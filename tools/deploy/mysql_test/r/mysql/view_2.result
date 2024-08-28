@@ -354,7 +354,8 @@ ERROR 42S02: 'view.v2' contains view recursion
 select * from v3;
 ERROR 42S02: 'view.v2' contains view recursion
 SET optimizer_switch = (SELECT variable_value FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'optimizer_switch');
-ERROR 0A000: subqueries or stored function calls here not supported
+Warnings:
+Warning	1235	This system variable now is mock not supported
 drop table if exists t1,t2;
 drop view if exists v1;
 create table t1(c1 int,c2 int);
@@ -481,7 +482,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   t21:
@@ -493,7 +494,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t21]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:

@@ -336,7 +336,7 @@ public:
   ~ObDDLTableStoreParam() = default;
   bool is_valid() const;
   TO_STRING_KV(K_(keep_old_ddl_sstable), K_(ddl_start_scn), K_(ddl_commit_scn), K_(ddl_checkpoint_scn),
-      K_(ddl_snapshot_version), K_(ddl_execution_id), K_(data_format_version));
+      K_(ddl_snapshot_version), K_(ddl_execution_id), K_(data_format_version), K_(ddl_table_type));
 public:
   bool keep_old_ddl_sstable_;
   share::SCN ddl_start_scn_;
@@ -345,6 +345,8 @@ public:
   int64_t ddl_snapshot_version_;
   int64_t ddl_execution_id_;
   int64_t data_format_version_;
+  // used to decide storage type for replaying ddl clog in cs replica, see ObTabletMeta::ddl_table_type_ for more detail
+  ObITable::TableType ddl_table_type_;
 };
 
 struct UpdateUpperTransParam final

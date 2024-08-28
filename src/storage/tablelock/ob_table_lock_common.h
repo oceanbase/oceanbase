@@ -447,6 +447,12 @@ bool is_lock_owner_type_valid(const ObLockOwnerType &type)
   return (type < ObLockOwnerType::MAX_OWNER_TYPE);
 }
 
+class ObNewTableLockOwnerID
+{
+public:
+  static const int64_t MAGIC_NUM = -0xABC;
+};
+
 class ObTableLockOwnerID
 {
 public:

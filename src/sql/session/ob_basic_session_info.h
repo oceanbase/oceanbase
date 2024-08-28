@@ -480,6 +480,7 @@ public:
   uint64_t get_local_auto_increment_increment() const;
   uint64_t get_local_auto_increment_offset() const;
   uint64_t get_local_last_insert_id() const;
+  void set_local_ob_enable_pl_cache(bool v) { sys_vars_cache_.set_ob_enable_pl_cache(v); }
   bool get_local_ob_enable_pl_cache() const;
   bool get_local_ob_enable_plan_cache() const;
   bool get_local_ob_enable_sql_audit() const;
@@ -651,6 +652,11 @@ public:
     sql_select_limit = sys_vars_cache_.get_sql_select_limit();
     return common::OB_SUCCESS;
   }
+  int get_oracle_sql_select_limit(int64_t &oracle_sql_select_limit) const
+  {
+    oracle_sql_select_limit = sys_vars_cache_.get_oracle_sql_select_limit();
+    return common::OB_SUCCESS;
+  }
   // session保留compatible mode，主要用于传递mode，方便后续进行guard切换，如inner sql connection等
   // 其他需要用mode地方请尽量使用线程上的is_oracle|mysql_mode
   // 同时可以使用check_compatibility_mode来检查线程与session上的mode是否一致
@@ -677,6 +683,7 @@ public:
   }
   int get_collation_database(common::ObCollationType &collation_database) const;
   int get_collation_server(common::ObCollationType &collation_server) const;
+  int get_default_collation_for_utf8mb4(ObCollationType &collation_server) const;
   int get_foreign_key_checks(int64_t &foreign_key_checks) const
   {
     foreign_key_checks = sys_vars_cache_.get_foreign_key_checks();
@@ -892,7 +899,9 @@ public:
   obmysql::ObMySQLCmd get_mysql_cmd() const { return thread_data_.mysql_cmd_; }
   char const *get_mysql_cmd_str() const { return obmysql::get_mysql_cmd_str(thread_data_.mysql_cmd_); }
   int store_query_string(const common::ObString &stmt);
+  int store_top_query_string(const common::ObString &stmt);
   void reset_query_string();
+  void reset_top_query_string();
   void set_session_sleep();
   // for SQL entry point
   int set_session_active(const ObString &sql,
@@ -903,6 +912,7 @@ public:
   int set_session_active(const ObString &label,
                          obmysql::ObMySQLCmd cmd);
   const common::ObString get_current_query_string() const;
+  const common::ObString get_top_query_string() const;
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
   int update_session_timeout();
   int is_timeout(bool &is_timeout);
@@ -1051,6 +1061,7 @@ public:
   int get_query_rewrite_enabled(int64_t &query_rewrite_enabled) const;
   int get_query_rewrite_integrity(int64_t &query_rewrite_integrity) const;
   int is_serial_set_order_forced(bool &force_set_order, bool is_oracle_mode) const;
+  int is_old_charset_aggregation_enabled(bool &is_enable) const;
   int is_storage_estimation_enabled(bool &storage_estimation_enabled) const;
   bool is_use_trace_log() const
   {
@@ -1515,6 +1526,7 @@ private:
   int deep_copy_trace_id_var(const common::ObObj &src_val,
                              common::ObObj *dest_val_ptr);
   inline int store_query_string_(const ObString &stmt);
+  inline int store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query, volatile int64_t& query_len);
   inline int set_session_state_(ObSQLSessionState state);
   //写入系统变量的默认值, deserialized scene need use base_value as baseline.
   int init_system_variables(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
@@ -1534,6 +1546,9 @@ protected:
                          cur_query_buf_len_(0),
                          cur_query_(nullptr),
                          cur_query_len_(0),
+                         top_query_buf_len_(0),
+                         top_query_(nullptr),
+                         top_query_len_(0),
                          cur_statement_id_(0),
                          last_active_time_(0),
                          dis_state_(CLIENT_FORCE_DISCONNECT),
@@ -1574,7 +1589,11 @@ protected:
       if (cur_query_ != nullptr) {
         cur_query_[0] = '\0';
       }
+      if (top_query_ != nullptr) {
+        top_query_[0] = '\0';
+      }
       cur_query_len_ = 0;
+      top_query_len_ = 0;
       cur_statement_id_ = 0;
       last_active_time_ = 0;
       dis_state_ = CLIENT_FORCE_DISCONNECT;
@@ -1615,6 +1634,9 @@ protected:
     int64_t cur_query_buf_len_;
     char *cur_query_;
     volatile int64_t cur_query_len_;
+    int64_t top_query_buf_len_;
+    char *top_query_;
+    volatile int64_t top_query_len_;
     uint64_t cur_statement_id_;
     int64_t last_active_time_;
     ObDisconnectState dis_state_;
@@ -1653,6 +1675,7 @@ public:
         sql_throttle_current_priority_(100),
         ob_last_schema_version_(0),
         sql_select_limit_(0),
+        oracle_sql_select_limit_(0),
         auto_increment_offset_(0),
         last_insert_id_(0),
         binlog_row_image_(2),
@@ -1715,6 +1738,7 @@ public:
       sql_throttle_current_priority_ = 100;
       ob_last_schema_version_ = 0;
       sql_select_limit_ = 0;
+      oracle_sql_select_limit_ = 0;
       auto_increment_offset_ = 0;
       last_insert_id_ = 0;
       binlog_row_image_ = 2;
@@ -1775,6 +1799,7 @@ public:
             sql_throttle_current_priority_ == other.sql_throttle_current_priority_ &&
             ob_last_schema_version_ == other.ob_last_schema_version_ &&
             sql_select_limit_ == other.sql_select_limit_ &&
+            oracle_sql_select_limit_ == other.oracle_sql_select_limit_ &&
             auto_increment_offset_ == other.auto_increment_offset_ &&
             last_insert_id_ == other.last_insert_id_ &&
             binlog_row_image_ == other.binlog_row_image_ &&
@@ -1931,7 +1956,7 @@ public:
                  K(ob_org_cluster_id_), K(ob_query_timeout_), K(ob_trx_timeout_), K(collation_connection_),
                  K(sql_mode_), K(nls_formats_[0]), K(nls_formats_[1]), K(nls_formats_[2]),
                  K(ob_trx_idle_timeout_), K(ob_trx_lock_timeout_), K(nls_collation_), K(nls_nation_collation_),
-                 K_(sql_throttle_current_priority), K_(ob_last_schema_version), K_(sql_select_limit),
+                 K_(sql_throttle_current_priority), K_(ob_last_schema_version), K_(sql_select_limit), K_(oracle_sql_select_limit),
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
                  K_(is_result_accurate), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
@@ -1944,6 +1969,7 @@ public:
     int64_t sql_throttle_current_priority_;
     int64_t ob_last_schema_version_;
     int64_t sql_select_limit_;
+    int64_t oracle_sql_select_limit_;
     uint64_t auto_increment_offset_;
     uint64_t last_insert_id_;
     int64_t binlog_row_image_;
@@ -2071,6 +2097,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, sql_throttle_current_priority);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_last_schema_version);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, sql_select_limit);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, oracle_sql_select_limit);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, auto_increment_offset);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, last_insert_id);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, binlog_row_image);
@@ -2146,6 +2173,7 @@ private:
         bool inc_sql_throttle_current_priority_:1;
         bool inc_ob_last_schema_version_:1;
         bool inc_sql_select_limit_:1;
+        bool inc_oracle_sql_select_limit_:1;
         bool inc_auto_increment_offset_:1;
         bool inc_last_insert_id_:1;
         bool inc_binlog_row_image_:1;
@@ -2458,6 +2486,13 @@ inline const common::ObString ObBasicSessionInfo::get_current_query_string() con
 {
   common::ObString str_ret;
   str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int64_t>(thread_data_.cur_query_len_));
+  return str_ret;
+}
+
+inline const common::ObString ObBasicSessionInfo::get_top_query_string() const
+{
+  common::ObString str_ret;
+  str_ret.assign_ptr(const_cast<char *>(thread_data_.top_query_), static_cast<int32_t>(thread_data_.top_query_len_));
   return str_ret;
 }
 

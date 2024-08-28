@@ -55,7 +55,7 @@ void fill_table_schema(ObTableSchema &table)
   table.set_part_level(PARTITION_LEVEL_TWO);
   table.set_charset_type(CHARSET_UTF8MB4);
   table.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-  table.set_table_type(USER_TABLE);
+  table.set_table_type(USER_VIEW);
   table.set_index_type(INDEX_TYPE_IS_NOT);
   table.set_index_status(INDEX_STATUS_AVAILABLE);
   table.set_data_table_id(0);
@@ -98,7 +98,7 @@ void fill_column_schema(ObColumnSchemaV2 &column, uint64_t id, const char *name,
   value.set_int(100);
   column.set_orig_default_value(value);
   value.set_int(101);
-  column.set_cur_default_value(value);
+  column.set_cur_default_value(value, false);
   column.set_comment("black gives me black eyes");
 }
 
@@ -182,6 +182,7 @@ void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchem
   g_sess_node_val.sess_info_.test_init(0, 0, 0, NULL);
   g_sess_node_val.sess_info_.load_all_sys_vars(schema_guard_);
   fake_ctx.init_physical_plan_ctx(0, 1);
+  fake_ctx.loc_meta_.route_policy_ = ObRoutePolicyType::READONLY_ZONE_FIRST;
   ASSERT_EQ(OB_SUCCESS, fake_ctx.construct_column_items());
 }
 

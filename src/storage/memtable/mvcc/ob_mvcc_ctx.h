@@ -178,7 +178,8 @@ public:
       const blocksstable::ObDmlFlag dml_flag,
       transaction::ObTxDesc *tx_desc,
       transaction::ObTxSEQ &parent_seq_no,
-      ObObj &index_data,
+      blocksstable::ObStorageDatum &index_data,
+      ObObjType &type,
       ObObj &ext_info_data);
 public:
   virtual void reset()

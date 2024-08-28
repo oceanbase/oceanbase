@@ -655,17 +655,19 @@ int ObTransformOrExpansion::get_joined_table_pushdown_conditions(const TableItem
         LOG_WARN("failed to get table rel ids", K(ret));
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmt->get_condition_exprs().count(); i++) {
-      ObRawExpr *cond = NULL;
-      if (OB_ISNULL(cond = trans_stmt->get_condition_exprs().at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (!cond->get_relation_ids().is_subset(table_set) ||
-                 cond->has_flag(CNT_SUB_QUERY)) {
-        /* do not push down */
-      } else if (OB_FAIL(pushdown_conds.push_back(cond))) {
-        LOG_WARN("failed to push cond", K(ret));
-      } else { /* do nothing */ }
+    if (OB_SUCC(ret) && !table_set.is_empty()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmt->get_condition_exprs().count(); i++) {
+        ObRawExpr *cond = NULL;
+        if (OB_ISNULL(cond = trans_stmt->get_condition_exprs().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (!cond->get_relation_ids().is_subset(table_set) ||
+                  cond->has_flag(CNT_SUB_QUERY)) {
+          /* do not push down */
+        } else if (OB_FAIL(pushdown_conds.push_back(cond))) {
+          LOG_WARN("failed to push cond", K(ret));
+        } else { /* do nothing */ }
+      }
     }
   }
   return ret;
@@ -996,7 +998,7 @@ int ObTransformOrExpansion::add_filter_to_stmt(ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_one = NULL;
   ObRawExpr *equal_expr = NULL;
-  ObOpRawExpr *is_not_null = NULL;
+  ObRawExpr *is_not_null = NULL;
   ObSEArray<ObRawExpr*, 2> conds;
   ObRawExpr *or_expr = NULL;
   if (OB_ISNULL(stmt) ||  OB_ISNULL(ctx_) ||  OB_ISNULL(ctx_->expr_factory_)
@@ -1016,7 +1018,7 @@ int ObTransformOrExpansion::add_filter_to_stmt(ObSelectStmt *stmt,
     LOG_WARN("failed to build common binary op expr", K(ret));
   } else if (OB_FAIL(conds.push_back(equal_expr))) {
     LOG_WARN("failed to push back expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, stmt, flag_exprs.at(0),
+  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, flag_exprs.at(0),
                                                        is_not_null))) {
     LOG_WARN("failed to add is not null", K(ret));
   } else if (OB_FAIL(conds.push_back(is_not_null))) {
@@ -3459,6 +3461,8 @@ int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool
     } else if (table_item->is_fake_cte_table()) {
       is_stmt_valid = false;
       OPT_TRACE("contain fake cte table");
+    } else if (table_item->is_has_sample_info()) {
+      is_stmt_valid = false;
     }
   }
   return ret;

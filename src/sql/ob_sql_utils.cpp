@@ -53,6 +53,7 @@
 #include "lib/charset/ob_charset.h"
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -60,6 +61,9 @@
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_utils.h"
+#endif
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
@@ -628,6 +632,12 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "GB18030_2022 not supported when data_version < 4_2_0_0", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, charset GB18030_2022 is");
+  } else if ((CHARSET_ASCII == charset_type || CHARSET_TIS620 == charset_type) &&
+             ((data_version < MOCK_DATA_VERSION_4_2_4_0) ||
+              (DATA_VERSION_4_3_0_0 <= data_version && data_version < DATA_VERSION_4_3_3_0))) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "charset not supported when data_version < 4_2_4_0 or between [430,433)",K(charset_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.4 or between [430,433), charset is");
   }
   return ret;
 }
@@ -635,18 +645,38 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
 int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, const int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_CLOSE_MODULES
    uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     SQL_LOG(WARN, "failed to GET_MIN_DATA_VERSION", K(ret));
-  } else if (data_version < DATA_VERSION_4_2_2_0 &&
-             (CS_TYPE_UTF16_UNICODE_CI == collation_type ||
-              CS_TYPE_UTF8MB4_UNICODE_CI == collation_type)) {
+  } else if ((data_version < MOCK_DATA_VERSION_4_2_4_0
+              || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_3_0))
+             && (CS_TYPE_UTF8MB4_CROATIAN_CI == collation_type
+                 || CS_TYPE_UTF8MB4_UNICODE_520_CI == collation_type
+                 || CS_TYPE_UTF8MB4_CZECH_CI == collation_type)) {
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_2_0", K(collation_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, unicode collation is");
   }
+#ifndef OB_BUILD_CLOSE_MODULES
+  if (OB_SUCC(ret)) {
+    if (data_version < DATA_VERSION_4_2_2_0 &&
+              (CS_TYPE_UTF16_UNICODE_CI == collation_type ||
+                CS_TYPE_UTF8MB4_UNICODE_CI == collation_type)) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_2_0", K(collation_type), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, unicode collation is");
+    }
+  }
 #endif
+  if (OB_SUCC(ret)) {
+    if ((CS_TYPE_UTF8MB4_0900_AI_CI == collation_type) &&
+        ((data_version < MOCK_DATA_VERSION_4_2_4_0) ||
+         (DATA_VERSION_4_3_0_0 <= data_version && data_version < DATA_VERSION_4_3_3_0))) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433)", K(collation_type), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.4 or between [430,433), collation is");
+    }
+  }
   return ret;
 }
 
@@ -950,7 +980,7 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString &expr_
       ObExprResType dest_type;
       dest_type.set_meta(gen_col.get_meta_type());
       dest_type.set_accuracy(gen_col.get_accuracy());
-      if (ObRawExprUtils::need_column_conv(dest_type, *expr)) {
+      if (ObRawExprUtils::need_column_conv(dest_type, *expr, true)) {
         if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(expr_factory, &gen_col, expr, &session))) {
           LOG_WARN("create column convert expr failed", K(ret));
         }
@@ -1375,6 +1405,50 @@ int ObSQLUtils::check_and_copy_column_alias_name(const ObCollationType cs_type, 
   return ret;
 }
 
+int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list)
+{
+  int ret = OB_SUCCESS;
+  if (all_part_spec.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty odps part spec", K(ret));
+  } else {
+    const char* start = all_part_spec.ptr();
+    const char* end = start + all_part_spec.length();
+    const char* ptr = NULL;
+    while (start < end && OB_SUCC(ret)) {
+      if (ptr == NULL && *start == '\'') {
+        ptr = start;
+      } else if (ptr != NULL && *start == '\'') {
+        int64_t len = start - ptr - 1;
+        if (0 == len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected part spec", K(ret), K(all_part_spec));
+        } else if (OB_FAIL(part_spec_list.push_back(ObString(len, ptr + 1)))) {
+          LOG_WARN("failed to push back part_spec", K(ret));
+        }
+        ptr = NULL;
+      }
+      ++start;
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps)
+{
+  int ret = OB_SUCCESS;
+  is_odps = false;
+  ObExternalFileFormat format;
+  if (properties.empty()) {
+    // do nothing
+  } else if (OB_FAIL(format.load_from_string(properties, allocator))) {
+    LOG_WARN("fail to load from properties string", K(ret), K(properties));
+  } else {
+    is_odps = ObExternalFileFormat::FormatType::ODPS_FORMAT == format.format_type_;
+  }
+  return ret;
+}
+
 int ObSQLUtils::check_ident_name(const ObCollationType cs_type, ObString &name,
                                  const bool check_for_path_char, const int64_t max_ident_len)
 {
@@ -1650,7 +1724,8 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_SEQUENCES == type
                || T_SHOW_ENGINE == type
                || T_SHOW_OPEN_TABLES == type
-               || (T_SET_ROLE == type && lib::is_mysql_mode())) {
+               || (T_SET_ROLE == type && lib::is_mysql_mode())
+               || T_SHOW_CREATE_USER == type) {
       ret = true;
     }
   }
@@ -1927,6 +2002,7 @@ int ObSQLUtils::get_cs_level_from_cast_mode(const ObCastMode cast_mode,
     } else {
       cs_level = tmp_cs_level;
     }
+    LOG_TRACE(" get_cs_level_from_cast_mode debug",K(default_level),K(cs_level));
   }
   return ret;
 }
@@ -3264,7 +3340,7 @@ int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx &expr_ctx, ObCastCtx &co
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_collation(const share::schema::ObLocalSessionVar &session_vars_snapshot,
+int ObSQLUtils::merge_solidified_var_into_collation(const ObLocalSessionVar &session_vars_snapshot,
                                                      ObCollationType &cs_type) {
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret) && lib::is_mysql_mode()) {
@@ -3338,7 +3414,7 @@ int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_dtc_params(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_dtc_params(const ObLocalSessionVar *local_vars,
                                                 const ObTimeZoneInfo *local_timezone,
                                                 ObDataTypeCastParams &dtc_param)
 {
@@ -3374,7 +3450,7 @@ int ObSQLUtils::merge_solidified_var_into_dtc_params(const share::schema::ObLoca
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_sql_mode(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_sql_mode(const ObLocalSessionVar *local_vars,
                                                     ObSQLMode &sql_mode) {
   int ret = OB_SUCCESS;
   ObSessionSysVar *local_var = NULL;
@@ -3395,7 +3471,7 @@ int ObSQLUtils::merge_solidified_var_into_sql_mode(const share::schema::ObLocalS
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const ObLocalSessionVar *local_vars,
                                                              int64_t &max_allowed_packet)
 {
   int ret = OB_SUCCESS;
@@ -3415,7 +3491,7 @@ int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const share::schema
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_compat_version(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_compat_version(const ObLocalSessionVar *local_vars,
                                                          uint64_t &compat_version)
 {
   int ret = OB_SUCCESS;
@@ -4636,6 +4712,9 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
           ret = OB_SUCCESS;
         }
       }
+#ifdef OB_BUILD_AUDIT_SECURITY
+      (void) ObAuditLogUtils::handle_sql_audit_log(session, audit_record, is_sensitive);
+#endif
     }
   }
   if (lib::is_diagnose_info_enabled()) {
@@ -5265,6 +5344,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
     ObObj *data = NULL;
     if (OB_UNLIKELY(!obj.is_ext())) {
       OZ (obj_params.push_back(obj));
+      OZ (ObSql::add_param_to_param_store(obj, obj_params));
     } else {
       CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
       CK (coll->get_count() > actual_pos);
@@ -5278,7 +5358,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
             ++actual_pos;
           }
         }
-        OX (obj_params.push_back(*(data + actual_pos)));
+        OZ (ObSql::add_param_to_param_store(*(data + actual_pos), obj_params));
       }
     }
   }
@@ -5382,7 +5462,7 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 
 bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
 {
-  return url.prefix_match_ci(OB_FILE_PREFIX);
+  return url.empty() ? false : url.prefix_match_ci(OB_FILE_PREFIX);
 }
 
 int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)
@@ -5898,4 +5978,9 @@ bool ObSQLUtils::is_data_version_ge_423_or_431(uint64_t data_version)
 bool ObSQLUtils::is_data_version_ge_423_or_432(uint64_t data_version)
 {
   return ((MOCK_DATA_VERSION_4_2_3_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_2_0);
+}
+
+bool ObSQLUtils::is_data_version_ge_424_or_433(uint64_t data_version)
+{
+  return ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_3_0);
 }

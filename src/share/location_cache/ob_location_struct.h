@@ -190,7 +190,7 @@ public:
   inline uint64_t get_tenant_id() const { return cache_key_.get_tenant_id(); }
   inline ObLSID get_ls_id() const { return cache_key_.get_ls_id(); }
   const ObLSLocationCacheKey &get_cache_key() const { return cache_key_; }
-  int get_replica_count(int64_t &full_replica_cnt, int64_t &readonly_replica_cnt);
+  int get_replica_count(int64_t &full_replica_cnt, int64_t &non_paxos_replica_cnt);
   inline const common::ObIArray<ObLSReplicaLocation> &get_replica_locations() const
   {
     return replica_locations_;

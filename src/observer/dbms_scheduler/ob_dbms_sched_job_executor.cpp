@@ -24,6 +24,7 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
+#include "sql/executor/ob_executor_rpc_processor.h"
 
 namespace oceanbase
 {
@@ -65,6 +66,7 @@ int ObDBMSSchedJobExecutor::init_session(
   ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
+  ObPrivSet db_priv_set = OB_PRIV_SET_EMPTY;
   ObArenaAllocator *allocator = NULL;
   const bool print_info_log = true;
   const bool is_sys_tenant = true;
@@ -97,19 +99,34 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.set_database_id(database_id));
   OZ (session.set_user(
     user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
+  OX (session.set_priv_user_id(user_info->get_user_id()));
   OX (session.set_user_priv_set(user_info->get_priv_set()));
+  OZ (schema_guard.get_db_priv_set(tenant_id, user_info->get_user_id(), database_name, db_priv_set));
+  OX (session.set_db_priv_set(db_priv_set));
   OX (session.set_shadow(true));
-  if (OB_SUCC(ret) && job_info.is_date_expression_job_class()) {
-    // set larger timeout for mview scheduler jobs
-    const int64_t QUERY_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
-    const int64_t TRX_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
-    ObObj query_timeout_obj;
-    ObObj trx_timeout_obj;
-    query_timeout_obj.set_int(QUERY_TIMEOUT_US);
-    trx_timeout_obj.set_int(TRX_TIMEOUT_US);
-    OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
-    OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+  if (OB_SUCC(ret)) {
+    if (job_info.is_date_expression_job_class()) {
+      // set larger timeout for mview scheduler jobs
+      const int64_t QUERY_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
+      const int64_t TRX_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
+      ObObj query_timeout_obj;
+      ObObj trx_timeout_obj;
+      query_timeout_obj.set_int(QUERY_TIMEOUT_US);
+      trx_timeout_obj.set_int(TRX_TIMEOUT_US);
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+    } else if (job_info.is_olap_async_job_class()) {
+      const int64_t QUERY_TIMEOUT_US = ((job_info.get_max_run_duration() - OLAP_ASYNC_JOB_DEVIATION_SECOND) * 1000000L);
+      const int64_t TRX_TIMEOUT_US = ((job_info.get_max_run_duration() - OLAP_ASYNC_JOB_DEVIATION_SECOND) * 1000000L);
+      ObObj query_timeout_obj;
+      ObObj trx_timeout_obj;
+      query_timeout_obj.set_int(QUERY_TIMEOUT_US);
+      trx_timeout_obj.set_int(TRX_TIMEOUT_US);
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+    }
   }
+
   return ret;
 }
 
@@ -136,6 +153,9 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
         job_info.get_tenant_id(), job_info.get_powner(), user_infos));
       OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
       CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+    } else if (job_info.get_user_id() != OB_INVALID_ID) {
+      OZ (schema_guard.get_user_info(
+        job_info.get_tenant_id(), job_info.get_user_id(), user_info));
     } else {
       ObString user = job_info.get_powner();
       if (OB_SUCC(ret)) {
@@ -247,6 +267,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       if (job_info.is_oracle_tenant_) {
         OZ (what.append_fmt("BEGIN %.*s; END;",
             job_info.get_what().length(), job_info.get_what().ptr()));
+      } else if (job_info.is_olap_async_job_class()){
+        OZ (what.append_fmt("%.*s",
+            job_info.get_what().length(), job_info.get_what().ptr()));
       } else {
         //mysql mode not support anonymous block
         OZ (what.append_fmt("CALL %.*s;",
@@ -346,13 +369,11 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       }
     }
     if (OB_SUCC(ret)) {
+      ObWorkerSessionGuard worker_session_guard(session_info);
       OZ (ObDBMSSchedJobExecutor::init_env(job_info, *session_info));
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
-      if (OB_NOT_NULL(conn)) {
-        conn->set_check_priv(true);
-      }
       OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
       if (OB_NOT_NULL(conn)) {
         sql_proxy_->close(conn, ret);
@@ -386,19 +407,37 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
   OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
-
-    OZ (run_dbms_sched_job(tenant_id, job_info));
-
-    int tmp_ret = OB_SUCCESS;
-    ObString errmsg = common::ob_get_tsi_err_msg(ret);
-    if (errmsg.empty() && ret != OB_SUCCESS) {
-      errmsg = ObString(strlen(ob_errpkt_strerror(ret, lib::is_oracle_mode())),
-                        ob_errpkt_strerror(ret, lib::is_oracle_mode()));
+    if (job_info.is_killed()) { //Intercept user cancellation requests before the actual execution of the job
+      OZ(table_operator_.update_for_kill(job_info));
+    } else {
+      OZ (run_dbms_sched_job(tenant_id, job_info));
+      bool job_is_user_stop = false;
+      if (OB_ERR_SESSION_INTERRUPTED == ret) { //It may have been the user interrupted, need to check.
+        int tmp_user_stop_ret = OB_SUCCESS;
+        bool job_is_killed = false;
+        if ((tmp_user_stop_ret = table_operator_.get_dbms_sched_job_is_killed(job_info, job_is_killed)) != OB_SUCCESS) {
+          LOG_WARN("double check get dbms sched job failed", K(tmp_user_stop_ret), K(ret));
+        } else if (job_is_killed) {
+          job_is_user_stop = true;
+        }
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (job_is_user_stop) {
+        if ((OB_TMP_FAIL(table_operator_.update_for_kill(job_info)))) {
+          LOG_WARN("update user stop dbms sched job failed", K(tmp_ret), K(ret));
+        }
+      } else {
+        ObString errmsg = common::ob_get_tsi_err_msg(ret);
+        if (errmsg.empty() && ret != OB_SUCCESS) {
+          errmsg = ObString(strlen(ob_errpkt_strerror(ret, lib::is_oracle_mode())),
+                            ob_errpkt_strerror(ret, lib::is_oracle_mode()));
+        }
+        if ((OB_TMP_FAIL(table_operator_.update_for_end(job_info, ret, errmsg)))) {
+          LOG_WARN("update dbms sched job failed", K(tmp_ret), K(ret));
+        }
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
-    if ((tmp_ret = table_operator_.update_for_end(job_info, ret, errmsg)) != OB_SUCCESS) {
-      LOG_WARN("update dbms sched job failed", K(tmp_ret), K(ret));
-    }
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }
   return ret;
 }

@@ -177,6 +177,8 @@ public:
                             ObPhysicalPlan *phy_plan,
                             ObExecContext &exec_ctx,
                             ObDMLStmt *&stmt,
+                            ObStmtNeedPrivs &stmt_need_privs,
+                            ObStmtOraNeedPrivs &stmt_ora_need_privs,
                             bool ignore_trace_event=false);
 
   //optimize stmt, generate logical_plan
@@ -494,12 +496,14 @@ private:
                                 ObSchemaGetterGuard &schema_guard,
                                 ObSqlTraits &sql_traits);
   int get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_sql);
-  static int add_param_to_param_store(const ObObjParam &param,
-                                      ParamStore &param_store);
   int check_need_switch_thread(ObSqlCtx &ctx, const ObStmt *stmt, bool &need_switch);
   void rollback_implicit_trans_when_fail(ObResultSet &result, int &ret);
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
+
+public:
+  static int add_param_to_param_store(const ObObjParam &param,
+                                      ParamStore &param_store);
 private:
   bool inited_;
   // BEGIN 全局单例依赖接口

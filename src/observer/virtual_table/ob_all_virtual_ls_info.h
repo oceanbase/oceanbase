@@ -48,7 +48,6 @@ private:
   common::ObAddr addr_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char state_name_[common::MAX_LS_STATE_LENGTH];
-  char replica_type_name_[common::MAX_REPLICA_TYPE_LENGTH];
   /* 跨租户访问的资源必须由ObMultiTenantOperator来处理释放*/
   int64_t ls_id_;
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;

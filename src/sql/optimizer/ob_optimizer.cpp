@@ -543,6 +543,10 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to check enable pdml", K(ret));
   } else if (OB_FAIL(init_parallel_policy(stmt, *session_info))) { // call after check pdml enabled
     LOG_WARN("fail to check enable pdml", K(ret));
+  } else if (OB_FAIL(init_replica_policy(stmt, *session_info))) {
+    LOG_WARN("fail to check enable column store replica", K(ret));
+  } else if (OB_FAIL(init_correlation_model(stmt, *session_info))) {
+    LOG_WARN("failed to init correlation model", K(ret));
   }
   return ret;
 }
@@ -562,6 +566,15 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
   bool das_keep_order_enabled = tenant_config.is_valid() && tenant_config->_enable_das_keep_order;
+  bool hash_join_enabled = tenant_config.is_valid() && tenant_config->_hash_join_enabled;
+  bool optimizer_sortmerge_join_enabled = tenant_config.is_valid() && tenant_config->_optimizer_sortmerge_join_enabled;
+  bool nested_loop_join_enabled = tenant_config.is_valid() && tenant_config->_nested_loop_join_enabled;
+  bool enable_adj_index_cost = false;
+  int64_t optimizer_index_cost_adj = 0;
+  bool is_skip_scan_enable = session.is_index_skip_scan_enabled();
+  bool enable_use_batch_nlj = false;
+  bool better_inlist_costing = false;
+  bool enable_spf_batch_rescan = session.is_spf_mlj_group_rescan_enabled();
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_FAIL(check_whether_contain_nested_sql(stmt))) {
     LOG_WARN("check whether contain nested sql failed", K(ret));
@@ -579,7 +592,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("calc link stmt count failed", K(ret));
   } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&stmt, has_dblink, true))) {
     LOG_WARN("failed to find dblink in stmt", K(ret));
-  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
     LOG_WARN("fail to check rowsets enabled", K(ret));
   } else if (OB_FAIL(stmt.check_has_cursor_expression(has_cursor_expr))) {
     LOG_WARN("fail to check cursor expression info", K(ret));
@@ -587,6 +600,28 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("fail to get storage_estimation_enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_DAS_KEEP_ORDER, das_keep_order_enabled))) {
     LOG_WARN("failed to check das keep order enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::HASH_JOIN_ENABLED, hash_join_enabled))) {
+    LOG_WARN("failed to check hash join enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::OPTIMIZER_SORTMERGE_JOIN_ENABLED, optimizer_sortmerge_join_enabled))) {
+    LOG_WARN("failed to check merge join enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED, nested_loop_join_enabled))) {
+    LOG_WARN("failed to check nested loop join enabled", K(ret));
+  } else if (OB_FAIL(session.is_adj_index_cost_enabled(enable_adj_index_cost, optimizer_index_cost_adj))) {
+    LOG_WARN("failed to check adjust index cost", K(ret));
+  } else if (OB_FAIL(opt_params.get_integer_opt_param(ObOptParamHint::OPTIMIZER_INDEX_COST_ADJ, optimizer_index_cost_adj))) {
+    LOG_WARN("fail to check opt param adjust index cost", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::OPTIMIZER_SKIP_SCAN_ENABLED, is_skip_scan_enable))) {
+    LOG_WARN("failed to get opt param skip scan enabled", K(ret));
+  } else if (OB_FAIL(session.is_better_inlist_enabled(better_inlist_costing))) {
+    LOG_WARN("failed to check better inlist enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::OPTIMIZER_BETTER_INLIST_COSTING, better_inlist_costing))) {
+    LOG_WARN("failed to get opt param better inlist costing", K(ret));
+  } else if (OB_FAIL(session.get_nlj_batching_enabled(enable_use_batch_nlj))) {
+    LOG_WARN("failed to get join cache size variable", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::NLJ_BATCHING_ENABLED, enable_use_batch_nlj))) {
+    LOG_WARN("failed to get opt param nlj batching enable", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_SPF_BATCH_RESCAN, enable_spf_batch_rescan))) {
+    LOG_WARN("failed to get opt param enable spf batch rescan", K(ret));
   } else {
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
@@ -598,22 +633,26 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_cost_model_type(rowsets_enabled ? ObOptEstCost::VECTOR_MODEL : ObOptEstCost::NORMAL_MODEL);
     ctx_.set_has_cursor_expression(has_cursor_expr);
     ctx_.set_das_keep_order_enabled(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? false : das_keep_order_enabled);
-    if (!tenant_config.is_valid() ||
-        (!tenant_config->_hash_join_enabled &&
-         !tenant_config->_optimizer_sortmerge_join_enabled &&
-         !tenant_config->_nested_loop_join_enabled)) {
+    ctx_.set_optimizer_index_cost_adj(optimizer_index_cost_adj);
+    ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
+    ctx_.set_enable_better_inlist_costing(better_inlist_costing);
+    ctx_.set_nlj_batching_enabled(enable_use_batch_nlj);
+    ctx_.set_enable_spf_batch_rescan(enable_spf_batch_rescan);
+    if (!hash_join_enabled
+        && !optimizer_sortmerge_join_enabled
+        && !nested_loop_join_enabled) {
       ctx_.set_hash_join_enabled(true);
       ctx_.set_merge_join_enabled(true);
       ctx_.set_nested_join_enabled(true);
+      LOG_TRACE("all join types are set to disable");
     } else {
-      ctx_.set_hash_join_enabled(tenant_config->_hash_join_enabled);
-      ctx_.set_merge_join_enabled(tenant_config->_optimizer_sortmerge_join_enabled);
-      ctx_.set_nested_join_enabled(tenant_config->_nested_loop_join_enabled);
+      ctx_.set_hash_join_enabled(hash_join_enabled);
+      ctx_.set_merge_join_enabled(optimizer_sortmerge_join_enabled);
+      ctx_.set_nested_join_enabled(nested_loop_join_enabled);
     }
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);
     }
-    //do nothing
   }
   return ret;
 }
@@ -688,6 +727,57 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
     LOG_TRACE("succeed to init parallel policy", K(session.is_user_session()),
                         K(ctx_.can_use_pdml()), K(ctx_.get_parallel_rule()), K(ctx_.get_parallel()),
                         K(ctx_.get_auto_dop_params()));
+  }
+  return ret;
+}
+
+int ObOptimizer::init_replica_policy(ObDMLStmt &dml_stmt, const ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  int64_t route_policy_type = 0;
+  if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
+    LOG_WARN("fail to get sys variable", K(ret));
+  } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
+    if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
+        dml_stmt.get_query_ctx()->is_contain_select_for_update_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, read query request");
+    } else {
+      ctx_.set_use_column_store_replica(true);
+    }
+  }
+  return ret;
+}
+
+int ObOptimizer::init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObEstCorrelationModel* correlation_model = NULL;
+  int64_t type = 0;
+  bool has_hint = false;
+  if (OB_ISNULL(ctx_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ctx", K(ret));
+  } else if (!ctx_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_4, COMPAT_VERSION_4_3_0,
+                                                             COMPAT_VERSION_4_3_3)) {
+    type = static_cast<int64_t>(ObEstCorrelationType::INDEPENDENT);
+  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, type))) {
+      LOG_WARN("failed to get bool hint param", K(ret));
+    }
+  } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_CARDINALITY_ESTIMATION_MODEL, type))) {
+    LOG_WARN("failed to get sys variable", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(type < 0) ||
+        OB_UNLIKELY(type >= static_cast<int64_t>(ObEstCorrelationType::MAX))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected correlation type", K(type));
+    } else {
+      ctx_.set_correlation_type(static_cast<ObEstCorrelationType>(type));
+    }
   }
   return ret;
 }

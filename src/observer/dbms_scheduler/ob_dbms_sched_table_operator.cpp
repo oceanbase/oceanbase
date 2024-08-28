@@ -174,6 +174,13 @@ int ObDBMSSchedTableOperator::_build_job_log_dml(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
   } else if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2(data_version)) {
+    if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version)) {
+      OZ (dml.add_column("database_name", ObHexEscapeSqlStr(job_info.cowner_)));
+      OZ (dml.add_column("owner", job_info.powner_));
+      OZ (dml.add_column("operation", ObHexEscapeSqlStr(job_info.job_action_)));
+      OZ (dml.add_column("status", job_info.state_));
+      OZ (dml.add_time_column("req_start_date", job_info.start_date_));
+    }
     OZ (dml.add_pk_column("job_name", job_info.job_name_));
     OZ (dml.splice_insert_sql(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME, sql));
   } else {
@@ -317,10 +324,12 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   } else if (job_info.is_date_expression_job_class() && now >= job_info.end_date_ && true == job_info.auto_drop_) {
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else if ((now >= job_info.end_date_ || job_info.get_interval_ts() == 0) && (true == job_info.auto_drop_)) {
+    job_info.state_ = ObString("COMPLETED");
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
     OX (job_info.failures_ = (err == 0) ? 0 : (job_info.failures_ + 1));
-    OX (job_info.flag_ = job_info.failures_ > 15 ? (job_info.flag_ | 0x1) : (job_info.flag_ & 0xfffffffffffffffE));
+    //
+    OX (job_info.flag_ = (job_info.failures_ > 15 && !ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) ? (job_info.flag_ | 0x1) : (job_info.flag_ & 0xfffffffffffffffE));
     OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
     if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
       // when if failures > 16 then set broken state.
@@ -341,6 +350,40 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
     OZ (_build_job_log_dml(now, job_info, err, errmsg, sql2));
   }
 
+  OZ (trans.start(sql_proxy_, tenant_id, true));
+  OZ (trans.write(tenant_id, sql1.ptr(), affected_rows));
+  if (OB_SUCC(ret) && need_record) {
+    OZ (trans.write(tenant_id, sql2.ptr(), affected_rows));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedTableOperator::update_for_kill(ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObSqlString sql1;
+  ObSqlString sql2;
+  int64_t affected_rows = 0;
+  const int64_t now = ObTimeUtility::current_time();
+  bool need_record = true;
+  int64_t tenant_id = job_info.tenant_id_;
+  CK (OB_NOT_NULL(sql_proxy_));
+  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
+  OZ (_check_need_record(job_info, need_record));
+  OZ (_build_job_drop_dml(now, job_info, sql1));
+  if (OB_SUCC(ret) && need_record) {
+    job_info.state_ = ObString("KILLED");
+    OZ (_build_job_log_dml(now, job_info, OB_ERR_SESSION_INTERRUPTED, "user stop job", sql2));
+  }
   OZ (trans.start(sql_proxy_, tenant_id, true));
   OZ (trans.write(tenant_id, sql1.ptr(), affected_rows));
   if (OB_SUCC(ret) && need_record) {
@@ -417,6 +460,16 @@ int ObDBMSSchedTableOperator::extract_info(
   job_info_local.tenant_id_ = tenant_id;
   job_info_local.is_oracle_tenant_ = is_oracle_tenant;
   EXTRACT_INT_FIELD_MYSQL(result, "job", job_info_local.job_, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "user_id", job_info_local.user_id_, uint64_t);
+  if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+    ret = OB_SUCCESS;
+    job_info_local.user_id_ = OB_INVALID_ID;
+  }
+  EXTRACT_INT_FIELD_MYSQL(result, "database_id", job_info_local.database_id_, uint64_t);
+  if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+    ret = OB_SUCCESS;
+    job_info_local.database_id_ = OB_INVALID_ID;
+  }
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "lowner", job_info_local.lowner_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "powner", job_info_local.powner_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "cowner", job_info_local.cowner_);
@@ -478,7 +531,7 @@ do {                                                                  \
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "job_class", job_info_local.job_class_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "program_name", job_info_local.program_name_);
   //job_type not used
-  //job_action not used
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "job_action", job_info_local.job_action_);
   //number_of_argument not used
   //repeat_interval not used
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "enabled", job_info_local.enabled_);
@@ -495,6 +548,19 @@ do {                                                                  \
 
   OZ (job_info.deep_copy(allocator, job_info_local));
 
+  return ret;
+}
+
+int ObDBMSSchedTableOperator::get_dbms_sched_job_is_killed(const ObDBMSSchedJobInfo &job_info, bool &is_killed)
+{
+  int ret = OB_SUCCESS;
+  is_killed = false;
+  ObArenaAllocator allocator("SchedStateTmp");
+  ObDBMSSchedJobInfo update_job_info;
+  OZ(get_dbms_sched_job_info(job_info.tenant_id_, job_info.is_oracle_tenant_, job_info.job_, job_info.job_name_, allocator, update_job_info));
+  if (OB_SUCC(ret) && update_job_info.is_killed()) {
+    is_killed = true;
+  }
   return ret;
 }
 
@@ -719,6 +785,32 @@ int ObDBMSSchedTableOperator::purge_run_detail_histroy(uint64_t tenant_id)
   LOG_INFO("purge run detail history", K(ret), K(tenant_id), K(sql.ptr()));
   if (need_purge_v2_table) {
     LOG_INFO("purge run detail v2 history", K(ret), K(tenant_id), K(sql.ptr()));
+  }
+  return ret;
+}
+
+int ObDBMSSchedTableOperator::purge_olap_async_job_run_detail(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  uint64_t data_version = 0;
+  int64_t log_history = 30;
+
+  CK (OB_NOT_NULL(sql_proxy_));
+  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2(data_version)) {
+    OZ (sql.assign_fmt("delete from %s where job_class=\'OLAP_ASYNC_JOB_CLASS\' and time<DATE_SUB(NOW(), INTERVAL %ld DAY)",
+        OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME, log_history));
+    OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
+    if (affected_rows > 0) {
+      LOG_INFO("purge olap async job run detail finish", K(ret), K(tenant_id), K(sql), K(affected_rows));
+    }
   }
   return ret;
 }

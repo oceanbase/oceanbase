@@ -1592,7 +1592,7 @@ int ObNumber::check_range(bool *is_valid_uint64, bool *is_valid_int64,
           } else {
             *is_valid = false; //no break
           }
-        } else {
+        } else if (digit != 0) {
           decimal_parts = digit;
           break;
         }

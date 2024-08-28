@@ -96,8 +96,30 @@ public:
     if (!is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->try_wrlock();
     } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
-      ret = static_cast<common::SpinRWLock *>(lock_)->try_wrlock();
+      ret = static_cast<common::SpinRWLock *>(lock_)->try_wrlock()
+        ? OB_SUCCESS : OB_EAGAIN;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  int try_rdlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->try_rdlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->try_rdlock()
+        ? OB_SUCCESS : OB_EAGAIN;
     } else {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));

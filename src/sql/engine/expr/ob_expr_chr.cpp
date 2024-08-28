@@ -63,7 +63,8 @@ inline int ObExprChr::calc_result_type1(ObExprResType &type,
 
 int ObExprChr::number2varchar(ObString &str_result,
                               const double double_val,
-                              ObIAllocator &alloc)
+                              ObIAllocator &alloc,
+                              bool is_single_byte)
 {
   int ret = OB_SUCCESS;
   int64_t int_val = static_cast<int64_t>(double_val);
@@ -77,6 +78,9 @@ int ObExprChr::number2varchar(ObString &str_result,
     str_result.reset();
   } else {
     uint32_t num = static_cast<uint32_t>(int_val);
+    if (is_single_byte) {
+      num %= 256;
+    }
     int length = 0;
     if (num & 0xFF000000UL) {
       length = 4;
@@ -105,7 +109,11 @@ int ObExprChr::calc_chr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
 {
   int ret = OB_SUCCESS;
   ObDatum *arg = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
+  sql::ObSQLSessionInfo *my_session_ = NULL;
+  if (OB_ISNULL(my_session_ = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
     res_datum.set_null();
@@ -113,7 +121,12 @@ int ObExprChr::calc_chr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
     ObExprStrResAlloc res_alloc(expr, ctx);
     double arg_double = arg->get_double();
     ObString res_str;
-    if (OB_FAIL(ObExprChr::number2varchar(res_str, arg_double, res_alloc))) {
+    bool is_single_byte = false;
+    int64_t maxmb_len = 0;
+    if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(my_session_->get_nls_collation(), maxmb_len))) {
+      LOG_WARN("failed to get mbmaxlen by coll", K(my_session_->get_nls_collation()));
+    } else if (FALSE_IT(is_single_byte = (maxmb_len==1))) {
+    } else if (OB_FAIL(ObExprChr::number2varchar(res_str, arg_double, res_alloc, is_single_byte))) {
       LOG_WARN("number2varchar failed", K(ret), K(arg_double));
     } else if (res_str.empty()) {
       res_datum.set_null();

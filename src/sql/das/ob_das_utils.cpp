@@ -23,6 +23,7 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/access/ob_dml_param.h"
+#include "storage/blocksstable/ob_datum_row_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -203,7 +204,7 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
                                     const ObDASWriteBuffer::DmlRow &dml_row,
                                     const IntFixedArray &row_projector,
                                     ObIAllocator &allocator,
-                                    ObNewRow &storage_row)
+                                    blocksstable::ObDatumRow &storage_row)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < row_projector.count(); ++i) {
@@ -212,14 +213,17 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
     const ObAccuracy &col_accuracy = dml_ctdef.column_accuracys_.at(i);
     if (projector_idx < 0) {
       //this column is not touched by query, only need to be marked as nop
-      storage_row.cells_[i].set_nop_value();
-    } else if (OB_FAIL(dml_row.cells()[projector_idx].to_obj(storage_row.cells_[i], col_type))) {
-      LOG_WARN("stored row to new row obj failed", K(ret),
-               K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(i));
-    } else if (OB_FAIL(reshape_storage_value(col_type, col_accuracy, allocator, storage_row.cells_[i]))) {
+      storage_row.storage_datums_[i].set_nop();
+    } else if (FALSE_IT(storage_row.storage_datums_[i].shallow_copy_from_datum(dml_row.cells()[projector_idx]))) {
+    } else if (storage_row.storage_datums_[i].is_null()) {
+      //nothing to do
+    } else if (OB_FAIL(reshape_datum_value(col_type, col_accuracy, true, allocator, storage_row.storage_datums_[i]))) {
       LOG_WARN("reshape storage value failed", K(ret));
+    } else if (col_type.is_lob_storage() && col_type.has_lob_header()) {
+      storage_row.storage_datums_[i].set_has_lob_header();
     }
   }
+
   //to project shadow rowkey with unique index
   if (OB_SUCC(ret) && dml_ctdef.spk_cnt_) {
     bool need_shadow_columns = false;
@@ -229,7 +233,7 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
       //need to fill shadow pk with the real pk value
       bool rowkey_has_null = false;
       for (int64_t i = 0; !rowkey_has_null && i < index_key_cnt; i++) {
-        rowkey_has_null = storage_row.cells_[i].is_null();
+        rowkey_has_null = storage_row.storage_datums_[i].is_null();
       }
       need_shadow_columns = rowkey_has_null;
     } else {
@@ -237,14 +241,14 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
       //need to fill shadow pk with the real pk value
       bool is_rowkey_all_null = true;
       for (int64_t i = 0; is_rowkey_all_null && i < index_key_cnt; i++) {
-        is_rowkey_all_null = storage_row.cells_[i].is_null();
+        is_rowkey_all_null = storage_row.storage_datums_[i].is_null();
       }
       need_shadow_columns = is_rowkey_all_null;
     }
     if (!need_shadow_columns) {
       for (int64_t i = 0; i < dml_ctdef.spk_cnt_; ++i) {
         int64_t spk_idx = index_key_cnt + i;
-        storage_row.cells_[spk_idx].set_null();
+        storage_row.storage_datums_[spk_idx].set_null();
       }
     }
   }
@@ -398,7 +402,7 @@ int ObDASUtils::find_child_das_def(const ObDASBaseCtDef *root_ctdef,
 
 int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
                                   const storage::ObDMLBaseParam &dml_param,
-                                  ObNewRow &row,
+                                  blocksstable::ObDatumRow &row,
                                   ObDASOpType op_type,
                                   bool is_old_row)
 {
@@ -432,23 +436,26 @@ int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
       }
     }
 
-    row.cells_[sequence_col].set_int(ObObjType::ObIntType, static_cast<int64_t>(autoinc_seq));
+    row.storage_datums_[sequence_col].reuse();
+    row.storage_datums_[dmltype_col].reuse();
+    row.storage_datums_[old_new_col].reuse();
+
+    row.storage_datums_[sequence_col].set_int(static_cast<int64_t>(autoinc_seq));
     if (sql::DAS_OP_TABLE_DELETE == op_type) {
-      row.cells_[dmltype_col].set_varchar("D");
-      row.cells_[old_new_col].set_varchar("O");
+      row.storage_datums_[dmltype_col].set_string(ObString("D"));
+      row.storage_datums_[old_new_col].set_string(ObString("O"));
     } else if (sql::DAS_OP_TABLE_UPDATE == op_type) {
-      row.cells_[dmltype_col].set_varchar("U");
+      row.storage_datums_[dmltype_col].set_string(ObString("U"));
       if (is_old_row) {
-        row.cells_[old_new_col].set_varchar("O");
+        row.storage_datums_[old_new_col].set_string(ObString("O"));
       } else {
-        row.cells_[old_new_col].set_varchar("N");
+        row.storage_datums_[old_new_col].set_string(ObString("N"));
       }
     } else {
-      row.cells_[dmltype_col].set_varchar("I");
-      row.cells_[old_new_col].set_varchar("N");
+      row.storage_datums_[dmltype_col].set_string(ObString("I"));
+      row.storage_datums_[old_new_col].set_string(ObString("N"));
     }
-    row.cells_[dmltype_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
-    row.cells_[old_new_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+    // TODO: if we need to update col_type_ in col_descs with ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI ?@xuanxi
   }
   return ret;
 }

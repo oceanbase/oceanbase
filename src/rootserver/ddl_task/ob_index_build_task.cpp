@@ -346,52 +346,6 @@ int ObIndexBuildTask::process()
   return ret;
 }
 
-void ObIndexBuildTask::flt_set_task_span_tag() const
-{
-  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
-              ddl_data_table_id, object_id_, ddl_index_table_id, index_table_id_,
-              ddl_is_unique_index, is_unique_index_, ddl_is_global_index, is_global_index_,
-              ddl_schema_version, schema_version_);
-}
-
-void ObIndexBuildTask::flt_set_status_span_tag() const
-{
-  switch (task_status_) {
-  case ObDDLTaskStatus::PREPARE: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::WAIT_TRANS_END: {
-    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_index_table_id, index_table_id_, ddl_schema_version, schema_version_,
-                ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::REDEFINITION: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::VALIDATE_CHECKSUM: {
-    FLT_SET_TAG(ddl_check_unique_snapshot, check_unique_snapshot_, ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::TAKE_EFFECT: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::FAIL: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::SUCCESS: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  default: {
-    break;
-  }
-  }
-}
-
 int ObIndexBuildTask::init(
     const uint64_t tenant_id,
     const int64_t task_id,
@@ -1459,9 +1413,12 @@ int ObIndexBuildTask::enable_index()
     schema_status.tenant_id_ = tenant_id_;
     int64_t version_in_inner_table = OB_INVALID_VERSION;
     int64_t local_schema_version = OB_INVALID_VERSION;
-    if (GCTX.is_standby_cluster()) {
+    bool is_standby = false;
+    if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id_, is_standby))) {
+      LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id_));
+    } else if (is_standby) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("create global index in slave cluster is not allowed", K(ret), K(index_table_id_));
+      LOG_WARN("create global index in standby tenant is not allowed", K(ret), K(index_table_id_));
     } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, index_table_exist))) {

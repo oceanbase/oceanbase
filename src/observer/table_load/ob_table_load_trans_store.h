@@ -74,7 +74,7 @@ public:
 public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
-  int px_write(const ObTabletID &tablet_id, const common::ObNewRow &row);
+  int px_write(const ObTabletID &tablet_id, const blocksstable::ObDatumRow &row);
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:
@@ -95,11 +95,12 @@ private:
                   blocksstable::ObStorageDatum &datum,
                   int32_t session_id);
   int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
+                            const common::ObObj &obj,
                             blocksstable::ObStorageDatum &datum,
-                            const ObObjTypeClass &tc,
                             int32_t session_id);
   int handle_identity_column(const share::schema::ObColumnSchemaV2 *column_schema,
-                             blocksstable::ObStorageDatum &datum,
+                             const common::ObObj &obj,
+                             common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
   int write_row_to_table_store(storage::ObDirectLoadTableStore &table_store,
                                const common::ObTabletID &tablet_id,

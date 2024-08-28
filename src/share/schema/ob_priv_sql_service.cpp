@@ -185,7 +185,9 @@ int ObPrivSqlService::grant_table(
     const ObObjPrivSortKey &obj_priv_key,
     const int64_t new_schema_version_ora,
     const bool is_grant,
-    bool is_revoke_all_ora)
+    bool is_revoke_all_ora,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const bool is_deleted = priv_set == 0;
@@ -202,7 +204,7 @@ int ObPrivSqlService::grant_table(
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(gen_table_priv_dml(exec_tenant_id, table_priv_key, priv_set, dml))) {
+    if (OB_FAIL(gen_table_priv_dml(exec_tenant_id, table_priv_key, priv_set, dml, grantor, grantor_host))) {
       LOG_WARN("gen_table_priv_dml failed", K(table_priv_key), K(priv_set), K(ret));
     }
     // insert into __all_table_privilege
@@ -238,7 +240,8 @@ int ObPrivSqlService::grant_table(
         }
       } else {
         if (OB_FAIL(add_table_priv_history(table_priv_key, priv_set,
-                                           new_schema_version, sql_client))) {
+                                           new_schema_version, sql_client,
+                                           grantor, grantor_host))) {
           LOG_WARN("add_table_priv_history failed", K(table_priv_key),
             K(priv_set), K(new_schema_version), K(ret));
         }
@@ -292,7 +295,9 @@ int ObPrivSqlService::grant_routine(
     const ObString *ddl_stmt_str,
     ObISQLClient &sql_client,
     const uint64_t option,
-    const bool is_grant)
+    const bool is_grant,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const bool is_deleted = priv_set == 0;
@@ -311,7 +316,7 @@ int ObPrivSqlService::grant_routine(
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(gen_routine_priv_dml(exec_tenant_id, routine_priv_key, priv_set, dml))) {
+    if (OB_FAIL(gen_routine_priv_dml(exec_tenant_id, routine_priv_key, priv_set, dml, grantor, grantor_host))) {
       LOG_WARN("gen_routine_priv_dml failed", K(routine_priv_key), K(priv_set), K(ret));
     }
     // insert into __all_routine_privilege
@@ -477,7 +482,9 @@ int ObPrivSqlService::revoke_routine(
     const ObPrivSet priv_set,
     const int64_t new_schema_version,
     const ObString *ddl_stmt_str,
-    ObISQLClient &sql_client)
+    ObISQLClient &sql_client,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   return grant_routine(routine_priv_key,
                      priv_set,
@@ -485,7 +492,9 @@ int ObPrivSqlService::revoke_routine(
                      ddl_stmt_str,
                      sql_client,
                      NO_OPTION,
-                     false);
+                     false,
+                     grantor,
+                     grantor_host);
 }
 
 
@@ -560,7 +569,9 @@ int ObPrivSqlService::revoke_table(
     const int64_t new_schema_version_ora,
     const ObObjPrivSortKey &obj_priv_key,
     const share::ObRawObjPrivArray &obj_priv_array,
-    bool is_revoke_all)
+    bool is_revoke_all,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   return grant_table(table_priv_key,
                      priv_set,
@@ -572,7 +583,9 @@ int ObPrivSqlService::revoke_table(
                      obj_priv_key,
                      new_schema_version_ora,
                      false,
-                     is_revoke_all);
+                     is_revoke_all,
+                     grantor,
+                     grantor_host);
 }
 
 int ObPrivSqlService::revoke_table_ora(
@@ -866,7 +879,9 @@ int ObPrivSqlService::add_table_priv_history(
     const ObTablePrivSortKey &table_priv_key,
     const ObPrivSet &priv_set,
     const int64_t schema_version,
-    common::ObISQLClient &sql_client)
+    common::ObISQLClient &sql_client,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_priv_key.tenant_id_;
@@ -874,7 +889,7 @@ int ObPrivSqlService::add_table_priv_history(
   ObDMLExecHelper exec(sql_client, exec_tenant_id);
   ObDMLSqlSplicer dml;
   int64_t affected_rows = 0;
-  if (OB_FAIL(gen_table_priv_dml(exec_tenant_id, table_priv_key, priv_set, dml))) {
+  if (OB_FAIL(gen_table_priv_dml(exec_tenant_id, table_priv_key, priv_set, dml, grantor, grantor_host))) {
     LOG_WARN("gen_table_priv_dml failed", K(table_priv_key), K(ret));
   } else {
     const int64_t is_deleted = 0;
@@ -923,9 +938,15 @@ int ObPrivSqlService::gen_table_priv_dml(
     const uint64_t exec_tenant_id,
     const ObTablePrivSortKey &table_priv_key,
     const ObPrivSet &priv_set,
-    ObDMLSqlSplicer &dml)
+    ObDMLSqlSplicer &dml,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  ObPrivSet priv_others = 0;
+  priv_others |= (priv_set & OB_PRIV_REFERENCES) != 0 ? OB_PRIV_OTHERS_REFERENCES : 0;
+  priv_others |= (priv_set & OB_PRIV_TRIGGER) != 0 ? OB_PRIV_OTHERS_TRIGGER : 0;
   if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, table_priv_key.tenant_id_)))
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
@@ -945,6 +966,20 @@ int ObPrivSqlService::gen_table_priv_dml(
       || OB_FAIL(dml.add_column("PRIV_SHOW_VIEW", priv_set & OB_PRIV_SHOW_VIEW ? 1 : 0))
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
+  } else if (!ObSQLUtils::is_data_version_ge_424_or_433(compat_version)) {
+    if (priv_others != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("priv others is not suppported when tenant's data version is below 4.2.4.0 or 4.3.3.0", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke table level priv other privilege");
+    }
+  } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (grantor.length() > 0 && OB_FAIL(dml.add_column("GRANTOR", grantor))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (grantor_host.length() > 0 && OB_FAIL(dml.add_column("GRANTOR_HOST", grantor_host))) {
+    LOG_WARN("add column failed", K(ret));
   }
   return ret;
 }
@@ -953,7 +988,9 @@ int ObPrivSqlService::gen_routine_priv_dml(
     const uint64_t exec_tenant_id,
     const ObRoutinePrivSortKey &routine_priv_key,
     const ObPrivSet &priv_set,
-    ObDMLSqlSplicer &dml)
+    ObDMLSqlSplicer &dml,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   int64_t all_priv = 0;
@@ -976,6 +1013,14 @@ int ObPrivSqlService::gen_routine_priv_dml(
       LOG_WARN("add column failed", K(ret));
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (ObSQLUtils::is_data_version_ge_424_or_433(compat_version)) {
+    if (grantor.length() > 0 && OB_FAIL(dml.add_column("GRANTOR", grantor))) {
+      LOG_WARN("add column failed", K(ret));
+    } else if (grantor_host.length() > 0 && OB_FAIL(dml.add_column("GRANTOR_HOST", grantor_host))) {
+      LOG_WARN("add column failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -987,9 +1032,11 @@ int ObPrivSqlService::gen_db_priv_dml(
 {
   int ret = OB_SUCCESS;
   ObPrivSet priv_others = 0;
-  priv_others |= (priv_set & OB_PRIV_EXECUTE) != 0 ? 1 : 0;
-  priv_others |= (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ? 2 : 0;
-  priv_others |= (priv_set & OB_PRIV_CREATE_ROUTINE) != 0 ? 4 : 0;
+  priv_others |= (priv_set & OB_PRIV_EXECUTE) != 0 ? OB_PRIV_OTHERS_EXECUTE : 0;
+  priv_others |= (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ? OB_PRIV_OTHERS_ALTER_ROUTINE : 0;
+  priv_others |= (priv_set & OB_PRIV_CREATE_ROUTINE) != 0 ? OB_PRIV_OTHERS_CREATE_ROUTINE : 0;
+  priv_others |= (priv_set & OB_PRIV_REFERENCES) != 0 ? OB_PRIV_OTHERS_REFERENCES : 0;
+  priv_others |= (priv_set & OB_PRIV_TRIGGER) != 0 ? OB_PRIV_OTHERS_TRIGGER : 0;
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
@@ -1015,9 +1062,17 @@ int ObPrivSqlService::gen_db_priv_dml(
     if (priv_others != 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("priv others is not suppported when tenant's data version is below 4.3.1.0 or 4.2.2.0", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke database level priv other privilege");
     }
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add column failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!ObSQLUtils::is_data_version_ge_424_or_433(compat_version) &&
+            ((priv_set & OB_PRIV_REFERENCES) != 0 || (priv_set & OB_PRIV_TRIGGER) != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("priv references/priv trigger is not suppported when tenant's data version is below 4.2.4.0 or 4.3.3.0", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke database level trigger privilege/references privilege");
   }
   return ret;
 }

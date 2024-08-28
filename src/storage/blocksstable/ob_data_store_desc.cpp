@@ -37,6 +37,7 @@ bool ObStaticDataStoreDesc::is_valid() const
 void ObStaticDataStoreDesc::reset()
 {
   MEMSET(this, 0, sizeof(*this));
+  need_submit_io_ = true;
 }
 
 int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
@@ -58,6 +59,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   encrypt_id_ = desc.encrypt_id_;
   master_key_id_ = desc.master_key_id_;
   MEMCPY(encrypt_key_, desc.encrypt_key_, sizeof(encrypt_key_));
+  need_submit_io_ = desc.need_submit_io_;
   return ret;
 }
 
@@ -104,7 +106,8 @@ int ObStaticDataStoreDesc::init(
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const share::SCN &end_scn,
-    const int64_t cluster_version)
+    const int64_t cluster_version,
+    const bool need_submit_io)
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(merge_type);
@@ -118,6 +121,7 @@ int ObStaticDataStoreDesc::init(
     merge_type_ = merge_type;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
+    need_submit_io_ = need_submit_io;
 
     if (!is_major) {
       end_scn_ = end_scn;
@@ -863,11 +867,12 @@ int ObWholeDataStoreDesc::init(
     const int64_t cluster_version,
     const share::SCN &end_scn,
     const storage::ObStorageColumnGroupSchema *cg_schema,
-    const uint16_t table_cg_idx)
+    const uint16_t table_cg_idx,
+    const bool need_submit_io /*=true*/)
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type, snapshot_version, end_scn, cluster_version))) {
+  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type, snapshot_version, end_scn, cluster_version, need_submit_io))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));

@@ -51,5 +51,17 @@ bool ObDirectLoadInsertMode::is_type_valid(const Type type)
   return type > INVALID_INSERT_MODE && type < MAX_INSERT_MODE;
 }
 
+/**
+ * ObDirectLoadLevel
+ */
+
+DEFINE_ENUM_FUNC(ObDirectLoadLevel::Type, type, OB_DIRECT_LOAD_LEVEL_DEF, ObDirectLoadLevel::);
+
+bool ObDirectLoadLevel::is_type_valid(const Type type)
+{
+  return type > INVALID_LEVEL && type < MAX_LEVEL;
+}
+
+
 } // namespace storage
 } // namespace oceanbase

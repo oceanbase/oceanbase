@@ -1184,7 +1184,7 @@ int ObTenantTabletStatMgr::get_queuing_cfg(
       }
     } else {
       queuing_cfg = ObTableQueuingModeCfg::get_basic_config(stream_node->mode_);
-      LOG_DEBUG("chengkong debug: success get queuing cfg", K(ret), K(ls_id), K(tablet_id), K(queuing_cfg));
+      LOG_DEBUG("success get queuing cfg", K(ret), K(ls_id), K(tablet_id), K(queuing_cfg));
     }
   }
   return ret;

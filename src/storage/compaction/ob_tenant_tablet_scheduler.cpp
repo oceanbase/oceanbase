@@ -1037,10 +1037,11 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     const ObLSID &ls_id,
     const storage::ObTablet &tablet,
     const ObMergeType merge_type,
-    const int64_t &merge_snapshot_version)
+    const int64_t &merge_snapshot_version,
+    const ObDagId *dag_net_id /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
-  if (is_major_merge_type(merge_type) && !tablet.is_row_store()) {
+  if (is_major_merge_type(merge_type) && (!tablet.is_row_store() || is_convert_co_major_merge(merge_type))) {
     ObCOMergeDagParam param;
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;
@@ -1048,6 +1049,9 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     param.merge_version_ = merge_snapshot_version;
     param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
     param.transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
+    if (OB_UNLIKELY(nullptr != dag_net_id)) {
+      param.dag_net_id_ = *dag_net_id;
+    }
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
         LOG_WARN("failed to schedule tablet merge dag", K(ret));
@@ -1066,6 +1070,27 @@ int ObTenantTabletScheduler::schedule_merge_dag(
         LOG_WARN("failed to schedule tablet merge dag", K(ret));
       }
     }
+    FLOG_INFO("schedule merge dag", K(ret), K(param), K(tablet.is_row_store()));
+  }
+  return ret;
+}
+
+int ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(
+      const ObLSID &ls_id,
+      const ObTablet &tablet,
+      const int64_t retry_times,
+      const ObDagId& curr_dag_net_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(
+                  ls_id, tablet, compaction::ObMergeType::CONVERT_CO_MAJOR_MERGE, tablet.get_last_major_snapshot_version(), &curr_dag_net_id))) {
+    if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
+      ret = tmp_ret;
+      LOG_WARN("failed to schedule co merge dag net for cs replica", K(ret), K(ls_id), "tablet_id", tablet.get_tablet_id());
+    }
+  } else {
+    LOG_INFO("[CS-Replica] schedule COMergeDagNet to convert row store to column store", K(retry_times), K(ls_id), "tablet_id", tablet.get_tablet_id(), K(curr_dag_net_id));
   }
   return ret;
 }
@@ -1501,7 +1526,8 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
       }
     } // end of while
 
-    const bool is_sync = true;
+    // ATTENTION! : do not use sync freeze because cyclic dependencies exist
+    const bool is_sync = false;
     start_time_us = ObClockGenerator::getClock();
     if (need_fast_freeze_tablets.empty()) {
       // empty array. do not need freeze

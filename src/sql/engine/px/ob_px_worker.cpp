@@ -188,7 +188,6 @@ void PxWorkerFunctor::operator ()(bool need_exec)
         ObThreadLogLevelUtils::init(env_arg_.get_log_level());
       }
     }
-    THIS_WORKER.set_group_id(env_arg_.get_group_id());
     // When deserialize expr, sql mode will affect basic function of expr.
     CompatModeGuard mode_guard(env_arg_.is_oracle_mode() ? Worker::CompatMode::ORACLE : Worker::CompatMode::MYSQL);
     MTL_SWITCH(sqc_handler->get_tenant_id()) {
@@ -298,7 +297,6 @@ int ObPxThreadWorker::run_at(ObPxRpcInitTaskArgs &task_arg, omt::ObPxPool &px_po
   env_args.set_trace_id(*ObCurTraceId::get_trace_id());
   env_args.set_is_oracle_mode(lib::is_oracle_mode());
   env_args.set_gctx(&gctx_);
-  env_args.set_group_id(THIS_WORKER.get_group_id());
   if (OB_LOG_LEVEL_NONE != common::ObThreadLogLevelUtils::get_level()) {
     env_args.set_log_level(common::ObThreadLogLevelUtils::get_level());
   }

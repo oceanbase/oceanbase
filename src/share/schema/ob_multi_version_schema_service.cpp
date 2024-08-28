@@ -968,7 +968,7 @@ int ObMultiVersionSchemaService::get_cluster_schema_guard(
   // new schema refresh
   if (OB_FAIL(guard.fast_reset())) {
     LOG_WARN("fail to reset guard", K(ret));
-  } else if (OB_FAIL(guard.init(GCTX.is_standby_cluster()))) {
+  } else if (OB_FAIL(guard.init())) {
     LOG_WARN("fail to init guard", K(ret));
   } else {
     ObSEArray<uint64_t, 1> tenant_ids;
@@ -1036,7 +1036,7 @@ int ObMultiVersionSchemaService::get_cluster_schema_guard(
           } else {
             // switchover/failover not clear schema_status, Cannot trust schema_status content unconditionally
             // bugfix:
-            if (guard.is_standby_cluster() || (*tenant)->is_restore()) {
+            if ((*tenant)->is_restore()) {
               if (OB_FAIL(get_schema_status(schema_status_array, tenant_id, schema_status))) {
                 LOG_WARN("fail to get schema status", K(ret), KPC(*tenant));
               }
@@ -1093,7 +1093,7 @@ int ObMultiVersionSchemaService::get_tenant_schema_guard(
     LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
   } else if (OB_FAIL(guard.fast_reset())) {
     LOG_WARN("fail to reset schema guard", K(ret));
-  } else if (OB_FAIL(guard.init(GCTX.is_standby_cluster()))) {
+  } else if (OB_FAIL(guard.init())) {
     LOG_WARN("fail to init guard", K(ret));
   }
   sys_schema_status.tenant_id_ = OB_SYS_TENANT_ID;
@@ -1150,8 +1150,7 @@ int ObMultiVersionSchemaService::get_tenant_schema_guard(
     // Avoid circular dependencies
   } else if (ObSchemaService::g_liboblog_mode_) {
     tenant_schema_status.tenant_id_ = tenant_id;
-  } else if (!guard.is_standby_cluster()
-             && OB_FAIL(check_tenant_is_restore(&guard, tenant_id, guard.restore_tenant_exist_))) {
+  } else if (OB_FAIL(check_tenant_is_restore(&guard, tenant_id, guard.restore_tenant_exist_))) {
     LOG_WARN("fail to check restore tenant exist", K(ret), K(tenant_id));
   } else if (guard.use_schema_status()) {
     ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
@@ -1482,10 +1481,9 @@ int ObMultiVersionSchemaService::retry_get_schema_guard(
         || is_meta_tenant(tenant_id)
         || ObSchemaService::g_liboblog_mode_) {
       // skip
-    } else if (!schema_guard.is_standby_cluster()
-               && OB_FAIL(check_tenant_is_restore(&schema_guard, tenant_id, is_restore))) {
+    } else if (OB_FAIL(check_tenant_is_restore(&schema_guard, tenant_id, is_restore))) {
       LOG_WARN("fail to check restore tenant exist", K(ret), K(tenant_id));
-    } else if (schema_guard.is_standby_cluster() || is_restore) {
+    } else if (is_restore) {
       ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
       if (OB_ISNULL(schema_status_proxy)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2392,7 +2390,6 @@ int ObMultiVersionSchemaService::refresh_and_add_schema(const ObIArray<uint64_t>
   FLOG_INFO("[REFRESH_SCHEMA] start to refresh and add schema", K(tenant_ids));
   const int64_t start = ObTimeUtility::current_time();
   int ret = OB_SUCCESS;
-  bool is_standby_cluster = GCTX.is_standby_cluster();
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -2410,7 +2407,7 @@ int ObMultiVersionSchemaService::refresh_and_add_schema(const ObIArray<uint64_t>
         LOG_WARN("fail to check restore tenant exist", K(ret), K(tmp_ret), K(tenant_ids));
         restore_tenant_exist = true;
       }
-      if (is_standby_cluster || restore_tenant_exist) {
+      if (restore_tenant_exist) {
         if (OB_ISNULL(schema_status_proxy)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("schema_status_proxy is null", K(ret));
@@ -2723,7 +2720,6 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
   const int64_t start = ObTimeUtility::current_time();
   int ret = OB_SUCCESS;
   bool refresh_full_schema = false;
-  bool is_standby_cluster = GCTX.is_standby_cluster();
   bool is_restore = false;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
@@ -2743,7 +2739,7 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
     ObISQLClient &sql_client = *sql_proxy_;
 
     // read refresh_schema_status from inner table
-    if ((!is_standby_cluster && !is_restore)
+    if (!is_restore
          || is_sys_tenant(tenant_id)
          || is_meta_tenant(tenant_id)) {
       // 1. System tenants strengthen the consistency of reading and refresh schema

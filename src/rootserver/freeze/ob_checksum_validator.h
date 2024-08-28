@@ -67,7 +67,8 @@ public:
     ObArray<share::ObTabletLSPair> &finish_tablet_ls_pair_array,
     ObArray<share::ObTabletChecksumItem> &finish_tablet_ckm_array,
     compaction::ObUncompactInfo &uncompact_info,
-    ObFTSGroupArray &fts_group_array)
+    ObFTSGroupArray &fts_group_array,
+    share::ObCompactionLocalityCache  &ls_locality_cache)
     : is_inited_(false),
       is_primary_service_(false),
       need_validate_index_ckm_(false),
@@ -93,7 +94,8 @@ public:
       simple_schema_(nullptr),
       table_compaction_info_(),
       replica_ckm_items_(),
-      last_table_ckm_items_(tenant_id)
+      last_table_ckm_items_(tenant_id),
+      ls_locality_cache_(ls_locality_cache)
   {}
   ~ObChecksumValidator() {}
   int init(
@@ -198,6 +200,7 @@ private:
   ObArray<share::ObTabletLSPair> cur_tablet_ls_pair_array_;
   ObReplicaCkmItems replica_ckm_items_;
   compaction::ObTableCkmItems last_table_ckm_items_; // only cached last data table with index
+  share::ObCompactionLocalityCache  &ls_locality_cache_;
 };
 
 } // end namespace rootserver

@@ -211,12 +211,10 @@ public:
                     ObIArray<ObTabletID> &freeze_failed_tablets);
   int get_all_async_freeze_tablets(const int64_t ls_epoch, ObIArray<ObTabletID> &tablet_ids);
   bool is_async_freeze_tablets_empty() const { return async_freeze_tablets_.empty(); }
-  bool is_async_tablet_freeze_task_running() { return ATOMIC_LOAD(&is_async_tablet_freeze_task_running_); }
-  bool set_async_tablet_freeze_task_start_succ() { return ATOMIC_BCAS(&is_async_tablet_freeze_task_running_, false, true); }
-  void set_async_freeze_task_stop() { ATOMIC_STORE(&is_async_tablet_freeze_task_running_, false); }
   void record_async_freeze_tablet(const AsyncFreezeTabletInfo &async_freeze_tablet_info);
   void erase_async_freeze_tablet(const AsyncFreezeTabletInfo &async_freeze_tablet_info);
-  void commit_an_async_freeze_task(const int64_t trace_id, const bool is_ls_freeze);
+  void submit_an_async_freeze_task(const int64_t trace_id, const bool is_ls_freeze);
+  void async_ls_freeze_consumer(const int64_t trace_id);
   void async_tablet_freeze_consumer(const int64_t trace_id);
   common::hash::ObHashSet<AsyncFreezeTabletInfo> &get_async_freeze_tablets() { return async_freeze_tablets_; }
   /********************** freeze **********************/
@@ -369,6 +367,8 @@ private:
                      ObIArray<ObTabletID> &freeze_failed_tablets);
   int inner_wait_memtable_freeze_finish_(ObTableHandleV2 &memtable_handle);
   void submit_checkpoint_task();
+  bool async_freeze_task_already_exists_(const bool is_ls_freeze);
+  bool acquired_exec_async_task_permission_(const bool is_ls_freeze);
 private:
   // flag whether the logsteram is freezing
   // the first bit: 1, freeze; 0, not freeze
@@ -394,7 +394,8 @@ private:
   bool need_resubmit_log_;
   bool enable_;                     // whether we can do freeze now
   bool is_inited_;
-  bool is_async_tablet_freeze_task_running_;
+  bool is_async_tablet_freeze_task_existing_;
+  bool is_async_ls_freeze_task_existing_;
   bool throttle_is_skipping_;
   bool tenant_replay_is_pending_;
   common::hash::ObHashSet<AsyncFreezeTabletInfo> async_freeze_tablets_;

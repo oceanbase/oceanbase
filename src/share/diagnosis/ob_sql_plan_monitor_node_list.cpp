@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 #include "lib/rc/ob_rc.h"
-#include "lib/thread/thread_mgr.h"
+#include "share/ob_thread_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

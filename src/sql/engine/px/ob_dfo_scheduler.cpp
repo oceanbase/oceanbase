@@ -307,7 +307,7 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
       } else if (parent->is_root_dfo() && !parent->is_thread_inited() &&
           OB_FAIL(ObPXServerAddrUtil::alloc_by_local_distribution(ctx, *parent))) {
         LOG_WARN("fail to alloc local distribution", K(ret));
-      } else if (!parent->is_root_dfo() &&
+      } else if (!parent->is_root_dfo() && !parent->is_thread_inited() &&
                  ObPQDistributeMethod::PARTITION_HASH == child->get_dist_method()) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
             coord_info_.pruning_table_location_,
@@ -1426,7 +1426,7 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
                                                                          parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
         } else { /*do nohting.*/ }
-      } else if (parent.is_root_dfo()) {
+      } else if (parent.is_root_dfo() || parent.has_into_odps()) {
         // QC/local dfo，直接在本机本线程执行，无需计算执行位置
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_local_distribution(exec_ctx,
                                                                     parent))) {

@@ -272,6 +272,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_table_direct_insert_service.cpp
   engine/cmd/ob_tenant_snapshot_executor.cpp
   engine/cmd/ob_mock_executor.cpp
+  engine/cmd/ob_olap_async_job_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_dml
@@ -302,7 +303,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_abs.cpp
   engine/expr/ob_expr_acos.cpp
   engine/expr/ob_expr_add.cpp
-  engine/expr/ob_expr_aes_encrypt.cpp
+  engine/expr/ob_expr_symmetric_encrypt.cpp
   engine/expr/ob_expr_agg_param_list.cpp
   engine/expr/ob_expr_and.cpp
   engine/expr/ob_expr_any_value.cpp
@@ -313,6 +314,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_at_time_zone.cpp
   engine/expr/ob_expr_atan.cpp
   engine/expr/ob_expr_atan2.cpp
+  engine/expr/ob_expr_audit_log_func.cpp
   engine/expr/ob_expr_autoinc_nextval.cpp
   engine/expr/ob_expr_benchmark.cpp
   engine/expr/ob_expr_between.cpp
@@ -706,6 +708,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_contains.cpp
   engine/expr/ob_expr_st_within.cpp
   engine/expr/ob_expr_sql_mode_convert.cpp
+  engine/expr/ob_expr_can_access_trigger.cpp
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
   engine/expr/ob_expr_xml_func_helper.cpp
@@ -887,7 +890,9 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
   engine/table/ob_external_table_access_service.cpp
+  # engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
+  engine/table/ob_odps_table_row_iter.cpp
 )
 
 ob_set_subtarget(ob_sql executor
@@ -1116,6 +1121,8 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_alter_system_resolver.cpp
   resolver/cmd/ob_tenant_snapshot_resolver.cpp
   resolver/cmd/ob_tenant_clone_resolver.cpp
+  resolver/cmd/ob_olap_async_job_resolver.cpp
+  resolver/cmd/ob_olap_async_job_stmt.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl
@@ -1344,6 +1351,8 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_mv_rewrite.cpp
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp
+  rewrite/ob_transform_late_materialization.cpp
+  rewrite/ob_transform_mv_rewrite_prepare.cpp
 )
 
 ob_set_subtarget(ob_sql session
@@ -1354,6 +1363,7 @@ ob_set_subtarget(ob_sql session
   session/ob_sys_params_mgr.cpp
   session/ob_user_resource_mgr.cpp
   session/ob_sess_info_verify.cpp
+  session/ob_local_session_var.cpp
 )
 
 ob_set_subtarget(ob_sql udr
@@ -1390,8 +1400,24 @@ add_library(ob_sql_static
   STATIC
   EXCLUDE_FROM_ALL)
 
+if(OB_BUILD_OPENSOURCE)
 target_link_libraries(ob_sql_static
-  PUBLIC ob_sql ob_sql_server_parser_static)
+  PUBLIC ob_sql
+  ob_sql_server_parser_static)
+else()
+target_link_libraries(ob_sql_static
+  PUBLIC ob_sql
+  ob_sql_server_parser_static
+  ${DEP_DIR}/lib64/libprotobuf.a
+  ${DEP_DIR}/lib64/libzstd.a
+  ${DEP_DIR}/lib64/libbrotlidec.a
+  ${DEP_DIR}/lib64/libbrotlienc.a
+  ${DEP_DIR}/lib64/libbrotlicommon.a
+  ${DEP_DIR}/lib64/libbz2.a
+  ${DEP_DIR}/lib64/libodps_sdk_tunnel_static.a
+  ${DEP_DIR}/lib64/libodps_sdk_common_static.a
+  ${DEP_DIR}/lib64/libodps_sdk_core_static.a)
+endif()
 
 execute_process(
   COMMAND bash gen_parser.sh

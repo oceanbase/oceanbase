@@ -13,6 +13,7 @@
 #pragma once
 
 #include "lib/container/ob_iarray.h"
+#include "lib/compress/ob_compress_util.h"
 
 namespace oceanbase
 {
@@ -21,10 +22,20 @@ namespace observer
 class ObTableLoadExecCtx;
 class ObTableLoadInstance;
 }
+namespace common
+{
+class ObTabletID;
+}
+namespace storage
+{
+struct ObDirectLoadLevel;
+}
 
 namespace sql
 {
 class ObExecContext;
+class ObPhysicalPlan;
+class ObSqlCtx;
 
 class ObTableDirectInsertCtx
 {
@@ -71,8 +82,12 @@ public:
   }
 
 private:
-  int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
-                          ObCompressorType &compressor_type);
+  int get_direct_load_level(const sql::ObPhysicalPlan &phy_plan,
+                            const uint64_t table_id,
+                            storage::ObDirectLoadLevel::Type &load_level);
+  int get_tablet_ids(const sql::ObSqlCtx &sql_ctx,
+                     const uint64_t table_id,
+                     common::ObIArray<common::ObTabletID> &tablet_ids);
   int get_is_heap_table(share::schema::ObSchemaGetterGuard &schema_guard,
                         const uint64_t tenant_id,
                         const uint64_t table_id,

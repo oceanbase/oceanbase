@@ -551,6 +551,11 @@ int ObStorageCosBase::open(
   } else if (OB_FAIL(handle_.build_bucket_and_object_name(uri))) {
     OB_LOG(WARN, "failed to build bucket and object name", K(ret), K(uri));
   }
+#ifdef ERRSIM
+    if (OB_NOT_NULL(storage_info) && (OB_SUCCESS != EventTable::EN_ENABLE_LOG_OBJECT_STORAGE_CHECKSUM_TYPE)) {
+      OB_LOG(ERROR, "errsim backup io with checksum type", "checksum_type", storage_info->get_checksum_type_str());
+    }
+#endif
   return ret;
 }
 

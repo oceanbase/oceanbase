@@ -245,22 +245,22 @@ public: // derived from ObITable
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
-      const storage::ObStoreRow &row,
+      blocksstable::ObDatumRow &row,
       const share::ObEncryptMeta *encrypt_meta,
       const bool check_exist);
   virtual int set(
       const storage::ObTableIterParam &param,
 	    storage::ObTableAccessContext &context,
-      const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
+      const common::ObIArray<share::schema::ObColDesc> &columns,
       const ObIArray<int64_t> &update_idx,
-      const storage::ObStoreRow &old_row,
-      const storage::ObStoreRow &new_row,
+      const blocksstable::ObDatumRow &old_row,
+      blocksstable::ObDatumRow &new_row,
       const share::ObEncryptMeta *encrypt_meta);
   int multi_set(
       const storage::ObTableIterParam &param,
 	    storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns,
-      const storage::ObStoreRow *rows,
+      blocksstable::ObDatumRow *rows,
       const int64_t row_count,
       const bool check_exist,
       const share::ObEncryptMeta *encrypt_meta,
@@ -287,7 +287,8 @@ public: // derived from ObITable
   virtual int lock(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
-      const common::ObNewRow &row);
+      ObColDescArray &col_desc,
+      blocksstable::ObDatumRow &row);
   virtual int lock(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -476,10 +477,11 @@ private:
   int mvcc_write_(
       const storage::ObTableIterParam &param,
 	    storage::ObTableAccessContext &context,
-	    const ObMemtableKey *key,
+	    const ObMemtableKey &key,
 	    const ObTxNodeArg &arg,
       const bool check_exist,
 	    bool &is_new_locked,
+      ObMemtableKeyGenerator::ObMemtableKeyBuffer *memtable_key_buffer,
       ObMvccRowAndWriteResult *mvcc_row = nullptr);
 
   int mvcc_replay_(storage::ObStoreCtx &ctx,
@@ -513,7 +515,6 @@ private:
   int lock_rows_on_frozen_stores_(
       const bool check_exist,
       const storage::ObTableIterParam &param,
-      const ObMemtableKeyGenerator &memtable_keys,
       storage::ObTableAccessContext &context,
       ObMvccRowAndWriteResults &mvcc_rows,
       ObRowsInfo &rows_info);
@@ -541,26 +542,22 @@ private:
   void set_begin(ObMvccAccessCtx &ctx);
   void set_end(ObMvccAccessCtx &ctx, int ret);
 
-  int check_standby_cluster_schema_condition_(storage::ObStoreCtx &ctx,
-                                              const int64_t table_id,
-                                              const int64_t table_version);
   int set_(
       const storage::ObTableIterParam &param,
       const common::ObIArray<share::schema::ObColDesc> &columns,
-      const storage::ObStoreRow &new_row,
-      const storage::ObStoreRow *old_row,
+      const blocksstable::ObDatumRow &new_row,
+      const blocksstable::ObDatumRow *old_row,
       const common::ObIArray<int64_t> *update_idx,
-      const ObMemtableKey &mtk,
       const bool check_exist,
       storage::ObTableAccessContext &context,
+      ObMemtableKeyGenerator &memtable_key_generator,
       ObMvccRowAndWriteResult *mvcc_row = nullptr);
   int multi_set_(
       const storage::ObTableIterParam &param,
       const common::ObIArray<share::schema::ObColDesc> &columns,
-      const storage::ObStoreRow *rows,
+      const blocksstable::ObDatumRow *rows,
       const int64_t row_count,
       const bool check_exist,
-      const ObMemtableKeyGenerator &memtable_keys,
       storage::ObTableAccessContext &context,
       storage::ObRowsInfo &rows_info);
   int lock_(

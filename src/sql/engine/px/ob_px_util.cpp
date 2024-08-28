@@ -50,6 +50,83 @@ case ERR_CODE: {                                                \
 
 OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_, *mview_ids_, *last_refresh_scns_);
 
+ObBaseOrderMap::~ObBaseOrderMap()
+{
+  int ret = OB_SUCCESS;
+  ClearMapFunc clear_func;
+  if (OB_FAIL(map_.foreach_refactored(clear_func))) {
+    LOG_WARN("failed to clear");
+  }
+  map_.destroy();
+  allocator_.reset();
+}
+
+int ObBaseOrderMap::init(int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(map_.create(count, ObModIds::OB_SQL_PX))) {
+    SQL_LOG(WARN, "Failed to create hash table", K(count));
+  }
+  return ret;
+}
+
+int ObBaseOrderMap::add_base_partition_order(int64_t pwj_group_id,
+                                             const TabletIdArray &tablet_id_array,
+                                             const DASTabletLocIArray &dst_locations)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  ObTMArray<int64_t> *base_order = nullptr;
+  if (OB_ISNULL(buf = reinterpret_cast<ObTMArray<int64_t> *>(
+                    allocator_.alloc(sizeof(ObTMArray<int64_t>))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory");
+  } else if (FALSE_IT(base_order = new(buf) ObTMArray<int64_t>())) {
+  } else if (OB_FAIL(base_order->reserve(dst_locations.count()))) {
+    LOG_WARN("fail reserve base order", K(ret), K(dst_locations.count()));
+  } else if (OB_FAIL(map_.set_refactored(pwj_group_id, base_order))) {
+    base_order->destroy();
+    LOG_WARN("failed to set", K(pwj_group_id));
+  } else {
+    for (int i = 0; i < dst_locations.count() && OB_SUCC(ret); ++i) {
+      for (int j = 0; j < tablet_id_array.count() && OB_SUCC(ret); ++j) {
+        if (dst_locations.at(i)->tablet_id_.id() == tablet_id_array.at(j)) {
+          if (OB_FAIL(base_order->push_back(j))) {
+            LOG_WARN("fail to push idx into base order", K(ret));
+          }
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBaseOrderMap::reorder_partition_as_base_order(int64_t pwj_group_id,
+                                                    const TabletIdArray &tablet_id_array,
+                                                    DASTabletLocIArray &dst_locations)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<int64_t> *base_order = nullptr;
+  if (OB_FAIL(map_.get_refactored(pwj_group_id, base_order))) {
+    LOG_WARN("hash not found", K(pwj_group_id));
+  } else if (base_order->count() != dst_locations.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not match count", K(base_order->count()), K(dst_locations.count()));
+  } else {
+    int index = 0;
+    for (int i = 0; i < base_order->count() && OB_SUCC(ret); ++i) {
+      for (int j = 0; j < dst_locations.count() && OB_SUCC(ret); ++j) {
+        if (dst_locations.at(j)->tablet_id_.id() == tablet_id_array.at(base_order->at(i))) {
+          std::swap(dst_locations.at(j), dst_locations.at(index++));
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // 物理分布策略：对于叶子节点，dfo 分布一般直接按照数据分布来
 // Note：如果 dfo 中有两个及以上的 scan，仅仅考虑第一个。并且，要求其余 scan
 //       的副本分布和第一个 scan 完全一致，否则报错。
@@ -180,7 +257,6 @@ int ObPXServerAddrUtil::get_external_table_loc(
       //For recovered cluster, the file addr may not in the cluster. Then igore it.
       LOG_WARN("filter files in location failed", K(ret));
     }
-
     if (OB_FAIL(ret)) {
     } else if (ext_file_urls.empty()) {
       const char* dummy_file_name = "#######DUMMY_FILE#######";
@@ -997,7 +1073,10 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
   ObDASTableLoc *dml_table_loc = nullptr;
   ObTableID dml_table_location_key = OB_INVALID_ID;
   ObTableID dml_ref_table_id = OB_INVALID_ID;
-  ObSEArray<int64_t, 2>base_order;
+  ObBaseOrderMap base_order_map;
+  if (OB_FAIL(base_order_map.init(max(1, scan_ops.count())))) {
+    LOG_WARN("Failed to init base_order_map");
+  }
   // 处理insert op 对应的partition location信息
   if (OB_FAIL(ret) || OB_ISNULL(dml_op)) {
     // pass
@@ -1030,7 +1109,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table loc is null", K(ret));
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx, base_table_location_key,
-        dfo, base_order, table_loc, dml_op))) {
+        dfo, base_order_map, table_loc, dml_op))) {
       LOG_WARN("failed to set sqc accessed location", K(ret));
     }
     dml_table_loc = table_loc;
@@ -1060,7 +1139,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
           // dml op has already set sqc.get_location information,
           // table scan does not need to be set again
           OB_ISNULL(dml_op) ? base_table_location_key : OB_INVALID_ID,
-          dfo, base_order, table_loc, scan_op))) {
+          dfo, base_order_map, table_loc, scan_op))) {
       LOG_WARN("failed to set sqc accessed location", K(ret), K(table_location_key),
                K(ref_table_id), KPC(table_loc));
     }
@@ -1077,13 +1156,10 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
   return ret;
 }
 
-
-int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext &ctx,
-                                                   int64_t base_table_location_key,
-                                                   ObDfo &dfo,
-                                                   ObIArray<int64_t> &base_order,
-                                                   const ObDASTableLoc *table_loc,
-                                                   const ObOpSpec *phy_op)
+int ObPXServerAddrUtil::set_sqcs_accessed_location(
+    ObExecContext &ctx, int64_t base_table_location_key, ObDfo &dfo,
+    ObBaseOrderMap &base_order_map,
+    const ObDASTableLoc *table_loc, const ObOpSpec *phy_op)
 {
   int ret = OB_SUCCESS;
   common::ObArray<ObPxSqcMeta *> sqcs;
@@ -1111,7 +1187,7 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext &ctx,
       LOG_WARN("fail to get table scan partition order", K(ret));
     } else if (OB_FAIL(ObPXServerAddrUtil::reorder_all_partitions(table_location_key,
         table_loc->get_ref_table_id(), locations,
-        temp_locations, asc_order, ctx, base_order))) {
+        temp_locations, asc_order, ctx, base_order_map))) {
       // 按照GI要求的访问顺序对当前SQC涉及到的分区进行排序
       // 如果是partition wise join场景, 需要根据partition_wise_join要求结合GI要求做asc/desc排序
       LOG_WARN("fail to reorder all partitions", K(ret));
@@ -1225,11 +1301,10 @@ private:
   ObTabletIdxMap *map_;
 };
 
-int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
-    int64_t ref_table_id,
-    const DASTabletLocList &src_locations,
-    DASTabletLocIArray &dst_locations,
-    bool asc, ObExecContext &exec_ctx, ObIArray<int64_t> &base_order)
+int ObPXServerAddrUtil::reorder_all_partitions(
+    int64_t table_location_key, int64_t ref_table_id, const DASTabletLocList &src_locations,
+    DASTabletLocIArray &dst_locations, bool asc, ObExecContext &exec_ctx,
+    ObBaseOrderMap &base_order_map)
 {
   int ret = OB_SUCCESS;
   dst_locations.reset();
@@ -1237,7 +1312,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
     ObTabletIdxMap tablet_order_map;
     if (OB_FAIL(dst_locations.reserve(src_locations.size()))) {
       LOG_WARN("fail reserve locations", K(ret), K(src_locations.size()));
-    // virtual table is list parition now,
+    // virtual table is list partition now,
     // no actual partition define, can't traverse
     // table schema for partition info
     } else if (!is_virtual_table(ref_table_id) &&
@@ -1264,41 +1339,40 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
           ret = OB_SCHEMA_ERROR;
         }
       }
-      PWJTabletIdMap *pwj_map = NULL;
+      GroupPWJTabletIdMap *group_pwj_map = nullptr;
       if (OB_FAIL(ret)) {
         LOG_WARN("fail to sort  locations", K(ret));
-      } else if (OB_NOT_NULL(pwj_map = exec_ctx.get_pwj_map())) {
-        TabletIdArray tablet_id_array;
-        if (OB_FAIL(pwj_map->get_refactored(table_location_key, tablet_id_array))) {
+      } else if (OB_NOT_NULL(group_pwj_map = exec_ctx.get_group_pwj_map())) {
+        GroupPWJTabletIdInfo group_pwj_tablet_id_info;
+        TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;
+        if (OB_FAIL(group_pwj_map->get_refactored(table_location_key, group_pwj_tablet_id_info))) {
           if (OB_HASH_NOT_EXIST == ret) {
-            // map中没有意味着不需要pwj调序
+            // means this is not a partition wise join table, do not need to reorder partition
             ret = OB_SUCCESS;
-          }
-        } else if (0 == base_order.count()) {
-          //TODO @yishen 在partition数量较多的情况, 使用hash map优化.
-          if (OB_FAIL(base_order.reserve(dst_locations.count()))) {
-            LOG_WARN("fail reserve base order", K(ret), K(dst_locations.count()));
-          }
-          for (int i = 0; i < dst_locations.count() && OB_SUCC(ret); ++i) {
-            for (int j = 0; j < tablet_id_array.count() && OB_SUCC(ret); ++j) {
-              if (dst_locations.at(i)->tablet_id_.id() == tablet_id_array.at(j)) {
-                if (OB_FAIL(base_order.push_back(j))) {
-                  LOG_WARN("fail to push idx into base order", K(ret));
-                }
-                break;
-              }
-            }
+          } else {
+            LOG_WARN("failed to get_refactored", K(table_location_key));
           }
         } else {
-          //TODO @yishen 在partition数量较多的情况, 使用hash map优化.
-          int index = 0;
-          for (int i = 0; i < base_order.count() && OB_SUCC(ret); ++i) {
-            for (int j = 0; j < dst_locations.count() && OB_SUCC(ret); ++j) {
-              if (dst_locations.at(j)->tablet_id_.id()  == tablet_id_array.at(base_order.at(i))) {
-                std::swap(dst_locations.at(j), dst_locations.at(index++));
-                break;
+          // set base order or reorder partition as base order
+          uint64_t pwj_group_id = group_pwj_tablet_id_info.group_id_;
+          ObIArray<int64_t> *base_order = nullptr;
+          if (OB_FAIL(base_order_map.get_map().get_refactored(pwj_group_id, base_order))) {
+            if (ret == OB_HASH_NOT_EXIST) {
+              ret = base_order_map.add_base_partition_order(pwj_group_id, tablet_id_array,
+                                                            dst_locations);
+              if (ret != OB_SUCCESS) {
+                LOG_WARN("failed to add_base_partition_order");
+              } else {
+                LOG_TRACE("succ to add_base_partition_order", K(pwj_group_id), K(table_location_key));
               }
+            } else {
+              LOG_WARN("failed to get_refactored");
             }
+          } else if (OB_FAIL(base_order_map.reorder_partition_as_base_order(
+                  pwj_group_id, tablet_id_array, dst_locations))) {
+            LOG_WARN("failed to reorder_partition_as_base_order");
+          } else {
+            LOG_TRACE("succ to reorder_partition_as_base_order", K(pwj_group_id), K(table_location_key));
           }
         }
       }
@@ -3826,14 +3900,15 @@ int ObDtlChannelUtil::get_sm_transmit_dtl_channel_set(
     ObAddr &dst_addr = ch_total_info.receive_exec_server_.exec_addrs_.at(0);
     bool is_local = true;
     int64_t chid = 0;
-    for (int64_t i = 0; i < transmit_task_cnt && OB_SUCC(ret); ++i) {
+    for (int64_t i = 0; i < receive_task_cnt && OB_SUCC(ret); ++i) {
       ObDtlChannelInfo ch_info;
       chid = ch_total_info.start_channel_id_ + receive_task_cnt * task_id + i;
       ObDtlChannelGroup::make_transmit_channel(ch_total_info.tenant_id_, dst_addr, chid, ch_info, is_local);
       OZ(ch_set.add_channel_info(ch_info));
     }
   }
-  LOG_DEBUG("get sm receive dtl channel set", K(sqc_id), K(task_id), K(ch_total_info), K(ch_set));
+  LOG_DEBUG("get sm receive dtl channel set", K(sqc_id), K(task_id), K(transmit_task_cnt),
+           K(receive_task_cnt), K(ch_total_info), K(ch_set));
   return ret;
 }
 

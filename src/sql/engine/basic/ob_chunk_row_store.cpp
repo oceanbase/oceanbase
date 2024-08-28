@@ -861,8 +861,6 @@ int ObChunkRowStore::finish_add_row(bool need_dump)
       LOG_WARN("finish_add_row dump error", K(ret));
     } else if (OB_FAIL(get_timeout(timeout_ms))) {
       LOG_WARN("get timeout failed", K(ret));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.sync(io_.fd_, timeout_ms))) {
-      LOG_WARN("sync file failed", K(ret), K_(io_.fd), K(timeout_ms));
     }
   } else {
     LOG_DEBUG("finish_add_row no need to dump", K(ret));
@@ -1627,7 +1625,6 @@ int ObChunkRowStore::write_file(void *buf, int64_t size)
         LOG_WARN("open file failed", K(ret));
       } else {
         file_size_ = 0;
-        io_.tenant_id_ = tenant_id_;
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         io_.io_timeout_ms_ = timeout_ms;
         LOG_TRACE("open file success", K_(io_.fd), K_(io_.dir_id));
@@ -1674,7 +1671,7 @@ int ObChunkRowStore::read_file(void *buf, const int64_t size, const int64_t offs
     this->set_io(size, static_cast<char *>(buf));
     io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     io_.io_timeout_ms_ = timeout_ms;
-    blocksstable::ObTmpFileIOHandle handle;
+    tmp_file::ObTmpFileIOHandle handle;
     if (0 == read_size
         && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(io_.fd_, tmp_file_size))) {
       LOG_WARN("failed to get tmp file size", K(ret));
@@ -1682,10 +1679,10 @@ int ObChunkRowStore::read_file(void *buf, const int64_t size, const int64_t offs
       if (OB_ITER_END != ret) {
         LOG_WARN("read form file failed", K(ret), K(io_), K(offset), K(timeout_ms));
       }
-    } else if (handle.get_data_size() != size) {
+    } else if (handle.get_done_size() != size) {
       ret = OB_INNER_STAT_ERROR;
       LOG_WARN("read data less than expected",
-          K(ret), K(io_), "read_size", handle.get_data_size());
+          K(ret), K(io_), "read_size", handle.get_done_size());
     }
   }
   return ret;

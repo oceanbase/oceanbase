@@ -22,6 +22,11 @@
 #include "share/ob_device_manager.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
+#include "sql/engine/cmd/ob_load_data_file_reader.h"
+//#include "sql/engine/table/ob_orc_table_row_iter.h"
 
 namespace oceanbase
 {
@@ -330,6 +335,215 @@ int ObExternalDataAccessDriver::init(const ObString &location, const ObString &a
   return ret;
 }
 
+ObExternalStreamFileReader::~ObExternalStreamFileReader()
+{
+  reset();
+}
+
+const char *  ObExternalStreamFileReader::MEMORY_LABEL = "ExternalReader";
+const int64_t ObExternalStreamFileReader::COMPRESSED_DATA_BUFFER_SIZE = 2 * 1024 * 1024;
+
+int ObExternalStreamFileReader::init(const common::ObString &location,
+                             const ObString &access_info,
+                             ObLoadCompressionFormat compression_format,
+                             ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(allocator_)) {
+    ret = OB_INIT_TWICE;
+  } else if (OB_FAIL(data_access_driver_.init(location, access_info))) {
+    LOG_WARN("failed to init data access driver", K(ret), K(location), K(access_info));
+  } else {
+    allocator_ = &allocator;
+    compression_format_ = compression_format;
+  }
+  return ret;
+}
+
+int ObExternalStreamFileReader::open(const ObString &filename)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_NOT_INIT;
+  } else if (data_access_driver_.is_opened()) {
+    ret = OB_INIT_TWICE;
+  } else if (OB_FAIL(data_access_driver_.open(filename.ptr()))) {
+    LOG_WARN("failed to open file", K(ret), K(filename));
+  } else if (OB_FAIL(data_access_driver_.get_file_size(filename.ptr(), file_size_))) {
+    LOG_WARN("failed to get file size", K(ret), K(filename));
+  } else {
+    ObLoadCompressionFormat this_file_compression_format = compression_format_;
+    if (this_file_compression_format == ObLoadCompressionFormat::AUTO
+        && OB_FAIL(compression_format_from_suffix(filename, this_file_compression_format))) {
+      LOG_WARN("failed to dectect compression format from filename", K(ret), K(filename));
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(create_decompressor(this_file_compression_format))) {
+      LOG_WARN("failed to create decompressor", K(ret));
+    }
+  }
+
+  LOG_TRACE("open file done", K(filename), K(ret));
+  return ret;
+}
+
+void ObExternalStreamFileReader::close()
+{
+  if (data_access_driver_.is_opened()) {
+    data_access_driver_.close();
+
+    is_file_end_ = true;
+    file_offset_ = 0;
+    file_size_   = 0;
+    LOG_DEBUG("close file");
+  }
+}
+
+void ObExternalStreamFileReader::reset()
+{
+  close();
+  if (OB_NOT_NULL(compressed_data_) && OB_NOT_NULL(allocator_)) {
+    allocator_->free(compressed_data_);
+    compressed_data_ = nullptr;
+  }
+
+  if (OB_NOT_NULL(decompressor_)) {
+    ObDecompressor::destroy(decompressor_);
+    decompressor_ = nullptr;
+  }
+
+  allocator_ = nullptr;
+}
+
+bool ObExternalStreamFileReader::eof()
+{
+  return is_file_end_;
+}
+
+int ObExternalStreamFileReader::read(char *buf, int64_t buf_len, int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  read_size = 0;
+
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_ISNULL(decompressor_)) {
+    ret = read_from_driver(buf, buf_len, read_size);
+    is_file_end_ = file_offset_ >= file_size_;
+    LOG_DEBUG("read file", K(is_file_end_), K(file_offset_), K(file_size_), K(read_size));
+  } else {
+    ret = read_decompress(buf, buf_len, read_size);
+  }
+  return ret;
+}
+
+int ObExternalStreamFileReader::read_from_driver(char *buf, int64_t buf_len, int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  read_size = 0;
+
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if(OB_FAIL(data_access_driver_.pread(buf, buf_len, file_offset_, read_size))) {
+    LOG_WARN("failed to read data from data access driver", K(ret), K(file_offset_), K(buf_len));
+  } else {
+    file_offset_ += read_size;
+  }
+  return ret;
+}
+
+int ObExternalStreamFileReader::read_decompress(char *buf, int64_t buf_len, int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  read_size = 0;
+
+  if (!data_access_driver_.is_opened()) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(buf), K(buf_len));
+  } else if (consumed_data_size_ >= compress_data_size_) {
+    if (file_offset_ < file_size_) {
+      ret = read_compressed_data();
+    } else {
+      is_file_end_ = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && compress_data_size_ > consumed_data_size_) {
+    int64_t consumed_size = 0;
+    ret = decompressor_->decompress(compressed_data_ + consumed_data_size_,
+                                    compress_data_size_ - consumed_data_size_,
+                                    consumed_size,
+                                    buf,
+                                    buf_len,
+                                    read_size);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to decompress", K(ret));
+    } else {
+      consumed_data_size_ += consumed_size;
+      uncompressed_size_  += read_size;
+    }
+  }
+  return ret;
+}
+
+int ObExternalStreamFileReader::read_compressed_data()
+{
+  int ret = OB_SUCCESS;
+  char *read_buffer = compressed_data_;
+  if (!data_access_driver_.is_opened()) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(consumed_data_size_ < compress_data_size_)) {
+    // backup data
+    const int64_t last_data_size = compress_data_size_ - consumed_data_size_;
+    MEMMOVE(compressed_data_, compressed_data_ + consumed_data_size_, last_data_size);
+    read_buffer = compressed_data_ + last_data_size;
+    consumed_data_size_ = 0;
+    compress_data_size_ = last_data_size;
+  } else if (consumed_data_size_ == compress_data_size_) {
+    consumed_data_size_ = 0;
+    compress_data_size_ = 0;
+  }
+
+  if (OB_SUCC(ret)) {
+    // read data from source reader
+    int64_t read_size = 0;
+    int64_t capacity  = COMPRESSED_DATA_BUFFER_SIZE - compress_data_size_;
+    ret = read_from_driver(read_buffer, capacity, read_size);
+    if (OB_SUCC(ret)) {
+      compress_data_size_ += read_size;
+    }
+  }
+  return ret;
+}
+
+int ObExternalStreamFileReader::create_decompressor(ObLoadCompressionFormat compression_format)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_NOT_INIT;
+  } else if (compression_format == ObLoadCompressionFormat::NONE) {
+    ObDecompressor::destroy(decompressor_);
+    decompressor_ = nullptr;
+  } else if (OB_NOT_NULL(decompressor_) && decompressor_->compression_format() == compression_format) {
+    // do nothing
+  } else {
+    if (OB_NOT_NULL(decompressor_)) {
+      ObDecompressor::destroy(decompressor_);
+      decompressor_ = nullptr;
+    }
+
+    if (OB_FAIL(ObDecompressor::create(compression_format, *allocator_, decompressor_))) {
+      LOG_WARN("failed to create decompressor", K(ret));
+    } else if (OB_ISNULL(compressed_data_) &&
+               OB_ISNULL(compressed_data_ = (char *)allocator_->alloc(COMPRESSED_DATA_BUFFER_SIZE))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(COMPRESSED_DATA_BUFFER_SIZE));
+    }
+  }
+  return ret;
+}
 
 int ObExternalTableAccessService::table_scan(
     ObVTableScanParam &param,
@@ -348,12 +562,30 @@ int ObExternalTableAccessService::table_scan(
         LOG_WARN("alloc memory failed", K(ret));
       }
       break;
-
     case ObExternalFileFormat::PARQUET_FORMAT:
       if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       }
+      break;
+    case ObExternalFileFormat::ODPS_FORMAT:
+#ifdef OB_BUILD_CPP_ODPS
+      if (OB_ISNULL(row_iter = OB_NEWx(ObODPSTableRowIterator, (scan_param.allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+      LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
+    case ObExternalFileFormat::ORC_FORMAT:
+      // if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
+      //   ret = OB_ALLOCATE_MEMORY_FAILED;
+      //   LOG_WARN("alloc memory failed", K(ret));
+      // }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -384,7 +616,17 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
     switch (param.external_file_format_.format_type_) {
       case ObExternalFileFormat::CSV_FORMAT:
       case ObExternalFileFormat::PARQUET_FORMAT:
+      case ObExternalFileFormat::ORC_FORMAT:
         result->reset();
+        break;
+      case ObExternalFileFormat::ODPS_FORMAT:
+#ifdef OB_BUILD_CPP_ODPS
+        result->reset();
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+        LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -453,7 +695,7 @@ int ObCSVTableRowIterator::expand_buf()
   if (nullptr != old_buf) {
     new_buf_len = state_.buf_len_ * 2;
   } else {
-    if (data_access_driver_.get_storage_type() != OB_STORAGE_FILE) {
+    if (file_reader_.get_storage_type() != OB_STORAGE_FILE) {
       //for better performance
       new_buf_len = OB_MALLOC_BIG_BLOCK_SIZE;
     } else {
@@ -548,17 +790,25 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     arena_alloc_.set_attr(lib::ObMemAttr(scan_param->tenant_id_, "CSVRowIter"));
     OZ (ObExternalTableRowIterator::init(scan_param));
     OZ (parser_.init(scan_param->external_file_format_.csv_format_));
-    OZ (data_access_driver_.init(scan_param_->external_file_location_, scan_param->external_file_access_info_));
+    OZ (file_reader_.init(scan_param_->external_file_location_, scan_param->external_file_access_info_,
+                          scan_param_->external_file_format_.compression_format_, malloc_alloc_));
     OZ (expand_buf());
 
     if (OB_SUCC(ret)) {
-      if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+      if (file_reader_.get_storage_type() == OB_STORAGE_FILE) {
         if (OB_ISNULL(state_.ip_port_buf_ = static_cast<char *>(arena_alloc_.alloc(max_ipv6_port_length)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", K(ret));
         }
       }
     }
+  }
+  for (int i = 0; i < scan_param_->key_ranges_.count(); ++i) {
+    int64_t start = 0;
+    int64_t step = 0;
+    int64_t part_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+    const ObString &file_url = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
+    int64_t file_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
   }
   return ret;
 }
@@ -629,7 +879,7 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(scan_param_->index_id_), K(scan_param_->tenant_id_));
-  } else if (table_schema->is_partitioned_table() && table_schema->is_user_specified_partition_for_external_table()) {
+  } else if (table_schema->is_partitioned_table() && (table_schema->is_user_specified_partition_for_external_table() || table_schema->is_odps_external_table())) {
     if (OB_FAIL(table_schema->get_partition_by_part_id(part_id, CHECK_PARTITION_MODE_NORMAL, partition))) {
       LOG_WARN("get partition failed", K(ret), K(part_id));
     } else if (OB_ISNULL(partition) || OB_UNLIKELY(partition->get_list_row_values().count() != 1)
@@ -653,11 +903,9 @@ int ObCSVTableRowIterator::open_next_file()
 {
   int ret = OB_SUCCESS;
   ObString location = scan_param_->external_file_location_;
+  int64_t file_size = 0;
 
-  if (data_access_driver_.is_opened()) {
-    data_access_driver_.close();
-  }
-
+  file_reader_.close();
   do {
     ObString file_url;
     int64_t file_id = 0;
@@ -665,6 +913,8 @@ int ObCSVTableRowIterator::open_next_file()
     int64_t start_line = 0;
     int64_t end_line = 0;
     int64_t task_idx = state_.file_idx_++;
+
+    file_size = 0;
     url_.reuse();
     ret = get_next_file_and_line_number(task_idx, file_url, file_id, part_id, start_line, end_line);
     if (OB_FAIL(ret)) {
@@ -695,8 +945,9 @@ int ObCSVTableRowIterator::open_next_file()
       OZ (url_.append_fmt("%.*s%s%.*s", location.length(), location.ptr(),
                                         (location.empty() || location[location.length() - 1] == '/') ? "" : split_char,
                                         file_url.length(), file_url.ptr()));
-      OZ (data_access_driver_.get_file_size(url_.string(), state_.file_size_));
-      if (OB_SUCC(ret) && data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+      // skip empty file and non-exist file
+      OZ (file_reader_.get_data_access_driver().get_file_size(url_.string(), file_size));
+      if (OB_SUCC(ret) && file_reader_.get_storage_type() == OB_STORAGE_FILE) {
         ObSqlString full_name;
         if (state_.ip_port_len_ == 0) {
           OZ (GCONF.self_addr_.addr_to_buffer(state_.ip_port_buf_, max_ipv6_port_length, state_.ip_port_len_));
@@ -708,10 +959,11 @@ int ObCSVTableRowIterator::open_next_file()
       }
     }
     LOG_DEBUG("try next file", K(ret), K(url_), K(file_url), K(state_));
-  } while (OB_SUCC(ret) && 0 >= state_.file_size_); //skip empty file
-  OZ (data_access_driver_.open(url_.ptr()), url_);
+  } while (OB_SUCC(ret) && file_size <= 0);
 
-  LOG_DEBUG("open external file", K(ret), K(url_), K(state_.file_size_), K(location));
+  OZ(file_reader_.open(url_.ptr()));
+
+  LOG_DEBUG("open external file", K(ret), K(url_), K(location));
 
   return ret;
 }
@@ -719,15 +971,14 @@ int ObCSVTableRowIterator::open_next_file()
 int ObCSVTableRowIterator::load_next_buf()
 {
   int ret = OB_SUCCESS;
+  int64_t read_size = 0;
   do {
     char *next_load_pos = NULL;
     int64_t next_buf_len = 0;
-    if (state_.is_end_file_) {
+    if (file_reader_.eof()) {
       if (OB_FAIL(open_next_file())) {
         //do not print log
       } else {
-        state_.is_end_file_ = false;
-        state_.file_offset_ = 0;
         next_load_pos = state_.buf_;
         next_buf_len = state_.buf_len_;
       }
@@ -747,17 +998,20 @@ int ObCSVTableRowIterator::load_next_buf()
     }
 
     if (OB_SUCC(ret)) {
-      int64_t read_size = 0;
-      OZ (data_access_driver_.pread(next_load_pos, next_buf_len, state_.file_offset_, read_size));
+      // `read` may return read_size 0.
+      // If we read a compressed empty file, we need to read it twice
+      // to know that we have reached the end of the file. The first
+      // time we read the original file data and decompress it, we get
+      // 0 bytes, and the second time we read it to know that we have
+      // reached the end of the file.
+      OZ (file_reader_.read(next_load_pos, next_buf_len, read_size));
       if (OB_SUCC(ret)) {
-        state_.file_offset_ += read_size;
         state_.pos_ = state_.buf_;
         state_.data_end_ = next_load_pos + read_size;
-        state_.is_end_file_ = (state_.file_offset_ >= state_.file_size_);
       }
     }
 
-  } while (false);
+  } while (OB_SUCC(ret) && read_size <= 0);
   return ret;
 }
 
@@ -773,7 +1027,7 @@ int ObCSVTableRowIterator::skip_lines()
   do {
     nrows = state_.skip_lines_;
     OZ (parser_.scan(state_.pos_, state_.data_end_, nrows, nullptr, nullptr,
-                     temp_handle, error_msgs, state_.is_end_file_));
+                     temp_handle, error_msgs, file_reader_.eof()));
     error_msgs.reuse();
     state_.skip_lines_ -= nrows;
   } while (OB_SUCC(ret) && state_.skip_lines_ > 0 && OB_SUCC(load_next_buf()));
@@ -820,7 +1074,7 @@ int ObCSVTableRowIterator::get_next_row()
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
         ObDatum &datum = file_column_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
         if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
-          if (csv_iter_->data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+          if (csv_iter_->file_reader_.get_storage_type() == OB_STORAGE_FILE) {
             datum.set_string(csv_iter_->state_.file_with_url_.ptr(), csv_iter_->state_.file_with_url_.length());
           } else {
             datum.set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
@@ -865,11 +1119,10 @@ int ObCSVTableRowIterator::get_next_row()
       nrows = MIN(1, state_.line_count_limit_);
       if (OB_UNLIKELY(0 == nrows)) {
         // if line_count_limit = 0, get next file.
-        state_.is_end_file_ = true;
       } else {
         ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
                                                   state_.escape_buf_, state_.escape_buf_end_,
-                                                  handle_one_line, error_msgs, state_.is_end_file_);
+                                                  handle_one_line, error_msgs, file_reader_.eof());
         if (OB_FAIL(ret)) {
           LOG_WARN("fail to scan csv", K(ret));
         } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
@@ -905,7 +1158,6 @@ int ObCSVTableRowIterator::get_next_row()
       column_expr->set_evaluated_flag(eval_ctx);
     }
   }
-
   return ret;
 }
 
@@ -950,7 +1202,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
       ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
       if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
-        if (csv_iter_->data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+        if (csv_iter_->file_reader_.get_storage_type() == OB_STORAGE_FILE) {
           datums[returned_row_cnt_].set_string(csv_iter_->state_.file_with_url_.ptr(), csv_iter_->state_.file_with_url_.length());
         } else {
           datums[returned_row_cnt_].set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
@@ -995,11 +1247,10 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
       nrows = MIN(batch_size, state_.line_count_limit_);
       if (OB_UNLIKELY(0 == nrows)) {
         // if line_count_limit = 0, get next file.
-        state_.is_end_file_ = true;
       } else {
         ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
                                         state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
-                                        error_msgs, state_.is_end_file_);
+                                        error_msgs, file_reader_.eof());
         if (OB_FAIL(ret)) {
           LOG_WARN("fail to scan csv", K(ret));
         } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
@@ -1047,7 +1298,6 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   }
 
   count = returned_row_cnt;
-
   return ret;
 }
 

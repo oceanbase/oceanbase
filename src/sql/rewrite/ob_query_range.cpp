@@ -160,6 +160,7 @@ void ObQueryRange::reset()
 int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
                                        const ColumnIArray &range_columns,
                                        ObExecContext *exec_ctx,
+                                       ObQueryCtx *query_ctx,
                                        ExprConstrantArray *expr_constraints,
                                        const ParamsIArray *params,
                                        const bool phy_rowid_for_table_loc,
@@ -177,11 +178,12 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc query range context failed", K(ret));
   } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session()) ||
-             OB_ISNULL(exec_ctx->get_physical_plan_ctx())) {
+             OB_ISNULL(exec_ctx->get_physical_plan_ctx())
+             || OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(exec_ctx));
+    LOG_WARN("get unexpected null", K(ret), K(exec_ctx), K(query_ctx));
   } else {
-    query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, expr_constraints, params);
+    query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, query_ctx, expr_constraints, params);
     query_range_ctx_->phy_rowid_for_table_loc_ = phy_rowid_for_table_loc;
     query_range_ctx_->ignore_calc_failure_ = ignore_calc_failure;
     query_range_ctx_->index_prefix_ = index_prefix;
@@ -272,6 +274,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ObRawExpr *expr_root,
                                                   const ObDataTypeCastParams &dtc_params,
                                                   ObExecContext *exec_ctx,
+                                                  ObQueryCtx *query_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool use_in_optimization /* = false */,
@@ -279,8 +282,9 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
-  if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx, expr_constraints, params,
-                                   false, true, use_in_optimization, index_prefix))) {
+  if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx, query_ctx,
+                                   expr_constraints, params, false, true,
+                                   use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
   } else if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_NOT_INIT;
@@ -741,6 +745,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ExprIArray &root_exprs,
                                                   const ObDataTypeCastParams &dtc_params,
                                                   ObExecContext *exec_ctx,
+                                                  ObQueryCtx *query_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool phy_rowid_for_table_loc /* = false*/,
@@ -757,7 +762,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs), K(use_in_optimization));
   ObSEArray<ObRawExpr *, 16> candi_exprs;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
-  if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx,
+  if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx, query_ctx,
                                    expr_constraints, params, phy_rowid_for_table_loc,
                                    ignore_calc_failure, use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
@@ -3503,11 +3508,13 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
   const ObRawExpr *l_expr = NULL;
   const ObOpRawExpr *r_expr = NULL;
   ObSQLSessionInfo *session = NULL;
+  ObQueryCtx *query_ctx = NULL;
   bool enable_not_in_range = false;
   if (OB_ISNULL(b_expr) || OB_ISNULL(query_range_ctx_) || OB_ISNULL(query_range_ctx_->exec_ctx_)
-      || OB_ISNULL(session = query_range_ctx_->exec_ctx_->get_my_session())) {
+      || OB_ISNULL(session = query_range_ctx_->exec_ctx_->get_my_session())
+      || OB_ISNULL(query_ctx = query_range_ctx_->query_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpected null", K(b_expr), K_(query_range_ctx), K(session));
+    LOG_WARN("get unexpected null", K(b_expr), K_(query_range_ctx), K(query_ctx), K(session));
   } else if (2 != b_expr->get_param_count()) {//binary op expr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("b_expr must has 2 arguments", K(ret));
@@ -3517,6 +3524,8 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
     LOG_WARN("r_expr is null.", K(ret));
   } else if (OB_FAIL(session->is_enable_range_extraction_for_not_in(enable_not_in_range))) {
     LOG_WARN("failed to check not in range enabled", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::ENABLE_RANGE_EXTRACTION_FOR_NOT_IN, enable_not_in_range))) {
+    LOG_WARN("fail to check opt param not in range enabled", K(ret));
   } else if (!enable_not_in_range || r_expr->get_param_count() > MAX_NOT_IN_SIZE
              || l_expr->get_expr_type() == T_OP_ROW) {
     // do not extract range: 1. not in range is disabled; 2. not in size over MAX_NOT_IN_SIZE
@@ -10008,6 +10017,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
   const ObSrsBoundsItem *srs_bound = NULL;
   ObS2Adapter *s2object = NULL;
   ObExecContext *exec_ctx = NULL;
+  ObQueryCtx *query_ctx = NULL;
   ObString buffer_geo;
 
   if ((input_srid != 0) && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
@@ -10051,6 +10061,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
       if (NULL != query_range_ctx_) {
         query_range_ctx_->cur_expr_is_precise_ = false;
         exec_ctx = query_range_ctx_->exec_ctx_;
+        query_ctx = query_range_ctx_->query_ctx_;
       }
       ObKeyPart *head = nullptr;
       ObKeyPart *last = nullptr;
@@ -10136,7 +10147,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("alloc query range context failed");
       } else {
-        query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, NULL, NULL);
+        query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, query_ctx, NULL, NULL);
       }
 
       // copy temp_result to out_key_part

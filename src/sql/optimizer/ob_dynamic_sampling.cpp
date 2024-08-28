@@ -403,7 +403,7 @@ int ObDynamicSampling::get_table_dml_info(const uint64_t tenant_id,
                                                                     cur_modified_dml_cnt,
                                                                     false))) {
     LOG_WARN("failed to estimate modified count", K(ret));
-  } else if (OB_FAIL(pl::ObDbmsStats::get_table_stale_percent_threshold(*ctx_->get_exec_ctx(),
+  } else if (OB_FAIL(pl::ObDbmsStats::get_table_stale_percent_threshold(ctx_->get_exec_ctx()->get_sql_proxy(),
                                                                         tenant_id,
                                                                         table_id,
                                                                         stale_percent_threshold))) {
@@ -772,7 +772,6 @@ int ObDynamicSampling::calc_table_sample_block_ratio(const ObDSTableParam &param
 {
   int ret = OB_SUCCESS;
   int64_t sample_micro_cnt = param.sample_block_cnt_;
-  const int64_t MAX_FULL_SCAN_ROW_COUNT = 100000;
   int64_t macro_threshold = 200;
   if (param.is_virtual_table_) {
     sample_block_ratio_ = 100.0;
@@ -783,6 +782,8 @@ int ObDynamicSampling::calc_table_sample_block_ratio(const ObDSTableParam &param
     LOG_WARN("get unexpected error", K(ret), K(param));
   } else if (OB_FAIL(estimate_table_block_count_and_row_count(param))) {
     LOG_WARN("failed to estimate table block count and row count", K(ret));
+  } else if (sstable_row_count_ + memtable_row_count_ <= MAGIC_MAX_AUTO_SAMPLE_SIZE) {
+    sample_block_ratio_ = 100.0;
   } else {
     int64_t max_allowed_multiple = sample_micro_cnt > OB_DS_BASIC_SAMPLE_MICRO_CNT ? sample_micro_cnt / OB_DS_BASIC_SAMPLE_MICRO_CNT : 1;
     if (micro_block_num_ > OB_DS_MAX_BASIC_SAMPLE_MICRO_CNT * max_allowed_multiple &&

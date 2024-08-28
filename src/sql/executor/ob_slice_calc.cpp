@@ -249,7 +249,12 @@ int ObRepartSliceIdxCalc::get_sub_part_id_by_one_level_first_ch_map(
   int ret = OB_SUCCESS;
   if (part2tablet_id_map_.size() > 0) {
     if (OB_FAIL(part2tablet_id_map_.get_refactored(part_id, tablet_id))) {
-      LOG_WARN("fail to get tablet id", K(ret));
+      if (OB_HASH_NOT_EXIST == ret) {
+        tablet_id = ObExprCalcPartitionId::NONE_PARTITION_ID;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get tablet id", K(ret), K(part2tablet_id_map_.size()));
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -270,11 +275,9 @@ int ObRepartSliceIdxCalc::get_tablet_id<false>(ObEvalCtx &eval_ctx, int64_t &tab
     LOG_WARN("fail to calc part id", K(ret), K(*calc_part_id_expr_));
   } else if (ObExprCalcPartitionId::NONE_PARTITION_ID ==
                              (tablet_id = tablet_id_datum->get_int())) {
-    // Usually, calc_part_id_expr_ returns tablet_id and set tablet_id_datum = 0
-    // if no partition match(refer to ObExprCalcPartitionBase::calc_partition_id).
-    // In this condition, it will not go to this branch because NONE_PARTITION_ID equals to -1.
-    // But when repart_type_ equals to OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST(means value of sub part key is fixed),
-    // calc_part_id_expr_ returns partition_id of first part and set tablet_id_datum = -1.
+    // When repart_type_ equals to OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST(means value of sub part key is fixed),
+    // calc_part_id_expr_ returns partition_id of first level partition and
+    //  set tablet_id_datum = NONE_PARTITION_ID if no first level partition match.
   } else if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST == repart_type_) {
     int64_t part_id = tablet_id;
     if (OB_FAIL(get_sub_part_id_by_one_level_first_ch_map(part_id, tablet_id))) {
@@ -352,7 +355,7 @@ int ObRepartSliceIdxCalc::get_tablet_ids<false>(ObEvalCtx &eval_ctx, ObBitVector
       } else if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST == repart_type_) {
         int64_t part_id = ObSliceIdxCalc::tablet_ids_[i];
         if (OB_FAIL(get_sub_part_id_by_one_level_first_ch_map(part_id, ObSliceIdxCalc::tablet_ids_[i]))) {
-          LOG_WARN("fail to get part id by ch map", K(ret));
+          LOG_WARN("fail to get part id by ch map", K(ret), K(part_id));
         }
       }
       if (OB_SUCC(ret)) {
@@ -671,10 +674,13 @@ int ObAffinitizedRepartSliceIdxCalc::get_slice_idx_batch_inner(const ObIArray<Ob
                                                              batch_size, tablet_ids_))) {
     LOG_WARN("fail to get partition id", K(ret));
   } else {
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+    batch_info_guard.set_batch_size(batch_size);
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
       if (skip.at(i)) {
         continue;
       }
+      batch_info_guard.set_batch_idx(i);
       if (OB_FAIL(px_repart_ch_map_.get_refactored(tablet_ids_[i], slice_indexes_[i]))) {
         if (OB_HASH_NOT_EXIST == ret && unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
           slice_indexes_[i] = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;

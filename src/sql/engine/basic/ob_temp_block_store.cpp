@@ -14,7 +14,7 @@
 
 #include "ob_temp_block_store.h"
 #include "lib/container/ob_se_array_iterator.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
@@ -205,8 +205,6 @@ int ObTempBlockStore::finish_add_row(bool need_dump /*true*/)
         LOG_WARN("get timeout failed", K(ret));
       } else if (write_io_handle_.is_valid() && OB_FAIL(write_io_handle_.wait())) {
         LOG_WARN("fail to wait write", K(ret), K(write_io_handle_));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.sync(io_.fd_, timeout_ms))) {
-        LOG_WARN("sync file failed", K(ret), K(io_.fd_), K(timeout_ms));
       }
       if (OB_LIKELY(nullptr != io_observer_)) {
         io_observer_->on_write_io(rdtsc() - begin_io_dump_time);
@@ -413,7 +411,7 @@ int ObTempBlockStore::decompr_block(BlockReader &reader, const Block *&blk)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpeteced null pointer", K(ret), KP(blk), KP(reader.buf_.data()));
   } else {
-    int64_t comp_size = reader.read_io_handle_.get_data_size() - sizeof(Block);
+    int64_t comp_size = reader.read_io_handle_.get_done_size() - sizeof(Block);
     int64_t decomp_size = blk->raw_size_ - sizeof(Block);
     int64_t actual_uncomp_size = 0;
     if (OB_FAIL(ensure_reader_buffer(reader, reader.decompr_buf_, blk->raw_size_))) {
@@ -1076,7 +1074,6 @@ int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
         LOG_WARN("open file failed", K(ret));
       } else {
         file_size_ = 0;
-        io_.tenant_id_ = tenant_id_;
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         io_.io_timeout_ms_ = timeout_ms;
         LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id), K(get_compressor_type()));
@@ -1109,7 +1106,7 @@ int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
 }
 
 int ObTempBlockStore::read_file(void *buf, const int64_t size, const int64_t offset,
-                                blocksstable::ObTmpFileIOHandle &handle, const bool is_async)
+                                tmp_file::ObTmpFileIOHandle &handle, const bool is_async)
 {
   int ret = OB_SUCCESS;
   int64_t timeout_ms = 0;
@@ -1118,12 +1115,12 @@ int ObTempBlockStore::read_file(void *buf, const int64_t size, const int64_t off
     LOG_WARN("invalid argument", K(size), K(offset), KP(buf));
   } else if (OB_FAIL(get_timeout(timeout_ms))) {
     LOG_WARN("get timeout failed", K(ret));
-  } else if (!handle.is_valid() && OB_FAIL(write_io_handle_.wait())) {
+  } else if (!handle.is_valid() && write_io_handle_.is_valid() && OB_FAIL(write_io_handle_.wait())) {
     LOG_WARN("fail to wait write", K(ret));
   }
 
   if (OB_SUCC(ret) && size > 0) {
-    blocksstable::ObTmpFileIOInfo tmp_read_id = io_;
+    tmp_file::ObTmpFileIOInfo tmp_read_id = io_;
     tmp_read_id.buf_ = static_cast<char *>(buf);
     tmp_read_id.size_ = size;
     tmp_read_id.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
@@ -1136,10 +1133,10 @@ int ObTempBlockStore::read_file(void *buf, const int64_t size, const int64_t off
     } else {
       if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(tmp_read_id, offset, handle))) {
         LOG_WARN("read form file failed", K(ret), K(tmp_read_id), K(offset), K(timeout_ms));
-      } else if (OB_UNLIKELY(handle.get_data_size() != size)) {
+      } else if (OB_UNLIKELY(handle.get_done_size() != size)) {
         ret = OB_INNER_STAT_ERROR;
         LOG_WARN("read data less than expected", K(ret), K(tmp_read_id),
-                                                 "read_size", handle.get_data_size());
+                                                 "read_size", handle.get_done_size());
       }
     }
     if (NULL != io_observer_) {
@@ -1421,7 +1418,6 @@ void ObTempBlockStore::BlockReader::reuse()
     buf_.reset();
     decompr_buf_.reset();
   }
-  read_io_handle_.set_last_extent_id(0);
 }
 
 void ObTempBlockStore::BlockReader::reset_cursor(const int64_t file_size, const bool need_release)

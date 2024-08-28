@@ -128,8 +128,6 @@ int ObTenantChecker::check_create_tenant_end_()
     LOG_WARN("schema service not init", K(ret));
   } else if (!schema_service_->is_sys_full_schema()) {
     // skip
-  } else if (GCTX.is_standby_cluster()) {
-    // skip
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get_tenant_ids failed", K(ret));
   } else if (OB_ISNULL(GCTX.root_service_)) {
@@ -991,8 +989,6 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
                                       ObIArray<Name> &miss_names /* data inner table less than hard code*/)
 {
   int ret = OB_SUCCESS;
-  ObRefreshSchemaStatus schema_status;
-  schema_status.tenant_id_ = tenant_id;
   fetch_names.reset();
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -1007,28 +1003,21 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_name is null or names is empty",
              KR(ret), K(tenant_id), KP(table_name), K(names));
-  } else if (GCTX.is_standby_cluster() && is_user_tenant(tenant_id)) {
-    if (OB_ISNULL(GCTX.schema_status_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema status proxy is null", K(ret));
-    } else if (OB_FAIL(GCTX.schema_status_proxy_->get_refresh_schema_status(tenant_id, schema_status))) {
-      LOG_WARN("fail to get schema status", KR(ret), K(tenant_id));
-    }
   }
 
   if (OB_SUCC(ret)) {
-    const uint64_t exec_tenant_id = schema_status.tenant_id_;
-    int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = tenant_id;
     ObSqlString sql;
-    ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_,
-                                               snapshot_timestamp);
     if (OB_FAIL(sql.append_fmt("SELECT name FROM %s%s%s", table_name,
         (extra_cond.empty()) ? "" : " WHERE ", extra_cond.ptr()))) {
       LOG_WARN("append_fmt failed", KR(ret), K(tenant_id), K(table_name), K(extra_cond));
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         ObMySQLResult *result = NULL;
-        if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        if (OB_FAIL(GCTX.sql_proxy_->read(res, exec_tenant_id, sql.ptr()))) {
           LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
           can_retry_ = true;
         } else if (OB_ISNULL(result = res.get_result())) {
@@ -1063,7 +1052,7 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
     if (OB_SUCC(ret)) {
       if (fetch_names.count() <= 0) {
         LOG_WARN("maybe tenant or zone has been deleted, ignore it",
-                 KR(ret), K(schema_status), K(table_name), K(extra_cond));
+                 KR(ret), K(table_name), K(extra_cond));
       } else {
         extra_names.reset();
         miss_names.reset();
@@ -1286,9 +1275,8 @@ int ObRootInspection::check_table_schema(const ObTableSchema &hard_code_table,
               "table_name", hard_code_table.get_table_name(), "column",
               hard_code_column->get_column_name(), K(ret));
         } else {
-          const bool ignore_column_id = is_virtual_table(hard_code_table.get_table_id());
           if (OB_FAIL(check_column_schema_(hard_code_table.get_table_name(),
-              *column, *hard_code_column, ignore_column_id))) {
+              *column, *hard_code_column))) {
             LOG_WARN("column schema mismatch with hard code column schema",
                 "table_name",inner_table.get_table_name(), "column", *column,
                 "hard_code_column", *hard_code_column, K(ret));
@@ -1333,7 +1321,6 @@ int ObRootInspection::check_and_get_system_table_column_diff(
     const ObColumnSchemaV2 *column = NULL;
     const ObColumnSchemaV2 *hard_code_column = NULL;
     ObColumnSchemaV2 tmp_column; // check_column_can_be_altered_online() may change dst_column, is ugly.
-    bool ignore_column_id = false;
 
     // case 1. check if columns should be dropped.
     // case 2. check if column can be altered online.
@@ -1353,8 +1340,7 @@ int ObRootInspection::check_and_get_system_table_column_diff(
         // case 2
         int tmp_ret = check_column_schema_(table_schema.get_table_name_str(),
                                            *column,
-                                           *hard_code_column,
-                                           ignore_column_id);
+                                           *hard_code_column);
         if (OB_SUCCESS == tmp_ret) {
           // not changed
         } else if (OB_SCHEMA_ERROR != tmp_ret) {
@@ -1654,8 +1640,7 @@ int ObRootInspection::check_table_options_(const ObTableSchema &table,
 
 int ObRootInspection::check_column_schema_(const ObString &table_name,
                                            const ObColumnSchemaV2 &column,
-                                           const ObColumnSchemaV2 &hard_code_column,
-                                           const bool ignore_column_id)
+                                           const ObColumnSchemaV2 &hard_code_column)
 {
   int ret = OB_SUCCESS;
   if (table_name.empty() || !column.is_valid() || !hard_code_column.is_valid()) {
@@ -1689,9 +1674,7 @@ int ObRootInspection::check_column_schema_(const ObString &table_name,
       }
     }
 
-    if (!ignore_column_id) {
-      CMP_COLUMN_ATTR(column_id);
-    }
+    CMP_COLUMN_ATTR(column_id);
     CMP_COLUMN_ATTR(tenant_id);
     CMP_COLUMN_ATTR(table_id);
     // don't need to check schema version

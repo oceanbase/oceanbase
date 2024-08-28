@@ -219,6 +219,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         ObTableSchema &alter_schema = alter_table_stmt->get_alter_table_schema();
         alter_schema.set_table_type(table_schema_->get_table_type());
         OZ (alter_schema.set_external_file_format(table_schema_->get_external_file_format()));
+        OZ (alter_schema.set_external_properties(table_schema_->get_external_properties()));
         OZ (alter_schema.set_external_file_location(table_schema_->get_external_file_location()));
         OZ (alter_schema.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
         OZ (alter_schema.set_external_file_pattern(table_schema_->get_external_file_pattern()));
@@ -5519,7 +5520,9 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
                               schema_checker_,
                               NULL == node->children_[1]))) {
     SQL_RESV_LOG(WARN, "failed to check default value", K(column), K(ret));
-  } else if (OB_FAIL(column.set_cur_default_value(dummy_column.get_cur_default_value()))) {
+  } else if (OB_FAIL(column.set_cur_default_value(
+                 dummy_column.get_cur_default_value(),
+                 dummy_column.is_default_expr_v2_column()))) {
     LOG_WARN("failed to set default value", K(ret));
   }
   // else if (OB_FAIL(process_default_value(stat, column))) {
@@ -5599,6 +5602,7 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
       } else {
         ObObjParam default_value;
+        ObDefaultValueRes resolve_res(default_value);
         if (T_CONSTR_NULL == default_node->type_) {
           default_value.set_null();
           alter_column_schema.is_drop_default_ = true;
@@ -5611,11 +5615,37 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         } else if (!lib::is_oracle_mode() && ob_is_geometry_tc(alter_column_schema.get_data_type())) {
           ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
           SQL_RESV_LOG(WARN, "GEOMETRY can't set default value!", K(ret));
-        } else if (OB_FAIL(resolve_default_value(default_node, default_value))) {
+        } else if (OB_FAIL(resolve_default_value(default_node, resolve_res))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }
+        if (OB_SUCC(ret) && !resolve_res.is_literal_) {
+          uint64_t data_version = 0;
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("session info is NULL", KR(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+            LOG_WARN("fail to get tenant data version", KR(ret), K(session_info_->get_effective_tenant_id()), K(data_version));
+          } else if ((MOCK_DATA_VERSION_4_2_4_0 <= data_version &&
+                      data_version < DATA_VERSION_4_3_0_0) ||
+                     data_version >= DATA_VERSION_4_3_3_0) {
+            ObString expr_str(default_node->str_len_, default_node->str_value_);
+            if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                                  *allocator_, session_info_->get_dtc_params(), expr_str))) {
+              LOG_WARN("fail to copy and convert string charset", K(ret));
+            } else {
+              default_value.set_varchar(expr_str);
+              default_value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+              default_value.set_param_meta();
+            }
+          } else {
+            ret = OB_ERR_ILLEGAL_TYPE;
+            SQL_RESV_LOG(WARN, "Illegal type of default value",K(ret));
+          }
+        }
+
         if (OB_SUCCESS == ret &&
-          OB_FAIL(alter_column_schema.set_cur_default_value(default_value))) {
+          OB_FAIL(alter_column_schema.set_cur_default_value(default_value, !resolve_res.is_literal_))) {
             SQL_RESV_LOG(WARN, "failed to set current default to alter column schema!", K(ret));
         }
       }

@@ -58,6 +58,8 @@ public:
   int freeze_direct_load_memtable(ObITabletMemtable *tablet_memtable);
   int get_direct_load_memtables_for_write(ObTableHdlArray &handles);
 
+  int try_get_active_memtable(ObTableHandleV2 &handle, const int64_t timeout);
+
 public: // derived from ObIMemtableMgr
   virtual int init(const common::ObTabletID &tablet_id,
                    const share::ObLSID &ls_id,

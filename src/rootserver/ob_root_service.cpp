@@ -2565,14 +2565,10 @@ int ObRootService::create_resource_pool(const obrpc::ObCreateResourcePoolArg &ar
       LOG_USER_ERROR(OB_MISS_ARGUMENT, "unit_num");
     }
     LOG_WARN("missing arg to create resource pool", K(arg), K(ret));
-  } else if (REPLICA_TYPE_LOGONLY != arg.replica_type_
-             && REPLICA_TYPE_FULL != arg.replica_type_) {
+  } else if (REPLICA_TYPE_FULL != arg.replica_type_) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("only full/logonly pool are supported", K(ret), K(arg));
-  } else if (REPLICA_TYPE_LOGONLY == arg.replica_type_
-             && arg.unit_num_> 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("logonly resource pool should only have one unit on one zone", K(ret), K(arg));
+    LOG_WARN("only full replica pool are supported", K(ret), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "replica_type of resource pool other than FULL replica");
   } else if (0 == arg.unit_.case_compare(OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can not create resource pool use standby unit config template", K(ret), K(arg));
@@ -3033,19 +3029,6 @@ int ObRootService::alter_database(const ObAlterDatabaseArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (common::STANDBY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()) {
-    const int64_t tenant_id = arg.database_schema_.get_tenant_id();
-    ObSchemaGetterGuard schema_guard;
-    uint64_t database_id = OB_INVALID_ID;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
-            tenant_id, schema_guard))) {
-      LOG_WARN("get_schema_guard with version in inner table failed", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_database_id(tenant_id,
-            arg.database_schema_.get_database_name_str(), database_id))) {
-      LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(arg));
-    }
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ddl_service_.alter_database(arg))) {
     LOG_WARN("alter database failed", K(arg), K(ret));
   }
@@ -4146,7 +4129,12 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
         break;
       }
       case share::MAKE_DDL_TAKE_EFFECT_TASK: {
-        if (OB_FAIL(ddl_service_.swap_orig_and_hidden_table_state(
+        if (arg.is_direct_load_partition_) {
+          if (OB_FAIL(ddl_service_.swap_orig_and_hidden_table_partitions(
+              const_cast<obrpc::ObAlterTableArg &>(arg)))) {
+            LOG_WARN("failed to swap orig and hidden table partitions", K(ret));
+          }
+        } else if (OB_FAIL(ddl_service_.swap_orig_and_hidden_table_state(
             const_cast<obrpc::ObAlterTableArg &>(arg)))) {
           LOG_WARN("failed to swap orig and hidden table state", K(ret));
         }
@@ -6585,7 +6573,7 @@ int ObRootService::revoke_routine(const ObRevokeRoutineArg &arg)
                             (arg.obj_type_ == (int64_t)ObObjectType::PROCEDURE) ? ObRoutineType::ROUTINE_PROCEDURE_TYPE
                            : (arg.obj_type_ == (int64_t)ObObjectType::FUNCTION) ? ObRoutineType::ROUTINE_FUNCTION_TYPE
                            : ObRoutineType::INVALID_ROUTINE_TYPE);
-    OZ (ddl_service_.revoke_routine(routine_priv_key, arg.priv_set_));
+    OZ (ddl_service_.revoke_routine(routine_priv_key, arg.priv_set_, arg.grantor_, arg.grantor_host_));
   }
   return ret;
 }
@@ -9342,6 +9330,95 @@ int ObRootService::admin_migrate_unit(const obrpc::ObAdminMigrateUnitArg &arg)
   return ret;
 }
 
+#define ADD_EVENT_FOR_ALTER_LS_REPLICA                                               \
+              "admin_alter_ls_replica", arg.get_alter_task_type().get_type_str(),    \
+              "ret_code", ret_val,                                                   \
+              "tenant_id", arg.get_tenant_id()                                       \
+
+int ObRootService::add_rs_event_for_alter_ls_replica_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    const int ret_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    char extra_info[MSG_SIZE] = {0};
+    char addr_str_buf[OB_SERVER_ADDR_STR_LEN];
+    if (OB_FAIL(arg.get_data_source().ip_port_to_string(addr_str_buf, OB_SERVER_ADDR_STR_LEN))) {
+      LOG_WARN("data source to string failed", KR(ret), K(arg));
+    } else {
+      snprintf(extra_info, sizeof(extra_info),
+      "data_source: %s, paxos_replica_num: %ld", addr_str_buf, arg.get_paxos_replica_num());
+    }
+    if (OB_FAIL(ret)) {
+    } else if (arg.get_alter_task_type().is_add_task()
+            || arg.get_alter_task_type().is_modify_replica_task()
+            || arg.get_alter_task_type().is_remove_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "target_replica", arg.get_server_addr(),
+                            "replica_type", share::ObShareUtil::replica_type_to_string(arg.get_replica_type()),
+                            "", NULL,
+                            extra_info);
+    } else if (arg.get_alter_task_type().is_migrate_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "source_replica", arg.get_server_addr(),
+                            "target_replica", arg.get_destination_addr(),
+                            "", NULL,
+                            extra_info);
+    } else if (arg.get_alter_task_type().is_modify_paxos_replica_num_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "paxos_replica_num", arg.get_paxos_replica_num());
+    } else if (arg.get_alter_task_type().is_cancel_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "task_id", arg.get_task_id());
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::admin_alter_ls_replica(const obrpc::ObAdminAlterLSReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("receive alter ls replica request", K(arg));
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    ObSystemAdminCtx ctx;
+    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
+      LOG_WARN("init_sys_admin_ctx failed", KR(ret));
+    } else {
+      ObAdminAlterLSReplica admin_util(ctx);
+      if (OB_FAIL(admin_util.execute(arg))) {
+        LOG_WARN("execute alter ls replica failed", KR(ret), K(arg));
+      }
+    }
+  }
+  int64_t cost_time = ObTimeUtility::current_time() - start_time;
+  FLOG_INFO("alter ls replica over", KR(ret), K(arg), K(cost_time));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = add_rs_event_for_alter_ls_replica_(arg, ret))) {
+    // ignore
+    LOG_WARN("add rs event for alter ls replica failed", KR(ret), KR(tmp_ret), K(arg));
+  }
+  return ret;
+}
+
 int ObRootService::admin_upgrade_virtual_schema()
 {
   int ret = OB_SUCCESS;
@@ -9408,7 +9485,6 @@ int ObRootService::admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeA
 int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg, obrpc::Int64 &res_job_id)
 {
   int ret = OB_SUCCESS;
-  bool has_standby_cluster = false;
   res_job_id = OB_INVALID_ID;
   int64_t current_timestamp = ObTimeUtility::current_time();
   int64_t start_ts = ObTimeUtility::current_time();
@@ -9430,12 +9506,10 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (GCTX.is_standby_cluster() || GCONF.in_upgrade_mode()) {
+  } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("restore tenant while in standby cluster or "
-             "in upgrade mode is not allowed", KR(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
-                   "restore tenant while in standby cluster or in upgrade mode");
+    LOG_WARN("in upgrade mode is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "in upgrade mode");
   } else if (0 == restore_concurrency) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore tenant when restore_concurrency is 0 not allowed", KR(ret));
@@ -9549,6 +9623,31 @@ int ObRootService::check_restore_tenant_valid(const share::ObPhysicalRestoreJob 
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("restore tenant with encrypted zone is not supported", KR(ret), K(info));
             }
+          }
+        }
+      }
+      // check if loclaity contains any C replica
+      ObLocalityDistribution locality_dist;
+      common::ObArray<share::schema::ObZoneRegion> zone_region_list;
+      common::ObArray<share::ObZoneReplicaAttrSet> zone_replica_num_array;
+      if (OB_FAIL(ret)) {
+        // already failed
+      } else if (OB_FAIL(locality_dist.init())) {
+        LOG_WARN("fail to init locality dist", K(ret));
+      } else if (OB_FAIL(ddl_service_.construct_zone_region_list(zone_region_list, zones))) {
+        LOG_WARN("fail to construct zone region list", K(ret));
+      } else if (OB_FAIL(locality_dist.parse_locality(
+              job_info.get_locality(), zones, &zone_region_list))) {
+        LOG_WARN("fail to parse locality", K(ret));
+      } else if (OB_FAIL(locality_dist.get_zone_replica_attr_array(zone_replica_num_array))) {
+        LOG_WARN("fail to get zone region replica num array", K(ret));
+      } else {
+        FOREACH_X(zone_replica_attr, zone_replica_num_array, OB_SUCC(ret)) {
+          if (zone_replica_attr->get_columnstore_replica_num() > 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("restore tenant with C replica not supported", KR(ret),
+                     "locality_str", job_info.get_locality(), K(zone_replica_num_array));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "restore tenant with COLUMNSTORE replica in locality is");
           }
         }
       }
@@ -10926,7 +11025,6 @@ int ObRootService::get_recycle_schema_versions(
 {
   int ret = OB_SUCCESS;
   LOG_INFO("receive get recycle schema versions request", K(arg));
-  bool is_standby = GCTX.is_standby_cluster();
   bool in_service = is_full_service();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -10934,10 +11032,10 @@ int ObRootService::get_recycle_schema_versions(
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg is invalid", K(ret), K(arg));
-  } else if (!is_standby || !in_service) {
+  } else if (!in_service) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("should be standby cluster and rs in service",
-             KR(ret), K(is_standby), K(in_service));
+    LOG_WARN("should be rs in service",
+             KR(ret), K(in_service));
   } else if (OB_FAIL(schema_history_recycler_.get_recycle_schema_versions(arg, result))) {
     LOG_WARN("fail to get recycle schema versions", KR(ret), K(arg));
   }
@@ -11721,10 +11819,6 @@ int ObRootService::handle_recover_table(const obrpc::ObRecoverTableArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
-  } else if (GCTX.is_standby_cluster()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("recover table in standby tenant is not allowed", K(ret), K(arg));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover table in standby tenant");
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("recover table in upgrade mode is not allowed", K(ret), K(arg));

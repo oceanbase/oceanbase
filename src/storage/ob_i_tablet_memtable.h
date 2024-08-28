@@ -209,14 +209,12 @@ public:
     unsubmitted_cnt_(0),
     logging_blocked_start_time_(0),
     write_ref_cnt_(0),
-    migration_clog_checkpoint_scn_(),
     freeze_state_(TabletMemtableFreezeState::INVALID),
     memtable_mgr_handle_()
   {
     max_end_scn_.set_min();
     rec_scn_.set_max();
     freeze_scn_.set_max();
-    migration_clog_checkpoint_scn_.set_min();
   }
 
   void reset()
@@ -241,7 +239,6 @@ public:
     max_end_scn_.set_min();
     rec_scn_.set_max();
     freeze_scn_.set_max();
-    migration_clog_checkpoint_scn_.set_min();
     freezer_ = nullptr;
     memtable_mgr_handle_.reset();
     mt_stat_.reset();
@@ -257,7 +254,6 @@ public:
   int dec_unsubmitted_cnt();
   int set_freezer(ObFreezer *handler);
   int set_rec_scn(const share::SCN rec_scn);
-  int set_migration_clog_checkpoint_scn(const share::SCN &clog_checkpoint_scn);
   int resolve_left_boundary(share::SCN end_scn) { return set_start_scn(end_scn); }
   int resolve_right_boundary();
   int replay_schema_version_change_log(const int64_t schema_version);
@@ -374,7 +370,6 @@ public:
   const ObMtStat &get_mt_stat() const { return mt_stat_; }
   share::SCN get_max_end_scn() const { return max_end_scn_.atomic_get(); }
   share::SCN get_rec_scn() { return rec_scn_.atomic_get(); }
-  share::SCN get_migration_clog_checkpoint_scn() { return migration_clog_checkpoint_scn_.atomic_get(); }
   ObTabletMemtableMgr *get_memtable_mgr();
   // *************** getter *****************
 
@@ -399,7 +394,6 @@ public:
                        K(max_end_scn_),
                        K(rec_scn_),
                        K(freeze_scn_),
-                       K(migration_clog_checkpoint_scn_),
                        KP(freezer_),
                        K(memtable_mgr_handle_),
                        K(mt_stat_.frozen_time_),
@@ -417,7 +411,7 @@ protected:
   // ************* memtable flag inner operator *************
 
 protected:
-  void resolve_left_boundary_for_active_memtable_();
+  int resolve_left_boundary_for_active_memtable_();
   int get_ls_current_right_boundary_(share::SCN &current_right_boundary);
   int set_memtable_mgr_(ObTabletMemtableMgr *mgr);
   int64_t inc_unsubmitted_cnt_();
@@ -477,7 +471,6 @@ private:
   int64_t unsubmitted_cnt_;
   int64_t logging_blocked_start_time_;  // record the start time of logging blocked
   int64_t write_ref_cnt_ CACHE_ALIGNED;
-  share::SCN migration_clog_checkpoint_scn_;
   TabletMemtableFreezeState freeze_state_;
   ObMemtableMgrHandle memtable_mgr_handle_;
 };

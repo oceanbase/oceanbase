@@ -1655,13 +1655,5 @@ int ObFtsIndexBuildTask::cleanup_impl()
   return ret;
 }
 
-void ObFtsIndexBuildTask::flt_set_task_span_tag() const
-{
-}
-
-void ObFtsIndexBuildTask::flt_set_status_span_tag() const
-{
-}
-
 } // end namespace rootserver
 } // end namespace oceanbase

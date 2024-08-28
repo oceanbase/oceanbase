@@ -346,7 +346,7 @@ public:
       const share::schema::AlterTableSchema &alter_table_schema,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString &nls_formats,
-      share::schema::ObLocalSessionVar &local_session_var,
+      sql::ObLocalSessionVar &local_session_var,
       obrpc::ObSequenceDDLArg &sequence_ddl_arg,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &new_table_schema,
@@ -561,6 +561,7 @@ public:
    *    step5: rename hidden table name to orig table name and modify the state to non-hidden
    */
   int swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter_table_arg);
+  int swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &alter_table_arg);
 
   /**
    * The function is designed for the recover restore table ddl, which is to check whether the object
@@ -654,7 +655,6 @@ public:
   int maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLArg &arg);
   int process_schema_object_dependency(
       const uint64_t tenant_id,
-      const bool is_standby,
       const share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObMySQLTransaction &trans,
@@ -837,7 +837,9 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                  const uint64_t option,
                                  const bool is_from_inner_sql,
                                  share::schema::ObObjPrivSortKey &obj_priv_key,
-                                 share::schema::ObSchemaGetterGuard &schema_guard);
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const common::ObString &grantor = "",
+                                 const common::ObString &grantor_host = "");
   virtual int grant_table_and_col_privs_to_user(
       const obrpc::ObGrantArg &arg,
       uint64_t grantee_id,
@@ -867,11 +869,11 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                         const bool is_grant);
 
   int grant_table_and_column_mysql(const obrpc::ObGrantArg &arg,
-                                         uint64_t user_id,
-                                         const ObString &user_name,
-                                         const ObString &host_name,
-                                         const ObNeedPriv &need_priv,
-                                         share::schema::ObSchemaGetterGuard &schema_guard);
+                                   uint64_t user_id,
+                                   const ObString &user_name,
+                                   const ObString &host_name,
+                                   const ObNeedPriv &need_priv,
+                                   share::schema::ObSchemaGetterGuard &schema_guard);
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObIArray<int64_t> &failed_index);
   int standby_grant(const obrpc::ObStandbyGrantArg &arg);
 
@@ -910,18 +912,24 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                           const share::ObRawObjPrivArray &obj_priv_array,
                           const uint64_t option,
                           const share::schema::ObObjPrivSortKey &obj_key,
-                          share::schema::ObSchemaGetterGuard &schema_guard);
+                          share::schema::ObSchemaGetterGuard &schema_guard,
+                          const common::ObString &grantor = "",
+                          const common::ObString &grantor_host = "");
 
   virtual int grant_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
     const ObPrivSet priv_set,
     const ObString *ddl_stmt_str,
     const uint64_t option,
-    share::schema::ObSchemaGetterGuard &schema_guard);
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObString &grantor = "",
+    const common::ObString &grantor_host = "");
 
   virtual int revoke_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
-    const ObPrivSet priv_set);
+    const ObPrivSet priv_set,
+    const common::ObString &grantor = "",
+    const common::ObString &grantor_host = "");
   virtual int revoke_table(const obrpc::ObRevokeTableArg &arg,
                            const share::schema::ObTablePrivSortKey &table_key,
                            const ObPrivSet priv_set,
@@ -1308,7 +1316,6 @@ private:
   int modify_tenant_inner_phase(const obrpc::ObModifyTenantArg &arg,
       const ObTenantSchema *orig_tenant_schema,
       ObSchemaGetterGuard &schema_guard,
-      bool is_standby,
       bool is_restore);
   int update_global_index(obrpc::ObAlterTableArg &arg,
       const uint64_t tenant_id,
@@ -1864,7 +1871,7 @@ private:
       const share::schema::ObColumnSchemaV2 &orig_column_schema,
       const share::schema::ObTableSchema &origin_table_schema,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
-      const share::schema::ObLocalSessionVar *local_session_var,
+      const sql::ObLocalSessionVar *local_session_var,
       share::schema::ObTableSchema &new_table_schema,
       const bool need_update_default_value,
       const bool need_update_session_var,
@@ -1880,7 +1887,7 @@ private:
                                         const ObObjType origin_type,
                                         const AlterColumnSchema &new_column_schema,
                                         const ObTableSchema &table_schema,
-                                        const share::schema::ObLocalSessionVar *local_session_var);
+                                        const sql::ObLocalSessionVar *local_session_var);
   int modify_depend_column_type(sql::ObRawExpr *expr,
                                 const ObString &column_name,
                                 const AlterColumnSchema &alter_column_schema,
@@ -2629,7 +2636,6 @@ private:
       const share::schema::ObSysVariableSchema &sys_variable,
       share::schema::ObSysParam *sys_params,
       int64_t params_capacity);
-  int get_is_standby_cluster(bool &is_standby) const;
   int check_can_alter_column(
       const int64_t tenant_id,
       const share::schema::AlterTableSchema &alter_table_schema,
@@ -2753,7 +2759,7 @@ private:
       common::ObIArray<common::ObConfigPairs> &init_configs);
 
 private:
-  int check_locality_compatible_(ObTenantSchema &schema);
+  int check_locality_compatible_(ObTenantSchema &schema, const bool for_create_tenant);
 
   int pre_rename_mysql_columns_online(const ObTableSchema &origin_table_schema,
                           const AlterTableSchema &alter_table_schema,

@@ -267,6 +267,7 @@ struct TableItem
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
     values_table_def_ = NULL;
+    sample_info_ = nullptr;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -289,7 +290,8 @@ struct TableItem
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
-               K_(exec_params), K_(mview_id), K_(need_expand_rt_mv));
+               K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
+               K_(external_table_partition));
 
   enum TableType
   {
@@ -303,7 +305,6 @@ struct TableItem
     TEMP_TABLE,
     LINK_TABLE,
     JSON_TABLE,
-    EXTERNAL_TABLE,
     VALUES_TABLE,
     LATERAL_TABLE,
   };
@@ -336,6 +337,7 @@ struct TableItem
   bool is_generated_table() const { return GENERATED_TABLE == type_; }
   bool is_temp_table() const { return TEMP_TABLE == type_; }
   bool is_fake_cte_table() const { return CTE_TABLE == type_; }
+  bool is_has_sample_info() const { return sample_info_ != nullptr; }
   bool is_joined_table() const { return JOINED_TABLE == type_; }
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
   bool is_link_table() const { return OB_INVALID_ID != dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
@@ -370,6 +372,7 @@ struct TableItem
   {
     return synonym_name_.empty() ? database_name_ : synonym_db_name_;
   }
+  // only can be used in resolve phase
   const TableItem &get_base_table_item() const
   {
     return (is_generated_table() || is_temp_table()) && view_base_item_ != NULL
@@ -416,8 +419,8 @@ struct TableItem
   bool need_expand_rt_mv_; // for real-time materialized view
   uint64_t mview_id_; // for materialized view, ref_id_ is mv container table id, mview_id_ is the view id
   const ParseNode* node_;
-  // base table item for updatable view
-  const TableItem *view_base_item_; // seems to be useful only in the resolve phase
+  // base table item for updatable view, can not access after the resolve phase
+  const TableItem *view_base_item_;
   ObRawExpr *flashback_query_expr_;
   FlashBackQueryType flashback_query_type_;
   ObRawExpr *function_table_expr_;
@@ -433,9 +436,13 @@ struct TableItem
   common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> part_names_;
   common::ObSEArray<ObExecParamRawExpr*, 4, common::ModulePageAllocator, true> exec_params_;
   // json table
-  ObJsonTableDef* json_table_def_;
+  ObJsonTableDef *json_table_def_;
   // values table
   ObValuesTableDef *values_table_def_;
+  // external table
+  common::ObString external_table_partition_;
+  // sample scan infos
+  SampleInfo *sample_info_;
 };
 
 struct ColumnItem
@@ -762,7 +769,7 @@ public:
   int get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt);
 
   int64_t get_from_item_size() const { return from_items_.count(); }
-  void clear_from_items() { from_items_.reset(); }
+  void clear_from_items() { from_items_.reuse(); }
   int add_from_item(uint64_t tid, bool is_joined = false)
   {
     int ret = common::OB_SUCCESS;
@@ -782,7 +789,8 @@ public:
   int remove_joined_table_item(const JoinedTable *joined_table);
   int remove_joined_table_item(uint64_t tid, bool *remove_happened = NULL);
 
-  TableItem *create_table_item(common::ObIAllocator &allocator);
+  static TableItem *create_table_item(common::ObIAllocator &allocator);
+  static JoinedTable *create_joined_table(common::ObIAllocator &allocator);
   int merge_from_items(const ObDMLStmt &stmt);
   const FromItem &get_from_item(int64_t index) const { return from_items_[index]; }
   FromItem &get_from_item(int64_t index) { return from_items_[index]; }
@@ -959,6 +967,7 @@ public:
 
   int relids_to_table_items(const ObRelIds &table_set, ObIArray<TableItem*> &tables) const;
   int relids_to_table_items(const ObSqlBitSet<> &table_set, ObIArray<TableItem*> &tables) const;
+  int relids_to_table_ids(const ObRelIds &table_set, ObIArray<uint64_t> &table_ids) const;
   int relids_to_table_ids(const ObSqlBitSet<> &table_set, ObIArray<uint64_t> &table_ids) const;
   int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;

@@ -525,7 +525,8 @@ int ObExpandAggregateUtils::extract_candi_window_aggr(ObSelectStmt *select_stmt,
 }
 
 int ObExpandAggregateUtils::add_aggr_item(ObIArray<ObAggFunRawExpr*> &new_aggr_items,
-                                          ObAggFunRawExpr *&aggr_expr)
+                                          ObAggFunRawExpr *&aggr_expr,
+                                          const bool need_strict_check /* = true */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(aggr_expr)) {
@@ -537,10 +538,14 @@ int ObExpandAggregateUtils::add_aggr_item(ObIArray<ObAggFunRawExpr*> &new_aggr_i
       if (OB_ISNULL(new_aggr_items.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(new_aggr_items.at(i)));
-      } else if (aggr_expr->same_as(*new_aggr_items.at(i))) {
-        aggr_expr = new_aggr_items.at(i);
+      } else if (need_strict_check) {
+        if (aggr_expr->same_as(*new_aggr_items.at(i))) {
+          aggr_expr = new_aggr_items.at(i);
+          break;
+        }
+      } else if (aggr_expr == new_aggr_items.at(i)) {
         break;
-      } else {/*do nothing*/}
+      }
     }
     if (OB_SUCC(ret) && i == new_aggr_items.count()) {
       if (OB_FAIL(new_aggr_items.push_back(aggr_expr))) {
@@ -552,7 +557,8 @@ int ObExpandAggregateUtils::add_aggr_item(ObIArray<ObAggFunRawExpr*> &new_aggr_i
 }
 
 int ObExpandAggregateUtils::add_win_expr(common::ObIArray<ObWinFunRawExpr*> &new_win_exprs,
-                                         ObWinFunRawExpr *&win_expr)
+                                         ObWinFunRawExpr *&win_expr,
+                                         const bool need_strict_check /* = true */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(win_expr)) {
@@ -564,10 +570,14 @@ int ObExpandAggregateUtils::add_win_expr(common::ObIArray<ObWinFunRawExpr*> &new
       if (OB_ISNULL(new_win_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(new_win_exprs.at(i)));
-      } else if (win_expr->same_as(*new_win_exprs.at(i))) {
-        win_expr = new_win_exprs.at(i);
+      } else if (need_strict_check) {
+        if (win_expr->same_as(*new_win_exprs.at(i))) {
+          win_expr = new_win_exprs.at(i);
+          break;
+        }
+      } else if (win_expr == new_win_exprs.at(i)) {
         break;
-      } else {/*do nothing*/}
+      }
     }
     if (OB_SUCC(ret) && i == new_win_exprs.count()) {
       if (OB_FAIL(new_win_exprs.push_back(win_expr))) {

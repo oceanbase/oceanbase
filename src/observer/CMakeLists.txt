@@ -175,6 +175,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_move_response.cpp
   table/ob_table_connection_mgr.cpp
   table/redis/ob_redis_meta.cpp
+  table/ob_table_mode_control.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -447,6 +448,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
+  virtual_table/ob_all_virtual_tmp_file.cpp
 )
 
 ob_server_add_target(ob_server)

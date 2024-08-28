@@ -472,7 +472,12 @@ int TabletToTableInfo::exchange_tablet_table_info(const common::ObSArray<common:
       if (OB_FAIL(tablet_to_table_map_.get(tablet_id, tmp_table_info))) {
         LOG_ERROR("tablet_to_table_map_ get failed", KR(ret), K(tablet_id));
       } else if (OB_FAIL(table_to_table_info_map.insert(TableID(tmp_table_info.get_table_id()), tmp_table_info))) {
-        LOG_ERROR("table_to_table_info_map insert failed", KR(ret), K(tablet_id), K(tmp_table_info));
+        // insert overwrite may exchange more than one partition
+        if (OB_ENTRY_EXIST != ret) {
+          LOG_ERROR("table_to_table_info_map insert failed", KR(ret), K(tablet_id), K(tmp_table_info));
+        } else {
+          ret = OB_SUCCESS;
+        }
       } else {
         LOG_INFO("table_to_table_info_map insert success", K(tablet_id), K(tmp_table_info));
       }

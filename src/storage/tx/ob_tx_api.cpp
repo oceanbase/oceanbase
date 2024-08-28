@@ -1132,6 +1132,7 @@ int ObTransService::rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
     ARRAY_FOREACH(parts, i) {
       ObPartTransCtx *ctx = NULL;
       ObTxPart &p = parts[i];
+      int64_t output_transfer_epoch = 0;
       ObSEArray<ObTxLSEpochPair, 1> downstream_parts;
       if (OB_FAIL(get_tx_ctx_(p.id_, tx.tx_id_, ctx))) {
         TRANS_LOG(WARN, "get tx ctx fail", K(ret), K_(p.id), K(tx));
@@ -1143,13 +1144,16 @@ int ObTransService::rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
                                                       tx.seq_base_,
                                                       expire_ts,
                                                       from_scn,
-                                                      0, /*request_id, only used for request*/
+                                                      -1, /*input_transfer_epoch*/
+                                                      output_transfer_epoch,
                                                       downstream_parts))) {
         TRANS_LOG(WARN, "LS rollback savepoint fail", K(ret), K(savepoint), K(tx));
       } else {
         // merge find new downstream to tx.rollback parts
         for (int64_t idx = 0; OB_SUCC(ret) && idx < downstream_parts.count(); idx++) {
-          if (OB_FAIL(rollback_parts.push_back(ObTxExecPart(downstream_parts.at(idx).left_, 0, downstream_parts.at(idx).right_)))) {
+          if (OB_FAIL(rollback_parts.push_back(ObTxExecPart(downstream_parts.at(idx).left_,
+                                                            0, /*exec_epoch*/
+                                                            -1 /*transfer_epoch*/)))) {
             TRANS_LOG(WARN, "push part to array failed", K(ret), K(tx));
           }
         }
@@ -1308,7 +1312,8 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                                  const int64_t tx_seq_base,
                                                  const int64_t expire_ts,
                                                  const ObTxSEQ specified_from_scn,
-                                                 const int64_t request_id,
+                                                 const int64_t input_transfer_epoch,
+                                                 int64_t &output_transfer_epoch,
                                                  ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
@@ -1319,7 +1324,8 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                           specified_from_scn,
                                           savepoint,
                                           tx_seq_base,
-                                          request_id,
+                                          input_transfer_epoch,
+                                          output_transfer_epoch,
                                           downstream_parts);
     if ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable) {
       if (ObTimeUtility::current_time() >= expire_ts) {
@@ -1537,6 +1543,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
     ObTxPart &p = parts[0];
     int64_t born_epoch = 0;
     ObSEArray<ObTxLSEpochPair, 1> downstream_parts;
+    int64_t output_transfer_epoch = 0;
     if (OB_FAIL(ls_rollback_to_savepoint_(tx.tx_id_,
                                           p.id_,
                                           p.epoch_,
@@ -1547,7 +1554,8 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
                                           &tx,
                                           false,/*for transfer*/
                                           ObTxSEQ::INVL(),
-                                          0, /*request_id, only for rollback_to request*/
+                                          -1,/*input_transfer_epoch*/
+                                          output_transfer_epoch,
                                           downstream_parts,
                                           -1/*non-blocking*/))) {
       if (common_retryable_error_(ret)) {
@@ -1571,7 +1579,9 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
       TRANS_LOG(WARN, "reserve space fail", K(ret), K(parts), K(tx));
     } else {
       ARRAY_FOREACH(parts, i) {
-        rollback_parts.push_back(ObTxExecPart(parts[i].id_, parts[i].epoch_, 0));
+        rollback_parts.push_back(ObTxExecPart(parts[i].id_,
+                                              parts[i].epoch_,
+                                              -1 /*transfer_epoch*/));
       }
     }
     if (FAILEDx(rollback_savepoint_slowpath_(tx,
@@ -1618,7 +1628,8 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
                                               const ObTxDesc *tx,
                                               const bool for_transfer,
                                               const ObTxSEQ from_scn,
-                                              const int64_t request_id,
+                                              const int64_t input_transfer_epoch,
+                                              int64_t &output_transfer_epoch,
                                               ObIArray<ObTxLSEpochPair> &downstream_parts,
                                               int64_t expire_ts)
 {
@@ -1682,7 +1693,8 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
                                                    tx_seq_base,
                                                    expire_ts,
                                                    from_scn,
-                                                   request_id,
+                                                   input_transfer_epoch,
+                                                   output_transfer_epoch,
                                                    downstream_parts))) {
       TRANS_LOG(WARN, "LS rollback to savepoint fail", K(ret), K(tx_id), K(ls), K(op_sn), K(savepoint), KPC(ctx));
     }
@@ -1724,6 +1736,7 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
   msg.epoch_ = -1;
   msg.request_id_ = tx_msg_id;
   msg.specified_from_scn_ = specified_from_scn;
+  msg.input_transfer_epoch_ = -1;
   // prepare msg.tx_ptr_ if required
   // TODO(yunxing.cyx) : in 4.1 rework here, won't serialize txDesc
   ObTxDesc *tmp_tx_desc = NULL;

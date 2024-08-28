@@ -26,7 +26,7 @@ ObLSReservedSnapshotMgr::ObLSReservedSnapshotMgr()
    allocator_("ResvSnapMgr"),
    min_reserved_snapshot_(0),
    next_reserved_snapshot_(0),
-   snapshot_lock_(),
+   snapshot_lock_(ObLatchIds::LS_RESERVED_SNAPSHOT_LOCK),
    sync_clog_lock_(),
    ls_(nullptr),
    ls_handle_(),

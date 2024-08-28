@@ -45,7 +45,8 @@ class ObCreateViewResolver : public ObCreateTableResolverBase
   static const int64_t PARTITION_NODE = 9;
   static const int64_t TABLE_OPTION_NODE = 10;
   static const int64_t HINT_NODE = 11;
-  static const int64_t ROOT_NUM_CHILD = 12;
+  static const int64_t COLUMN_GROUP_NODE = 12;
+  static const int64_t ROOT_NUM_CHILD = 13;
 
 public:
   explicit ObCreateViewResolver(ObResolverParams &params);
@@ -145,6 +146,12 @@ private:
                                                 ObSEArray<ObConstraint,4>& csts);
   int resolve_primary_key_node(ParseNode &pk_node, ObTableSchema &table_schema);
   int check_on_query_computation_supported(const ObSelectStmt *stmt);
+  int load_mview_dep_session_vars(ObSQLSessionInfo &session_info,
+                                  ObSelectStmt *stmt,
+                                  ObLocalSessionVar &dep_vars);
+  int get_dep_session_vars_from_stmt(ObSQLSessionInfo &session_info,
+                                     ObSelectStmt *stmt,
+                                     ObLocalSessionVar &dep_vars);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateViewResolver);
 };

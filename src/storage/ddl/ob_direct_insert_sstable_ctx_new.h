@@ -388,6 +388,7 @@ public:
   inline const ObITable::TableKey &get_table_key() const { return table_key_; }
   inline uint64_t get_data_format_version() const { return data_format_version_; }
   inline ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
+  inline bool need_process_cs_replica() const { return need_process_cs_replica_; }
   inline ObTabletDirectLoadBuildCtx &get_sqc_build_ctx() { return sqc_build_ctx_; }
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
   inline const ObTabletID &get_tablet_id() const { return tablet_id_; }
@@ -408,9 +409,23 @@ public:
   int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
   int prepare_storage_schema(ObTabletHandle &tablet_handle);
+  // init column store related parameters when open in leader
+  int init_column_store_params(
+      const ObLSHandle &ls_handle,
+      const ObStorageSchema &storage_schema,
+      const ObTabletID &new_tablet_id,
+      const ObDirectLoadType new_direct_load_type);
+  /*
+   * For full data direct load, row store table and column store table take diffrent way.
+   * 1. row store table: take the same way with offline ddl;
+   * 2. column store table: take PX to accelerate.
+   * 3. for table with cs replica, take the same way with offline ddl, and writing additional column store data.
+   *    so if is data direct load type but need process cs replica, it should skip the originally column store load code.
+   */
+  bool is_originally_column_store_data_direct_load() const { return is_data_direct_load(direct_load_type_) && !need_process_cs_replica_; }
 
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt),
-               K_(direct_load_type), K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs));
+               K_(direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group), K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs));
 
 private:
   int prepare_schema_item_on_demand(const uint64_t table_id,
@@ -441,6 +456,10 @@ protected:
   common::ObLatch lock_;
   int64_t ref_cnt_;
   ObDirectLoadType direct_load_type_;
+  // only row store user tablet need process cs replica in leader, column store tablet do not need
+  bool need_process_cs_replica_;
+  // column store table, or need process cs replica
+  bool need_fill_column_group_;
   // sqc_build_ctx_ is just used for the observer node who receives the requests from the SQL Layer
   // to write the start log and the data redo log. And other observer nodes can not use it.
   ObTabletDirectLoadBuildCtx sqc_build_ctx_;
@@ -480,7 +499,8 @@ public:
       const share::SCN &start_scn,
       const uint64_t data_format_version,
       const int64_t execution_id,
-      const share::SCN &checkpoint_scn);
+      const share::SCN &checkpoint_scn,
+      const bool replay_normal_in_cs_replica = false);
   int start_with_checkpoint(
       ObTablet &tablet,
       const share::SCN &start_scn,
@@ -520,7 +540,7 @@ private:
   bool is_started() { return start_scn_.is_valid_and_not_min(); }
   int schedule_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool wait_major_generated, const bool is_replay); // try wait build major sstable
   int cleanup_unlock();
-  int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
+  int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn, const bool replay_normal_in_cs_replica = false);
   int update_major_sstable();
 
 private:

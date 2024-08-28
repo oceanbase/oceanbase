@@ -26,6 +26,8 @@
 #include "sql/ob_result_set.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "share/stat/ob_dbms_stats_preferences.h"
+#include "observer/ob_sql_client_decorator.h"
+#include "share/stat/ob_dbms_stats_executor.h"
 
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_json_pl_utils.h"
@@ -147,19 +149,15 @@ int ObDbmsStatsUtils::cast_number_to_double(const number::ObNumber &src_val, dou
   return ret;
 }
 
-// gather statistic related inner table should not read or write during tenant restore or on 
-// standby cluster.
+// gather statistic related inner table should not read or write restore or standby tenant
 int ObDbmsStatsUtils::check_table_read_write_valid(const uint64_t tenant_id, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  bool in_restore = false;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->check_tenant_is_restore(NULL, tenant_id, in_restore))) {
-    LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (OB_UNLIKELY(in_restore) || GCTX.is_standby_cluster()) {
+  bool is_primary = true;
+  if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_primary)) {
     is_valid = false;
   }
   return ret;
@@ -171,7 +169,7 @@ int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &sc
                                           const int64_t table_id,
                                           bool &is_valid)
 {
-  bool ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   is_valid = false;
   const ObTableSchema *table_schema = NULL;
   if (is_sys_table(table_id)) {//check sys table
@@ -1103,6 +1101,13 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.global_part_id_ = param.global_part_id_;
   gather_param.gather_vectorize_ = gather_vectorize;
   gather_param.use_column_store_ = use_column_store;
+  gather_param.is_async_gather_ = param.is_async_gather_;
+  gather_param.async_gather_sample_size_ = param.async_gather_sample_size_;
+  gather_param.async_full_table_size_ = param.async_full_table_size_;
+  gather_param.hist_sample_info_.is_sample_ = param.hist_sample_info_.is_sample_;
+  gather_param.hist_sample_info_.is_block_sample_ = param.hist_sample_info_.is_block_sample_;
+  gather_param.hist_sample_info_.sample_type_ = param.hist_sample_info_.sample_type_;
+  gather_param.hist_sample_info_.sample_value_ = param.hist_sample_info_.sample_value_;
   return gather_param.column_group_params_.assign(param.column_group_params_);
 }
 
@@ -1293,7 +1298,7 @@ int ObDbmsStatsUtils::implicit_commit_before_gather_stats(sql::ObExecContext &ct
     LOG_WARN("failed to get_optimizer_features_enable_version", K(ret));
   } else if (optimizer_features_enable_version < COMPAT_VERSION_4_2_4 ||
              (optimizer_features_enable_version >= COMPAT_VERSION_4_3_0 &&
-              optimizer_features_enable_version < COMPAT_VERSION_4_3_2)) {
+              optimizer_features_enable_version < COMPAT_VERSION_4_3_3)) {
     //do nothing
   } else if (OB_FAIL(ObResultSet::implicit_commit_before_cmd_execute(*ctx.get_my_session(), ctx, stmt::T_ANALYZE))) {
     LOG_WARN("failed to implicit commit before cmd execute", K(ret));
@@ -1401,6 +1406,132 @@ int ObDbmsStatsUtils::get_sys_online_estimate_percent(sql::ObExecContext &ctx,
     LOG_WARN("failed to get sys default stat options", K(ret));
   } else {
     percent = stat_param.online_sample_percent_;
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::check_can_async_gather_stats(sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString raw_sql;
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(ctx.get_my_session()));
+  } else if (OB_FAIL(raw_sql.append_fmt("SELECT 1 FROM dual WHERE EXISTS(SELECT 1 FROM %s WHERE tenant_id = %lu);",
+                                        share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TNAME,
+                                        ctx.get_my_session()->get_effective_tenant_id()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    uint64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(ctx.get_sql_proxy());
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, raw_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else if (OB_FAIL(client_result->next())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        ret = OB_ERR_DBMS_STATS_PL;
+        LOG_WARN("async stats gathering needs to wait for other stats gathering tasks to finish", K(ret));
+        LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"async stats gathering needs to wait for other stats gathering tasks to finish");
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::cancel_async_gather_stats(sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(ctx.get_my_session()));
+  } else {
+    ObSEArray<ObString, 1> task_ids;
+    uint64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
+    ObArenaAllocator allocator("CancelAsyGather", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+    if (OB_FAIL(fetch_need_cancel_async_gather_stats_task(allocator, ctx, task_ids))) {
+      LOG_WARN("failed to fetch need cancel async gather stats task", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); ++i) {
+        if (OB_FAIL(ObDbmsStatsExecutor::cancel_gather_stats(ctx, task_ids.at(i)))) {
+          if (ret != OB_ERR_DBMS_STATS_PL) {
+            LOG_WARN("failed to cancel gather stats", K(ret));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::fetch_need_cancel_async_gather_stats_task(ObIAllocator &allocator,
+                                                                sql::ObExecContext &ctx,
+                                                                ObIArray<ObString> &task_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString raw_sql;
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(ctx.get_my_session()));
+  } else if (OB_FAIL(raw_sql.append_fmt("SELECT task_id FROM %s WHERE tenant_id = %lu and type = %d;",
+                                        share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TNAME,
+                                        ctx.get_my_session()->get_effective_tenant_id(),
+                                        ObOptStatGatherType::AYSNC_GATHER))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    uint64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(ctx.get_sql_proxy());
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, raw_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
+          int64_t idx = 0;
+          ObObj obj;
+          ObString str;
+          ObString tmp_str;
+          if (OB_FAIL(client_result->get_obj(idx, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_string(str))) {
+            LOG_WARN("failed to get string", K(ret));
+          } else if (OB_FAIL(ob_write_string(allocator, str, tmp_str))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if (OB_FAIL(task_ids.push_back(tmp_str))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+        ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+    LOG_TRACE("failed to fetch need cancel async gather stats task", K(task_ids));
   }
   return ret;
 }

@@ -567,7 +567,7 @@ int ObTransformMinMax::set_child_order_item(ObSelectStmt *stmt,
 int ObTransformMinMax::set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_param)
 {
   int ret = OB_SUCCESS;
-  ObOpRawExpr *not_null_expr = NULL;
+  ObRawExpr *not_null_expr = NULL;
   bool is_not_null = false;
   ObArray<ObRawExpr *> constraints;
   if (OB_ISNULL(stmt) || OB_ISNULL(aggr_param) || OB_ISNULL(ctx_)) {
@@ -580,7 +580,7 @@ int ObTransformMinMax::set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_p
     if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
       LOG_WARN("failed to add param not null constraints", K(ret));
     }
-  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, stmt, aggr_param, not_null_expr))) {
+  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, aggr_param, not_null_expr))) {
     LOG_WARN("failed to add is not null", K(ret));
   } else if (OB_FAIL(stmt->add_condition_expr(not_null_expr))) {
     LOG_WARN("failed to add condition expr", K(ret));

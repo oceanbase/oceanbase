@@ -65,7 +65,13 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
       LOG_WARN("fail to check location access priv", K(ret));
     } else {
       scan_ctdef.is_external_table_ = true;
-      if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(table_schema->get_external_file_format()))) {
+      const ObString &format_or_properties = table_schema->get_external_file_format().empty() ?
+                                            table_schema->get_external_properties() :
+                                            table_schema->get_external_file_format();
+      if (format_or_properties.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("format_or_properties is empty", K(ret));
+      } else if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(format_or_properties))) {
         LOG_WARN("fail to set string", K(ret));
       } else if (OB_FAIL(scan_ctdef.external_file_location_.store_str(table_schema->get_external_file_location()))) {
         LOG_WARN("fail to set string", K(ret));
@@ -212,7 +218,10 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
   const bool pd_agg = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_aggregate_pushdown();
   const bool pd_group_by =  scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_group_by_pushdown();
   ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
-  CK(OB_NOT_NULL(schema_guard));
+  ObBasicSessionInfo *session_info = cg_.opt_ctx_->get_session_info();
+  int64_t route_policy = 0;
+  bool is_cs_replica_query = false;
+  CK(OB_NOT_NULL(schema_guard), OB_NOT_NULL(session_info));
   if (OB_UNLIKELY(pd_agg && 0 == scan_ctdef.aggregate_column_ids_.count()) ||
       OB_UNLIKELY(pd_group_by && 0 == scan_ctdef.group_by_column_ids_.count())) {
     ret = OB_INVALID_ARGUMENT;
@@ -231,6 +240,10 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
   } else if (table_schema->is_multivalue_index_aux() && FALSE_IT(scan_ctdef.table_param_.set_is_multivalue_index(true))) {
   } else if (OB_FAIL(extract_das_output_column_ids(op, scan_ctdef, *table_schema, tsc_out_cols))) {
     LOG_WARN("extract tsc output column ids failed", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("get route policy failed", K(ret));
+  } else {
+    is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == route_policy;
   }
 
   if (OB_FAIL(ret)) {
@@ -240,7 +253,8 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
                                                      scan_ctdef.access_column_ids_,
                                                      scan_ctdef.pd_expr_spec_.pd_storage_flag_,
                                                      &tsc_out_cols,
-                                                     is_oracle_mapping_real_virtual_table(op.get_ref_table_id())))) {/* for real agent table , use mysql mode compulsory*/
+                                                     is_oracle_mapping_real_virtual_table(op.get_ref_table_id()), /* for real agent table , use mysql mode compulsory*/
+                                                     is_cs_replica_query))) {
     LOG_WARN("convert schema failed", K(ret), K(*table_schema),
              K(scan_ctdef.access_column_ids_), K(op.get_index_back()));
   } else if ((pd_agg || pd_group_by) &&
@@ -1080,9 +1094,12 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.is_external_files_on_disk_ =
       ObSQLUtils::is_external_files_on_local_disk(table_schema.get_external_file_location());
   bool is_weak_read = false;
+  int64_t route_policy = 0;
   if (OB_ISNULL(cg_.opt_ctx_) || OB_ISNULL(cg_.opt_ctx_->get_exec_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(cg_.opt_ctx_), K(ret));
+  } else if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("get route policy failed", K(ret));
   } else if (stmt.get_query_ctx()->has_dml_write_stmt_) {
     loc_meta.select_leader_ = 1;
     loc_meta.is_weak_read_ = 0;
@@ -1101,6 +1118,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
     loc_meta.select_leader_ = 1;
     loc_meta.is_weak_read_ = 0;
   }
+  loc_meta.route_policy_ = route_policy;
   if (OB_SUCC(ret) && !table_schema.is_global_index_table()) {
     TableLocRelInfo *rel_info = nullptr;
     ObTableID data_table_id = table_schema.is_index_table() && !table_schema.is_rowkey_doc_id() ?

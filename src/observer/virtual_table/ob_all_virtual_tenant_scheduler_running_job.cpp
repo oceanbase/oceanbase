@@ -151,6 +151,15 @@ int ObAllVirtualTenantSchedulerRunningJob::FillScanner::operator()(
           cur_row_->cells_[cell_idx].set_null();
           break;
         }
+        case JOB_CLASS: {
+          if (OB_NOT_NULL(sess_info->get_job_info())) {
+            cur_row_->cells_[cell_idx].set_varchar(sess_info->get_job_info()->get_job_class());
+            cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+          } else {
+            cur_row_->cells_[cell_idx].set_null();
+          }
+          break;
+        }
         case JOB_STYLE: {
           cur_row_->cells_[cell_idx].set_null();
           break;

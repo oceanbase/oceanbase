@@ -61,10 +61,15 @@ namespace sql {
   class ObUDRMgr;
   class ObPlanCache;
   class ObPsCache;
+  class ObAuditLogger;
+  class ObAuditLogUpdater;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
   class ObDecodeResourcePool;
+}
+namespace tmp_file {
+  class ObTenantTmpFileManager;
 }
 namespace storage {
 namespace mds {
@@ -257,6 +262,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
       common::ObTenantIOManager*,                    \
+      tmp_file::ObTenantTmpFileManager*,             \
       storage::mds::ObTenantMdsService*,             \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
@@ -368,7 +374,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObStorageHADiagMgr*,                  \
       common::sqlclient::ObTenantDblinkKeeper*,      \
       storage::ObGlobalIteratorPool*,                \
-      storage::ObTenantRestoreInfoMgr*              \
+      storage::ObTenantRestoreInfoMgr*,              \
+      sql::ObAuditLogger*,                           \
+      sql::ObAuditLogUpdater*                        \
   )
 
 

@@ -188,6 +188,66 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
   return ret;
 }
 
+int ObPLCacheMgr::flush_pl_cache_by_sql(
+                                  uint64_t key_id,
+                                  uint64_t db_id,
+                                  uint64_t tenant_id,
+                                  share::schema::ObMultiVersionSchemaService & schema_service)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard tenant_schema_guard;
+  const ObSimpleTenantSchema *tenant = NULL;
+
+  ObString db_name;
+  ObString tenant_name;
+  //get tenant name
+  if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, tenant_schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_schema_guard.get_tenant_info(tenant_id, tenant))) {
+    LOG_WARN("failed get tenant info", K(ret));
+  } else if (OB_ISNULL(tenant)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant is null", K(ret));
+  } else {
+    tenant_name = tenant->get_tenant_name_str();
+  }
+  //get db name
+  const ObSimpleDatabaseSchema *database_schema = NULL;
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(tenant_schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
+    LOG_WARN("failed get db schema", K(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant is null", K(ret));
+  } else {
+     db_name = database_schema->get_database_name();
+  }
+
+  share::ObTenantRole tenant_role;
+  ObMySQLProxy *sql_proxy = nullptr;
+  // system tenant execute global flush
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(OB_SYS_TENANT_ID);
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sql proxy", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt("alter system flush pl cache schema_id = %lu databases = \"%.*s\" TENANT = \"%.*s\" global", key_id,
+                                      db_name.length(), db_name.ptr(), tenant_name.length(), tenant_name.ptr()))) {
+    LOG_WARN("alter system flush pl cache failed.", K(ret), K(key_id));
+  } else {
+    if (OB_FAIL(sql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute query failed", K(ret), K(sql));
+    } else {
+      // do nothing
+      LOG_INFO("succ to flush pl cache", K(key_id), K(tenant_id), K(affected_rows));
+    }
+  }
+  return ret;
+}
 
 // delete all pl cache obj
 int ObPLCacheMgr::cache_evict_all_pl(ObPlanCache *lib_cache)
@@ -229,6 +289,7 @@ int ObPLCacheMgr::cache_evict_pl_cache_single(ObPlanCache *lib_cache, uint64_t d
 }
 
 template int ObPLCacheMgr::cache_evict_pl_cache_single<ObGetPLKVEntryBySchemaIdOp, uint64_t>(ObPlanCache *lib_cache, uint64_t db_id, uint64_t &schema_id);
+template int ObPLCacheMgr::cache_evict_pl_cache_single<ObGetPLKVEntryByDbIdOp, uint64_t>(ObPlanCache *lib_cache, uint64_t db_id, uint64_t &schema_id);
 template int ObPLCacheMgr::cache_evict_pl_cache_single<ObGetPLKVEntryBySQLIDOp, common::ObString>(ObPlanCache *lib_cache, uint64_t db_id, common::ObString &sql_id);
 
 }

@@ -29,6 +29,55 @@ class ObMySQLResult;
 namespace share
 {
 
+struct ObLSReplicaUniItem
+{
+  ObLSReplicaUniItem();
+  ObLSReplicaUniItem(const ObLSID &ls_id, const common::ObAddr &server);
+  ~ObLSReplicaUniItem();
+  void reset();
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
+  bool is_valid() const;
+  bool operator == (const ObLSReplicaUniItem &other) const;
+  bool operator != (const ObLSReplicaUniItem &other) const;
+  TO_STRING_KV(K_(ls_id), K_(server));
+
+  share::ObLSID ls_id_;
+  common::ObAddr server_;
+};
+
+class ObLSColumnReplicaCache
+{
+public:
+  ObLSColumnReplicaCache();
+  ~ObLSColumnReplicaCache();
+  int init();
+  void destroy();
+  void reuse();
+  int assign(const ObLSColumnReplicaCache &other);
+  int deep_fetch(
+      hash::ObHashSet<ObLSID> &target_ls_id_set,
+      hash::ObHashSet<ObLSReplicaUniItem> &target_ls_replica_set,
+      common::ObIArray<ObLSInfo> &target_ls_infos) const;
+  int update(const ObLSID &ls_id);
+  int update_with_ls_info(const ObLSInfo &ls_info);
+  int check_is_cs_replica(const ObLSReplicaUniItem &ls_item, bool &is_cs_replica) const;
+  int check_can_skip(const ObLSReplicaUniItem &ls_item, bool &can_skip) const;
+  TO_STRING_KV(K_(is_inited), K_(ls_id_set), K_(ls_replica_set), K_(ls_infos));
+private:
+  int check_contains_ls(const ObLSID &ls_id, bool &contained) const;
+  int mark_ls_finished(const ObLSID &ls_id);
+  int add_cs_replica(const ObLSReplicaUniItem &ls_item);
+private:
+  const static int64_t BUCKET_NUM_OF_LS_ID_SET = 15;
+  const static int64_t BUCKET_NUM_OF_LS_REPLICA_SET = 31;
+private:
+  bool is_inited_;
+  hash::ObHashSet<ObLSID> ls_id_set_; // record looped ls id
+  hash::ObHashSet<ObLSReplicaUniItem> ls_replica_set_; // cs-prelica ls
+  common::ObSEArray<ObLSInfo, 4> ls_infos_; // used for check member list and learner list
+};
+
 class ObCompactionLocalityCache
 {
 public:
@@ -39,8 +88,8 @@ public:
   bool empty() const { return ls_infos_map_.empty(); }
   int refresh_ls_locality(const bool force_refresh);
   int get_ls_info(const share::ObLSID &ls_id, share::ObLSInfo &ls_info);
+  const share::ObLSColumnReplicaCache& get_cs_replica_cache() const { return ls_cs_replica_cache_; }
   TO_STRING_KV(K_(is_inited), K_(tenant_id));
-
 private:
   const int64_t CHECK_LS_LOCALITY_INTERVAL = 5 * 60 * 1000 * 1000L; // 5 mins
   int get_zone_list_from_inner_table(ObIArray<common::ObZone> &zone_list);
@@ -62,6 +111,7 @@ private:
   uint64_t tenant_id_;
   rootserver::ObMajorMergeInfoManager *merge_info_mgr_;
   common::hash::ObHashMap<share::ObLSID, share::ObLSInfo> ls_infos_map_;
+  share::ObLSColumnReplicaCache ls_cs_replica_cache_;
 };
 
 } // namespace share

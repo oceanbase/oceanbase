@@ -87,7 +87,7 @@ public:
   // push a task into this queue's schedule_list
   // @param [in] task, the task to push in
   int push_task_in_schedule_list(
-      ObDRTask &task);
+      const ObDRTask &task);
 
   // pop a task and move it from wait_list to schedule_list
   // @param [out] task, the task to pop
@@ -261,6 +261,10 @@ public:
       const ObDRTaskPriority priority,
       bool &task_exist);
 
+  // add task in schedule list and execute task
+  // @param [in] task, target task
+  virtual int add_task_in_queue_and_execute(
+      const ObDRTask &task);
   // add a task into queue
   // @param [in] task, the task to push in
   virtual int add_task(
@@ -397,6 +401,11 @@ private:
   // try to persist and execute a task
   // @param [in] task, the task to execute
   int execute_task(
+      const ObDRTask &task);
+
+  // try to persist and execute a manual task
+  // @param [in] task, the task to execute
+  int execute_manual_task_(
       const ObDRTask &task);
 
   // set sibling in schedule

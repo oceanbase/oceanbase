@@ -2356,9 +2356,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'06')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'06'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'06'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'W'}, {'u|Qxg6*bV 8Xcx!HQo*VO'})
 INSERT INTO t1(c0) VALUES("W"), ('u|Qxg6*bV 8Xcx!HQo*VO') ON DUPLICATE KEY UPDATE c0='06';
@@ -2375,7 +2375,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'5jr'})
 INSERT INTO t1(c0) VALUES("5jr");
@@ -2441,7 +2441,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({''})
 INSERT INTO t1(c0) VALUES("");
@@ -2474,7 +2474,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'b.6,RL-c[<.ScG<'})
 INSERT /*+parallel(5) enable_parallel_dml*/ INTO t1(c0) VALUES('b.6,RL-c[<.ScG<');
@@ -2491,7 +2491,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'-1773558993'})
 INSERT INTO t1(c0) VALUES('-1773558993');
@@ -2525,9 +2525,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'u>|!T4e/?W')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'u>|!T4e/?W'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'u>|!T4e/?W'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'-j&7LN&bUm*drF?'})
 INSERT INTO t1(c0) VALUES('-j&7LN&bUm*drF?') ON DUPLICATE KEY UPDATE c0="u>|!T4e/?W";
@@ -2595,9 +2595,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'AS')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'AS'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'AS'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'38814790'})
 INSERT INTO t1(c0) VALUES("38814790") ON DUPLICATE KEY UPDATE c0='AS';
@@ -2631,7 +2631,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'1623564365'})
 REPLACE INTO t1(c0) VALUES("1623564365");
@@ -2682,9 +2682,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'4W[^L2o')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'4W[^L2o'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'4W[^L2o'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'#'}, {'-2025228192'})
 INSERT INTO t1(c0) VALUES("#"), ('-2025228192') ON DUPLICATE KEY UPDATE c0='4W[^L2o';
@@ -2769,7 +2769,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'W'})
 REPLACE INTO t1(c0) VALUES("W");
@@ -2786,9 +2786,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'79355437')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'79355437'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'79355437'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'6Hk'})
 INSERT INTO t1(c0) VALUES('6Hk') ON DUPLICATE KEY UPDATE c0='79355437';
@@ -2805,7 +2805,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'-532544134'}, {'666893151'})
 INSERT INTO t1(c0) VALUES("-532544134"), ("666893151");
@@ -2822,9 +2822,10 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'~qpBxh2{~O4VOlX]>}')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,
-      length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'~qpBxh2{~O4VOlX]>}'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      length:1,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'~qpBxh2{~O4VOlX]>}'), 
+      1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'eX ad2g'})
 INSERT /*+parallel(10) enable_parallel_dml*/  INTO t1(c0) VALUES("eX ad2g") ON DUPLICATE KEY UPDATE c0='~qpBxh2{~O4VOlX]>}';
@@ -2841,7 +2842,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'1030190317'}, {'KU^)'})
 REPLACE INTO t1(c0) VALUES("1030190317"), ("KU^)");
@@ -2907,7 +2908,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'\''}, {'-1490343411'}, {'[4/dbA*1X<!k*V#9'}, {'-1e50'})
 REPLACE INTO t1(c0) VALUES(''''), ("-1490343411"), ('[4/dbA*1X<!k*V#9'), ("-1e50");
@@ -2940,7 +2941,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({''})
 REPLACE INTO t1(c0) VALUES("");
@@ -2974,9 +2975,10 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'HZ#?tYU!jSQG8O}8r*m*i-B4g')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,
-      length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'HZ#?tYU!jSQG8O}8r*m*i-B4g'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      length:1,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'HZ#?tYU!jSQG8O}8r*m*i-B4g'),
+       1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'U{/'})
 INSERT /*+parallel(4) enable_parallel_dml*/  INTO t1(c0) VALUES('U{/') ON DUPLICATE KEY UPDATE c0='HZ#?tYU!jSQG8O}8r*m*i-B4g';
@@ -2993,9 +2995,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'ZNTH|')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'ZNTH|'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'ZNTH|'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'_W>nY~7'})
 INSERT /*+parallel(3) enable_parallel_dml*/  INTO t1(c0) VALUES('_W>nY~7') ON DUPLICATE KEY UPDATE c0='ZNTH|';
@@ -3012,9 +3014,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'1mdf')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'1mdf'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'1mdf'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'wv^wo}]0Ye]0._'}, {'B}F?kb10lgWz'}, {'TRUE'}, {'lrzyLtiPj*IrdBu9%-O*Ih<>3'})
 INSERT INTO t1(c0) VALUES('wv^wo}]0Ye]0._'), ("B}F?kb10lgWz"), ('TRUE'), ('lrzyLtiPj*IrdBu9%-O*Ih<>3') ON DUPLICATE KEY UPDATE c0="1mdf";
@@ -3031,7 +3033,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'06'}, {'i.3'})
 REPLACE INTO t1(c0) VALUES('06'), ("i.3");
@@ -3100,7 +3102,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'F<THOTAy{\\Nko|<_HJF^L?'}, {'1977657970'}, {'k'})
 INSERT INTO t1(c0) VALUES("F<THOTAy{\\Nko|<_HJF^L?"), ("1977657970"), ('k');
@@ -3117,7 +3119,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'vh5XVc7J/)H'})
 REPLACE INTO t1(c0) VALUES('vh5XVc7J/)H');
@@ -3320,9 +3322,10 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'}]rz7kf]8o(LZ)*2Z/*Cer[t')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,
-      length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'}]rz7kf]8o(LZ)*2Z/*Cer[t'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      length:1,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'}]rz7kf]8o(LZ)*2Z/*Cer[t'),
+       1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'~6'}, {''})
 INSERT INTO t1(c0) VALUES('~6'), ('') ON DUPLICATE KEY UPDATE c0="}]rz7kf]8o(LZ)*2Z/*Cer[t";
@@ -3339,7 +3342,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({''})
 INSERT /*+parallel(9) enable_parallel_dml*/ INTO t1(c0) VALUES("");
@@ -3356,7 +3359,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'u~!v\\OJtA7t}[Z '}, {']3#rkm'})
 REPLACE INTO t1(c0) VALUES("u~!v\\OJtA7t}[Z "), ("]3#rkm");
@@ -3406,9 +3409,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'38814790')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'38814790'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'38814790'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'['}, {'pt^O(_6NrLQkdgSNYV3'})
 INSERT INTO t1(c0) VALUES('['), ("pt^O(_6NrLQkdgSNYV3") ON DUPLICATE KEY UPDATE c0="38814790";
@@ -3457,7 +3460,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'1782144585'})
 INSERT /*+parallel(3) enable_parallel_dml*/ INTO t1(c0) VALUES("1782144585");
@@ -3560,7 +3563,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'[d78a[xFm1J{/jh*i!_&Rh7/'})
 REPLACE INTO t1(c0) VALUES('[d78a[xFm1J{/jh*i!_&Rh7/');
@@ -3593,7 +3596,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'|'})
 INSERT INTO t1(c0) VALUES('|');
@@ -3628,7 +3631,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'B+|1zv5XulF,23fY8ax'}, {'\\#Sj}vEKk}[}HvhDtbQJ70nU '}, {'RGE'})
 INSERT INTO t1(c0) VALUES('B+|1zv5XulF,23fY8ax'), ("\\#Sj}vEKk}[}HvhDtbQJ70nU "), ("RGE");
@@ -3645,7 +3648,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'_w>ny~7'})
 INSERT INTO t1(c0) VALUES('_w>ny~7');
@@ -3679,7 +3682,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'PO'})
 REPLACE INTO t1(c0) VALUES('PO');
@@ -3696,7 +3699,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'-j&7ln&bum*drf?'}, {''}, {'1090711076'}, {'4*1xlr38daa9lgb1-2q'})
 INSERT INTO t1(c0) VALUES('-j&7ln&bum*drf?'), (""), ('1090711076'), ('4*1xlr38daa9lgb1-2q');
@@ -3749,9 +3752,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'5JR')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'5JR'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'5JR'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({''})
 INSERT INTO t1(c0) VALUES("") ON DUPLICATE KEY UPDATE c0='5JR';
@@ -3784,9 +3787,10 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'-rv\\!dh1m\'gtk+cs-t#xli')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,
-      length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'-rv\\!dh1m\'gtk+cs-t#xli'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      length:1,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'-rv\\!dh1m\'gtk+cs-t#xli'),
+       1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'xkwDL3io6,T!'})
 INSERT INTO t1(c0) VALUES('xkwDL3io6,T!') ON DUPLICATE KEY UPDATE c0='-rv\\!dh1m''gtk+cs-t#xli';
@@ -3838,7 +3842,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'398204275'})
 REPLACE INTO t1(c0) VALUES('398204275');
@@ -3855,7 +3859,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({']a'})
 REPLACE INTO t1(c0) VALUES(']a');
@@ -3924,9 +3928,10 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'w,}kpz)vwu[*.8az38ag4ajqy')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,
-      length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'w,}kpz)vwu[*.8az38ag4ajqy'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      length:1,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'w,}kpz)vwu[*.8az38ag4ajqy'),
+       1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'Hg 4QF9^yYv(|n0aC'})
 INSERT /*+parallel(8) enable_parallel_dml*/  INTO t1(c0) VALUES("Hg 4QF9^yYv(|n0aC") ON DUPLICATE KEY UPDATE c0="w,}kpz)vwu[*.8az38ag4ajqy";
@@ -3943,7 +3948,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'h*9X7!SX95R?Xh'}, {'xog)!uy#&7e-5vdyqt1}cv'}, {'e\\ DN?Y'})
 REPLACE INTO t1(c0) VALUES('h*9X7!SX95R?Xh'), ('xog)!uy#&7e-5vdyqt1}cv'), ('e\\ DN?Y');
@@ -3994,7 +3999,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'ZxJ|lh\\%UKIy]/x&C?Q-+vweYo&'})
 REPLACE INTO t1(c0) VALUES("ZxJ|lh\\%UKIy]/x&C?Q-+vweYo&");
@@ -4011,7 +4016,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'o'})
 REPLACE INTO t1(c0) VALUES("o");
@@ -4028,7 +4033,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'6MQXB)Er'})
 REPLACE INTO t1(c0) VALUES('6MQXB)Er');
@@ -4045,7 +4050,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'[4/DBA*1X<!K*V#9'})
 REPLACE INTO t1(c0) VALUES("[4/DBA*1X<!K*V#9");
@@ -4165,7 +4170,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({''})
 REPLACE INTO t1(c0) VALUES('');
@@ -4338,7 +4343,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'-692090307'}, {'2/}8nAnJ0'}, {''})
 REPLACE INTO t1(c0) VALUES("-692090307"), ("2/}8nAnJ0"), ("");
@@ -4423,9 +4428,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'-_s')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'-_s'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'-_s'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({''})
 INSERT /*+parallel(7) enable_parallel_dml*/  INTO t1(c0) VALUES('') ON DUPLICATE KEY UPDATE c0="-_s";
@@ -4475,7 +4480,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'R\''})
 REPLACE INTO t1(c0) VALUES("R'");
@@ -4508,9 +4513,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
-      update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,
-      utf8mb4_general_ci,length:500,NULL,''), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
+      update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,column_conv(VARCHAR,
+      utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,''), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({''})
 INSERT /*+parallel(10) enable_parallel_dml*/ INTO t1(c0) VALUES('') ON DUPLICATE KEY UPDATE c0='';
@@ -4527,7 +4532,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({''})
 REPLACE INTO t1(c0) VALUES('');
@@ -4610,7 +4615,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'nZmnPezW*p\'1F_A9'}, {''}, {'1623564365'}, {'bGb ,(gNvYBJ&h[w835\\JUA7!C'})
 INSERT /*+parallel(10) enable_parallel_dml*/  INTO t1(c0) VALUES("nZmnPezW*p'1F_A9"), (""), ('1623564365'), ("bGb ,(gNvYBJ&h[w835\\JUA7!C");
@@ -4725,7 +4730,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'%tS*_s!&Y~}'}, {'38814790'})
 REPLACE INTO t1(c0) VALUES('%tS*_s!&Y~}'), ("38814790");
@@ -4809,7 +4814,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'c'})
 INSERT /*+parallel(7) enable_parallel_dml*/  INTO t1(c0) VALUES("c");
@@ -4860,7 +4865,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'HHX_hf[^'})
 REPLACE INTO t1(c0) VALUES("HHX_hf[^");
@@ -4894,7 +4899,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'Qw9'})
 REPLACE INTO t1(c0) VALUES("Qw9");
@@ -4911,9 +4916,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'h')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'h'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'h'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({''})
 INSERT /*+parallel(7) enable_parallel_dml*/  INTO t1(c0) VALUES("") ON DUPLICATE KEY UPDATE c0="h";
@@ -4965,9 +4970,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'v>')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,
-      substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'v>'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'v>'), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({''})
 INSERT INTO t1(c0) VALUES("") ON DUPLICATE KEY UPDATE c0="v>";
@@ -5000,7 +5005,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'q6h]zjLt)|[?S*C'}, {''})
 REPLACE INTO t1(c0) VALUES('q6h]zjLt)|[?S*C'), ("");
@@ -5065,7 +5070,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'t'})
 REPLACE INTO t1(c0) VALUES('t');
@@ -5132,9 +5137,10 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'%*5?JXe5x\'--N*w|NM#+~\'yj}w')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,
-      length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'%*5?JXe5x\'--N*w|NM#+~\'yj}w'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      length:1,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'%*5?JXe5x\'--N*w|NM#+~\'yj}w'),
+       1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'&a>a'}, {'}8Z'}, {'d|ze^fJh(Y|tof0-w#FVF[{pTf 1Z'})
 INSERT /*+parallel(5) enable_parallel_dml*/ INTO t1(c0) VALUES("&a>a"), ('}8Z'), ('d|ze^fJh(Y|tof0-w#FVF[{pTf 1Z') ON DUPLICATE KEY UPDATE c0='%*5?JXe5x''--N*w|NM#+~''yj}w';
@@ -5184,7 +5190,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'1796091423'})
 INSERT /*+parallel(1) enable_parallel_dml*/  INTO t1(c0) VALUES('1796091423');
@@ -5235,7 +5241,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({''}, {'u['})
 REPLACE INTO t1(c0) VALUES(""), ("u[");
@@ -5269,9 +5275,10 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
       update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'upb,KpUrE8ZdvnzOe')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,
-      length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'upb,KpUrE8ZdvnzOe'), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      length:1,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'upb,KpUrE8ZdvnzOe'), 1,
+       1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'\''}, {'ehOqju3G72*M'}, {'E.p1qkG'}, {'%P%_5\\+1J}\\cjXWYbcD\\Y(]qX8+z]'}, {''})
 INSERT /*+parallel(8) enable_parallel_dml*/ INTO t1(c0) VALUES(''''), ('ehOqju3G72*M'), ('E.p1qkG'), ("%P%_5\\+1J}\\cjXWYbcD\\Y(]qX8+z]"), ("") ON DUPLICATE KEY UPDATE c0="upb,KpUrE8ZdvnzOe";
@@ -5507,7 +5514,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'L0'})
 REPLACE INTO t1(c0) VALUES('L0');
@@ -5559,7 +5566,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'417065122'})
 REPLACE INTO t1(c0) VALUES('417065122');
@@ -5576,7 +5583,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'+'}, {'V5Bd'}, {'mo)!qHyHCC5l\'K'})
 INSERT INTO t1(c0) VALUES("+"), ("V5Bd"), ('mo)!qHyHCC5l''K');
@@ -5593,7 +5600,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'G%Dy&j6yjSU{Kk#Szx0Z#S_i4pkLq'}, {''})
 REPLACE INTO t1(c0) VALUES('G%Dy&j6yjSU{Kk#Szx0Z#S_i4pkLq'), ("");
@@ -5610,7 +5617,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'gNy.{w^bliF#ob4w8Bgg)'})
 REPLACE INTO t1(c0) VALUES("gNy.{w^bliF#ob4w8Bgg)");
@@ -5627,7 +5634,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'N'})
 REPLACE INTO t1(c0) VALUES("N");
@@ -5744,7 +5751,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'C]'})
 REPLACE INTO t1(c0) VALUES("C]");
@@ -5761,9 +5768,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))]),
-      update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,
-      utf8mb4_general_ci,length:500,NULL,''), 1, 1))], [t1.__pk_increment=T_HIDDEN_PK])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))]),
+      update([t1.c0=column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,'')], [t1.__substr1_16=column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,column_conv(VARCHAR,
+      utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,''), 1, 1)))], [t1.__pk_increment=T_HIDDEN_PK])
   1 - output([__values.c0]), filter(nil)
       values({'-1971421495'})
 INSERT /*+parallel(6) enable_parallel_dml*/ INTO t1(c0) VALUES("-1971421495") ON DUPLICATE KEY UPDATE c0='';
@@ -5797,7 +5804,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'FtK<%7j6kT2|206T4OaoRlx,]mNN/'}, {'eOtb0c_zm\'a*U%{6g0/%l7BpQmY '}, {''}, {''}, {'xa'})
 REPLACE INTO t1(c0) VALUES("FtK<%7j6kT2|206T4OaoRlx,]mNN/"), ("eOtb0c_zm'a*U%{6g0/%l7BpQmY "), (""), (""), ("xa");
@@ -5814,7 +5821,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'^.MC2C(*5BCTF^_QUVE+GIH)E'})
 REPLACE INTO t1(c0) VALUES('^.MC2C(*5BCTF^_QUVE+GIH)E');
@@ -5882,7 +5889,7 @@ Outputs & filters:
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)}, {i260: (t1.__substr1_16, t1.__pk_increment,
        t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'lXpUQ'}, {'xbo'}, {'W'}, {'y1p3qByYNx.bym)/q4c'}, {'-1750125326'}, {'y'})
 REPLACE INTO t1(c0) VALUES('lXpUQ'), ('xbo'), ('W'), ('y1p3qByYNx.bym)/q4c'), ("-1750125326"), ('y');
@@ -5900,7 +5907,7 @@ Outputs & filters:
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)}, {i260: (t1.__substr1_16, t1.__pk_increment,
        t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'s'})
 REPLACE INTO t1(c0) VALUES("s");
@@ -5935,7 +5942,7 @@ Outputs & filters:
       columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.__substr1_16)}, {i430: (t1.__substr1_16, t1.__pk_increment, t1.c0)}, {i260: (t1.__substr1_16, t1.__pk_increment,
        t1.c0)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(VARCHAR,utf8mb4_general_ci,length:1,
-      NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1))])
+      NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:1,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0), 1, 1)))])
   1 - output([__values.c0]), filter(nil)
       values({'rF0Lll5'})
 REPLACE INTO t1(c0) VALUES('rF0Lll5');
@@ -5964,7 +5971,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_COUNT(*)])
-  1 - output(nil), filter([result.t2c0 = 1489403758], [concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [concat(result.t0c0, '') IS NULL], [result.t0c1 = 398204275]), rowset=256
+  1 - output(nil), filter([result.t0c1 = 398204275], [result.t2c0 = 1489403758], [concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [concat(result.t0c0, '') 
+      IS NULL]), rowset=256
       access([result.t0c0], [result.t0c1], [result.t2c0], [result.t1c0])
   2 - output([t0.c0], [t0.c1], [t2.c0], [t1.c0]), filter(nil), rowset=256
       limit(2147483647), offset(0)
@@ -6020,7 +6028,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_COUNT(*)])
-  1 - output(nil), filter([result.t2c0 = 1489403758], [concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [concat(result.t0c0, '') IS NULL], [result.t0c1 = 398204275]), rowset=256
+  1 - output(nil), filter([result.t0c1 = 398204275], [result.t2c0 = 1489403758], [concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [concat(result.t0c0, '') 
+      IS NULL]), rowset=256
       access([result.t0c0], [result.t0c1], [result.t2c0], [result.t1c0])
   2 - output([t0.c0], [t0.c1], [t2.c0], [t1.c0]), filter(nil), rowset=256
       limit(2147483647), offset(0)

@@ -41,6 +41,14 @@ namespace sql
 class ObRawExprFactory;
 class ObLogPlanFactory;
 
+enum class ObEstCorrelationType
+{
+  INDEPENDENT,
+  PARTIAL,
+  FULL,
+  MAX
+};
+
 typedef common::ObArray<common::ObString, common::ObIAllocator &> ObPlanNotes;
 //table location local index id related info
 //tablet_loc_id and ref_table_id_ are used to uniquely determine
@@ -235,7 +243,14 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     system_stat_(),
     storage_estimation_enabled_(false),
     das_keep_order_enabled_(true),
-    generate_random_plan_(false)
+    generate_random_plan_(false),
+    optimizer_index_cost_adj_(0),
+    is_skip_scan_enabled_(false),
+    enable_better_inlist_costing_(false),
+    nlj_batching_enabled_(false),
+    enable_spf_batch_rescan_(false),
+    correlation_type_(ObEstCorrelationType::MAX),
+    use_column_store_replica_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -433,6 +448,11 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   }
   void get_runtime_filter_type() {
     runtime_filter_type_ = session_info_->get_runtime_filter_type();
+    if (OB_ISNULL(query_ctx_)) {
+      // do nothing
+    } else {
+      query_ctx_->get_global_hint().opt_params_.get_opt_param_runtime_filter_type(runtime_filter_type_);
+    }
   }
 
   int64_t get_batch_size() const { return batch_size_; }
@@ -609,7 +629,21 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline const OptSystemStat& get_system_stat() const { return system_stat_; }
   inline bool generate_random_plan() const { return generate_random_plan_; }
   inline void set_generate_random_plan(bool rand_plan) { generate_random_plan_ = rand_plan; }
+  inline int64_t get_optimizer_index_cost_adj() const { return optimizer_index_cost_adj_; }
+  inline void set_optimizer_index_cost_adj(int64_t v) { optimizer_index_cost_adj_ = v; }
+  inline bool get_is_skip_scan_enabled() const { return is_skip_scan_enabled_; }
+  inline void set_is_skip_scan_enabled(bool v) { is_skip_scan_enabled_ = v; }
+  inline bool get_enable_better_inlist_costing() const { return enable_better_inlist_costing_; }
+  inline void set_enable_better_inlist_costing(bool v) { enable_better_inlist_costing_ = v; }
+  inline bool get_nlj_batching_enabled() const { return nlj_batching_enabled_; }
+  inline void set_nlj_batching_enabled(bool v) { nlj_batching_enabled_ = v; }
+  inline bool get_enable_spf_batch_rescan() const { return enable_spf_batch_rescan_; }
+  inline void set_enable_spf_batch_rescan(bool v) { enable_spf_batch_rescan_ = v; }
+  inline bool use_column_store_replica() const { return use_column_store_replica_; }
+  inline void set_use_column_store_replica(bool use) { use_column_store_replica_ = use; }
 
+  inline void set_correlation_type(ObEstCorrelationType type) { correlation_type_ = type; }
+  inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -696,6 +730,13 @@ private:
   bool das_keep_order_enabled_;
 
   bool generate_random_plan_;
+  int64_t optimizer_index_cost_adj_;
+  bool is_skip_scan_enabled_;
+  bool enable_better_inlist_costing_;
+  bool nlj_batching_enabled_;
+  bool enable_spf_batch_rescan_;
+  ObEstCorrelationType correlation_type_;
+  bool use_column_store_replica_;
 };
 }
 }

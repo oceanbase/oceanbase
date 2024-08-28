@@ -27,12 +27,15 @@
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/rewrite/ob_transformer_impl.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "common/ob_store_format.h"
 
 namespace oceanbase
 {
 using namespace common;
 using namespace obrpc;
 using namespace share::schema;
+using namespace omt;
 namespace sql
 {
 ObCreateViewResolver::ObCreateViewResolver(ObResolverParams &params) : ObCreateTableResolverBase(params)
@@ -399,6 +402,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       ObMVAdditionalInfo *mv_ainfo = NULL;
       ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
       ObSEArray<ObConstraint,4> &csts = create_table_stmt->get_create_table_arg().constraint_list_;
+      ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+      ObTableStoreType table_store_type = OB_TABLE_STORE_INVALID;
       if (OB_FAIL(ObResolverUtils::check_schema_valid_for_mview(table_schema))) {
         LOG_WARN("failed to check schema valid for mview", KR(ret), K(table_schema));
       } else if (OB_FAIL(resolve_table_options(parse_tree.children_[TABLE_OPTION_NODE], false))) {
@@ -418,10 +423,28 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                             mv_ainfo->mv_refresh_info_,
                                             table_schema))) {
         LOG_WARN("fail to resolve mv options", K(ret));
-      } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE], *stmt, mv_ainfo->container_table_schema_))) {
-        LOG_WARN("resolve hints failed", K(ret));
-      } else {
-        mv_ainfo->mv_refresh_info_.parallel_ = stmt->get_parallelism();
+      } else if (OB_FAIL(load_mview_dep_session_vars(*session_info_, select_stmt, table_schema.get_local_session_var()))) {
+        LOG_WARN("fail to load mview dep session variables", K(ret));
+      } else if (!tenant_config.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant config is invalid", KR(ret));
+      } else if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
+                  tenant_config->default_table_store_format.get_value_string(),
+                  table_store_type))) {
+        LOG_WARN("fail to find table store type", KR(ret));
+      } else if (ObTableStoreFormat::is_with_column(table_store_type)
+                 || OB_NOT_NULL(parse_tree.children_[COLUMN_GROUP_NODE])) {
+        if (OB_FAIL(resolve_column_group_helper(parse_tree.children_[COLUMN_GROUP_NODE],
+                    mv_ainfo->container_table_schema_))) {
+          LOG_WARN("fail to resolve column group", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE], *stmt, mv_ainfo->container_table_schema_))) {
+          LOG_WARN("resolve hints failed", K(ret));
+        } else {
+          mv_ainfo->mv_refresh_info_.parallel_ = stmt->get_parallelism();
+        }
       }
     }
 
@@ -1298,6 +1321,11 @@ int ObCreateViewResolver::resolve_mv_options(const ObSelectStmt *stmt,
              && OB_FAIL(ObMVChecker::check_mv_fast_refresh_valid(stmt, params_.stmt_factory_,
                                                                  params_.expr_factory_,
                                                                  params_.session_info_))) {
+    // When creating an MV, which can not be fast refreshed, with both fast refresh
+    // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
+    if (table_schema.mv_on_query_computation() && OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
+      ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
+    }
     LOG_WARN("fail to check fast refresh valid", K(ret));
   } else if (table_schema.mv_on_query_computation()
              && OB_FAIL(check_on_query_computation_supported(stmt))) {
@@ -1806,6 +1834,65 @@ int ObCreateViewResolver::resolve_columns_nullable_value(const sql::ObSelectStmt
     LOG_WARN("failed to resolve nullable value", K(ret), K(table_schema));
   } else {
     column_schema.set_nullable(column_attributes.null_ == "YES");
+  }
+  return ret;
+}
+
+int ObCreateViewResolver::load_mview_dep_session_vars(ObSQLSessionInfo &session_info,
+                                                      ObSelectStmt *stmt,
+                                                      ObLocalSessionVar &dep_vars)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(session_info.get_effective_tenant_id(), data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_3_3_0) {
+    //  when use data version before DATA_VERSION_4_3_3_0, do not extract local var
+  } else if (OB_FAIL(dep_vars.reserve_max_local_vars_capacity())) {
+    LOG_WARN("fail to reserve max local vars capacity", K(ret));
+  } else if (OB_FAIL(get_dep_session_vars_from_stmt(session_info, stmt, dep_vars))) {
+    LOG_WARN("fail to get dep session vars from stmt", K(ret));
+  } else if (OB_FAIL(dep_vars.remove_local_var(SYS_VAR_SQL_MODE))) {
+    LOG_WARN("fail to remove sql_mode from vars", K(ret));
+  } else {
+    LOG_TRACE("finish load mview dep session vars", K(session_info.get_sql_mode()), K(dep_vars));
+  }
+  return ret;
+}
+
+int ObCreateViewResolver::get_dep_session_vars_from_stmt(ObSQLSessionInfo &session_info,
+                                                         ObSelectStmt *stmt,
+                                                         ObLocalSessionVar &dep_vars)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt *, 4> childs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (OB_FAIL(stmt->get_child_stmts(childs))) {
+    LOG_WARN("get sel exprs failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < childs.count(); i++) {
+      if (OB_FAIL(SMART_CALL(get_dep_session_vars_from_stmt(session_info, childs.at(i), dep_vars)))) {
+        LOG_WARN("fail to get dep session vars from stmt", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObRawExpr*, 32> exprs;
+    if (OB_FAIL(stmt->get_relation_exprs(exprs))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+        if (OB_ISNULL(exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(exprs.at(i)->get_expr_dep_session_vars_recursively(&session_info, dep_vars))) {
+          LOG_WARN("fail to get expr dep session vars recursively", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }

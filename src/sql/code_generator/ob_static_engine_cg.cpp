@@ -160,6 +160,7 @@
 #include "sql/engine/set/ob_hash_union_vec_op.h"
 #include "sql/engine/set/ob_hash_intersect_vec_op.h"
 #include "sql/engine/set/ob_hash_except_vec_op.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -3678,13 +3679,20 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       || (min_ver > MOCK_CLUSTER_VERSION_4_2_1_4 && min_ver < CLUSTER_VERSION_4_2_2_0)) {
     spec.bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
     spec.send_bloom_filter_size_ = GCONF._send_bloom_filter_size;
+    if (OB_ISNULL(opt_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("opt_ctx_ is null", K(ret));
+    } else if (OB_FAIL(opt_ctx_->get_global_hint().opt_params_.get_integer_opt_param(ObOptParamHint::BLOOM_FILTER_RATIO, spec.bloom_filter_ratio_))) {
+      LOG_WARN("failed to get opt param bloom filter ratio", K(ret));
+    }
   } else {
     // for compatibility, if the cluseter is upgrading, set them as default value 0
     spec.bloom_filter_ratio_ = 0;
     spec.send_bloom_filter_size_ = 0;
   }
 
-  if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
   } else if (OB_NOT_NULL(op.get_tablet_id_expr()) &&
       OB_FAIL(generate_calc_part_id_expr(*op.get_tablet_id_expr(), nullptr, spec.calc_tablet_id_expr_))) {
@@ -7991,6 +7999,10 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     LOG_WARN("fail to set closed cht", K(op.get_closed_cht()), K(ret));
   } else if (OB_FAIL(deep_copy_obj(alloc, op.get_escaped_cht(), spec.escaped_cht_))) {
     LOG_WARN("fail to set escaped cht", K(op.get_escaped_cht()), K(ret));
+  } else if (OB_FAIL(spec.external_properties_.store_str(op.get_external_properties()))) {
+    LOG_WARN("fail to set external properties", K(op.get_external_properties()), K(ret));
+  } else if (OB_FAIL(spec.external_partition_.store_str(op.get_external_partition()))) {
+    LOG_WARN("fail to set external partition", K(op.get_external_partition()), K(ret));
   } else if (OB_FAIL(spec.user_vars_.init(op.get_user_vars().count()))) {
     LOG_WARN("init fixed array failed", K(ret), K(op.get_user_vars().count()));
   } else if (OB_FAIL(spec.select_exprs_.init(op.get_select_exprs().count()))) {
@@ -8018,12 +8030,24 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
       }
     }
     if (OB_SUCC(ret)) {
+      ObExpr *rt_expr = nullptr;
+      const ObRawExpr* file_partition_expr = op.get_file_partition_expr();
+      if (file_partition_expr == NULL) {
+      } else if (OB_FAIL(generate_rt_expr(*file_partition_expr, rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else {
+        spec.file_partition_expr_ = rt_expr;
+      }
+    }
+    if (OB_SUCC(ret)) {
       spec.into_type_ = op.get_into_type();
       spec.is_optional_ = op.get_is_optional();
       spec.is_single_ = op.get_is_single();
       spec.max_file_size_ = op.get_max_file_size();
+      spec.buffer_size_ = op.get_buffer_size();
       spec.cs_type_ = op.get_cs_type();
       spec.parallel_ = op.get_parallel();
+      spec.is_overwrite_ = op.get_is_overwrite();
       spec.plan_->need_drive_dml_query_ = true;
     }
   }
@@ -8346,6 +8370,9 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
              || OB_ISNULL(exec_ctx->get_stmt_factory()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid query_ctx", K(ret));
+  } else if (my_session->get_ddl_info().is_refreshing_mview()
+             && OB_FAIL(check_refreshing_mview_session_var(*schema_guard, *my_session, log_plan.get_stmt()))) {
+    LOG_WARN("failed to check refreshing mview session var", K(ret));
   } else {
     ret = phy_plan.set_params_info(*(log_plan.get_optimizer_context().get_params()));
   }
@@ -8716,6 +8743,33 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
 
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::check_refreshing_mview_session_var(ObSchemaGetterGuard &schema_guard,
+                                                         ObSQLSessionInfo &session,
+                                                         const ObDMLStmt *dml_stmt)
+{
+  int ret = OB_SUCCESS;
+  bool is_same = false;
+  uint64_t mview_id = OB_INVALID_ID;
+  const share::schema::ObTableSchema *mview_schema = NULL;
+  const ObDelUpdStmt *del_up_stmt = dynamic_cast<const ObDelUpdStmt*>(dml_stmt);
+  bool is_vars_matched = false;
+  if (!session.get_ddl_info().is_refreshing_mview() || OB_ISNULL(del_up_stmt)) {
+    /* do nothing */
+  } else if (OB_FAIL(del_up_stmt->get_modified_materialized_view_id(mview_id))) {
+    LOG_WARN("fail to get modified mview_id", K(ret), K(mview_id));
+  } else if (OB_INVALID_ID == mview_id) {
+    /* do nothing */
+  } else if (OB_FAIL(schema_guard.get_table_schema(session.get_effective_tenant_id(), mview_id, mview_schema))) {
+    LOG_WARN("fail to get mview schema", K(ret), K(mview_id));
+  } else if (OB_ISNULL(mview_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("fail to get mview schema", K(ret), K(mview_id));
+  } else if (OB_FAIL(ObMVProvider::check_mview_dep_session_vars(*mview_schema, session, true, is_vars_matched))) {
+    LOG_WARN("failed to check mview dep session vars", K(ret));
   }
   return ret;
 }

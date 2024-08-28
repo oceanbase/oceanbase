@@ -1510,6 +1510,7 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
                                                                     target_exprs,
                                                                     ctx_->schema_checker_,
                                                                     ctx_->session_info_,
+                                                                    false,
                                                                     is_foreign_primary_join,
                                                                     is_first_table_parent,
                                                                     foreign_key_info))) {
@@ -1544,6 +1545,9 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
                                                         foreign_key_info,
                                                         all_primary_key))) {
       LOG_WARN("failed to check all column primary key", K(ret));
+    } else if (source_table->is_has_sample_info()) {
+      // do nothing
+      OPT_TRACE("table has sample info", K(source_table->table_id_));
     } else if (all_primary_key) {
       can_be_eliminated = true;
     } else {
@@ -3202,6 +3206,7 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
                                                                   target_exprs,
                                                                   ctx_->schema_checker_,
                                                                   ctx_->session_info_,
+                                                                  false,
                                                                   is_foreign_primary_join,
                                                                   is_first_table_parent,
                                                                   foreign_key_info))) {
@@ -3223,6 +3228,8 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
   } else if (OB_FAIL(check_all_column_primary_key(target_stmt, target_table->table_id_,
                                                   foreign_key_info, all_primary_key))) {
     LOG_WARN("failed to check all column primary key", K(ret));
+  } else if (source_table->is_has_sample_info()) {
+    OPT_TRACE("table has sample info", K(source_table->table_id_));
   } else if (all_primary_key) {
     can_be_eliminated = true;
   } else {
@@ -3836,7 +3843,7 @@ int ObTransformJoinElimination::add_is_not_null_if_needed(ObDMLStmt *stmt,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); ++i) {
     bool is_not_null = true;
-    ObOpRawExpr *is_not_expr = NULL;
+    ObRawExpr *is_not_expr = NULL;
     if (OB_ISNULL(col_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -3850,9 +3857,8 @@ int ObTransformJoinElimination::add_is_not_null_if_needed(ObDMLStmt *stmt,
         LOG_WARN("failed to add param not null constraint", K(ret));
       }
     } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_,
-                                                          stmt,
-                                                          col_exprs.at(i),
-                                                          is_not_expr))) {
+                                                         col_exprs.at(i),
+                                                         is_not_expr))) {
       LOG_WARN("failed to add is not null for col", K(ret));
     } else if (OB_FAIL(cond_exprs.push_back(is_not_expr))) {
       LOG_WARN("failed to add is_not_expr into condition", K(ret));

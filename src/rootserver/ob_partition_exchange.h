@@ -18,6 +18,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
+#include "share/stat/ob_stat_define.h"
 
 namespace oceanbase
 {
@@ -33,25 +34,40 @@ namespace rootserver
 {
 class ObDDLService;
 class ObDDLSQLTransaction;
-class ObPartitionExchange final
+class ObPartitionExchange
 {
 public:
   typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletID;
   explicit ObPartitionExchange(ObDDLService &ddl_service, const uint64_t data_version);
-  ~ObPartitionExchange();
+  virtual ~ObPartitionExchange();
   int check_and_exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res, ObSchemaGetterGuard &schema_guard);
-private:
+
+protected:
   int check_partition_exchange_conditions_(const obrpc::ObExchangePartitionArg &arg, const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode, ObSchemaGetterGuard &schema_guard);
   int do_exchange_partition_(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res, const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode, ObSchemaGetterGuard &schema_guard);
   int lock_exchange_data_table_and_partition_(const uint64_t tenant_id, const ObTableSchema &partitioned_table_schema, const ObTableSchema &non_partitioned_table_schema, const common::ObTabletID &tablet_id, ObDDLSQLTransaction &trans);
-  int check_data_table_partition_exchange_conditions_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const ObString &exchange_partition_name, const ObPartitionLevel exchange_partition_level,const bool is_oracle_mode);
+  int check_data_table_partition_exchange_conditions_(const ObTableSchema &base_table_schema,
+                                                      const ObTableSchema &inc_table_schema,
+                                                      const ObIArray<ObTabletID> &base_tablet_ids,
+                                                      const ObIArray<ObTabletID> &inc_tablet_ids,
+                                                      const ObPartitionLevel exchange_partition_level,
+                                                      const bool is_oracle_mode);
   // table level conditions that need to be checked for partition exchange in mysql mode and oracle mode
-  int check_table_conditions_in_common_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const ObString &exchange_partition_name, const ObPartitionLevel exchange_partition_level, const bool is_oracle_mode);
+  virtual int check_table_conditions_in_common_(const ObTableSchema &base_table_schema,
+                                                const ObTableSchema &inc_table_schema,
+                                                const ObPartitionLevel exchange_partition_level,
+                                                const bool is_oracle_mode);
   // table level conditions that need to be checked for partition exchange in mysql mode
   int check_table_conditions_in_mysql_mode_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema);
   // table level conditions that need to be checked for partition exchange in oracle mode
   int check_table_conditions_in_oracle_mode_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema);
-  int check_partition_and_table_tablespace_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const ObString &exchange_partition_name, const ObPartitionLevel exchange_partition_level, const bool is_oracle_mode);
+  int check_tablespace_(const ObTableSchema &base_table_schema,
+                              const ObTableSchema &inc_table_schema,
+                              const bool is_oracle_mode);
+  int check_data_table_partitions_and_tablespace_(const ObTableSchema &table_schema,
+                                                 const ObIArray<ObTabletID> &tablet_ids,
+                                                 const ObPartitionLevel exchange_partition_level);
+
   int check_table_index_infos_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode);
   int check_table_lob_infos_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode);
   int check_table_rowkey_infos_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode);
@@ -83,83 +99,62 @@ private:
                                          ObDDLOperator &ddl_operator,
                                          ObDDLSQLTransaction &trans,
                                          ObSchemaGetterGuard &schema_guard);
-  int get_data_partition_and_index_(const ObTableSchema &partitioned_data_table_schema, const ObString &data_part_name, const ObPartition *&data_part, int64_t &data_partition_index);
-  int get_data_subpartition_and_index_(const ObTableSchema &partitioned_data_table_schema,
-                                       const ObString &data_subpart_name,
-                                       const ObPartition *&data_part,
-                                       const ObSubPartition *&data_subpart,
-                                       int64_t &data_partition_index,
-                                       int64_t &data_subpartition_index);
+  int get_and_check_data_partition_by_name(const ObTableSchema &partitioned_data_table_schema,
+                                           const ObString &data_part_name,
+                                           const ObPartition *&data_part);
+  int get_and_check_data_subpartition_by_name(const ObTableSchema &partitioned_data_table_schema,
+                                              const ObString &data_subpart_name,
+                                              const ObPartition *&data_part,
+                                              const ObSubPartition *&data_subpart);
   int exchange_data_table_partition_(const uint64_t tenant_id,
-                                     const ObTableSchema &partitioned_table_schema,
-                                     const ObTableSchema &non_partitioned_table_schema,
-                                     const ObPartition &part,
+                                     const ObTableSchema &base_table_schema,
+                                     const ObTableSchema &inc_table_schema,
+                                     const common::ObTabletID &tablet_id,
+                                     const common::ObTabletID &inc_tablet_id,
                                      const bool is_oracle_mode,
+                                     const bool is_subpartition,
                                      ObDDLOperator &ddl_operator,
                                      ObDDLSQLTransaction &trans,
                                      ObSchemaGetterGuard &schema_guard);
-  int exchange_data_table_subpartition_(const uint64_t tenant_id,
-                                        const ObTableSchema &partitioned_table_schema,
-                                        const ObTableSchema &non_partitioned_table_schema,
-                                        const ObPartition &part,
-                                        const ObSubPartition &subpart,
-                                        const bool is_oracle_mode,
-                                        ObDDLOperator &ddl_operator,
-                                        ObDDLSQLTransaction &trans,
-                                        ObSchemaGetterGuard &schema_guard);
   int exchange_auxiliary_table_partition_(const uint64_t tenant_id,
-                                          const int64_t  ori_data_partition_index,
-                                          const ObPartition &ori_data_part,
+                                          const ObTableSchema &base_data_table_schema,
+                                          const ObTableSchema &inc_data_table_schema,
+                                          const common::ObTabletID &data_tablet_id,
+                                          const common::ObTabletID &inc_data_tablet_id,
                                           const bool is_oracle_mode,
+                                          const bool is_subpartition,
                                           ObDDLOperator &ddl_operator,
                                           ObDDLSQLTransaction &trans,
                                           ObSchemaGetterGuard &schema_guard);
-  int exchange_auxiliary_table_subpartition_(const uint64_t tenant_id,
-                                             const int64_t  ori_data_partition_index,
-                                             const int64_t  ori_data_subpartition_index,
-                                             const ObPartition &ori_data_part,
-                                             const ObSubPartition &ori_data_subpart,
-                                             const bool is_oracle_mode,
-                                             ObDDLOperator &ddl_operator,
-                                             ObDDLSQLTransaction &trans,
-                                             ObSchemaGetterGuard &schema_guard);
   int exchange_partition_map_relationship_(const uint64_t tenant_id,
-                                           const ObPartition &part,
-                                           const ObTableSchema &partitioned_table_schema,
-                                           const ObTableSchema &non_partitioned_table_schema,
+                                           const ObTableSchema &base_table_schema,
+                                           const ObTableSchema &inc_table_schema,
+                                           const ObIArray<common::ObTabletID> &base_tablet_ids,
+                                           const ObIArray<common::ObTabletID> &inc_tablet_id,
                                            const bool is_oracle_mode,
+                                           const bool is_subpartition,
                                            ObDDLOperator &ddl_operator,
                                            ObDDLSQLTransaction &trans,
                                            ObSchemaGetterGuard &schema_guard);
-  int exchange_subpartition_map_relationship_(const uint64_t tenant_id,
-                                              const ObPartition &part,
-                                              const ObSubPartition &subpart,
-                                              const ObTableSchema &partitioned_table_schema,
-                                              const ObTableSchema &non_partitioned_table_schema,
-                                              const bool is_oracle_mode,
-                                              ObDDLOperator &ddl_operator,
-                                              ObDDLSQLTransaction &trans,
-                                              ObSchemaGetterGuard &schema_guard);
   int update_exchange_table_non_schema_attributes_(const uint64_t tenant_id,
-                                                   const int64_t old_partition_id,
-                                                   const int64_t new_partition_id,
-                                                   const bool is_exchange_subpartition,
-                                                   const ObTableSchema &partitioned_table_schema,
-                                                   const ObTableSchema &non_partitioned_table_schema,
-                                                   const ObIArray<uint64_t> &exchange_table_ids,
-                                                   const ObIArray<ObTabletID> &exchange_tablet_ids,
+                                                   const ObTableSchema &old_table_schema,
+                                                   const ObIArray<ObTabletID> &old_tablet_ids,
+                                                   const ObIArray<int64_t> &old_partition_ids,
+                                                   const ObIArray<int64_t> &new_partition_ids,
+                                                   const uint64_t new_table_id,
+                                                   const common::StatLevel new_stat_level,
                                                    const bool is_oracle_mode,
                                                    ObDDLOperator &ddl_operator,
                                                    ObDDLSQLTransaction &trans,
                                                    ObSchemaGetterGuard &schema_guard);
   int update_exchange_table_level_attributes_(const uint64_t tenant_id,
-                                              const ObIArray<uint64_t> &exchange_table_ids,
-                                              const ObIArray<ObTabletID> &exchange_tablet_ids,
+                                              const ObIArray<ObTabletID> &base_tablet_ids,
+                                              const ObIArray<ObTabletID> &inc_tablet_ids,
                                               ObTableSchema &partitioned_table_schema,
                                               ObTableSchema &non_partitioned_table_schema,
                                               ObDDLSQLTransaction &trans);
-  int update_table_to_tablet_id_mapping_(const uint64_t tenant_id,
-                                         const ObIArray<uint64_t> &table_ids,
+  int update_table_to_tablet_ids_mapping_(const uint64_t tenant_id,
+                                         const uint64_t table_id,
                                          const ObIArray<ObTabletID> &tablet_ids,
                                          ObDDLSQLTransaction &trans);
   int refresh_table_schema_version_(const uint64_t tenant_id, ObTableSchema &table_schema);
@@ -172,9 +167,9 @@ private:
                                       int64_t &new_schema_version,
                                       ObDDLSQLTransaction &trans);
   int get_local_storage_index_and_lob_table_schemas_(const ObTableSchema &table_schema,
-                                                     const bool is_pt_schema,
                                                      const bool is_oracle_mode,
                                                      ObIArray<const ObTableSchema*> &table_schemas,
+                                                     ObIArray<uint64_t> &unused_index_ids,
                                                      ObSchemaGetterGuard &schema_guard);
   int check_auxiliary_schema_conditions_(const ObTableSchema *table_schema, const bool is_oracle_mode);
   int compare_column_extended_type_info_(const common::ObIArray<common::ObString> &l_extended_type_info,
@@ -183,33 +178,28 @@ private:
   bool in_supported_table_type_white_list_(const ObTableSchema &table_schema);
   // generate corresponding auxiliary table mapping that need to exchange partitions
   bool in_find_same_aux_table_retry_white_list_(const int ret_code);
-  int generate_auxiliary_table_mapping_(const ObTableSchema &partitioned_data_table_schema,
-                                        const ObTableSchema &non_partitioned_data_table_schema,
-                                        const ObString &exchange_partition_name,
+  int generate_auxiliary_table_mapping_(const ObTableSchema &base_data_table_schema,
+                                        const ObTableSchema &inc_data_table_schema,
                                         const ObPartitionLevel exchange_partition_level,
                                         const bool is_oracle_mode,
                                         ObSchemaGetterGuard &schema_guard);
-  int generate_local_storage_index_and_lob_table_mapping_(const ObTableSchema &partitioned_table_schema,
-                                                          ObIArray<const ObTableSchema*> &non_partitioned_table_schemas,
-                                                          const ObString &exchange_partition_name,
+  int generate_local_storage_index_and_lob_table_mapping_(const ObTableSchema &base_table_schema,
+                                                          ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                           const ObPartitionLevel exchange_partition_level,
                                                           const bool is_oracle_mode,
                                                           ObIArray<bool> &used_nt_schema_flag);
-  int generate_local_storage_index_table_mapping_in_mysql_mode_(const ObTableSchema &partitioned_table_schema,
-                                                                ObIArray<const ObTableSchema*> &non_partitioned_table_schemas,
-                                                                const ObString &exchange_partition_name,
+  int generate_local_storage_index_table_mapping_in_mysql_mode_(const ObTableSchema &base_table_schema,
+                                                                ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                                 const ObPartitionLevel exchange_partition_level,
                                                                 ObIArray<bool> &used_nt_schema_flag,
                                                                 bool &find_related_nt_schema);
-  int generate_local_storage_index_table_mapping_in_oracle_mode_(const ObTableSchema &partitioned_table_schema,
-                                                                 ObIArray<const ObTableSchema*> &non_partitioned_table_schemas,
-                                                                 const ObString &exchange_partition_name,
+  int generate_local_storage_index_table_mapping_in_oracle_mode_(const ObTableSchema &base_table_schema,
+                                                                 ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                                  const ObPartitionLevel exchange_partition_level,
                                                                  ObIArray<bool> &used_nt_schema_flag,
                                                                  bool &find_related_nt_schema);
-  int generate_lob_table_mapping_(const ObTableSchema &partitioned_table_schema,
-                                  ObIArray<const ObTableSchema*> &non_partitioned_table_schemas,
-                                  const ObString &exchange_partition_name,
+  int generate_lob_table_mapping_(const ObTableSchema &base_table_schema,
+                                  ObIArray<const ObTableSchema*> &inc_table_schemas,
                                   const ObPartitionLevel exchange_partition_level,
                                   const bool is_oracle_mode,
                                   ObIArray<bool> &used_nt_schema_flag,
@@ -223,16 +213,16 @@ private:
                            ObSchemaGetterGuard &schema_guard);
   // Register MDS for read and write defense verification after single table ddl
   int build_single_table_rw_defensive_(const uint64_t tenant_id,
-                                       const ObArray<common::ObTabletID> &tablet_ids,
+                                       const ObIArray<common::ObTabletID> &tablet_ids,
                                        const int64_t schema_version,
                                        ObDDLSQLTransaction &trans);
   int build_modify_tablet_binding_args_v1_(const uint64_t tenant_id,
-                                           const ObArray<ObTabletID> &tablet_ids,
+                                           const ObIArray<ObTabletID> &tablet_ids,
                                            const int64_t schema_version,
                                            ObIArray<ObBatchUnbindTabletArg> &modify_args,
                                            ObDDLSQLTransaction &trans);
   int get_tablets_(const uint64_t tenant_id,
-                   const ObArray<common::ObTabletID> &tablet_ids,
+                   const ObIArray<common::ObTabletID> &tablet_ids,
                    ObIArray<LSTabletID> &tablets,
                    ObDDLSQLTransaction &trans);
   int adapting_cdc_changes_in_exchange_partition_(const uint64_t tenant_id,
@@ -261,13 +251,93 @@ private:
                                           ObDDLSQLTransaction &trans);
   int update_table_all_monitor_modified_(const uint64_t tenant_id, const uint64_t new_table_id, const ObTabletID &tablet_id, const ObTableSchema &orig_table_schema, ObDDLSQLTransaction &trans);
   int get_object_id_from_partition_schema_(ObPartitionSchema &partition_schema, const bool get_subpart_only, int64_t &object_id);
-private:
+
+protected:
+  int inner_init(const ObTableSchema &base_table_schema,
+                 const ObTableSchema &inc_table_schema,
+                 const ObPartitionLevel exchange_partition_level,
+                 const bool is_oracle_mode,
+                 ObSchemaGetterGuard &schema_guard);
+  int exchange_data_table_partitions(const uint64_t tenant_id,
+                                     const ObTableSchema &base_table_schema,
+                                     const ObTableSchema &inc_table_schema,
+                                     const ObIArray<ObTabletID> &base_tablet_ids,
+                                     const ObIArray<ObTabletID> &inc_tablet_ids,
+                                     const bool is_oracle_mode,
+                                     const bool is_subpartition,
+                                     ObDDLOperator &ddl_operator,
+                                     ObDDLSQLTransaction &trans,
+                                     ObSchemaGetterGuard &schema_guard);
+  int exchange_auxiliary_table_partitions(const uint64_t tenant_id,
+                                          const ObTableSchema &base_data_table_schema,
+                                          const ObTableSchema &inc_data_table_schema,
+                                          const ObIArray<common::ObTabletID> &data_tablet_ids,
+                                          const ObIArray<common::ObTabletID> &inc_data_tablet_ids,
+                                          const bool is_oracle_mode,
+                                          const bool is_subpartition,
+                                          ObDDLOperator &ddl_operator,
+                                          ObDDLSQLTransaction &trans,
+                                          ObSchemaGetterGuard &schema_guard);
+  int generate_alter_table_part_schema_for_pt(const ObTableSchema &base_table_schema,
+                                              const ObTableSchema &inc_table_schema,
+                                              const ObIArray<ObTabletID> &base_tablet_ids,
+                                              const ObIArray<ObTabletID> &inc_tablet_ids,
+                                              const bool is_subpartition,
+                                              AlterTableSchema &alter_pt_drop_part_schema,
+                                              AlterTableSchema &alter_pt_add_new_part_schema,
+                                              AlterTableSchema &alter_inc_drop_new_part_schema,
+                                              AlterTableSchema &alter_inc_add_part_schema,
+                                              ObIArray<int64_t> &old_base_part_ids,
+                                              ObIArray<int64_t> &new_base_part_ids,
+                                              ObIArray<int64_t> &old_inc_part_ids,
+                                              ObIArray<int64_t> &new_inc_part_ids);
+  int generate_alter_table_part_schema_for_npt(const ObTableSchema &base_table_schema,
+                                               const ObTableSchema &inc_table_schema,
+                                               const ObTabletID &base_tablet_id,
+                                               const ObTabletID &inc_tablet_id,
+                                               const bool is_subpartition,
+                                               AlterTableSchema &alter_pt_drop_part_schema,
+                                               AlterTableSchema &alter_pt_add_new_part_schema,
+                                               ObIArray<int64_t> &old_base_part_ids,
+                                               ObIArray<int64_t> &new_base_part_ids,
+                                               ObIArray<int64_t> &old_inc_part_ids,
+                                               ObIArray<int64_t> &new_inc_part_ids);
+  int get_part_by_tablet_id(const ObTableSchema &table_schema,
+                            const ObTabletID &tablet_id,
+                            const ObPartition *&part,
+                            const ObSubPartition *&subpart,
+                            const bool get_subpart);
+  int init_alter_table_part_schema(const ObTableSchema &table_schema,
+                                   AlterTableSchema &alter_table_schema);
+  int generate_alter_table_part_schema(const ObTableSchema &table_schema,
+                                       const ObPartition *part,
+                                       const ObSubPartition *subpart,
+                                       const bool is_subpart,
+                                       AlterTableSchema &alter_table_schema);
+  int add_table_to_tablet_ids_map(const uint64_t table_id, const ObTabletID &tablet_id);
+  int add_table_to_tablet_ids_map(const uint64_t table_id, const ObIArray<ObTabletID> &inc_tablet_ids);
+  int get_and_check_aux_tablet_id(const ObPartition *data_part,
+                                  const ObSubPartition *data_subpart,
+                                  const ObTableSchema &aux_table_schema,
+                                  const bool is_oracle_mode,
+                                  const bool is_subpart,
+                                  ObTabletID &aux_tablet_id);
+  int ddl_exchange_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                                    share::schema::ObTableSchema &inc_table_schema,
+                                    share::schema::ObTableSchema &del_table_schema,
+                                    ObDDLOperator &ddl_operator,
+                                    common::ObMySQLTransaction &trans,
+                                    const bool is_subpartition);
+
+protected:
   ObDDLService &ddl_service_;
   uint64_t data_version_;
+private:
   common::hash::ObHashMap<uint64_t, uint64_t> used_pt_nt_id_map_;
-  common::hash::ObHashMap<uint64_t, ObTabletID> used_table_to_tablet_id_map_;
+  common::hash::ObHashMap<uint64_t, ObArray<ObTabletID>> used_table_to_tablet_ids_map_;
   common::ObSArray<uint64_t> unused_pt_index_id_;
   common::ObSArray<uint64_t> unused_nt_index_id_;
+  bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionExchange);
 };

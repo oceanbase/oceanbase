@@ -99,6 +99,13 @@ struct ObColumnResolveStat
   bool is_set_orig_default_value_;
 };
 
+struct ObDefaultValueRes
+{
+  ObDefaultValueRes(common::ObObjParam &value): is_literal_(true), value_(value) {}
+  bool is_literal_;
+  common::ObObjParam &value_;
+};
+
 class ObDDLResolver : public ObStmtResolver
 {
 public:
@@ -219,9 +226,9 @@ public:
       const share::schema::ObColumnSchemaV2 &column_schema);
   int resolve_default_value(
       ParseNode *def_node,
-      common::ObObjParam &default_value);
+      ObDefaultValueRes &resolve_res);
   int resolve_sign_in_default_value(
-      ObIAllocator *name_pool, ParseNode *def_val, ObObjParam &default_value, const bool is_neg);
+      ObIAllocator *name_pool, ParseNode *def_val, ObDefaultValueRes &resolve_res, const bool is_neg);
   static int check_and_fill_column_charset_info(
       share::schema::ObColumnSchemaV2 &column,
       const common::ObCharsetType table_charset_type,
@@ -253,7 +260,7 @@ public:
                                ObIArray<ObString> &gen_col_expr_arr);
   static int init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                 const ObString *nls_formats,
-                                const share::schema::ObLocalSessionVar *local_session_var,
+                                const ObLocalSessionVar *local_session_var,
                                 common::ObIAllocator &allocator,
                                 share::schema::ObTableSchema &table_schema,
                                 const ObSQLMode sql_mode,
@@ -262,7 +269,7 @@ public:
   static int reformat_generated_column_expr(ObObj &default_value,
                                             const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                             const common::ObString *nls_formats,
-                                            const share::schema::ObLocalSessionVar &local_session_var,
+                                            const ObLocalSessionVar &local_session_var,
                                             common::ObIAllocator &allocator,
                                             share::schema::ObTableSchema &table_schema,
                                             share::schema::ObColumnSchemaV2 &column,
@@ -952,6 +959,7 @@ protected:
                                                   share::schema::ObTableSchema &table_schema);
 
   int resolve_file_format(const ParseNode *node, ObExternalFileFormat &format);
+  int mask_properties_sensitive_info(const ParseNode *node, ObString &ddl_sql, ObString &masked_sql);
 
   int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
 

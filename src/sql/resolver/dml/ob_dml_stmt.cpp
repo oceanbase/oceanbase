@@ -270,6 +270,9 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   ddl_schema_version_ = other.ddl_schema_version_;
   ddl_table_id_ = other.ddl_table_id_;
   ref_query_ = other.ref_query_;
+  //external table
+  external_table_partition_ = other.external_table_partition_;
+  SampleInfo *buf = NULL;
   if (is_json_table()
       && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy json table define", K(ret));
@@ -284,7 +287,26 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (is_values_table() &&
              OB_FAIL(deep_copy_values_table_def(*other.values_table_def_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy values table def", K(ret));
-  } else {
+  } else { /* do nothing */ }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(other.sample_info_)) {
+      // do nothing
+    } else {
+      if (OB_ISNULL(sample_info_)) {
+        buf = static_cast<SampleInfo*>(allocator->alloc(sizeof(SampleInfo)));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for sample info", K(ret));
+        } else {
+          sample_info_ = new(buf) SampleInfo();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        *sample_info_ = *other.sample_info_;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     exec_params_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < other.exec_params_.count(); ++i) {
       ObRawExpr *exec_param = other.exec_params_.at(i);
@@ -292,7 +314,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
       if (OB_FAIL(expr_copier.do_copy_expr(exec_param, new_expr))) {
         LOG_WARN("failed to copy exec param", K(ret));
       } else if (OB_ISNULL(new_expr) ||
-                 OB_UNLIKELY(!new_expr->is_exec_param_expr())) {
+                OB_UNLIKELY(!new_expr->is_exec_param_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("exec param is invalid", K(ret), K(new_expr));
       } else if (OB_FAIL(expr_copier.copy(static_cast<ObExecParamRawExpr *>(new_expr)->get_ref_expr()))) {
@@ -2497,6 +2519,19 @@ TableItem *ObDMLStmt::create_table_item(ObIAllocator &allocator)
   return table_item;
 }
 
+JoinedTable *ObDMLStmt::create_joined_table(ObIAllocator &allocator)
+{
+  JoinedTable *table_item = NULL;
+  void *ptr = NULL;
+  if (NULL == (ptr = allocator.alloc(sizeof(JoinedTable)))) {
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc joined table failed");
+  } else {
+    table_item = new(ptr) JoinedTable();
+    table_item->type_ = TableItem::JOINED_TABLE;
+  }
+  return table_item;
+}
+
 int ObDMLStmt::add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item)
 {
   int ret = OB_SUCCESS;
@@ -3000,6 +3035,26 @@ int ObDMLStmt::init_stmt(TableHashAllocator &table_hash_alloc, ObWrapperAllocato
 }
 
 int ObDMLStmt::relids_to_table_ids(const ObSqlBitSet<> &table_set,
+                                   ObIArray<uint64_t> &table_ids) const
+{
+  int ret = OB_SUCCESS;
+  TableItem *table = NULL;
+  int64_t idx = OB_INVALID_INDEX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); ++i) {
+    if (OB_ISNULL(table = table_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (OB_UNLIKELY((idx = get_table_bit_index(table->table_id_)) == OB_INVALID_INDEX)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get table item invalid idx", K(idx), K(table->table_id_));
+    } else if (table_set.has_member(idx)) {
+      ret = table_ids.push_back(table->table_id_);
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::relids_to_table_ids(const ObRelIds &table_set,
                                    ObIArray<uint64_t> &table_ids) const
 {
   int ret = OB_SUCCESS;

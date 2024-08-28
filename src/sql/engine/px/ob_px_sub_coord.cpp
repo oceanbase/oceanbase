@@ -47,6 +47,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
+#include "sql/engine/basic/ob_select_into_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -101,7 +102,6 @@ int ObPxSubCoord::pre_process()
       LOG_WARN("fail to setup receive/transmit op input", K(ret));
     }
   }
-
   if (OB_SUCC(ret) && !sqc_arg_.sqc_.get_pruning_table_locations().empty()) {
     sqc_ctx_.gi_pump_.set_need_partition_pruning(true);
     OZ(sqc_ctx_.gi_pump_.set_pruning_table_location(sqc_arg_.sqc_.get_pruning_table_locations()));
@@ -557,6 +557,18 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
       LOG_DEBUG("debug wf input", K(wf_spec->role_type_), K(sqc.get_task_count()),
                 K(sqc.get_total_task_count()));
     }
+  } else if (root.get_type() == PHY_SELECT_INTO) {
+    ObPxSqcMeta &sqc = sqc_arg_.sqc_;
+    ObSelectIntoSpec *select_into_spec = reinterpret_cast<ObSelectIntoSpec *>(&root);
+#ifdef OB_BUILD_CPP_ODPS
+    ObOdpsPartitionDownloaderMgr &odps_mgr = sqc_ctx.gi_pump_.get_odps_mgr();
+    if (OB_FAIL(odps_mgr.init_uploader(select_into_spec->external_properties_.str_,
+                                       select_into_spec->external_partition_.str_,
+                                       select_into_spec->is_overwrite_,
+                                       sqc.get_task_count()))) {
+      LOG_WARN("failed to init odps uploader", K(ret));
+    }
+#endif
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(root.register_to_datahub(ctx))) {

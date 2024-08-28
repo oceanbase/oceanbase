@@ -117,13 +117,13 @@ int LogReader::pread(const block_id_t block_id,
       EVENT_TENANT_INC(ObStatEventIds::PALF_READ_IO_COUNT_FROM_DISK, MTL_ID());
       EVENT_ADD(ObStatEventIds::PALF_READ_SIZE_FROM_DISK, out_read_size);
       EVENT_ADD(ObStatEventIds::PALF_READ_TIME_FROM_DISK, cost_ts);
-      ATOMIC_INC(&accum_read_io_count_);
-      ATOMIC_AAF(&accum_read_log_size_, out_read_size);
-      ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
+      const int64_t accum_read_io_count = ATOMIC_AAF(&accum_read_io_count_, 1);
+      const int64_t accum_read_log_size = ATOMIC_AAF(&accum_read_log_size_, out_read_size);
+      const int64_t accum_read_cost_ts = ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
       if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
-        const int64_t avg_pread_cost = accum_read_cost_ts_ / accum_read_io_count_;
-        PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", K_(accum_read_io_count),
-                 K_(accum_read_log_size), K(avg_pread_cost));
+        const int64_t avg_pread_cost = accum_read_cost_ts / accum_read_io_count;
+        PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", K(accum_read_io_count),
+                 K(accum_read_log_size), K(avg_pread_cost));
         ATOMIC_STORE(&accum_read_io_count_, 0);
         ATOMIC_STORE(&accum_read_log_size_, 0);
         ATOMIC_STORE(&accum_read_cost_ts_, 0);

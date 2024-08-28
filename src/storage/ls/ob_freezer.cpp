@@ -389,7 +389,8 @@ ObFreezer::ObFreezer()
     need_resubmit_log_(false),
     enable_(false),
     is_inited_(false),
-    is_async_tablet_freeze_task_running_(false),
+    is_async_tablet_freeze_task_existing_(false),
+    is_async_ls_freeze_task_existing_(false),
     throttle_is_skipping_(false),
     tenant_replay_is_pending_(false),
     async_freeze_tablets_() {}
@@ -408,7 +409,8 @@ ObFreezer::ObFreezer(ObLS *ls)
     need_resubmit_log_(false),
     enable_(false),
     is_inited_(false),
-    is_async_tablet_freeze_task_running_(false),
+    is_async_tablet_freeze_task_existing_(false),
+    is_async_ls_freeze_task_existing_(false),
     throttle_is_skipping_(false),
     tenant_replay_is_pending_(false),
     async_freeze_tablets_() {}
@@ -433,7 +435,8 @@ void ObFreezer::reset()
   enable_ = false;
   async_freeze_tablets_.reuse();
   is_inited_ = false;
-  is_async_tablet_freeze_task_running_ = false;
+  is_async_tablet_freeze_task_existing_ = false;
+  is_async_ls_freeze_task_existing_ = false;
   throttle_is_skipping_ = false;
   tenant_replay_is_pending_ = false;
 }
@@ -458,7 +461,8 @@ int ObFreezer::init(ObLS *ls)
     low_priority_freeze_cnt_ = 0;
     pend_replay_cnt_ = 0;
     need_resubmit_log_ = false;
-    is_async_tablet_freeze_task_running_ = false;
+    is_async_tablet_freeze_task_existing_ = false;
+    is_async_ls_freeze_task_existing_ = false;
     throttle_is_skipping_ = false;
     tenant_replay_is_pending_ = false;
 
@@ -658,27 +662,27 @@ void ObFreezer::resubmit_log_if_needed_(const int64_t start_time,
 struct AsyncFreezeFunctor {
   const int64_t trace_id_;
   const bool is_ls_freeze_;
+  const ObLSID ls_id_;
   ObFreezer *freezer_;
   // hold ls handle to avoid logstream being destroyed
-  ObLSHandle ls_handle_;
   AsyncFreezeFunctor(const int64_t trace_id, const bool is_ls_freeze, ObFreezer *freezer, ObLSHandle &ls_handle)
-      : trace_id_(trace_id), is_ls_freeze_(is_ls_freeze), freezer_(freezer), ls_handle_(ls_handle) {}
+      : trace_id_(trace_id),
+        is_ls_freeze_(is_ls_freeze),
+        ls_id_(freezer->get_ls_id()),
+        freezer_(freezer) {}
   int operator()()
   {
     int ret = OB_SUCCESS;
-    ObLS *ls = nullptr;
-    if (OB_ISNULL(freezer_)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "unexpected nullptr ", KR(ret), KP(this));
-    } else if (FALSE_IT(ls = freezer_->ls_)) {
-    } else if (OB_ISNULL(ls)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "unexpected nullptr ", KR(ret), KP(this));
+
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_id_));
     } else {
-      share::ObLSID ls_id = freezer_->get_ls_id();
-      STORAGE_LOG(INFO, "[Freezer] An Async Freeze Task Start", K(trace_id_), K(ls_id), K(is_ls_freeze_), KP(freezer_));
+      // freezer_ cannot be nullptr because AsyncFreezeFunctor is constructed by ObFreezer::this pointer
+      STORAGE_LOG(
+          INFO, "[Freezer] An Async Freeze Task Start", K(trace_id_), K(ls_id_), K(is_ls_freeze_), KP(freezer_));
       if (is_ls_freeze_) {
-        (void)ls->logstream_freeze_task(trace_id_, INT64_MAX);
+        (void)freezer_->async_ls_freeze_consumer(trace_id_);
       } else {
         (void)freezer_->async_tablet_freeze_consumer(trace_id_);
       }
@@ -687,26 +691,40 @@ struct AsyncFreezeFunctor {
   }
 };
 
-void ObFreezer::commit_an_async_freeze_task(const int64_t trace_id, const bool is_ls_freeze)
+/**
+ * @brief Try pushing back an async freeze task into Tenant Freeze Task Queue.
+ *        To minimize the number of tasks in the async task queue as much as possible,
+ *        we control the task count by async task existing flag.
+ *
+ *        1. First, we check task existing flag(async_freeze_task_already_exists_() function)
+ *           and skip submit task if flag is true
+ *        2. Then, we use ATOMIC_CAS(acquired_exec_async_task_permission_() function) to avoid
+ *           more than one thread set flag succ
+ *
+ */
+void ObFreezer::submit_an_async_freeze_task(const int64_t trace_id, const bool is_ls_freeze)
 {
   int ret = OB_SUCCESS;
   ObTenantFreezer *tenant_freezer = nullptr;
   share::ObLSID ls_id = get_ls_id();
   const int64_t start_time = ObClockGenerator::getClock();
+  bool submit_succ = false;
 
-  if (OB_UNLIKELY(!enable_)) {
+  if (OB_UNLIKELY(!enable_) || OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
   } else if (OB_ISNULL(tenant_freezer = MTL(storage::ObTenantFreezer *))) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "ObTenantFreezer is null", K(ret), K(ls_id));
+  } else if (async_freeze_task_already_exists_(is_ls_freeze)) {
+    submit_succ = false;
   } else {
     ObSpinLockGuard freeze_thread_pool(tenant_freezer->freeze_thread_pool_lock_);
 
     ObLSHandle ls_handle;
     if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_id));
-    } else {
+    } else if (acquired_exec_async_task_permission_(is_ls_freeze)) {
       AsyncFreezeFunctor async_freeze_functor(trace_id, is_ls_freeze, this, ls_handle);
       do {
         ret = tenant_freezer->freeze_thread_pool_.commit_task_ignore_ret(async_freeze_functor);
@@ -714,63 +732,103 @@ void ObFreezer::commit_an_async_freeze_task(const int64_t trace_id, const bool i
           STORAGE_LOG(WARN, "commit task to freeze thread pool failed", KR(ret), K(ls_id));
         }
       } while (OB_FAIL(ret));
-      STORAGE_LOG(INFO, "finish commit async freeze task", KR(ret), K(is_ls_freeze));
+      submit_succ = true;
+      STORAGE_LOG(INFO, "finish submit async freeze task", KR(ret), K(ls_id), K(is_ls_freeze), K(submit_succ));
     }
   }
+
+  if (!submit_succ && REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
+    TRANS_LOG(INFO,
+              "async freeze task already exists, skip submitting one task",
+              K(ls_id),
+              K(is_ls_freeze),
+              K(is_async_tablet_freeze_task_existing_),
+              K(is_async_ls_freeze_task_existing_));
+  }
+}
+
+bool ObFreezer::async_freeze_task_already_exists_(const bool is_ls_freeze)
+{
+  bool already_exists = false;
+  if (is_ls_freeze) {
+    already_exists = ATOMIC_LOAD(&is_async_ls_freeze_task_existing_);
+  } else {
+    already_exists = ATOMIC_LOAD(&is_async_tablet_freeze_task_existing_);
+  }
+  return already_exists;
+}
+
+bool ObFreezer::acquired_exec_async_task_permission_(const bool is_ls_freeze)
+{
+  bool acquired = false;
+  if (is_ls_freeze) {
+    acquired = ATOMIC_BCAS(&is_async_ls_freeze_task_existing_, false, true);
+  } else {
+    acquired = ATOMIC_BCAS(&is_async_tablet_freeze_task_existing_, false, true);
+  }
+  return acquired;
+}
+
+void ObFreezer::async_ls_freeze_consumer(const int64_t trace_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_->logstream_freeze_task(trace_id, INT64_MAX))) {
+    STORAGE_LOG(WARN, "async ls freeze failed", KR(ret), K(trace_id), K(get_ls_id()));
+  }
+
+  // reset task existing flag
+  ATOMIC_STORE(&is_async_ls_freeze_task_existing_, false);
 }
 
 void ObFreezer::async_tablet_freeze_consumer(const int64_t trace_id)
 {
-  if (OB_ISNULL(ls_)) {
-    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected nullptr of ls", KP(this));
-  } else if (set_async_tablet_freeze_task_start_succ()) {
-    const int64_t start_time = ObClockGenerator::getClock();
-    STORAGE_LOG(INFO, "Async Tablet Freeze Task Start", K(get_ls_id()));
+  const int64_t start_time = ObClockGenerator::getClock();
+  STORAGE_LOG(INFO, "Async Tablet Freeze Task Start", K(get_ls_id()));
 
-    ObSEArray<ObTabletID, 128> tablet_ids;
-    tablet_ids.reuse();
-    const int64_t current_epoch = ls_->get_switch_epoch();
-    (void)get_all_async_freeze_tablets(current_epoch, tablet_ids);
+  ObSEArray<ObTabletID, 128> tablet_ids;
+  tablet_ids.reuse();
+  const int64_t current_epoch = ls_->get_switch_epoch();
+  (void)get_all_async_freeze_tablets(current_epoch, tablet_ids);
 
-    int ret = OB_SUCCESS;
-    bool need_resubmit_task = false;
-    if (tablet_ids.empty()) {
-      // no tablet need freeze
-    } else {
-      const int64_t abs_timeout_ts = start_time + (3600LL * 1000LL * 1000LL/*an hour*/);
-      const bool need_rewrite_meta = false;
-      const bool is_sync = false;
-      if (OB_FAIL(ls_->tablet_freeze_task(
-              trace_id, tablet_ids, need_rewrite_meta, is_sync, abs_timeout_ts, current_epoch))) {
-        need_resubmit_task = true;
-      }
+  int ret = OB_SUCCESS;
+  bool need_resubmit_task = false;
+  if (tablet_ids.empty()) {
+    // no tablet need freeze
+  } else {
+    const int64_t abs_timeout_ts = start_time + (3600LL * 1000LL * 1000LL /*an hour*/);
+    const bool need_rewrite_meta = false;
+    const bool is_sync = false;
+    if (OB_FAIL(
+            ls_->tablet_freeze_task(trace_id, tablet_ids, need_rewrite_meta, is_sync, abs_timeout_ts, current_epoch))) {
+      need_resubmit_task = true;
     }
+  }
 
-    const int64_t end_time = ObClockGenerator::getClock();
-    const int64_t spend_time_ms = (end_time - start_time) / 1000;
-    STORAGE_LOG(INFO, "Async Tablet Freeze Task finish", K(get_ls_id()), K(spend_time_ms));
-    (void)set_async_freeze_task_stop();
+  // print some debug info
+  const int64_t end_time = ObClockGenerator::getClock();
+  const int64_t spend_time_ms = (end_time - start_time) / 1000;
+  STORAGE_LOG(INFO, "Async Tablet Freeze Task finish", K(get_ls_id()), K(spend_time_ms));
 
-    // NOTE : must check is_async_freeze_tablets_empty() after set_async_freeze_task_stop()
-    if (need_resubmit_task || !is_async_freeze_tablets_empty()) {
-      const bool is_ls_freeze = false;
-      (void)commit_an_async_freeze_task(trace_id, is_ls_freeze);
-    }
+  // NOTE : reset task existing flag before submit another task
+  ATOMIC_STORE(&is_async_tablet_freeze_task_existing_, false);
+  if (need_resubmit_task || !is_async_freeze_tablets_empty()) {
+    const bool is_ls_freeze = false;
+    (void)submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
 }
 
 void ObFreezer::try_freeze_tx_data_()
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_RETRY_DURATION = 10LL * 1000LL * 1000LL;  // 10 seconds
+  const int64_t MAX_RETRY_DURATION = 5LL * 1000LL * 1000LL;  // 5 seconds
   int64_t retry_times = 0;
   int64_t start_freeze_ts = ObClockGenerator::getClock();
   do {
     if (OB_FAIL(ls_->get_tx_table()->self_freeze_task())) {
       if (OB_EAGAIN == ret) {
-        // sleep and retry
+        // sleep 100ms and retry
         retry_times++;
-        usleep(100);
+        usleep(100LL * 1000LL);
       } else {
         STORAGE_LOG(WARN, "freeze tx data table failed", KR(ret), K(get_ls_id()));
       }

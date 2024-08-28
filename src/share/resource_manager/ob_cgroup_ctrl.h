@@ -25,6 +25,7 @@ class ObString;
 namespace share
 {
 class ObGroupName;
+class ObTenantBase;
 
 typedef enum  : uint64_t {
   DEFAULT = 0,
@@ -150,12 +151,7 @@ public:
   // 删除租户cgroup规则
   int remove_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   int remove_both_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  static int remove_dir_(const char *curr_dir);
-
-  int add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id = OBCG_DEFAULT, const char *base_path = "");
-
-  // 从指定租户cgroup组移除指定tid
-  int remove_self_from_cgroup(const uint64_t tenant_id);
+  static int remove_dir_(const char *curr_dir, bool is_delete_group = false);
 
   static int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
   static int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
@@ -214,6 +210,9 @@ private:
   int64_t last_usage_check_time_;
 
 private:
+  friend class oceanbase::share::ObTenantBase;
+  friend int oceanbase::lib::SET_GROUP_ID(uint64_t group_id);
+  int add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT);
   int init_cgroup_root_dir_(const char *cgroup_path);
   static int init_dir_(const char *curr_dir);
   static int init_full_dir_(const char *curr_path);

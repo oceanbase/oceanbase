@@ -130,6 +130,7 @@ user_client_port	bigint(20)	NO		0
 proxy_user	varchar(128)	YES		NULL	
 service_name	varchar(64)	YES		NULL	
 total_cpu_time	double	NO		NULL	
+top_info	varchar(262143)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_processlist;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1636,7 +1637,7 @@ body	varchar(1048576)	NO
 definer	varchar(77)	NO			
 created	timestamp(6)	NO		NULL	
 modified	timestamp(6)	NO		NULL	
-sql_mode	varchar(32)	NO			
+sql_mode	varchar(1048576)	NO			
 comment	varchar(1048576)	NO			
 character_set_client	varchar(128)	NO		NULL	
 collation_connection	varchar(128)	NO		NULL	
@@ -4905,6 +4906,37 @@ IS_MANDATORY	varchar(1024)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.ENABLED_ROLES;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ls_replica_task_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+task_type	varchar(64)	NO	PRI	NULL	
+task_id	varchar(200)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+task_status	varchar(2048)	YES		NULL	
+priority	bigint(20)	NO		1	
+target_replica_svr_ip	varchar(46)	YES		NULL	
+target_replica_svr_port	bigint(20)	YES		NULL	
+target_paxos_replica_number	bigint(20)	YES		NULL	
+target_replica_type	varchar(16)	YES		NULL	
+source_replica_svr_ip	varchar(46)	YES		NULL	
+source_replica_svr_port	bigint(20)	YES		NULL	
+source_paxos_replica_number	bigint(20)	YES		NULL	
+source_replica_type	varchar(16)	YES		NULL	
+data_source_svr_ip	varchar(46)	YES		NULL	
+data_source_svr_port	bigint(20)	YES		NULL	
+is_manual	tinyint(4)	YES		0	
+task_exec_svr_ip	varchar(46)	YES		NULL	
+task_exec_svr_port	bigint(20)	YES		NULL	
+generate_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
+schedule_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
+finish_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
+execute_result	varchar(2048)	YES		NULL	
+comment	varchar(2048)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_replica_task_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_session_ps_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -4952,6 +4984,17 @@ enable_versions	longtext	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_compatibility_control;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_service;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+service_name_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+service_name	varchar(64)	NO		NULL	
+service_status	varchar(64)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_service;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_resource_limit;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -4994,5 +5037,34 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_nic_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_temp_file;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+file_id	bigint(20)	NO		NULL	
+trace_id	varchar(64)	NO		NULL	
+dir_id	bigint(20)	NO		NULL	
+bytes	bigint(20)	NO		NULL	
+start_offset	bigint(20)	NO		NULL	
+is_deleting	tinyint(4)	NO		NULL	
+cached_page_num	bigint(20)	NO		NULL	
+write_back_page_num	bigint(20)	NO		NULL	
+flushed_page_num	bigint(20)	NO		NULL	
+ref_cnt	bigint(20)	NO		NULL	
+total_writes	bigint(20)	NO		NULL	
+unaligned_writes	bigint(20)	NO		NULL	
+total_reads	bigint(20)	NO		NULL	
+unaligned_reads	bigint(20)	NO		NULL	
+total_read_bytes	bigint(20)	NO		NULL	
+last_access_time	timestamp(6)	NO		NULL	
+last_modify_time	timestamp(6)	NO		NULL	
+birth_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_temp_file;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_temp_file runs in single server"
 IF(count(*) >= 0, 1, 0)
 1

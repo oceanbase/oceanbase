@@ -110,12 +110,12 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |9       |66          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|9       |57          |
-|2 |  └─HASH GROUP BY                |        |9       |48          |
-|3 |    └─EXCHANGE IN DISTR          |        |16      |45          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)|:EX10000|16      |37          |
-|5 |        └─HASH GROUP BY          |        |16      |20          |
+|0 |PX COORDINATOR                   |        |12      |79          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|12      |68          |
+|2 |  └─HASH GROUP BY                |        |12      |55          |
+|3 |    └─EXCHANGE IN DISTR          |        |19      |51          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)|:EX10000|19      |42          |
+|5 |        └─HASH GROUP BY          |        |19      |21          |
 |6 |          └─PX PARTITION ITERATOR|        |28      |16          |
 |7 |            └─MERGE JOIN         |        |28      |16          |
 |8 |              ├─TABLE FULL SCAN  |score   |28      |8           |

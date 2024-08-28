@@ -56,7 +56,6 @@ public:
   {
     reset_autocommit_ = false;
     has_inner_dml_write_ = false;
-    need_close_conn_ = false;
     have_saved_session_ = false;
     has_autonomous_tx_ = false;
     old_worker_timeout_ts_ = 0;
@@ -65,20 +64,17 @@ public:
     tenant_id_ = 0;
     database_id_ = OB_INVALID_ID;
     database_name_.reset();
-    sql_proxy_ = nullptr;
     inner_conn_ = nullptr;
-    session_info_ = nullptr;
+    store_inner_conn_ = nullptr;
     my_exec_ctx_ = nullptr;
     saved_session_.reset();
   }
 
-  int init(sql::ObSQLSessionInfo &session_info,
-           sql::ObExecContext &ctx,
+  int init(sql::ObExecContext &ctx,
            const int64_t timeout_us = 0);
   int destroy(sql::ObExecContext &ctx,
-              sql::ObSQLSessionInfo &session_info,
               bool is_rollback);
-  bool is_inited() { return session_info_ != NULL; }
+  bool is_inited() { return my_exec_ctx_ != NULL; }
 
   static int valid_execute_context(sql::ObExecContext &ctx);
   int execute_write(const ObSqlString &sql, int64_t &affected_rows);
@@ -97,7 +93,6 @@ private:
   friend class ObGetLockExecutor;
   bool reset_autocommit_;
   bool has_inner_dml_write_;
-  bool need_close_conn_;
   bool have_saved_session_;
   bool has_autonomous_tx_;
   int64_t old_worker_timeout_ts_;
@@ -106,9 +101,8 @@ private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   ObSqlString database_name_;
-  common::ObMySQLProxy *sql_proxy_;
   observer::ObInnerSQLConnection *inner_conn_;
-  sql::ObSQLSessionInfo *session_info_;
+  observer::ObInnerSQLConnection *store_inner_conn_;
   sql::ObExecContext *my_exec_ctx_; //my exec context
   sql::ObBasicSessionInfo::TransSavedValue saved_session_;
 };
@@ -190,7 +184,6 @@ private:
                             const uint64_t client_session_create_ts,
                             const uint32_t server_session_id);
   int check_need_reroute_(ObLockFuncContext &ctx,
-                          sql::ObSQLSessionInfo *session,
                           const uint32_t client_session_id,
                           const uint64_t client_session_create_ts);
   int get_lock_session_(ObLockFuncContext &ctx,

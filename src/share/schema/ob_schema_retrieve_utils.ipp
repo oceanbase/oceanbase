@@ -1503,6 +1503,20 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         bool, true, true/*ignore_column_error*/, false);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, auto_increment_cache_size, table_schema,
         int64_t, true, true, 0);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_properties, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
+    if (OB_SUCC(ret) && table_schema.is_materialized_view()) {
+      bool skip_null_error = true;
+      bool skip_column_error = true;
+      ObString local_session_var;
+      ObString default_session_var(""); //default value is empty string
+      EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "local_session_vars", local_session_var,
+                                                    skip_null_error, skip_column_error, default_session_var);
+      if (OB_SUCC(ret) && !local_session_var.empty()
+          && OB_FAIL(table_schema.get_local_session_var().fill_local_session_var_from_str(local_session_var))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to deserialize mview_session_var", K(ret));
+      }
+    }
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));
@@ -1528,7 +1542,7 @@ int fill_column_schema_default_value(T &result,
   lib::CompatModeGuard guard(compat_mode);
   EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value, default_type,
                                     column,false, false, tenant_id);
-  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, cur_default_value, default_type,
+  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL_V2(result, default_type,
                                     column, true, false, tenant_id);
   EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value_v2, default_type,
                                     column, false, true, tenant_id);
@@ -1624,30 +1638,15 @@ int ObSchemaRetrieveUtils::fill_column_schema(
       bool skip_column_error = true;
       ObString local_session_var;
       ObString default_session_var(""); //default value is empty string
-      int64_t pos = 0;
       EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result,
                                                  "local_session_vars",
                                                  local_session_var,
                                                  skip_null_error,
                                                  skip_column_error,
                                                  default_session_var);
-      if (OB_SUCC(ret) && !local_session_var.empty()) {
-        ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
-        char *value_buf = NULL;
-        if (OB_ISNULL(value_buf = static_cast<char*>(tmp_allocator.alloc(local_session_var.length())))) {
-          ret = common::OB_ALLOCATE_MEMORY_FAILED;
-          SHARE_SCHEMA_LOG(WARN, "fail to alloc memory", K(ret));
-        } else {
-          ObLength len = common::str_to_hex(local_session_var.ptr(),
-                                            local_session_var.length(),
-                                            value_buf,
-                                            local_session_var.length());
-          if (OB_FAIL(column.get_local_session_var().deserialize_(value_buf, static_cast<int64_t>(len), pos))) {
-            SHARE_SCHEMA_LOG(WARN, "fail to deserialize local_session_var", K(ret));
-          } else {
-            tmp_allocator.free(value_buf);
-          }
-        }
+      if (OB_SUCC(ret) && !local_session_var.empty()
+          && OB_FAIL(column.get_local_session_var().fill_local_session_var_from_str(local_session_var))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to deserialize local_session_var", K(ret));
       }
     }
   }
@@ -1911,12 +1910,16 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     ObPrivSet priv_others = 0;
     EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "priv_others", priv_others, uint64_t, true /* skip null error*/,
                                                ignore_column_error, 0);
-    user_info.set_priv((priv_others & 1) != 0 ? OB_PRIV_EXECUTE : 0);
-    user_info.set_priv((priv_others & 2) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
-    user_info.set_priv((priv_others & 4) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
-    user_info.set_priv((priv_others & 8) != 0 ? OB_PRIV_CREATE_TABLESPACE : 0);
-    user_info.set_priv((priv_others & 16) != 0 ? OB_PRIV_SHUTDOWN : 0);
-    user_info.set_priv((priv_others & 32) != 0 ? OB_PRIV_RELOAD : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_EXECUTE) != 0 ? OB_PRIV_EXECUTE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_ALTER_ROUTINE) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROUTINE) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_TABLESPACE) != 0 ? OB_PRIV_CREATE_TABLESPACE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_SHUTDOWN) != 0 ? OB_PRIV_SHUTDOWN : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_RELOAD) != 0 ? OB_PRIV_RELOAD : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROLE) != 0 ? OB_PRIV_CREATE_ROLE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_DROP_ROLE) != 0 ? OB_PRIV_DROP_ROLE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
 
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
@@ -2215,9 +2218,11 @@ int ObSchemaRetrieveUtils::fill_db_priv_schema(
                                                ignore_column_error, 0);
     if (OB_FAIL(ret)) {
     } else {
-      db_priv.set_priv((priv_others & 1) != 0 ? OB_PRIV_EXECUTE : 0);
-      db_priv.set_priv((priv_others & 2) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
-      db_priv.set_priv((priv_others & 4) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_EXECUTE) != 0 ? OB_PRIV_EXECUTE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_ALTER_ROUTINE) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROUTINE) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
     }
   }
 
@@ -2272,6 +2277,15 @@ int ObSchemaRetrieveUtils::fill_table_priv_schema(
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_create_view, table_priv, PRIV_CREATE_VIEW);
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_show_view, table_priv, PRIV_SHOW_VIEW);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, table_priv, int64_t);
+    bool ignore_column_error = true;
+    ObPrivSet priv_others = 0;
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "priv_others", priv_others, uint64_t, true /* skip null error*/,
+                                               ignore_column_error, 0);
+    if (OB_FAIL(ret)) {
+    } else {
+      table_priv.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
+      table_priv.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
+    }
   }
 
   return ret;

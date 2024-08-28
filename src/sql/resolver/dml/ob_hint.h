@@ -140,26 +140,40 @@ struct ObOptParamHint
 {
   ObOptParamHint() {};
 
-  #define OPT_PARAM_TYPE_DEF(DEF)         \
-    DEF(INVALID_OPT_PARAM_TYPE, = 0)      \
-    DEF(HIDDEN_COLUMN_VISIBLE,)           \
-    DEF(ROWSETS_ENABLED,)                 \
-    DEF(ROWSETS_MAX_ROWS,)                \
-    DEF(DDL_EXECUTION_ID,)                \
-    DEF(DDL_TASK_ID,)                     \
-    DEF(ENABLE_NEWSORT,)                  \
-    DEF(USE_PART_SORT_MGB,)               \
-    DEF(USE_DEFAULT_OPT_STAT,)            \
-    DEF(ENABLE_IN_RANGE_OPTIMIZATION,)    \
-    DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)    \
-    DEF(WORKAREA_SIZE_POLICY,)         \
-    DEF(ENABLE_RICH_VECTOR_FORMAT,)    \
-    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)   \
-    DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
-    DEF(ENABLE_DAS_KEEP_ORDER,)           \
-    DEF(SPILL_COMPRESSION_CODEC,)   \
-    DEF(INLIST_REWRITE_THRESHOLD,)        \
-    DEF(PUSHDOWN_STORAGE_LEVEL,)          \
+  #define OPT_PARAM_TYPE_DEF(DEF)                   \
+    DEF(INVALID_OPT_PARAM_TYPE, = 0)                \
+    DEF(HIDDEN_COLUMN_VISIBLE,)                     \
+    DEF(ROWSETS_ENABLED,)                           \
+    DEF(ROWSETS_MAX_ROWS,)                          \
+    DEF(DDL_EXECUTION_ID,)                          \
+    DEF(DDL_TASK_ID,)                               \
+    DEF(ENABLE_NEWSORT,)                            \
+    DEF(USE_PART_SORT_MGB,)                         \
+    DEF(USE_DEFAULT_OPT_STAT,)                      \
+    DEF(ENABLE_IN_RANGE_OPTIMIZATION,)              \
+    DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)              \
+    DEF(WORKAREA_SIZE_POLICY,)                      \
+    DEF(ENABLE_RICH_VECTOR_FORMAT,)                 \
+    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)    \
+    DEF(PRESERVE_ORDER_FOR_PAGINATION,)             \
+    DEF(ENABLE_DAS_KEEP_ORDER,)                     \
+    DEF(SPILL_COMPRESSION_CODEC,)                   \
+    DEF(INLIST_REWRITE_THRESHOLD,)                  \
+    DEF(PUSHDOWN_STORAGE_LEVEL,)                    \
+    DEF(HASH_JOIN_ENABLED,)                         \
+    DEF(OPTIMIZER_SORTMERGE_JOIN_ENABLED,)          \
+    DEF(NESTED_LOOP_JOIN_ENABLED,)                  \
+    DEF(ENABLE_RANGE_EXTRACTION_FOR_NOT_IN,)        \
+    DEF(OPTIMIZER_INDEX_COST_ADJ,)                  \
+    DEF(OPTIMIZER_SKIP_SCAN_ENABLED,)               \
+    DEF(OPTIMIZER_BETTER_INLIST_COSTING,)           \
+    DEF(OPTIMIZER_GROUP_BY_PLACEMENT,)              \
+    DEF(WITH_SUBQUERY,)                             \
+    DEF(ENABLE_SPF_BATCH_RESCAN,)                   \
+    DEF(NLJ_BATCHING_ENABLED,)                      \
+    DEF(RUNTIME_FILTER_TYPE,)                       \
+    DEF(BLOOM_FILTER_RATIO,)                        \
+    DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,) \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -171,10 +185,13 @@ struct ObOptParamHint
   int get_opt_param(const OptParamType param_type, ObObj &val) const;
   int has_enable_opt_param(const OptParamType param_type, bool &enabled) const;
   int print_opt_param_hint(PlanText &plan_text) const;
-  int get_bool_opt_param(const OptParamType param_type, bool &val, bool& is_exists) const;
+  int get_bool_opt_param(const OptParamType param_type, bool &val, bool &is_exists) const;
   // if the corresponding opt_param is specified, the `val` will be overwritten
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
+  int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
+  int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   bool empty() const { return param_types_.empty();  }
   int check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param, bool &val) const;
@@ -220,6 +237,7 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_2      (oceanbase::common::cal_version(4, 2, 2, 0))
 #define COMPAT_VERSION_4_2_3      (oceanbase::common::cal_version(4, 2, 3, 0))
 #define COMPAT_VERSION_4_2_4      (oceanbase::common::cal_version(4, 2, 4, 0))
+#define COMPAT_VERSION_4_2_5      (oceanbase::common::cal_version(4, 2, 5, 0))
 #define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
@@ -523,7 +541,8 @@ public:
       HINT_TABLE_PARALLEL,
       HINT_PQ_SET,
       HINT_JOIN_FILTER,
-      HINT_TABLE_DYNAMIC_SAMPLING
+      HINT_TABLE_DYNAMIC_SAMPLING,
+      HINT_PQ
     };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
@@ -538,6 +557,7 @@ public:
       orig_hint_(NULL) {
         hint_type_ = get_hint_type(hint_type);
         is_enable_hint_ = (hint_type_ == hint_type);
+        is_trans_added_ = false;
       }
   virtual ~ObHint() {}
   int assign(const ObHint &other);
@@ -597,10 +617,13 @@ public:
   bool is_pq_subquery_hint() const { return T_PQ_SUBQUERY == hint_type_; }
   bool is_decorrelate_hint() const { return T_DECORRELATE == hint_type_; }
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
+  bool is_trans_added() const { return is_trans_added_; }
+  bool set_trans_added(bool is_trans_added) { return is_trans_added_ = is_trans_added; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
-                       K_(orig_hint), K_(is_enable_hint));
+                       K_(orig_hint), K_(is_enable_hint),
+                       K_(is_trans_added));
 
 private:
   // only used in create_push_down_hint
@@ -612,6 +635,7 @@ protected:
   ObString qb_name_;
   const ObHint *orig_hint_;
   bool is_enable_hint_;
+  bool is_trans_added_; // It means that hint is added by rewriter, and it needn't print the hint when explain extended
 };
 
 class ObTransHint : public ObHint
@@ -965,6 +989,9 @@ public:
   const int64_t &get_index_prefix() const { return index_prefix_; }
   bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
   bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type(); }
+  bool is_match_index(const ObCollationType cs_type,
+                      const TableItem &ref_table,
+                      const ObTableSchema &index_schema) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name), K_(index_prefix));
 
@@ -990,7 +1017,7 @@ public:
   const ObTableInHint &get_table() const { return table_; }
   int64_t get_parallel() const { return parallel_; }
   void set_parallel(int64_t parallel) { parallel_ = parallel; }
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(table), K_(parallel));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(parallel));
 
 private:
   ObTableInHint table_;
@@ -1110,6 +1137,31 @@ class ObPQSubqueryHint : public ObOptHint
 private:
   DistAlgo dist_algo_;
   QbNameList sub_qb_names_;
+};
+
+// normal pq hint for single child op: group by/distinct
+class ObPQHint : public ObOptHint
+{
+  public:
+  ObPQHint(ObItemType hint_type)
+    : ObOptHint(hint_type),
+      dist_method_(T_INVALID)
+  {
+    set_hint_class(HINT_PQ);
+  }
+  int assign(const ObPQHint &other);
+  virtual ~ObPQHint() {}
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  static const char* get_dist_method_str(ObItemType dist_method);
+  void set_dist_method(ObItemType dist_method) { dist_method_ = dist_method; }
+  inline bool is_dist_method_match(ObItemType dist_method)  const { return dist_method_ == dist_method; }
+  inline bool is_force_basic()  const { return T_DISTRIBUTE_BASIC == dist_method_; }
+  inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
+  inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
+
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method));
+private:
+  ObItemType dist_method_;
 };
 
 class ObJoinOrderHint : public ObOptHint {

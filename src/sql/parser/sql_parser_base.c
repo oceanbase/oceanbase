@@ -28,15 +28,15 @@ extern YY_BUFFER_STATE obsql_mysql_yy_scan_bytes (yyconst char *bytes,int len ,y
 extern void obsql_mysql_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
 extern void obsql_mysql_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
 #ifdef OB_BUILD_ORACLE_PARSER
-extern int obsql_oracle_latin1_yylex_init_extra(YY_EXTRA_TYPE yy_user_defined,yyscan_t* ptr_yy_globals );
-extern int obsql_oracle_latin1_yyparse(ParseResult *result);
-extern int obsql_oracle_latin1_multi_fast_parse(ParseResult *p);
-extern int obsql_oracle_latin1_multi_values_parse(ParseResult *p);
-extern int obsql_oracle_latin1_fast_parse(ParseResult *p);
-extern int obsql_oracle_latin1_yylex_destroy (yyscan_t yyscanner );
-extern YY_BUFFER_STATE obsql_oracle_latin1_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
-extern void obsql_oracle_latin1_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
-extern void obsql_oracle_latin1_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+extern int obsql_oracle_single_byte_yylex_init_extra(YY_EXTRA_TYPE yy_user_defined,yyscan_t* ptr_yy_globals );
+extern int obsql_oracle_single_byte_yyparse(ParseResult *result);
+extern int obsql_oracle_single_byte_multi_fast_parse(ParseResult *p);
+extern int obsql_oracle_single_byte_multi_values_parse(ParseResult *p);
+extern int obsql_oracle_single_byte_fast_parse(ParseResult *p);
+extern int obsql_oracle_single_byte_yylex_destroy (yyscan_t yyscanner );
+extern YY_BUFFER_STATE obsql_oracle_single_byte_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
+extern void obsql_oracle_single_byte_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
+extern void obsql_oracle_single_byte_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
 extern int obsql_oracle_utf8_yylex_init_extra(YY_EXTRA_TYPE yy_user_defined,yyscan_t* ptr_yy_globals );
 extern int obsql_oracle_utf8_yyparse(ParseResult *result);
 extern int obsql_oracle_utf8_multi_fast_parse(ParseResult *p);
@@ -89,11 +89,16 @@ int parse_init(ParseResult *p)
         case 46/*CS_TYPE_UTF8MB4_BIN*/:
         case 63/*CS_TYPE_BINARY*/:
         case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
+        case 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/:
           ret = obsql_oracle_utf8_yylex_init_extra(p, &(p->yyscan_info_));
           break;
         case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
         case 47/*CS_TYPE_LATIN1_BIN*/:
-          ret = obsql_oracle_latin1_yylex_init_extra(p, &(p->yyscan_info_));
+        case 11/*CS_TYPE_ASCII_GENERAL_CI*/:
+        case 65/*CS_TYPE_ASCII_BIN*/:
+        case 18/*CS_TYPE_TIS620_THAI_CI*/:
+        case 89/*CS_TYPE_TIS620_BIN*/:
+          ret = obsql_oracle_single_byte_yylex_init_extra(p, &(p->yyscan_info_));
           break;
         default: {
           ret = -1;
@@ -145,11 +150,16 @@ int parse_terminate(ParseResult *p)
         case 46/*CS_TYPE_UTF8MB4_BIN*/:
         case 63/*CS_TYPE_BINARY*/:
         case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
+        case 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/:
           ret = obsql_oracle_utf8_yylex_destroy(p->yyscan_info_);
           break;
         case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
         case 47/*CS_TYPE_LATIN1_BIN*/:
-          ret = obsql_oracle_latin1_yylex_destroy(p->yyscan_info_);
+        case 11/*CS_TYPE_ASCII_GENERAL_CI*/:
+        case 65/*CS_TYPE_ASCII_BIN*/:
+        case 18/*CS_TYPE_TIS620_THAI_CI*/:
+        case 89/*CS_TYPE_TIS620_BIN*/:
+          ret = obsql_oracle_single_byte_yylex_destroy(p->yyscan_info_);
           break;
         default: {
           ret = -1;
@@ -264,7 +274,9 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
             case 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/:
             case 46/*CS_TYPE_UTF8MB4_BIN*/:
             case 63/*CS_TYPE_BINARY*/:
-            case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:{
+            case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
+            case 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/:
+            {
               YY_BUFFER_STATE bp = obsql_oracle_utf8_yy_scan_bytes(buf, len, p->yyscan_info_);
               obsql_oracle_utf8_yy_switch_to_buffer(bp, p->yyscan_info_);
               int tmp_ret = -1;
@@ -291,19 +303,23 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
               obsql_oracle_utf8_yy_delete_buffer(bp, p->yyscan_info_);
               break;
             }
+            case 11/*CS_TYPE_ASCII_GENERAL_CI*/:
+            case 65/*CS_TYPE_ASCII_BIN*/:
+            case 18/*CS_TYPE_TIS620_THAI_CI*/:
+            case 89/*CS_TYPE_TIS620_BIN*/:
             case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
             case 47/*CS_TYPE_LATIN1_BIN*/:{
-              YY_BUFFER_STATE bp = obsql_oracle_latin1_yy_scan_bytes(buf, len, p->yyscan_info_);
-              obsql_oracle_latin1_yy_switch_to_buffer(bp, p->yyscan_info_);
+              YY_BUFFER_STATE bp = obsql_oracle_single_byte_yy_scan_bytes(buf, len, p->yyscan_info_);
+              obsql_oracle_single_byte_yy_switch_to_buffer(bp, p->yyscan_info_);
               int tmp_ret = -1;
               if (p->is_fp_) {
-                tmp_ret = obsql_oracle_latin1_fast_parse(p);
+                tmp_ret = obsql_oracle_single_byte_fast_parse(p);
               } else if (p->is_multi_query_) {
-                tmp_ret = obsql_oracle_latin1_multi_fast_parse(p);
+                tmp_ret = obsql_oracle_single_byte_multi_fast_parse(p);
               } else if (p->is_multi_values_parser_) {
-                tmp_ret = obsql_oracle_latin1_multi_values_parse(p);
+                tmp_ret = obsql_oracle_single_byte_multi_values_parse(p);
               } else {
-                tmp_ret = obsql_oracle_latin1_yyparse(p);
+                tmp_ret = obsql_oracle_single_byte_yyparse(p);
               }
               if (0 == tmp_ret) {
                 ret = OB_PARSER_SUCCESS;
@@ -316,7 +332,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
                   ret = OB_PARSER_ERR_PARSE_SQL;
                 }
               }
-              obsql_oracle_latin1_yy_delete_buffer(bp, p->yyscan_info_);
+              obsql_oracle_single_byte_yy_delete_buffer(bp, p->yyscan_info_);
               break;
             }
             default: {

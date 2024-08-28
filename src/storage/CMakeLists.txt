@@ -43,11 +43,11 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_sstable_printer.cpp
   blocksstable/ob_storage_cache_suite.cpp
   blocksstable/ob_super_block_buffer_holder.cpp
-  blocksstable/ob_tmp_file.cpp
-  blocksstable/ob_tmp_file_cache.cpp
-  blocksstable/ob_tmp_file_store.cpp
+  blocksstable/ob_storage_datum.cpp
   blocksstable/ob_datum_row.cpp
   blocksstable/ob_datum_rowkey.cpp
+  blocksstable/ob_datum_row_store.cpp
+  blocksstable/ob_datum_row_utils.cpp
   blocksstable/ob_data_store_desc.cpp
   blocksstable/ob_table_flag.cpp
   blocksstable/ob_datum_rowkey_vector.cpp
@@ -142,6 +142,27 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_sstable_sec_meta_iterator.cpp
 )
 
+ob_set_subtarget(ob_storage tmp_file
+  tmp_file/ob_shared_nothing_tmp_file.cpp
+  tmp_file/ob_tmp_file_write_buffer_index_cache.cpp
+  tmp_file/ob_tmp_file_cache.cpp
+  tmp_file/ob_tmp_file_io_define.cpp
+  tmp_file/ob_tmp_file_io_ctx.cpp
+  tmp_file/ob_tmp_file_global.cpp
+  tmp_file/ob_tmp_file_block_manager.cpp
+  tmp_file/ob_tmp_file_manager.cpp
+  tmp_file/ob_tmp_file_eviction_manager.cpp
+  tmp_file/ob_tmp_file_flush_priority_manager.cpp
+  tmp_file/ob_tmp_file_flush_list_iterator.cpp
+  tmp_file/ob_tmp_file_meta_tree.cpp
+  tmp_file/ob_tmp_file_flush_manager.cpp
+  tmp_file/ob_tmp_file_flush_ctx.cpp
+  tmp_file/ob_tmp_file_page_cache_controller.cpp
+  tmp_file/ob_tmp_file_thread_wrapper.cpp
+  tmp_file/ob_tmp_file_thread_job.cpp
+  tmp_file/ob_tmp_file_write_buffer_pool.cpp
+)
+
 ob_set_subtarget(ob_storage slog
   slog/ob_server_slog_writer.cpp
   slog/ob_storage_log_batch_header.cpp
@@ -217,6 +238,7 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_block_tx_service.cpp
   high_availability/ob_storage_ha_diagnose_mgr.cpp
   high_availability/ob_storage_ha_diagnose_service.cpp
+  high_availability/ob_cs_replica_migration.cpp
 )
 
 ob_set_subtarget(ob_storage restore
@@ -498,6 +520,7 @@ ob_set_subtarget(ob_storage column_store
   column_store/ob_virtual_cg_scanner.cpp
   column_store/ob_column_store_util.cpp
   column_store/ob_cg_group_by_scanner.cpp
+  column_store/ob_column_store_replica_util.cpp
 )
 
 ob_set_subtarget(ob_storage access
@@ -691,6 +714,7 @@ ob_set_subtarget(ob_storage memtable
 
 ob_set_subtarget(ob_storage memtable_mvcc
   memtable/mvcc/ob_multi_version_iterator.cpp
+  memtable/mvcc/ob_mvcc_acc_ctx.cpp
   memtable/mvcc/ob_mvcc_ctx.cpp
   memtable/mvcc/ob_mvcc_engine.cpp
   memtable/mvcc/ob_mvcc_iterator.cpp

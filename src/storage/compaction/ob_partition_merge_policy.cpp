@@ -63,7 +63,8 @@ ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[
       ObPartitionMergePolicy::not_support_merge_type,
       ObPartitionMergePolicy::not_support_merge_type,
       ObPartitionMergePolicy::not_support_merge_type,
-      ObPartitionMergePolicy::get_mds_merge_tables
+      ObPartitionMergePolicy::get_mds_merge_tables,
+      ObPartitionMergePolicy::get_convert_co_major_merge_tables
     };
 
 
@@ -228,6 +229,44 @@ int ObPartitionMergePolicy::get_mds_merge_tables(
     result.handle_.reset();
   } else {
     result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
+  }
+  return ret;
+}
+
+int ObPartitionMergePolicy::get_convert_co_major_merge_tables(
+    const storage::ObGetMergeTablesParam &param,
+    storage::ObLS &ls,
+    const storage::ObTablet &tablet,
+    storage::ObGetMergeTablesResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObSSTable *base_table = nullptr;
+  result.reset();
+  result.merge_version_ = param.merge_version_;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_UNLIKELY(!table_store_wrapper.get_member()->is_valid()
+                      || !param.is_valid()
+                      || !is_convert_co_major_merge(param.merge_type_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), KPC(table_store_wrapper.get_member()), K(param));
+  } else if (OB_ISNULL(base_table = static_cast<ObSSTable*>(
+      table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_ERROR("major sstable not exist", K(ret), KPC(table_store_wrapper.get_member()));
+  } else if (OB_FAIL(result.handle_.add_sstable(base_table, table_store_wrapper.get_meta_handle()))) {
+    LOG_WARN("failed to add base_table to result", K(ret));
+  } else if (OB_UNLIKELY(base_table->get_snapshot_version() != param.merge_version_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("convert co major merge should not change major snapshot version", K(ret), KPC(base_table), K(param), K(tablet));
+  } else {
+    result.version_range_.base_version_ = 0;
+    result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
+    result.version_range_.snapshot_version_ = param.merge_version_;
+    if (OB_FAIL(get_multi_version_start(param.merge_type_, ls, tablet, result.version_range_, result.snapshot_info_))) {
+      LOG_WARN("failed to get multi version_start", K(ret));
+    }
   }
   return ret;
 }

@@ -110,6 +110,20 @@ public:
       column_cnt_(0),
       column_idxs_(nullptr)
   {}
+  ObStorageColumnGroupSchema(const share::schema::ObColumnGroupType type, const ObCompressorType compressor_type,
+      const ObRowStoreType row_store_type, const uint32_t block_size, const uint16_t schema_column_cnt, const uint16_t rowkey_column_cnt,
+          const uint16_t schema_rowkey_column_cnt, const uint16_t column_cnt, uint16_t *column_idxs)
+  : version_(COLUMN_GRUOP_SCHEMA_VERSION),
+    type_(type),
+    compressor_type_(compressor_type),
+    row_store_type_(row_store_type),
+    block_size_(block_size),
+    schema_column_cnt_(schema_column_cnt),
+    rowkey_column_cnt_(rowkey_column_cnt),
+    schema_rowkey_column_cnt_(schema_rowkey_column_cnt),
+    column_cnt_(column_cnt),
+    column_idxs_(column_idxs)
+  {}
   ~ObStorageColumnGroupSchema() = default;
   OB_INLINE void reset() { MEMSET(this, 0, sizeof(ObStorageColumnGroupSchema)); }
   void destroy(ObIAllocator &allocator);
@@ -164,12 +178,14 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info = false,
-      const int64_t compat_version = STORAGE_SCHEMA_VERSION_LATEST);
+      const int64_t compat_version = STORAGE_SCHEMA_VERSION_LATEST,
+      const bool generate_cs_replica_cg_array = false);
   int init(
       common::ObIAllocator &allocator,
       const ObStorageSchema &old_schema,
       const bool skip_column_info = false,
-      const ObStorageSchema *column_group_schema = nullptr);
+      const ObStorageSchema *column_group_schema = nullptr,
+      const bool generate_cs_replica_cg_array = false);
   int deep_copy_column_array(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
@@ -217,6 +233,7 @@ public:
   inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
   inline bool is_mlog_table() const { return share::schema::ObTableSchema::is_mlog_table(table_type_); }
   inline bool is_fts_index() const { return share::schema::is_fts_index(index_type_); }
+  inline bool is_user_data_table() const { return share::schema::ObTableSchema::is_user_data_table(table_type_); }
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }
   virtual inline int64_t get_block_size() const override { return block_size_; }
 
@@ -250,6 +267,7 @@ public:
                            blocksstable::ObDatumRow &default_row) const;
   const ObStorageColumnSchema *get_column_schema(const int64_t column_id) const;
   int mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_store_cg) const;
+  int transform_from_row_to_columnar(); // TODO(chengkong): is used?
   int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
   // This function only get cg idx for actually stored column
   int get_column_group_index(
@@ -289,6 +307,8 @@ private:
   int generate_str(const share::schema::ObTableSchema &input_schema);
   int generate_column_array(const share::schema::ObTableSchema &input_schema);
   int generate_column_group_array(const share::schema::ObTableSchema &input_schema, common::ObIAllocator &allocator);
+  int generate_cs_replica_cg_array(common::ObIAllocator &allocator, ObIArray<ObStorageColumnGroupSchema> &cg_schemas) const; // also used by ddl
+  int generate_cs_replica_cg_array();
   int get_column_ids_without_rowkey(
       common::ObIArray<share::schema::ObColDesc> &column_ids,
       bool no_virtual) const;
@@ -306,6 +326,8 @@ private:
   int64_t get_column_array_serialize_length(const common::ObIArray<ObStorageColumnSchema> &array) const;
   int deserialize_skip_idx_attr_array(const char *buf, const int64_t data_len, int64_t &pos);
   int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type) const;
+  int generate_rowkey_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type, common::ObIAllocator &allocator) const;
+  int generate_single_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type, const uint16_t column_idx, common::ObIAllocator &allocator) const;
   template <typename T>
   int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>

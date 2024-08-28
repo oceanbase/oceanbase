@@ -30,6 +30,55 @@ namespace sql
 {
 class ObDataInFileStruct;
 
+struct ObODPSGeneralFormat {
+  ObODPSGeneralFormat() :
+    access_type_(),
+    access_id_(),
+    access_key_(),
+    sts_token_(),
+    endpoint_(),
+    project_(),
+    schema_(),
+    table_(),
+    quota_(),
+    compression_code_()
+  {}
+  int deep_copy_str(const ObString &src,
+                    ObString &dest);
+  int deep_copy(const ObODPSGeneralFormat &src);
+  int encrypt_str(common::ObString &src, common::ObString &dst);
+  int decrypt_str(common::ObString &src, common::ObString &dst);
+  int encrypt();
+  int decrypt();
+  static constexpr const char *OPTION_NAMES[] = {
+    "ACCESSTYPE",
+    "ACCESSID",
+    "ACCESSKEY",
+    "STSTOKEN",
+    "ENDPOINT",
+    "PROJECT_NAME",
+    "SCHEMA_NAME",
+    "TABLE_NAME",
+    "QUOTA_NAME",
+    "COMPRESSION_CODE",
+  };
+  common::ObString access_type_;
+  common::ObString access_id_;
+  common::ObString access_key_;
+  common::ObString sts_token_;
+  common::ObString endpoint_;
+  common::ObString project_;
+  common::ObString schema_;
+  common::ObString table_;
+  common::ObString quota_;
+  common::ObString compression_code_;
+  common::ObArenaAllocator arena_alloc_;
+  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token), K_(endpoint), K_(project), K_(schema), K_(table), K_(quota), K_(compression_code));
+  OB_UNIS_VERSION(1);
+};
+
 struct ObCSVGeneralFormat {
   ObCSVGeneralFormat () :
     line_start_str_(),
@@ -40,6 +89,7 @@ struct ObCSVGeneralFormat {
     cs_type_(common::CHARSET_INVALID),
     skip_header_lines_(0),
     skip_blank_lines_(false),
+    ignore_extra_fields_(false),
     trim_space_(false),
     null_if_(),
     empty_field_as_null_(false),
@@ -65,6 +115,7 @@ struct ObCSVGeneralFormat {
   common::ObCharsetType cs_type_; // charset type of format strings
   int64_t skip_header_lines_;
   bool skip_blank_lines_;
+  bool ignore_extra_fields_;
   bool trim_space_;
   common::ObArrayWrap<common::ObString> null_if_;
   bool empty_field_as_null_;
@@ -442,7 +493,8 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
     }
     if (OB_LIKELY(find_new_line) || is_end_file) {
       if (!format_.skip_blank_lines_ || field_idx > 0) {
-        if (field_idx != format_.file_column_nums_) {
+        if (field_idx < format_.file_column_nums_
+            || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
@@ -486,6 +538,26 @@ struct ObOriginFileFormat
   common::ObString origin_null_if_str_;
 };
 
+enum class ObLoadCompressionFormat
+{
+  INVALID,
+  NONE,
+  AUTO,
+  GZIP,
+  DEFLATE,
+  ZSTD,
+};
+
+const char *compression_format_to_string(ObLoadCompressionFormat compression_format);
+int compression_format_from_string(ObString compression_name, ObLoadCompressionFormat &compression_format);
+
+/**
+ * guess compression format from filename suffix
+ *
+ * Return NONE if none of the known compression format matches.
+ */
+int compression_format_from_suffix(ObString filename, ObLoadCompressionFormat &compression_format);
+
 struct ObExternalFileFormat
 {
   struct StringData {
@@ -501,6 +573,8 @@ struct ObExternalFileFormat
     INVALID_FORMAT = -1,
     CSV_FORMAT,
     PARQUET_FORMAT,
+    ODPS_FORMAT,
+    ORC_FORMAT,
     MAX_FORMAT
   };
 
@@ -509,7 +583,7 @@ struct ObExternalFileFormat
     OPT_BINARY_AS_TEXT = 1 << 1,
   };
 
-  ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
+  ObExternalFileFormat() : format_type_(INVALID_FORMAT), compression_format_(ObLoadCompressionFormat::NONE) {}
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
   int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
@@ -518,8 +592,9 @@ struct ObExternalFileFormat
   ObOriginFileFormat origin_file_format_str_;
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
+  sql::ObODPSGeneralFormat odps_format_;
+  ObLoadCompressionFormat compression_format_;
   uint64_t options_;
-
   static const char *FORMAT_TYPE_STR[];
 };
 

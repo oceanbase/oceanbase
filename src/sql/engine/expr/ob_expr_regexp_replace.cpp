@@ -110,7 +110,7 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
         if (OB_FAIL(ObExprRegexContext::check_binary_compatible(types, 3))) {
           LOG_WARN("types are not compatible with binary.", K(ret));
         } else {
-          ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx.get_coll_type());
+          ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx);
           is_case_sensitive = ObCharset::is_bin_sort(type.get_collation_type());
         }
       }
@@ -525,7 +525,7 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
         res_vec->set_null(i);
       } else {
         // if text is lob type, res_replace only get locator
-        ret = vector_regexp_replace_convert<StrDiscVec, StrDiscVec>(
+        ret = vector_regexp_replace_convert<TextVec, ResVec>(
                                       VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
                                       expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
       }
@@ -618,7 +618,7 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
             res_vec->set_null(i);
           } else {
             // if text is lob type, res_replace only get locator;
-            ret = vector_regexp_replace_convert<StrDiscVec, StrDiscVec>(
+            ret = vector_regexp_replace_convert<TextVec, ResVec>(
                                       VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
                                       expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
           }
@@ -661,7 +661,7 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
         } else if (res_replace.empty() && lib::is_oracle_mode()) {
           res_vec->set_null(i);
         } else {
-          ret = vector_regexp_replace_convert<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST,
+          ret = vector_regexp_replace_convert<TextVec, ResVec>(VECTOR_EVAL_FUNC_ARG_LIST,
                     res_replace, is_no_pattern_to_replace, res_coll_type, out_alloc, tmp_alloc, i);
         }
       }

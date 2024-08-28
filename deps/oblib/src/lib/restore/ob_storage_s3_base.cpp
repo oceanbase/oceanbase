@@ -992,6 +992,11 @@ int ObStorageS3Base::open(const ObString &uri, ObObjectStorageInfo *storage_info
     OB_LOG(WARN, "faied to get s3 client", K(ret));
   } else {
     checksum_type_ = storage_info->get_checksum_type();
+#ifdef ERRSIM
+    if (OB_NOT_NULL(storage_info) && (OB_SUCCESS != EventTable::EN_ENABLE_LOG_OBJECT_STORAGE_CHECKSUM_TYPE)) {
+      OB_LOG(ERROR, "errsim backup io with checksum type", "checksum_type", storage_info->get_checksum_type_str());
+    }
+#endif
     if (OB_UNLIKELY(!is_s3_supported_checksum(checksum_type_))) {
       ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for s3", K(ret), K_(checksum_type));

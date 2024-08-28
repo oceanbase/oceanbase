@@ -14,6 +14,7 @@
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "share/tablet/ob_tablet_filter.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "share/ob_tablet_replica_checksum_operator.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/compaction/ob_tenant_medium_checker.h"
@@ -86,7 +87,12 @@ public:
     const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
     const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
-    ObCompactionTimeGuard &time_guard);
+    ObCompactionTimeGuard &time_guard,
+    const share::ObLSColumnReplicaCache &ls_cs_replica_cache);
+  static int check_replica_checksum_items(
+      const ObIArray<ObTabletReplicaChecksumItem> &checksum_items,
+      const ObLSColumnReplicaCache &ls_cs_replica_cache,
+      const bool is_medium_checker);
 
   int schedule_next_medium_for_leader(
     const int64_t major_snapshot,
@@ -132,13 +138,14 @@ protected:
       const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
       bool &merge_finish);
   static int init_tablet_filters(share::ObTabletReplicaFilterHolder &filters);
-  static int check_medium_checksum(
+  static int check_tablet_checksum(
       const ObIArray<ObTabletReplicaChecksumItem> &checksum_items,
+      const ObLSColumnReplicaCache &ls_cs_replica_cache,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      const bool is_medium_checker,
       ObIArray<ObTabletLSPair> &error_pairs,
-      int64_t &item_idx,
       int &check_ret);
-  static int batch_check_medium_checksum(
-      const ObIArray<ObTabletReplicaChecksumItem> &checksum_items);
   int choose_medium_snapshot(
       const int64_t max_sync_medium_scn,
       ObMediumCompactionInfo &medium_info,

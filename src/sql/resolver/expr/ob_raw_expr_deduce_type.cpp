@@ -529,6 +529,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
         }
       }
     }
+
     if (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0) {
       result_type.set_has_lob_header();
     }
@@ -581,6 +582,13 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
           LOG_WARN("function not implement calc result type", K(ret));
         }
         LOG_WARN("fail to calc result type with const arguments", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // refine result type precision and scale here
+      if (lib::is_mysql_mode() && result_type.is_decimal_int()) {
+        result_type.set_precision(MIN(result_type.get_precision(),
+                                      OB_MAX_DECIMAL_POSSIBLE_PRECISION));
       }
     }
     if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
@@ -2423,7 +2431,6 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
         LOG_WARN("fail to calc result type", K(ret), K(types));
       }
     }
-
     if (OB_SUCC(ret) && T_FUN_SYS_ANY_VALUE == expr.get_expr_type()) {
       ObRawExpr *first_param = NULL;
       if (OB_ISNULL(first_param = expr.get_param_expr(0))) {
@@ -2553,6 +2560,8 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
   result_number_type.set_number();
 
   common::ObIArray<ObRawExpr *> &func_params = expr.get_func_params();
+  ObExprTypeCtx type_ctx;
+  ObSQLUtils::init_type_ctx(my_session_, type_ctx);
   if (func_params.count() <= 0) {
     if (NULL == expr.get_agg_expr()) {
       ObExprResType result_type(alloc_);
@@ -2671,7 +2680,6 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
   } else if (T_WIN_FUN_LEAD == expr.get_func_type()
              || T_WIN_FUN_LAG == expr.get_func_type()) {
     if (is_mysql_mode() && func_params.count() == 3) { //compatiable with mysql
-      const ObLengthSemantics default_ls = my_session_->get_actual_nls_length_semantics();
       ObExprResType res_type;
       ObSEArray<ObExprResType, 2> types;
       ObCollationType coll_type = CS_TYPE_INVALID;
@@ -2684,9 +2692,8 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       } else if (OB_FAIL(ObExprOperator::aggregate_result_type_for_merge(res_type,
                                                                   &types.at(0),
                                                                   types.count(),
-                                                                  coll_type,
                                                                   false,
-                                                                  default_ls))) {
+                                                                  type_ctx))) {
         LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
       } else {
         if (res_type.is_json()) {
@@ -2918,7 +2925,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         LOG_WARN("fail to push_back", K(ret));
       } else if (OB_FAIL(dummy_op.get_cmp_result_type3(result_type, need_no_cast,
                                                        &types.at(0), types.count(), has_lower,
-                                                       *my_session_))) {
+                                                       type_ctx))) {
         LOG_WARN("fail to get_cmp_result_type3", K(ret));
       } else {
         result_type.set_accuracy(result_type.get_calc_accuracy());
@@ -3136,9 +3143,13 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
                                                           ObExprResType &result_type)
 {
   int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(my_session_));
+  CK(OB_NOT_NULL(expr_factory_));
   ObArray<ObExprResType> types;
   expr.set_data_type(ObVarcharType);
   const ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs();
+  ObExprTypeCtx type_ctx;
+  ObSQLUtils::init_type_ctx(my_session_, type_ctx);
   for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
     ObRawExpr *real_param_expr = real_parm_exprs.at(i);
     if (OB_ISNULL(real_param_expr)) {
@@ -3152,8 +3163,6 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
                                                 K(real_param_expr->get_result_type()));
     }
   }
-  CK(OB_NOT_NULL(my_session_));
-  CK(OB_NOT_NULL(expr_factory_));
   ObCollationType coll_type = CS_TYPE_INVALID;
   OC( (my_session_->get_collation_connection)(coll_type) );
 
@@ -3189,7 +3198,7 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(dummy_op.aggregate_charsets_for_string_result(
                 result_type, (types.count() == 0 ? NULL : &(types.at(0))),
-                types.count(), coll_type))) {
+                types.count(), type_ctx))) {
       LOG_WARN("fail to aggregate charsets for string result", K(ret), K(types));
     } else {
       expr.set_result_type(result_type);
@@ -3205,6 +3214,7 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
     ObExprResType result_type(alloc_);
     result_type.set_varchar();
     result_type.set_collation_type(expr.get_result_type().get_collation_type());
+    result_type.set_collation_level(expr.get_result_type().get_collation_level());
     if (lib::is_oracle_mode()) {
       result_type.set_length_semantics(expr.get_result_type().get_length_semantics());
     }

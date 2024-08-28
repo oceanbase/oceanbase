@@ -102,16 +102,17 @@ struct TableDependInfo {
 
 struct SubPlanInfo
 {
-  SubPlanInfo() : init_expr_(NULL), subplan_(NULL), init_plan_(false) {}
+  SubPlanInfo() : init_expr_(NULL), subplan_(NULL), init_plan_(false), allocated_(false) {}
   SubPlanInfo(ObQueryRefRawExpr *expr, ObLogPlan *plan, bool init_)
-  : init_expr_(expr), subplan_(plan), init_plan_(init_) {}
+  : init_expr_(expr), subplan_(plan), init_plan_(init_), allocated_(false) {}
   virtual ~SubPlanInfo() {}
   void set_subplan(ObLogPlan *plan) { subplan_ = plan; }
 
   ObQueryRefRawExpr *init_expr_;
   ObLogPlan *subplan_;
   bool init_plan_;
-  TO_STRING_KV(K_(init_expr), K_(subplan), K_(init_plan));
+  bool allocated_;
+  TO_STRING_KV(K_(init_expr), K_(subplan), K_(init_plan), K_(allocated));
 };
 
 struct ObDistinctAggrBatch
@@ -319,9 +320,6 @@ public:
   int sort_pwj_constraint(ObLocationConstraintContext &location_constraint) const;
   int resolve_dup_tab_constraint(ObLocationConstraintContext &location_constraint) const;
 
-  int get_from_table_items(const ObIArray<FromItem> &from_items,
-                          ObIArray<TableItem *> &table_items);
-
   int get_current_semi_infos(const ObIArray<SemiInfo*> &semi_infos,
                              const ObIArray<TableItem*> &table_items,
                              ObIArray<SemiInfo*> &current_semi_infos);
@@ -426,6 +424,13 @@ public:
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
   void set_nonrecursive_plan_for_fake_cte(ObSelectLogPlan *plan) { nonrecursive_plan_for_fake_cte_ = plan; }
   ObSelectLogPlan *get_nonrecursive_plan_for_fake_cte() { return nonrecursive_plan_for_fake_cte_; }
+
+  int add_exec_params_meta(ObIArray<ObExecParamRawExpr *> &exec_params,
+                           const OptTableMetas &table_metas,
+                           const OptSelectivityCtx &ctx);
+  int add_query_ref_meta(ObQueryRefRawExpr *expr,
+                         const OptTableMetas &child_table_metas,
+                         const OptSelectivityCtx &child_ctx);
 public:
 
   struct All_Candidate_Plans
@@ -477,6 +482,17 @@ public:
     }
     virtual ~GroupingOpHelper() {}
 
+    void set_ignore_hint()  { ignore_hint_ = true;  }
+    void clear_ignore_hint()  { ignore_hint_ = false; }
+    inline bool allow_basic() const { return ignore_hint_ || (!force_partition_wise_ && !force_dist_hash_); }
+    inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ && !force_partition_wise_); }
+    inline bool allow_partition_wise(bool parallel_more_than_part_cnt) const
+    {
+      bool disable_by_rule = parallel_more_than_part_cnt && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
+      return ignore_hint_ ? !disable_by_rule
+                          : (disable_by_rule ? force_partition_wise_ : (!force_basic_ && !force_dist_hash_));
+    }
+
     bool can_storage_pushdown_;
     bool can_basic_pushdown_;
     bool can_three_stage_pushdown_;
@@ -485,7 +501,13 @@ public:
     bool force_use_merge_; // has no_use_hash_aggregation/no_use_hash_distinct hint
     bool force_part_sort_;  // force use partition sort for merge group by
     bool force_normal_sort_;  // disable use partition sort for merge group by
+    bool force_basic_;          // pq hint force use basic plan
+    bool force_partition_wise_; // pq hint force use partition wise plan
+    bool force_dist_hash_;      // pq hint force use hash distributed method plan
     bool is_scalar_group_by_;
+    bool is_from_povit_;
+    bool ignore_hint_;
+    uint64_t optimizer_features_enable_version_;
     ObSEArray<ObRawExpr*, 8> distinct_exprs_;
 
     // context for three stage group by push down
@@ -510,7 +532,15 @@ public:
                  K_(can_rollup_pushdown),
                  K_(force_use_hash),
                  K_(force_use_merge),
+                 K_(force_part_sort),
+                 K_(force_normal_sort),
+                 K_(force_basic),
+                 K_(force_partition_wise),
+                 K_(force_dist_hash),
                  K_(is_scalar_group_by),
+                 K_(is_from_povit),
+                 K_(ignore_hint),
+                 K_(optimizer_features_enable_version),
                  K_(distinct_exprs),
                  K_(pushdown_groupby_columns),
                  K_(group_ndv),
@@ -667,6 +697,11 @@ public:
                                     const ObIArray<ObRawExpr*> &having_exprs,
                                     const bool is_from_povit);
 
+  int inner_candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &agg_items,
+                                          const ObIArray<ObRawExpr*> &having_exprs,
+                                          GroupingOpHelper &groupby_helper,
+                                          ObIArray<CandidatePlan> &groupby_plans);
+
   int prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_exprs,
                                const ObIArray<ObRawExpr *> &rollup_exprs,
                                GroupingOpHelper &helper);
@@ -704,7 +739,6 @@ public:
 
   int create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &agg_items,
                               const ObIArray<ObRawExpr*> &having_exprs,
-                              const bool is_from_povit,
                               GroupingOpHelper &groupby_helper,
                               ObLogicalOperator *&top);
 
@@ -955,7 +989,10 @@ public:
 
   int allocate_select_into_as_top(ObLogicalOperator *&old_top);
 
-  int check_select_into(bool &has_select_into, bool &is_single, bool &has_order_by);
+  int check_select_into(bool &has_select_into,
+                        bool &is_single,
+                        bool &has_order_by,
+                        ObRawExpr *&file_partition_expr);
 
   int allocate_expr_values_as_top(ObLogicalOperator *&top,
                                   const ObIArray<ObRawExpr*> *filter_exprs = NULL);
@@ -1359,6 +1396,7 @@ public:
 
   int will_use_column_store(const uint64_t table_id,
                             const uint64_t index_id,
+                            const uint64_t ref_table_id,
                             bool &use_column_store,
                             bool &use_row_store);
 
@@ -1495,35 +1533,16 @@ protected:
                                 bool &is_valid_join,
                                 ObJoinOrder *&join_tree);
 
-  int is_detector_used(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      ObConflictDetector *detector,
-                      bool &is_used);
-
-  int choose_join_info(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      ObIArray<ObConflictDetector*> &valid_detectors,
-                      bool delay_cross_product,
-                      bool &is_strict_order);
-
-  int check_join_info(const ObIArray<ObConflictDetector*> &valid_detectors,
-                      ObJoinType &join_type,
-                      bool &is_valid);
-
-  int merge_join_info(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      const ObIArray<ObConflictDetector*> &valid_detectors,
-                      JoinInfo &join_info);
-
   int check_detector_valid(ObJoinOrder *left_tree,
                           ObJoinOrder *right_tree,
                           const ObIArray<ObConflictDetector*> &valid_detectors,
                           ObJoinOrder *cur_tree,
                           bool &is_valid);
 
-  int remove_redundancy_pred(ObJoinOrder *left_tree,
-                            ObJoinOrder *right_tree,
-                            JoinInfo &join_info);
+  int process_join_pred(ObJoinOrder *left_tree,
+                        ObJoinOrder *right_tree,
+                        JoinInfo &join_info);
+
 
   int try_keep_pred_join_same_tables(ObJoinOrder *left_tree,
                                      ObJoinOrder *right_tree,
@@ -1662,6 +1681,8 @@ protected:
 
   int init_lateral_table_depend_info(const ObIArray<TableItem*> &table_items);
 private: // member functions
+  static int distribute_filters_to_baserels(ObIArray<ObJoinOrder*> &base_level,
+                                            ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters);
   static int strong_select_replicas(const common::ObAddr &local_server,
                                     common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                     bool &is_hit_partition,
@@ -1871,6 +1892,46 @@ private:
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> new_or_quals_;
 
   ObSelectLogPlan *nonrecursive_plan_for_fake_cte_;
+
+  // has_allocated_range_shuffle_ is a flag for select into
+  // when flag = true, logical plan is like
+  // select into
+  //     |
+  //    sort
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(range)
+  // condition: partition expr is null or const expr, single is false, has order by without limit
+  //
+  // when flag = false, logical plan is like
+  // select into
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(random)
+  // condition: single is false, no order by, partition expr is null or const expr
+  //
+  // or
+  //
+  // select into
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(hash)
+  // condition: single is false, no order by, partition expr is not const expr
+  //
+  // or
+  //
+  // select into
+  //     |
+  // px coordinator
+  //     |
+  // exchange out distr
+  // condition: single is true / parallel = 1 / has limit / has order by and partition by
+  //
+  // 为select into分配了range shuffle后, 在分配select into算子时不应再分配exchange算子
+  bool has_allocated_range_shuffle_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

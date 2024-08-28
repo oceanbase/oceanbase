@@ -126,7 +126,9 @@ struct ObSelectIntoItem
         is_optional_(DEFAULT_OPTIONAL_ENCLOSED),
         is_single_(DEFAULT_SINGLE_OPT),
         max_file_size_(DEFAULT_MAX_FILE_SIZE),
-        escaped_cht_()
+        escaped_cht_(),
+        file_partition_expr_(NULL),
+        buffer_size_(DEFAULT_BUFFER_SIZE)
   {
     field_str_.set_varchar(DEFAULT_FIELD_TERM_STR);
     field_str_.set_collation_type(ObCharset::get_system_collation());
@@ -151,8 +153,12 @@ struct ObSelectIntoItem
     max_file_size_ = other.max_file_size_;
     escaped_cht_ = other.escaped_cht_;
     cs_type_ = other.cs_type_;
+    file_partition_expr_ = other.file_partition_expr_;
+    buffer_size_ = other.buffer_size_;
     return user_vars_.assign(other.user_vars_);
   }
+  int deep_copy(ObIRawExprCopier &copier,
+                const ObSelectIntoItem &other);
   TO_STRING_KV(K_(into_type),
                K_(outfile_name),
                K_(field_str),
@@ -162,7 +168,8 @@ struct ObSelectIntoItem
                K_(is_single),
                K_(max_file_size),
                K_(escaped_cht),
-               K_(cs_type));
+               K_(cs_type),
+               N_EXPR, file_partition_expr_);
   ObItemType into_type_;
   common::ObObj outfile_name_;
   common::ObObj field_str_; // field terminated str
@@ -175,6 +182,9 @@ struct ObSelectIntoItem
   int64_t max_file_size_;
   common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
+  sql::ObRawExpr* file_partition_expr_;
+  int64_t buffer_size_;
+  ObPQDistributeMethod::Type dist_method_;
 
   static const char* const DEFAULT_FIELD_TERM_STR;
   static const char* const DEFAULT_LINE_TERM_STR;
@@ -182,6 +192,7 @@ struct ObSelectIntoItem
   static const bool DEFAULT_OPTIONAL_ENCLOSED;
   static const bool DEFAULT_SINGLE_OPT;
   static const int64_t DEFAULT_MAX_FILE_SIZE;
+  static const int64_t DEFAULT_BUFFER_SIZE;
   static const char DEFAULT_FIELD_ESCAPED_CHAR;
 };
 
@@ -438,6 +449,8 @@ public:
                                                into_item_->into_type_ == T_INTO_OUTFILE; }
   // check if the stmt is a Select-Project-Join(SPJ) query
   bool is_spj() const;
+  // is_spj + normal group by or scalar group by
+  bool is_spjg() const;
 
   ObRawExpr *get_expr(uint64_t expr_id);
   inline bool is_single_table_stmt() const { return (1 == get_table_size()
@@ -638,13 +651,6 @@ public:
   int add_search_item(const OrderItem &order_item) { return search_by_items_.push_back(order_item); }
   int add_cycle_item(const ColumnItem &col_item) { return cycle_by_items_.push_back(col_item); }
 
-  int add_sample_info(const SampleInfo &sample_info) { return sample_infos_.push_back(sample_info); }
-  common::ObIArray<SampleInfo> &get_sample_infos() { return sample_infos_; }
-  const common::ObIArray<SampleInfo> &get_sample_infos() const { return sample_infos_; }
-  const SampleInfo *get_sample_info_by_table_id(uint64_t table_id) const;
-  SampleInfo *get_sample_info_by_table_id(uint64_t table_id);
-  // check if a table is using sample scan
-  bool is_sample_scan(uint64_t table_id) const { return get_sample_info_by_table_id(table_id) != nullptr; }
   virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
 
   // check aggregation has distinct or group concat e.g.:
@@ -718,9 +724,6 @@ private:
   common::ObSEArray<ObGroupingSetsItem, 8, common::ModulePageAllocator, true> grouping_sets_items_;
   common::ObSEArray<ObRollupItem, 8, common::ModulePageAllocator, true> rollup_items_;
   common::ObSEArray<ObCubeItem, 8, common::ModulePageAllocator, true> cube_items_;
-
-  // sample scan infos
-  common::ObSEArray<SampleInfo, 4, common::ModulePageAllocator, true> sample_infos_;
 
   // for oracle mode only, for stmt print only
   common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> for_update_columns_;

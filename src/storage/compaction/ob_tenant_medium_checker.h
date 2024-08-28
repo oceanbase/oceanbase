@@ -95,7 +95,8 @@ public:
       int64_t end_idx,
       ObIArray<ObTabletCheckInfo> &check_tablet_ls_infos,
       ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
-      ObBatchFinishCheckStat &stat);
+      ObBatchFinishCheckStat &stat,
+      const share::ObLSColumnReplicaCache &ls_cs_replica_cache);
   int add_tablet_ls(const ObTabletID &tablet_id, const share::ObLSID &ls_id, const int64_t medium_scn);
   bool locality_cache_empty();
   TO_STRING_KV(K_(is_inited), K_(ls_locality_cache));
@@ -113,7 +114,6 @@ public:
   static const int64_t CHECK_LS_LOCALITY_INTERVAL = 5 * 60 * 1000 * 1000L; // 5m
 #endif
   static const int64_t DEFAULT_MAP_BUCKET = 1024;
-  static const int64_t MAX_BATCH_CHECK_NUM = 3000;
   typedef common::ObArray<ObTabletCheckInfo> TabletLSArray;
   typedef hash::ObHashSet<ObTabletCheckInfo, hash::NoPthreadDefendMode> TabletLSSet;
   typedef hash::ObHashMap<share::ObLSID, share::ObLSInfo> LSInfoMap;

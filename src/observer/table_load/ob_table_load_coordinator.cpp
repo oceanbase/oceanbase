@@ -17,6 +17,7 @@
 #include "observer/table_load/control/ob_table_load_control_rpc_proxy.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator_trans.h"
+#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_redef_table.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
@@ -297,6 +298,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         ObArray<int64_t> partitions;
         int64_t store_server_count = all_leader_info_array.count();
         int64_t coordinator_session_count = 0;
+        int64_t write_session_count = 0;
         int64_t min_session_count = MAX(ctx_->param_.parallel_, 2);
         int64_t max_session_count = (int64_t)tenant->unit_max_cpu() * 2;
         int64_t total_session_count = MIN(ctx_->param_.parallel_, max_session_count * store_server_count);
@@ -350,27 +352,38 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
               }
             }
           }
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
-          ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-          if (all_leader_info_array[i].addr_ == coordinator_addr) {
-            coordinator_session_count = unit.thread_count_;
-          }
-          min_session_count = MIN(min_session_count, unit.thread_count_);
-          int64_t min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * unit.thread_count_;
-          if (ctx_->schema_.is_heap_table_) {
-            if (min_unsort_memory <= memory_limit) {
-              need_sort = false;
-              unit.memory_size_ = min_unsort_memory;
-            } else {
-              need_sort = ctx_->param_.need_sort_; // allow forced non-sorting
-              unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+          for (int64_t i = 0; i < store_server_count; i++) {
+            ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+            if (all_leader_info_array[i].addr_ == coordinator_addr) {
+              coordinator_session_count = unit.thread_count_;
             }
+            min_session_count = MIN(min_session_count, unit.thread_count_);
+          }
+          if (include_cur_addr && ctx_->param_.load_mode_ == ObDirectLoadMode::LOAD_DATA) {
+            // 协调节点和数据节点都在同一个节点上，对于load data模式，分出一半的线程用于解析数据，一半的线程用于存储数据
+            write_session_count = MIN(min_session_count, (coordinator_session_count + 1) / 2);
           } else {
-            if (need_sort) {
-              unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+            write_session_count = min_session_count;
+          }
+          for (int64_t i = 0; i < store_server_count; i++) {
+            ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+            int64_t min_unsort_memory = 0;
+            if (ctx_->schema_.is_heap_table_) {
+              min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * write_session_count;
+              if (min_unsort_memory <= memory_limit) {
+                need_sort = false;
+                unit.memory_size_ = min_unsort_memory;
+              } else {
+                need_sort = ctx_->param_.need_sort_; // allow forced non-sorting
+                unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+              }
             } else {
-              unit.memory_size_ = MIN(min_unsort_memory, memory_limit);
+              min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * unit.thread_count_;
+              if (need_sort) {
+                unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+              } else {
+                unit.memory_size_ = MIN(min_unsort_memory, memory_limit);
+              }
             }
           }
         }
@@ -389,8 +402,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
           } else {
             ctx_->param_.need_sort_ = need_sort;
             ctx_->param_.session_count_ = coordinator_session_count;
-            ctx_->param_.write_session_count_ =
-                (include_cur_addr ? MIN(min_session_count, (coordinator_session_count + 1) / 2) : min_session_count);
+            ctx_->param_.write_session_count_ = write_session_count;
             ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ?
                 (need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
                 (need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
@@ -1117,7 +1129,7 @@ int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statist
                                               "TLD_TabStatNode",
                                               tenant_id))) {
       LOG_WARN("fail to create table stats map", KR(ret));
-    } else if (OB_FAIL(inc_column_stats.create(ctx_->param_.column_count_,
+    } else if (OB_FAIL(inc_column_stats.create(ctx_->schema_.store_column_count_,
                                                "TLD_ColStatBkt",
                                                "TLD_ColStatNode",
                                                tenant_id))) {
@@ -1659,10 +1671,20 @@ public:
   int set_objs(const ObTableLoadObjRowArray &obj_rows, const ObIArray<int64_t> &idx_array)
   {
     int ret = OB_SUCCESS;
+    ObTableLoadErrorRowHandler *error_row_handler = ctx_->coordinator_ctx_->error_row_handler_;
     for (int64_t i = 0; OB_SUCC(ret) && (i < obj_rows.count()); ++i) {
       const ObTableLoadObjRow &src_obj_row = obj_rows.at(i);
       ObTableLoadObjRow out_obj_row;
-      if (OB_FAIL(src_obj_row.project(idx_array, out_obj_row))) {
+      // 对于客户端导入场景, 需要处理多列或者少列
+      if (OB_UNLIKELY(src_obj_row.count_ != ctx_->param_.column_count_)) {
+        ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
+        LOG_WARN("column count doesn't match value count", KR(ret), K(src_obj_row),
+                 K(ctx_->param_.column_count_));
+        ObNewRow new_row(src_obj_row.cells_, src_obj_row.count_);
+        if (OB_FAIL(error_row_handler->handle_error_row(ret, new_row))) {
+          LOG_WARN("fail to handle error row", KR(ret));
+        }
+      } else if (OB_FAIL(src_obj_row.project(idx_array, out_obj_row))) {
         LOG_WARN("failed to projecte out_obj_row", KR(ret), K(src_obj_row.count_));
       } else if (OB_FAIL(obj_rows_.push_back(out_obj_row))) {
         LOG_WARN("failed to add row to obj_rows_", KR(ret), K(out_obj_row));
@@ -1742,12 +1764,12 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id, int32_t se
     // 取出bucket_writer
     else if (OB_FAIL(trans->get_bucket_writer_for_write(bucket_writer))) {
       LOG_WARN("fail to get bucket writer", KR(ret));
-    } else if (OB_FAIL(bucket_writer->advance_sequence_no(session_id, sequence_no, guard))) {
-      if (OB_UNLIKELY(OB_ENTRY_EXIST != ret)) {
-        LOG_WARN("fail to advance sequence no", KR(ret), K(session_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
+    // } else if (OB_FAIL(bucket_writer->advance_sequence_no(session_id, sequence_no, guard))) {
+    //   if (OB_UNLIKELY(OB_ENTRY_EXIST != ret)) {
+    //     LOG_WARN("fail to advance sequence no", KR(ret), K(session_id));
+    //   } else {
+    //     ret = OB_SUCCESS;
+    //   }
     } else {
       ObTableLoadTask *task = nullptr;
       WriteTaskProcessor *processor = nullptr;

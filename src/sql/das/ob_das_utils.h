@@ -53,7 +53,7 @@ public:
                                  const ObDASWriteBuffer::DmlRow &dml_row,
                                  const IntFixedArray &row_projector,
                                  common::ObIAllocator &allocator,
-                                 common::ObNewRow &storage_row);
+                                 blocksstable::ObDatumRow &storage_row);
   static int reshape_storage_value(const common::ObObjMeta &col_type,
                                    const common::ObAccuracy &col_accuracy,
                                    common::ObIAllocator &allocator,
@@ -93,7 +93,7 @@ public:
   }
   static int generate_mlog_row(const common::ObTabletID &tablet_id,
                                const storage::ObDMLBaseParam &dml_param,
-                               common::ObNewRow &row,
+                               blocksstable::ObDatumRow &row,
                                ObDASOpType op_type,
                                bool is_old_row);
 };

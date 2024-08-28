@@ -2972,6 +2972,7 @@ int ObTableSqlService::gen_table_dml(
                          && (table.is_external_table()
                              || !table.get_external_file_location().empty()
                              || !table.get_external_file_format().empty()
+                             || !table.get_external_properties().empty()
                              || !table.get_external_file_location_access_info().empty()
                              || !table.get_external_file_pattern().empty()))) {
     ret = OB_NOT_SUPPORTED;
@@ -3030,6 +3031,8 @@ int ObTableSqlService::gen_table_dml(
         "" : table.get_ttl_definition().ptr();
     const char *kv_attributes = table.get_kv_attributes().empty() ?
         "" : table.get_kv_attributes().ptr();
+    ObString local_session_var;
+    ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
     if (OB_FAIL(check_table_options(table))) {
       LOG_WARN("fail to check table option", K(ret), K(table));
     } else if (data_version < DATA_VERSION_4_1_0_0 && 0 != table.get_table_flags()) {
@@ -3038,6 +3041,9 @@ int ObTableSqlService::gen_table_dml(
                K(table));
     } else if (OB_FAIL(check_column_store_valid(table, data_version))) {
       LOG_WARN("fail to check column store valid", KR(ret), K(table), K(data_version));
+    } else if (table.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
+               && OB_FAIL(table.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
+      LOG_WARN("fail to gen local session var str", K(ret));
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                                exec_tenant_id, table.get_tenant_id())))
         || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -3147,6 +3153,10 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
         || ((data_version >= DATA_VERSION_4_3_2_0 || (data_version < DATA_VERSION_4_3_0_0 && data_version >= MOCK_DATA_VERSION_4_2_3_0))
             && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
+        || (data_version >= DATA_VERSION_4_3_2_1 &&
+            OB_FAIL(dml.add_column("external_properties", ObHexEscapeSqlStr(table.get_external_properties()))))
+        || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -4335,25 +4345,9 @@ int ObTableSqlService::gen_column_dml(
       }
     }
     ObString local_session_var;
-    if (OB_SUCC(ret) && column.is_generated_column() && tenant_data_version >= DATA_VERSION_4_2_2_0) {
-      int64_t pos = 0;
-      int64_t buf_len = column.get_local_session_var().get_serialize_size();
-      char *binary_str = NULL;;
-      char *hex_str = NULL;
-      int64_t hex_pos = 0;
-      ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
-      if (OB_ISNULL(binary_str = static_cast<char *>(tmp_allocator.alloc(buf_len)))
-          || OB_ISNULL(hex_str = static_cast<char *>(allocator.alloc(buf_len * 2)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory for local_session_var failed", K(ret), KP(binary_str), KP(hex_str));
-      } else if (OB_FAIL(column.get_local_session_var().serialize_(binary_str, buf_len, pos))) {
-        LOG_WARN("fail to serialize local_session_var", K(ret));
-      } else if (OB_FAIL(common::hex_print(binary_str, pos, hex_str, buf_len * 2, hex_pos))) {
-        LOG_WARN("print hex string failed", K(ret));
-      } else {
-        local_session_var.assign(hex_str, hex_pos);
-        tmp_allocator.free(binary_str);
-      }
+    if (OB_SUCC(ret) && column.is_generated_column() && tenant_data_version >= DATA_VERSION_4_2_2_0
+        && OB_FAIL(column.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
+      LOG_WARN("fail to gen local session var str", K(ret));
     }
     if (OB_SUCC(ret) && (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                                     exec_tenant_id, column.get_tenant_id())))

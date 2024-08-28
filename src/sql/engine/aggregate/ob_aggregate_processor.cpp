@@ -509,6 +509,7 @@ ObAggregateProcessor::GroupConcatExtraResult::~GroupConcatExtraResult()
     alloc_.free(sort_op_);
     sort_op_ = NULL;
   } else {
+    row_store_iter_.reset();
     row_store_.reset();
   }
 }

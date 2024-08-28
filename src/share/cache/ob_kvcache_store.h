@@ -84,8 +84,10 @@ public:
   void flush_washable_mbs(const int64_t cache_id);
   void flush_washable_mbs(const uint64_t tenant_id, const int64_t cache_id);
 
-  int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
-                    lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks);
+  int sync_wash_mbs(const uint64_t tenant_id,
+                    const int64_t wash_size,
+                    lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks,
+                    const int64_t wash_cache_id = -1);
 
   virtual int alloc_mbhandle(ObKVCacheInst &inst, const int64_t block_size,
                              ObKVMemBlockHandle *&mb_handle);
@@ -207,7 +209,9 @@ private:
   void destroy_wash_structs();
 
   void *alloc_mb(lib::ObTenantResourceMgrHandle &resource_handle,
-        const uint64_t tenant_id, const int64_t block_size);
+        const uint64_t tenant_id,
+        const int64_t block_size,
+        const int64_t wash_cache_id = -1);
   void free_mb(lib::ObTenantResourceMgrHandle &resource_handle,
         const uint64_t tenant_id, void *ptr);
 

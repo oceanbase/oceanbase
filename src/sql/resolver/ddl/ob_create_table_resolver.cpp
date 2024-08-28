@@ -54,7 +54,6 @@ namespace sql
 ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
     : ObCreateTableResolverBase(params),
       cur_column_id_(OB_APP_MIN_COLUMN_ID - 1),
-      cur_column_group_id_(COLUMN_GROUP_START_ID),
       primary_keys_(),
       column_name_set_(),
       if_not_exist_(false),
@@ -716,6 +715,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           if (create_table_stmt->get_create_table_arg().schema_.get_part_level() == ObPartitionLevel::PARTITION_LEVEL_ONE) {
             OZ (create_default_partition_for_table(create_table_stmt->get_create_table_arg().schema_));
           }
+          /*
+          if (OB_FAIL(ret)) {
+          } else if (ObExternalFileFormat::FormatType::ODPS_FORMAT != external_table_format_type_ &&
+                     OB_FAIL(add_hidden_external_table_pk_col())) {
+            LOG_WARN("fail to add hidden pk col for external table", K(ret));
+          }
+          */
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(add_hidden_external_table_pk_col())) {
             LOG_WARN("fail to add hidden pk col for external table", K(ret));
@@ -1046,6 +1052,8 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
         LOG_WARN("user specified partition col expr contains no external partition pseudo column is not supported", K(ret));
       }
     }
+  } else if (table_schema.is_odps_external_table()) {
+    // lcqlog to do check
   } else {
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
@@ -1859,12 +1867,12 @@ int ObCreateTableResolver::set_nullable_for_cta_column(ObSelectStmt *select_stmt
             T_WIN_FUN_ROW_NUMBER == win_expr->get_func_type()) {
           ObObj temp_default;
           temp_default.set_uint64(0);
-          column.set_cur_default_value(temp_default);
+          column.set_cur_default_value(temp_default, false);
         } else if (T_WIN_FUN_CUME_DIST == win_expr->get_func_type() ||
                    T_WIN_FUN_PERCENT_RANK == win_expr->get_func_type()) {
           ObObj temp_default;
           temp_default.set_double(0);
-          column.set_cur_default_value(temp_default);
+          column.set_cur_default_value(temp_default, false);
         } else {}
       } else {}
       column.set_nullable(!is_not_null);
@@ -2047,7 +2055,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 if (NULL != org_column &&
                     !org_column->is_generated_column() &&
                     !org_column->get_cur_default_value().is_null()) {
-                    column.set_cur_default_value(org_column->get_cur_default_value());
+                  column.set_cur_default_value(
+                      org_column->get_cur_default_value(),
+                      org_column->is_default_expr_v2_column());
                   }
               }
             } else if (new_table_item == NULL &&
@@ -2058,7 +2068,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               common::ObObjType result_type = expr->get_result_type().get_obj_meta().get_type();
               if (ob_is_numeric_type(result_type) || ob_is_string_tc(result_type) || ob_is_time_tc(result_type)) {
                 common::ObObj zero_obj(0);
-                if (OB_FAIL(column.set_cur_default_value(zero_obj))) {
+                if (OB_FAIL(column.set_cur_default_value(zero_obj, false))) {
                   LOG_WARN("set default value failed", K(ret));
                 }
               }
@@ -3136,7 +3146,7 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
       int32_t num = node->num_child_;
       for (int32_t i = 0; OB_SUCC(ret) && i < num; ++i) {
         option_node = node->children_[i];
-        if (OB_NOT_NULL(option_node) && T_EXTERNAL_FILE_FORMAT == option_node->type_) {
+        if (OB_NOT_NULL(option_node) && (T_EXTERNAL_FILE_FORMAT == option_node->type_ || T_EXTERNAL_PROPERTIES == option_node->type_)) {
           ObExternalFileFormat format;
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
@@ -3151,12 +3161,6 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
         }
       }
     }
-  }
-  if (OB_SUCC(ret) && external_table_format_type_ >= ObExternalFileFormat::PARQUET_FORMAT) {
-    uint64_t data_version = 0;
-    CK (OB_NOT_NULL(session_info_));
-    OZ (GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version));
-    OV (DATA_VERSION_4_3_2_0 <= data_version, OB_NOT_SUPPORTED, data_version);
   }
   return ret;
 }
@@ -3343,100 +3347,6 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
     if (OB_SUCC(ret)) {
       table_schema.get_part_option() = *partition_option;
       table_schema.set_part_level(share::schema::PARTITION_LEVEL_ONE);
-    }
-  }
-  return ret;
-}
-
-uint64_t ObCreateTableResolver::gen_column_group_id()
-{
-  return ++cur_column_group_id_;
-}
-
-/*
-* only when default columns store is column_store
-* have to add each column group
-*/
-int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
-{
-  int ret = OB_SUCCESS;
-  ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
-  ObArray<uint64_t> column_ids; // not include virtual column
-  uint64_t compat_version = 0;
-  ObTableStoreType table_store_type = OB_TABLE_STORE_INVALID;
-
-  if (OB_ISNULL(create_table_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "create_table_stmt should not be null", KR(ret));
-  } else {
-    ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-    const uint64_t tenant_id = table_schema.get_tenant_id();
-    const int64_t column_cnt = table_schema.get_column_count();
-    if (OB_FAIL(column_ids.reserve(column_cnt))) {
-      LOG_WARN("fail to reserve", KR(ret), K(column_cnt));
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-      LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-    } else if (!(compat_version >= DATA_VERSION_4_3_0_0)) {
-      if (OB_NOT_NULL(cg_node) && (T_COLUMN_GROUP == cg_node->type_)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("can't support column store if version less than 4_1_0_0", KR(ret), K(compat_version));
-      }
-    } else {
-      table_schema.set_column_store(true);
-      bool is_each_cg_exist = false;
-      if (OB_NOT_NULL(cg_node)) {
-        if (OB_FAIL(parse_column_group(cg_node, table_schema, table_schema))) {
-          LOG_WARN("fail to parse column group", K(ret));
-        }
-      }
-
-      /* build column group when cg node is null && tenant cg valid*/
-      ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
-      if (OB_FAIL(ret)) {
-      } else if ( OB_LIKELY(tenant_config.is_valid()) && nullptr == cg_node) {
-        /* force to build each cg*/
-        if (!ObSchemaUtils::can_add_column_group(table_schema)) {
-        } else if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
-                    tenant_config->default_table_store_format.get_value_string(),
-                    table_store_type))) {
-          LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
-        } else if (ObTableStoreFormat::is_with_column(table_store_type)) {
-          /* for default is column store, must add each column group*/
-          if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
-            LOG_WARN("fail to add each column group", K(ret));
-          }
-        }
-
-        /* force to build all cg*/
-        ObColumnGroupSchema all_cg;
-        if (OB_FAIL(ret)) {
-        } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
-        } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
-          if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(),
-                                                                   table_schema.get_max_used_column_group_id() + 1, all_cg))) {
-            LOG_WARN("fail to add all column group", K(ret));
-          } else if (OB_FAIL(table_schema.add_column_group(all_cg))) {
-            LOG_WARN("fail to build all column group", K(ret));
-          }
-        }
-      }
-
-      // add default_type column_group, build a empty and then use alter_deafult_cg
-      if (OB_SUCC(ret)) {
-        ObColumnGroupSchema tmp_cg;
-        column_ids.reuse();
-        if (OB_FAIL(build_column_group(table_schema, ObColumnGroupType::DEFAULT_COLUMN_GROUP,
-            OB_DEFAULT_COLUMN_GROUP_NAME, column_ids, DEFAULT_TYPE_COLUMN_GROUP_ID, tmp_cg))) {
-          LOG_WARN("fail to build default type column_group", KR(ret), K(table_store_type),
-                   "table_id", table_schema.get_table_id());
-        } else if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
-          LOG_WARN("fail to add default column group", KR(ret), "table_id", table_schema.get_table_id());
-        } else if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(table_schema))) {
-          LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
-        } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(table_schema))) {
-          LOG_WARN("fail to adjust default column group", K(ret));
-        }
-      }
     }
   }
   return ret;

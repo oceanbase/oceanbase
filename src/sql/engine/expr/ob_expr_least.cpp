@@ -244,36 +244,30 @@ int ObExprLeastGreatest::calc_result_typeN_mysql(ObExprResType &type,
         all_integer = false;
       }
     }
-    const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
-                      ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
     bool enable_decimalint = false;
-    if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimalint))) {
-      LOG_WARN("fail to check_enable_decimalint", K(ret), K(session->get_effective_tenant_id()));
-    } else if (OB_FAIL(calc_result_meta_for_comparison(
-                         type, types, param_num,
-                         type_ctx.get_coll_type(),
-                         default_length_semantics,
-                         enable_decimalint))) {
+    if (OB_FAIL(calc_result_meta_for_comparison(type, types, param_num, type_ctx, enable_decimalint))) {
       LOG_WARN("calc result meta for comparison failed");
     }
-    // can't cast origin parameters.
-    for (int64_t i = 0; i < param_num; i++) {
-      types[i].set_calc_meta(types[i].get_obj_meta());
-    }
-    if (all_integer && type.is_integer_type()) {
-      type.set_calc_type(ObNullType);
-    } else if (all_integer && ob_is_number_or_decimal_int_tc(type.get_type())) {
-      // the args type is integer and result type is number/decimal, there are unsigned bigint in
-      // args, set expr meta here.
-      type.set_accuracy(common::ObAccuracy::DDL_DEFAULT_ACCURACY2[0/*is_oracle*/][ObUInt64Type]);
-    } else {
+    if (OB_SUCC(ret)) {
+      // can't cast origin parameters.
       for (int64_t i = 0; i < param_num; i++) {
-        if (ob_is_enum_or_set_type(types[i].get_type())) {
-          types[i].set_calc_type(type.get_calc_type());
+        types[i].set_calc_meta(types[i].get_obj_meta());
+      }
+      if (all_integer && type.is_integer_type()) {
+        type.set_calc_type(ObNullType);
+      } else if (all_integer && ob_is_number_or_decimal_int_tc(type.get_type())) {
+        // the args type is integer and result type is number/decimal, there are unsigned bigint in
+        // args, set expr meta here.
+        type.set_accuracy(common::ObAccuracy::DDL_DEFAULT_ACCURACY2[0/*is_oracle*/][ObUInt64Type]);
+      } else {
+        for (int64_t i = 0; i < param_num; i++) {
+          if (ob_is_enum_or_set_type(types[i].get_type())) {
+            types[i].set_calc_type(type.get_calc_type());
+          }
         }
       }
+      LOG_DEBUG("least calc_result_typeN", K(type), K(type.get_calc_accuracy()));
     }
-    LOG_DEBUG("least calc_result_typeN", K(type), K(type.get_calc_accuracy()));
   }
   return ret;
 }

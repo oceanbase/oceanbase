@@ -314,7 +314,9 @@ int ObServerZoneOpService::start_servers(
       if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, server, server_info))) {
         // make sure the server is in whitelist, then send rpc
         LOG_WARN("fail to get server_info", KR(ret), K(server));
-      } else if (sys_tenant_data_version >= DATA_VERSION_4_3_2_0) {
+      } else if ((sys_tenant_data_version >= MOCK_DATA_VERSION_4_2_5_0
+                  && sys_tenant_data_version < DATA_VERSION_4_3_0_0)
+                || sys_tenant_data_version >= DATA_VERSION_4_3_2_0) {
         int64_t timeout = ctx.get_timeout();
         const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 150;
         char disk_error_server_err_msg[ERR_MSG_BUF_LEN] = "";

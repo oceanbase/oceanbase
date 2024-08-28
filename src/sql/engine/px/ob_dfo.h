@@ -520,7 +520,8 @@ public:
     p2p_dh_map_info_(),
     coord_info_ptr_(nullptr),
     force_bushy_(false),
-    query_sql_()
+    query_sql_(),
+    has_into_odps_(false)
   {
   }
 
@@ -561,6 +562,8 @@ public:
   inline bool has_need_branch_id_op() const { return has_need_branch_id_op_; }
   inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }
   inline bool has_temp_table_scan() const { return has_temp_scan_; }
+  inline void set_into_odps(bool has_into_odps) { has_into_odps_ = has_into_odps; }
+  inline bool has_into_odps() const { return has_into_odps_; }
   inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
   inline void set_slave_mapping_type(SlaveMappingType v) { slave_mapping_type_ = v; }
   inline SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
@@ -813,6 +816,7 @@ private:
   bool force_bushy_;
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
   ObString query_sql_;
+  bool has_into_odps_;
 };
 
 
@@ -1216,8 +1220,7 @@ class ObPxWorkerEnvArgs
 public :
   typedef common::ObCurTraceId::TraceId TraceId;
   ObPxWorkerEnvArgs () : trace_id_(), log_level_(OB_LOG_LEVEL_NONE),
-  is_oracle_mode_(false), enqueue_timestamp_(-1), gctx_(nullptr),
-  group_id_(0) { }
+  is_oracle_mode_(false), enqueue_timestamp_(-1), gctx_(nullptr){ }
 
   virtual ~ObPxWorkerEnvArgs() { }
 
@@ -1227,7 +1230,6 @@ public :
     is_oracle_mode_ = other.is_oracle_mode_;
     enqueue_timestamp_ = other.enqueue_timestamp_;
     gctx_ = other.gctx_;
-    group_id_ = other.group_id_;
     return *this;
   }
 
@@ -1241,8 +1243,6 @@ public :
   int64_t get_enqueue_timestamp() const { return enqueue_timestamp_; }
   void set_gctx(const observer::ObGlobalContext *ctx) { gctx_ = ctx; }
   const observer::ObGlobalContext *get_gctx() { return gctx_; }
-  void set_group_id(int32_t v) { group_id_ = v; }
-  int32_t get_group_id() const { return group_id_; }
 
 private:
   TraceId trace_id_;
@@ -1250,7 +1250,6 @@ private:
   bool is_oracle_mode_;
   int64_t enqueue_timestamp_;
   const observer::ObGlobalContext *gctx_;
-  int32_t group_id_;
 };
 
 }

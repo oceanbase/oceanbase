@@ -14,7 +14,7 @@
 
 #include "ob_ra_datum_store.h"
 #include "lib/container/ob_se_array_iterator.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
@@ -1144,11 +1144,10 @@ int ObRADatumStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     if (NULL != mem_stat_) {
       mem_stat_->dumped(size);
     }
-    blocksstable::ObTmpFileIOInfo io;
+    tmp_file::ObTmpFileIOInfo io;
     io.fd_ = fd_;
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
-    io.tenant_id_ = tenant_id_;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
     io.io_timeout_ms_ = timeout_ms;
     const uint64_t start = rdtsc();
@@ -1184,22 +1183,21 @@ int ObRADatumStore::read_file(void *buf, const int64_t size, const int64_t offse
   }
 
   if (OB_SUCC(ret) && size > 0) {
-    blocksstable::ObTmpFileIOInfo io;
+    tmp_file::ObTmpFileIOInfo io;
     io.fd_ = fd_;
     io.dir_id_ = dir_id_;
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
-    io.tenant_id_ = tenant_id_;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     io.io_timeout_ms_ = timeout_ms;
     const uint64_t start = rdtsc();
-    blocksstable::ObTmpFileIOHandle handle;
+    tmp_file::ObTmpFileIOHandle handle;
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io, offset, handle))) {
       LOG_WARN("read form file failed", K(ret), K(io), K(offset), K(timeout_ms));
-    } else if (OB_UNLIKELY(handle.get_data_size() != size)) {
+    } else if (OB_UNLIKELY(handle.get_done_size() != size)) {
       ret = OB_INNER_STAT_ERROR;
       LOG_WARN("read data less than expected",
-          K(ret), K(io), "read_size", handle.get_data_size());
+          K(ret), K(io), "read_size", handle.get_done_size());
     }
     if (NULL != io_observer_) {
       io_observer_->on_read_io(rdtsc() - start);
@@ -1323,8 +1321,6 @@ int ObRADatumStore::finish_add_row()
         LOG_WARN("write last index block to file failed", K(ret), K(ret));
       } else if (OB_FAIL(get_timeout(timeout_ms))) {
         LOG_WARN("get timeout failed", K(ret));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.sync(fd_, timeout_ms))) {
-        LOG_WARN("sync file failed", K(ret), K(fd_), K(timeout_ms));
       } else {
         if (blkbuf_.buf_.is_inited()) {
           free_blk_mem(blkbuf_.buf_.data(), blkbuf_.buf_.capacity());

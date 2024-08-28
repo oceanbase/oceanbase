@@ -544,8 +544,11 @@ public:
       longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
       execution_id_(-1), start_time_(0), data_format_version_(0), is_pre_split_(false), wait_trans_ctx_()
   {}
+  ObDDLTask():
+    ObDDLTask(share::DDL_INVALID)
+  {}
   virtual ~ObDDLTask() {}
-  virtual int process() = 0;
+  virtual int process() { return OB_NOT_SUPPORTED; }
   virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) { return common::OB_NOT_SUPPORTED; }
   virtual bool is_valid() const { return is_inited_; }
   typedef common::ObCurTraceId::TraceId TraceId;
@@ -627,9 +630,7 @@ public:
   static bool check_is_load_data(share::ObDDLType task_type);
   virtual bool support_longops_monitoring() const { return false; }
   int cleanup();
-  virtual int cleanup_impl() = 0;
-  virtual void flt_set_task_span_tag() const = 0;
-  virtual void flt_set_status_span_tag() const = 0;
+  virtual int cleanup_impl() { return OB_NOT_SUPPORTED; }
   int update_task_record_status_and_msg(common::ObISQLClient &proxy, const share::ObDDLTaskStatus real_new_status);
 
   #ifdef ERRSIM

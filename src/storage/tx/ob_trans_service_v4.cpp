@@ -1867,6 +1867,7 @@ int ObTransService::batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
     if (p.exec_epoch_ <= 0 && p.transfer_epoch_ > 0) {
       msg.set_for_transfer();
     }
+    msg.input_transfer_epoch_ = p.transfer_epoch_;
     if (OB_FAIL(rpc_->post_msg(msg.receiver_, msg))) {
       if (OB_LS_IS_DELETED == ret) {
         ObSpinLockGuard lock(tx.lock_);
@@ -2109,7 +2110,8 @@ int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                   msg.tx_ptr_,
                                   msg.for_transfer(),
                                   msg.specified_from_scn_,
-                                  msg.request_id_,
+                                  msg.input_transfer_epoch_,
+                                  result.output_transfer_epoch_,
                                   result.downstream_parts_);
   if (msg.use_async_resp()) {
     ObTxRollbackSPRespMsg resp;
@@ -2124,6 +2126,7 @@ int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
     resp.ret_ = ret;
     resp.orig_epoch_ = msg.epoch_,
     resp.epoch_ = ctx_born_epoch;
+    resp.output_transfer_epoch_ = result.output_transfer_epoch_;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(resp.downstream_parts_.assign(result.downstream_parts_))) {
       TRANS_LOG(WARN, "parts assign failed", K(tmp_ret), K(resp));
@@ -2157,6 +2160,7 @@ int ObTransService::handle_sp_rollback_response(ObTxRollbackSPRespMsg &msg,
                                 msg.request_id_,
                                 msg.epoch_,
                                 msg.sender_addr_,
+                                msg.output_transfer_epoch_,
                                 msg.downstream_parts_);
   result.reset();
   result.init(ret, msg.get_timestamp());
@@ -2319,7 +2323,9 @@ int ObTransService::merge_rollback_downstream_parts_(ObTxDesc &tx, const ObIArra
   int ret = OB_SUCCESS;
   for (int64_t idx = 0; OB_SUCC(ret) && idx < downstream_parts.count(); idx++) {
     ObLSID add_ls_id = downstream_parts.at(idx).left_;
-    if (OB_FAIL(tx.brpc_mask_set_.merge_part(add_ls_id, 0, downstream_parts.at(idx).right_))) {
+    if (OB_FAIL(tx.brpc_mask_set_.merge_part(add_ls_id,
+                                             0/*exec_epoch*/,
+                                             -1/*transfer_epoch*/))) {
       TRANS_LOG(WARN, "merge part failed", KR(ret), K(tx.tx_id_), K(add_ls_id));
     } else {
       TRANS_LOG(INFO, "merge rollback parts", K(tx.tx_id_), K(add_ls_id));
@@ -2335,10 +2341,12 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
                                             const int64_t request_id,
                                             const int64_t ret_epoch,
                                             const ObAddr &ret_addr,
+                                            const int64_t transfer_epoch,
                                             const ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
-  TRANS_LOG(INFO, "handle_sp_rollback_resp", K(tx_id), K(ls_id), K(status), K(downstream_parts));
+  TRANS_LOG(INFO, "handle_sp_rollback_resp", K(tx_id), K(ls_id), K(status),
+            K(transfer_epoch), K(downstream_parts));
   ObRollbackSPMsgGuard *rollback_sp_msg_guard = NULL;
   ObTxDesc *tx = NULL;
   // find tx_msg by request_id
@@ -2368,7 +2376,7 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
       ObTxExecPart p;
       if (downstream_parts.count() > 0 && OB_FAIL(merge_rollback_downstream_parts_(*tx, downstream_parts))) {
         TRANS_LOG(WARN, "merge rollback downstream parts failed", K(ret), K(tx_id), K(downstream_parts));
-      } else if (OB_FAIL(tx->brpc_mask_set_.find_part(ls_id, orig_epoch, p))) {
+      } else if (OB_FAIL(tx->brpc_mask_set_.find_part(ls_id, orig_epoch, transfer_epoch, p))) {
         TRANS_LOG(WARN, "find part failed", K(ret), K(ls_id), K(tx_id));
       } else {
         // find rollback part by ls_id
@@ -3631,18 +3639,16 @@ int ObTransService::handle_trans_ask_state(const ObAskStateMsg &msg,
     revert_tx_ctx_(ctx);
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(ctx) || is_root) {
-      if (!resp.state_info_array_.empty()) {
-        build_tx_ask_state_resp_(resp, msg);
-        ObAddr send_to_addr; // for msg compat
-        if (msg.ori_addr_.is_valid()) {
-          send_to_addr = msg.ori_addr_;
-        } else {
-          send_to_addr = msg.sender_addr_;
-        }
-        if (OB_FAIL(rpc_->post_msg(send_to_addr, resp))) {
-          TRANS_LOG(WARN, "post ask state msg fail", K(ret), K(resp));
-        }
+    if (!resp.state_info_array_.empty()) {
+      build_tx_ask_state_resp_(resp, msg);
+      ObAddr send_to_addr; // for msg compat
+      if (msg.ori_addr_.is_valid()) {
+        send_to_addr = msg.ori_addr_;
+      } else {
+        send_to_addr = msg.sender_addr_;
+      }
+      if (OB_FAIL(rpc_->post_msg(send_to_addr, resp))) {
+        TRANS_LOG(WARN, "post ask state msg fail", K(ret), K(resp));
       }
     }
   }

@@ -222,7 +222,7 @@ protected:
   virtual uint64_t get_request_checksum() override;
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
   virtual bool is_kv_processor() override { return true; }
-
+  virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
 private:
   int process_query_start();
   int process_query_next();

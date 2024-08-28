@@ -133,19 +133,30 @@ public:
 class ObHATabletGroupCtx
 {
 public:
-  ObHATabletGroupCtx();
+  enum class TabletGroupCtxType
+  {
+    NORMAL_TYPE     = 0,
+    CS_REPLICA_TYPE = 1,
+    MAX_TYPE
+  };
+public:
+  ObHATabletGroupCtx(const TabletGroupCtxType type = TabletGroupCtxType::NORMAL_TYPE);
   virtual ~ObHATabletGroupCtx();
   int init(const common::ObIArray<ObLogicTabletID> &tablet_id_array);
   int get_next_tablet_id(ObLogicTabletID &logic_tablet_id);
   int get_all_tablet_ids(common::ObIArray<ObLogicTabletID> &tablet_id);
-  void reuse();
-
+  bool is_cs_replica_ctx() const;
+public:
+  virtual void reuse();
+  virtual void inner_reuse();
+  virtual int inner_init() { return OB_SUCCESS; }
   TO_STRING_KV(K_(tablet_id_array), K_(index));
-private:
+protected:
   bool is_inited_;
   common::SpinRWLock lock_;
   ObArray<ObLogicTabletID> tablet_id_array_;
   int64_t index_;
+  TabletGroupCtxType type_;
   DISALLOW_COPY_AND_ASSIGN(ObHATabletGroupCtx);
 };
 
@@ -158,8 +169,14 @@ public:
   int get_next_tablet_group_ctx(
       ObHATabletGroupCtx *&tablet_group_ctx);
   int build_tablet_group_ctx(
-      const common::ObIArray<ObLogicTabletID> &tablet_id_array);
+      const common::ObIArray<ObLogicTabletID> &tablet_id_array,
+      const ObHATabletGroupCtx::TabletGroupCtxType type = ObHATabletGroupCtx::TabletGroupCtxType::NORMAL_TYPE);
+  int alloc_and_new_tablet_group_ctx(
+      const ObHATabletGroupCtx::TabletGroupCtxType type,
+      ObHATabletGroupCtx *&tablet_group_ctx);
   void reuse();
+  int64_t get_tablet_group_ctx_count() const;
+  int get_tablet_group_ctx(const int64_t idx, ObHATabletGroupCtx *&tablet_group_ctx);
 
   TO_STRING_KV(K_(tablet_group_ctx_array), K_(index));
 private:
@@ -176,12 +193,14 @@ class ObStorageHATaskUtils
 public:
   static int check_need_copy_sstable(
       const ObMigrationSSTableParam &param,
+      const bool &is_restore,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
 
 private:
   static int check_major_sstable_need_copy_(
       const ObMigrationSSTableParam &param,
+      const bool &is_restore,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
 
@@ -197,7 +216,13 @@ private:
 
 };
 
-
+class ObStorageHACancelDagNetUtils
+{
+public:
+  static int cancel_task(const share::ObLSID &ls_id, const share::ObTaskId &task_id);
+private:
+  static int cancel_migration_task_(const share::ObTaskId &task_id, const ObLSHandle &ls_handle, bool &is_exist);
+};
 }
 }
 #endif

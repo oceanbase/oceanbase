@@ -56,7 +56,8 @@ private:
     DESTINATION_OWNER,
     DESTINATION,
     CREDENTIAL_OWNER,
-    CREDENTIAL_NAME
+    CREDENTIAL_NAME,
+    JOB_CLASS
   };
   class FillScanner
   {

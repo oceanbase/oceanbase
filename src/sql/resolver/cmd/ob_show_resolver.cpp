@@ -22,6 +22,7 @@
 #include "observer/ob_server_struct.h"
 #include "sql/resolver/dcl/ob_grant_resolver.h"
 #include "observer/virtual_table/ob_tenant_all_tables.h"
+#include "share/schema/ob_schema_printer.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -81,6 +82,54 @@ ObShowResolver::~ObShowResolver()
 
 #define REAL_NAME(a, b)   ((!is_oracle_mode) ? (a) : (b))
 
+static constexpr char check_table_ok_template[] =
+    "(SELECT \'%s.%s\' As \"Table\", "
+    "'check' As Op, "
+    "'status' As Msg_type, "
+    "'OK' As Msg_text "
+    "FROM dual)";
+static constexpr char check_table_db_not_exists1[] =
+    "(SELECT \'%s.%s\' As \"Table\", "
+    "'check' As Op, "
+    "'Error' As Msg_type, "
+    "\"Unknown database \'%s\'\" As Msg_text "
+    "FROM dual)";
+
+static constexpr char check_table_db_not_exists2[] =
+    "(SELECT \'%s.%s\' As \"Table\", "
+    "'check' As Op, "
+    "'error' As Msg_type, "
+    "'Corrupt' As Msg_text "
+    "FROM dual)";
+
+static constexpr char check_table_table_not_exists1[] =
+    "(SELECT \'%s.%s\' As \"Table\", "
+    "'check' As Op, "
+    "'Error' As Msg_type, "
+    "\"Table \'%s.%s\' doesn't exist\" As Msg_text "
+    "FROM dual)";
+
+static constexpr char check_table_table_not_exists2[] =
+    "(SELECT \'%s.%s\' As \"Table\", "
+    "'check' As Op, "
+    "'status' As Msg_type, "
+    "'Operation failed' As Msg_text "
+    "FROM dual)";
+
+static constexpr char check_table_view_invalid1[] =
+    "(SELECT \'%s.%s\' As \"Table\", "
+    "'check' As Op, "
+    "'Error' As Msg_type, "
+    "\"View \'%s.%s\' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them\" As Msg_text "
+    "FROM dual)";
+
+static constexpr char check_table_view_invalid2[] =
+    "(SELECT \'%s.%s\' As \"Table\", "
+    "'check' As Op, "
+    "'error' As Msg_type, "
+    "'Corrupt' As Msg_text "
+    "FROM dual)";
+
 int ObShowResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -105,9 +154,15 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         K(params_.allocator_),
         K(schema_checker_));
   } else if (OB_UNLIKELY(parse_tree.type_ < T_SHOW_TABLES || parse_tree.type_ > T_SHOW_GRANTS)
-             && (parse_tree.type_ != T_SHOW_TRIGGERS) && (parse_tree.type_ != T_SHOW_PROFILE)
-             && (parse_tree.type_ != T_SHOW_PROCEDURE_CODE) && (parse_tree.type_ != T_SHOW_FUNCTION_CODE)
-             && (parse_tree.type_ != T_SHOW_ENGINE) && (parse_tree.type_ != T_SHOW_OPEN_TABLES)) {
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_TRIGGERS)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_PROFILE)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_PROCEDURE_CODE)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_FUNCTION_CODE)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_ENGINE)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_OPEN_TABLES)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_USER)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CHECK_TABLE)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_OLAP_ASYNC_JOB_STATUS)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
   } else {
@@ -549,6 +604,20 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         }();
         break;
       }
+      case T_SHOW_CHECK_TABLE:
+      {
+        if (OB_FAIL(resolve_show_check_table(parse_tree, show_resv_ctx, select_sql))) {
+          LOG_WARN("failed to resolve show check table", K(ret));
+        }
+        break;
+      }
+      case T_SHOW_CREATE_USER:
+      {
+        if (OB_FAIL(resolve_show_create_user(parse_tree, show_resv_ctx, session_priv, stmt_need_privs, select_sql, sql_gen))) {
+          LOG_WARN("failed to resolve show create user", K(ret));
+        }
+        break;
+      }
       case T_SHOW_CREATE_PROCEDURE:
       case T_SHOW_CREATE_FUNCTION: {
         [&] {
@@ -651,23 +720,22 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_db_id = OB_INVALID_ID;
             ObString show_tg_name;
             uint64_t show_tg_id = OB_INVALID_ID;
+            ObString show_table_name;
             bool allow_show = false;
             if (OB_FAIL(resolve_show_from_trigger(parse_tree.children_[0], NULL, 
                                                   database_name.empty(),
                                                   real_tenant_id, show_db_name,
-                                                  show_db_id, show_tg_name, show_tg_id))) {
+                                                  show_db_id, show_tg_name, show_tg_id, show_table_name))) {
               LOG_WARN("fail to resolve show from trigger", K(ret));
             }
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(schema_checker_->check_trigger_show(session_priv, show_db_name,
-                                                                  show_tg_name, allow_show))) {
+                                                                  show_tg_name, allow_show, show_table_name))) {
               LOG_WARN("Check trigger show error", K(ret));
             } else if (!allow_show) {
-              ret = OB_ERR_NO_TABLE_PRIVILEGE;
-              LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, static_cast<int>(strlen("SHOW")), "SHOW",
-                            session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                            session_priv.host_name_.length(), session_priv.host_name_.ptr(),
-                            show_tg_name.length(), show_tg_name.ptr());
+              ret = OB_ERR_NO_PRIVILEGE;
+              LOG_WARN("trigger not has priv", K(ret), K(show_db_name), K(show_table_name), K(show_tg_name));
+              LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "TRIGGER");
             } else { }//do nothing
             if (OB_SUCC(ret)) {
               show_resv_ctx.stmt_type_ = stmt::T_SHOW_CREATE_TRIGGER;
@@ -1662,6 +1730,56 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         }
         break;
       }
+      case T_SHOW_OLAP_ASYNC_JOB_STATUS: {
+        [&] {
+          const int WHERE_JOB_NAME_LENGTH = 128 + 20;
+          const int LIMIT_LENGTH = 40;
+          char where_job_name[WHERE_JOB_NAME_LENGTH] = {};
+          char limit_count [LIMIT_LENGTH] = {};
+          uint64_t min_version = OB_INVALID_VERSION;
+
+          if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
+          } else if (min_version < DATA_VERSION_4_3_2_1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support show async job", K(ret), K(real_tenant_id));
+          } else if (parse_tree.num_child_ == 1 && OB_NOT_NULL(parse_tree.children_)) {
+            snprintf(where_job_name, WHERE_JOB_NAME_LENGTH, " AND JOB_NAME = '%.*s' ", (int)parse_tree.children_[0]->str_len_, parse_tree.children_[0]->str_value_);
+            snprintf(limit_count, LIMIT_LENGTH, "order by update_time desc limit 1");
+          } else if (parse_tree.num_child_ == 0) {
+            //nothing to do
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_),
+                    K(parse_tree.children_));
+          }
+          if (OB_SUCC(ret)) {
+            const int WHERE_USR_NAME_LENGTH = OB_MAX_USER_NAME_LENGTH + OB_MAX_HOST_NAME_LENGTH + 20;
+            char where_user_from_jobs[WHERE_USR_NAME_LENGTH] = {};
+            char where_user_from_logs[WHERE_USR_NAME_LENGTH] = {};
+            if (0 != session_info_->get_user_name().case_compare("root")) {
+              snprintf(where_user_from_jobs, WHERE_USR_NAME_LENGTH, " AND T.POWNER = '%.*s@%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                                                                                                   session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
+              snprintf(where_user_from_logs, WHERE_USR_NAME_LENGTH, " AND R.OWNER = '%.*s@%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                                                                                                  session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
+            }
+            show_resv_ctx.stmt_type_ = stmt::T_SHOW_OLAP_ASYNC_JOB_STATUS;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_OLAP_ASYNC_JOB_STATUS);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_OLAP_ASYNC_JOB_STATUS,
+                          OB_SYS_DATABASE_NAME,
+                          OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME,
+                          where_job_name,
+                          where_user_from_logs,
+                          OB_SYS_DATABASE_NAME,
+                          OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                          sql_tenant_id,
+                          where_job_name,
+                          where_user_from_jobs,
+                          limit_count);
+          }
+        }();
+        break;
+      }
       default:
         /* won't be here */
         ret = OB_NOT_IMPLEMENT;
@@ -1698,6 +1816,306 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(select_stmt->formalize_stmt(session_info_))) {
         LOG_WARN("pull select stmt all expr relation ids failed", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObShowResolver::resolve_show_check_table(const ParseNode &parse_tree,
+                                             ObShowResolverContext &show_resv_ctx,
+                                             ObString &select_sql)
+{
+  int ret = OB_SUCCESS;
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  show_resv_ctx.stmt_type_ = stmt::T_SHOW_CHECK_TABLE;
+  static const int64_t MAX_CHECK_TABLE_CNT = 10000;
+  ObArenaAllocator alloc("ShowCKTable", OB_MALLOC_NORMAL_BLOCK_SIZE, session_info_->get_effective_tenant_id());
+  ObSEArray<ObCheckTableInfo, 1> infos;
+  TableInfoSet tables_set;
+  if (OB_UNLIKELY(is_oracle_mode)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "check table oracle mode is");
+  } else if (OB_FAIL(tables_set.create(MAX_CHECK_TABLE_CNT / 2))) {
+    LOG_WARN("failed to create hash set", K(ret));
+  } else if (OB_UNLIKELY(1 != parse_tree.num_child_) || OB_ISNULL(parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse tree is wrong", K(ret));
+  } else if (OB_FAIL(recursive_resolve_table_info(parse_tree.children_[0], alloc, infos, tables_set))) {
+    LOG_WARN("failed to resolve table info", K(ret));
+  } else if (infos.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get error info", K(ret));
+  } else if (infos.count() >= MAX_CHECK_TABLE_CNT) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "check table count exceed 10000 is");
+  }
+  if (OB_SUCC(ret)) {
+    ObSqlString check_table_str;
+    for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
+      if (i > 0) {
+        OZ (check_table_str.append(" UNION ALL "));
+      }
+      if (!infos.at(i).db_exist_) {
+        OZ (check_table_str.append_fmt(check_table_db_not_exists1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
+                                                                   infos.at(i).db_name_.ptr()));
+        OZ (check_table_str.append(" UNION ALL "));
+        OZ (check_table_str.append_fmt(check_table_db_not_exists2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+      } else if (!infos.at(i).table_exist_) {
+        OZ (check_table_str.append_fmt(check_table_table_not_exists1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
+                                                                      infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+        OZ (check_table_str.append(" UNION ALL "));
+        OZ (check_table_str.append_fmt(check_table_table_not_exists2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+      } else if (infos.at(i).is_view_ && !infos.at(i).valid_) {
+        OZ (check_table_str.append_fmt(check_table_view_invalid1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
+                                                                  infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+        OZ (check_table_str.append(" UNION ALL "));
+        OZ (check_table_str.append_fmt(check_table_view_invalid2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+      } else {
+        OZ (check_table_str.append_fmt(check_table_ok_template, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+      }
+    }
+    OZ (check_table_str.append(";"));
+    OZ (ob_write_string(*allocator_, check_table_str.string(), select_sql));
+  }
+  return ret;
+}
+
+int ObShowResolver::resolve_show_create_user(const ParseNode &parse_tree,
+                                             ObShowResolverContext &show_resv_ctx,
+                                             ObSessionPrivInfo &session_priv,
+                                             ObStmtNeedPrivs &stmt_need_privs,
+                                             ObString &select_sql,
+                                             ObSqlStrGenerator &sql_gen)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_ID;
+  uint64_t user_id = OB_INVALID_ID;
+  ObString user_name;
+  ObString host_name;
+  bool has_select_privilege = false;
+  bool show_current_user = false;
+  const ObUserInfo *user_info = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  show_resv_ctx.stmt_type_ = stmt::T_SHOW_CREATE_USER;
+  if (OB_UNLIKELY(is_oracle_mode)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "show table in oracle mode is");
+  } else if (OB_ISNULL(session_info_) ||
+             OB_ISNULL(params_.schema_checker_) ||
+             OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got null ptr", K(ret));
+  } else if (OB_UNLIKELY(1 != parse_tree.num_child_) || OB_ISNULL(parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse tree is wrong", K(ret));
+  } else if (T_FUN_SYS_CURRENT_USER == parse_tree.children_[0]->type_) {
+    tenant_id = session_info_->get_effective_tenant_id();
+    user_id = session_info_->get_priv_user_id();
+    show_current_user = true;
+    if (OB_FAIL(params_.schema_checker_->get_user_info(tenant_id, user_id, user_info))) {
+      if (ret == OB_USER_NOT_EXIST) {
+        tmp_ret = OB_USER_NOT_EXIST;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to got user info", K(ret), K(tenant_id), K(user_id));
+      }
+    } else if (OB_ISNULL(user_info)) {
+      tmp_ret = OB_USER_NOT_EXIST;
+      ret = OB_SUCCESS;
+    } else {
+      user_name = user_info->get_user_name_str();
+      host_name = user_info->get_host_name_str();
+    }
+  } else if (OB_UNLIKELY(T_USER_WITH_HOST_NAME != parse_tree.children_[0]->type_) ||
+             OB_UNLIKELY(2 != parse_tree.children_[0]->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse tree is wrong", K(ret));
+  } else {
+    ParseNode *user_name_node = parse_tree.children_[0]->children_[0];
+    ParseNode *host_name_node = parse_tree.children_[0]->children_[1];
+    tenant_id = session_info_->get_effective_tenant_id();
+    if (OB_ISNULL(user_name_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user_name is NULL", K(ret), K(user_name));
+    } else {
+      user_name = ObString(user_name_node->str_len_, user_name_node->str_value_);
+      if (NULL != host_name_node) {
+        host_name = ObString(host_name_node->str_len_, host_name_node->str_value_);
+      } else {
+        host_name = ObString(OB_DEFAULT_HOST_NAME);
+      }
+      if (OB_FAIL(params_.schema_checker_->get_user_info(tenant_id, user_name, host_name, user_info))) {
+        if (ret == OB_USER_NOT_EXIST) {
+          tmp_ret = OB_USER_NOT_EXIST;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to got user info", K(ret), K(tenant_id), K(user_name), K(host_name));
+        }
+      } else if (OB_ISNULL(user_info)) {
+        tmp_ret = OB_USER_NOT_EXIST;
+        ret = OB_SUCCESS;
+      } else {
+        user_id = user_info->get_user_id();
+        if (user_id == session_info_->get_user_id()) {
+          show_current_user = true;
+        }
+      }
+    }
+  }
+  // check privileges
+  if (OB_SUCC(ret)) {
+    int ret_code = OB_SUCCESS;
+    if (OB_FAIL(check_show_create_user_privilege(show_current_user,
+                                                 stmt_need_privs,
+                                                 session_priv,
+                                                 ret_code,
+                                                 has_select_privilege))) {
+      LOG_WARN("failed to check show create user privileges", K(ret));
+    } else if (!has_select_privilege && !show_current_user) {
+      ret = ret_code;
+      if (OB_ERR_NO_DB_PRIVILEGE == ret) {
+        LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE,
+                       session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                       session_info_->get_host_name().length(), session_info_->get_host_name().ptr(),
+                       (int)strlen(OB_SYS_DATABASE_NAME), OB_SYS_DATABASE_NAME);
+      } else if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
+        LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
+                       session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                       session_info_->get_host_name().length(), session_info_->get_host_name().ptr(),
+                       (int)strlen("OCEANBASE.__ALL_USER"), "OCEANBASE.__ALL_USER");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected ret code", K(ret), K(ret_code));
+      }
+    } else if (has_select_privilege && OB_USER_NOT_EXIST == tmp_ret) {
+      ObSqlString msg;
+      if (show_current_user &&
+          OB_FAIL(msg.append_fmt("CURRENT_USER()"))) {
+        LOG_WARN("Build msg fail", K(ret));
+      } else if (!show_current_user &&
+                 OB_FAIL(msg.append_fmt("`%.*s`@`%.*s`", user_name.length(), user_name.ptr(),
+                                                         host_name.length(), host_name.ptr()))) {
+        LOG_WARN("Build msg fail", K(user_name), K(host_name), K(ret));
+      } else {
+        ret = OB_CANNOT_USER;
+        LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("SHOW CREATE USER"), "SHOW CREATE USER",
+                                       (int)msg.length(), msg.ptr());
+      }
+    }
+  }
+  // fanpin create user sql
+  if (OB_SUCC(ret)) {
+    char *user_def_buf = NULL;
+    int64_t user_def_buf_size = OB_MAX_VARCHAR_LENGTH;
+    int64_t pos = 0;
+    ObSchemaPrinter schema_printer(*schema_guard);
+    if (OB_ISNULL(user_def_buf = static_cast<char *>(allocator_->alloc(user_def_buf_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SERVER_LOG(ERROR, "fail to alloc user_def_buf", K(ret), K(user_def_buf_size));
+    } else if (OB_FAIL(schema_printer.print_user_definition(tenant_id, *user_info, user_def_buf,
+                                                     user_def_buf_size, pos, false,
+                                                     !has_select_privilege && show_current_user))) {
+      SERVER_LOG(WARN, "Generate user definition failed");
+    } else {
+      GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_USER);
+      GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_USER,
+                     pos, user_def_buf,
+                     user_name.length(), user_name.ptr(),
+                     host_name.length(), host_name.ptr());
+    }
+  }
+  return ret;
+}
+
+int ObShowResolver::check_show_create_user_privilege(const bool show_current_user,
+                                                     ObStmtNeedPrivs &stmt_need_privs,
+                                                     ObSessionPrivInfo &session_priv,
+                                                     int &ret_code,
+                                                     bool &has_select_privilege)
+{
+  int ret = OB_SUCCESS;
+  ret_code = OB_SUCCESS;
+  has_select_privilege = false;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(params_.schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected NULL ptr", K(ret));
+  } else if (show_current_user) {
+    // current_user require select privileges on mysql.user or oceanbase.__all_user
+    // user level
+    ObNeedPriv need_priv_0;
+    need_priv_0.priv_set_ = OB_PRIV_SELECT;
+    need_priv_0.priv_level_ = OB_PRIV_USER_LEVEL;
+    // db level
+    ObNeedPriv need_priv_1;
+    need_priv_1.db_ = OB_SYS_DATABASE_NAME;
+    need_priv_1.priv_set_ = OB_PRIV_SELECT;
+    need_priv_1.priv_level_ = OB_PRIV_DB_LEVEL;
+    ObNeedPriv need_priv_2;
+    need_priv_2.db_ = OB_MYSQL_SCHEMA_NAME;
+    need_priv_2.priv_set_ = OB_PRIV_SELECT;
+    need_priv_2.priv_level_ = OB_PRIV_DB_LEVEL;
+    // table level
+    ObNeedPriv need_priv_3;
+    need_priv_3.priv_set_ = OB_PRIV_SELECT;
+    need_priv_3.db_ = OB_SYS_DATABASE_NAME;
+    need_priv_3.table_ = OB_ALL_USER_TNAME;
+    need_priv_3.priv_level_ = OB_PRIV_TABLE_LEVEL;
+    ObNeedPriv need_priv_4;
+    need_priv_4.db_ = OB_MYSQL_SCHEMA_NAME;
+    need_priv_4.table_ = "user";
+    need_priv_4.priv_set_ = OB_PRIV_SELECT;
+    need_priv_4.priv_level_ = OB_PRIV_TABLE_LEVEL;
+    if (OB_FAIL(stmt_need_privs.need_privs_.init(5))) {
+      LOG_WARN("Failed to init stmt need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_0))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_1))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_2))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_3))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_4))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    }
+  } else {
+    // not current_user require select privileges on mysql or oceanbase
+    // user level
+    ObNeedPriv need_priv_0;
+    need_priv_0.priv_set_ = OB_PRIV_SELECT;
+    need_priv_0.priv_level_ = OB_PRIV_USER_LEVEL;
+    // db level
+    ObNeedPriv need_priv_1;
+    need_priv_1.db_ = OB_SYS_DATABASE_NAME;
+    need_priv_1.priv_set_ = OB_PRIV_SELECT;
+    need_priv_1.priv_level_ = OB_PRIV_DB_LEVEL;
+    ObNeedPriv need_priv_2;
+    need_priv_2.db_ = OB_MYSQL_SCHEMA_NAME;
+    need_priv_2.priv_set_ = OB_PRIV_SELECT;
+    need_priv_2.priv_level_ = OB_PRIV_DB_LEVEL;
+    if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
+      LOG_WARN("Failed to init stmt need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_0))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_1))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv_2))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
+      if (OB_ERR_NO_DB_PRIVILEGE == ret || OB_ERR_NO_TABLE_PRIVILEGE == ret) {
+        ret_code = ret;
+        ret = OB_SUCCESS;
+        has_select_privilege = false;
+      } else {
+        LOG_WARN("Failed to check acc", K(ret));
+      }
+    } else {
+      has_select_privilege = true;
     }
   }
   return ret;
@@ -1769,7 +2187,8 @@ int ObShowResolver::process_select_type(ObSelectStmt *select_stmt,
              //|| stmt_type == stmt::T_SHOW_PRIVILEGES
              || stmt_type == stmt::T_SHOW_PROCESSLIST
              //|| stmt_type == stmt::T_SHOW_PROFILES
-             || stmt_type == stmt::T_SHOW_WARNINGS) {
+             || stmt_type == stmt::T_SHOW_WARNINGS
+             || stmt_type == stmt::T_SHOW_CREATE_USER) {
     select_stmt->set_select_type(NOT_AFFECT_FOUND_ROWS);
   } else {
     select_stmt->set_select_type(AFFECT_FOUND_ROWS);
@@ -2173,9 +2592,11 @@ int ObShowResolver::resolve_show_from_trigger(const ParseNode *from_tg_node,
                                               ObString &show_database_name,
                                               uint64_t &show_database_id,
                                               ObString &show_tg_name,
-                                              uint64_t &show_tg_id)
+                                              uint64_t &show_tg_id,
+                                              ObString &show_table_name)
 {
   int ret = OB_SUCCESS;
+  const ObTableSchema *table = NULL;
   if (OB_UNLIKELY(NULL == schema_checker_)) {
     ret = OB_ERR_SCHEMA_UNSET;
     LOG_WARN("some data member is not init", K(ret), K(schema_checker_));
@@ -2241,6 +2662,9 @@ int ObShowResolver::resolve_show_from_trigger(const ParseNode *from_tg_node,
         real_tenant_id, show_database_name, show_tg_name);
     OV (OB_NOT_NULL(tg_info), OB_ERR_TRIGGER_NOT_EXIST);
     OX (show_tg_id = tg_info->get_trigger_id());
+    OZ (schema_checker_->get_table_schema(real_tenant_id, tg_info->get_base_object_id(), table));
+    CK (OB_NOT_NULL(table));
+    OX (show_table_name = table->get_table_name());
   }
   return ret;
 }
@@ -2747,6 +3171,94 @@ int ObShowResolver::resolve_column_ref_expr(const ObQualifiedName &q_name, ObRaw
   }
   return ret;
 }
+
+int ObShowResolver::recursive_resolve_table_info(const ParseNode *table_list_node,
+                                                 ObIAllocator &alloc,
+                                                 ObIArray<ObCheckTableInfo> &table_infos,
+                                                 TableInfoSet &tables_set)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_list_node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null point", K(ret), KP(table_list_node));
+  } else if (T_LINK_NODE == table_list_node->type_) {
+    if (OB_FAIL(SMART_CALL(recursive_resolve_table_info(table_list_node->children_[0], alloc, table_infos, tables_set)))) {
+      LOG_WARN("recursive resolve table list node failed", K(ret));
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve_table_info(table_list_node->children_[1], alloc, table_infos, tables_set)))) {
+      LOG_WARN("recursive resolve table list node failed", K(ret));
+    }
+  } else if (OB_FAIL(resolve_table_info(table_list_node, alloc, table_infos, tables_set))) {
+    LOG_WARN("resolve table info failed", K(ret));
+  }
+  return ret;
+}
+
+int ObShowResolver::resolve_table_info(const ParseNode *table_node,
+                                       ObIAllocator &alloc,
+                                       ObIArray<ObCheckTableInfo> &table_infos,
+                                       TableInfoSet &tables_set)
+{
+  int ret = OB_SUCCESS;
+  ObString table_name;
+  ObString database_name;
+  const ObTableSchema *table_schema = NULL;
+  int64_t tenant_id = session_info_->get_effective_tenant_id();
+  uint64_t database_id = OB_INVALID_ID;
+  ObCheckTableInfo curr_info;
+  if (OB_ISNULL(table_node) || OB_ISNULL(schema_checker_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null point", K(table_node), K(schema_checker_), K(ret));
+  } else if (OB_FAIL(resolve_table_relation_node(table_node, table_name, database_name))) {
+    LOG_WARN("failed to resolve table relation node", K(ret));
+  } else if (OB_FAIL(ob_write_string(alloc, database_name, curr_info.db_name_, true))) {
+    LOG_WARN("failed to copy db name", K(ret));
+  } else if (OB_FAIL(ob_write_string(alloc, table_name, curr_info.table_name_, true))) {
+    LOG_WARN("failed to copy table name", K(ret));
+  } else {
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_checker_->get_database_id(tenant_id, database_name, database_id))) {
+      if (OB_ERR_BAD_DATABASE != ret) {
+        LOG_WARN("failed to get database id", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+        curr_info.db_exist_ = false;
+      }
+    } else {
+      curr_info.db_exist_ = true;
+    }
+    if (OB_SUCC(ret)
+        && curr_info.db_exist_
+        && OB_FAIL(schema_checker_->get_table_schema(tenant_id, database_name,
+                                                     table_name, false, table_schema))) {
+      if (OB_TABLE_NOT_EXIST != ret) {
+        LOG_WARN("failed to get schema", K(ret));
+      } else {
+        curr_info.table_exist_ = false;
+        ret = OB_SUCCESS;
+      }
+    } else if (nullptr == table_schema) {
+      curr_info.table_exist_ = false;
+    } else {
+      curr_info.table_exist_ = true;
+      curr_info.is_view_ = table_schema->is_view_table();
+      curr_info.valid_ = ObObjectStatus::VALID == table_schema->get_object_status();
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tables_set.set_refactored(curr_info, 0))) {
+        if (OB_HASH_EXIST != ret) {
+          LOG_WARN("failed to set info", K(ret));
+        } else {
+          ret = OB_ERR_NONUNIQ_TABLE;
+          LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, curr_info.table_name_.length(), curr_info.table_name_.ptr());
+        }
+      } else {
+        OZ (table_infos.push_back(curr_info));
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObShowResolver::ObSqlStrGenerator::init(common::ObIAllocator *allocator)
 {
@@ -3264,5 +3776,17 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_SEQUENCES_LIKE,
                        "SELECT sequence_name FROM %s.%s WHERE database_id = %ld ORDER BY sequence_name COLLATE utf8mb4_bin ASC",
                        NULL,
                        "sequence_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_OLAP_ASYNC_JOB_STATUS,
+                       NULL,
+                       "(SELECT R.job_name AS 'job_id', R.database_name AS 'schema_name', CASE WHEN R.status = 'COMPLETED' AND R.message = 'SUCCESS' THEN 'FINISH' WHEN R.status = 'COMPLETED' AND R.message <> 'SUCCESS' THEN 'FAILED' WHEN R.status = 'KILLED' THEN 'CANCELLED' ELSE R.status END as 'status', R.message as 'fail_msg', R.req_start_date as 'create_time', R.time as 'update_time', R.operation AS 'definition' FROM %s.%s R WHERE R.JOB_CLASS = 'OLAP_ASYNC_JOB_CLASS' %s %s\
+                        UNION ALL\
+                        SELECT T.job_name AS 'job_id', T.cowner AS 'schema_name', CASE WHEN T.state IS NULL THEN 'SUBMITTED' WHEN T.state = 'SCHEDULED' THEN 'RUNNING' WHEN T.state = 'KILLED' THEN 'CANCELLED' ELSE T.state END as 'status', NULL as fail_msg, T.start_date as 'create_time', T.gmt_modified as 'update_time', T.job_action as 'definition'  FROM %s.%s T WHERE T.JOB_CLASS = 'OLAP_ASYNC_JOB_CLASS' AND T.TENANT_ID = %d AND T.JOB > 0 %s %s) %s",
+                       NULL,
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_USER,
+                       NULL,
+                       "SELECT \"%.*s\" AS `CREATE USER for %.*s@%.*s` FROM DUAL",
+                       NULL,
+                       NULL);
 }/* ns sql*/
 }/* ns oceanbase */

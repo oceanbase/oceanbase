@@ -1844,7 +1844,8 @@
       "READONLY_ZONE_FIRST",
       "ONLY_READONLY_ZONE",
       "UNMERGE_ZONE_FIRST",
-      "UNMERGE_FOLLOWER_FIRST"
+      "UNMERGE_FOLLOWER_FIRST",
+      "COLUMN_STORE_ONLY"
     ],
     "publish_version": "",
     "info_cn": "",
@@ -2188,12 +2189,17 @@
       "aes-256-cfb128",
       "aes-128-ofb",
       "aes-192-ofb",
-      "aes-256-ofb"
+      "aes-256-ofb",
+      "sm4-ecb",
+      "sm4-cbc",
+      "sm4-cfb",
+      "sm4-ofb"
     ],
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": ""
+    "ref_url": "",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_block_encryption_mode"
   },
   "nls_date_format": {
     "id": 10064,
@@ -5997,6 +6003,7 @@
     "data_type": "int",
     "info": "control default collation for utf8mb4",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE | MYSQL_ONLY",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_default_value_for_utf8mb4",
     "get_meta_type_func": "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar",
     "to_select_obj_func": "ObSysVarToObjFuncs::to_obj_collation",
     "to_show_str_func": "ObSysVarToStrFuncs::to_str_collation",
@@ -6039,13 +6046,12 @@
     "default_value": "0",
     "base_value": "0",
     "data_type": "int",
-    "info": "mock for mysql5.7",
+    "info": "The value to be used by the following INSERT or ALTER TABLE statement when inserting an AUTO_INCREMENT value. Merely simulates MySQL 5.7.",
     "flags": "SESSION | MYSQL_ONLY",
     "publish_version": "424",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "join_buffer_size": {
       "id": 10329,
@@ -6053,27 +6059,25 @@
       "default_value": "262144",
       "base_value": "262144",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The minimum size of the buffer that is used for plain index scans, range index scans, and joins that do not use indexes and thus perform full table scans. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "max_join_size": {
       "id": 10330,
       "name": "max_join_size",
-      "default_value": "18446744073709500416",
-      "base_value": "18446744073709500416",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "default_value": "18446744073709547520",
+      "base_value": "18446744073709547520",
+      "data_type": "uint",
+      "info": "Do not permit statements that probably need to examine more than max_join_size rows (for single-table statements) or row combinations (for multiple-table statements) or that are likely to do more than max_join_size disk seeks. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "max_length_for_sort_data": {
       "id": 10331,
@@ -6081,13 +6085,12 @@
       "default_value": "1024",
       "base_value": "1024",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The cutoff on the size of index values that determines which filesort algorithm to use. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "max_prepared_stmt_count": {
       "id": 10332,
@@ -6095,13 +6098,12 @@
       "default_value": "16382",
       "base_value": "16382",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "This variable limits the total number of prepared statements in the server. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "max_sort_length": {
       "id": 10333,
@@ -6109,13 +6111,12 @@
       "default_value": "1024",
       "base_value": "1024",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The number of bytes to use when sorting data values. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "min_examined_row_limit": {
       "id": 10334,
@@ -6123,13 +6124,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Queries that examine fewer than this number of rows are not logged to the slow query log. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "multi_range_count": {
       "id": 10335,
@@ -6137,13 +6137,12 @@
       "default_value": "256",
       "base_value": "256",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "This variable has no effect. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "mysqlx_connect_timeout": {
       "id": 10336,
@@ -6151,13 +6150,12 @@
       "default_value": "30",
       "base_value": "30",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The number of seconds X Plugin waits for the first packet to be received from newly connected clients. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/x-plugin-options-system-variables.html"
   },
   "mysqlx_idle_worker_thread_timeout": {
       "id": 10337,
@@ -6165,13 +6163,12 @@
       "default_value": "60",
       "base_value": "60",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The number of seconds after which idle worker threads are terminated. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/x-plugin-options-system-variables.html"
   },
   "mysqlx_max_allowed_packet": {
       "id": 10338,
@@ -6179,13 +6176,12 @@
       "default_value": "67108864",
       "base_value": "67108864",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The maximum size of network packets that can be received by X Plugin. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/x-plugin-options-system-variables.html"
   },
   "mysqlx_max_connections": {
       "id": 10339,
@@ -6193,13 +6189,12 @@
       "default_value": "100",
       "base_value": "100",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The maximum number of concurrent client connections X Plugin can accept. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/x-plugin-options-system-variables.html"
   },
   "mysqlx_min_worker_threads": {
       "id": 10340,
@@ -6207,27 +6202,25 @@
       "default_value": "2",
       "base_value": "2",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The minimum number of worker threads used by X Plugin for handling client requests. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/x-plugin-options-system-variables.html"
   },
   "performance_schema_show_processlist": {
       "id": 10341,
       "name": "performance_schema_show_processlist",
-      "default_value": "OFF",
-      "base_value": "OFF",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "default_value": "0",
+      "base_value": "0",
+      "data_type": "bool",
+      "info": "The variable determines which SHOW PROCESSLIST implementation to use. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/performance-schema-system-variables.html"
   },
   "query_alloc_block_size": {
       "id": 10342,
@@ -6235,13 +6228,12 @@
       "default_value": "8192",
       "base_value": "8192",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The allocation size in bytes of memory blocks that are allocated for objects created during statement parsing and execution. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "query_prealloc_size": {
       "id": 10343,
@@ -6249,13 +6241,12 @@
       "default_value": "8192",
       "base_value": "8192",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The size in bytes of the persistent buffer used for statement parsing and execution. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "slow_query_log": {
       "id": 10344,
@@ -6263,27 +6254,25 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Whether the slow query log is enabled. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "slow_query_log_file": {
       "id": 10345,
       "name": "slow_query_log_file",
       "default_value": "/usr/local/mysql/data/obrd-slow.log",
       "base_value": "/usr/local/mysql/data/obrd-slow.log",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "data_type": "varchar",
+      "info": "The name of the slow query log file. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "sort_buffer_size": {
       "id": 10346,
@@ -6291,13 +6280,12 @@
       "default_value": "262144",
       "base_value": "262144",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Each session that must perform a sort allocates a buffer of this size. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "sql_buffer_result": {
       "id": 10347,
@@ -6305,13 +6293,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "If enabled, sql_buffer_result forces results from SELECT statements to be put into temporary tables. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "binlog_cache_size": {
       "id": 10348,
@@ -6319,13 +6306,12 @@
       "default_value": "32768",
       "base_value": "32768",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "binlog_cache_size sets the size for the transaction cache only. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_direct_non_transactional_updates": {
       "id": 10349,
@@ -6333,27 +6319,29 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Enabling binlog_direct_non_transactional_updates causes updates to nontransactional tables to be written directly to the binary log, rather than to the transaction cache. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_error_action": {
       "id": 10350,
       "name": "binlog_error_action",
-      "default_value": "ABORT_SERVER",
-      "base_value": "ABORT_SERVER",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "default_value": "1",
+      "base_value": "1",
+      "data_type": "enum",
+      "info": "Controls what happens when the server encounters an error. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
+      "enum_names": [
+        "IGNORE_ERROR",
+        "ABORT_SERVER"
+      ],
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_group_commit_sync_delay": {
       "id": 10351,
@@ -6361,13 +6349,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Controls how many microseconds the binary log commit waits before synchronizing the binary log file to disk. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_group_commit_sync_no_delay_count": {
       "id": 10352,
@@ -6375,13 +6362,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The maximum number of transactions to wait for before aborting the current delay as specified by binlog_group_commit_sync_delay. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_max_flush_queue_time": {
       "id": 10353,
@@ -6389,13 +6375,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "This variable no longer has any effect. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_order_commits": {
       "id": 10354,
@@ -6403,13 +6388,12 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "When this variable is enabled on a replication source server, transaction commit instructions issued to storage engines are serialized on a single thread. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_stmt_cache_size": {
       "id": 10355,
@@ -6417,13 +6401,12 @@
       "default_value": "32768",
       "base_value": "32768",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "This variable determines the size of the cache for the binary log to hold nontransactional statements issued during a transaction. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_transaction_dependency_history_size": {
       "id": 10356,
@@ -6431,27 +6414,30 @@
       "default_value": "25000",
       "base_value": "25000",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Sets an upper limit on the number of row hashes which are kept in memory and used for looking up the transaction that last modified a given row. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "binlog_transaction_dependency_tracking": {
       "id": 10357,
       "name": "binlog_transaction_dependency_tracking",
-      "default_value": "COMMIT_ORDER",
-      "base_value": "COMMIT_ORDER",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "default_value": "0",
+      "base_value": "0",
+      "data_type": "enum",
+      "info": "The source of dependency information that the source uses to determine which transactions can be executed in parallel by the replica's multithreaded applier. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
+      "enum_names": [
+        "COMMIT_ORDER",
+        "WRITESET",
+        "WRITESET_SESSION"
+      ],
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "expire_logs_days": {
       "id": 10358,
@@ -6459,13 +6445,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The number of days for automatic binary log file removal. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "innodb_flush_log_at_timeout": {
       "id": 10359,
@@ -6473,13 +6458,12 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Write and flush the logs every N seconds. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_flush_log_at_trx_commit": {
       "id": 10360,
@@ -6487,27 +6471,25 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Controls the balance between strict ACID compliance for commit operations and higher performance. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_log_checkpoint_now": {
       "id": 10361,
       "name": "innodb_log_checkpoint_now",
-      "default_value": "OFF",
-      "base_value": "OFF",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "default_value": "0",
+      "base_value": "0",
+      "data_type": "bool",
+      "info": "Enable this debug option to force InnoDB to write a checkpoint. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_log_checksums": {
       "id": 10362,
@@ -6515,13 +6497,12 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Enables or disables checksums for redo log pages. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_log_compressed_pages": {
       "id": 10363,
@@ -6529,13 +6510,12 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Specifies whether images of re-compressed pages are written to the redo log. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_log_write_ahead_size": {
       "id": 10364,
@@ -6543,13 +6523,12 @@
       "default_value": "8192",
       "base_value": "8192",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Defines the write-ahead block size for the redo log, in bytes. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_max_undo_log_size": {
       "id": 10365,
@@ -6557,13 +6536,12 @@
       "default_value": "1073741824",
       "base_value": "1073741824",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Defines a threshold size for undo tablespaces. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_online_alter_log_max_size": {
       "id": 10366,
@@ -6571,13 +6549,12 @@
       "default_value": "134217728",
       "base_value": "134217728",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Specifies an upper limit in bytes on the size of the temporary log files used during online DDL operations for InnoDB tables. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_undo_log_truncate": {
       "id": 10367,
@@ -6585,13 +6562,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "When enabled, undo tablespaces that exceed the threshold value defined by innodb_max_undo_log_size are marked for truncation. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_undo_logs": {
       "id": 10368,
@@ -6599,13 +6575,12 @@
       "default_value": "128",
       "base_value": "128",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Defines the number of rollback segments used by InnoDB. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "log_bin_trust_function_creators": {
       "id": 10369,
@@ -6613,13 +6588,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "It controls whether stored function creators can be trusted not to create stored functions that causes unsafe events to be written to the binary log. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "log_bin_use_v1_row_events": {
       "id": 10370,
@@ -6627,13 +6601,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Whether Version 2 binary logging is in use. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "log_builtin_as_identified_by_password": {
       "id": 10371,
@@ -6641,27 +6614,25 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "This variable affects binary logging of user-management statements. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "max_binlog_cache_size": {
       "id": 10372,
       "name": "max_binlog_cache_size",
       "default_value": "18446744073709500416",
       "base_value": "18446744073709500416",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "data_type": "uint",
+      "info": "If a transaction requires more than this many bytes, the server generates a Multi-statement transaction required more than 'max_binlog_cache_size' bytes of storage error. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "max_binlog_size": {
       "id": 10373,
@@ -6669,27 +6640,25 @@
       "default_value": "1073741824",
       "base_value": "1073741824",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "If a write to the binary log causes the current log file size to exceed the value of this variable, the server rotates the binary logs. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "max_binlog_stmt_cache_size": {
       "id": 10374,
       "name": "max_binlog_stmt_cache_size",
       "default_value": "18446744073709500416",
       "base_value": "18446744073709500416",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "data_type": "uint",
+      "info": "If nontransactional statements within a transaction require more than this many bytes of memory, the server generates an error. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "max_relay_log_size": {
       "id": 10375,
@@ -6697,27 +6666,25 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The size at which the server rotates relay log files automatically. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-replica.html"
   },
   "relay_log_info_repository": {
       "id": 10376,
       "name": "relay_log_info_repository",
       "default_value": "FILE",
       "base_value": "FILE",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "data_type": "varchar",
+      "info": "The setting of this variable determines whether the replica server stores its applier metadata repository as an InnoDB table in the mysql system database, or as a file in the data directory. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-replica.html"
   },
   "relay_log_purge": {
       "id": 10377,
@@ -6725,13 +6692,12 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Disables or enables automatic purging of relay log files as soon as they are not needed any more. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-replica.html"
   },
   "sync_binlog": {
       "id": 10378,
@@ -6739,13 +6705,12 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Controls how often the MySQL server synchronizes the binary log to disk. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html"
   },
   "sync_relay_log": {
       "id": 10379,
@@ -6753,13 +6718,12 @@
       "default_value": "10000",
       "base_value": "10000",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "If the value of this variable is greater than 0, the MySQL server synchronizes its relay log to disk after every sync_relay_log events are written to the relay log. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-replica.html"
   },
   "sync_relay_log_info": {
       "id": 10380,
@@ -6767,13 +6731,12 @@
       "default_value": "10000",
       "base_value": "10000",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "Setting this variable takes effect for all replication channels immediately, including running channels. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-replica.html"
   },
   "innodb_deadlock_detect": {
       "id": 10381,
@@ -6781,13 +6744,12 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "This option is used to disable deadlock detection. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_lock_wait_timeout": {
       "id": 10382,
@@ -6795,13 +6757,12 @@
       "default_value": "50",
       "base_value": "50",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The length of time in seconds an InnoDB transaction waits for a row lock before giving up. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_print_all_deadlocks": {
       "id": 10383,
@@ -6809,13 +6770,12 @@
       "default_value": "0",
       "base_value": "0",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "When this option is enabled, information about all deadlocks in InnoDB user transactions is recorded in the mysqld error log. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "innodb_table_locks": {
       "id": 10384,
@@ -6823,27 +6783,25 @@
       "default_value": "1",
       "base_value": "1",
       "data_type": "int",
-      "info": "mock for mysql5.7",
+      "info": "The default value is 1, which means that LOCK TABLES causes InnoDB to lock a table internally if autocommit = 0. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | SESSION | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html"
   },
   "max_write_lock_count": {
       "id": 10385,
       "name": "max_write_lock_count",
       "default_value": "18446744073709500416",
       "base_value": "18446744073709500416",
-      "data_type": "int",
-      "info": "mock for mysql5.7",
+      "data_type": "uint",
+      "info": "if max_write_lock_count is set to some low value (say, 10), read lock requests may be preferred over pending write lock requests if the read lock requests have already been passed over in favor of 10 write lock requests. Merely simulates MySQL 5.7.",
       "flags": "GLOBAL | MYSQL_ONLY",
       "publish_version": "424",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "_ob_enable_role_ids": {
       "id": 10386,
@@ -10545,8 +10503,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_character_sets_dir",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_character_sets_dir"
   },
   "date_format": {
     "id": 10646,
@@ -10559,8 +10516,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_date_format",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_date_format"
   },
   "datetime_format": {
     "id": 10647,
@@ -10573,8 +10529,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_datetime_format",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_datetime_format"
   },
   "disconnect_on_expired_password": {
     "id": 10648,
@@ -10587,8 +10542,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_disconnect_on_expired_password",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_disconnect_on_expired_password"
   },
   "external_user": {
     "id": 10649,
@@ -10601,8 +10555,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_external_user",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_external_user"
   },
   "have_crypt": {
     "id": 10650,
@@ -10615,8 +10568,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_have_crypt",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_have_crypt"
   },
   "have_dynamic_loading": {
     "id": 10651,
@@ -10629,8 +10581,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_have_dynamic_loading",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_have_dynamic_loading"
   },
   "keyring_aws_conf_file": {
     "id": 10652,
@@ -10643,8 +10594,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_conf_file",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_conf_file"
   },
   "keyring_aws_data_file": {
     "id": 10653,
@@ -10657,8 +10607,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_data_file",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_data_file"
   },
   "language": {
     "id": 10654,
@@ -10671,8 +10620,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-options.html#option_mysqld_language",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-options.html#option_mysqld_language"
   },
   "lc_messages_dir": {
     "id": 10655,
@@ -10685,8 +10633,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_lc_messages_dir",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_lc_messages_dir"
   },
   "lower_case_file_system": {
     "id": 10656,
@@ -10699,8 +10646,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_lower_case_file_system",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_lower_case_file_system"
   },
   "max_digest_length": {
     "id": 10657,
@@ -10713,8 +10659,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_digest_length",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_digest_length"
   },
   "ndbinfo_database": {
     "id": 10658,
@@ -10727,8 +10672,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndbinfo_database",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndbinfo_database"
   },
   "ndbinfo_table_prefix": {
     "id": 10659,
@@ -10741,8 +10685,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndbinfo_database",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndbinfo_database"
   },
   "ndbinfo_version": {
     "id": 10660,
@@ -10755,8 +10698,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndbinfo_version",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndbinfo_version"
   },
   "ndb_batch_size": {
     "id": 10661,
@@ -10769,8 +10711,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html"
   },
   "ndb_cluster_connection_pool": {
     "id": 10662,
@@ -10785,8 +10726,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html"
   },
   "ndb_cluster_connection_pool_nodeids": {
     "id": 10663,
@@ -10799,8 +10739,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html"
   },
   "ndb_log_apply_status": {
     "id": 10664,
@@ -10813,8 +10752,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html"
   },
   "ndb_log_bin": {
     "id": 10665,
@@ -10827,8 +10765,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_log_bin",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_log_bin"
   },
   "ndb_log_fail_terminate": {
     "id": 10666,
@@ -10841,8 +10778,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html"
   },
   "ndb_log_orig": {
     "id": 10667,
@@ -10855,8 +10791,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_log_orig",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_log_orig"
   },
   "ndb_log_transaction_id": {
     "id": 10668,
@@ -10869,8 +10804,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_log_transaction_id",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_log_transaction_id"
   },
   "ndb_optimized_node_selection": {
     "id": 10669,
@@ -10883,8 +10817,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_optimized_node_selection",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_optimized_node_selection"
   },
   "Ndb_system_name": {
     "id": 10670,
@@ -10897,8 +10830,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#statvar_Ndb_system_name",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#statvar_Ndb_system_name"
   },
   "ndb_use_copying_alter_table": {
     "id": 10671,
@@ -10911,8 +10843,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_use_copying_alter_table",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_use_copying_alter_table"
   },
   "ndb_version_string": {
     "id": 10672,
@@ -10925,8 +10856,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_version_string",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_version_string"
   },
   "ndb_wait_connected": {
     "id": 10673,
@@ -10941,8 +10871,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html"
   },
   "ndb_wait_setup": {
     "id": 10674,
@@ -10957,8 +10886,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html"
   },
   "proxy_user": {
     "id": 10675,
@@ -10971,8 +10899,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_proxy_user",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_proxy_user"
   },
   "sha256_password_auto_generate_rsa_keys": {
     "id": 10676,
@@ -10985,8 +10912,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_auto_generate_rsa_keys",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_auto_generate_rsa_keys"
   },
   "sha256_password_private_key_path": {
     "id": 10677,
@@ -10999,8 +10925,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_private_key_path",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_private_key_path"
   },
   "sha256_password_public_key_path": {
     "id": 10678,
@@ -11013,8 +10938,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_public_key_path",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_public_key_path"
   },
   "skip_show_database": {
     "id": 10679,
@@ -11027,8 +10951,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_skip_show_database",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_skip_show_database"
   },
   "plugin_load": {
     "id": 10680,
@@ -11041,8 +10964,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-options.html#option_mysqld_plugin-load",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-options.html#option_mysqld_plugin-load"
   },
   "plugin_load_add": {
     "id": 10681,
@@ -11055,8 +10977,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-options.html#option_mysqld_plugin-load-add",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-options.html#option_mysqld_plugin-load-add"
   },
   "big_tables": {
     "id": 10682,
@@ -11069,8 +10990,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_big_tables",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_big_tables"
   },
   "check_proxy_users": {
     "id": 10683,
@@ -11083,8 +11003,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_check_proxy_users",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_check_proxy_users"
   },
   "connection_control_failed_connections_threshold": {
     "id": 10684,
@@ -11099,8 +11018,7 @@
     "max_val": "2147483647",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/connection-control-variables.html#sysvar_connection_control_failed_connections_threshold",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/connection-control-variables.html#sysvar_connection_control_failed_connections_threshold"
   },
   "connection_control_max_connection_delay": {
     "id": 10685,
@@ -11115,8 +11033,7 @@
     "max_val": "2147483647",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/connection-control-variables.html#sysvar_connection_control_max_connection_delay",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/connection-control-variables.html#sysvar_connection_control_max_connection_delay"
   },
   "connection_control_min_connection_delay": {
     "id": 10686,
@@ -11131,8 +11048,7 @@
     "max_val": "2147483647",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/connection-control-variables.html#sysvar_connection_control_min_connection_delay",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/connection-control-variables.html#sysvar_connection_control_min_connection_delay"
   },
   "default_week_format": {
     "id": 10687,
@@ -11147,8 +11063,7 @@
     "max_val": "7",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_default_week_format",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_default_week_format"
   },
   "delayed_insert_timeout": {
     "id": 10688,
@@ -11163,8 +11078,7 @@
     "max_val": "31536000",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_delayed_insert_timeout",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_delayed_insert_timeout"
   },
   "delayed_queue_size": {
     "id": 10689,
@@ -11179,8 +11093,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_delayed_queue_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_delayed_queue_size"
   },
   "eq_range_index_dive_limit": {
     "id": 10690,
@@ -11195,8 +11108,7 @@
     "max_val": "4294967295",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_eq_range_index_dive_limit",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_eq_range_index_dive_limit"
   },
   "innodb_stats_auto_recalc": {
     "id": 10691,
@@ -11209,8 +11121,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_auto_recalc",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_auto_recalc"
   },
   "innodb_stats_include_delete_marked": {
     "id": 10692,
@@ -11223,8 +11134,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_include_delete_marked",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_include_delete_marked"
   },
   "innodb_stats_method": {
     "id": 10693,
@@ -11242,8 +11152,7 @@
     ],
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_method",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_method"
   },
   "innodb_stats_on_metadata": {
     "id": 10694,
@@ -11256,8 +11165,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_on_metadata",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_on_metadata"
   },
   "version_tokens_session": {
     "id": 10695,
@@ -11270,8 +11178,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/version-tokens-reference.html#sysvar_version_tokens_session",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/version-tokens-reference.html#sysvar_version_tokens_session"
   },
   "innodb_stats_persistent_sample_pages": {
     "id": 10696,
@@ -11286,8 +11193,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_persistent_sample_pages",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_persistent_sample_pages"
   },
   "innodb_stats_sample_pages": {
     "id": 10697,
@@ -11302,8 +11208,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_sample_pages",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_sample_pages"
   },
   "innodb_stats_transient_sample_pages": {
     "id": 10698,
@@ -11318,8 +11223,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_transient_sample_pagess",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_stats_transient_sample_pagess"
   },
   "keyring_aws_cmk_id": {
     "id": 10699,
@@ -11332,8 +11236,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_cmk_id",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_cmk_id"
   },
   "keyring_aws_region": {
     "id": 10700,
@@ -11375,8 +11278,7 @@
     ],
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_region",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_aws_region"
   },
   "keyring_encrypted_file_data": {
     "id": 10701,
@@ -11389,8 +11291,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_encrypted_file_data",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_encrypted_file_data"
   },
   "keyring_encrypted_file_password": {
     "id": 10702,
@@ -11403,8 +11304,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_encrypted_file_password",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_encrypted_file_password"
   },
   "keyring_file_data": {
     "id": 10703,
@@ -11417,8 +11317,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_file_data",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_file_data"
   },
   "keyring_okv_conf_dir": {
     "id": 10704,
@@ -11431,8 +11330,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_okv_conf_dir",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_okv_conf_dir"
   },
   "keyring_operations": {
     "id": 10705,
@@ -11445,8 +11343,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_operations",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/keyring-system-variables.html#sysvar_keyring_operations"
   },
   "optimizer_switch": {
     "id": 10706,
@@ -11459,8 +11356,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_switch",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_switch"
   },
   "max_connect_errors": {
     "id": 10707,
@@ -11475,8 +11371,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_connect_errors",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_connect_errors"
   },
   "mysql_firewall_mode": {
     "id": 10708,
@@ -11489,8 +11384,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/firewall-reference.html#sysvar_mysql_firewall_mode",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/firewall-reference.html#sysvar_mysql_firewall_mode"
   },
   "mysql_firewall_trace": {
     "id": 10709,
@@ -11503,8 +11397,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/firewall-reference.html#sysvar_mysql_firewall_trace",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/firewall-reference.html#sysvar_mysql_firewall_trace"
   },
   "mysql_native_password_proxy_users": {
     "id": 10710,
@@ -11517,8 +11410,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_mysql_native_password_proxy_users",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_mysql_native_password_proxy_users"
   },
   "net_retry_count": {
     "id": 10711,
@@ -11531,8 +11423,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_net_retry_count",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_net_retry_count"
   },
   "new": {
     "id": 10712,
@@ -11545,8 +11436,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_new",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_new"
   },
   "old_passwords": {
     "id": 10713,
@@ -11564,8 +11454,7 @@
     ],
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_old_passwords",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_old_passwords"
   },
   "optimizer_prune_level": {
     "id": 10714,
@@ -11580,8 +11469,7 @@
     "max_val": "1",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_prune_level",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_prune_level"
   },
   "optimizer_search_depth": {
     "id": 10715,
@@ -11596,8 +11484,7 @@
     "max_val": "62",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_search_depth",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_search_depth"
   },
   "optimizer_trace": {
     "id": 10716,
@@ -11610,8 +11497,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace"
   },
   "optimizer_trace_features": {
     "id": 10717,
@@ -11624,8 +11510,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_features",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_features"
   },
   "optimizer_trace_limit": {
     "id": 10718,
@@ -11640,8 +11525,7 @@
     "max_val": "2147483647",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_limit",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_limit"
   },
   "optimizer_trace_max_mem_size": {
     "id": 10719,
@@ -11656,8 +11540,7 @@
     "max_val": "4294967295",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_max_mem_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_max_mem_size"
   },
   "optimizer_trace_offset": {
     "id": 10720,
@@ -11672,8 +11555,7 @@
     "max_val": "2147483647",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_offset",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_optimizer_trace_offset"
   },
   "parser_max_mem_size": {
     "id": 10721,
@@ -11688,8 +11570,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_parser_max_mem_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_parser_max_mem_size"
   },
   "rand_seed1": {
     "id": 10722,
@@ -11704,8 +11585,7 @@
     "max_val": "4294967295",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_rand_seed1",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_rand_seed1"
   },
   "rand_seed2": {
     "id": 10723,
@@ -11720,8 +11600,7 @@
     "max_val": "4294967295",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_rand_seed2",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_rand_seed2"
   },
   "range_alloc_block_size": {
     "id": 10724,
@@ -11736,8 +11615,7 @@
     "max_val": "18446744073709550592",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_range_alloc_block_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_range_alloc_block_size"
   },
   "range_optimizer_max_mem_size": {
     "id": 10725,
@@ -11752,8 +11630,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_range_optimizer_max_mem_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_range_optimizer_max_mem_size"
   },
   "rewriter_enabled": {
     "id": 10726,
@@ -11766,8 +11643,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/rewriter-query-rewrite-plugin-reference.html#sysvar_rewriter_enabled",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/rewriter-query-rewrite-plugin-reference.html#sysvar_rewriter_enabled"
   },
   "rewriter_verbose": {
     "id": 10727,
@@ -11780,8 +11656,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/rewriter-query-rewrite-plugin-reference.html#sysvar_rewriter_verbose",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/rewriter-query-rewrite-plugin-reference.html#sysvar_rewriter_verbose"
   },
   "secure_auth": {
     "id": 10728,
@@ -11794,8 +11669,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_secure_auth",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_secure_auth"
   },
   "sha256_password_proxy_users": {
     "id": 10729,
@@ -11808,8 +11682,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_proxy_users",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_proxy_users"
   },
   "show_compatibility_56": {
     "id": 10730,
@@ -11822,8 +11695,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_proxy_users",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sha256_password_proxy_users"
   },
   "show_create_table_verbosity": {
     "id": 10731,
@@ -11836,8 +11708,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_show_create_table_verbosity",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_show_create_table_verbosity"
   },
   "show_old_temporals": {
     "id": 10732,
@@ -11850,8 +11721,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_show_old_temporals",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_show_old_temporals"
   },
   "sql_big_selects": {
     "id": 10733,
@@ -11864,8 +11734,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sql_big_selects",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_sql_big_selects"
   },
   "updatable_views_with_limit": {
     "id": 10734,
@@ -11884,8 +11753,7 @@
     ],
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_updatable_views_with_limit",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_updatable_views_with_limit"
   },
   "validate_password_dictionary_file": {
     "id": 10735,
@@ -11898,8 +11766,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/validate-password-options-variables.html#sysvar_validate_password_dictionary_file",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/validate-password-options-variables.html#sysvar_validate_password_dictionary_file"
   },
   "delayed_insert_limit": {
     "id": 10736,
@@ -11914,8 +11781,7 @@
     "max_val": "18446744073709551615",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_delayed_insert_limit",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_delayed_insert_limit"
   },
   "ndb_version": {
     "id": 10737,
@@ -11928,8 +11794,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_version",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-options-variables.html#sysvar_ndb_version"
   },
   "auto_generate_certs": {
     "id": 10738,
@@ -11942,8 +11807,7 @@
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_auto_generate_certs",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_auto_generate_certs"
   },
   "_optimizer_cost_based_transformation": {
     "id": 10739,
@@ -11955,6 +11819,34 @@
     "flags": "GLOBAL | SESSION",
     "min_val": "0",
     "max_val": "2",
+    "publish_version": "425",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "range_index_dive_limit": {
+    "id": 10740,
+    "name": "range_index_dive_limit",
+    "default_value": "10",
+    "base_value": "10",
+    "data_type": "int",
+    "info": "Indicate the limit on the number of ranges when optimizer use storage cardinality estimation",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "425",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "partition_index_dive_limit": {
+    "id": 10741,
+    "name": "partition_index_dive_limit",
+    "default_value": "10",
+    "base_value": "10",
+    "data_type": "int",
+    "info": "Indicate the limit on the number of partitions when optimizer use storage cardinality estimation",
+    "flags": "SESSION | GLOBAL",
     "publish_version": "425",
     "info_cn": "",
     "background_cn": "",

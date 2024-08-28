@@ -547,7 +547,7 @@ int DRLSInfo::get_leader(
 int DRLSInfo::get_leader_and_member_list(
     common::ObAddr &leader_addr,
     common::ObMemberList &member_list,
-    GlobalLearnerList &learner_list)
+    GlobalLearnerList &learner_list) const
 {
   int ret = OB_SUCCESS;
   const ObLSReplica *leader_replica = nullptr;
@@ -604,6 +604,68 @@ int DRLSInfo::get_default_data_source(
                                   leader_replica->get_member_time_us(),
                                   leader_replica->get_replica_type(),
                                   leader_replica->get_memstore_percent());
+  }
+  return ret;
+}
+
+int DRLSInfo::get_member_by_server(
+    const common::ObAddr& server_addr,
+    ObMember &member) const
+{
+  int ret = OB_SUCCESS;
+  member.reset();
+  common::ObAddr leader_addr; // not used
+  GlobalLearnerList learner_list;
+  common::ObMemberList member_list;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!server_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server_addr));
+  } else if (OB_FAIL(get_leader_and_member_list(leader_addr, member_list, learner_list))) {
+    LOG_WARN("fail to get leader and member list", KR(ret), K(server_addr));
+  } else if (member_list.contains(server_addr)) {
+    if (OB_FAIL(member_list.get_member_by_addr(server_addr, member))) {
+      LOG_WARN("fail to get member by addr", KR(ret), K(server_addr), K(member_list));
+    }
+  } else if (learner_list.contains(server_addr)) {
+    if (OB_FAIL(learner_list.get_learner_by_addr(server_addr, member))) {
+      LOG_WARN("fail to get member by addr", KR(ret), K(server_addr), K(learner_list));
+    }
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("fail to find server in leader member list and learner list",
+                KR(ret), K(server_addr), K(learner_list), K(member_list));
+  }
+  return ret;
+}
+
+int DRLSInfo::check_replica_exist_and_get_ls_replica(
+    const common::ObAddr& server_addr,
+    share::ObLSReplica& ls_replica) const
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSReplica *ls_replica_ptr = nullptr;
+  ls_replica.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!server_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server_addr));
+  } else if (OB_FAIL(inner_ls_info_.find(server_addr, ls_replica_ptr))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to find replica by server", KR(ret), K(server_addr), K(inner_ls_info_));
+    } else {
+      LOG_INFO("dose not have replica", KR(ret), K(server_addr), K(inner_ls_info_));
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_ISNULL(ls_replica_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_replica_ptr is null", KR(ret), K(server_addr), KP(ls_replica_ptr), K(inner_ls_info_));
+  } else if (OB_FAIL(ls_replica.assign(*ls_replica_ptr))) {
+    LOG_WARN("ls_replica assign failed", KR(ret), K(server_addr), KP(ls_replica_ptr));
   }
   return ret;
 }

@@ -61,7 +61,7 @@ inline bool ObFeedbackReplicaLocation::is_valid_obj() const
 {
   return server_.is_valid()
          && (common::INVALID_ROLE != role_)
-         && (common::REPLICA_TYPE_MAX != replica_type_);
+         && (common::REPLICA_TYPE_INVALID != replica_type_);
 }
 
 class ObFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObFeedbackPartitionLocation>
@@ -195,7 +195,7 @@ inline bool ObFeedbackRerouteInfo::is_valid_obj() const
   return (for_session_reroute_ && server_.is_valid()) ||
          (!for_session_reroute_ && server_.is_valid()
          && (common::INVALID_ROLE != role_)
-         && (common::REPLICA_TYPE_MAX != replica_type_)
+         && (common::REPLICA_TYPE_INVALID != replica_type_)
          && tbl_name_len_ > 0
          && tbl_name_len_ <= common::OB_MAX_TABLE_NAME_LENGTH
          && OB_INVALID_VERSION != tbl_schema_version_);

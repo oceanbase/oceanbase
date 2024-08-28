@@ -202,7 +202,8 @@ protected:
   int resolve_into_line_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_variable_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_file_node(const ParseNode *node, ObSelectIntoItem &into_item);
-  int resolve_max_file_size_node(const ParseNode *file_size_node, ObSelectIntoItem &into_item);
+  int resolve_file_partition_node(const ParseNode *node, ObSelectIntoItem &into_item);
+  int resolve_size_node(const ParseNode *file_size_node, ObSelectIntoItem &into_item);
   int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value) const;
   // resolve_star related functions
   int resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info);
@@ -363,6 +364,7 @@ private:
   int check_aggr_in_select_scope(ObSelectStmt *select_stmt);
   int mark_aggr_in_select_scope(ObSelectStmt *select_stmt);
 
+  int check_audit_log_stmt(ObSelectStmt *select_stmt);
 protected:
   // data members
   /*these member is only for with clause*/

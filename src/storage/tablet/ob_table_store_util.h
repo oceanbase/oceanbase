@@ -86,6 +86,10 @@ public:
   TO_STRING_KV(K_(cnt), KP_(sstable_array), K_(serialize_table_type), K_(is_inited));
 private:
   int get_all_tables(ObIArray<ObITable *> &tables) const;
+  // construct major_tables with old sstable array and input tables_array, but filter twin sstable of new_co_major
+  int replace_twin_majors_and_build_new(
+      const ObIArray<ObITable *> &tables_array,
+      ObIArray<ObITable *> &major_tables) const;
   int inc_meta_ref_cnt(bool &inc_success) const;
   int inc_data_ref_cnt(bool &inc_success) const;
   void dec_meta_ref_cnt() const;

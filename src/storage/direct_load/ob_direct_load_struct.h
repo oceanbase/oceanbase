@@ -68,5 +68,18 @@ struct ObDirectLoadInsertMode
   static bool is_valid_for_incremental_method(const Type type) { return NORMAL == type || INC_REPLACE == type; }
 };
 
+struct ObDirectLoadLevel
+{
+#define OB_DIRECT_LOAD_LEVEL_DEF(DEF) \
+  DEF(INVALID_LEVEL, = 0)             \
+  DEF(TABLE, = 1)                     \
+  DEF(PARTITION, = 2)                 \
+  DEF(MAX_LEVEL, )
+
+  DECLARE_ENUM(Type, type, OB_DIRECT_LOAD_LEVEL_DEF, static);
+
+  static bool is_type_valid(const Type type);
+};
+
 } // namespace storage
 } // namespace oceanbase

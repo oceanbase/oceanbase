@@ -67,7 +67,8 @@ public:
   int update_for_rollback(ObDBMSSchedJobInfo &job_info);
   int update_for_timeout(ObDBMSSchedJobInfo &job_info);
   int update_for_end(ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
-
+  int update_for_kill(ObDBMSSchedJobInfo &job_info);
+  int get_dbms_sched_job_is_killed(const ObDBMSSchedJobInfo &job_info, bool &is_killed);
   int get_dbms_sched_job_info(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
     common::ObIAllocator &allocator, ObDBMSSchedJobInfo &job_info);
@@ -90,6 +91,7 @@ public:
 
   int purge_run_detail_histroy(uint64_t tenant_id);
 
+  int purge_olap_async_job_run_detail(uint64_t tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedTableOperator);
 

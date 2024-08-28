@@ -36,6 +36,7 @@ public:
   {}
   virtual obrpc::ObDDLArg &get_ddl_arg() { return trigger_arg_; }
   obrpc::ObCreateTriggerArg &get_trigger_arg() { return trigger_arg_; }
+  const obrpc::ObCreateTriggerArg &get_trigger_arg() const { return trigger_arg_; }
 private:
   obrpc::ObCreateTriggerArg trigger_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateTriggerStmt);
@@ -46,16 +47,23 @@ class ObDropTriggerStmt : public ObDDLStmt
 public:
   explicit ObDropTriggerStmt(common::ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_DROP_TRIGGER),
+      trigger_table_name_(),
+      is_exist(true),
       trigger_arg_()
   {}
   explicit ObDropTriggerStmt()
     : ObDDLStmt(stmt::T_DROP_TRIGGER),
+      trigger_table_name_(),
+      is_exist(true),
       trigger_arg_()
   {}
   virtual ~ObDropTriggerStmt()
   {}
   virtual obrpc::ObDDLArg &get_ddl_arg() { return trigger_arg_; }
   obrpc::ObDropTriggerArg &get_trigger_arg() { return trigger_arg_; }
+  const obrpc::ObDropTriggerArg &get_trigger_arg() const { return trigger_arg_; }
+  common::ObString trigger_table_name_;
+  bool is_exist;
 private:
   obrpc::ObDropTriggerArg trigger_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObDropTriggerStmt);

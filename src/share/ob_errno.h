@@ -773,7 +773,6 @@ constexpr int OB_ERR_INVALID_TYPE_FOR_ARGUMENT = -5351;
 constexpr int OB_ERR_ADD_PART_BOUN_NOT_INC = -5353;
 constexpr int OB_ERR_DATA_TOO_LONG_IN_PART_CHECK = -5354;
 constexpr int OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR = -5355;
-constexpr int OB_CANT_AGGREGATE_3COLLATIONS = -5356;
 constexpr int OB_CANT_AGGREGATE_NCOLLATIONS = -5357;
 constexpr int OB_ERR_DUPLICATED_UNIQUE_KEY = -5358;
 constexpr int OB_DOUBLE_OVERFLOW = -5359;
@@ -1868,6 +1867,9 @@ constexpr int OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST = -9778;
 constexpr int OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST = -9779;
 constexpr int OB_ERR_EVENT_RECURSION_FORBIDDEN = -9780;
 constexpr int OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR = -9781;
+constexpr int OB_ERR_INVALID_CHARACTER = -9782;
+constexpr int OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE = -9783;
+constexpr int OB_ERR_CURSOR_ATTR_APPLY = -9784;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -2220,7 +2222,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DIVISOR_IS_ZERO__USER_ERROR_MSG "divisor is equal to zero"
 #define OB_ERR_AES_DECRYPT__USER_ERROR_MSG "fail to decrypt data"
 #define OB_ERR_AES_ENCRYPT__USER_ERROR_MSG "fail to encrypt data"
-#define OB_ERR_AES_IV_LENGTH__USER_ERROR_MSG "The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long"
+#define OB_ERR_AES_IV_LENGTH__USER_ERROR_MSG "The initialization vector supplied is too short. Must be at least 16 bytes long"
 #define OB_STORE_DIR_ERROR__USER_ERROR_MSG "store directory structure error"
 #define OB_OPEN_TWICE__USER_ERROR_MSG "open twice"
 #define OB_RAID_SUPER_BLOCK_NOT_MACTH__USER_ERROR_MSG "raid super block not match"
@@ -2655,7 +2657,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_TABLE_USED__USER_ERROR_MSG "You can\'t specify target table \'%s\' for update in FROM clause"
 #define OB_ERR_COULUMN_VALUE_NOT_MATCH__USER_ERROR_MSG "Column count doesn\'t match value count at row %ld"
 #define OB_ERR_INVALID_GROUP_FUNC_USE__USER_ERROR_MSG "Invalid use of group function"
-#define OB_CANT_AGGREGATE_2COLLATIONS__USER_ERROR_MSG "Illegal mix of collations"
+#define OB_CANT_AGGREGATE_2COLLATIONS__USER_ERROR_MSG "Illegal mix of collations (%s,%s), (%s,%s)"
 #define OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD__USER_ERROR_MSG "Field \'%.*s\' is of a not allowed type for this type of partitioning"
 #define OB_ERR_TOO_LONG_IDENT__USER_ERROR_MSG "Identifier name \'%.*s\' is too long"
 #define OB_ERR_WRONG_TYPE_FOR_VAR__USER_ERROR_MSG "Incorrect argument type to variable '%.*s'"
@@ -2832,7 +2834,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ADD_PART_BOUN_NOT_INC__USER_ERROR_MSG "VALUES LESS THAN value must be strictly increasing for each partition"
 #define OB_ERR_DATA_TOO_LONG_IN_PART_CHECK__USER_ERROR_MSG "Data too long for column"
 #define OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR__USER_ERROR_MSG "Partition column values of incorrect type"
-#define OB_CANT_AGGREGATE_3COLLATIONS__USER_ERROR_MSG "Illegal mix of collations"
+#define OB_CANT_AGGREGATE_3COLLATIONS__USER_ERROR_MSG "Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)"
 #define OB_CANT_AGGREGATE_NCOLLATIONS__USER_ERROR_MSG "Illegal mix of collations"
 #define OB_ERR_DUPLICATED_UNIQUE_KEY__USER_ERROR_MSG "Duplicate entry \'%s\' for key \'%.*s\'"
 #define OB_DOUBLE_OVERFLOW__USER_ERROR_MSG "result Double value is out of range"
@@ -3848,7 +3850,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__USER_ERROR_MSG "backup advance checkpoint by flush timeout"
 #define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__USER_ERROR_MSG "observer clog is recycled before archive"
 #define OB_SOURCE_TENANT_STATE_NOT_MATCH__USER_ERROR_MSG "log restore source tenant state not match, switchover to primary not allowed"
-#define OB_SOURCE_LS_STATE_NOT_MATCH__USER_ERROR_MSG "log restore source ls state not match, switchover to primary not allowed"
+#define OB_SOURCE_LS_STATE_NOT_MATCH__USER_ERROR_MSG "log restore source LS state not match, switchover to primary is not allowed"
 #define OB_ESI_SESSION_NOT_EXIST__USER_ERROR_MSG "obesi process session not exist"
 #define OB_ALREADY_IN_ARCHIVE_MODE__USER_ERROR_MSG "Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__USER_ERROR_MSG "Already in NOARCHIVELOG mode"
@@ -4170,6 +4172,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST__USER_ERROR_MSG "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future."
 #define OB_ERR_EVENT_RECURSION_FORBIDDEN__USER_ERROR_MSG "Recursion of EVENT DDL statements is forbidden when body is present"
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__USER_ERROR_MSG "Table has no partition for value"
+#define OB_ERR_INVALID_CHARACTER__USER_ERROR_MSG "invalid character"
+#define OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE__USER_ERROR_MSG "cannot ENABLE ON QUERY COMPUTATION for the materialized view `%s`.`%s`"
+#define OB_ERR_CURSOR_ATTR_APPLY__USER_ERROR_MSG "cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4846,8 +4851,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_AES_DECRYPT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4334, fail to decrypt data"
 #define OB_ERR_AES_ENCRYPT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4335, fail to encrypt data"
 #define OB_ERR_AES_ENCRYPT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4335, fail to encrypt data"
-#define OB_ERR_AES_IV_LENGTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4336, The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long"
-#define OB_ERR_AES_IV_LENGTH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4336, The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long"
+#define OB_ERR_AES_IV_LENGTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4336, The initialization vector supplied is too short. Must be at least 16 bytes long"
+#define OB_ERR_AES_IV_LENGTH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4336, The initialization vector supplied is too short. Must be at least 16 bytes long"
 #define OB_STORE_DIR_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4337, store directory structure error"
 #define OB_STORE_DIR_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4337, store directory structure error"
 #define OB_OPEN_TWICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4338, open twice"
@@ -5716,8 +5721,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_COULUMN_VALUE_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5175, Column count doesn\'t match value count at row %ld"
 #define OB_ERR_INVALID_GROUP_FUNC_USE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5176, Invalid use of group function"
 #define OB_ERR_INVALID_GROUP_FUNC_USE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5176, Invalid use of group function"
-#define OB_CANT_AGGREGATE_2COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5177, Illegal mix of collations"
-#define OB_CANT_AGGREGATE_2COLLATIONS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5177, Illegal mix of collations"
+#define OB_CANT_AGGREGATE_2COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5177, Illegal mix of collations (%s,%s), (%s,%s)"
+#define OB_CANT_AGGREGATE_2COLLATIONS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5177, Illegal mix of collations (%s,%s), (%s,%s)"
 #define OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5178, Field \'%.*s\' is of a not allowed type for this type of partitioning"
 #define OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5178, Field \'%.*s\' is of a not allowed type for this type of partitioning"
 #define OB_ERR_TOO_LONG_IDENT__ORA_USER_ERROR_MSG "ORA-00972: identifier \'%.*s\' is too long"
@@ -6070,8 +6075,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_IN_PART_CHECK__OBE_USER_ERROR_MSG "OBE-14036: partition bound value too large for column"
 #define OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR__ORA_USER_ERROR_MSG "ORA-14308: partition bound element must be one of: string, datetime or interval literal, number, or NULL"
 #define OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR__OBE_USER_ERROR_MSG "OBE-14308: partition bound element must be one of: string, datetime or interval literal, number, or NULL"
-#define OB_CANT_AGGREGATE_3COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5356, Illegal mix of collations"
-#define OB_CANT_AGGREGATE_3COLLATIONS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5356, Illegal mix of collations"
+#define OB_CANT_AGGREGATE_3COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5356, Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)"
+#define OB_CANT_AGGREGATE_3COLLATIONS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5356, Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)"
 #define OB_CANT_AGGREGATE_NCOLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5357, Illegal mix of collations"
 #define OB_CANT_AGGREGATE_NCOLLATIONS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5357, Illegal mix of collations"
 #define OB_ERR_DUPLICATED_UNIQUE_KEY__ORA_USER_ERROR_MSG "ORA-01452: cannot CREATE UNIQUE INDEX; duplicate keys found"
@@ -8102,8 +8107,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9087, observer clog is recycled before archive"
 #define OB_SOURCE_TENANT_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9088, log restore source tenant state not match, switchover to primary not allowed"
 #define OB_SOURCE_TENANT_STATE_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9088, log restore source tenant state not match, switchover to primary not allowed"
-#define OB_SOURCE_LS_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9089, log restore source ls state not match, switchover to primary not allowed"
-#define OB_SOURCE_LS_STATE_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9089, log restore source ls state not match, switchover to primary not allowed"
+#define OB_SOURCE_LS_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9089, log restore source LS state not match, switchover to primary is not allowed"
+#define OB_SOURCE_LS_STATE_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9089, log restore source LS state not match, switchover to primary is not allowed"
 #define OB_ESI_SESSION_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
 #define OB_ESI_SESSION_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9090, obesi process session not exist"
 #define OB_ALREADY_IN_ARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
@@ -8746,6 +8751,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_EVENT_RECURSION_FORBIDDEN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9780, Recursion of EVENT DDL statements is forbidden when body is present"
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__ORA_USER_ERROR_MSG "ORA-14400: inserted partition key does not map to any partition"
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__OBE_USER_ERROR_MSG "OBE-14400: inserted partition key does not map to any partition"
+#define OB_ERR_INVALID_CHARACTER__ORA_USER_ERROR_MSG "ORA-00911: invalid character"
+#define OB_ERR_INVALID_CHARACTER__OBE_USER_ERROR_MSG "OBE-00911: invalid character"
+#define OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE__ORA_USER_ERROR_MSG "ORA-32361: cannot ENABLE ON QUERY COMPUTATION for the materialized view %s.%s"
+#define OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE__OBE_USER_ERROR_MSG "OBE-32361: cannot ENABLE ON QUERY COMPUTATION for the materialized view %s.%s"
+#define OB_ERR_CURSOR_ATTR_APPLY__ORA_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
+#define OB_ERR_CURSOR_ATTR_APPLY__OBE_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -8907,7 +8918,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2325];
+extern int g_all_ob_errnos[2328];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

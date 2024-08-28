@@ -24,6 +24,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "./blocksstable/ob_data_file_prepare.h"
 #include "share/ob_simple_mem_limit_getter.h"
+#include "mtlenv/mock_tenant_module_env.h"
 
 namespace oceanbase
 {
@@ -186,7 +187,9 @@ void TestParallelExternalSort::SetUp()
 {
   TestDataFilePrepare::SetUp();
   ASSERT_EQ(OB_SUCCESS, init_tenant_mgr());
-  ASSERT_EQ(OB_SUCCESS, ObTmpFileManager::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;
@@ -194,14 +197,32 @@ void TestParallelExternalSort::SetUp()
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
+
+  tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
+  EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
+  EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
+  tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
+  tenant_ctx.set(tf_mgr);
+
   ObTenantEnv::set_tenant(&tenant_ctx);
 }
 
 void TestParallelExternalSort::TearDown()
 {
   allocator_.reuse();
-  ObTmpFileManager::get_instance().destroy();
+  // ObTenantTmpFileManager uses ObServerBlockManager, which is destroyed in TestDataFilePrepare::TearDown()
+  // so we need to destroy ObTenantTmpFileManager first
+  tmp_file::ObTenantTmpFileManager *tmp_file_mgr = MTL(tmp_file::ObTenantTmpFileManager *);
+  if (OB_NOT_NULL(tmp_file_mgr)) {
+    tmp_file_mgr->stop();
+    tmp_file_mgr->wait();
+    tmp_file_mgr->destroy();
+  }
+  tmp_file::ObTmpBlockCache::get_instance().destroy();
+  tmp_file::ObTmpPageCache::get_instance().destroy();
   TestDataFilePrepare::TearDown();
+  common::ObClockGenerator::destroy();
   destroy_tenant_mgr();
 }
 
@@ -974,6 +995,34 @@ TEST_F(TestParallelExternalSort, test_get_before_sort)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   const TestItem *item = NULL;
+  ret = external_sort.get_next_item(item);
+  ASSERT_EQ(OB_ITER_END, ret);
+}
+
+TEST_F(TestParallelExternalSort, test_sort_then_get)
+{
+  int ret = OB_SUCCESS;
+  const int64_t file_buf_size = MACRO_BLOCK_SIZE;
+  const int64_t buf_mem_limit = 8 * 1024 * 1024L;
+  typedef ObExternalSort<TestItem, TestItemCompare> ExternalSort;
+  ExternalSort external_sort;
+  ObVector<TestItem *>total_items;
+  TestItemCompare compare(ret);
+  const int64_t expire_timestamp = 0;
+  ret = external_sort.init(buf_mem_limit, file_buf_size, expire_timestamp, OB_SYS_TENANT_ID, &compare);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = generate_items(81920, false, total_items);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+    ret = external_sort.add_item(*total_items.at(i));
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+  ASSERT_EQ(OB_SUCCESS, external_sort.do_sort(true));
+  const TestItem *item = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+    ret = external_sort.get_next_item(item);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
   ret = external_sort.get_next_item(item);
   ASSERT_EQ(OB_ITER_END, ret);
 }

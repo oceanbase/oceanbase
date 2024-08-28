@@ -78,9 +78,13 @@
 
 - version: 4.3.1.0
   can_be_upgraded_to:
-      - 4.3.2.0
+      - 4.3.2.1
 
 - version: 4.3.2.0
+  can_be_upgraded_to:
+      - 4.3.3.0
+
+- version: 4.3.2.1
   can_be_upgraded_to:
       - 4.3.3.0
 

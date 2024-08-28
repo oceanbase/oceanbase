@@ -495,7 +495,6 @@ typedef enum ObItemType
   T_FUN_SYS_DES_ENCRYPT = 763,
   T_FUN_SYS_ENCRYPT = 764,
   T_FUN_SYS_ICU_VERSION = 765,
-
   T_FUN_SYS_CURRENT_USER_PRIV = 766,
   T_FUN_SYS_CURRENT_ROLE = 767,
   T_FUN_SYS_EXTRACT_CERT_EXPIRED_TIME = 768,
@@ -2577,6 +2576,22 @@ typedef enum ObItemType
   T_REBUILD_TABLET = 4727,
 
   T_MICRO_INDEX_CLUSTERED = 4728,
+
+  // Parquet related
+  T_PER_ROW_GROUP_SIZE = 4729,
+  T_COMPRESSION_ALGORITHM = 4730,
+
+  // Erase micro cache
+  T_FLUSH_SS_MICRO_CACHE = 4731,
+
+  //restore sts
+  T_RESTORE_WITH_CONFIG_LIST = 4732,
+  T_STS_CREDENTIAL = 4733,
+  // optimizer hint
+  T_PQ_GBY_HINT = 4734,
+  T_PQ_DISTINCT_HINT = 4735,
+  T_DISTRIBUTE_BASIC = 4736,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2710,7 +2725,7 @@ typedef enum ObOutlineType
 
 #define IS_DML_STMT(op)  \
   ((op) == T_SELECT || (op) == T_DELETE || (op) == T_INSERT || (op) == T_MERGE || (op) == T_UPDATE || (op) == T_MULTI_INSERT)
-#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS)
+#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS || (op) == T_SHOW_CREATE_USER)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

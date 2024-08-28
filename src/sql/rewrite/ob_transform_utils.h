@@ -417,12 +417,12 @@ public:
   /**
    * @brief add_is_not_null
    * 增加对 child_expr 结果的 not null 判断
-   * @param stmt
    * @param child_expr
    * @return
    */
-  static int add_is_not_null(ObTransformerCtx *ctx, const ObDMLStmt *stmt,
-                             ObRawExpr *child_expr, ObOpRawExpr *&is_not_expr);
+  static int add_is_not_null(ObTransformerCtx *ctx,
+                             ObRawExpr *child_expr,
+                             ObRawExpr *&is_not_expr);
 
   static int is_column_nullable(const ObDMLStmt *stmt,
                                 ObSchemaChecker *schema_checker,
@@ -670,6 +670,7 @@ public:
    * @param second_exprs            第二个表的连接列
    * @param is_foreign_primary_join 是否为主外键连接
    * @param is_first_table_parent   first_table是否为父表
+   * @param allow_partial_join      是否允许连接条件只匹配外键关系的非空子集（只用于判定连接无损）
    */
   static int check_foreign_primary_join(const TableItem *first_table,
                                         const TableItem * second_table,
@@ -677,6 +678,7 @@ public:
                                         const ObIArray<const ObRawExpr *> &second_exprs,
                                         ObSchemaChecker *schema_checker,
                                         ObSQLSessionInfo *session_info,
+                                        bool allow_partial_join,
                                         bool &is_foreign_primary_join,
                                         bool &is_first_table_parent,
                                         share::schema::ObForeignKeyInfo *&foreign_key_info);
@@ -686,6 +688,7 @@ public:
                                         const ObIArray< ObRawExpr *> &second_exprs,
                                         ObSchemaChecker *schema_checker,
                                         ObSQLSessionInfo *session_info,
+                                        bool allow_partial_join,
                                         bool &is_foreign_primary_join,
                                         bool &is_first_table_parent,
                                         share::schema::ObForeignKeyInfo *&foreign_key_info);
@@ -700,14 +703,17 @@ public:
    *          或child_exprs = [c3, c4] 且 parent_exprs = [c1, c2]
    *
    * @param is_all_involved       是否包含了主外键约束中一一对应的所有的键
+   * @param allow_partial_join    是否允许只包含主外键约束中的部分键
    */
   static int is_all_foreign_key_involved(const ObIArray<const ObRawExpr *> &child_exprs,
                                          const ObIArray<const ObRawExpr *> &parent_exprs,
                                          const share::schema::ObForeignKeyInfo &info,
+                                         bool allow_partial_join,
                                          bool &is_all_involved);
   static int is_all_foreign_key_involved(const ObIArray< ObRawExpr *> &child_exprs,
                                          const ObIArray< ObRawExpr *> &parent_exprs,
                                          const share::schema::ObForeignKeyInfo &info,
+                                         bool allow_partial_join,
                                          bool &is_all_involved);
 
   /**
@@ -1584,13 +1590,9 @@ public:
 
   static int check_can_pullup_conds(const ObSelectStmt &subquery, bool &has_special_expr);
 
-  static int is_table_item_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                      const ObSelectStmt &subquery,
-                                      bool &contains);
-
-  static int is_join_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                           const ObSelectStmt *subquery,
-                                           bool &is_correlated);
+  static int is_from_item_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                     const ObSelectStmt &subquery,
+                                     bool &is_correlated);
 
   static int check_semi_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                               const SemiInfo *semi_info,
@@ -1772,6 +1774,11 @@ public:
                                 ObIArray<ObRawExpr *> *having_exprs = NULL,
                                 ObIArray<OrderItem> *order_items = NULL);
 
+  static int create_aggr_expr(ObTransformerCtx *ctx,
+                              ObItemType type,
+                              ObAggFunRawExpr *&agg_expr,
+                              ObRawExpr *child_expr);
+
   /* Push all content of the parent stmt into an inline view,
      and keep the ptr of the parent stmt  */
   static int pack_stmt(ObTransformerCtx *ctx,
@@ -1912,7 +1919,8 @@ public:
                                                    ObSQLSessionInfo *session_info,
                                                    bool &has_fts_or_multivalue_index);
   static int add_aggr_winfun_expr(ObSelectStmt *stmt,
-                                  ObRawExpr *expr);
+                                  ObRawExpr *expr,
+                                  bool need_strict_check = true);
   static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);
   static int adjust_col_and_sel_for_expand_mview(ObTransformerCtx *ctx,
                                                  ObIArray<ColumnItem> &uppper_col_items,

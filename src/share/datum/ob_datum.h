@@ -128,6 +128,7 @@ struct ObDatumPtr {
     const char *inner_enumset_;
     const ObLobCommon *lob_data_;
     const ObLobLocator *lob_locator_;
+    const ObMemLobCommon *mem_lob_;
     const ObObj *extend_obj_; // for extend type
     const ObDecimalInt *decimal_int_;
   };
@@ -283,6 +284,10 @@ public:
     return ObURowIDData(pack_, (const uint8_t *)ptr_);
   }
   inline const ObLobLocator &get_lob_locator() const { return *lob_locator_; }
+  inline void get_mem_lob(ObLobLocatorV2 &lob_locator) const
+  {
+    lob_locator.assign_ptr(mem_lob_, len_, has_lob_header());
+  }
   inline const ObLobCommon &get_lob_data() const { return *lob_data_; }
 
   inline const ObDecimalInt *get_decimal_int() const { return decimal_int_; }
@@ -388,11 +393,6 @@ public:
   {
     ptr_ = reinterpret_cast<const char *>(urowid_data.rowid_content_);
     pack_ = static_cast<uint32_t>(urowid_data.rowid_len_);
-  }
-  inline void set_urowid(const char *ptr, const int64_t size)
-  {
-    ptr_ = ptr;
-    pack_ = static_cast<uint32_t>(size);
   }
   inline void set_lob_locator(const ObLobLocator &value)
   {

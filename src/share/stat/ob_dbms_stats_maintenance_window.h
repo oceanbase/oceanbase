@@ -31,8 +31,9 @@
 #define DEFAULT_NON_WORKING_DAY_START_HOHR 6
 #define DEFAULT_NON_WORKING_DAY_DURATION_SEC (20 * 60 * 60)
 #define DEFAULT_NON_WORKING_DAY_DURATION_USEC (20 * 60 * 60 * 1000000LL)
-#define DEFAULT_DML_STATS_INTERVAL_USEC (15*60*1000000LL)
 #define DEFAULT_HISTORY_MANAGER_DURATION_SEC (12 * 60 * 60)
+#define DEFAULT_ASYNC_GATHER_STATS_DURATION_SEC (10 * 60)
+#define DEFAULT_ASYNC_GATHER_STATS_INTERVAL_USEC (15 * 60 * 1000000LL)
 
 namespace oceanbase {
 
@@ -56,6 +57,10 @@ public:
                                               share::ObDMLSqlSplicer &dml);
 
   static bool is_stats_job(const ObString &job_name);
+
+  static int get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
+                                                    const uint64_t tenant_id,
+                                                    ObSqlString &sql);
 
 private:
   static int get_window_job_info(const int64_t current_time,
@@ -92,6 +97,19 @@ private:
                                  const int64_t specify_time,
                                  const int64_t current_time,
                                  bool &is_valid);
+  static int get_async_gather_stats_job_sql(const bool is_oracle_mode,
+                                            const uint64_t tenant_id,
+                                            const int64_t job_id,
+                                            const ObString &exec_env,
+                                            ObSqlString &raw_sql);
+  static int get_async_gather_stats_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
+                                                        ObIAllocator &allocator,
+                                                        const uint64_t tenant_id,
+                                                        int64_t &job_id,
+                                                        ObString &exec_env);
+  static int check_async_gather_job_exists(common::ObMySQLProxy *sql_proxy,
+                                           const uint64_t tenant_id,
+                                           bool &is_join_exists);
 
 };
 

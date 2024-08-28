@@ -210,7 +210,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
         TINYINT SMALLINT MEDIUMINT INTEGER BIGINT FLOAT DOUBLE PRECISION DEC DECIMAL NUMERIC
         CHARACTER VARCHAR BINARY VARBINARY UNSIGNED
         ZEROFILL COLLATE SET BLOB TINYTEXT MEDIUMTEXT LONGTEXT TINYBLOB
-        MEDIUMBLOB LONGBLOB VARYING
+        MEDIUMBLOB LONGBLOB VARYING LOAD
 /* reserved key words only used in ob, in mysql these keywords are non reserved*/
         CHARSET COMMIT ROLLBACK DO UNTIL
 //-----------------------------reserved keyword end-------------------------------------------------
@@ -223,7 +223,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME USER TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
-      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE
+      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE SUBMIT CANCEL JOB
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -248,7 +248,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sp_decl_idents sp_data_type opt_sp_decl_default opt_param_default
 %type <node> sp_proc_stmt_if sp_if sp_proc_stmt_case sp_when_list sp_when sp_elseifs 
 %type <node> sp_proc_stmt_return
-%type <node> sql_stmt ident simple_ident
+%type <node> sql_stmt_prefix sql_stmt ident simple_ident
 %type <node> into_clause
 %type <node> sp_name sp_call_name opt_sp_param_list opt_sp_fparam_list sp_param_list sp_fparam_list
 %type <node> sp_param sp_fparam sp_alter_chistics
@@ -276,6 +276,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> create_trigger_stmt drop_trigger_stmt plsql_trigger_source
 %type <node> trigger_definition trigger_event trigger_body pl_obj_access_ref
 %type <ival> trigger_time
+%type <node> submit_job_stmt cancel_job_stmt
 /*SQL data type*/
 %type <node> scalar_data_type opt_charset collation opt_collation charset_name collation_name
 %type <node> number_literal literal charset_key opt_float_precision opt_number_precision opt_binary
@@ -359,6 +360,8 @@ outer_stmt:
   | create_package_stmt { $$ = $1; }
   | create_package_body_stmt { $$ = $1; }
   | drop_package_stmt { $$ = $1; }
+  | submit_job_stmt { $$ = $1; }
+  | cancel_job_stmt { $$ = $1; }
   | sql_stmt { $$ = $1; }
   | call_sp_stmt { $$ = $1; }
   | do_sp_stmt { $$ = $1; }
@@ -384,17 +387,22 @@ outer_stmt:
  *
  *****************************************************************************/
 sql_keyword:
-    '(' sql_keyword { $$ = NULL; }
-  | SQL_KEYWORD { $$ = NULL; }
+    SQL_KEYWORD { $$ = NULL; }
   | TABLE { $$ = NULL; }
   | USER { $$ = NULL; }
+;
+
+sql_stmt_prefix:
+    '(' sql_stmt_prefix { $$ = NULL; }
+  | SQL_KEYWORD { $$ = NULL; }
   | INSERT { $$ = NULL; }
   | DELETE { $$ = NULL; }
   | UPDATE { $$ = NULL; }
+  | LOAD { $$ = NULL; }
 ;
 
 sql_stmt:
-    sql_keyword /*sql stmt tail*/
+    sql_stmt_prefix /*sql stmt tail*/
     {
       //read sql query string直到读到token';'或者END_P
       ParseNode *sql_stmt = NULL;
@@ -579,6 +587,14 @@ call_sp_stmt:
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CALL_STMT, 2, $2, $3);
     }
+  | CALL sp_proc_stmt
+    {
+      if (!parse_ctx->is_inner_parse_) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
+        YYERROR; //生成一个语法错误
+      }
+      $$ = $2;
+    }
   | CALL PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
     {
       if (!parse_ctx->is_inner_parse_) {
@@ -722,6 +738,7 @@ unreserved_keyword:
   | BODY %prec LOWER_PARENS
   | C
   | CATALOG_NAME
+  | CANCEL
   | CLASS_ORIGIN
   | CLOSE
   | COLUMN_NAME
@@ -742,6 +759,7 @@ unreserved_keyword:
   | HANDLER
   | INTERFACE 
   | INVOKER
+  | JOB
   | JSON
   | LANGUAGE
   | MESSAGE_TEXT
@@ -761,6 +779,7 @@ unreserved_keyword:
   | SCHEMA_NAME
   | SECURITY
   | SUBCLASS_ORIGIN
+  | SUBMIT
   | TABLE_NAME
   | TYPE
   | VALUE
@@ -1844,6 +1863,9 @@ opt_sp_decl_default:
     /*Empty*/ { $$ = NULL; }
   | DEFAULT default_expr
     {
+      if (NULL == $2) {
+        YYERROR;
+      }
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_DECL_DEFAULT, 1, $2);
     }
 ;
@@ -2717,6 +2739,30 @@ scond_info_item_name:
   | CURSOR_NAME { $$ = DIAG_CURSOR_NAME; }
   | MESSAGE_TEXT { $$ = DIAG_MESSAGE_TEXT; }
   | MYSQL_ERRNO { $$ = DIAG_MYSQL_ERRNO; }
+;
+
+/*****************************************************************************
+ *
+ *	OLAP ASYNC JOB grammar
+ *
+ *****************************************************************************/
+submit_job_stmt:
+    SUBMIT JOB sql_stmt
+    {
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_SUBMIT);
+      const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
+      int32_t str_len = @3.last_column - @3.first_column + 1;
+      $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+      check_ptr($$->str_value_);
+      $$->str_len_ = str_len;
+    }
+;
+
+cancel_job_stmt:
+    CANCEL JOB STRING
+    {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_CANCEL, 1, $3);
+    }
 ;
 
 %%

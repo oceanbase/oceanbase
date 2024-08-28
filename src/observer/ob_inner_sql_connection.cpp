@@ -326,6 +326,11 @@ void ObInnerSQLConnection::set_is_load_data_exec(bool v)
   get_session().set_load_data_exec_session(v);
 }
 
+void ObInnerSQLConnection::set_ob_enable_pl_cache(bool v)
+{
+  get_session().set_local_ob_enable_pl_cache(v);
+}
+
 int ObInnerSQLConnection::init_session_info(
     sql::ObSQLSessionInfo *session,
     const bool is_extern_session,
@@ -692,6 +697,7 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
     } else {
       ObSQLSessionInfo &session = res.result_set().get_session();
       session.set_expect_group_id(group_id_);
+      CONSUMER_GROUP_ID_GUARD(consumer_group_id_);
       if (OB_ISNULL(res.sql_ctx().schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null");
@@ -1441,9 +1447,10 @@ int ObInnerSQLConnection::execute_proc(const uint64_t tenant_id,
                                       const share::schema::ObRoutineInfo &routine_info,
                                       const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                                       const ObTimeZoneInfo *tz_info,
-                                      ObObj *result)
+                                      ObObj *result,
+                                      bool is_sql)
 {
-  UNUSEDx(tenant_id, allocator, params, sql, routine_info, udts, tz_info, result);
+  UNUSEDx(tenant_id, allocator, params, sql, routine_info, udts, tz_info, result, is_sql);
   int ret = OB_SUCCESS;
   return ret;
 }

@@ -363,6 +363,11 @@ public:
   typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
   append(const T& value);
 
+  //for ObIArrayWrap<double>
+  template <typename T>
+  typename std::enable_if<std::is_base_of<ObIArrayWrap<double>, T>::value, int>::type
+  append(const T& value);
+
   //for ObIArray<ObDSResultItem>
   template <typename T>
   typename std::enable_if<std::is_base_of<ObIArray<ObDSResultItem>, T>::value, int>::type
@@ -491,6 +496,23 @@ ObOptimizerTraceImpl::append(const T& value)
 //for ObIArray<int64_t>
 template <typename T>
 typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
+ObOptimizerTraceImpl::append(const T& value)
+{
+  int ret = OB_SUCCESS;
+  append("[");
+  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
+    if (i > 0) {
+      append(", ");
+    }
+    ret = append(value.at(i));
+  }
+  append("]");
+  return ret;
+}
+
+//for ObIArray<double>
+template <typename T>
+typename std::enable_if<std::is_base_of<ObIArrayWrap<double>, T>::value, int>::type
 ObOptimizerTraceImpl::append(const T& value)
 {
   int ret = OB_SUCCESS;

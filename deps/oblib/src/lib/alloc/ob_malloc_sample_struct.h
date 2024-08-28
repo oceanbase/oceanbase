@@ -87,9 +87,10 @@ struct ObMallocSamplePairCmp
   }
 };
 
-inline uint64_t ob_malloc_sample_hash(const char* data)
+inline uint64_t ob_malloc_sample_hash(uint64_t v1, uint64_t v2)
 {
-  return (uint64_t)data * 0xdeece66d + 0xb;
+  uint64_t data = (v1<<32) | ((v2<<32)>>32);
+  return data * 0xdeece66d + 0xb;
 }
 
 inline ObMallocSampleLimiter::ObMallocSampleLimiter()
@@ -124,7 +125,8 @@ inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, con
     // Full sample when size is bigger than 16M.
     ret = true;
   } else {
-    uint64_t hash_val = ob_malloc_sample_hash(attr.label_.str_);
+    int64_t tid = ob_gettid();
+    uint64_t hash_val = ob_malloc_sample_hash((uint64_t)attr.label_.str_, tid);
     if (rate_limiters[hash_val & MAX_MALLOC_SAMPLER_NUM].try_acquire(size)) {
       ret = true;
     }

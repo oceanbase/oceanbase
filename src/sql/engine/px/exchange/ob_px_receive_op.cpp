@@ -441,6 +441,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
 {
   const int64_t max_cnt = std::min(max_row_cnt, spec_.max_batch_size_);
   int ret = OB_SUCCESS;
+  clear_evaluated_flag();
   int64_t idx = 0;
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_size(max_cnt);

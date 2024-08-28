@@ -187,8 +187,10 @@ public:
   int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
                         const ObIArray<ObRawExpr *> &to_exprs,
                         const ObIArray<ObRawExpr *> *skip_exprs = NULL);
+  inline int add_replace_expr(ObRawExpr *from_expr, ObRawExpr *to_expr) { return replacer_.add_replace_expr(from_expr, to_expr); }
   void set_skip_bool_param_mysql(bool skip) { replacer_.set_skip_bool_param_mysql(skip); }
   bool is_skip_bool_param_mysql() { return replacer_.is_skip_bool_param_mysql(); }
+  inline bool is_existed(const ObRawExpr *target) const { return replacer_.is_existed(target); }
 private:
   int add_skip_expr(const ObRawExpr *skip_expr);
   int check_expr_need_skip(const ObRawExpr *skip_expr, bool &need_skip);

@@ -140,7 +140,6 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   hash::ObHashMap<uint64_t, ObParentDMLStmt> parent_map;
   trans_happened = false;
   bool enable_temp_table_transform = false;
-  bool force_temp_table_inline = false;
   bool has_hint = false;
   bool is_hint_enabled = false;
   ObSQLSessionInfo *session_info = NULL;
@@ -150,8 +149,6 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
   } else if (OB_FAIL(session_info->is_temp_table_transformation_enabled(enable_temp_table_transform))) {
     LOG_WARN("failed to check temp table transform enabled", K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_inline(force_temp_table_inline))) {
-    LOG_WARN("failed to check temp table force inline", K(ret));
   } else if (OB_FAIL(stmt->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
               ObOptParamHint::XSOLAPI_GENERATE_WITH_CLAUSE, is_hint_enabled, has_hint))) {
     LOG_WARN("failed to check has opt param", K(ret));
@@ -161,7 +158,7 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   if (OB_FAIL(ret)) {
   } else if (ctx_->is_set_stmt_oversize_) {
     OPT_TRACE("stmt containt oversize set stmt");
-  } else if (!enable_temp_table_transform || force_temp_table_inline) {
+  } else if (!enable_temp_table_transform || ctx_->is_force_inline_) {
     OPT_TRACE("session variable disable temp table transform");
   } else if (stmt->has_for_update()) {
     OPT_TRACE("stmt has for update, can not extract CTE");
@@ -192,18 +189,12 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  bool system_force_inline_cte = false;
-  bool system_force_materialize_cte = false;
   ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
       OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_) ||
       OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_inline(system_force_inline_cte))) {
-    LOG_WARN("failed to check temp table force inline", K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_materialize(system_force_materialize_cte))) {
-    LOG_WARN("failed to check temp table force materialize", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.count(); ++i) {
     TempTableInfo &helper = temp_table_info.at(i);
@@ -244,10 +235,10 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     } else if (is_oversize_stmt) {
       //do nothing
       OPT_TRACE("CTE too large to expand");
-    } else if (system_force_materialize_cte) {
+    } else if (ctx_->is_force_materialize_) {
       //do nothing
       OPT_TRACE("system variable force materialize CTE");
-    } else if (system_force_inline_cte) {
+    } else if (ctx_->is_force_inline_) {
       need_expand = true;
       OPT_TRACE("system variable force inline CTE");
     } else if (1 == helper.table_items_.count()) {
@@ -495,105 +486,107 @@ int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_s
   int ret = OB_SUCCESS;
   ObStmtMapInfo map_info;
   QueryRelation relation;
-  typedef ObSEArray<StmtCompareHelper, 8> StmtCompareHelperArray;
-  SMART_VAR(StmtCompareHelperArray, compare_info) {
-    //计算相似stmt分组
-    if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
+  ObSEArray<StmtCompareHelper*, 8> compare_infos;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
+    bool find_similar = false;
+    ObSelectStmt *stmt = stmts.at(i);
+    if (OB_ISNULL(stmt)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null param", K(ret));
+      LOG_WARN("unexpect null stmt ", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
-      bool find_similar = false;
-      ObSelectStmt *stmt = stmts.at(i);
-      if (OB_ISNULL(stmt)) {
+    for (int64_t j = 0; OB_SUCC(ret) && !find_similar && j < compare_infos.count(); ++j) {
+      bool has_stmt = false;
+      bool is_valid = false;
+      StmtCompareHelper *helper = compare_infos.at(j);
+      map_info.reset();
+      if (OB_ISNULL(helper)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null stmt ", K(ret));
-      }
-      for (int64_t j = 0; OB_SUCC(ret) && !find_similar && j < compare_info.count(); ++j) {
-        map_info.reset();
-        bool has_stmt = false;
-        bool is_valid = false;
-        StmtCompareHelper &helper = compare_info.at(j);
-        bool check_basic_similarity = !helper.hint_force_stmt_set_.empty() &&
-                                      helper.hint_force_stmt_set_.has_qb_name(stmt);
-        if (OB_FAIL(check_has_stmt(helper.similar_stmts_,
-                                   stmt,
-                                   parent_map,
-                                   has_stmt))) {
-          LOG_WARN("failed to check has stmt", K(ret));
-        } else if (has_stmt) {
-          //do nothing
-        } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(helper.stmt_,
-                                                                  stmt,
-                                                                  map_info,
-                                                                  relation))) {
-          LOG_WARN("failed to check stmt containment", K(ret));
-        } else if (OB_FAIL(check_stmt_can_extract_temp_table(helper.stmt_,
-                                                             stmt,
-                                                             map_info,
-                                                             relation,
-                                                             check_basic_similarity,
-                                                             is_valid))) {
-          LOG_WARN("failed to check is similar stmt");
-        } else if (!is_valid) {
-          //do nothing
-        } else if (OB_FAIL(helper.similar_stmts_.push_back(stmt))) {
-          LOG_WARN("failed to push back stmt", K(ret));
-        } else if (OB_FAIL(helper.stmt_map_infos_.push_back(map_info))) {
-          LOG_WARN("failed to push back map info", K(ret));
-        } else {
-          find_similar = true;
-        }
-      }
-      if (OB_SUCC(ret) && !find_similar) {
-        SMART_VAR(StmtCompareHelper, helper) {
-          map_info.reset();
-          bool force_no_trans = false;
-          QbNameList qb_names;
-          if (OB_FAIL(get_hint_force_set(root_stmt,
-                                         *stmt, 
-                                         qb_names, 
-                                         force_no_trans))) {
-            LOG_WARN("failed to get hint set", K(ret));
-          } else if (force_no_trans) {
-            //do nothing
-            OPT_TRACE("hint reject materialize:", stmt);
-          } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(stmt,
-                                                                    stmt,
-                                                                    map_info,
-                                                                    relation))) {
-            LOG_WARN("failed to check stmt containment", K(ret));
-          } else if (OB_FAIL(helper.similar_stmts_.push_back(stmt))) {
-            LOG_WARN("failed to push back stmt", K(ret));
-          } else if (OB_FAIL(helper.stmt_map_infos_.push_back(map_info))) {
-            LOG_WARN("failed to push back map info", K(ret));
-          } else if (OB_FAIL(helper.hint_force_stmt_set_.assign(qb_names))) {
-            LOG_WARN("failed to assign qb names", K(ret));
-          } else if (OB_FALSE_IT(helper.stmt_ = stmt)) {
-          } else if (OB_FAIL(compare_info.push_back(helper))) {
-            LOG_WARN("failed to push back compare info", K(ret));
-          }
-        }
+        LOG_WARN("got unexpected NULL ptr", K(ret));
+      } else if (OB_FAIL(check_has_stmt(helper->similar_stmts_, stmt, parent_map, has_stmt))) {
+        LOG_WARN("failed to check has stmt", K(ret));
+      } else if (has_stmt) {
+        //do nothing
+      } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(helper->stmt_,
+                                                                stmt,
+                                                                map_info,
+                                                                relation))) {
+        LOG_WARN("failed to check stmt containment", K(ret));
+      } else if (OB_FAIL(check_stmt_can_extract_temp_table(helper->stmt_,
+                                                           stmt,
+                                                           map_info,
+                                                           relation,
+                                                           !helper->hint_force_stmt_set_.empty() &&
+                                                           helper->hint_force_stmt_set_.has_qb_name(stmt),
+                                                           is_valid))) {
+        LOG_WARN("failed to check is similar stmt");
+      } else if (!is_valid) {
+        //do nothing
+      } else if (OB_FAIL(helper->similar_stmts_.push_back(stmt))) {
+        LOG_WARN("failed to push back stmt", K(ret));
+      } else if (OB_FAIL(helper->stmt_map_infos_.push_back(map_info))) {
+        LOG_WARN("failed to push back map info", K(ret));
+      } else {
+        find_similar = true;
       }
     }
-    //对每组相似stmt创建temp table
-    for (int64_t i = 0; OB_SUCC(ret) && i < compare_info.count(); ++i) {
-      StmtCompareHelper &helper = compare_info.at(i);
-      bool is_happened = false;
-      OPT_TRACE("try to materialize:", helper.stmt_);
-      if (!helper.hint_force_stmt_set_.empty() &&
-          !helper.hint_force_stmt_set_.is_subset(helper.similar_stmts_)) {
+    if (OB_SUCC(ret) && !find_similar) {
+      StmtCompareHelper *new_helper = NULL;
+      bool force_no_trans = false;
+      QbNameList qb_names;
+      map_info.reset();
+      if (OB_FAIL(get_hint_force_set(root_stmt, *stmt, qb_names, force_no_trans))) {
+        LOG_WARN("failed to get hint set", K(ret));
+      } else if (force_no_trans) {
+        //do nothing
+        OPT_TRACE("hint reject materialize:", stmt);
+      } else if (OB_FAIL(StmtCompareHelper::alloc_compare_helper(*ctx_->allocator_, new_helper))) {
+        LOG_WARN("failed to alloc compare helper", K(ret));
+      } else if (OB_ISNULL(new_helper)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null compare helper", K(ret));
+      } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(stmt, stmt, map_info, relation))) {
+        LOG_WARN("failed to check stmt containment", K(ret));
+      } else if (OB_FAIL(new_helper->similar_stmts_.push_back(stmt))) {
+        LOG_WARN("failed to push back stmt", K(ret));
+      } else if (OB_FAIL(new_helper->stmt_map_infos_.push_back(map_info))) {
+        LOG_WARN("failed to push back map info", K(ret));
+      } else if (OB_FAIL(new_helper->hint_force_stmt_set_.assign(qb_names))) {
+        LOG_WARN("failed to assign qb names", K(ret));
+      } else if (OB_FALSE_IT(new_helper->stmt_ = stmt)) {
+      } else if (OB_FAIL(compare_infos.push_back(new_helper))) {
+        LOG_WARN("failed to push back compare info", K(ret));
+      }
+    }
+  }
+  //对每组相似stmt创建temp table
+  for (int64_t i = 0; OB_SUCC(ret) && i < compare_infos.count(); ++i) {
+    StmtCompareHelper *helper = compare_infos.at(i);
+    bool is_happened = false;
+    if (OB_ISNULL(helper)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got unexpected NULL ptr", K(ret));
+    } else {
+      OPT_TRACE("try to materialize:", helper->stmt_);
+      if (!helper->hint_force_stmt_set_.empty() &&
+          !helper->hint_force_stmt_set_.is_subset(helper->similar_stmts_)) {
         //hint forbid, do nothing
         OPT_TRACE("hint reject transform");
-      } else if (helper.hint_force_stmt_set_.empty() && 
-                (helper.similar_stmts_.count() < 2)) {
-        OPT_TRACE("no other similar stmts");
+      } else if (helper->hint_force_stmt_set_.empty() && helper->similar_stmts_.count() < 2) {
         //do nothing
-      } else if (OB_FAIL(create_temp_table(root_stmt, helper, parent_map, is_happened))) {
+        OPT_TRACE("no other similar stmts");
+      } else if (OB_FAIL(create_temp_table(root_stmt, *helper, parent_map, is_happened))) {
         LOG_WARN("failed to create temp table", K(ret));
       } else {
         trans_happened |= is_happened;
       }
+    }
+    if (NULL != compare_infos.at(i)) {
+      compare_infos.at(i)->~StmtCompareHelper();
+      compare_infos.at(i) = NULL;
     }
   }
   return ret;
@@ -1598,16 +1591,16 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
         OB_ISNULL(view = view_table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null param", K(ret), KP(parent_stmt), KP(temp_table_query), KP(view_table));
-    } else {
-      context.init(temp_table_query, view, map_info, &parent_stmt->get_query_ctx()->calculable_items_);
-      if (OB_FAIL(apply_temp_table_columns(context, map_info, temp_table_query, view,
-                                           old_view_columns, new_temp_columns))) {
-        LOG_WARN("failed to apply temp table columns", K(ret));
-      } else if (OB_FAIL(apply_temp_table_select_list(context, map_info, parent_stmt,
-                                                      temp_table_query, view, view_table,
-                                                      old_view_columns, new_temp_columns))) {
-        LOG_WARN("failed to apply temp table select list", K(ret));
-      }
+    } else if (OB_FAIL(context.init(temp_table_query, view, map_info,
+                                    &parent_stmt->get_query_ctx()->calculable_items_))) {
+      LOG_WARN("failed to init context", K(ret));
+    } else if (OB_FAIL(apply_temp_table_columns(context, map_info, temp_table_query, view,
+                                                old_view_columns, new_temp_columns))) {
+      LOG_WARN("failed to apply temp table columns", K(ret));
+    } else if (OB_FAIL(apply_temp_table_select_list(context, map_info, parent_stmt,
+                                                    temp_table_query, view, view_table,
+                                                    old_view_columns, new_temp_columns))) {
+      LOG_WARN("failed to apply temp table select list", K(ret));
     }
   } // end smart var
   return ret;

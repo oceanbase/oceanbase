@@ -288,6 +288,8 @@ void ObTenantIOClock::destroy()
 int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req)
 {
   int ret = OB_SUCCESS;
+  const int64_t current_ts = ObTimeUtility::fast_current_time();
+  bool is_unlimited = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -298,13 +300,8 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(req));
   } else if (req.get_flag().is_unlimited()) {
-    const int64_t current_ts = ObTimeUtility::fast_current_time();
-    phy_queue->reservation_ts_ = current_ts;
-    phy_queue->group_limitation_ts_ = current_ts;
-    phy_queue->tenant_limitation_ts_ = current_ts;
-    phy_queue->proportion_ts_ = current_ts;
+    is_unlimited = true;
   } else {
-    const int64_t current_ts = ObTimeUtility::fast_current_time();
     uint64_t cur_queue_index = phy_queue->queue_index_;
     if (cur_queue_index < 0 || (cur_queue_index >= group_clocks_.count() && cur_queue_index != INT64_MAX)) {
       ret = OB_INVALID_ARGUMENT;
@@ -324,11 +321,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
         LOG_WARN("get iops scale failed", K(ret), K(req));
       } else if (OB_UNLIKELY(is_io_ability_valid == false)) {
         //unlimited
-        const int64_t current_ts = ObTimeUtility::fast_current_time();
-        phy_queue->reservation_ts_ = current_ts;
-        phy_queue->group_limitation_ts_ = current_ts;
-        phy_queue->tenant_limitation_ts_ = current_ts;
-        phy_queue->proportion_ts_ = current_ts;
+        is_unlimited = true;
       } else if (OB_FAIL(mclock.calc_phy_clock(current_ts, iops_scale, weight_scale, phy_queue))) {
         LOG_WARN("calculate clock of the queue failed", K(ret), K(mclock), K(weight_scale));
       } else {
@@ -336,6 +329,12 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
         unit_clock_.atom_update(current_ts, iops_scale, phy_queue->tenant_limitation_ts_);
       }
     }
+  }
+  if (OB_FAIL(ret) || is_unlimited) {
+    phy_queue->reservation_ts_ = current_ts;
+    phy_queue->group_limitation_ts_ = current_ts;
+    phy_queue->tenant_limitation_ts_ = current_ts;
+    phy_queue->proportion_ts_ = current_ts;
   }
   return ret;
 }

@@ -132,10 +132,6 @@ private:
   int check_external_table_generated_partition_column_sanity(ObTableSchema &table_schema, ObRawExpr *dependant_expr, ObIArray<int64_t> &external_part_idx);
   typedef common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_USER_DEFINED_COLUMNS_COUNT> VPColumnIdHashSet;
 
-  // check this type of table_schema should build column_group or not
-  uint64_t gen_column_group_id();
-  int resolve_column_group(const ParseNode *cg_node);
-
   int add_inner_index_for_heap_gtt();
   int check_max_row_data_length(const ObTableSchema &table_schema);
 
@@ -144,7 +140,6 @@ private:
 private:
   // data members
   uint64_t cur_column_id_;
-  uint64_t cur_column_group_id_;
   common::ObSEArray<uint64_t, 16> primary_keys_;
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> column_name_set_;
   bool if_not_exist_;

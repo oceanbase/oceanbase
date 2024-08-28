@@ -223,7 +223,8 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "snapshot_barrier=%ld "
                           "snapshot_barrier_flag=%ld "
                           "mtd=%s "
-                          "seq_no=%s",
+                          "seq_no=%s "
+                          "write_epoch=%ld",
                           this,
                           to_cstring(trans_version_),
                           to_cstring(scn_),
@@ -239,7 +240,8 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
                           snapshot_version_barrier_ >> 62,
                           to_cstring(*mtd),
-                          to_cstring(seq_no_));
+                          to_cstring(seq_no_),
+                          write_epoch_);
   return pos;
 }
 
@@ -514,7 +516,10 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "meet unexpected index_node", KR(ret), K(*prev), K(node), K(*index_node), K(*this));
             abort_unless(0);
-          } else if (prev->tx_id_ == node.tx_id_ && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)) {
+          } else if (prev->tx_id_ == node.tx_id_
+                     && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)
+                     // exclude the concurrently update uk case, which always in branch 0
+                     && !(prev->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
             usleep(1000);
@@ -636,14 +641,9 @@ int ObMvccRow::elr(const ObTransID &tx_id,
     // TODO shanyan.g
     if (NULL != key) {
       wakeup_waiter(tablet_id, *key);
+      MTL(ObLockWaitMgr*)->reset_hash_holder(tablet_id, *key, tx_id);
     } else {
-      ObLockWaitMgr *lwm = NULL;
-      if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
-      } else {
-        lwm->wakeup(tx_id);
-      }
+      MTL(ObLockWaitMgr*)->wakeup(tx_id);
     }
   }
   return ret;
@@ -830,9 +830,9 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         iter = iter->prev_;
         need_retry = true;
       } else if (data_tx_id == writer_tx_id) {
+        bool is_lock_node = false;
         // Case 4: the newest node is not decided and locked by itself, so we
         //         can insert into it
-        bool is_lock_node = false;
         if (OB_FAIL(writer_node.is_lock_node(is_lock_node))) {
           TRANS_LOG(ERROR, "get is lock node failed", K(ret), K(writer_node));
         } else if (is_lock_node) {
@@ -886,9 +886,10 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
                                                                    list_head_->get_seq_no()))) {
         TRANS_LOG(WARN, "check sequence set violation failed", K(ret), KPC(this));
       } else if (nullptr != list_head_ && FALSE_IT(res.is_checked_ = true)) {
-      } else if (OB_SUCC(check_double_insert_(snapshot_version,
-                                              writer_node,
-                                              list_head_))) {
+      } else if (OB_SUCC(mvcc_sanity_check_(snapshot_version,
+                                            ctx.mvcc_acc_ctx_.write_flag_,
+                                            writer_node,
+                                            list_head_))) {
         ATOMIC_STORE(&(writer_node.prev_), list_head_);
         ATOMIC_STORE(&(writer_node.next_), NULL);
         if (NULL != list_head_) {
@@ -919,19 +920,43 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
 }
 
 __attribute__((noinline))
-int ObMvccRow::check_double_insert_(const SCN snapshot_version,
-                                    ObMvccTransNode &node,
-                                    ObMvccTransNode *prev)
+int ObMvccRow::mvcc_sanity_check_(const SCN snapshot_version,
+                                  const concurrent_control::ObWriteFlag write_flag,
+                                  ObMvccTransNode &node,
+                                  ObMvccTransNode *prev)
 {
   int ret = OB_SUCCESS;
+
+  const bool compliant_with_sql_semantic = !write_flag.is_table_api();
 
   if (NULL != prev) {
     if (blocksstable::ObDmlFlag::DF_INSERT == node.get_dml_flag()
         && blocksstable::ObDmlFlag::DF_DELETE != prev->get_dml_flag()
         && prev->is_committed()
         && snapshot_version >= prev->trans_version_) {
+      // Case 1: Check double insert case
       ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
       TRANS_LOG(WARN, "find double insert node", K(ret), K(node), KPC(prev), K(snapshot_version), K(*this));
+    } else if (prev->get_tx_id() == node.get_tx_id()
+               && prev->is_incomplete()
+               && compliant_with_sql_semantic) {
+      // TODO(handora.qc): remove after kaizhan.dkz finish the concureent
+      // insert/delete feature
+      //
+      // Case 2: The current implementation allows the same rowkey to perform
+      // insert and delete within the same statement concurrently. So to prevent
+      // disorder between insert and callback registeration, we return an error
+      // in this scenario, hoping that the sql layer will retry later.
+      // Otherwise, it may lead to an out-of-order actions from logs between
+      // leader and follower.
+      ret = OB_SEQ_NO_REORDER_UNDER_PDML;
+      TRANS_LOG(INFO, "mvcc_write meet current write by self", K(ret), KPC(prev), K(node));
+    } else if (prev->get_tx_id() == node.get_tx_id()
+               && prev->get_write_epoch() == node.get_write_epoch()
+               && prev->get_seq_no().get_branch() != node.get_seq_no().get_branch()) {
+      // Case 3: Check concurrent modify to the same row
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "concurrent modify to the same row", K(ret), KPC(prev), K(node));
     }
   }
 

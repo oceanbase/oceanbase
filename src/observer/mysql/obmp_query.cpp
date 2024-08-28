@@ -368,7 +368,7 @@ int ObMPQuery::process()
     IGNORE_RETURN record_flt_trace(session);
   }
 
-  if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && is_conn_valid()) {
+  if (is_conn_valid()) {
     int tmp_ret = OB_SUCCESS;
     // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
     // because we have to reset conn.group_id_ according to user_name.
@@ -1229,7 +1229,9 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_USE_DATABASE:
     case stmt::T_SET_NAMES: //read only not restrict it
     case stmt::T_START_TRANS:
-    case stmt::T_END_TRANS: {
+    case stmt::T_END_TRANS:
+    case stmt::T_SHOW_CHECK_TABLE:
+    case stmt::T_SHOW_CREATE_USER: {
       is_readonly = true;
       break;
     }

@@ -931,6 +931,43 @@ int ObAllVirtualProxySchema::get_next_tenant_server_(
   return ret;
 }
 
+int ObAllVirtualProxySchema::get_replica_type_from_locality_(
+    const ZoneLocalityIArray &zone_locality_array,
+    const ObZone &zone,
+    ObReplicaType &replica_type)
+{
+  int ret = OB_SUCCESS;
+  replica_type = REPLICA_TYPE_FULL;
+  if (OB_UNLIKELY(zone_locality_array.empty() || zone.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(zone_locality_array), K(zone));
+  } else {
+    bool zone_found = false;
+    FOREACH_CNT_X(zone_locality, zone_locality_array, !zone_found && OB_SUCCESS == ret) {
+      if (zone_locality->get_zone_set().at(0) == zone) {
+        zone_found = true;
+        if (zone_locality->get_readonly_replica_num() > 0) {
+          replica_type = REPLICA_TYPE_READONLY;
+        } else if (zone_locality->get_columnstore_replica_num() > 0) {
+          replica_type = REPLICA_TYPE_COLUMNSTORE;
+        } else if (zone_locality->get_full_replica_num() > 0) {
+          replica_type = REPLICA_TYPE_FULL;
+        } else {
+          // unrecognized replica_type
+          ret = OB_ERR_UNEXPECTED;
+          replica_type = REPLICA_TYPE_INVALID;
+          LOG_WARN("unrecognized replica type", KR(ret), KPC(zone_locality));
+        }
+      }
+    }
+    if (!zone_found) {
+      // tenant locality does not include this zone, regard as FULL
+      replica_type = REPLICA_TYPE_FULL;
+    }
+  }
+  return ret;
+}
+
 int ObAllVirtualProxySchema::fill_tenant_servers_(
     const uint64_t tenant_id,
     ObMySQLResult &result,
@@ -952,6 +989,17 @@ int ObAllVirtualProxySchema::fill_tenant_servers_(
   int64_t svr_idx = 0;
   first_idx_in_zone.reset();
   tenant_servers_.reset();
+  const ObTenantSchema *tenant_schema = NULL;
+  ObArray<share::ObZoneReplicaNumSet> zone_locality;
+
+  if (OB_FAIL(schema_guard_.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array(zone_locality))) {
+    LOG_WARN("fail to get zone_locality_array");
+  }
 
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     tenant_server.reset();
@@ -960,7 +1008,9 @@ int ObAllVirtualProxySchema::fill_tenant_servers_(
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "svr_ip", svr_ip);
     EXTRACT_INT_FIELD_MYSQL(result, "inner_port", sql_port, int64_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "zone", zone);
-    if (OB_UNLIKELY(!server.set_ip_addr(svr_ip, svr_port))) {
+    if (FAILEDx(get_replica_type_from_locality_(zone_locality, zone, replica_type))) {
+      LOG_WARN("failed to get replica_type", KR(ret), K(zone_locality), K(zone));
+    } else if (OB_UNLIKELY(!server.set_ip_addr(svr_ip, svr_port))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to set_ip_addr", KR(ret), K(svr_ip), K(svr_port));
     } else if (OB_FAIL(replica_location.init(

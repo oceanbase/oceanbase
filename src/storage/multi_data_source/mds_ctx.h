@@ -74,8 +74,7 @@ private:
     int64_t try_times = 0;
     do {
       MdsWLockGuard lg(lock_);
-      if (state_ == TwoPhaseCommitState::ON_PREPARE && new_state == TwoPhaseCommitState::BEFORE_PREPARE) {// due to force majeure
-        // do nothing, just accept it
+      if (state_ >= new_state) {
         operate_all_nodes_succeed = true;
       } else {
         operate_all_nodes_succeed = op();

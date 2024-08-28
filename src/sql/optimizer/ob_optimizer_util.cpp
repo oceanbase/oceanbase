@@ -3205,6 +3205,18 @@ int ObOptimizerUtil::get_onetime_exprs(ObRawExpr* expr,
   return ret;
 }
 
+int ObOptimizerUtil::get_onetime_exprs(ObIArray<ObRawExpr *> &exprs,
+                                       ObIArray<ObExecParamRawExpr*> &onetime_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+    if (OB_FAIL(get_onetime_exprs(exprs.at(i), onetime_exprs))) {
+      LOG_WARN("failed to get onetime exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::get_query_ref_exprs(ObIArray<ObRawExpr *> &exprs,
                                          ObIArray<ObRawExpr *> &subqueries,
                                          ObIArray<ObRawExpr *> &nested_subqueries)
@@ -6705,9 +6717,10 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
     LOG_WARN("failed to get collation connection", K(ret));
   } else {
     ObExprVersion dummy_op(*allocator);
-    const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
     ObSEArray<ObExprResType, 2> types;
     ObExprResType res_type;
+    ObExprTypeCtx type_ctx;
+    ObSQLUtils::init_type_ctx(session_info, type_ctx);
     const int64_t child_num = child_querys.count();
     const int64_t select_num = select_stmt->get_select_item_size();
     ObSelectStmt *cur_stmt = NULL;
@@ -6758,8 +6771,8 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
       } else if (1 == types.count() || all_types_is_decint) {
         ret = res_types.push_back(types.at(0));
       } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0),
-                                                    types.count(), coll_type, is_oracle_mode(),
-                                                    length_semantics))) {
+                                                    types.count(), is_oracle_mode(),
+                                                    type_ctx))) {
         LOG_WARN("failed to aggregate result type for merge", K(ret));
       } else if (OB_FAIL(res_types.push_back(res_type))) {
         LOG_WARN("failed to pushback res type", K(ret));
@@ -6810,6 +6823,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
       res_types->reuse();
     }
     const int64_t num = left_types.count();
+    ObExprTypeCtx type_ctx;
+    ObSQLUtils::init_type_ctx(session_info, type_ctx);
     for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
       res_type.reset();
       ObExprResType &left_type = left_types.at(i);
@@ -6897,7 +6912,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
           LOG_WARN("failed to get collation connection", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2,
-                            coll_type, is_oracle_mode(), length_semantics))) {
+                            is_oracle_mode(), type_ctx))) {
           if (session_info->is_varparams_sql_prepare()) {
             skip_add_cast = true;
             res_type = left_type;

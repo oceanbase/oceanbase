@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+class ObDatumRowIterator;
+}
 namespace storage
 {
 class ObMultipleScanMerge;
@@ -37,7 +41,7 @@ public:
   static ObColMap *get_col_map();
 
   static void free_table_scan_iter(common::ObNewRowIterator *iter);
-  static void free_insert_dup_iter(common::ObNewRowIterator *iter);
+  static void free_insert_dup_iter(blocksstable::ObDatumRowIterator *iter);
   static void free_merge_iter(ObQueryRowIterator *iter);
   static void free_col_map(ObColMap *col_map);
   static void free_work_row(ObStoreRow *row);

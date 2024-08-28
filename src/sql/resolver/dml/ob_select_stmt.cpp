@@ -52,12 +52,43 @@ int SelectItem::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
+int ObSelectIntoItem::deep_copy(ObIRawExprCopier &copier,
+                                const ObSelectIntoItem &other)
+{
+  int ret = OB_SUCCESS;
+  into_type_ = other.into_type_;
+  outfile_name_ = other.outfile_name_;
+  field_str_ = other.field_str_;
+  line_str_ = other.line_str_;
+  closed_cht_ = other.closed_cht_;
+  is_optional_ = other.is_optional_;
+  is_single_ = other.is_single_;
+  max_file_size_ = other.max_file_size_;
+  escaped_cht_ = other.escaped_cht_;
+  cs_type_ = other.cs_type_;
+  file_partition_expr_ = other.file_partition_expr_;
+  buffer_size_ = other.buffer_size_;
+  user_vars_.assign(other.user_vars_);
+  if (OB_FAIL(copier.copy(other.file_partition_expr_, file_partition_expr_))) {
+    LOG_WARN("deep copy file partition expr failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.pl_vars_.count(); ++i) {
+    ObRawExpr* pl_var;
+    if (OB_FAIL(copier.copy(other.pl_vars_.at(i), pl_var))) {
+      LOG_WARN("failed to copy exprs", K(ret));
+    } else if (OB_FAIL(pl_vars_.push_back(pl_var))) {
+      LOG_WARN("failed to push back group by expr", K(ret));
+    }
+  }
+  return ret;
+}
 const char* const ObSelectIntoItem::DEFAULT_LINE_TERM_STR = "\n";
 const char* const ObSelectIntoItem::DEFAULT_FIELD_TERM_STR = "\t";
 const char ObSelectIntoItem::DEFAULT_FIELD_ENCLOSED_CHAR = 0;
 const bool ObSelectIntoItem::DEFAULT_OPTIONAL_ENCLOSED = false;
 const bool ObSelectIntoItem::DEFAULT_SINGLE_OPT = true;
 const int64_t ObSelectIntoItem::DEFAULT_MAX_FILE_SIZE = 256 * 1024 * 1024;
+const int64_t ObSelectIntoItem::DEFAULT_BUFFER_SIZE = 1 * 1024 * 1024;
 const char ObSelectIntoItem::DEFAULT_FIELD_ESCAPED_CHAR = '\\';
 
 //对于select .. for update 也认为是被更改
@@ -204,8 +235,6 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     LOG_WARN("assign other rollup directions.", K(ret));
   } else if (OB_FAIL(search_by_items_.assign(other.search_by_items_))) {
     LOG_WARN("assign search by items failed", K(ret));
-  } else if (OB_FAIL(sample_infos_.assign(other.sample_infos_))) {
-    LOG_WARN("assign sample scan infos failed", K(ret));
   } else if (OB_FAIL(set_query_.assign(other.set_query_))) {
     LOG_WARN("assign set query failed", K(ret));
   } else if (OB_FAIL(for_update_dml_info_.assign(other.for_update_dml_info_))) {
@@ -289,8 +318,6 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                                        other.order_items_,
                                                        order_items_))) {
     LOG_WARN("deep copy order items failed", K(ret));
-  } else if (OB_FAIL(sample_infos_.assign(other.sample_infos_))) {
-    LOG_WARN("failed to assign sample infos", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<ObGroupingSetsItem>(expr_copier,
                                                                 other.grouping_sets_items_,
                                                                 grouping_sets_items_))) {
@@ -340,7 +367,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
         LOG_WARN("failed to allocate select into item", K(ret));
       } else {
         temp_into_item = new(ptr) ObSelectIntoItem();
-        if (OB_FAIL(temp_into_item->assign(*other.into_item_))) {
+        if (OB_FAIL(temp_into_item->deep_copy(expr_copier, *other.into_item_))) {
           LOG_WARN("deep copy into item failed", K(ret));
         } else {
           into_item_ = temp_into_item;
@@ -476,6 +503,10 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       if (OB_FAIL(visitor.visit(into_item_->pl_vars_.at(i), SCOPE_SELECT_INTO))) {
         LOG_WARN("failed to visit select into", K(ret));
       }
+    }
+    if (OB_SUCC(ret) && into_item_->file_partition_expr_ != NULL
+        && OB_FAIL(visitor.visit(into_item_->file_partition_expr_, SCOPE_SELECT))) {
+      LOG_WARN("failed to visit select into", K(ret));
     }
   }
   return ret;
@@ -898,54 +929,59 @@ int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
   return ret;
 }
 
-const SampleInfo *ObSelectStmt::get_sample_info_by_table_id(uint64_t table_id) const
-{
-  const SampleInfo *sample_info = nullptr;
-  int64_t num = sample_infos_.count();
-  for (int64_t i = 0; i < num; ++i) {
-    if (sample_infos_.at(i).table_id_ == table_id) {
-      sample_info = &sample_infos_.at(i);
-      break;
-    }
-  }
-  return sample_info;
-}
-
-SampleInfo *ObSelectStmt::get_sample_info_by_table_id(uint64_t table_id)
-{
-  SampleInfo *sample_info = nullptr;
-  int64_t num = sample_infos_.count();
-  for (int64_t i = 0; i < num; ++i) {
-    if (sample_infos_.at(i).table_id_ == table_id) {
-      sample_info = &sample_infos_.at(i);
-      break;
-    }
-  }
-  return sample_info;
-}
-
 bool ObSelectStmt::is_spj() const
 {
+  int ret = OB_SUCCESS;
+  bool bret = false;
   bool has_rownum_expr = false;
-  bool ret = !(has_distinct()
-               || has_group_by()
-               || is_set_stmt()
-               || has_rollup()
-               || has_order_by()
-               || has_limit()
-               || get_aggr_item_size() != 0
-               || get_from_item_size() == 0
-               || is_contains_assignment()
-               || has_window_function()
-               || has_sequence()
-               || is_hierarchical_query());
-  if (!ret) {
+  bret = !(has_distinct()
+           || has_group_by()
+           || is_set_stmt()
+           || has_rollup()
+           || has_order_by()
+           || has_limit()
+           || get_aggr_item_size() != 0
+           || get_from_item_size() == 0
+           || is_contains_assignment()
+           || has_window_function()
+           || has_sequence()
+           || is_hierarchical_query());
+  if (!bret) {
+    // do nothing
   } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
-    ret = false;
+    LOG_WARN("failed to check has rownum", K(ret));
+    bret = false;
   } else {
-    ret = !has_rownum_expr;
+    bret = !has_rownum_expr;
   }
-  return ret;
+  return bret;
+}
+
+bool ObSelectStmt::is_spjg() const
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  bool has_rownum_expr = false;
+  bret = !(has_distinct()
+           || has_having()
+           || is_set_stmt()
+           || has_rollup()
+           || has_order_by()
+           || has_limit()
+           || get_from_item_size() == 0
+           || is_contains_assignment()
+           || has_window_function()
+           || has_sequence()
+           || is_hierarchical_query());
+  if (!bret) {
+    // do nothing
+  } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
+    LOG_WARN("failed to check has rownum", K(ret));
+    bret = false;
+  } else {
+    bret = !has_rownum_expr;
+  }
+  return bret;
 }
 
 int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*> &select_exprs,

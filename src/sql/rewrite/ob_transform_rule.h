@@ -39,6 +39,63 @@ class ObCodeGeneratorImpl;
 class ObLogPlan;
 class StmtUniqueKeyProvider;
 
+struct MvInfo {
+  MvInfo() : mv_id_(common::OB_INVALID_ID),
+             data_table_id_(common::OB_INVALID_ID),
+             mv_schema_(NULL),
+             data_table_schema_(NULL),
+             db_schema_(NULL),
+             view_stmt_(NULL),
+             select_mv_stmt_(NULL),
+             mv_intersect_tbl_num_(0) {}
+
+  MvInfo(uint64_t mv_id,
+          uint64_t data_table_id,
+          const ObTableSchema *mv_schema,
+          const ObTableSchema *data_table_schema,
+          const ObDatabaseSchema *db_schema,
+          ObSelectStmt *view_stmt,
+          ObSelectStmt *select_mv_stmt,
+          uint64_t mv_intersect_tbl_num)
+        : mv_id_(mv_id),
+          data_table_id_(data_table_id),
+          mv_schema_(mv_schema),
+          data_table_schema_(data_table_schema),
+          db_schema_(db_schema),
+          view_stmt_(view_stmt),
+          select_mv_stmt_(select_mv_stmt),
+          mv_intersect_tbl_num_(mv_intersect_tbl_num),
+          has_select_priv_(false) {}
+
+  TO_STRING_KV(
+    K_(mv_id),
+    K_(data_table_id),
+    K_(mv_schema),
+    K_(data_table_schema),
+    K_(db_schema),
+    K_(view_stmt),
+    K_(select_mv_stmt),
+    K_(mv_intersect_tbl_num),
+    K_(has_select_priv)
+  );
+
+  bool operator<(const MvInfo &other) {
+    return mv_intersect_tbl_num_ > other.mv_intersect_tbl_num_;
+  }
+
+  uint64_t mv_id_;
+  uint64_t data_table_id_;
+  const ObTableSchema *mv_schema_;          // schema of mv table
+  const ObTableSchema *data_table_schema_;  // schema of mv container table
+  const ObDatabaseSchema *db_schema_;
+  ObSelectStmt *view_stmt_;            // stmt of mv's definition
+  ObSelectStmt *select_mv_stmt_;       // stmt of "SELECT * FROM mv;"
+  uint64_t mv_intersect_tbl_num_;      // number of tables that appear in both mv and origin query, used for sort mv info
+  ObStmtNeedPrivs mv_need_privs_;      // privilege needed of mv
+  ObStmtOraNeedPrivs mv_ora_need_privs_; // ora privilege needed of mv
+  bool has_select_priv_;
+};
+
 struct ObTransformerCtx
 {
   ObTransformerCtx()
@@ -68,10 +125,16 @@ struct ObTransformerCtx
     outline_trans_hints_(),
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
+    is_groupby_placement_enabled_(true),
+    is_force_inline_(false),
+    is_force_materialize_(false),
     is_spm_outline_(false),
     push_down_filters_(),
     in_accept_transform_(false),
-    iteration_level_(0)
+    iteration_level_(0),
+    mv_stmt_gen_count_(0),
+    stmt_need_privs_(NULL),
+    stmt_ora_need_privs_(NULL)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -130,10 +193,20 @@ struct ObTransformerCtx
   ObSEArray<const ObHint*, 8> used_trans_hints_;
   ObSEArray<uint64_t, 4> groupby_pushdown_stmts_;
   /* end used for hint and outline below */
+
+  // used for transform parameters
+  bool is_groupby_placement_enabled_;
+  bool is_force_inline_;
+  bool is_force_materialize_;
+
   bool is_spm_outline_;
   ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
   bool in_accept_transform_;
   uint64_t iteration_level_;
+  ObSEArray<MvInfo, 4, common::ModulePageAllocator, true> mv_infos_; // used to perform mv rewrite
+  int64_t mv_stmt_gen_count_;
+  ObStmtNeedPrivs *stmt_need_privs_;
+  ObStmtOraNeedPrivs *stmt_ora_need_privs_;
 };
 
 enum TransMethod
@@ -182,6 +255,7 @@ enum TRANSFORM_TYPE {
   DECORRELATE                   ,
   CONDITIONAL_AGGR_COALESCE     ,
   MV_REWRITE                    ,
+  LATE_MATERIALIZATION          ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -216,8 +290,10 @@ struct ObTryTransHelper
   int is_filled() const { return !qb_name_counts_.empty(); }
 
   uint64_t available_tb_id_;
+  int64_t stmt_count_;
   int64_t subquery_count_;
   int64_t temp_table_count_;
+  int64_t anonymous_view_count_;
   int64_t qb_name_sel_start_id_;
   int64_t qb_name_set_start_id_;
   int64_t qb_name_other_start_id_;
@@ -288,7 +364,8 @@ public:
       (1L << GROUPBY_PULLUP) |
       (1L << SUBQUERY_COALESCE) |
       (1L << SEMI_TO_INNER) |
-      (1L << MV_REWRITE);
+      (1L << MV_REWRITE) |
+      (1L << LATE_MATERIALIZATION);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,
@@ -405,7 +482,15 @@ protected:
                            ObRawExprFactory &expr_factory,
                            ObIArray<ObSelectStmt*> &old_temp_table_stmts,
                            ObIArray<ObSelectStmt*> &new_temp_table_stmts);
-
+  int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                              ObDMLStmt *stmt,
+                              ObDMLStmt *&orgin_stmt,
+                              ObDMLStmt *&root_stmt);
+  void reset_stmt_cost() { stmt_cost_ = -1; }
+  int prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                             ObDMLStmt &stmt,
+                             ObDMLStmt *&copied_stmt,
+                             bool is_trans_stmt);
 private:
   // pre-order transformation
   int transform_pre_order(common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -428,10 +513,6 @@ private:
   int transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stmts,
                             const int64_t current_level,
                             ObDMLStmt *&stmt);
-  int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                              ObDMLStmt *stmt,
-                              ObDMLStmt *&orgin_stmt,
-                              ObDMLStmt *&root_stmt);
 
   int evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stms,
                     ObDMLStmt *&stmt,
@@ -439,12 +520,6 @@ private:
                     double &plan_cost,
                     bool &is_expected,
                     void *check_ctx = NULL);
-
-  int prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                             ObDMLStmt &stmt,
-                             ObDMLStmt *&copied_stmt,
-                             bool is_trans_stmt);
-
   int prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_stmt, ObDMLStmt *&root_stmt_with_filter);
 
   virtual int is_expected_plan(ObLogPlan *plan,

@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_RESOLVER_CMD_OB_SHOW_RESOLVER_
 #define OCEANBASE_SQL_RESOLVER_CMD_OB_SHOW_RESOLVER_
 #include "sql/resolver/dml/ob_select_resolver.h"
+#include "lib/hash/ob_hashset.h"
 namespace oceanbase
 {
 namespace sql
@@ -29,6 +30,30 @@ protected:
 private:
   class ObSqlStrGenerator;
   struct ObShowSqlSet;
+  struct ObCheckTableInfo
+  {
+    ObCheckTableInfo() : db_name_(), table_name_(), db_exist_(false),
+                        table_exist_(false), is_view_(false),
+                        valid_(true) {}
+    int hash(uint64_t &res) const { res = db_name_.hash(table_name_.hash()); return OB_SUCCESS; }
+    bool operator==(const ObCheckTableInfo &other) const
+    {
+      return db_name_ == other.db_name_ && table_name_ == other.table_name_;
+    }
+    ObString db_name_;
+    ObString table_name_;
+    bool db_exist_;
+    bool table_exist_;
+    bool is_view_;
+    bool valid_;
+    TO_STRING_KV(K_(db_name),
+                K_(table_name),
+                K_(table_exist),
+                K_(db_exist),
+                K_(is_view),
+                K_(valid));
+  };
+  typedef common::hash::ObHashSet<ObShowResolver::ObCheckTableInfo, common::hash::NoPthreadDefendMode> TableInfoSet;
   int get_database_info(const ParseNode *databse_node,
                         const common::ObString &database_name,
                         uint64_t real_tenant_id,
@@ -73,14 +98,37 @@ private:
                                 ObString &show_database_name,
                                 uint64_t &show_database_id,
                                 ObString &show_tg_name,
-                                uint64_t &show_tg_id);
+                                uint64_t &show_tg_id,
+                                ObString &show_table_name);
   int parse_and_resolve_select_sql(const common::ObString &select_sql);
   int resolve_like_or_where_clause(ObShowResolverContext &ctx);
   int replace_where_clause(ParseNode* expr_node, const ObShowResolverContext &show_resv_ctx);
   int process_select_type(
       ObSelectStmt *select_stmt, stmt::StmtType stmt_type, const ParseNode &parse_tree);
   virtual int resolve_column_ref_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
+  int resolve_show_check_table(const ParseNode &parse_tree,
+                               ObShowResolverContext &show_resv_ctx,
+                               ObString &select_sql);
+  int resolve_show_create_user(const ParseNode &parse_tree,
+                               ObShowResolverContext &show_resv_ctx,
+                               ObSessionPrivInfo &session_priv,
+                               ObStmtNeedPrivs &stmt_need_privs,
+                               ObString &select_sql,
+                               ObSqlStrGenerator &sql_gen);
+  int check_show_create_user_privilege(const bool show_current_user,
+                                       ObStmtNeedPrivs &stmt_need_privs,
+                                       ObSessionPrivInfo &session_priv,
+                                       int &ret_code,
+                                       bool &has_select_privilege);
 private:
+  int recursive_resolve_table_info(const ParseNode *table_list_node,
+                                   ObIAllocator &alloc,
+                                   ObIArray<ObCheckTableInfo> &infos,
+                                   TableInfoSet &tables_set);
+  int resolve_table_info(const ParseNode *table_node,
+                         ObIAllocator &alloc,
+                         ObIArray<ObCheckTableInfo> &infos,
+                         TableInfoSet &tables_set);
   DISALLOW_COPY_AND_ASSIGN(ObShowResolver);
 };// ObShowresolver
 
@@ -161,6 +209,8 @@ struct ObShowResolver::ObShowSqlSet
   DECLARE_SHOW_CLAUSE_SET(SHOW_SEQUENCES_LIKE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_ENGINE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_OPEN_TABLES);
+  DECLARE_SHOW_CLAUSE_SET(SHOW_OLAP_ASYNC_JOB_STATUS);
+  DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_USER);
 };// ObShowSqlSet
 
 class ObShowResolver::ObSqlStrGenerator

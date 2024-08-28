@@ -317,7 +317,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
   return ret;
 }
 
-int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const ObNewRow &row)
+int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -330,22 +330,13 @@ int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const ObN
   } else {
     ObTableLoadSequenceNo seq_no(0); // pdml导入的行目前不存在主键冲突，先都用一个默认的seq_no
     SessionContext &session_ctx = session_ctx_array_[0];
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
-      ObStorageDatum &datum = session_ctx.datum_row_.storage_datums_[i];
-      const ObObj &obj = row.cells_[i];
-      if (OB_FAIL(datum.from_obj_enhance(obj))) {
-        LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_,
-                                           tablet_id,
-                                           seq_no,
-                                           session_ctx.datum_row_))) {
-        LOG_WARN("fail to write row", KR(ret), K(tablet_id));
-      } else {
-        ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, 1);
-      }
+    if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_,
+                                          tablet_id,
+                                          seq_no,
+                                          row))) {
+      LOG_WARN("fail to write row", KR(ret), K(tablet_id), K(row));
+    } else {
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, 1);
     }
   }
   return ret;
@@ -434,51 +425,60 @@ int ObTableLoadTransStoreWriter::cast_column(
   int ret = OB_SUCCESS;
   ObCastCtx cast_ctx(&cast_allocator, &cast_params, cast_mode_, column_schema->get_collation_type());
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
-  const bool is_null_autoinc =
-    (column_schema->is_autoincrement() || column_schema->is_identity_column()) &&
-    (obj.is_null() || obj.is_nop_value());
   ObObj out_obj;
-  if (is_null_autoinc) {
-    out_obj.set_null();
-  } else if (obj.is_nop_value()) {
-    if (column_schema->is_not_null_for_write() &&
-        column_schema->get_cur_default_value().is_null()) {
-      if (column_schema->get_meta_type().is_enum()) {
-        const uint64_t ENUM_FIRST_VAL = 1;
-        out_obj.set_enum(ENUM_FIRST_VAL);
-      } else {
-        ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
-        LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
+  if (column_schema->is_autoincrement()) {
+    if (obj.is_null() || obj.is_nop_value()) {
+      out_obj = obj;
+    } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx,
+                                                      column_schema,
+                                                      obj,
+                                                      out_obj))) {
+      LOG_WARN("fail to cast obj", KR(ret), K(obj), KPC(column_schema));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(handle_autoinc_column(column_schema, out_obj, datum, session_id))) {
+        LOG_WARN("fail to handle autoinc column", KR(ret), K(out_obj));
       }
+    }
+  } else if (column_schema->is_identity_column()) {
+    if (column_schema->is_tbl_part_key_column()) {
+      // 自增列是分区键, 在分区计算的时候就已经确定值了
+      out_obj = obj;
     } else {
-      out_obj = column_schema->get_cur_default_value();
+      // 生成的seq_value是number, 可能需要转换成decimal int
+      ObObj tmp_obj;
+      if (OB_FAIL(handle_identity_column(column_schema, obj, tmp_obj, cast_allocator))) {
+        LOG_WARN("fail to handle identity column", KR(ret), K(obj));
+      } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema, tmp_obj, out_obj))) {
+        LOG_WARN("fail to cast obj and check", KR(ret), K(tmp_obj));
+      }
     }
-  } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema, obj, out_obj))) {
-    LOG_WARN("fail to cast obj and check", KR(ret), K(obj));
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
-    LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
-  } else if (column_schema->is_autoincrement()) {
-    if (OB_FAIL(handle_autoinc_column(
-          column_schema, datum, column_schema->get_meta_type().get_type_class(), session_id))) {
-      LOG_WARN("fail to handle autoinc column", KR(ret), K(datum));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
+        LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
+      }
     }
-  } else if (column_schema->is_identity_column() && !column_schema->is_tbl_part_key_column()) {
-    // if identity column is part key column, the value is determined before partition calculation
-    if (OB_FAIL(handle_identity_column(column_schema, datum, cast_allocator))) {
-      LOG_WARN("fail to handle identity column", KR(ret), K(datum));
+  } else {
+    // 普通列
+    if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema, obj, out_obj))) {
+      LOG_WARN("fail to cast obj and check", KR(ret), K(obj));
+    } else if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
+      LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
     }
   }
   return ret;
 }
 
 int ObTableLoadTransStoreWriter::handle_autoinc_column(const ObColumnSchemaV2 *column_schema,
+                                                       const ObObj &obj,
                                                        ObStorageDatum &datum,
-                                                       const ObObjTypeClass &tc, int32_t session_id)
+                                                       int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableLoadAutoincNextval::eval_nextval(
+  const ObObjTypeClass &tc = column_schema->get_meta_type().get_type_class();
+  if (OB_FAIL(datum.from_obj_enhance(obj))) {
+    LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
+  } else if (OB_FAIL(ObTableLoadAutoincNextval::eval_nextval(
         &(store_ctx_->session_ctx_array_[session_id - 1].autoinc_param_), datum, tc,
         store_ctx_->ctx_->session_info_->get_sql_mode()))) {
     LOG_WARN("fail to get auto increment next value", KR(ret));
@@ -487,24 +487,37 @@ int ObTableLoadTransStoreWriter::handle_autoinc_column(const ObColumnSchemaV2 *c
 }
 
 int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *column_schema,
-                                                        ObStorageDatum &datum,
+                                                        const ObObj &obj,
+                                                        ObObj &out_obj,
                                                         ObArenaAllocator &cast_allocator)
 {
   int ret = OB_SUCCESS;
-  if (column_schema->is_always_identity_column()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("direct-load does not support always identity column", KR(ret));
-    FORWARD_USER_ERROR_MSG(ret, "direct-load does not support always identity column");
-  } else if (column_schema->is_default_identity_column() && datum.is_null()) {
-    ret = OB_ERR_INVALID_NOT_NULL_CONSTRAINT_ON_IDENTITY_COLUMN;
-    LOG_WARN("default identity column has null value", KR(ret));
-  } else if (column_schema->is_default_on_null_identity_column()) {
+  // 1. generated always as identity : 不能指定此列导入
+  // 2. generated by default as identity : 不指定时自动生成, 不能导入null
+  // 3. generated by default on null as identity : 不指定或者指定null会自动生成
+  if (OB_UNLIKELY(column_schema->is_always_identity_column() && !obj.is_nop_value())) {
+    ret = OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN;
+    LOG_USER_ERROR(OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN);
+  } else if (OB_UNLIKELY(column_schema->is_default_identity_column() && obj.is_null())) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("default identity column cannot insert null", KR(ret));
+  } else {
+    // 不论用户有没有指定自增列的值, 都取一个seq_value, 行为与insert into保持一致
+    // 取seq_value的性能受表的参数cache影响
     ObSequenceValue seq_value;
-    if (OB_FAIL(share::ObSequenceCache::get_instance().nextval(
-          trans_ctx_->ctx_->store_ctx_->sequence_schema_, cast_allocator, seq_value))) {
+    if (OB_FAIL(ObSequenceCache::get_instance().nextval(trans_ctx_->ctx_->store_ctx_->sequence_schema_,
+                                                        cast_allocator,
+                                                        seq_value))) {
       LOG_WARN("fail get nextval for seq", KR(ret));
-    } else if (datum.is_null()) {
-      datum.set_number(seq_value.val());
+    } else if (obj.is_nop_value() || obj.is_null()) {
+      ObNumber number;
+      if (OB_FAIL(number.from(seq_value.val(), cast_allocator))) {
+        LOG_WARN("fail deep copy value", KR(ret), K(seq_value));
+      } else {
+        out_obj.set_number(number);
+      }
+    } else {
+      out_obj = obj;
     }
   }
   return ret;

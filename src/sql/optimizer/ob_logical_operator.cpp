@@ -1067,6 +1067,8 @@ int ObLogicalOperator::compute_property(Path *path)
     set_server_cnt(path->server_cnt_);
     if (OB_FAIL(server_list_.assign(path->server_list_))) {
       LOG_WARN("failed to assign path's server list to op", K(ret));
+    } else if (OB_FAIL(ambient_card_.assign(path->parent_->get_ambient_card()))) {
+      LOG_WARN("failed to assign ambient cards", K(ret));
     } else if (OB_FAIL(check_property_valid())) {
       LOG_WARN("failed to check property valid", K(ret), KPC(path));
     } else {
@@ -1273,6 +1275,8 @@ int ObLogicalOperator::compute_property()
     LOG_WARN("failed to compute width", K(ret));
   } else if (OB_FAIL(est_cost())) {
     LOG_WARN("failed to estimate cost", K(ret));
+  } else if (OB_FAIL(est_ambient_card())) {
+    LOG_WARN("failed to est ambient card");
   } else if (OB_FAIL(check_property_valid())) {
     LOG_WARN("failed to check property valid", K(ret));
   } else {
@@ -1296,6 +1300,41 @@ int ObLogicalOperator::compute_property()
               K(width_));
   }
 
+  return ret;
+}
+
+int ObLogicalOperator::est_ambient_card()
+{
+  int ret = OB_SUCCESS;
+  if (1 == get_num_of_child()) {
+    if (OB_FAIL(inner_est_ambient_card_by_child(ObLogicalOperator::first_child))) {
+      LOG_WARN("failed to est ambient cards by first child", K(ret), K(get_type()));
+    }
+  } else if (0 == get_num_of_child()) {
+    // do nothing
+    // ambient cardinality of the leaf node is inited by the path
+  } else {
+    // ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("multi child op called default est_ambient_card function", K(ret), K(get_type()));
+  }
+  return ret;
+}
+
+int ObLogicalOperator::inner_est_ambient_card_by_child(int64_t child_idx)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  if (OB_UNLIKELY(child_idx >= get_num_of_child()) ||
+      OB_ISNULL(child = get_child(child_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(child), K(ret));
+  } else if (OB_FAIL(ambient_card_.assign(child->get_ambient_card()))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    for (int64_t i = 0; i < ambient_card_.count(); i ++) {
+      ambient_card_.at(i) = ObOptSelectivity::scale_distinct(get_card(), child->get_card(), ambient_card_.at(i));
+    }
+  }
   return ret;
 }
 
@@ -2639,6 +2678,8 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           LOG_WARN("failed to push back location constraint", K(ret));
         } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
           LOG_WARN("failed to push back location constraint", K(ret));
+        } else if (EXTERNAL_TABLE == log_scan_op->get_table_type()) {
+          // do not add pwj constraints for external table
         } else if (OB_FAIL(strict_pwj_constraint_.push_back(
                     loc_cons_ctx->base_table_constraints_.count() - 1))) {
           LOG_WARN("failed to push back location constraint offset", K(ret));
@@ -4295,7 +4336,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
       gi_op->set_parallel(get_parallel());
       gi_op->set_partition_count(ctx.partition_count_);
       gi_op->set_hash_part(ctx.hash_part_);
-      gi_op->set_tablet_size(ctx.tablet_size_);
+      gi_op->set_tablet_size(ctx.tablet_size_ > 0 ? ctx.tablet_size_ : OB_DEFAULT_TABLET_SIZE);
 
       if (ctx.is_in_pw_affinity_state()) {
         gi_op->add_flag(GI_AFFINITIZE);

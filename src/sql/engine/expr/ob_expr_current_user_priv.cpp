@@ -152,5 +152,86 @@ int ObExprCurrentRole::eval_current_role(const ObExpr &expr, ObEvalCtx &ctx, ObD
   return ret;
 }
 
+ObExprIsEnabledRole::ObExprIsEnabledRole(ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_IS_ENABLED_ROLE, N_IS_ENABLED_ROLE, 2,
+                       NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, true) {
+}
+
+ObExprIsEnabledRole::~ObExprIsEnabledRole() {
+}
+
+int ObExprIsEnabledRole::cg_expr(ObExprCGCtx &op_cg_ctx,
+                                 const ObRawExpr &raw_expr,
+                                 ObExpr &rt_expr) const
+{
+  UNUSED(raw_expr);
+  UNUSED(op_cg_ctx);
+  rt_expr.eval_func_ = ObExprIsEnabledRole::eval_is_enabled_role;
+  return OB_SUCCESS;
+}
+
+int ObExprIsEnabledRole::calc_result_type2(ObExprResType &type,
+                                           ObExprResType &type1,
+                                           ObExprResType &type2,
+                                           ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  type.set_tinyint();
+  type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+  type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  type1.set_calc_type(ObVarcharType);
+  type1.set_calc_collation_type(common::ObCharset::get_default_collation(common::ObCharset::get_default_charset()));
+  type1.set_calc_length(type1.get_length());
+  type2.set_calc_type(ObVarcharType);
+  type2.set_calc_collation_type(common::ObCharset::get_default_collation(common::ObCharset::get_default_charset()));
+  type2.set_calc_length(type2.get_length());
+  return OB_SUCCESS;
+}
+
+int ObExprIsEnabledRole::eval_is_enabled_role(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  ObSchemaGetterGuard schema_guard;
+  ObSQLSessionInfo *session_info = NULL;
+  ObDatum *user = NULL;
+  ObDatum *host = NULL;
+  ObString user_name;
+  ObString host_name;
+  bool is_enabled_role = false;
+  if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema_service", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_UNLIKELY(2 != expr.arg_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected arg cnt", K(ret));
+  } else if (OB_FAIL(expr.eval_param_value(ctx, user, host))) {
+    LOG_WARN("eval arg failed", K(ret));
+  } else if (user->is_null() || host->is_null()) {
+  } else {
+    user_name = user->get_string();
+    host_name = host->get_string();
+    const ObIArray<uint64_t> &roles = session_info->get_enable_role_array();
+    const ObUserInfo *user_info = NULL;
+    for (int i = 0; OB_SUCC(ret) && !is_enabled_role && i < roles.count(); i++) {
+      if (OB_FAIL(schema_guard.get_user_info(tenant_id, roles.at(i), user_info))) {
+        LOG_WARN("failed to get user info", K(ret));
+      } else if (OB_ISNULL(user_info)) {
+        //ignored
+      } else if ((user_info->get_user_name_str().compare(user_name) == 0)
+                 && (user_info->get_host_name_str().compare(host_name) == 0)) {
+        is_enabled_role = true;
+      }
+    }
+  }
+  expr_datum.set_bool(is_enabled_role);
+  return ret;
+}
+
 }/* ns sql*/
 }/* ns oceanbase */

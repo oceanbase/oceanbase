@@ -698,6 +698,33 @@ bool is_match_alter_string_column_online_ddl_rules(const common::ObObjMeta& src_
   return is_online_ddl;
 }
 
+int ob_sql_type_str_with_coll(char *buff,
+    int64_t buff_length,
+    int64_t &pos,
+    ObObjType type,
+    int64_t length,
+    int64_t precision,
+    int64_t scale,
+    ObCollationType coll_type,
+    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, sub_type))) {
+    LOG_WARN("fail to get data type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
+  } else if (lib::is_mysql_mode() && ob_is_string_type(type) && CS_TYPE_BINARY != coll_type) {
+      if (ObCharset::is_default_collation(coll_type)) {
+        if (OB_FAIL(databuff_printf(buff, buff_length, pos, " CHARSET %s", ObCharset::charset_name(coll_type)))) {
+          LOG_WARN("fail to concat charset str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
+        }
+      } else {
+        if (OB_FAIL(databuff_printf(buff, buff_length, pos, " CHARSET %s COLLATE %s", ObCharset::charset_name(coll_type), ObCharset::collation_name(coll_type)))) {
+          LOG_WARN("fail to concat charset and coll_type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
+        }
+      }
+  }
+  return ret;
+}
+
 int ob_sql_type_str(char *buff,
     int64_t buff_length,
     int64_t &pos,

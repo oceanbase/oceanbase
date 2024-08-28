@@ -191,6 +191,15 @@ int ObLogSubPlanFilter::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
+int ObLogSubPlanFilter::est_ambient_card()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_est_ambient_card_by_child(ObLogicalOperator::first_child))) {
+    LOG_WARN("failed to est ambient cards by first child", K(ret), K(get_type()));
+  }
+  return ret;
+}
+
 int ObLogSubPlanFilter::est_cost()
 {
   int ret = OB_SUCCESS;
@@ -224,7 +233,7 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
     LOG_WARN("unexpected params", K(ret), K(get_plan()), K(child), K(param.need_parallel_));
   } else if (param.need_row_count_ < 0 || param.need_row_count_ >= child->get_card()) {
     param.need_row_count_ = -1;
-  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(&child->get_output_equal_sets(), child->get_card()))) {
+  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(child))) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                              get_plan()->get_selectivity_ctx(),
                                                              get_filter_exprs(),
@@ -514,15 +523,17 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
+  ObQueryCtx *query_ctx = NULL;
   ObLogPlan *plan = NULL;
   if (OB_ISNULL(plan = get_plan())
-      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
+      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())
+      || OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (!session_info->is_spf_mlj_group_rescan_enabled()) {
+    LOG_WARN("get unexpected null", K(ret), K(plan), K(session_info), K(query_ctx));
+  } else if (!plan->get_optimizer_context().get_enable_spf_batch_rescan()) {
     enable_das_group_rescan_ = false;
-  } else if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_das_group_rescan_))) {
-    LOG_WARN("failed to get enable batch variable", K(ret));
+  } else {
+    enable_das_group_rescan_ = plan->get_optimizer_context().get_nlj_batching_enabled();
   }
   // check use batch
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_group_rescan_ && i < get_num_of_child(); i++) {

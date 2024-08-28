@@ -39,18 +39,29 @@ public:
   static int check_support_direct_load(uint64_t table_id,
                                        const storage::ObDirectLoadMethod::Type method,
                                        const storage::ObDirectLoadInsertMode::Type insert_mode,
-                                       const storage::ObDirectLoadMode::Type load_mode);
+                                       const storage::ObDirectLoadMode::Type load_mode,
+                                       const storage::ObDirectLoadLevel::Type load_level,
+                                       const common::ObIArray<uint64_t> &column_ids);
   // 业务层指定schema_guard进行检查
   static int check_support_direct_load(share::schema::ObSchemaGetterGuard &schema_guard,
                                        uint64_t table_id,
                                        const storage::ObDirectLoadMethod::Type method,
                                        const storage::ObDirectLoadInsertMode::Type insert_mode,
-                                       const storage::ObDirectLoadMode::Type load_mode);
+                                       const storage::ObDirectLoadMode::Type load_mode,
+                                       const storage::ObDirectLoadLevel::Type load_level,
+                                       const common::ObIArray<uint64_t> &column_ids);
   static int check_support_direct_load(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        const storage::ObDirectLoadMethod::Type method,
                                        const storage::ObDirectLoadInsertMode::Type insert_mode,
-                                       const storage::ObDirectLoadMode::Type load_mode);
+                                       const storage::ObDirectLoadMode::Type load_mode,
+                                       const storage::ObDirectLoadLevel::Type load_level,
+                                       const common::ObIArray<uint64_t> &column_ids);
+  static int check_support_direct_load_for_insert_overwrite(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      const storage::ObDirectLoadLevel::Type load_level,
+      const uint64_t compat_version);
   static ObTableLoadTableCtx *alloc_ctx();
   static void free_ctx(ObTableLoadTableCtx *table_ctx);
   static int add_ctx(ObTableLoadTableCtx *table_ctx);

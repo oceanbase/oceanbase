@@ -366,17 +366,17 @@ bool ObLSLocation::operator!=(const ObLSLocation &other) const
   return !(*this == other);
 }
 
-int ObLSLocation::get_replica_count(int64_t &full_replica_cnt, int64_t &readonly_replica_cnt)
+int ObLSLocation::get_replica_count(int64_t &full_replica_cnt, int64_t &non_paxos_replica_cnt)
 {
   int ret = OB_SUCCESS;
   full_replica_cnt = 0;
-  readonly_replica_cnt = 0;
+  non_paxos_replica_cnt = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < replica_locations_.count(); ++i) {
     const ObLSReplicaLocation &replica = replica_locations_.at(i);
     if (REPLICA_TYPE_FULL == replica.get_replica_type()) {
       full_replica_cnt++;
-    } else if (REPLICA_TYPE_READONLY == replica.get_replica_type()) {
-      readonly_replica_cnt++;
+    } else if (ObReplicaTypeCheck::is_non_paxos_replica(replica.get_replica_type())) {
+      non_paxos_replica_cnt++;
     }
   }
   return ret;

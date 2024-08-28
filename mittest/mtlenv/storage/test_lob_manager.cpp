@@ -23,7 +23,6 @@
 #include "lib/random/ob_random.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "share/ob_simple_mem_limit_getter.h"
-#include "storage/blocksstable/ob_tmp_file.h"
 #include "storage/lob/ob_lob_piece.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/objectpool/ob_server_object_pool.h"
@@ -329,7 +328,7 @@ void TestLobManager::insert_lob_piece(
   ASSERT_NE(nullptr, tablet);
 
   // insert rows
-  ObMockNewRowIterator mock_iter;
+  ObMockDatumRowIterator mock_iter;
   ObSEArray<uint64_t, 512> column_ids;
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 0); // pk
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 1); // c1
@@ -453,7 +452,7 @@ void TestLobManager::insert_lob_meta(
   ASSERT_NE(nullptr, tablet);
 
   // insert rows
-  ObMockNewRowIterator mock_iter;
+  ObMockDatumRowIterator mock_iter;
   ObSEArray<uint64_t, 512> column_ids;
   for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
     column_ids.push_back(OB_APP_MIN_COLUMN_ID + i);

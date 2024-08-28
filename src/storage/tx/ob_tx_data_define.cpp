@@ -756,6 +756,9 @@ DEF_TO_STRING(ObTxData)
        K_(start_scn),
        K_(end_scn),
        K_(op_guard));
+  if (op_guard_.is_valid()) {
+    J_KV("UndoStatusList", op_guard_->get_undo_status_list());
+  }
   J_OBJ_END();
   return pos;
 }

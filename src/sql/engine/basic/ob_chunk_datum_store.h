@@ -22,7 +22,7 @@
 #include "common/row/ob_row_iterator.h"
 #include "share/datum/ob_datum.h"
 #include "sql/engine/expr/ob_expr.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "sql/engine/basic/ob_sql_mem_callback.h"
 #include "sql/engine/basic/ob_batch_result_holder.h"
 
@@ -831,7 +831,7 @@ public:
      // cp from chunk iter
      ObChunkDatumStore* store_;
      Block* cur_iter_blk_;
-     blocksstable::ObTmpFileIOHandle aio_read_handle_;
+     tmp_file::ObTmpFileIOHandle aio_read_handle_;
      int64_t cur_nth_blk_;     //reading nth blk start from 1
      int64_t cur_chunk_n_blocks_; //the number of blocks of current chunk
      int64_t cur_iter_pos_;    //pos in file
@@ -1136,16 +1136,16 @@ private:
 
   int write_file(void *buf, int64_t size);
   int read_file(
-      void *buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle &handle,
+      void *buf, const int64_t size, const int64_t offset, tmp_file::ObTmpFileIOHandle &handle,
       const int64_t file_size, const int64_t cur_pos, int64_t &tmp_file_size);
   int aio_read_file(void *buf,
                     const int64_t size,
                     const int64_t offset,
-                    blocksstable::ObTmpFileIOHandle &handle);
+                    tmp_file::ObTmpFileIOHandle &handle);
   bool need_dump(int64_t extra_size);
   BlockBuffer* new_block();
   void set_io(int64_t size, char *buf) { io_.size_ = size; io_.buf_ = buf; }
-  static void set_io(int64_t size, char *buf, blocksstable::ObTmpFileIOInfo &io) { io.size_ = size; io.buf_ = buf; }
+  static void set_io(int64_t size, char *buf, tmp_file::ObTmpFileIOInfo &io) { io.size_ = size; io.buf_ = buf; }
   bool find_block_can_hold(const int64_t size, bool &need_shrink);
   int get_store_row(RowIterator &it, const StoredRow *&sr);
   inline void callback_alloc(int64_t size) { if (callback_ != nullptr) callback_->alloc(size); }
@@ -1175,7 +1175,7 @@ private:
   int64_t row_cnt_;
   int64_t col_count_;
 
-  blocksstable::ObTmpFileIOHandle aio_write_handle_;
+  tmp_file::ObTmpFileIOHandle aio_write_handle_;
 
   bool enable_dump_;
   bool has_dumped_;
@@ -1184,7 +1184,7 @@ private:
   ObIOEventObserver *io_event_observer_;
 
   //int fd_;
-  blocksstable::ObTmpFileIOInfo io_;
+  tmp_file::ObTmpFileIOInfo io_;
   int64_t file_size_;
   int64_t n_block_in_file_;
 

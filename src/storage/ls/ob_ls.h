@@ -231,6 +231,7 @@ public:
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
            const share::SCN &create_scn,
+           const ObLSStoreFormat &store_format,
            observer::ObIMetaReport *reporter);
   // I am ready to work now.
   int start();
@@ -309,6 +310,10 @@ public:
   bool is_in_gc();
   bool is_restore_first_step() const;
   bool is_clone_first_step() const;
+  // is current ls replica a column store replica
+  bool is_cs_replica() const;
+  // is current ls replica set contains a column store replica
+  int check_has_cs_replica(bool &has_cs_replica) const;
   // for rebuild
   // remove inner tablet, the memtable and minor sstable of data tablet, disable replay
   // int prepare_rebuild();
@@ -497,6 +502,7 @@ public:
   DELEGATE_WITH_RET(ls_meta_, set_rebuild_info, int);
   DELEGATE_WITH_RET(ls_meta_, get_rebuild_info, int);
   DELEGATE_WITH_RET(ls_meta_, get_create_type, int);
+  DELEGATE_WITH_RET(ls_meta_, get_store_format, ObLSStoreFormat);
 
 
   // get ls_meta_package and sorted tablet_metas for backup. tablet gc is forbidden meanwhile.
@@ -920,6 +926,7 @@ public:
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);
   DELEGATE_WITH_RET(keep_alive_ls_handler_, get_min_start_scn, void);
+  DELEGATE_WITH_RET(keep_alive_ls_handler_, clear_keep_alive_smaller_scn_info, void);
 
   // update tablet table store here do not using Macro because need lock ls and tablet
   // update table store for tablet

@@ -248,6 +248,7 @@ public:
       : alloc_(alloc), type_(type), n_child_(0), childs_(nullptr),
       col_ids_(alloc)
   {}
+  virtual ~ObPushdownFilterNode() {}
   PushdownFilterType get_type() const { return type_; }
   common::ObIArray<uint64_t> &get_col_ids() { return col_ids_; }
   void set_type(PushdownFilterType type) { type_ = type; }
@@ -458,6 +459,7 @@ public:
             ObPushdownFilterNode &filter_node,
             ObPushdownFilterExecutor *&filter_executor,
             ObPushdownOperator &op);
+  int convert_white_filter_to_black(ObPushdownFilterExecutor *&filter);
 
 private:
   // pushdown filter
@@ -692,7 +694,7 @@ public:
   int pull_up_common_node(
       const common::ObIArray<uint32_t> &filter_indexes,
       ObPushdownFilterExecutor *&common_filter_executor);
-  virtual int init_evaluated_datums() { return common::OB_NOT_SUPPORTED; }
+  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) { return common::OB_NOT_SUPPORTED; }
   int execute(
       ObPushdownFilterExecutor *parent,
       PushdownFilterInfo &filter_info,
@@ -758,7 +760,7 @@ public:
   {}
   virtual ~ObPhysicalFilterExecutor();
   int filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, const sql::ObBitVector &skip_bit, bool &ret_val);
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) = 0;
   INHERIT_TO_STRING_KV("ObPhysicalFilterExecutor", ObPushdownFilterExecutor,
                        K_(n_eval_infos), KP_(eval_infos));
@@ -943,7 +945,7 @@ public:
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
   virtual const common::ObIArray<ObExpr *> *get_cg_col_exprs() const override { return &filter_.column_exprs_; }
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
   OB_INLINE const common::ObIArray<common::ObDatum> &get_datums() const
   { return datum_params_; }
   OB_INLINE const common::ObDatum &get_min_param() const
@@ -972,8 +974,8 @@ protected:
   {
     return datum.is_null() || (lib::is_oracle_mode() && obj_meta.is_character_type() && (0 == datum.len_));
   }
-  int init_compare_eval_datums();
-  int init_in_eval_datums();
+  int init_compare_eval_datums(bool &need_convert);
+  int init_in_eval_datums(bool &need_convert);
   int init_param_set(const int64_t count, const ObExpr *cur_arg);
   int add_to_param_set_and_array(const ObDatum &datum, const ObExpr *cur_arg);
 public:
@@ -997,7 +999,7 @@ public:
   OB_INLINE ObPushdownAndFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
   INHERIT_TO_STRING_KV("ObPushdownAndFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownAndFilterNode &filter_;
@@ -1015,7 +1017,7 @@ public:
   OB_INLINE ObPushdownOrFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
   INHERIT_TO_STRING_KV("ObPushdownOrFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownOrFilterNode &filter_;
@@ -1045,7 +1047,7 @@ public:
   {
     return static_cast<const ObPushdownDynamicFilterNode &>(filter_);
   }
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
   int check_runtime_filter(ObPushdownFilterExecutor* parent_filter, bool &is_needed);
   void filter_on_bypass(ObPushdownFilterExecutor* parent_filter);
   void filter_on_success(ObPushdownFilterExecutor* parent_filter);

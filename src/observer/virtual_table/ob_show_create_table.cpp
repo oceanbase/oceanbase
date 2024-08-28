@@ -216,7 +216,19 @@ int ObShowCreateTable::fill_row_cells_inner(const uint64_t show_table_id,
           // create_table
           ObSchemaPrinter schema_printer(*schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes);
           int64_t pos = 0;
-          if (table_schema.is_view_table()) {
+          if (table_schema.is_materialized_view()) {
+            if (OB_FAIL(schema_printer.print_materialized_view_definition(effective_tenant_id_,
+                                                                         show_table_id,
+                                                                         table_def_buf,
+                                                                         table_def_buf_size,
+                                                                         pos,
+                                                                         TZ_INFO(session_),
+                                                                         false,
+                                                                         session_->get_sql_mode()))) {
+              SERVER_LOG(WARN, "Generate materialized view definition failed",
+                         KR(ret), K(effective_tenant_id_), K(show_table_id));
+            }
+          } else if (table_schema.is_view_table()) {
             if (OB_FAIL(schema_printer.print_view_definiton(effective_tenant_id_,
                                                             show_table_id,
                                                             table_def_buf,

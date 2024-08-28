@@ -348,7 +348,7 @@ void ObDDLTracing::end_task_span()
     int ret = OB_SUCCESS;
     FLT_RESTORE_DDL_TRACE_CTX(trace_ctx_);
     FLT_SET_AUTO_FLUSH(true);
-    task_->flt_set_task_span_tag();
+    // task_->flt_set_task_span_tag();
     // TODO hanxuan fix MTL_SWITCH
     MTL_SWITCH(OB_SYS_TENANT_ID) {
       FLT_END_SPAN(task_span_);
@@ -513,7 +513,7 @@ void ObDDLTracing::end_status_span()
     int ret = OB_SUCCESS;
     FLT_RESTORE_DDL_TRACE_CTX(trace_ctx_);
     FLT_SET_AUTO_FLUSH(true);
-    task_->flt_set_status_span_tag();
+    //task_->flt_set_status_span_tag();
     // TODO hanxuan fix MTL_SWITCH
     MTL_SWITCH(OB_SYS_TENANT_ID) {
       FLT_END_SPAN(status_span_);
@@ -966,7 +966,9 @@ int ObDDLTask::set_ddl_stmt_str(const ObString &ddl_stmt_str)
 int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_, is_pre_split_);
+  bool is_unique_index = false;
+  bool is_global_index = false;
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_, is_unique_index, is_global_index, is_pre_split_);
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
@@ -1001,7 +1003,9 @@ int ObDDLTask::deserialize_params_from_message(const uint64_t tenant_id, const c
 
 int64_t ObDDLTask::get_serialize_param_size() const
 {
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_, is_pre_split_);
+  bool is_unique_index = false;
+  bool is_global_index = false;
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_, is_unique_index, is_global_index, is_pre_split_);
   return serialize_field.get_serialize_size();
 }
 
