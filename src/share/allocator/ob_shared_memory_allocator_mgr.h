@@ -19,6 +19,7 @@
 #include "share/throttle/ob_share_resource_throttle_tool.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/ls/ob_ls.h"
 
 namespace oceanbase {
 namespace share {
@@ -92,6 +93,7 @@ public:
   static int do_throttle(const bool for_replay,
                          const int64_t abs_expire_time,
                          const int64_t throttle_memory_size,
+                         const ObLS &ls,
                          TxShareThrottleTool &throttle_tool,
                          ObThrottleInfoGuard &share_ti_guard,
                          ObThrottleInfoGuard &module_ti_guard)
@@ -112,8 +114,8 @@ public:
     while (throttle_tool.still_throttling<ALLOCATOR>(share_ti_guard, module_ti_guard) &&
            (left_interval > 0)) {
       int64_t expected_wait_time = 0;
-      if (for_replay && MTL(ObTenantFreezer *)->exist_ls_throttle_is_skipping()) {
-        // skip throttle if ls freeze exists
+      if ((for_replay && MTL(ObTenantFreezer *)->exist_ls_throttle_is_skipping()) || ls.is_offline()) {
+        // skip throttle if : 1) throttle need skipping; 2) this logstream offline
         break;
       } else if ((expected_wait_time =
                       throttle_tool.expected_wait_time<ALLOCATOR>(share_ti_guard, module_ti_guard)) <= 0) {

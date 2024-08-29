@@ -72,12 +72,21 @@ void ObStorageTableGuard::throttle_if_needed_()
       // only do throttle on active memtable
       if (OB_NOT_NULL(memtable_) && memtable_->is_active_memtable()) {
         reset();
-        (void)TxShareMemThrottleUtil::do_throttle<ObMemstoreAllocator>(for_replay_,
-                                                                       store_ctx_.timeout_,
-                                                                       share::memstore_throttled_alloc(),
-                                                                       throttle_tool,
-                                                                       share_ti_guard,
-                                                                       module_ti_guard);
+        ObLSHandle ls_handle;
+        ObLS *ls = nullptr;
+        const ObLSID &ls_id = tablet_->get_tablet_meta().ls_id_;
+        if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+          STORAGE_LOG(WARN, "get ls handle failed", KR(ret), K(ls_id));
+        } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        } else {
+          (void)TxShareMemThrottleUtil::do_throttle<ObMemstoreAllocator>(for_replay_,
+                                                                         store_ctx_.timeout_,
+                                                                         share::memstore_throttled_alloc(),
+                                                                         *ls,
+                                                                         throttle_tool,
+                                                                         share_ti_guard,
+                                                                         module_ti_guard);
+        }
       }
 
       // if throttle is skipped due to some reasons, advance clock by call skip_throttle() and clean throttle status
