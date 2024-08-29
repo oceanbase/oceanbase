@@ -392,6 +392,7 @@
 #include "ob_expr_rb_from_string.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
+#include "ob_expr_split_part.h"
 
 namespace oceanbase
 {
@@ -1248,6 +1249,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprArrayContains::eval_array_contains_double,            /* 752 */
   NULL, //ObExprArrayContains::eval_array_contains_ObString,          /* 753 */
   NULL, //ObExprArrayContains::eval_array_contains_array,             /* 754 */
+  ObExprSplitPart::calc_split_part_expr,                              /* 755 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

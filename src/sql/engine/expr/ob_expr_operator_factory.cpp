@@ -457,6 +457,7 @@
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
+#include "sql/engine/expr/ob_expr_split_part.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1129,6 +1130,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm3);
     REG_OP(ObExprSm4Encrypt);
     REG_OP(ObExprSm4Decrypt);
+    REG_OP(ObExprSplitPart);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1457,6 +1459,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSdoRelate);
   REG_OP_ORCL(ObExprGetPath);
   REG_OP_ORCL(ObExprDecodeTraceId);
+  REG_OP_ORCL(ObExprSplitPart);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)
