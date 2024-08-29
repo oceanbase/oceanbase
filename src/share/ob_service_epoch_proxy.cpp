@@ -34,7 +34,8 @@ int ObServiceEpochProxy::init_service_epoch(
     const int64_t freeze_service_epoch,
     const int64_t arbitration_service_epoch,
     const int64_t server_zone_op_service_epoch,
-    const int64_t heartbeat_service_epoch)
+    const int64_t heartbeat_service_epoch,
+    const int64_t service_name_epoch)
 {
   int ret = OB_SUCCESS;
   if (is_user_tenant(tenant_id)) {
@@ -94,6 +95,12 @@ int ObServiceEpochProxy::init_service_epoch(
         ARBITRATION_SERVICE_EPOCH,
         arbitration_service_epoch))) {
       LOG_WARN("fail to init arb service epoch", KR(ret), K(user_tenant_id), K(arbitration_service_epoch));
+    } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+        sql_proxy,
+        user_tenant_id,
+        SERVICE_NAME_EPOCH,
+        service_name_epoch))) {
+      LOG_WARN("fail to init service name epoch", KR(ret), K(user_tenant_id), K(service_name_epoch));
     } else {}
   } else {}
   return ret;

@@ -92,6 +92,39 @@
                 IS_ALL_LS_SYNCED,
                 NON_SYNC_INFO);
   };
+
+  class SERVICE_NAME {
+    public:
+      DEF_MODULE(SERVICE_NAME, "SERVICE NAME");
+
+      DEF_EVENT(SERVICE_NAME, CREATE_SERVICE, "CREATE SERVICE",
+                SERVICE_NAME_STRING,
+                CREATED_SERVICE_NAME);
+
+      DEF_EVENT(SERVICE_NAME, DELETE_SERVICE, "DELETE SERVICE",
+                DELETED_SERVICE_NAME);
+
+      DEF_EVENT(SERVICE_NAME, START_SERVICE, "START SERVICE",
+                SERVICE_NAME_BEFORE,
+                SERVICE_NAME_AFTER);
+
+      DEF_EVENT(SERVICE_NAME, STOP_SERVICE, "STOP SERVICE",
+                SERVICE_NAME_BEFORE,
+                SERVICE_NAME_AFTER);
+
+      DEF_EVENT(SERVICE_NAME, KILL_CONNECTIONS_OF_SERVICE_NAME, "KILL CONNECTIONS OF SERVICE NAME",
+                SERVICE_NAME,
+                KILLED_CONNECTIONS_COUNT,
+                KILLED_CONNECTIONS_LIST);
+
+      DEF_EVENT(SERVICE_NAME, BROADCAST_SERVICE_NAME, "BROADCAST SERVICE NAME",
+                EPOCH,
+                TARGET_SERVICE_NAME_ID,
+                SERVICE_NAME_LIST,
+                SERVICE_NAME_COMMAND_TYPE,
+                TARGET_SERVERS_LIST,
+                SUCCESS_SERVERS_LIST);
+  };
 #endif
 #endif
 ////////////////////////////////////////////////////////////////

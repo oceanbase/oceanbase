@@ -1013,6 +1013,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
         break;
       }
+      case stmt::T_SERVICE_NAME: {
+        DEFINE_EXECUTE_CMD(ObServiceNameStmt, ObServiceNameExecutor);
+        break;
+      }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:
       case stmt::T_SWITCH_ROOTSERVER:

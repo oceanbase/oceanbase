@@ -58,6 +58,7 @@
 #include "ob_sess_info_verify.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/config/ob_config_helper.h"
+#include "rootserver/ob_tenant_info_loader.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -203,7 +204,9 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       current_dblink_sequence_id_(0),
       client_non_standard_(false),
       is_session_sync_support_(false),
-      job_info_(nullptr)
+      job_info_(nullptr),
+      failover_mode_(false),
+      service_name_()
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -388,6 +391,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   dblink_sequence_schemas_.reset();
   is_session_sync_support_ = false;
   job_info_ = nullptr;
+  failover_mode_ = false;
+  service_name_.reset();
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -4447,4 +4452,52 @@ int ObSQLSessionInfo::get_dblink_sequence_schema(int64_t sequence_id, const ObSe
   }
   LOG_TRACE("get dblink sequence schema", K(sequence_id), K(dblink_sequence_schemas_));
   return ret;
+}
+
+int ObSQLSessionInfo::set_service_name(const ObString& service_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(service_name_.init(service_name))) {
+    LOG_WARN("fail to init service_name", KR(ret), K(service_name));
+  }
+  return ret;
+}
+int ObSQLSessionInfo::check_service_name_and_failover_mode(const uint64_t tenant_id) const
+{
+  // if failover_mode is on, and the session is created via service_name
+  // the tenant should be primary
+  // service name must exist and service status must be started
+  // if service_name is not empty, the version must be >= 4240
+  int ret = OB_SUCCESS;
+  bool is_sts_ready = false;
+  if (service_name_.is_empty()) {
+    // do nothing
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MTL_SWITCH(tenant_id) {
+      rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+      if (OB_ISNULL(tenant_info_loader)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant_info_loader is null", KR(ret), KP(tenant_info_loader));
+      } else if (OB_FAIL(tenant_info_loader->check_if_sts_is_ready(is_sts_ready))) {
+        LOG_WARN("fail to execute check_if_sts_is_ready", KR(ret));
+      } else if (failover_mode_ && is_sts_ready) {
+        // 'sts_ready' indicates that the 'access_mode' is 'RAW_WRITE'
+        // The reason for using 'sts_ready' is that we believe all connections intending to reach the
+        // primary tenant should be accepted before the 'access_mode' switches to 'RAW_WRITE'.
+        ret = OB_NOT_PRIMARY_TENANT;
+        LOG_WARN("the tenant is not primary, the request is not allowed", KR(ret), K(is_sts_ready));
+      } else if (OB_FAIL(tenant_info_loader->check_if_the_service_name_is_stopped(service_name_))) {
+        LOG_WARN("fail to execute check_if_the_service_name_is_stopped", KR(ret), K(service_name_));
+      }
+    }
+  }
+  return ret;
+}
+int ObSQLSessionInfo::check_service_name_and_failover_mode() const
+{
+  uint64_t tenant_id = get_effective_tenant_id();
+  return check_service_name_and_failover_mode(tenant_id);
 }

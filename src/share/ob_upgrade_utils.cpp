@@ -1262,6 +1262,41 @@ int ObUpgradeFor4217Processor::post_upgrade_for_spm()
 }
 /* =========== 4217 upgrade processor end ============= */
 
+/* =========== 4219 upgrade processor start ============= */
+int ObUpgradeFor4219Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_service_name())) {
+    LOG_WARN("post for upgrade for service_name", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4219Processor::post_upgrade_for_service_name()
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_));
+  } else if (!is_meta_tenant(tenant_id_)) {
+    LOG_INFO("not meta tenant, skip", K(tenant_id_));
+  } else {
+    ObSqlString sql;
+    uint64_t user_tenant_id = gen_user_tenant_id(tenant_id_);
+    if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s (tenant_id, name, value) VALUES (%lu, '%s', 0)",
+        OB_ALL_SERVICE_EPOCH_TNAME, user_tenant_id, ObServiceEpochProxy::SERVICE_NAME_EPOCH))) {
+      LOG_WARN("fail to assign sql assign", KR(ret));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(sql));
+    } else {}
+  }
+  FLOG_INFO("insert service name epoch", KR(ret), K(tenant_id_), K(affected_rows));
+  return ret;
+}
+/* =========== 4219 upgrade processor end ============= */
 /* =========== special upgrade processor end   ============= */
 } // end share
 } // end oceanbase

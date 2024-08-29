@@ -46,6 +46,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
+#include "share/ob_service_name_proxy.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 namespace oceanbase
@@ -80,6 +81,7 @@ namespace share
 {
 struct ObSequenceValue;
 }
+using share::ObServiceNameString;
 using common::ObPsStmtId;
 namespace sql
 {
@@ -1313,6 +1315,13 @@ public:
   int on_user_disconnect();
   virtual void reset_tx_variable(bool reset_next_scope = true);
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
+  const ObServiceNameString& get_service_name() const { return service_name_; }
+  bool get_failover_mode() const { return failover_mode_; }
+  void set_failover_mode(const bool failover_mode) { failover_mode_ = failover_mode; }
+  void reset_service_name() { service_name_.reset(); }
+  int set_service_name(const ObString& service_name);
+  int check_service_name_and_failover_mode() const;
+  int check_service_name_and_failover_mode(const uint64_t tenant_id) const;
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
@@ -1564,6 +1573,8 @@ private:
   bool client_non_standard_;
   bool is_session_sync_support_; // session_sync_support flag.
   dbms_scheduler::ObDBMSSchedJobInfo *job_info_; // dbms_scheduler related.
+  bool failover_mode_;
+  ObServiceNameString service_name_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

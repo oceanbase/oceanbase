@@ -238,8 +238,17 @@ private:
   int post_upgrade_for_spm();
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 8)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 9)
 
+class ObUpgradeFor4219Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4219Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4219Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_service_name();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

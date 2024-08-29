@@ -139,8 +139,9 @@ DEF_SIMPLE_EXECUTOR(ObSetRegionBandwidth);
 DEF_SIMPLE_EXECUTOR(ObCheckpointSlog);
 DEF_SIMPLE_EXECUTOR(ObBootstrap);
 
-DEF_SIMPLE_EXECUTOR(ObTransferPartition);
 
+DEF_SIMPLE_EXECUTOR(ObTransferPartition);
+DEF_SIMPLE_EXECUTOR(ObServiceName);
 class ObCancelTaskExecutor
 {
 public:

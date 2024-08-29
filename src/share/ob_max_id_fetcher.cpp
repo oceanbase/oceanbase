@@ -82,6 +82,7 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_rls_policy_id", "max used ddl rls policy id"},
   { "ob_max_used_rls_group_id", "max used ddl rls group id"},
   { "ob_max_used_rls_context_id", "max used ddl rls context id"},
+  { "ob_max_used_service_name_id", "max used service name id"}
 };
 
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
@@ -123,6 +124,7 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_OBJECT_ID_TYPE:
     case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
     case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
+    case OB_MAX_USED_SERVICE_NAME_ID_TYPE:
     case OB_MAX_USED_TTL_TASK_ID_TYPE: {
       dst = src;
       break;
@@ -314,6 +316,7 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
         case OB_MAX_USED_LS_ID_TYPE:
         case OB_MAX_USED_LS_GROUP_ID_TYPE:
         case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
+        case OB_MAX_USED_SERVICE_NAME_ID_TYPE:
         case OB_MAX_USED_TTL_TASK_ID_TYPE: {
           // won't check other id
           break;

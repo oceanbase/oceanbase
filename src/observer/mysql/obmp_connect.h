@@ -123,6 +123,9 @@ private:
 
   int set_proxy_version(ObSMConnection &conn);
   int set_client_version(ObSMConnection &conn);
+  int extract_service_name(ObSMConnection &conn, ObString &service_name, bool &failover_mode);
+  int set_service_name(const uint64_t tenant_id, sql::ObSQLSessionInfo &session,
+      const ObString &service_name, const bool failover_mode);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPConnect);
   obmysql::OMPKHandshakeResponse hsr_;

@@ -523,6 +523,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
 %type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
+%type <node> service_name_stmt service_op
 
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
@@ -690,6 +691,7 @@ stmt:
   | switchover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
+  | service_name_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -18141,6 +18143,43 @@ part_info
 | ALL
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ALL);
+}
+;
+/*===========================================================
+ *
+ * 租户 SERVICE_NAME 管理
+ *
+ *===========================================================*/
+service_name_stmt:
+ALTER SYSTEM service_op SERVICE relation_name opt_tenant_name
+{
+  (void)($2);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_SERVICE_NAME, 3,
+                           $3,                   /* service operation */
+                           $5,                   /* service name */
+                           $6);                  /* tenant name */
+}
+;
+service_op :
+CREATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| DELETE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+| START
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 3;
+}
+| STOP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 4;
 }
 ;
 /*===========================================================

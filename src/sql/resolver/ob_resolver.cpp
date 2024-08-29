@@ -1184,6 +1184,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
+      case T_SERVICE_NAME: {
+        REGISTER_STMT_RESOLVER(ServiceName);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);

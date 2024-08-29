@@ -184,6 +184,7 @@ ob_set_subtarget(ob_share common
   ob_cluster_event_history_table_operator.cpp
   scn.cpp
   ob_throttling_utils.cpp
+  ob_service_name_proxy.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed

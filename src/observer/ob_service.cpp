@@ -76,6 +76,7 @@
 #include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
 #include "rootserver/backup/ob_backup_schedule_task.h" // ObBackupScheduleTask
+#include "rootserver/ob_service_name_command.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -363,6 +364,10 @@ void ObService::stop()
     FLOG_INFO("begin to stop cluster event instance");
     CLUSTER_EVENT_INSTANCE.stop();
     FLOG_INFO("cluster event instance stopped");
+
+    FLOG_INFO("begin to stop tenant event instance");
+    TENANT_EVENT_INSTANCE.stop();
+    FLOG_INFO("tenant event instance stopped");
   }
   FLOG_INFO("[OBSERVICE_NOTICE] observice finish stop", K_(stopped));
 }
@@ -404,6 +409,10 @@ void ObService::wait()
     FLOG_INFO("begin to wait cluster event instance");
     CLUSTER_EVENT_INSTANCE.wait();
     FLOG_INFO("wait cluster event instance success");
+
+    FLOG_INFO("begin to wait tenant event instance");
+    TENANT_EVENT_INSTANCE.wait();
+    FLOG_INFO("wait tenant event instance success");
   }
   FLOG_INFO("[OBSERVICE_NOTICE] wait ob_service end");
 }
@@ -3416,6 +3425,59 @@ int ObService::ob_admin_unlock_member_list(
   return ret;
 }
 
+int ObService::refresh_service_name(
+    const ObRefreshServiceNameArg &arg,
+    ObRefreshServiceNameRes &result)
+{
+  // 1. epoch:
+  //    1.1 if the arg's epoch <= the tenant_info_loader's epoch, do nothing
+  //    1.2 otherwise, replace cache with the arg's service_name_list
+  // 2. kill local connections when the arg's service_op is STOP SERVICE
+  //    and the target service_name's status in the tenant_info_loader is STOPPING
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.get_tenant_id();
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_), K(arg));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (tenant_id != MTL_ID() && OB_FAIL(guard.switch_to(tenant_id))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+    if (OB_ISNULL(tenant_info_loader)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant_info_loader should not be null", KR(ret), KP(tenant_info_loader));
+    } else if (OB_FAIL(tenant_info_loader->update_service_name(arg.get_epoch(), arg.get_service_name_list()))) {
+      LOG_WARN("fail to execute update_service_name", KR(ret), K(arg));
+    } else if (arg.is_start_service()) {
+      // When starting the service, it is expected that `service_name` is utilized.
+      // However, the ability for users to connect via `service_name` also depends on `tenant_info`,
+      // so it's crucial to ensure that `tenant_info` is up-to-date.
+      const ObUpdateTenantInfoCacheArg &u_arg = arg.get_update_tenant_info_arg();
+      if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(u_arg.get_ora_rowscn(), u_arg.get_tenant_info()))) {
+        LOG_WARN("fail to execute update_tenant_info_cache", KR(ret), K(u_arg), K(arg));
+      }
+    } else if (arg.is_stop_service()) {
+      ObServiceName service_name;
+      if (OB_FAIL(tenant_info_loader->get_service_name(arg.get_target_service_name_id(), service_name))) {
+        LOG_WARN("fail to get service name", KR(ret), K(arg));
+      } else if (service_name.is_stopping()
+          && OB_FAIL(ObServiceNameCommand::kill_local_connections(tenant_id, service_name))) {
+        LOG_WARN("fail to kill local connections", KR(ret), K(arg), K(service_name));
+      }
+    }
+  }
+  if (FAILEDx(result.init(tenant_id))) {
+    LOG_WARN("failed to init res", KR(ret), K(tenant_id));
+  }
+  FLOG_INFO("finish refresh_service_name", KR(ret), K(arg), K(result));
+  return ret;
+}
 
 }// end namespace observer
 }// end namespace oceanbase

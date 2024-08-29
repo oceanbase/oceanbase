@@ -246,6 +246,7 @@ public:
   RPC_AP(PR5 tablet_location_send, OB_TABLET_LOCATION_BROADCAST, (obrpc::ObTabletLocationSendArg), obrpc::ObTabletLocationSendResult);
   RPC_S(PR5 force_set_tenant_log_disk, OB_LOG_FORCE_SET_TENANT_LOG_DISK, (obrpc::ObForceSetTenantLogDiskArg));
   RPC_S(PR5 dump_server_usage, OB_FORCE_DUMP_SERVER_USAGE, (obrpc::ObDumpServerUsageRequest), obrpc::ObDumpServerUsageResult);
+  RPC_AP(PR5 refresh_service_name, OB_REFRESH_SERVICE_NAME, (obrpc::ObRefreshServiceNameArg), obrpc::ObRefreshServiceNameRes);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc
