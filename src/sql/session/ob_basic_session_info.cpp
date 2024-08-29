@@ -2908,8 +2908,16 @@ void ObBasicSessionInfo::trace_all_sys_vars() const
     store_idx = ObSysVarsToIdxMap::get_store_idx((int64_t)ObSysVariables::get_sys_var_id(i));
     OV (0 <= store_idx && store_idx < ObSysVarFactory::ALL_SYS_VARS_COUNT);
     OV (OB_NOT_NULL(sys_vars_[store_idx]));
-    if (OB_SUCC(ret) && (sys_vars_[store_idx]->get_value() != sys_vars_[store_idx]->get_global_default_value())) {
-      OPT_TRACE("  ", sys_vars_[store_idx]->get_name(), " = ", sys_vars_[store_idx]->get_value());
+    if (OB_SUCC(ret)) {
+      int cmp = 0;
+      if (sys_vars_[store_idx]->get_value().can_compare(sys_vars_[store_idx]->get_global_default_value())) {
+        if (OB_FAIL(sys_vars_[store_idx]->get_value().compare(sys_vars_[store_idx]->get_global_default_value(), cmp))) {
+          //ignore fail code
+          ret = OB_SUCCESS;
+        } else if (0 != cmp) {
+          OPT_TRACE("  ", sys_vars_[store_idx]->get_name(), " = ", sys_vars_[store_idx]->get_value());
+        }
+      }
     }
   }
 }
