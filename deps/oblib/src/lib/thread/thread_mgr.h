@@ -302,8 +302,8 @@ public:
   void stop() override
   {
     if (nullptr != th_) {
-      th_->runnable_->set_stop(true);
       th_->stop();
+      th_->runnable_->set_stop(true);
     }
   }
   void wait() override
