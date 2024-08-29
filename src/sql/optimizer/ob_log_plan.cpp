@@ -10404,12 +10404,12 @@ int ObLogPlan::generate_plan()
     /*do nothing*/
   } else if (OB_FAIL(do_post_plan_processing())) {
     LOG_WARN("failed to post plan processing", K(ret));
-  } else if (OB_FAIL(plan_traverse_loop(RUNTIME_FILTER,
+  } else if (OB_FAIL(plan_traverse_loop(PX_RESCAN,
+                                        RUNTIME_FILTER,
                                         ALLOC_GI,
                                         PX_PIPE_BLOCKING,
                                         ALLOC_OP,
                                         OPERATOR_NUMBERING,
-                                        PX_RESCAN,
                                         EXCHANGE_NUMBERING,
                                         ALLOC_EXPR,
                                         PROJECT_PRUNING,
