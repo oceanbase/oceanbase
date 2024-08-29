@@ -173,7 +173,8 @@ struct ObOptParamHint
     DEF(NLJ_BATCHING_ENABLED,)                      \
     DEF(RUNTIME_FILTER_TYPE,)                       \
     DEF(BLOOM_FILTER_RATIO,)                        \
-    DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,) \
+    DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,)    \
+    DEF(_PUSH_JOIN_PREDICATE,)                      \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
