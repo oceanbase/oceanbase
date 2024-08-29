@@ -363,7 +363,9 @@ int ObLogExchange::compute_op_ordering()
   } else if (is_producer()) {
     // for FULL_INPUT_SAMPLE, we cache all rows in transmit and send in random range
     // to avoid send to one worker at one time if input order is the same with %sort_keys_
-    is_local_order_ = FULL_INPUT_SAMPLE == sample_type_;
+    if (FULL_INPUT_SAMPLE == sample_type_) {
+      is_local_order_ = true;
+    }
   } else if (is_consumer()) {
     if (is_merge_sort_) {
       if (OB_UNLIKELY(sort_keys_.empty())) {
