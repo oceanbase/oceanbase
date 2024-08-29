@@ -1585,13 +1585,9 @@ public:
 
   static int check_can_pullup_conds(const ObSelectStmt &subquery, bool &has_special_expr);
 
-  static int is_table_item_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                      const ObSelectStmt &subquery,
-                                      bool &contains);
-
-  static int is_join_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                           const ObSelectStmt *subquery,
-                                           bool &is_correlated);
+  static int is_from_item_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                     const ObSelectStmt &subquery,
+                                     bool &is_correlated);
 
   static int check_semi_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                               const SemiInfo *semi_info,
