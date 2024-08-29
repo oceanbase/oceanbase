@@ -2193,7 +2193,6 @@ bool ObMemtable::ready_for_flush_()
                                            get_end_scn(),
                                            get_write_ref(),
                                            get_unsubmitted_cnt(),
-                                           get_unsynced_cnt(),
                                            current_right_boundary.get_val_for_tx());
 
     int tmp_ret = OB_SUCCESS;

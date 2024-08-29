@@ -124,6 +124,24 @@ void ObShareResourceThrottleTool<FakeAllocator, Args...>::alloc_resource(const i
 
 template <typename FakeAllocator, typename... Args>
 template <typename ALLOCATOR>
+bool ObShareResourceThrottleTool<FakeAllocator, Args...>::has_triggered_throttle()
+{
+  ACQUIRE_THROTTLE_UNIT(FakeAllocator, share_throttle_unit);
+  ACQUIRE_UNIT_ALLOCATOR(ALLOCATOR, module_throttle_unit, allocator);
+
+  int64_t module_hold = allocator->hold();
+  SumModuleHoldResourceFunctor sum_hold_func;
+  (void)module_throttle_tuple_.for_each(sum_hold_func);
+
+  bool share_throttled = share_throttle_unit.has_triggered_throttle(sum_hold_func.sum_);
+  bool module_throttled = module_throttle_unit.has_triggered_throttle(allocator->hold());
+
+  bool has_triggered_throttle = (share_throttled | module_throttled);
+  return has_triggered_throttle;
+}
+
+template <typename FakeAllocator, typename... Args>
+template <typename ALLOCATOR>
 bool ObShareResourceThrottleTool<FakeAllocator, Args...>::is_throttling(ObThrottleInfoGuard &share_ti_guard,
                                                                         ObThrottleInfoGuard &module_ti_guard)
 {

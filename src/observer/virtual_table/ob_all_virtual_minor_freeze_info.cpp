@@ -151,7 +151,7 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 5:
           // is_force
-          cur_row_.cells_[i].set_varchar(freeze_stat.get_is_force() ? "YES" : "NO");
+          cur_row_.cells_[i].set_varchar(freeze_stat.need_rewrite_meta() ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
@@ -282,8 +282,6 @@ int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
       append_memtable_info_string(MEMTABLE_INFO_MEMBER[3], to_cstring(memtables_info_[i].write_ref_cnt_), size);
       // unsubmitted_cnt
       append_memtable_info_string(MEMTABLE_INFO_MEMBER[4], to_cstring(memtables_info_[i].unsubmitted_cnt_), size);
-      // unsynced_cnt
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[5], to_cstring(memtables_info_[i].unsynced_cnt_), size);
       // current_right_boundary
       append_memtable_info_string(MEMTABLE_INFO_MEMBER[6], to_cstring(memtables_info_[i].current_right_boundary_), size);
       // end of the memtable_info

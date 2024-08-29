@@ -661,7 +661,9 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
             }
           } else if (!table->is_frozen_memtable()) {
             is_memtable_ready = false;
-            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_))) {
+            const bool need_rewrite_meta = false;
+            const bool is_sync = false;
+            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_, need_rewrite_meta, is_sync, 0 /*abs_timeout_ts*/))) {
               if (OB_EAGAIN == ret) {
                 ret = OB_SUCCESS;
               } else {

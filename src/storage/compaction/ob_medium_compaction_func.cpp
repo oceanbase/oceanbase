@@ -1306,7 +1306,11 @@ int ObMediumCompactionScheduleFunc::check_need_merge_and_schedule(
       LOG_DEBUG("success to schedule medium merge dag", K(ret), K(schedule_scn));
     }
   } else if (need_force_freeze) {
-    if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_id, true/*force_freeze*/, true/*is_sync*/))) {
+    const bool is_sync = true;
+    const bool need_rewrite_meta = true;
+    // just try tablet freeze for one second
+    const int64_t max_retry_time_us = 1LL * 1000LL * 1000LL /* 1 second */;
+    if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_id, is_sync, max_retry_time_us, need_rewrite_meta))) {
       LOG_WARN("failed to force freeze tablet", K(tmp_ret), K(ls_id), K(tablet_id));
     }
   }

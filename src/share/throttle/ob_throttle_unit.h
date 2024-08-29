@@ -98,6 +98,13 @@ public:
                      bool &is_throttled);
 
   /**
+   * @brief Check if this throttle unit has triggerd throttle but do not alloc any resource
+   *        ATTENTION : This function is different from is_throttling(). is_throttling() only checks if current
+   *        thread is throttling, but this function checks if this tenant is throttling
+   */
+  bool has_triggered_throttle(const int64_t holding_resource);
+
+  /**
    * @brief Check if this throttle unit is throttling status.
    *
    * @param[out] ti_guard The throttle info guard from this unit.

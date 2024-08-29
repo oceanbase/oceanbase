@@ -1764,144 +1764,207 @@ int ObLS::replay_get_tablet(
 
   return ret;
 }
-
-int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t abs_timeout_ts)
+int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t input_abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
-  ObFuture<int> result;
 
+  if (is_sync) {
+    const int64_t abs_timeout_ts = (0 == input_abs_timeout_ts)
+                                       ? ObClockGenerator::getClock() + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME
+                                       : input_abs_timeout_ts;
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_meta_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_meta_.ls_id_));
+    } else {
+      ret = logstream_freeze_task(trace_id, abs_timeout_ts);
+    }
+  } else {
+    const bool is_ls_freeze = true;
+    (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
+  }
+  return ret;
+}
+
+int ObLS::logstream_freeze_task(const int64_t trace_id, const int64_t abs_timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_time = ObClockGenerator::getClock();
   {
-    int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+    int64_t read_lock = LSLOCKALL;
     int64_t write_lock = 0;
     ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
     if (!lock_myself.locked()) {
       ret = OB_TIMEOUT;
-      LOG_WARN("lock ls failed, please retry later", K(ret), K(ls_meta_));
+      STORAGE_LOG(WARN, "lock ls failed, please retry later", K(ret), K(ls_meta_));
     } else if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-      LOG_WARN("ls is not inited", K(ret));
-    } else if (OB_UNLIKELY(is_stopped_)) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-    } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.logstream_freeze(trace_id, &result))) {
-      LOG_WARN("logstream freeze failed", K(ret), K_(ls_meta));
-    } else {
-      // do nothing
+      STORAGE_LOG(WARN, "ls is not inited", K(ret));
+    } else if (OB_UNLIKELY(is_offline())) {
+      ret = OB_LS_OFFLINE;
+      STORAGE_LOG(WARN, "offline ls not allowed freeze", K(ret), K_(ls_meta));
+    } else if (OB_FAIL(ls_freezer_.logstream_freeze(trace_id))) {
+      STORAGE_LOG(WARN, "logstream freeze failed", K(ret), K_(ls_meta));
     }
   }
 
-  if (OB_SUCC(ret) && is_sync) {
-    ret = ls_freezer_.wait_freeze_finished(result);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ls_freezer_.wait_ls_freeze_finish())) {
+    STORAGE_LOG(WARN, "wait ls freeze finish failed", KR(ret));
   }
 
+  const int64_t ls_freeze_task_spend_time = ObClockGenerator::getClock() - start_time;
+  STORAGE_LOG(INFO,
+              "[Freezer] logstream freeze task finish",
+              K(ret),
+              K(ls_freeze_task_spend_time),
+              K(trace_id),
+              KTIME(abs_timeout_ts));
   return ret;
 }
 
+/**
+ * @brief for single tablet freeze
+ *
+ */
 int ObLS::tablet_freeze(const ObTabletID &tablet_id,
                         const bool is_sync,
-                        const int64_t abs_timeout_ts)
+                        const int64_t input_abs_timeout_ts,
+                        const bool need_rewrite_meta)
 {
   int ret = OB_SUCCESS;
-  ObFuture<int> result;
-
-  {
-    int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
-    int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
-    if (!lock_myself.locked()) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
-    } else if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("ls is not inited", K(ret));
-    } else if (OB_UNLIKELY(is_stopped_)) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-    } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("log handler not enable replay, should not freeze", K(ret), K(tablet_id), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.tablet_freeze(tablet_id, &result))) {
-      LOG_WARN("tablet freeze failed", K(ret), K(tablet_id));
-    } else {
-      // do nothing
-    }
-  }
-
-  if (OB_SUCC(ret) && is_sync) {
-    ret = ls_freezer_.wait_freeze_finished(result);
-  }
-
-  return ret;
-}
-
-int ObLS::force_tablet_freeze(const ObTabletID &tablet_id, const int64_t abs_timeout_ts)
-{
-  int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
-  int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
-  if (!lock_myself.locked()) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
-  } else if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_UNLIKELY(is_stopped_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("log handler not enable replay, should not freeze", K(ret), K(tablet_id), K_(ls_meta));
-  } else if (OB_FAIL(ls_freezer_.force_tablet_freeze(tablet_id))) {
-    LOG_WARN("tablet force freeze failed", K(ret), K(tablet_id));
+  if (tablet_id.is_ls_inner_tablet()) {
+    ret = ls_freezer_.ls_inner_tablet_freeze(tablet_id);
   } else {
-    // do nothing
+    ObSEArray<ObTabletID, 1> tablet_ids;
+    if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+      STORAGE_LOG(WARN, "push back tablet id failed", KR(ret), K(tablet_id));
+    } else {
+      ret = tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_ids, is_sync, input_abs_timeout_ts, need_rewrite_meta);
+    }
   }
   return ret;
 }
 
-int ObLS::batch_tablet_freeze(const int64_t trace_id,
-    const ObIArray<ObTabletID> &tablet_ids,
-    const bool is_sync,
-    const int64_t abs_timeout_ts)
+int ObLS::tablet_freeze(const int64_t trace_id,
+                        const ObIArray<ObTabletID> &tablet_ids,
+                        const bool is_sync,
+                        const int64_t input_abs_timeout_ts,
+                        const bool need_rewrite_meta)
 {
   int ret = OB_SUCCESS;
-  ObFuture<int> result;
+  STORAGE_LOG(
+      DEBUG, "start tablet freeze", K(tablet_ids), K(is_sync), KTIME(input_abs_timeout_ts), K(need_rewrite_meta));
+  int64_t freeze_epoch = ATOMIC_LOAD(&switch_epoch_);
+  if (need_rewrite_meta && (!is_sync)) {
+    ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(ERROR,
+                "tablet freeze for rewrite meta must be sync freeze ",
+                KR(ret),
+                K(need_rewrite_meta),
+                K(is_sync),
+                K(tablet_ids));
+  } else if (is_sync) {
+    const int64_t start_time = ObClockGenerator::getClock();
+    const int64_t abs_timeout_ts =
+        (0 == input_abs_timeout_ts) ? start_time + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME : input_abs_timeout_ts;
+    bool is_retry_code = false;
+    bool is_not_timeout = false;
+    do {
+      ret = tablet_freeze_task(trace_id, tablet_ids, need_rewrite_meta, is_sync, abs_timeout_ts, freeze_epoch);
+      const int64_t current_time = ObClockGenerator::getClock();
+      if (OB_FAIL(ret) &&
+          current_time - start_time > 10LL * 1000LL * 1000LL &&
+          REACH_TIME_INTERVAL(5LL * 1000LL * 1000LL)) {
+        STORAGE_LOG(WARN, "sync tablet freeze for long time", KR(ret), KTIME(start_time), KTIME(abs_timeout_ts));
+      }
 
+      is_retry_code = OB_EAGAIN == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret;
+      is_not_timeout = current_time < abs_timeout_ts;
+    } while (is_retry_code && is_not_timeout);
+  } else {
+    //Async tablet freeze. Must record tablet ids before submit task
+    const bool is_ls_freeze = false;
+    (void)record_async_freeze_tablets_(tablet_ids, freeze_epoch);
+    (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
+  }
+  return ret;
+}
+
+int ObLS::tablet_freeze_task(const int64_t trace_id,
+                             const ObIArray<ObTabletID> &tablet_ids,
+                             const bool need_rewrite_meta,
+                             const bool is_sync,
+                             const int64_t abs_timeout_ts,
+                             const int64_t freeze_epoch)
+{
+  int ret = OB_SUCCESS;
+
+  bool print_warn_log = false;
+  const int64_t start_time = ObClockGenerator::getClock();
+  ObSEArray<ObTableHandleV2, 32> frozen_memtable_handles;
+  ObSEArray<ObTabletID, 32> freeze_failed_tablets;
   {
-    int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+    int64_t read_lock = LSLOCKALL;
     int64_t write_lock = 0;
     ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
     if (!lock_myself.locked()) {
       ret = OB_TIMEOUT;
-      LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
+      STORAGE_LOG(WARN, "lock failed, please retry later", K(ret), K(ls_meta_));
     } else if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-      LOG_WARN("ls is not inited", K(ret));
-    } else if (OB_UNLIKELY(is_stopped_)) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-    } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(trace_id, tablet_ids, &result))) {
-      LOG_WARN("batch tablet freeze failed", K(ret));
-    } else {
-      // do nothing
+      STORAGE_LOG(WARN, "ls is not inited", K(ret));
+    } else if (OB_UNLIKELY(is_offline())) {
+      ret = OB_LS_OFFLINE;
+      STORAGE_LOG(WARN, "ls has offlined", K(ret), K_(ls_meta));
+    } else if (OB_FAIL(ls_freezer_.tablet_freeze(
+                   trace_id, tablet_ids, need_rewrite_meta, frozen_memtable_handles, freeze_failed_tablets))) {
+      if (REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL)) {
+        STORAGE_LOG(WARN, "tablet freeze failed", KR(ret), K(ls_meta_.ls_id_), K(tablet_ids), K(freeze_failed_tablets));
+      }
     }
   }
 
-  if (OB_SUCC(ret) && is_sync) {
-    ret = ls_freezer_.wait_freeze_finished(result);
+  // ATTENTION : if frozen memtable handles not empty, must wait freeze finish
+  if (!frozen_memtable_handles.empty()) {
+    (void)ls_freezer_.wait_tablet_freeze_finish(frozen_memtable_handles, freeze_failed_tablets);
   }
 
+  // handle freeze failed tablets
+  if (!freeze_failed_tablets.empty()) {
+    if (OB_SUCC(ret)) {
+      // some tablet freeze failed need retry
+      ret = OB_EAGAIN;
+    }
+    if (!is_sync) {
+      (void)record_async_freeze_tablets_(freeze_failed_tablets, freeze_epoch);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t tablet_freeze_task_spend_time = ObClockGenerator::getClock() - start_time;
+    STORAGE_LOG(INFO,
+                "[Freezer] tablet freeze task success",
+                K(ret),
+                K(need_rewrite_meta),
+                K(is_sync),
+                K(tablet_freeze_task_spend_time),
+                K(trace_id),
+                KTIME(abs_timeout_ts));
+  }
   return ret;
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tennat_freeze)
+void ObLS::record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch)
+{
+  for (int64_t i = 0; i < tablet_ids.count(); i++) {
+    AsyncFreezeTabletInfo tablet_info;
+    tablet_info.tablet_id_ = tablet_ids.at(i);
+    tablet_info.epoch_ = epoch;
+    (void)ls_freezer_.record_async_freeze_tablet(tablet_info);
+  }
+}
+
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tenant_freeze)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -1911,7 +1974,7 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
     ret = OB_TIMEOUT;
     LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
   } else {
-    if (is_tennat_freeze) {
+    if (is_tenant_freeze) {
       ObDataCheckpoint::set_tenant_freeze();
       LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
     }

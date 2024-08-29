@@ -1444,16 +1444,18 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
         if (OB_SUCC(ret)) {
           need_fast_freeze = false;
           if (!fast_freeze_checker_.need_check()) {
-          } else if (OB_TMP_FAIL(fast_freeze_checker_.check_need_fast_freeze(*tablet_handle.get_obj(), need_fast_freeze))) {
+          } else if (OB_TMP_FAIL(
+                         fast_freeze_checker_.check_need_fast_freeze(*tablet_handle.get_obj(), need_fast_freeze))) {
             LOG_WARN("failed to check need fast freeze", K(tmp_ret), K(tablet_handle));
           } else if (need_fast_freeze) {
-            if (OB_TMP_FAIL(ls.tablet_freeze(tablet_id, true/*is_sync*/))) {
+            const bool is_sync = false;
+            if (OB_TMP_FAIL(ls.tablet_freeze(tablet_id, is_sync))) {
               LOG_WARN("failt to freeze tablet", K(tmp_ret), K(tablet_id));
             }
           }
         }
       }
-    } // end of while
+    }  // end of while
   } // else
   return ret;
 }

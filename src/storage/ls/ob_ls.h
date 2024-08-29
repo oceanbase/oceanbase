@@ -217,6 +217,7 @@ public:
   bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
   bool is_remove() const { return ATOMIC_LOAD(&is_remove_); }
   void set_is_remove() { return ATOMIC_STORE(&is_remove_, true); }
+  int64_t get_switch_epoch() const { return ATOMIC_LOAD(&switch_epoch_); }
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
@@ -809,32 +810,46 @@ public:
   // ObReplayHandler interface:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
-  // ObFreezer interface:
-  // freeze the data of ls:
-  // @param [in] trace_id, for checkpoint diagnose
-  // @param [in] is_sync, only used for wait_freeze_finished()
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int logstream_freeze(const int64_t trace_id,
-                       const bool is_sync = false,
-                       const int64_t abs_timeout_ts = INT64_MAX);
-  // tablet freeze
-  // @param [in] is_sync, only used for wait_freeze_finished()
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
+  /**
+   * @brief freeze this logstream
+   *
+   * @param[in] trace_id
+   * @param[in] is_sync if is_sync == true, call logstream_freeze_task directly. Or commit an async task to execute
+   * logstream_freeze_task
+   * @param[in] abs_timeout_ts only used when is_sync == true, 0 as default, which means retry for
+   * ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   */
+  int logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t abs_timeout_ts = 0);
+  int logstream_freeze_task(const int64_t trace_id,
+                            const int64_t abs_timeout_ts);
+
   int tablet_freeze(const ObTabletID &tablet_id,
-                    const bool is_sync = false,
-                    const int64_t abs_timeout_ts = INT64_MAX);
-  // force freeze tablet
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int force_tablet_freeze(const ObTabletID &tablet_id,
-                          const int64_t abs_timeout_ts = INT64_MAX);
-  // batch tablet freeze
-  // @param [in] tablet_ids
-  // @param [in] is_sync
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int batch_tablet_freeze(const int64_t trace_id,
-      const ObIArray<ObTabletID> &tablet_ids,
-      const bool is_sync = false,
-      const int64_t abs_timeout_ts = INT64_MAX);
+                    const bool is_sync,
+                    const int64_t input_abs_timeout_ts = 0,
+                    const bool need_rewrite_meta = false);
+  /**
+   * @brief freeze one or multiple tablets. if is_sync is true, retry until timeout. or commit an async task and retry
+   * till die
+   *
+   * @param[in] trace_id
+   * @param[in] tablet_ids
+   * @param[in] is_sync if is_sync == true, call tablet_freeze_task directly. Or commit an async task to execute
+   * logstream_freeze_task
+   * @param[in] need_rewrite_meta
+   * @param[in] abs_timeout_ts only used when is_sync == true, 0 as default, which means retry for
+   * ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   */
+  int tablet_freeze(const int64_t trace_id,
+                    const ObIArray<ObTabletID> &tablet_ids,
+                    const bool is_sync,
+                    const int64_t abs_timeout_ts = 0,
+                    const bool need_rewrite_meta = false);
+  int tablet_freeze_task(const int64_t trace_id,
+                         const ObIArray<ObTabletID> &tablet_ids,
+                         const bool need_rewrite_meta,
+                         const bool is_sync,
+                         const int64_t abs_timeout_ts,
+                         const int64_t freeze_epoch);
 
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
@@ -896,6 +911,10 @@ public:
   DELEGATE_WITH_RET(ls_meta_, cleanup_transfer_meta_info, int);
 
   int set_ls_migration_gc(bool &allow_gc);
+private:
+  void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
+  void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
+
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.
