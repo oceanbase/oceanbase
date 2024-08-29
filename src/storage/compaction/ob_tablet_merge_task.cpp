@@ -803,6 +803,8 @@ int ObTabletMergeDag::prepare_merge_ctx(bool &finish_flag)
     LOG_WARN("failed to alloc ctx", KR(ret), K_(param));
   } else if (OB_FAIL(ctx_->build_ctx(finish_flag))) {
     LOG_WARN("failed to build ctx", KR(ret), K_(param), KP_(ctx));
+  } else if (OB_FAIL(ctx_->check_merge_ctx_valid())) {
+    LOG_WARN("invalid merge ctx", KR(ret), K_(param), KPC_(ctx));
   }
   return ret;
 }

@@ -1599,6 +1599,8 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
   } else if (FALSE_IT(co_merge_ctx_->time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE))) {
   } else if (OB_FAIL(co_merge_ctx_->build_ctx(useless_finish_flag))) {
     LOG_WARN("failed to build ctx", KR(ret), KP_(co_merge_ctx));
+  } else if (OB_FAIL(co_merge_ctx_->check_merge_ctx_valid())) {
+    LOG_WARN("invalid merge ctx", KR(ret), KPC_(co_merge_ctx));
   } else {
     update_merge_status(COMergeStatus::CTX_PREPARED);
   }

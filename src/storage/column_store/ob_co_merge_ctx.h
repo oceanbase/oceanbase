@@ -61,6 +61,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
   virtual int build_ctx(bool &finish_flag) override;
+  virtual int check_merge_ctx_valid() override;
   OB_INLINE bool all_cg_finish() const // locked by ObCODagNet ctx_lock_
   {
     return exe_stat_.finish_cg_count_ == array_count_;

@@ -1033,6 +1033,44 @@ bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const SCN &check_sc
   return tx_table_ready;
 }
 
+int ObTenantTabletScheduler::check_ready_for_major_merge(
+    const ObLSID &ls_id,
+    const storage::ObTablet &tablet,
+    const ObMergeType merge_type)
+{
+  int ret = OB_SUCCESS;
+  if (tablet.is_row_store() && (is_medium_merge(merge_type) || is_major_merge(merge_type))) {
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    bool need_wait_major_convert = false;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id));
+    } else if (OB_UNLIKELY(!ls_handle.is_valid()) || OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls is invalid or nullptr", K(ret), K(ls_id), K(ls_handle), KPC(ls));
+    } else if (!ls->is_cs_replica()) {
+    } else if (OB_FAIL(ObCSReplicaUtil::check_need_wait_major_convert(*ls, tablet.get_tablet_meta().tablet_id_, tablet, need_wait_major_convert))) {
+      LOG_WARN("fail to check need wait major convert in cs replica", K(ret), KPC(ls), K(tablet));
+    } else if (need_wait_major_convert) {
+      ret = OB_EAGAIN;
+      LOG_WARN("need wait major convert in cs replica", K(ret), KPC(ls), K(tablet));
+      // if ls migration finished, schedule convert co merge
+      ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ls->get_ls_meta().get_migration_status(migration_status))) {
+        LOG_WARN("failed to get migration status", K(tmp_ret), KPC(ls));
+      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status) {
+        ObDagId co_dag_net_id;
+        co_dag_net_id.init(GCTX.self_addr());
+        if (OB_TMP_FAIL(schedule_convert_co_merge_dag_net(ls_id, tablet, 0 /*retry_times*/, co_dag_net_id))) {
+          LOG_WARN("failed to schedule convert co merge for cs replica", K(tmp_ret), K(ls_id), K(tablet));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTenantTabletScheduler::schedule_merge_dag(
     const ObLSID &ls_id,
     const storage::ObTablet &tablet,
@@ -1041,7 +1079,9 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     const ObDagId *dag_net_id /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
-  if (is_major_merge_type(merge_type) && (!tablet.is_row_store() || is_convert_co_major_merge(merge_type))) {
+  if (OB_FAIL(check_ready_for_major_merge(ls_id, tablet, merge_type))) {
+    LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet), K(merge_type));
+  } else if (is_major_merge_type(merge_type) && (!tablet.is_row_store() || is_convert_co_major_merge(merge_type))) {
     ObCOMergeDagParam param;
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;
@@ -1107,6 +1147,9 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
   if (OB_UNLIKELY(!ls_handle.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_handle), K(tablet_handle));
+  } else if (ls_handle.get_ls()->is_cs_replica()) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_WARN("meta merge is not supported in cs replica now", K(ret), K(ls_handle), K(tablet_handle));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else {
     const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();

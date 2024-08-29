@@ -133,6 +133,7 @@ public:
   void destroy();
   /* PREPARE SECTION */
   virtual int build_ctx(bool &finish_flag);
+  virtual int check_merge_ctx_valid();
   int build_ctx_after_init();
   int prepare_merge_progress(
     ObPartitionMergeProgress *&progress,

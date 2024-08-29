@@ -253,6 +253,10 @@ public:
   static bool check_weak_read_ts_ready(
       const int64_t &merge_version,
       ObLS &ls);
+  static int check_ready_for_major_merge(
+      const ObLSID &ls_id,
+      const storage::ObTablet &tablet,
+      const ObMergeType merge_type);
   static int schedule_merge_dag(
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,

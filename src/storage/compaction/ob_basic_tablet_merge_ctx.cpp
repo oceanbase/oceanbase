@@ -412,6 +412,30 @@ int ObBasicTabletMergeCtx::build_ctx(bool &finish_flag)
   return ret;
 }
 
+int ObBasicTabletMergeCtx::check_merge_ctx_valid()
+{
+  int ret = OB_SUCCESS;
+  const ObMergeType &merge_type = get_merge_type();
+  const ObITable *base_table = nullptr;
+  const ObTablet *tablet = nullptr;
+  if (is_major_merge_type(merge_type) || is_meta_major_merge(merge_type)) {
+    if (OB_UNLIKELY(!tablet_handle_.is_valid()) || OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid tablet", K(ret), K_(tablet_handle));
+    } else if (!tablet->is_row_store()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column store table should do co merge", K(ret), KPC(tablet));
+    } else if (OB_ISNULL(base_table = static_param_.tables_handle_.get_table(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("base table is null", K(ret), K_(static_param));
+    } else if (OB_UNLIKELY(!base_table->is_major_sstable() || base_table->is_co_sstable())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid base table type", K(ret), KPC(base_table));
+    }
+  }
+  return ret;
+}
+
 int ObBasicTabletMergeCtx::build_ctx_after_init()
 {
   int ret = OB_SUCCESS;

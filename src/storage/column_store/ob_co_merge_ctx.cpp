@@ -237,6 +237,40 @@ int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
   return ret;
 }
 
+int ObCOTabletMergeCtx::check_merge_ctx_valid()
+{
+  int ret = OB_SUCCESS;
+  const ObMergeType &merge_type = get_merge_type();
+  const ObITable *base_table = nullptr;
+  const ObTablet *tablet = nullptr;
+  if (OB_UNLIKELY(!tablet_handle_.is_valid()) || OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet", K(ret), K_(tablet_handle));
+  } else if (tablet->is_row_store() && OB_UNLIKELY(!is_convert_co_major_merge(merge_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only row store tablet need to do convert co major merge", K(ret), K(merge_type), KPC(tablet));
+  } else if (OB_ISNULL(base_table = static_param_.tables_handle_.get_table(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base table is null", K(ret), K_(static_param));
+  } else if (OB_UNLIKELY(!base_table->is_major_sstable())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid base table type", K(ret), KPC(base_table));
+  } else if (ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(static_param_.co_major_merge_type_)) {
+    if (base_table->is_co_sstable()) {
+      const ObSSTable *sstable = nullptr;
+      const ObCOSSTableV2 *co_sstable = nullptr;
+      if (OB_ISNULL(sstable = static_cast<const ObSSTable *>(base_table)) || OB_ISNULL(co_sstable = static_cast<const ObCOSSTableV2 *>(sstable))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid sstable type", K(ret), KPC(sstable), KPC(co_sstable));
+      } else if (OB_UNLIKELY(!co_sstable->is_row_store_only_co_table())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("only row store only co sstable can do use_rs_build_schema_match_merge", K(ret), KPC(co_sstable));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObCOTabletMergeCtx::cal_merge_param()
 {
   int ret = OB_SUCCESS;

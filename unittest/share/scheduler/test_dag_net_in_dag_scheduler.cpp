@@ -23,6 +23,7 @@
 #include "observer/omt/ob_tenant_node_balancer.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/column_store/ob_co_merge_dag.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 1; // 100ms
@@ -1703,6 +1704,59 @@ TEST_F(TestDagScheduler, test_destroy_when_running) //TODO(renju.rj): fix it
 //    usleep(100);
 //  }
 //  #endif
+}
+
+TEST_F(TestDagScheduler, test_add_multi_co_merge_dag_net)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+
+  ObLSID ls_id(1001);
+  ObTabletID tablet_id(200001);
+  {
+    compaction::ObCOMergeDagParam param;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = tablet_id;
+    param.merge_type_ = compaction::ObMergeType::CONVERT_CO_MAJOR_MERGE;
+    param.compat_mode_ = lib::Worker::CompatMode::MYSQL;
+    param.transfer_seq_ = 0;
+    ret = scheduler->create_and_add_dag_net<compaction::ObCOMergeDagNet>(&param);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    COMMON_LOG(INFO, "Success to create and add co convert dag net", K(ret));
+  }
+  {
+    compaction::ObCOMergeDagParam param;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = tablet_id;
+    param.merge_type_ = compaction::ObMergeType::CONVERT_CO_MAJOR_MERGE;
+    param.compat_mode_ = lib::Worker::CompatMode::MYSQL;
+    param.transfer_seq_ = 0;
+    ret = scheduler->create_and_add_dag_net<compaction::ObCOMergeDagNet>(&param);
+    EXPECT_EQ(OB_TASK_EXIST, ret);
+    COMMON_LOG(INFO, "Success to create and add co convert dag net", K(ret));
+  }
+  {
+    compaction::ObCOMergeDagParam param;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = tablet_id;
+    param.merge_type_ = compaction::ObMergeType::MAJOR_MERGE;
+    param.compat_mode_ = lib::Worker::CompatMode::MYSQL;
+    param.transfer_seq_ = 0;
+    ret = scheduler->create_and_add_dag_net<compaction::ObCOMergeDagNet>(&param);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    COMMON_LOG(INFO, "Success to create and add co major dag net", K(ret));
+  }  {
+    compaction::ObCOMergeDagParam param;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = tablet_id;
+    param.merge_type_ = compaction::ObMergeType::MEDIUM_MERGE;
+    param.compat_mode_ = lib::Worker::CompatMode::MYSQL;
+    param.transfer_seq_ = 0;
+    ret = scheduler->create_and_add_dag_net<compaction::ObCOMergeDagNet>(&param);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    COMMON_LOG(INFO, "Success to create and add co medium dag net", K(ret));
+  }
 }
 
 
