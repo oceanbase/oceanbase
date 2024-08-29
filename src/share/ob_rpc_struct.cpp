@@ -3806,10 +3806,10 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     ls_id_,
                     src_,
                     dst_,
-                    discarded_data_source_,
+                    discarded_data_source_, // FARM COMPAT WHITELIST
                     paxos_replica_number_,
                     skip_change_member_list_,
-                    discarded_force_use_data_source_,
+                    discarded_force_use_data_source_, // FARM COMPAT WHITELIST
                     force_data_source_);
 
 int ObLSMigrateReplicaArg::assign(
@@ -3858,11 +3858,11 @@ OB_SERIALIZE_MEMBER(ObLSAddReplicaArg,
                     tenant_id_,
                     ls_id_,
                     dst_,
-                    discarded_data_source_,
+                    discarded_data_source_, // FARM COMPAT WHITELIST
                     orig_paxos_replica_number_,
                     new_paxos_replica_number_,
                     skip_change_member_list_,
-                    discarded_force_use_data_source_,
+                    discarded_force_use_data_source_, // FARM COMPAT WHITELIST
                     force_data_source_);
 
 int ObLSAddReplicaArg::assign(
