@@ -1442,7 +1442,8 @@ private:
   bool need_check_constraint_validity(const obrpc::ObAlterTableArg &alter_table_arg) const;
   // offline ddl cannot appear at the same time with other ddl types
   // Offline ddl cannot appear at the same time as offline ddl
-  int check_is_offline_ddl(obrpc::ObAlterTableArg &alter_table_arg,
+  int check_is_offline_ddl(const uint64_t tenant_data_version,
+                           obrpc::ObAlterTableArg &alter_table_arg,
                            share::ObDDLType &ddl_type);
   int check_is_oracle_mode_add_column_not_null_ddl(const obrpc::ObAlterTableArg &alter_table_arg,
                                                    ObSchemaGetterGuard &schema_guard,
@@ -1499,6 +1500,7 @@ private:
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator,
+      const bool reorder_column_id,
       const ObString &index_name = ObString(""));
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
@@ -1567,9 +1569,20 @@ private:
                                     const share::schema::ObColumnSchemaV2 &orig_column_schema,
                                     share::schema::AlterColumnSchema &alter_column_schema,
                                     bool &is_offline) const;
-  int check_is_add_column_online(const share::schema::ObTableSchema &table_schema,
-                                 const share::schema::AlterColumnSchema &alter_column_schema,
-                                 share::ObDDLType &tmp_ddl_type);
+  int check_is_add_column_online_(const share::schema::ObTableSchema &table_schema,
+                                  const share::schema::AlterColumnSchema &alter_column_schema,
+                                  const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                  const bool is_oracle_mode,
+                                  const uint64_t tenant_data_version,
+                                  share::ObDDLType &tmp_ddl_type);
+  // except add column instant with modify column, add column instant with other ddl will be DDL_TABLE_REDEFINITION
+  int check_can_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                    const AlterTableSchema &alter_table_schema,
+                                    const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                    const uint64_t tenant_data_version,
+                                    const bool is_oracle_mode,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    ObDDLType &ddl_type);
   int check_is_modify_partition_key(const ObTableSchema &orig_table_schema,
                                     const AlterTableSchema &alter_table_schema,
                                     bool &is_modify_partition_key);
@@ -1583,6 +1596,7 @@ private:
                                const share::schema::ObTableSchema &orig_table_schema,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const bool is_oracle_mode,
+                               const uint64_t tenant_data_version,
                                share::ObDDLType &ddl_type);
   int check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,
                                   const share::schema::ObTableSchema &orig_table_schema,
@@ -2749,6 +2763,10 @@ private:
   }
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;
+
+// check whether the table adds column instant, we need to reorder the column
+  int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                               ObTableSchema &new_table_schema);
 
 private:
   bool inited_;

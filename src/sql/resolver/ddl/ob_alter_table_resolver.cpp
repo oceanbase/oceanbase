@@ -614,11 +614,12 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         }
       }
     }
+    HEAP_VARS_2((ObColumnNameSet, add_column_names_set),
+                (ObReducedVisibleColSet, reduced_visible_col_set)) {
     // only use in oracle mode
     bool is_modify_column_visibility = false;
     int64_t alter_column_times = 0;
     int64_t alter_column_visibility_times = 0;
-    ObReducedVisibleColSet reduced_visible_col_set;
     bool has_alter_column_option = false;
     //in mysql mode, resolve add index after resolve column actions
     ObSEArray<int64_t, 4> add_index_action_idxs;
@@ -667,7 +668,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             bool temp_is_modify_column_visibility = false;
             bool is_drop_column = false;
             has_alter_column_option = true;
-            if (OB_FAIL(resolve_column_options(*action_node, temp_is_modify_column_visibility, is_drop_column, reduced_visible_col_set))) {
+            if (OB_FAIL(resolve_column_options(*action_node, temp_is_modify_column_visibility, is_drop_column, add_column_names_set, reduced_visible_col_set))) {
               SQL_RESV_LOG(WARN, "Resolve column option failed!", K(ret));
             } else {
               if (temp_is_modify_column_visibility) {
@@ -1058,32 +1059,34 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "SET/REMOVE TTL together with other Alter Column DDL");
       } else if (has_alter_column_option) {
-        ObTableSchema tbl_schema;
-        ObSEArray<ObString, 8> ttl_columns;
-        if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
-          LOG_WARN("fail to get table schema", K(ret));
-        } else if (OB_FAIL(ObTTLUtil::get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
-          LOG_WARN("fail to get ttl column", K(ret));
-        } else if (ttl_columns.empty()) {
-          // do nothing
-        } else {
-          AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
-          ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
-          ObTableSchema::const_column_iterator end = alter_table_schema.column_end();
-          for (; OB_SUCC(ret) && iter != end; ++iter) {
-            const AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*iter);
-            if (OB_ISNULL(column)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null alter column", K(ret));
-            } else if (ObTTLUtil::is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("Modify/Change TTL column is not allowed", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
+        HEAP_VAR(ObTableSchema, tbl_schema) {
+          ObSEArray<ObString, 8> ttl_columns;
+          if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+            LOG_WARN("fail to get table schema", KR(ret));
+          } else if (OB_FAIL(common::ObTTLUtil::get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
+            LOG_WARN("fail to get ttl column", KR(ret));
+          } else if (ttl_columns.empty()) {
+            // do nothing
+          } else {
+            AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
+            ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
+            ObTableSchema::const_column_iterator end = alter_table_schema.column_end();
+            for (; OB_SUCC(ret) && iter != end; ++iter) {
+              const AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*iter);
+              if (OB_ISNULL(column)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null alter column", KR(ret));
+              } else if (common::ObTTLUtil::is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("Modify/Change TTL column is not allowed", KR(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
+              }
             }
           }
         }
       }
     }
+    } // end for heap_vars_2.
   }
   return ret;
 }
@@ -1091,6 +1094,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
 int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
                                                  bool &is_modify_column_visibility,
                                                  bool &is_drop_column,
+                                                 ObColumnNameSet &add_column_names_set,
                                                  ObReducedVisibleColSet &reduced_visible_col_set)
 {
   int ret = OB_SUCCESS;
@@ -1108,7 +1112,7 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
         switch(column_node->type_) {
         //add column
         case T_COLUMN_ADD: {
-            if (OB_FAIL(resolve_add_column(*column_node))) {
+            if (OB_FAIL(resolve_add_column(*column_node, add_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve add column error!", K(ret));
             }
             break;
@@ -1152,7 +1156,7 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             break;
           }
         case T_COLUMN_ADD_WITH_LOB_PARAMS: {
-            if (OB_FAIL(resolve_add_column(*column_node->children_[0]))) {
+            if (OB_FAIL(resolve_add_column(*column_node->children_[0], add_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve column option error!", K(ret));
             } else if (OB_FAIL(resolve_lob_storage_parameters(column_node->children_[1]))) {
               SQL_RESV_LOG(WARN, "Resolve lob storage parameters error!", K(ret));
@@ -4817,16 +4821,19 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
   return ret;
 }
 
-int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
+int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnNameSet &add_column_names_set)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
   if (OB_UNLIKELY(T_COLUMN_ADD != node.type_ || NULL == node.children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
-  } else if (OB_ISNULL(alter_table_stmt)) {
+  } else if (OB_ISNULL(alter_table_stmt) || OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "stmt should not be null!", K(ret));
+    LOG_WARN("stmt or table_schema_ should not be null!", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", KR(ret), KPC(table_schema_));
   } else {
     int64_t identity_column_count = 0;
     AlterColumnSchema alter_column_schema;
@@ -4837,6 +4844,8 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
     for (int i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       alter_column_schema.reset();
       alter_column_schema.alter_type_ = OB_DDL_ADD_COLUMN;
+      alter_table_stmt->get_alter_table_arg().alter_algorithm_ = lib::is_mysql_mode() && tenant_data_version >= DATA_VERSION_4_2_5_0
+                                                                 ? obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT : obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
       if (OB_ISNULL(node.children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
@@ -4888,6 +4897,22 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
             }
           }
         }
+
+        // do duplicate column name check
+        if (OB_SUCC(ret)) {
+          const ObString &column_name = alter_column_schema.get_column_name_str();
+          ObColumnSchemaHashWrapper col_key(column_name);
+          if (OB_FAIL(add_column_names_set.set_refactored(col_key))) {
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_ERR_COLUMN_DUPLICATE;
+              LOG_WARN("duplicate column name", KR(ret), K(column_name));
+              LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
+            } else {
+              LOG_WARN("set refactored failed", KR(ret), K(column_name));
+            }
+          }
+        }
+
         //add column
         if (OB_SUCC(ret)) {
           if (OB_FAIL(check_sdo_geom_default_value(alter_table_stmt, alter_column_schema))) {

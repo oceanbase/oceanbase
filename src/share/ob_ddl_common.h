@@ -93,6 +93,9 @@ enum ObDDLType
   DDL_ADD_COLUMN_ONLINE = 10002, // only add trailing columns
   DDL_CHANGE_COLUMN_NAME = 10003,
   DDL_DROP_COLUMN_INSTANT = 10004,
+  DDL_ALTER_PARTITION_AUTO_SPLIT_ATTRIBUTE = 10005, // auto table auto partition // online
+  DDL_ADD_COLUMN_INSTANT = 10006, // add after/before columns
+  DDL_COMPOUND_INSTANT = 10007,
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
@@ -711,4 +714,3 @@ public:
 }  // end namespace oceanbase
 
 #endif  // OCEANBASE_SHARE_OB_DDL_COMMON_H
-

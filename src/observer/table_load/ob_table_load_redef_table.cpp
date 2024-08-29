@@ -39,22 +39,22 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     ObCreateHiddenTableArg create_table_arg;
     ObCreateHiddenTableRes create_table_res;
     int64_t snapshot_version = OB_INVALID_VERSION;
-    create_table_arg.reset();
-    create_table_arg.exec_tenant_id_ = arg.tenant_id_;
-    create_table_arg.tenant_id_ = arg.tenant_id_;
-    create_table_arg.dest_tenant_id_ = arg.tenant_id_;
-    create_table_arg.table_id_ = arg.table_id_;
-    create_table_arg.parallelism_ = arg.parallelism_;
-    create_table_arg.ddl_type_ = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
-    create_table_arg.session_id_ = session_info.get_sessid_for_table();
-    create_table_arg.sql_mode_ = session_info.get_sql_mode();
-    create_table_arg.tz_info_ = session_info.get_tz_info_wrap().get_tz_info_offset();
-    create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = session_info.get_local_nls_date_format();
-    create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = session_info.get_local_nls_timestamp_format();
-    create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = session_info.get_local_nls_timestamp_tz_format();
-    create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
-    if (OB_FAIL(create_table_arg.tz_info_wrap_.deep_copy(session_info.get_tz_info_wrap()))) {
-      LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
+    uint64_t tenant_id = arg.tenant_id_;
+    // 1.load data relies on column_store_column_ids' column order
+    // 2.after add column instant, ObColumnIterByPrevNextID's column order represent new column order to show user rather than column_store_column_ids' column order
+    // so we should not redistribute column ids
+    const bool need_reorder_column_id = false;
+    const share::ObDDLType ddl_type = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
+    if (OB_FAIL(create_table_arg.init(tenant_id, tenant_id, tenant_id, arg.table_id_,
+                                      THIS_WORKER.get_group_id(), session_info.get_sessid_for_table(),
+                                      arg.parallelism_, ddl_type, session_info.get_sql_mode(),
+                                      session_info.get_tz_info_wrap().get_tz_info_offset(),
+                                      session_info.get_local_nls_date_format(),
+                                      session_info.get_local_nls_timestamp_format(),
+                                      session_info.get_local_nls_timestamp_tz_format(),
+                                      session_info.get_tz_info_wrap(),
+                                      need_reorder_column_id))) {
+      LOG_WARN("fail to init create hidden table arg", KR(ret));
     } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res, snapshot_version, session_info))) {
       LOG_WARN("failed to create hidden table", KR(ret), K(create_table_arg));
     } else if (OB_UNLIKELY(snapshot_version <= 0)) {

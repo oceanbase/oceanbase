@@ -1535,6 +1535,8 @@ public:
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   bool has_lob_column() const;
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
+  // ObColumnIterByPrevNextID's column id is not in order, it means table has add column instant and return true
+  int has_add_column_instant(bool &add_column_instant) const;
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
   inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }
   inline void add_or_del_table_flag(uint64_t flag, bool is_add)
