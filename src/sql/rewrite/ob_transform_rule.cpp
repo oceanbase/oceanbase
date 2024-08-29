@@ -49,9 +49,7 @@ bool ObTransformerCtx::is_valid()
          NULL != stmt_factory_ &&
          NULL != sql_schema_guard_ &&
          NULL != sql_schema_guard_->get_schema_guard() &&
-         NULL != self_addr_ &&
-         NULL != stmt_need_privs_ &&
-         NULL != stmt_ora_need_privs_;
+         NULL != self_addr_;
 }
 
 void ObTransformerCtx::reset()

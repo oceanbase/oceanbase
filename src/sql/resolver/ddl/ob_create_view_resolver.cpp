@@ -1852,8 +1852,6 @@ int ObCreateViewResolver::load_mview_dep_session_vars(ObSQLSessionInfo &session_
     LOG_WARN("fail to reserve max local vars capacity", K(ret));
   } else if (OB_FAIL(get_dep_session_vars_from_stmt(session_info, stmt, dep_vars))) {
     LOG_WARN("fail to get dep session vars from stmt", K(ret));
-  } else if (OB_FAIL(dep_vars.remove_local_var(SYS_VAR_SQL_MODE))) {
-    LOG_WARN("fail to remove sql_mode from vars", K(ret));
   } else {
     LOG_TRACE("finish load mview dep session vars", K(session_info.get_sql_mode()), K(dep_vars));
   }
