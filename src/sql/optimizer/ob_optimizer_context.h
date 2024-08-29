@@ -245,7 +245,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_random_plan_(false),
     enable_new_query_range_(false),
     system_stat_(),
-    correlation_type_(ObEstCorrelationType::MAX)
+    correlation_type_(ObEstCorrelationType::MAX),
+    push_join_pred_into_view_enabled_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -624,6 +625,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
 
   inline void set_correlation_type(ObEstCorrelationType type) { correlation_type_ = type; }
   inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
+  inline bool is_push_join_pred_into_view_enabled() const { return push_join_pred_into_view_enabled_; }
+  inline void set_push_join_pred_into_view_enabled(bool enabled) { push_join_pred_into_view_enabled_ = enabled; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -711,6 +714,7 @@ private:
   bool enable_new_query_range_;
   OptSystemStat system_stat_;
   ObEstCorrelationType correlation_type_;
+  bool push_join_pred_into_view_enabled_;
 };
 }
 }
