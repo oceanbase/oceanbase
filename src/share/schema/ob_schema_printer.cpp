@@ -2975,7 +2975,7 @@ int ObSchemaPrinter::print_materialized_view_definition(
       }
     }
     if (OB_SUCC(ret)) {
-      if (!strict_compat_ && OB_FAIL(print_table_definition_table_options(*container_table_schema,
+      if (OB_FAIL(print_table_definition_table_options(*container_table_schema,
                                                        buf,
                                                        buf_len,
                                                        pos,
@@ -3064,7 +3064,7 @@ int ObSchemaPrinter::print_materialized_view_definition(
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "AS "))) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " AS "))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
       } else if (OB_FAIL(print_view_define_str(buf, buf_len, pos, is_oracle_mode,
                                               table_schema->get_view_schema().get_view_definition_str()))) {
