@@ -548,6 +548,7 @@ int ObGtsSource::get_gts_leader_(ObAddr &leader)
       TRANS_LOG(WARN, "gts cache leader is invalid", KR(ret), K(leader), K(*this));
     }
   }
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(sys_ls_leader_addr_, static_cast<int64_t>(leader.get_ipv4() << 31 | leader.get_port()));
 
   return ret;
 }

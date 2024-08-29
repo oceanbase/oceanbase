@@ -23,6 +23,8 @@
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 
+void __attribute__((weak)) request_finish_callback();
+
 ObMPDisconnect::ObMPDisconnect(const sql::ObFreeSessionCtx &ctx)
     : ctx_(ctx)
 {
@@ -92,5 +94,6 @@ int ObMPDisconnect::run()
       }
     }
   }
+  request_finish_callback();
   return ret;
 }

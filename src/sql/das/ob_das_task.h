@@ -154,6 +154,7 @@ public:
     : errcode_(OB_SUCCESS),
       trans_desc_(nullptr),
       snapshot_(nullptr),
+      das_task_start_timestamp_(0),
       tenant_id_(common::OB_INVALID_ID),
       task_id_(common::OB_INVALID_ID),
       op_type_(DAS_OP_INVALID),
@@ -278,6 +279,7 @@ public:
   int errcode_; //don't need serialize it
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
   transaction::ObTxReadSnapshot *snapshot_; // Mvcc snapshot
+  int64_t das_task_start_timestamp_;
 protected:
   int start_das_task();
   int end_das_task();

@@ -15,7 +15,7 @@
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"

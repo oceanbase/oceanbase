@@ -197,7 +197,8 @@ private:
                               const ObLockID &lock_id,
                               const ObTableLockMode &lock_mode,
                               const ObTransID &conflict_tx_id,
-                              ObFunction<int(bool &need_wait)> &recheck_f);
+                              ObFunction<int(bool &need_wait)> &recheck_f,
+                              const ObTxSEQ &lock_seq);
   int register_into_deadlock_detector_(const storage::ObStoreCtx &ctx,
                                        const ObTableLockOp &lock_op);
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);

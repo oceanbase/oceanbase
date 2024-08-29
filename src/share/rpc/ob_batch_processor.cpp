@@ -16,6 +16,7 @@
 #include "observer/omt/ob_th_worker.h"
 #include "observer/omt/ob_tenant.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "lib/utility/serialization.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/log_request_handler.h"
@@ -44,6 +45,7 @@ int ObBatchP::process()
     int64_t clog_batch_cnt = 0;
     int64_t trx_batch_cnt = 0;
     int64_t sql_batch_cnt = 0;
+    int64_t lock_wait_mgr_batch_cnt = 0;
     while(NULL != (req = arg_.next(req_pos))) {
       // rewrite ret
       ret = OB_SUCCESS;
@@ -91,6 +93,11 @@ int ObBatchP::process()
             sql_batch_cnt++;
             handle_sql_req(sender, msg_type, buf + pos, req->size_ - (int32_t)pos);
             break;
+          case LOCK_WAIT_MGR_REQ:
+            lock_wait_mgr_batch_cnt++;
+            handle_lock_wait_mgr_req(msg_type, buf + pos, req->size_ - (int32_t)pos);
+            break;
+
           default:
             RPC_LOG(ERROR, "unknown batch req type", K(req->type_));
             break;
@@ -103,7 +110,7 @@ int ObBatchP::process()
     }
     if (REACH_TIME_INTERVAL(3000000)) {
       RPC_LOG(INFO, "batch rpc statistics",
-          K(clog_batch_nodelay_cnt), K(clog_batch_cnt), K(trx_batch_cnt), K(sql_batch_cnt));
+          K(clog_batch_nodelay_cnt), K(clog_batch_cnt), K(trx_batch_cnt), K(sql_batch_cnt), K(lock_wait_mgr_batch_cnt));
     }
   }
   return ret;
@@ -208,6 +215,18 @@ int ObBatchP::handle_log_req(const common::ObAddr& sender, int type, const share
     RPC_LOG(ERROR, "invalid sub_type", K(ret), K(type));
   }
   #undef __LOG_BATCH_PROCESS_REQ
+  return ret;
+}
+
+int ObBatchP::handle_lock_wait_mgr_req(int type, const char* buf, int32_t size)
+{
+  int ret = OB_SUCCESS;
+  lockwaitmgr::ObLockWaitMgr *lwm = MTL(lockwaitmgr::ObLockWaitMgr *);
+  if (OB_ISNULL(lwm)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ret = lwm->handle_batch_req(type, buf, size);
+  }
   return ret;
 }
 }; // end namespace rpc

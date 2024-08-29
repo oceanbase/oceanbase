@@ -114,6 +114,8 @@ public:
       const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
   static int print_top_sql_text(const AshReportParams &ash_report_params,
       const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_top_blocking_session(const AshReportParams &ash_report_params,
+    const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
   static int print_ash_report_header(const AshReportParams &ash_report_params, ObStringBuffer &buff);
   static int print_section_header(const AshReportParams &ash_report_params, ObStringBuffer &buff, const char *str);
   static int print_subsection_header(const AshReportParams &ash_report_params, ObStringBuffer &buff, const char *str);

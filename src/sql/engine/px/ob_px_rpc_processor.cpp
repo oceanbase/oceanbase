@@ -20,7 +20,7 @@
 #include "lib/ash/ob_active_session_guard.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/dtl/ob_dtl_basic_channel.h"
@@ -99,6 +99,9 @@ int ObInitSqcP::process()
     LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
   } else if (result_.reserved_thread_count_ <= 0) {
     ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, sqc_handler->get_phy_plan().get_px_dop());
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, 1);
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, result_.reserved_thread_count_);
     LOG_WARN("Worker thread res not enough", K_(result));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("Failed to link qc sqc channel", K(ret));

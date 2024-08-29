@@ -24,8 +24,8 @@
 
 #define CONST_DELEGATE(delegate_obj, func_name)                       \
   template <typename ...Args>                                   \
-  auto func_name(Args &&...args)                                \
-  ->decltype(delegate_obj.func_name(std::forward<Args>(args)...)) const { \
+  auto func_name(Args &&...args) const                              \
+  ->decltype(delegate_obj.func_name(std::forward<Args>(args)...)) { \
     return delegate_obj.func_name(std::forward<Args>(args)...); \
   }
 

@@ -121,6 +121,8 @@ int ObDASBaseAccessP<pcode>::process()
   } else {
     for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
       task_op = task_ops.at(i);
+      ObActiveSessionGuard::get_stat().tablet_id_ = task_op->get_tablet_id().id();
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, task_op->get_ls_id().id());
       if (OB_FAIL(das_factory->create_das_task_result(task_op->get_type(), op_result))) {
         LOG_WARN("create das task result failed", K(ret));
       } else if (OB_FAIL(task_resp.add_op_result(op_result))) {

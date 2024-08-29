@@ -18,8 +18,10 @@
 #include "storage/tx/ob_location_adapter.h"
 #include "storage/tx/ob_tx_log_adapter.h"
 #include "storage/tx/ob_tx_free_route.h"
+#include "../it/ob_mock_request_msg.h"
 namespace oceanbase {
 using namespace share;
+using namespace memtable;
 namespace transaction {
 struct TxMsgCallbackMsg {
 private:
@@ -139,6 +141,21 @@ public:
     OZ(msg.serialize(buf, size, pos));
     ObString msg_str(size, buf);
     TRANS_LOG(INFO, "post_tx_free_route_msg", "msg_ptr", OB_P(buf), K(msg), "receiver", server);
+    OZ(msg_bus_->send_msg(msg_str, addr_, server));
+    return ret;
+  }
+  int post_msg(const ObAddr &server, ObFakeRequestMsg &msg)
+  {
+    int ret = OB_SUCCESS;
+    int64_t size = msg.get_serialize_size() + 1 /*for msg category*/ + sizeof(int16_t) /* for tx_msg.type_ */;
+    char *buf = (char*)ob_malloc(size, ObNewModIds::TEST);
+    buf[0] = 2; // 2 request msg
+    int64_t pos = 1;
+    int16_t msg_type = msg.type_;
+    OZ(serialization::encode(buf, size, pos, msg_type));
+    OZ(msg.serialize(buf, size, pos));
+    ObString msg_str(size, buf);
+    TRANS_LOG(INFO, "post_msg", "msg_ptr", OB_P(buf), K(msg), "receiver", server);
     OZ(msg_bus_->send_msg(msg_str, addr_, server));
     return ret;
   }

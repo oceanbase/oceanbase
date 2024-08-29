@@ -83,12 +83,6 @@ public:
   uint64_t hash() const;
   // for log print
   int64_t to_string(char *buffer, const int64_t length) const;
-  struct BufferFactory {
-    static int get_buffer(uint64_t buffer_length, char *&p_buffer);
-    static void revert_buffer(char* &p_buffer);
-    static uint64_t malloc_times;
-    static uint64_t free_times;
-  };
 private:
   uint64_t key_type_id_;
   uint64_t key_binary_code_buffer_length_;

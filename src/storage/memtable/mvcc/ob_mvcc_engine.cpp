@@ -431,10 +431,5 @@ int ObMvccEngine::ensure_kv(const ObMemtableKey *stored_key,
   }
   return ret;
 }
-
-void ObMvccEngine::mvcc_undo(ObMvccRow *value)
-{
-  value->mvcc_undo();
-}
 }
 }

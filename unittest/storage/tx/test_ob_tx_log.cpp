@@ -558,6 +558,8 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_session_id(), replay_active_state.get_session_id());
   replay_member_cnt++;
+  EXPECT_EQ(fill_active_state.get_associated_session_id(), replay_active_state.get_associated_session_id());
+  replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_app_trace_id(), replay_active_state.get_app_trace_id());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_schema_version(), replay_active_state.get_schema_version());

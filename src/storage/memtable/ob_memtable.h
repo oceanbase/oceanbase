@@ -498,7 +498,6 @@ public:
   static int batch_remove_unused_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
     const memtable::ObMemtableSet *memtable_set);
-
   /* freeze */
   virtual int set_frozen() override { local_allocator_.set_frozen(); return OB_SUCCESS; }
   virtual bool rec_scn_is_stable() override;

@@ -507,6 +507,7 @@ public:
     ObSqlSockSession* sess = (ObSqlSockSession *)sess_;
     return sess->on_disconnect();
   }
+  void* get_sql_session_info() { return sql_session_info_; }
   void set_sql_session_info(void* sess) { sql_session_info_ = sess; }
   void reset_sql_session_info() { ATOMIC_STORE(&sql_session_info_, NULL); }
   bool sql_session_info_is_null() { return NULL == ATOMIC_LOAD(&sql_session_info_); }
@@ -578,6 +579,19 @@ int get_fd_from_sess(void *sess)
     fd = sock->get_fd();
   }
   return fd;
+}
+
+void* get_sql_sess_from_sess(void *sess)
+{
+  ObSqlSock *sock = nullptr;
+  void* sql_sess = nullptr;
+  if (OB_NOT_NULL(sess)) {
+    sock = sess2sock(sess);
+  }
+  if (OB_NOT_NULL(sock) && !sock->sql_session_info_is_null()) {
+    sql_sess = sock->get_sql_session_info();
+  }
+  return sql_sess;
 }
 
 int ObSqlSock::set_ssl_enabled()

@@ -28,11 +28,15 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObQueryRetryASHDiagInfo;
+}
+
 namespace common
 {
 class ObDiagnoseSessionInfo;
 class ObDiagnoseTenantInfo;
-
 class ObAshBuffer;
 
 // historical ob active session stat for ash.
@@ -67,7 +71,9 @@ public:
         tid_(0),
         plan_hash_(0),
         tx_id_(0),
-        stmt_type_(0)
+        stmt_type_(0),
+        tablet_id_(0),
+        block_sessid_(0)
   {
     sql_id_[0] = '\0';
     top_level_sql_id_[0] = '\0';
@@ -171,6 +177,8 @@ public:
   int64_t plan_hash_;
   int64_t tx_id_;
   int64_t stmt_type_;
+  int64_t tablet_id_;
+  int64_t block_sessid_;
   char program_[ASH_PROGRAM_STR_LEN];
   char module_[ASH_MODULE_STR_LEN];
   char action_[ASH_ACTION_STR_LEN];
@@ -183,7 +191,7 @@ public:
       K_(plan_line_id), K_(sql_id), K_(top_level_sql_id), K_(plsql_entry_subprogram_name),
       K_(plsql_subprogram_name), K_(session_type), K_(is_wr_sample), K_(delta_time),
       K_(delta_cpu_time), K_(delta_db_time), K_(program), K_(module), K_(action), K_(client_id),
-      K_(group_id));
+      K_(group_id), K_(tablet_id), K_(block_sessid));
 };
 
 // record run-time stat for each OB session
@@ -204,9 +212,19 @@ public:
         pcode_(0),
         bkgd_elapse_time_(0),
         prev_inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
+        retry_wait_event_no_(0),
+        retry_wait_event_p1_(0),
+        retry_wait_event_p2_(0),
+        retry_wait_event_p3_(0),
+        need_calc_wait_event_end_(false),
+        last_query_exec_use_time_us_(0),
+        curr_query_start_time_(0),
+        last_das_task_exec_use_time_us_(0),
+        curr_das_task_start_time_(0),
         last_stat_(nullptr),
         fixup_index_(-1),
-        fixup_ash_buffer_()
+        fixup_ash_buffer_(),
+        query_retry_ash_diag_info_ptr_(nullptr)
   {}
   ~ObActiveSessionStat() = default;
   void fixup_last_stat(ObWaitEventDesc &desc);
@@ -262,6 +280,40 @@ public:
                        const int64_t p2 = 0,
                        const int64_t p3 = 0);
   void finish_ash_waiting();
+  inline void set_retry_ash_diag_info_ptr(sql::ObQueryRetryASHDiagInfo* query_retry_ash_diag_info_ptr) {
+    query_retry_ash_diag_info_ptr_ = query_retry_ash_diag_info_ptr;
+  }
+  inline void reset_retry_ash_diag_info_ptr() { query_retry_ash_diag_info_ptr_ = nullptr; }
+  inline sql::ObQueryRetryASHDiagInfo* get_retry_ash_diag_info_ptr() { return query_retry_ash_diag_info_ptr_; }
+  void begin_retry_wait_event(const int64_t retry_wait_event_no,
+                              const int64_t retry_wait_event_p1,
+                              const int64_t retry_wait_event_p2,
+                              const int64_t retry_wait_event_p3);
+  void end_retry_wait_event();
+
+  void begin_row_lock_wait_event();
+  void end_row_lock_wait_event();
+  static void calc_retry_wait_event(ObActiveSessionStat &stat, const int64_t sample_time, const sql::ObSQLSessionInfo* sess_info);
+  inline void record_cur_query_start_ts(bool is_in_retry) {
+    curr_query_start_time_ = common::ObTimeUtility::current_time();
+    need_calc_wait_event_end_ = is_in_retry;
+  }
+  inline void record_last_query_exec_use_time_us(const int64_t last_query_exec_use_time_us) {
+    last_query_exec_use_time_us_ = last_query_exec_use_time_us;
+    need_calc_wait_event_end_ = false;
+  }
+  inline bool can_start_das_retry() const {
+    return retry_wait_event_no_ > 0;
+  }
+  inline void record_cur_das_test_start_ts(const int64_t last_das_task_exec_use_time_us, bool is_in_retry) {
+    curr_das_task_start_time_ = common::ObTimeUtility::current_time();
+    last_das_task_exec_use_time_us_ = last_das_task_exec_use_time_us;
+    need_calc_wait_event_end_ = is_in_retry;
+  }
+  inline void stop_das_retry_wait_event() {
+    end_retry_wait_event();
+  }
+public:
   int64_t last_ts_;
   int64_t wait_event_begin_ts_;
   uint64_t total_idle_wait_time_; // idle wait time in total
@@ -275,12 +327,21 @@ public:
   int pcode_;
   int64_t bkgd_elapse_time_; // for backgorund elapse time.
   ObInnerSqlWaitTypeId prev_inner_sql_wait_type_id_;
+  int64_t retry_wait_event_no_;
+  int64_t retry_wait_event_p1_;
+  int64_t retry_wait_event_p2_;
+  int64_t retry_wait_event_p3_;
+  bool need_calc_wait_event_end_;
+  int64_t last_query_exec_use_time_us_;
+  int64_t curr_query_start_time_;
+  int64_t last_das_task_exec_use_time_us_;
+  int64_t curr_das_task_start_time_;
 
   INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_ts),
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
       K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
       K_(is_bkgd_active), K_(inner_sql_wait_type_id), K_(pcode),
-      K_(bkgd_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer));
+      K_(bkgd_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer), K_(retry_wait_event_no));
 
 private:
   // for wait time fix-up.
@@ -289,6 +350,7 @@ private:
   ObActiveSessionStatItem *last_stat_;
   int64_t fixup_index_;
   common::ObSharedGuard<ObAshBuffer> fixup_ash_buffer_;
+  sql::ObQueryRetryASHDiagInfo* query_retry_ash_diag_info_ptr_;
 };
 
 class ObAshBuffer
@@ -411,6 +473,22 @@ private:
   ObBackgroundSessionIdGenerator *generator_;
   uint64_t local_seq_;
 };
+
+#define ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(filed)                                              \
+  ({                                                                                              \
+    int64_t ret = 0;                                                                              \
+    if (OB_NOT_NULL(ObActiveSessionGuard::get_stat().get_retry_ash_diag_info_ptr())) {            \
+      ret = ObActiveSessionGuard::get_stat().get_retry_ash_diag_info_ptr()->filed;                \
+    }                                                                                             \
+    ret;                                                                                          \
+  })
+
+#define ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(filed, value)                                       \
+do {                                                                                              \
+  if (OB_NOT_NULL(ObActiveSessionGuard::get_stat().get_retry_ash_diag_info_ptr())) {              \
+    ObActiveSessionGuard::get_stat().get_retry_ash_diag_info_ptr()->filed = value;                \
+  }                                                                                               \
+} while(0)
 
 }
 }

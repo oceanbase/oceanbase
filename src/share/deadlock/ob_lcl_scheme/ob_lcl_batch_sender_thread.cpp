@@ -34,7 +34,7 @@ namespace detector
 using namespace common;
 extern const char * MEMORY_LABEL;
 
-bool ObLCLBatchSenderThread::RemoveIfOp::operator()(const ObDependencyResource &key,
+bool ObLCLBatchSenderThread::RemoveIfOp::operator()(const ObDependencyHolder &key,
                                                     ObLCLMessage &lcl_msg)
 {
   UNUSED(key);
@@ -55,7 +55,7 @@ bool ObLCLBatchSenderThread::RemoveIfOp::operator()(const ObDependencyResource &
   return ret;
 }
 
-bool ObLCLBatchSenderThread::MergeOp::operator()(const ObDependencyResource &key,
+bool ObLCLBatchSenderThread::MergeOp::operator()(const ObDependencyHolder &key,
                                                  ObLCLMessage &value)
 {
   UNUSED(key);
@@ -94,7 +94,7 @@ int ObLCLBatchSenderThread::start()
   return ret;
 }
 
-int ObLCLBatchSenderThread::cache_msg(const ObDependencyResource &key, const ObLCLMessage &lcl_msg)
+int ObLCLBatchSenderThread::cache_msg(const ObDependencyHolder &key, const ObLCLMessage &lcl_msg)
 {
   #define PRINT_WRAPPER KR(ret), K(key), K(lcl_msg), K(can_insert), K(random_drop_percentage)
   int ret = OB_SUCCESS;
@@ -123,7 +123,7 @@ int ObLCLBatchSenderThread::cache_msg(const ObDependencyResource &key, const ObL
   #undef PRINT_WRAPPER
 }
 
-int ObLCLBatchSenderThread::insert_or_merge_(const ObDependencyResource &key,
+int ObLCLBatchSenderThread::insert_or_merge_(const ObDependencyHolder &key,
                                              const ObLCLMessage &lcl_message,
                                              const bool can_insert)
 {

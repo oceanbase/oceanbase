@@ -31,6 +31,7 @@ namespace oceanbase
 namespace obmysql
 {
   int get_fd_from_sess(void *sess);
+  void* get_sql_sess_from_sess(void *sess);
 }
 
 namespace rpc

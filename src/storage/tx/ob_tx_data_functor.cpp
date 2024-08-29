@@ -12,6 +12,7 @@
 
 #include "storage/tx/ob_tx_data_functor.h"
 #include "lib/rowid/ob_urowid.h"
+#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/tx/ob_committer_define.h"
 #include "storage/ob_i_store.h"
 #include "storage/tx/ob_trans_define.h"
@@ -23,6 +24,8 @@
 #include "logservice/leader_coordinator/ob_failure_detector.h"
 #include "observer/virtual_table/ob_all_virtual_tx_data.h"
 #include "logservice/ob_garbage_collector.h"
+#include "storage/memtable/mvcc/ob_mvcc_row.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -378,7 +381,7 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
   int ret = OB_ERR_SHARED_LOCK_CONFLICT;
   const int64_t MAX_RETRY_CNT = 1000;
   const int64_t MAX_SLEEP_US = 1000;
-  ObMvccAccessCtx &acc_ctx = lock_for_read_arg_.mvcc_acc_ctx_;
+  memtable::ObMvccAccessCtx &acc_ctx = lock_for_read_arg_.mvcc_acc_ctx_;
   int64_t lock_expire_ts = acc_ctx.eval_lock_expire_ts();
   // check lock_for_read blocked or not every 1ms * 1000 = 1s
   int64_t retry_cnt = 0;
@@ -551,6 +554,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
   const SCN commit_version = tx_data.commit_version_;
   const SCN end_scn = tx_data.end_scn_;
   const bool is_rollback = tx_data.is_rollback_;
+  memtable::DummyHashHolderOp dummy_hash_holder_op;
 
   if (ObTxData::RUNNING == state && !is_rollback) {
     // Case 1: data is during execution, so we donot need write back
@@ -566,19 +570,19 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
         if (OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
         } else {
-          (void)tnode_.trans_abort(end_scn);
+          (void)tnode_.trans_abort(end_scn, dummy_hash_holder_op);
         }
       } else if (ObTxData::RUNNING == state) {
       } else if (ObTxData::ELR_COMMIT == state) {
         // TODO: make it more clear
         value_.update_max_elr_trans_version(commit_version, tnode_.tx_id_);
         tnode_.fill_trans_version(commit_version);
-        tnode_.set_elr();
+        tnode_.trans_elr(dummy_hash_holder_op);
       } else if (ObTxData::COMMIT == state) {
         // Case 4: data is committed, so we should write back the commit state
         if (OB_FAIL(value_.trans_commit(commit_version, tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
-        } else if (FALSE_IT(tnode_.trans_commit(commit_version, end_scn))) {
+        } else if (FALSE_IT(tnode_.trans_commit(commit_version, end_scn, dummy_hash_holder_op))) {
         } else if (blocksstable::ObDmlFlag::DF_LOCK == tnode_.get_dml_flag()
                    && OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "unlink lock node failed", K(ret), K(value_), K(tnode_));
@@ -588,7 +592,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
         if (OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
         } else {
-          (void)tnode_.trans_abort(end_scn);
+          (void)tnode_.trans_abort(end_scn, dummy_hash_holder_op);
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

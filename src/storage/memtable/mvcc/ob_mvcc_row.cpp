@@ -22,7 +22,7 @@
 #include "lib/time/ob_tsc_timestamp.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_context.h"
 #include "storage/memtable/ob_concurrent_control.h"
@@ -30,6 +30,8 @@
 #include "storage/tx/ob_trans_event.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "storage/access/ob_rows_info.h"
+#include "ob_mvcc_trans_ctx.h"
 
 namespace oceanbase
 {
@@ -40,15 +42,6 @@ using namespace common;
 using namespace share;
 namespace memtable
 {
-
-const uint8_t ObMvccTransNode::F_INIT = 0x0;
-const uint8_t ObMvccTransNode::F_WEAK_CONSISTENT_READ_BARRIER = 0x1;
-const uint8_t ObMvccTransNode::F_STRONG_CONSISTENT_READ_BARRIER = 0x2;
-const uint8_t ObMvccTransNode::F_COMMITTED = 0x4;
-const uint8_t ObMvccTransNode::F_ELR = 0x8;
-const uint8_t ObMvccTransNode::F_ABORTED = 0x10;
-const uint8_t ObMvccTransNode::F_DELAYED_CLEANOUT = 0x40;
-const uint8_t ObMvccTransNode::F_INCOMPLETE_STATE = 0x80;
 
 void ObMvccTransNode::checksum(ObBatchChecksum &bc) const
 {
@@ -97,40 +90,6 @@ blocksstable::ObDmlFlag ObMvccTransNode::get_dml_flag() const
   return reinterpret_cast<const ObMemtableDataHeader *>(buf_)->dml_flag_;
 }
 
-void ObMvccTransNode::set_safe_read_barrier(const bool is_weak_consistent_read)
-{
-  uint8_t consistent_flag = F_STRONG_CONSISTENT_READ_BARRIER;
-  if (is_weak_consistent_read) {
-    consistent_flag = F_WEAK_CONSISTENT_READ_BARRIER;
-  }
-  while (true) {
-    const uint8_t flag = ATOMIC_LOAD(&flag_);
-    const uint8_t tmp = (flag | consistent_flag);
-    if (ATOMIC_BCAS(&flag_, flag, tmp)) {
-      break;
-    }
-  }
-}
-
-void ObMvccTransNode::clear_safe_read_barrier()
-{
-  const uint8_t consistent_flag = (F_WEAK_CONSISTENT_READ_BARRIER | F_STRONG_CONSISTENT_READ_BARRIER);
-  while (true) {
-    const uint8_t flag = ATOMIC_LOAD(&flag_);
-    const uint8_t tmp = (flag & (~consistent_flag));
-    if (ATOMIC_BCAS(&flag_, flag, tmp)) {
-      break;
-    }
-  }
-}
-
-bool ObMvccTransNode::is_safe_read_barrier() const
-{
-  const uint8_t flag = flag_;
-  return ((flag & F_WEAK_CONSISTENT_READ_BARRIER)
-          || (flag & F_STRONG_CONSISTENT_READ_BARRIER));
-}
-
 void ObMvccTransNode::set_snapshot_version_barrier(const SCN scn_version,
                                                    const int64_t flag)
 {
@@ -162,25 +121,6 @@ int ObMvccTransNode::fill_scn(const SCN scn)
 {
   scn_.atomic_store(scn);
   return OB_SUCCESS;
-}
-
-void ObMvccTransNode::trans_commit(const SCN commit_version, const SCN tx_end_scn)
-{
-  // NB: we need set commit version before set committed
-  fill_trans_version(commit_version);
-  set_committed();
-  set_tx_end_scn(tx_end_scn);
-}
-
-void ObMvccTransNode::trans_abort(const SCN tx_end_scn)
-{
-  set_aborted();
-  set_tx_end_scn(tx_end_scn);
-}
-
-void ObMvccTransNode::remove_callback()
-{
-  set_delayed_cleanout(true);
 }
 
 int ObMvccTransNode::is_lock_node(bool &is_lock) const
@@ -229,7 +169,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           acc_checksum_,
                           version_,
                           type_,
-                          flag_,
+                          flag_.flag_status_,
                           snapshot_version_barrier_
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
                           snapshot_version_barrier_ >> 62,
@@ -610,9 +550,11 @@ bool ObMvccRow::is_transaction_set_violation(const SCN snapshot_version)
 int ObMvccRow::elr(const ObTransID &tx_id,
                    const SCN elr_commit_version,
                    const ObTabletID &tablet_id,
-                   const ObMemtableKey* key)
+                   const ObMemtableKey* key,
+                   const bool is_non_unique_local_index_cb)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMvccTransNode *iter = get_list_head();
   if (NULL != iter
       && !iter->is_elr()
@@ -627,7 +569,15 @@ int ObMvccRow::elr(const ObTransID &tx_id,
         TRANS_LOG(ERROR, "unexected transaction version", K(*iter), K(elr_commit_version));
       } else {
         iter->trans_version_ = elr_commit_version;
-        iter->set_elr();
+        if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled() && !is_non_unique_local_index_cb)) {
+          CorrectHashHolderOp op(LockHashHelper::hash_rowkey(tablet_id, *key),
+                                  *iter,
+                                  MTL(ObLockWaitMgr*)->get_row_holder());
+          iter->trans_elr(op);
+        } else {
+          DummyHashHolderOp op;
+          iter->trans_elr(op);
+        }
         iter = iter->prev_;
       }
     }
@@ -635,7 +585,6 @@ int ObMvccRow::elr(const ObTransID &tx_id,
     // TODO shanyan.g
     if (NULL != key) {
       wakeup_waiter(tablet_id, *key);
-      MTL(ObLockWaitMgr*)->reset_hash_holder(tablet_id, *key, tx_id);
     } else {
       MTL(ObLockWaitMgr*)->wakeup(tx_id);
     }
@@ -714,35 +663,6 @@ void ObMvccRow::update_dml_flag_(const blocksstable::ObDmlFlag flag, const share
   }
 }
 
-int ObMvccRow::remove_callback(ObMvccRowCallback &cb)
-{
-  int ret = OB_SUCCESS;
-
-  ObMvccTransNode *node = cb.get_trans_node();
-  if (OB_NOT_NULL(node)) {
-    node->remove_callback();
-    if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
-      TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
-    } else {
-      auto tx_ctx = cb.get_trans_ctx();
-      ObAddr tx_scheduler;
-      if (OB_ISNULL(tx_ctx)) {
-        int tmp_ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "trans ctx is null", KR(tmp_ret), K(cb));
-      } else {
-        tx_scheduler = static_cast<transaction::ObPartTransCtx*>(tx_ctx)->get_scheduler();
-      }
-      MTL(ObLockWaitMgr*)->transform_row_lock_to_tx_lock(cb.get_tablet_id(), *cb.get_key(), ObTransID(node->tx_id_), tx_scheduler);
-      if (cb.is_non_unique_local_index_cb()) {
-        // row lock holder is no need to set for non-unique local index, so the reset can be skipped
-      } else {
-        MTL(ObLockWaitMgr*)->reset_hash_holder(cb.get_tablet_id(), *cb.get_key(), ObTransID(node->tx_id_));
-      }
-    }
-  }
-  return ret;
-}
-
 /*
  * wakeup_waiter - wakeup whom waiting to acquire the
  *                 ownership of this row to write
@@ -751,8 +671,10 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
                              const ObMemtableKey &key)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObLockWaitMgr *lwm = NULL;
   if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
+    tmp_ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
   } else {
     lwm->wakeup(tablet_id, key);
@@ -963,7 +885,8 @@ void ObMvccRow::mvcc_undo()
   if (OB_ISNULL(iter)) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mvcc undo with no mvcc data");
   } else {
-    iter->set_aborted();
+    DummyHashHolderOp op;
+    iter->trans_rollback(op);
     ATOMIC_STORE(&(list_head_), iter->prev_);
     if (NULL != iter->prev_) {
       ATOMIC_STORE(&(iter->prev_->next_), NULL);

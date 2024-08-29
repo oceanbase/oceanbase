@@ -4860,6 +4860,8 @@ int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRec
   int ret = OB_SUCCESS;
   if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
     LOG_WARN("failed to assign executing sql stat record");
+  } else {
+    get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
   }
   return ret;
 }

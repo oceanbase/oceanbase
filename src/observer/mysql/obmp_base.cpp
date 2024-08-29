@@ -404,7 +404,9 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
     session.reset_current_plan_hash();
     session.reset_current_plan_id();
     session.reset_warnings_buf();
-    session.set_session_sleep();
+    if (!session.get_is_in_retry()) {
+      session.set_session_sleep();
+    }
   }
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);

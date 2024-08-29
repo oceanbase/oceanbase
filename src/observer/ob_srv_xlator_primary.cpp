@@ -28,6 +28,7 @@
 #include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "storage/tx/ob_trans_rpc.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr_rpc.h"
 #include "storage/tx/ob_gts_rpc.h"
 // #include "storage/tx/ob_dup_table_rpc.h"
 #include "storage/tx/ob_dup_table_base.h"
@@ -61,6 +62,7 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
+using namespace oceanbase::memtable;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::obmysql;
 
@@ -168,6 +170,11 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxFreeRoutePushStateP);
   // for tx state check of 4377
   RPC_PROCESSOR(ObAskTxStateFor4377P);
+  // for lock wait mgr
+  RPC_PROCESSOR(ObLockWaitMgrDstEnqueueP);
+  RPC_PROCESSOR(ObLockWaitMgrDstEnqueueRespP);
+  RPC_PROCESSOR(ObLockWaitMgrLockReleaseP);
+  RPC_PROCESSOR(ObLockWaitMgrWakeUpP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator *xlator) {

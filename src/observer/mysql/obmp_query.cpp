@@ -67,6 +67,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::trace;
 using namespace oceanbase::sql;
+void __attribute__((weak)) request_finish_callback();
 ObMPQuery::ObMPQuery(const ObGlobalContext &gctx)
     : ObMPBase(gctx),
       single_process_timestamp_(0),
@@ -396,6 +397,7 @@ int ObMPQuery::process()
   if (!THIS_WORKER.need_retry()) {
     if (async_resp_used) {
       async_resp_used_ = true;
+      request_finish_callback();
       packet_sender_.disable_response();
     } else if (OB_UNLIKELY(!is_conn_valid())) {
       tmp_ret = OB_CONNECT_ERROR;

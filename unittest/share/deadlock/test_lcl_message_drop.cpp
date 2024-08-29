@@ -66,8 +66,8 @@ TEST_F(TestLCLMsgDrop, always_keep) {// the first 2048 will always success
                                                 0,
                                                 mock_lcl_label,
                                                 1));
-    ObDependencyResource mock_resource(mock_addr, mock_dest_key);
-    ObDependencyResource mock_resource2(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource2(mock_addr, mock_dest_key);
     OB_ASSERT(mock_resource == mock_resource2);
     ASSERT_EQ(OB_SUCCESS, batch_sender_.cache_msg(mock_resource, mock_message));
     ObLCLMessage read_message;
@@ -94,7 +94,7 @@ TEST_F(TestLCLMsgDrop, random_drop_25_percentage) {
                                                 0,
                                                 mock_lcl_label,
                                                 1));
-    ObDependencyResource mock_resource(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
     ASSERT_EQ(OB_SUCCESS, batch_sender_.lcl_msg_map_.insert(mock_resource, mock_message));
   }
 
@@ -108,7 +108,7 @@ TEST_F(TestLCLMsgDrop, random_drop_25_percentage) {
                                                 0,
                                                 mock_lcl_label,
                                                 1));
-    ObDependencyResource mock_resource(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
     if (OB_SUCC(batch_sender_.cache_msg(mock_resource, mock_message))) {
       ++succ_times;
       batch_sender_.lcl_msg_map_.erase(mock_resource);
@@ -140,7 +140,7 @@ TEST_F(TestLCLMsgDrop, random_drop_75_percentage) {
                                                 0,
                                                 mock_lcl_label,
                                                 1));
-    ObDependencyResource mock_resource(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
     ASSERT_EQ(OB_SUCCESS, batch_sender_.lcl_msg_map_.insert(mock_resource, mock_message));
   }
 
@@ -154,7 +154,7 @@ TEST_F(TestLCLMsgDrop, random_drop_75_percentage) {
                                                 0,
                                                 mock_lcl_label,
                                                 1));
-    ObDependencyResource mock_resource(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
     if (OB_SUCC(batch_sender_.cache_msg(mock_resource, mock_message))) {
       ++succ_times;
       batch_sender_.lcl_msg_map_.erase(mock_resource);
@@ -186,7 +186,7 @@ TEST_F(TestLCLMsgDrop, always_drop) {
                                                 0,
                                                 mock_lcl_label,
                                                 1));
-    ObDependencyResource mock_resource(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
     ASSERT_EQ(OB_SUCCESS, batch_sender_.lcl_msg_map_.insert(mock_resource, mock_message));
   }
 
@@ -199,7 +199,7 @@ TEST_F(TestLCLMsgDrop, always_drop) {
                                                 0,
                                                 mock_lcl_label,
                                                 1));
-    ObDependencyResource mock_resource(mock_addr, mock_dest_key);
+    ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
     ASSERT_EQ(OB_BUF_NOT_ENOUGH, batch_sender_.cache_msg(mock_resource, mock_message));
   }
 }
@@ -222,7 +222,7 @@ TEST_F(TestLCLMsgDrop, message_merge_when_reach_limit) {
                                               0,
                                               mock_lcl_label,
                                               1));
-  ObDependencyResource mock_resource(mock_addr, mock_dest_key);
+  ObDependencyHolder mock_resource(mock_addr, mock_dest_key);
   ASSERT_EQ(OB_SUCCESS, batch_sender_.lcl_msg_map_.get(mock_resource, read_message));
   DETECT_LOG(INFO, "print mock resource message", K(read_message));
   ASSERT_EQ(OB_SUCCESS, batch_sender_.cache_msg(mock_resource, mock_message));

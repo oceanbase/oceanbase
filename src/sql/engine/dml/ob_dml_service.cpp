@@ -1783,6 +1783,8 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
   int64_t extend_size = is_strict_defensive_check ?
       ObDASWriteBuffer::DAS_WITH_TRANS_INFO_EXTEND_SIZE : ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE;
 
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(table_id_, ctdef.table_id_);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(table_schema_version_, ctdef.schema_version_);
   // 1. find das dml op
   OpType *dml_op = nullptr;
   if (OB_UNLIKELY(!dml_rtctx.das_ref_.has_das_op(tablet_loc, dml_op))) {

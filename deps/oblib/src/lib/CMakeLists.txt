@@ -182,6 +182,7 @@ ob_set_subtarget(oblib_lib common_mixed
   stat/ob_stat_template.cpp
   statistic_event/ob_stat_event.cpp
   string/ob_hex_utils_base.cpp
+  string/ob_occam_regex.cpp
   string/ob_sql_string.cpp
   string/ob_string.cpp
   string/ob_strings.cpp

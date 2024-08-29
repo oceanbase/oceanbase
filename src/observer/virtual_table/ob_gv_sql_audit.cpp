@@ -1076,7 +1076,8 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_default_collation_type();
         } break;
         case SEQ_NUM: {
-          cells[cell_idx].set_null();
+          int64_t set_v = record.data_.seq_num_;
+          cells[cell_idx].set_int(set_v);
         } break;
         case TOTAL_MEMSTORE_READ_ROW_COUNT: {
           if (record.data_.sql_len_ > 0) {

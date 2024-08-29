@@ -30,7 +30,7 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_tx_stat.h"

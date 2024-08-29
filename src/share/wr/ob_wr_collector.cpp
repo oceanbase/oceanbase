@@ -255,7 +255,7 @@ int ObWrCollector::collect_ash()
             "tm_delta_db_time, "
             "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, "
             "plsql_object_id, "
-            "plsql_subprogram_id, plsql_subprogram_name  from "
+            "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id  from "
             "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
             "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
             "svr_ip='%s' and svr_port=%d";
@@ -340,6 +340,8 @@ int ObWrCollector::collect_ash()
                   skip_null_error, skip_column_error, default_value);
               EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_hash", ash.plan_hash_,
                   uint64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", ash.tablet_id_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "blocking_session_id", ash.blocking_session_id_, int64_t);
 
               char plan_hash_char[64] = "";
               if (OB_SUCC(ret)) {
@@ -499,6 +501,18 @@ int ObWrCollector::collect_ash()
                 } else if (ash.stmt_type_ >= 0 &&
                           OB_FAIL(dml_splicer.add_column("stmt_type", ash.stmt_type_))) {
                   LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
+                } else if (ash.tablet_id_ < 0 &&
+                          OB_FAIL(dml_splicer.add_column(true, "tablet_id"))) {
+                  LOG_WARN("failed to add column tablet_id", KR(ret), K(ash));
+                } else if (ash.tablet_id_ >= 0 &&
+                          OB_FAIL(dml_splicer.add_column("tablet_id", ash.tablet_id_))) {
+                  LOG_WARN("failed to add column tablet_id", KR(ret), K(ash));
+                } else if (ash.blocking_session_id_ < 0 &&
+                          OB_FAIL(dml_splicer.add_column(true, "blocking_session_id"))) {
+                  LOG_WARN("failed to add column blocking_session_id", KR(ret), K(ash));
+                } else if (ash.blocking_session_id_ >= 0 &&
+                          OB_FAIL(dml_splicer.add_column("blocking_session_id", ash.blocking_session_id_))) {
+                  LOG_WARN("failed to add column blocking_session_id", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.finish_row())) {
                   LOG_WARN("failed to finish row", KR(ret));
                 }

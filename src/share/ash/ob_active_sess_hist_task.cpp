@@ -215,6 +215,7 @@ bool ObActiveSessHistTask::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessio
       stat.plan_hash_ = sess_info->get_current_plan_hash();
       stat.tx_id_ = sess_info->get_tx_id_with_thread_data_lock();
       ObActiveSessionStat::calc_db_time(stat, sample_time_);
+      ObActiveSessionStat::calc_retry_wait_event(stat, sample_time_, sess_info);
 
       stat.program_[0] = '\0';
       stat.module_[0] = '\0';
@@ -322,6 +323,8 @@ void ObActiveSessHistTask::process_net_request(
     }
     stat.event_no_ = ObWaitEventIds::NETWORK_QUEUE_WAIT;
     ObActiveSessionStat::calc_db_time(stat, sample_time_);
+    // when packet retrying and request is in network queue, it is still in retry waiting
+    // do not need to end retry wait event
     ObActiveSessHistList::get_instance().add(stat);
   } else {
     LOG_WARN_RET(

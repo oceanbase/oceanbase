@@ -18,7 +18,7 @@
 #include "lib/objectpool/ob_concurrency_objpool.h"
 #include "ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_interface.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "ob_trans_service.h"
 #include "observer/ob_server.h"
 #include "lib/profile/ob_trace_id.h"

@@ -16,6 +16,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 
@@ -159,6 +160,15 @@ int64_t ObAshBuffer::append(const ObActiveSessionStatItem &stat)
   int64_t idx = (write_pos_++ + buffer_.size()) % buffer_.size();
   MEMCPY(&buffer_[idx], &stat, sizeof(ObActiveSessionStatItem));
   buffer_[idx].id_ = write_pos_;
+  const ObActiveSessionStat & ash_stat = static_cast<const ObActiveSessionStat &>(stat);
+  int ret = OB_SUCCESS;
+  if (ash_stat.retry_wait_event_no_ > 0) {
+    // We think retry wait event is more import than normal wait event
+    buffer_[idx].event_no_ = ash_stat.retry_wait_event_no_;
+    buffer_[idx].p1_ = ash_stat.retry_wait_event_p1_;
+    buffer_[idx].p2_ = ash_stat.retry_wait_event_p2_;
+    buffer_[idx].p3_ = ash_stat.retry_wait_event_p3_;
+  }
   if (0 == write_pos_ % WR_ASH_SAMPLE_INTERVAL) {
     buffer_[idx].is_wr_sample_ = true;
   }
@@ -243,7 +253,7 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
       stat.delta_db_time_ = 0;
     } else {
       const uint64_t cur_wait_begin_ts = stat.wait_event_begin_ts_;
-      const int64_t cur_event_no = stat.event_no_;
+      const int64_t cur_event_no = stat.retry_wait_event_no_ ? stat.retry_wait_event_no_ : stat.event_no_;
       if (OB_UNLIKELY(cur_wait_begin_ts != 0 && cur_event_no != 0)) {
         // has unfinished wait event
         stat.wait_event_begin_ts_ = sample_time;
@@ -290,6 +300,87 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
         }
       }
     }
+  }
+}
+
+void ObActiveSessionStat::calc_retry_wait_event(ObActiveSessionStat &stat, const int64_t sample_time, const sql::ObSQLSessionInfo* sess_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_wait_event_no = stat.retry_wait_event_no_;
+  if (retry_wait_event_no > 0 && retry_wait_event_no != ObWaitEventIds::ROW_LOCK_WAIT
+        && stat.need_calc_wait_event_end_) {
+    if (OB_NOT_NULL(sess_info)) {
+      if (sess_info->get_is_in_retry()) {
+        LOG_DEBUG("[retry wait event] end query retry wait event", K(ret), K(sess_info->get_sessid()),
+                      K(sample_time), K(stat.curr_query_start_time_), K(stat.last_query_exec_use_time_us_));
+        if (stat.curr_query_start_time_ > 0 &&
+              sample_time - stat.curr_query_start_time_ > stat.last_query_exec_use_time_us_)  {
+          // end query retry wait event
+          stat.end_retry_wait_event();
+          if (retry_wait_event_no == ObWaitEventIds::ROW_LOCK_RETRY) {
+            stat.block_sessid_ = 0;
+          }
+        }
+      } else {
+        LOG_DEBUG("[retry wait event] end query retry wait event", K(ret), K(sess_info->get_sessid()),
+                      K(sample_time), K(stat.curr_das_task_start_time_), K(stat.last_das_task_exec_use_time_us_));
+        if (stat.curr_das_task_start_time_ > 0 &&
+              sample_time - stat.curr_das_task_start_time_ > stat.last_das_task_exec_use_time_us_)  {
+          // end das retry wait event
+          stat.end_retry_wait_event();
+        }
+      }
+    }
+  }
+}
+
+void ObActiveSessionStat::begin_retry_wait_event(const int64_t retry_wait_event_no,
+                                                 const int64_t retry_wait_event_p1,
+                                                 const int64_t retry_wait_event_p2,
+                                                 const int64_t retry_wait_event_p3)
+{
+#ifdef ENABLE_DEBUG_LOG
+  if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "ASH's retry_wait_event concurrency may occur ", K(retry_wait_event_no_), K(retry_wait_event_no), K(retry_wait_event_p1));
+  }
+#endif
+  retry_wait_event_no_ = retry_wait_event_no;
+  retry_wait_event_p1_ = retry_wait_event_p1;
+  retry_wait_event_p2_ = retry_wait_event_p2;
+  retry_wait_event_p3_ = retry_wait_event_p3;
+}
+
+void ObActiveSessionStat::end_retry_wait_event()
+{
+  retry_wait_event_no_ = 0;
+  retry_wait_event_p1_ = 0;
+  retry_wait_event_p2_ = 0;
+  retry_wait_event_p3_ = 0;
+  need_calc_wait_event_end_ = false;
+}
+
+void ObActiveSessionStat::begin_row_lock_wait_event()
+{
+  if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_RETRY || retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT) {
+    retry_wait_event_no_ =  ObWaitEventIds::ROW_LOCK_WAIT;
+  } else if (retry_wait_event_no_ == 0) {
+    begin_retry_wait_event(
+        ObWaitEventIds::ROW_LOCK_WAIT,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_tx_id_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_data_seq_num_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_lock_timestamp_));
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid retry wait event no", K(ret), K(retry_wait_event_no_));
+  }
+}
+
+void ObActiveSessionStat::end_row_lock_wait_event()
+{
+  if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT || retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_RETRY) {
+    end_retry_wait_event();
+    block_sessid_ = 0;
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "error wait event no", K(ret), K(retry_wait_event_no_));
   }
 }
 

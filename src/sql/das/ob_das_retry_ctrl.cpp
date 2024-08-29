@@ -72,6 +72,10 @@ void ObDASRetryCtrl::tablet_location_retry_proc(ObDASRef &das_ref,
   } else {
     loc_router.force_refresh_location_cache(true, task_op.get_errcode());
     need_retry = true;
+    if (ObActiveSessionGuard::get_stat().can_start_das_retry()) {
+      ObActiveSessionGuard::get_stat().record_cur_das_test_start_ts(common::ObTimeUtility::current_time() - task_op.das_task_start_timestamp_, need_retry);
+      observer::ObQueryRetryCtrl::start_location_error_retry_wait_event(task_op.errcode_);
+    }
     const ObDASTableLocMeta *loc_meta = tablet_loc->loc_meta_;
     LOG_INFO("[DAS RETRY] refresh tablet location cache and retry DAS task",
              "errcode", task_op.get_errcode(), KPC(loc_meta), KPC(tablet_loc));
@@ -84,6 +88,10 @@ void ObDASRetryCtrl::tablet_nothing_readable_proc(ObDASRef &, ObIDASTaskOp &task
     need_retry = false;
   } else {
     need_retry = true;
+    if (ObActiveSessionGuard::get_stat().can_start_das_retry()) {
+      ObActiveSessionGuard::get_stat().record_cur_das_test_start_ts(common::ObTimeUtility::current_time() - task_op.das_task_start_timestamp_, need_retry);
+      observer::ObQueryRetryCtrl::start_replica_not_readable_retry_wait_event();
+    }
   }
 }
 

@@ -253,6 +253,7 @@ int ObIDASTaskOp::start_das_task()
   int &ret = errcode_;
   int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_OPEN_ERROR);
   int need_dump = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
+  das_task_start_timestamp_ = common::ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_in_retry() && OB_SUCCESS != simulate_error)) {
     ret = simulate_error;
   } else {

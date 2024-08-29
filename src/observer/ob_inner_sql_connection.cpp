@@ -2325,6 +2325,7 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
                inner_session_id_ /*p2*/,
                0 /*p3*/,
                false /* is_atomic*/);
+    common::ObActiveSessionGuard::get_stat().block_sessid_ = inner_session_id_;
 
     // 2. switch the ptr of the thread-local ASH stat to the inner session ASH stat.
     prev_stat_ = &(ObActiveSessionGuard::get_stat());
@@ -2413,6 +2414,7 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
 
 
     // 4. wait event end
+    common::ObActiveSessionGuard::get_stat().block_sessid_ = 0;
     WAIT_END(ObWaitEventIds::INNER_SQL_EXEC_WAIT);
   }
 }

@@ -230,6 +230,7 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit_detail.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
+#include "observer/virtual_table/ob_all_virtual_deadlock_detector_stat.h"
 
 namespace oceanbase
 {
@@ -2739,6 +2740,19 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               {
                 LOG_WARN("set server addr failed", K(ret), K(addr_));
               }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TID: {
+            ObAllVirtualDeadLockDetectorStat *deadlock_detector_stat = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_UNLIKELY(NULL == omt)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "get tenant fail", K(ret));
+            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDeadLockDetectorStat, deadlock_detector_stat, omt))) {
+              SERVER_LOG(ERROR, "ObAllVirtualDeadLockDetectorStat construct fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObAllVirtualDeadLockDetectorStat *>(deadlock_detector_stat);
             }
             break;
           }

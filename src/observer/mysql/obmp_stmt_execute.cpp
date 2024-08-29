@@ -52,6 +52,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 
+void __attribute__((weak)) request_finish_callback();
 namespace oceanbase
 {
 
@@ -2058,6 +2059,7 @@ int ObMPStmtExecute::process()
   if (!THIS_WORKER.need_retry()) {
     if (async_resp_used) {
       async_resp_used_ = true;
+      request_finish_callback();
       packet_sender_.disable_response();
     } else {
       flush_ret = flush_buffer(true);

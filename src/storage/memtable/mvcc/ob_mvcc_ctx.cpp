@@ -11,6 +11,7 @@
  */
 
 #include "storage/memtable/mvcc/ob_mvcc_ctx.h"
+#include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/memtable/ob_memtable_data.h"
 #include "storage/memtable/ob_memtable.h"
@@ -20,6 +21,8 @@
 #include "storage/tablelock/ob_table_lock_callback.h"
 #include "storage/lob/ob_ext_info_callback.h"
 #include "storage/ls/ob_freezer.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -27,6 +30,7 @@ using namespace share;
 using namespace storage;
 using namespace transaction::tablelock;
 using namespace blocksstable;
+using namespace lockwaitmgr;
 namespace memtable
 {
 
@@ -86,6 +90,14 @@ int ObIMvccCtx::register_row_commit_cb(
     if (OB_FAIL(ret)) {
       free_mvcc_row_callback(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
+    } else {
+      if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
+        MTL(ObLockWaitMgr*)->insert_or_replace_hash_holder(
+            LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
+            node->tx_id_,
+            node->seq_no_,
+            share::SCN());
+      }
     }
   }
   return ret;
@@ -137,6 +149,14 @@ int ObIMvccCtx::register_row_replay_cb(
     if (OB_FAIL(ret)) {
       free_mvcc_row_callback(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
+    } else {
+      if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && OB_NOT_NULL(MTL(ObLockWaitMgr*))) {
+        MTL(ObLockWaitMgr*)->insert_or_replace_hash_holder(
+          LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *key),
+          node->tx_id_,
+          node->seq_no_,
+          node->scn_);
+      }
     }
   }
   return ret;

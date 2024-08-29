@@ -17,7 +17,7 @@
 #include "sql/resolver/ob_stmt.h"
 #include "pl/ob_pl.h"
 #include "storage/tx/ob_trans_define.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/mysql/ob_mysql_result_set.h"
 #include "observer/ob_server_struct.h"
 #include "observer/mysql/obmp_query.h"
@@ -705,6 +705,9 @@ void ObQueryRetryCtrl::px_thread_not_enough_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObPxThreadNotEnoughRetryPolicy thread_not_enough;
   retry_obj.test(thread_not_enough);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_px_worker_insufficient_retry_wait_event(v.ctx_);
+  }
 }
 
 void ObQueryRetryCtrl::trx_set_violation_proc(ObRetryParam &v)
@@ -727,6 +730,9 @@ void ObQueryRetryCtrl::try_lock_row_conflict_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObLockRowConflictRetryPolicy lock_conflict;
   retry_obj.test(lock_conflict);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_rowlock_retry_wait_event();
+  }
 }
 
 
@@ -743,6 +749,9 @@ void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
   } else {
     ObRefreshLocationCacheNonblockPolicy nonblock_refresh;
     retry_obj.test(nonblock_refresh);
+  }
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_location_error_retry_wait_event(v.err_);
   }
 }
 
@@ -763,6 +772,9 @@ void ObQueryRetryCtrl::location_error_nothing_readable_proc(ObRetryParam &v)
   // 但是还是要保持inited的状态以便通过防御性检查，所以不能调reset，而是要调clear），然后再重试。
   v.session_.get_retry_info_for_update().clear();
   location_error_proc(v);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_location_error_retry_wait_event(v.err_);
+  }
 }
 
 void ObQueryRetryCtrl::peer_server_status_uncertain_proc(ObRetryParam &v)
@@ -780,6 +792,9 @@ void ObQueryRetryCtrl::schema_error_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObCheckSchemaUpdatePolicy schema_update_policy;
   retry_obj.test(schema_update_policy);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_schema_error_retry_wait_event(v.err_);
+  }
 }
 
 void ObQueryRetryCtrl::autoinc_cache_not_equal_retry_proc(ObRetryParam &v)
@@ -788,6 +803,9 @@ void ObQueryRetryCtrl::autoinc_cache_not_equal_retry_proc(ObRetryParam &v)
   ObAutoincCacheNotEqualRetryPolicy autoinc_retry_policy;
   ObCommonRetryLinearShortWaitPolicy retry_short_wait;
   retry_obj.test(autoinc_retry_policy).test(retry_short_wait);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_schema_error_retry_wait_event(v.err_);
+  }
 }
 
 void ObQueryRetryCtrl::snapshot_discard_proc(ObRetryParam &v)
@@ -816,6 +834,11 @@ void ObQueryRetryCtrl::long_wait_retry_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObCommonRetryIndexLongWaitPolicy long_wait_retry;
   retry_obj.test(long_wait_retry);
+  if ( OB_REPLICA_NOT_READABLE == v.err_) {
+    if (can_start_retry_wait_event(v.retry_type_)) {
+      start_replica_not_readable_retry_wait_event();
+    }
+  }
 }
 
 void ObQueryRetryCtrl::short_wait_retry_proc(ObRetryParam &v)
@@ -823,6 +846,15 @@ void ObQueryRetryCtrl::short_wait_retry_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObCommonRetryLinearShortWaitPolicy short_wait_retry;
   retry_obj.test(short_wait_retry);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    if (OB_ERR_INSUFFICIENT_PX_WORKER == v.err_)  {
+      start_px_worker_insufficient_retry_wait_event(v.ctx_);
+    } else if (OB_GTS_NOT_READY == v.err_ || OB_GTI_NOT_READY == v.err_) {
+      start_gts_not_ready_retry_wait_event(v.err_);
+    } else if ( OB_REPLICA_NOT_READABLE == v.err_) {
+      start_replica_not_readable_retry_wait_event();
+    }
+  }
 }
 
 void ObQueryRetryCtrl::force_local_retry_proc(ObRetryParam &v)
@@ -875,6 +907,9 @@ void ObQueryRetryCtrl::inner_try_lock_row_conflict_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObInnerLockRowConflictRetryPolicy lock_conflict;
   retry_obj.test(lock_conflict);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_rowlock_retry_wait_event();
+  }
 }
 
 void ObQueryRetryCtrl::inner_table_location_error_proc(ObRetryParam &v)
@@ -884,6 +919,9 @@ void ObQueryRetryCtrl::inner_table_location_error_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObCommonRetryIndexLongWaitPolicy retry_long_wait;
   retry_obj.test(retry_long_wait);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_location_error_retry_wait_event(v.err_);
+  }
 }
 
 void ObQueryRetryCtrl::inner_location_error_proc(ObRetryParam &v)
@@ -909,6 +947,9 @@ void ObQueryRetryCtrl::inner_location_error_proc(ObRetryParam &v)
     // case 4: do nothing for other inner sql
     empty_proc(v);
   }
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_location_error_retry_wait_event(v.err_);
+  }
 }
 
 void ObQueryRetryCtrl::inner_location_error_nothing_readable_proc(ObRetryParam &v)
@@ -919,6 +960,9 @@ void ObQueryRetryCtrl::inner_location_error_nothing_readable_proc(ObRetryParam &
   // 但是还是要保持inited的状态以便通过防御性检查，所以不能调reset，而是要调clear），然后再重试。
   v.session_.get_retry_info_for_update().clear();
   inner_location_error_proc(v);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_location_error_retry_wait_event(v.err_);
+  }
 }
 
 void ObQueryRetryCtrl::inner_common_schema_error_proc(ObRetryParam &v)
@@ -926,6 +970,9 @@ void ObQueryRetryCtrl::inner_common_schema_error_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObInnerCommonCheckSchemaPolicy common_schema_policy;
   retry_obj.test(common_schema_policy);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_schema_error_retry_wait_event(v.err_);
+  }
 }
 
 
@@ -935,6 +982,9 @@ void ObQueryRetryCtrl::inner_schema_error_proc(ObRetryParam &v)
   ObInnerCommonCheckSchemaPolicy common_schema_policy;
   ObInnerCheckSchemaPolicy schema_policy;
   retry_obj.test(common_schema_policy).test(schema_policy);
+  if (can_start_retry_wait_event(v.retry_type_)) {
+    start_schema_error_retry_wait_event(v.err_);
+  }
 }
 
 void ObQueryRetryCtrl::inner_peer_server_status_uncertain_proc(ObRetryParam &v)
@@ -966,6 +1016,8 @@ void ObQueryRetryCtrl::empty_proc(ObRetryParam &v)
 
 void ObQueryRetryCtrl::before_func(ObRetryParam &v)
 {
+  ObActiveSessionGuard::get_stat().record_last_query_exec_use_time_us(common::ObTimeUtility::current_time() -
+              ObActiveSessionGuard::get_stat().curr_query_start_time_);
   if (OB_UNLIKELY(v.is_inner_sql_)) {
     ObRetryObject retry_obj(v);
     ObInnerBeforeRetryCheckPolicy before_retry;
@@ -992,6 +1044,11 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
   if (RETRY_TYPE_NONE != v.retry_type_) {
     v.session_.get_retry_info_for_update().set_last_query_retry_err(v.err_);
     v.session_.get_retry_info_for_update().inc_retry_cnt();
+    if (0 == ObActiveSessionGuard::get_stat().retry_wait_event_no_) {
+      if (can_start_retry_wait_event(v.retry_type_)) {
+        start_other_retry_wait_event(v.err_);
+      }
+    }
     if (OB_UNLIKELY(v.err_ != v.client_ret_)) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "when need retry, v.client_ret_ must be equal to err", K(v));
     }
@@ -1001,7 +1058,7 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
   }
   // bug fix:
   if (RETRY_TYPE_LOCAL == v.retry_type_) {
-    rpc::ObLockWaitNode* node = MTL(memtable::ObLockWaitMgr*)->get_thread_node();
+    rpc::ObLockWaitNode* node = MTL(lockwaitmgr::ObLockWaitMgr*)->get_thread_node();
     if (NULL != node) {
       node->reset_need_wait();
     }
@@ -1267,6 +1324,74 @@ void ObQueryRetryCtrl::on_close_resultset_fail_(const int err, int &client_ret)
       client_ret = err;
     }
   }
+}
+bool ObQueryRetryCtrl::can_start_retry_wait_event(const ObQueryRetryType& retry_type)
+{
+  return retry_type != RETRY_TYPE_NONE
+         && ObActiveSessionGuard::get_stat().retry_wait_event_no_ != ObWaitEventIds::ROW_LOCK_WAIT;
+}
+void ObQueryRetryCtrl::start_schema_error_retry_wait_event(const int error_code)
+{
+  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::SCHEMA_RETRY_WAIT,
+        error_code,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_id_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_schema_version_));
+}
+
+void ObQueryRetryCtrl::start_location_error_retry_wait_event(const int error_code)
+{
+  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::LOCATION_RETRY_WAIT,
+        error_code,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
+        0);
+}
+
+void ObQueryRetryCtrl::start_rowlock_retry_wait_event()
+{
+  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::ROW_LOCK_RETRY,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_tx_id_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_data_seq_num_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_lock_timestamp_));
+}
+
+void ObQueryRetryCtrl::start_px_worker_insufficient_retry_wait_event(const ObSqlCtx& sql_ctx)
+{
+    ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::INSUFFICIENT_PX_WORKER_RETRY_WAIT,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(dop_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(required_px_workers_number_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(admitted_px_workers_number_));
+}
+
+void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(const int error_code)
+{
+  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::GTS_NOT_READEY_RETRY_WAIT,
+        error_code,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(sys_ls_leader_addr_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(admitted_px_workers_number_));
+}
+
+
+void ObQueryRetryCtrl::start_replica_not_readable_retry_wait_event()
+{
+  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::REPLICA_NOT_READABLE_RETRY_WAIT,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
+        ObActiveSessionGuard::get_stat().tablet_id_,
+        0);
+}
+
+void ObQueryRetryCtrl::start_other_retry_wait_event(const int error_code)
+{
+  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::OTHER_RETRY_WAIT,
+        error_code,
+        0,
+        0);
 }
 }/* ns observer*/
 }/* ns oceanbase */

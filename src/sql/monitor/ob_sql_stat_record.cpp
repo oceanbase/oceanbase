@@ -181,6 +181,7 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
 #define RECORD_ITEM(se)                                                                            \
   do {                                                                                             \
     ObDiagnoseSessionInfo *di_info = ObDiagnoseSessionInfo::get_local_diagnose_info();             \
+    elapsed_time_##se##_ = ObTimeUtility::current_time();                                          \
     if (OB_NOT_NULL(di_info)) {                                                                    \
       ObStatEventAddStatArray &arr = di_info->get_add_stat_stats();                                \
       disk_reads_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);                     \
@@ -189,7 +190,6 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
                             EVENT_STAT_GET(arr, ObStatEventIds::BLOOM_FILTER_FILTS) * 2 +          \
                             EVENT_STAT_GET(arr, ObStatEventIds::BLOCK_CACHE_HIT) +                 \
                             disk_reads_##se##_;                                                    \
-      elapsed_time_##se##_ = ObTimeUtility::current_time();                                        \
       cpu_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SYS_TIME_MODEL_DB_CPU);               \
       ccwait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                           \
       userio_wait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::USER_IO_WAIT_TIME);                \

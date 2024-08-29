@@ -140,6 +140,7 @@ void ObQueryRetryInfo::reset()
   last_query_retry_err_ = OB_SUCCESS;
   retry_cnt_ = 0;
   query_switch_leader_retry_timeout_ts_ = 0;
+  query_retry_ash_diag_info_.reset();
 }
 
 void ObQueryRetryInfo::clear()

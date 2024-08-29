@@ -398,7 +398,11 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case BLOCKING_SESSION_ID: {
-        cells[cell_idx].set_null();
+        if (node.block_sessid_ != 0) {
+          cells[cell_idx].set_int(node.block_sessid_);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case PLAN_HASH: {
@@ -420,6 +424,14 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
       case STMT_TYPE: {
         if (node.stmt_type_ != 0) {
           cells[cell_idx].set_int(node.stmt_type_);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case TABLET_ID: {
+        if (node.tablet_id_ != 0) {
+          cells[cell_idx].set_int(node.tablet_id_);
         } else {
           cells[cell_idx].set_null();
         }

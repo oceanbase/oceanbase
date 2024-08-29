@@ -13,11 +13,13 @@
 #ifndef OCEANBASE_MEMTABLE_MVCC_OB_MVCC_ENGINE_
 #define OCEANBASE_MEMTABLE_MVCC_OB_MVCC_ENGINE_
 
+#include "ob_tablet_id.h"
 #include "share/ob_define.h"
 #include "storage/memtable/mvcc/ob_mvcc_define.h"
 #include "storage/memtable/mvcc/ob_multi_version_iterator.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/mvcc/ob_query_engine.h"
+#include "storage/memtable/ob_memtable_key.h"
 #include "storage/memtable/ob_row_compactor.h"
 #include "storage/memtable/ob_memtable_context.h"
 
@@ -79,7 +81,7 @@ public:
 
   // mvcc_undo removes the newly written tx node. It never returns error
   // and always succeed.
-  void mvcc_undo(ObMvccRow *value);
+  void mvcc_undo(ObMvccRow *value) { value->mvcc_undo(); }
 
   // mvcc_replay builds the ObMvccTransNode according to the arg
   int mvcc_replay(const ObTxNodeArg &arg,

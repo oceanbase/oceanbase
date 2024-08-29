@@ -253,6 +253,10 @@ int ObExternalTableAccessService::table_scan(
     ObNewRowIterator *&result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  const share::ObLSID &ls_id = param.ls_id_;
+  const common::ObTabletID &data_tablet_id = param.tablet_id_;
+  ObActiveSessionGuard::get_stat().tablet_id_ = data_tablet_id.id();
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
   int ret = OB_SUCCESS;
   ObExternalTableRowIterator* row_iter = NULL;
 
@@ -286,6 +290,10 @@ int ObExternalTableAccessService::table_scan(
 int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRowIterator *result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  const share::ObLSID &ls_id = param.ls_id_;
+  const common::ObTabletID &data_tablet_id = param.tablet_id_;
+  ObActiveSessionGuard::get_stat().tablet_id_ = data_tablet_id.id();
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
   int ret = OB_SUCCESS;
   if (OB_ISNULL(result)) {
     ret = OB_ERR_UNEXPECTED;
@@ -307,6 +315,8 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
 int ObExternalTableAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *iter)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObActiveSessionGuard::get_stat().tablet_id_ = 0;
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   UNUSED(switch_param);
   iter->reset();
   return OB_SUCCESS;
@@ -315,6 +325,8 @@ int ObExternalTableAccessService::reuse_scan_iter(const bool switch_param, ObNew
 int ObExternalTableAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObActiveSessionGuard::get_stat().tablet_id_ = 0;
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(iter)) {
     ret = OB_ERR_UNEXPECTED;

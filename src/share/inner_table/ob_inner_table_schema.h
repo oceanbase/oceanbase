@@ -1050,6 +1050,7 @@ public:
   static int all_virtual_tenant_resource_limit_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_resource_limit_detail_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_scheduler_job_run_detail_v2_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_deadlock_detector_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_kv_group_commit_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_kv_client_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -3756,6 +3757,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tenant_resource_limit_schema,
   ObInnerTableSchema::all_virtual_tenant_resource_limit_detail_schema,
   ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_schema,
+  ObInnerTableSchema::all_virtual_deadlock_detector_stat_schema,
   ObInnerTableSchema::all_virtual_kv_group_commit_status_schema,
   ObInnerTableSchema::all_virtual_kv_client_info_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
@@ -5653,6 +5655,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SERVICE_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID,
+  OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TID,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TID,
   OB_ALL_VIRTUAL_KV_CLIENT_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -8242,6 +8245,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SERVICE_TNAME,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TNAME,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TNAME,
+  OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TNAME,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TNAME,
   OB_ALL_VIRTUAL_KV_CLIENT_INFO_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
@@ -10186,6 +10190,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID,
+  OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TID,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TID,
   OB_ALL_VIRTUAL_KV_CLIENT_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -12857,11 +12862,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 281;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 806;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 807;
 const int64_t OB_SYS_VIEW_COUNT = 925;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2017;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2018;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2020;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2021;
 
 } // end namespace share
 } // end namespace oceanbase

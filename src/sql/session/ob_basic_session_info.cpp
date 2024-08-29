@@ -6278,6 +6278,7 @@ void ObBasicSessionInfo::setup_ash()
   ash_stat_.trace_id_ = get_current_trace_id();
   ash_stat_.tid_ = GETTID();
   ash_stat_.group_id_ = THIS_WORKER.get_group_id();
+  ash_stat_.set_retry_ash_diag_info_ptr(get_retry_info_for_update().get_query_retry_ash_diag_info_ptr());
   ObActiveSessionGuard::setup_ash(ash_stat_);
 }
 
@@ -6297,9 +6298,11 @@ void ObBasicSessionInfo::set_session_sleep()
 {
   ash_stat_.accumulate_elapse_time();
   LockGuard lock_guard(thread_data_mutex_);
+  int ret = OB_SUCCESS;
   set_session_state_(SESSION_SLEEP);
   thread_data_.mysql_cmd_ = obmysql::COM_SLEEP;
   thread_id_ = 0;
+  ash_stat_.end_retry_wait_event();
   ObActiveSessionGuard::resetup_thread_local_ash();
 }
 

@@ -279,6 +279,47 @@ struct ObInsertRewriteOptCtx
   int64_t row_count_;
 };
 
+struct ObQueryRetryASHDiagInfo {
+public:
+  ObQueryRetryASHDiagInfo()
+    :ls_id_(0),
+    holder_tx_id_(0),
+    holder_data_seq_num_(0),
+    holder_lock_timestamp_(0),
+    table_id_(0),
+    table_schema_version_(0),
+    sys_ls_leader_addr_(0),
+    dop_(0),
+    required_px_workers_number_(0),
+    admitted_px_workers_number_(0)
+  {}
+
+  ~ObQueryRetryASHDiagInfo() = default;
+  void reset() {
+    ls_id_ = 0;
+    holder_tx_id_ = 0;
+    holder_data_seq_num_ = 0;
+    holder_lock_timestamp_ = 0;
+    table_id_ = 0;
+    table_schema_version_ = 0;
+    sys_ls_leader_addr_ = 0;
+    dop_ = 0;
+    required_px_workers_number_ = 0;
+    admitted_px_workers_number_ = 0;
+  }
+
+public:
+  int64_t ls_id_;
+  int64_t holder_tx_id_;
+  int64_t holder_data_seq_num_;
+  int64_t holder_lock_timestamp_;
+  int64_t table_id_;
+  int64_t table_schema_version_;
+  int64_t sys_ls_leader_addr_;
+  int64_t dop_;
+  int64_t required_px_workers_number_;
+  int64_t admitted_px_workers_number_;
+};
 
 class ObQueryRetryInfo
 {
@@ -288,7 +329,8 @@ public:
       is_rpc_timeout_(false),
       last_query_retry_err_(common::OB_SUCCESS),
       retry_cnt_(0),
-      query_switch_leader_retry_timeout_ts_(0)
+      query_switch_leader_retry_timeout_ts_(0),
+      query_retry_ash_diag_info_()
   {
   }
   virtual ~ObQueryRetryInfo() {}
@@ -334,6 +376,7 @@ public:
   void inc_retry_cnt() { retry_cnt_++; }
   int64_t get_retry_cnt() const { return retry_cnt_; }
 
+  ObQueryRetryASHDiagInfo* get_query_retry_ash_diag_info_ptr() { return &query_retry_ash_diag_info_; }
 
   TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(last_query_retry_err));
 
@@ -351,6 +394,7 @@ private:
   int64_t retry_cnt_;
   // for fast fail,
   int64_t query_switch_leader_retry_timeout_ts_;
+  ObQueryRetryASHDiagInfo query_retry_ash_diag_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRetryInfo);
 };
@@ -658,6 +702,7 @@ public:
   TO_STRING_KV(K(stmt_type_));
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
+
 };
 
 struct ObQueryCtx

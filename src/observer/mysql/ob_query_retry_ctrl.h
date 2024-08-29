@@ -262,6 +262,16 @@ public:
             || isolation == transaction::ObTxIsolationLevel::SERIAL);
   }
   static int get_das_retry_func(int err, sql::ObDASRetryCtrl::retry_func &retry_func);
+
+  // processors for ASH and wait event
+  static bool can_start_retry_wait_event(const ObQueryRetryType& retry_type);
+  static void start_schema_error_retry_wait_event(const int error_code);
+  static void start_location_error_retry_wait_event(const int error_code);
+  static void start_rowlock_retry_wait_event();
+  static void start_px_worker_insufficient_retry_wait_event(const sql::ObSqlCtx& sql_ctx);
+  static void start_gts_not_ready_retry_wait_event(const int error_code);
+  static void start_replica_not_readable_retry_wait_event();
+  static void start_other_retry_wait_event(const int error_code);
 public:
   // schema类型的错误最多在本线程重试5次。
   // 5是拍脑袋决定的，之后还要看统计数据的反馈再修改。TODO qianfu.zpf

@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_DEADLOCK_OB_DEADLOCK_COLLECT_INFO_MESSAGE_H
 
 #include "ob_deadlock_detector_common_define.h"
+#include "lib/string/ob_string_holder.h"
 
 namespace oceanbase
 {
@@ -52,17 +53,20 @@ public:
   int set_args(const common::ObAddr &parent_addr,
                const UserBinaryKey &dest_key,
                const common::ObAddr &src_addr,
-               const UserBinaryKey &src_key);
+               const UserBinaryKey &src_key,
+               const ObStringHolder &action);
   const UserBinaryKey &get_parent_key() const { return parent_key_; }
   const common::ObAddr &get_src_addr() const { return src_addr_; }
   const UserBinaryKey &get_src_key() const { return src_key_; }
+  const ObStringHolder &get_action() const { return action_; }
   bool is_valid() const;
-  TO_STRING_KV(K_(parent_addr), K_(parent_key), K_(src_addr), K_(src_key));
+  TO_STRING_KV(K_(parent_addr), K_(parent_key), K_(src_addr), K_(src_key), K_(action));
 private:
   common::ObAddr parent_addr_;
   UserBinaryKey parent_key_;
   common::ObAddr src_addr_;
   UserBinaryKey src_key_;
+  ObStringHolder action_;
 };
 
 }

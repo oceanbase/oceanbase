@@ -361,7 +361,7 @@ int ObTxActiveInfoLog::before_serialize()
       TRANS_LOG(WARN, "reset all compat_bytes_ valid failed", K(ret));
     }
   } else {
-    if (OB_FAIL(compat_bytes_.init(19))) {
+    if (OB_FAIL(compat_bytes_.init(20))) {
       TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
     }
   }

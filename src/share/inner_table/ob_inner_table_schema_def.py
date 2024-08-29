@@ -5937,6 +5937,7 @@ def_table_schema(
     ('plan_hash', 'uint', 'true'),
     ('thread_id', 'int', 'true'),
     ('stmt_type', 'int', 'true'),
+    ('tablet_id', 'int', 'true'),
   ],
 )
 
@@ -9869,7 +9870,15 @@ def_table_schema(
   ('total_update_cnt', 'int'),
   ('trans_id', 'int'),
   ('holder_trans_id', 'int'),
-  ('holder_session_id', 'int')
+  ('holder_session_id', 'int'),
+  ('ls_id', 'int'),
+  ('assoc_session_id', 'int'),
+  ('wait_timeout', 'int'),
+  ('tx_active_ts', 'int'),
+  ('node_id', 'int'),
+  ('node_type', 'int'),
+  ('remote_addr', 'varchar:MAX_LOCK_REMOTE_ADDR_BUF_LENGTH'),
+  ('is_placeholder', 'int')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -12263,6 +12272,7 @@ def_table_schema(
     ('PLAN_HASH', 'uint', 'true'),
     ('THREAD_ID', 'int', 'true'),
     ('STMT_TYPE', 'int', 'true'),
+    ('TABLET_ID', 'int', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -14147,6 +14157,51 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12488',
   table_name = '__all_virtual_scheduler_job_run_detail_v2',
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2']))
+
+def_table_schema(
+  owner = 'xuwang.txw',
+  table_name = '__all_virtual_deadlock_detector_stat',
+  table_id = '12489',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('detector_id', 'int'),
+  ],
+
+  normal_columns = [
+  # 定位信息
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('module', 'longtext'),
+  ('visitor', 'longtext'),
+  # 等待关系
+  ('action', 'longtext'),
+  ('static_waiting_resource', 'longtext'),
+  ('static_block_list', 'longtext'),
+  ('dynamic_waiting_resource', 'longtext'),
+  ('dynamic_block_list', 'longtext'),
+  ('conflict_actions', 'longtext'),
+  # 时间戳信息
+  ('waiter_create_time', 'timestamp'),
+  ('create_time', 'timestamp'),
+  ('timeout_ts', 'timestamp'),
+  ('allow_detect_time', 'timestamp'),
+  # LCL信息
+  ('lclv', 'int'),
+  ('lcl_period', 'int'),
+  ('private_label', 'longtext'),
+  ('public_label', 'longtext'),
+  # 其他
+  ('count_down_allow_detect', 'int'),
+  ('parent_list', 'longtext'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 
 def_table_schema(
   owner      = 'wuguangxin.wgx',
@@ -25526,7 +25581,9 @@ PLSQL_ENTRY_SUBPROGRAM_ID,
 PLSQL_ENTRY_SUBPROGRAM_NAME,
 PLSQL_OBJECT_ID,
 PLSQL_SUBPROGRAM_ID,
-PLSQL_SUBPROGRAM_NAME FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY
+PLSQL_SUBPROGRAM_NAME,
+BLOCKING_SESSION_ID,
+TABLET_ID FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -25598,7 +25655,9 @@ PLSQL_ENTRY_SUBPROGRAM_ID,
 PLSQL_ENTRY_SUBPROGRAM_NAME,
 PLSQL_OBJECT_ID,
 PLSQL_SUBPROGRAM_ID,
-PLSQL_SUBPROGRAM_NAME FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLSQL_SUBPROGRAM_NAME,
+BLOCKING_SESSION_ID,
+TABLET_ID FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -30494,7 +30553,9 @@ def_table_schema(
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
       ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
-      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
+      ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,
+      ASH.TABLET_ID AS TABLET_ID
   FROM
     (
       oceanbase.__all_virtual_wr_active_session_history ASH
@@ -30574,7 +30635,9 @@ def_table_schema(
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
       ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
-      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
+      ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,
+      ASH.TABLET_ID AS TABLET_ID
   FROM
     (
       oceanbase.__all_virtual_wr_active_session_history ASH
@@ -33761,7 +33824,9 @@ def_table_schema(
       CAST(PLSQL_ENTRY_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       CAST(PLSQL_OBJECT_ID AS SIGNED) AS PLSQL_OBJECT_ID,
       CAST(PLSQL_SUBPROGRAM_ID AS SIGNED) AS PLSQL_SUBPROGRAM_ID,
-      CAST(PLSQL_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_SUBPROGRAM_NAME
+      CAST(PLSQL_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_SUBPROGRAM_NAME,
+      CAST(BLOCKING_SESSION_ID AS SIGNED) AS BLOCKING_SESSION_ID,
+      CAST(TABLET_ID AS SIGNED) AS TABLET_ID
   FROM oceanbase.__all_virtual_ash ASH LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#`
 """.replace("\n", " "),
   normal_columns  = [],
@@ -33836,7 +33901,9 @@ def_table_schema(
       PLSQL_ENTRY_SUBPROGRAM_NAME,
       PLSQL_OBJECT_ID,
       PLSQL_SUBPROGRAM_ID,
-      PLSQL_SUBPROGRAM_NAME FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+      PLSQL_SUBPROGRAM_NAME,
+      BLOCKING_SESSION_ID,
+      TABLET_ID FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -53387,7 +53454,9 @@ def_table_schema(
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
       ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
-      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
+      ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,
+      ASH.TABLET_ID AS TABLET_ID
   FROM
     SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
     SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
@@ -60445,7 +60514,9 @@ PLSQL_ENTRY_SUBPROGRAM_ID,
 PLSQL_ENTRY_SUBPROGRAM_NAME,
 PLSQL_OBJECT_ID,
 PLSQL_SUBPROGRAM_ID,
-PLSQL_SUBPROGRAM_NAME FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY
+PLSQL_SUBPROGRAM_NAME,
+BLOCKING_SESSION_ID,
+TABLET_ID FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
 )
 
@@ -60519,7 +60590,9 @@ def_table_schema(
       PLSQL_ENTRY_SUBPROGRAM_NAME,
       PLSQL_OBJECT_ID,
       PLSQL_SUBPROGRAM_ID,
-      PLSQL_SUBPROGRAM_NAME FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+      PLSQL_SUBPROGRAM_NAME,
+      BLOCKING_SESSION_ID,
+      TABLET_ID FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
@@ -62583,7 +62656,9 @@ def_table_schema(
       CAST(PLSQL_ENTRY_SUBPROGRAM_NAME AS VARCHAR2(32)) AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       CAST(PLSQL_OBJECT_ID AS NUMBER) AS PLSQL_OBJECT_ID,
       CAST(PLSQL_SUBPROGRAM_ID AS NUMBER) AS PLSQL_SUBPROGRAM_ID,
-      CAST(PLSQL_SUBPROGRAM_NAME AS VARCHAR2(32)) AS PLSQL_SUBPROGRAM_NAME
+      CAST(PLSQL_SUBPROGRAM_NAME AS VARCHAR2(32)) AS PLSQL_SUBPROGRAM_NAME,
+      CAST(BLOCKING_SESSION_ID AS NUMBER) AS BLOCKING_SESSION_ID,
+      CAST(TABLET_ID AS NUMBER) AS TABLET_ID
     FROM SYS.ALL_VIRTUAL_ASH LEFT JOIN SYS.V$EVENT_NAME on EVENT_NO = "EVENT#"
 """.replace("\n", " "),
 )
@@ -62657,7 +62732,9 @@ PLSQL_ENTRY_SUBPROGRAM_ID,
 PLSQL_ENTRY_SUBPROGRAM_NAME,
 PLSQL_OBJECT_ID,
 PLSQL_SUBPROGRAM_ID,
-PLSQL_SUBPROGRAM_NAME FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLSQL_SUBPROGRAM_NAME,
+BLOCKING_SESSION_ID,
+TABLET_ID FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 

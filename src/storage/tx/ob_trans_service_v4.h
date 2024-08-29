@@ -410,7 +410,7 @@ bool tx_need_reset_(const int error_code) const;
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,
                         ObTxTableGuard &guard);
-void fetch_cflict_tx_ids_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
+void fetch_conflict_info_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
 int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,
                             const share::SCN &snapshot,

@@ -15,6 +15,9 @@
 
 #include <stdint.h>
 namespace oceanbase {
+namespace transaction {
+class ObTxDesc;
+}
 namespace memtable {
 class ObMvccRow;
 class ObMvccAccessCtx;

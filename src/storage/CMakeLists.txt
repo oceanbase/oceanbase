@@ -246,6 +246,7 @@ ob_set_subtarget(ob_storage tx_wrs
 )
 
 ob_set_subtarget(ob_storage tx
+  tx/deadlock_adapter/ob_remote_execution_deadlock_callback.cpp
   tx/ob_ctx_tx_data.cpp
   tx/ob_clog_encrypt_info_os.cpp
   tx/ob_dblink_client.cpp
@@ -292,6 +293,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_elr_util.cpp
   tx/ob_tx_elr_handler.cpp
   tx/ob_trans_stat.cpp
+  tx/ob_tx_seq.cpp
   tx/ob_tx_stat.cpp
   tx/ob_tx_retain_ctx_mgr.cpp
   tx/ob_ls_tx_ctx_mgr_stat.cpp
@@ -539,8 +541,16 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_medium_list_checker.cpp
 )
 
+ob_set_subtarget(ob_storage lock_wait_mgr
+  lock_wait_mgr/ob_lock_wait_mgr.cpp
+  lock_wait_mgr/ob_lock_wait_mgr_msg.cpp
+  lock_wait_mgr/ob_lock_wait_mgr_rpc.cpp
+)
+
 ob_set_subtarget(ob_storage memtable
-  memtable/ob_lock_wait_mgr.cpp
+  memtable/deadlock_adapter/ob_local_execution_deadlock_callback.cpp
+  memtable/hash_holder/ob_row_hash_holder_info.cpp
+  memtable/hash_holder/ob_row_hash_holder_map.cpp
   memtable/ob_memtable.cpp
   memtable/ob_memtable_key.cpp
   memtable/ob_memtable_compact_writer.cpp

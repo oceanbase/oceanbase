@@ -18,6 +18,8 @@
 #include "ob_row_data.h"
 #include "ob_mvcc_row.h"
 #include "ob_mvcc.h"
+#include "share/rc/ob_tenant_base.h"
+#include "storage/memtable/hash_holder/ob_row_hash_holder_map.h"
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/memtable/mvcc/ob_tx_callback_list.h"
@@ -48,6 +50,23 @@ class RedoLogEpoch;
 class ObCallbackListLogGuard;
 class ObTxCallbackListStat;
 class ObITransCallback;
+
+class CorrectHashHolderOp {
+public:
+  CorrectHashHolderOp() = delete;
+  CorrectHashHolderOp(const uint64_t hash,
+                      const ObMvccTransNode &node,
+                      memtable::RowHolderMapper &row_holder)
+  : hash_(hash),
+  node_(node),
+  row_holder_(row_holder) {}
+  void operator()();
+private:
+  const uint64_t hash_;
+  const ObMvccTransNode &node_;
+  memtable::RowHolderMapper &row_holder_;
+};
+
 struct RedoDataNode
 {
   void set(const ObMemtableKey *key,
@@ -513,7 +532,7 @@ public:
   transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
   int get_trans_id(transaction::ObTransID &trans_id) const;
   int get_cluster_version(uint64_t &cluster_version) const override;
-  transaction::ObTransCtx *get_trans_ctx() const;
+  transaction::ObPartTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
   virtual void after_append(const bool is_replay) override;
@@ -553,6 +572,7 @@ private:
   int dec_unsubmitted_cnt_();
   int dec_unsynced_cnt_();
   int wakeup_row_waiter_if_need_();
+  void commit_trans_node_();
 private:
   ObIMvccCtx &ctx_;
   ObMemtableKey key_;

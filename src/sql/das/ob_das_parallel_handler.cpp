@@ -22,6 +22,8 @@ using namespace oceanbase::share;
 int64_t ObDASParallelTaskFactory::alloc_count_;
 int64_t ObDASParallelTaskFactory::free_count_;
 
+void __attribute__((weak)) request_finish_callback();
+
 int ObDASParallelHandler::init(observer::ObSrvTask *task)
 {
   int ret = OB_SUCCESS;
@@ -192,6 +194,7 @@ int ObDASParallelHandler::run()
   }
   // whether success or failure,we must dec the reference_count
   task->get_das_ref_count_ctx().inc_concurrency_limit_with_signal();
+  request_finish_callback();
   // cover the error code
   ret = OB_SUCCESS;
   return ret;

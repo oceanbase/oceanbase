@@ -1,5 +1,13 @@
+add_library(mock_lock_wait_mgr SHARED
+  ob_mock_request_msg.h
+  ob_mock_request_msg.cpp
+  ob_mock_lock_wait_mgr.h
+  ob_mock_lock_wait_mgr.cpp)
+
+target_link_libraries(mock_lock_wait_mgr PUBLIC oceanbase mockcontainer)
+
 add_library(tx_node OBJECT tx_node.cpp)
-target_link_libraries(tx_node PUBLIC oceanbase)
+target_link_libraries(tx_node PUBLIC oceanbase mock_lock_wait_mgr)
 
 function(tx_it_test case)
   ob_unittest(${ARGV})
@@ -12,5 +20,5 @@ tx_it_test(test_tx_free_route)
 tx_it_test(test_tx_ctx)
 tx_it_test(test_register_mds)
 #tx_it_test(test_tx_perf)
-
+tx_it_test(test_lock_wait_mgr)
 

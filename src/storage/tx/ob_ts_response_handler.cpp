@@ -20,6 +20,8 @@ using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 
+void __attribute__((weak)) request_finish_callback();
+
 int64_t ObTsResponseTaskFactory::alloc_count_;
 int64_t ObTsResponseTaskFactory::free_count_;
 
@@ -62,6 +64,7 @@ int ObTsResponseHandler::run()
     //op_reclaim_free(task);
     //task = NULL;
   }
+  request_finish_callback();
   return ret;
 }
 
