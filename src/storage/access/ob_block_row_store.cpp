@@ -160,11 +160,11 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
   } else if (nullptr == pd_filter_info_.filter_) {
     // nothing to do
-  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(context_.stmt_allocator_, need_convert))) {
+  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(&pd_filter_info_.filter_->get_allocator(), need_convert))) {
     LOG_WARN("Failed to init pushdown filter evaluated datums", K(ret));
   } else {
     if (OB_UNLIKELY(need_convert)) {
-      sql::ObPushdownFilterFactory filter_factory(context_.stmt_allocator_);
+      sql::ObPushdownFilterFactory filter_factory(&pd_filter_info_.filter_->get_allocator());
       if (OB_FAIL(filter_factory.convert_white_filter_to_black(pd_filter_info_.filter_))) {
         LOG_WARN("Failed to convert white filter to black filter", K(ret), KPC_(pd_filter_info_.filter));
       } else {
