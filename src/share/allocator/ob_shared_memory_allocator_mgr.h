@@ -150,6 +150,7 @@ public:
                                              has_printed_lbt);
     }
     PrintThrottleUtil::print_throttle_statistic(ret, ALLOCATOR::throttle_unit_name(), sleep_time, throttle_memory_size);
+    EVENT_ADD(ObStatEventIds::STORAGE_WRITING_THROTTLE_TIME, sleep_time);
 
     if (for_replay && sleep_time > 0) {
       // avoid print replay_timeout
