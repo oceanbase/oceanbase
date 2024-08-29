@@ -543,6 +543,9 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.kv_attributes_, kv_attributes_))) {
     LOG_WARN("Fail to deep copy ttl definition string", K(ret));
   }
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.index_params_, index_params_))) {
+    LOG_WARN("Fail to deep copy vector index param string", K(ret));
+  }
 
   return ret;
 }

@@ -174,8 +174,6 @@ protected:
   virtual int check_and_cancel_complement_data_dag(bool &all_complement_dag_exit); // wait dag exit before unlock table.
   virtual int fail();
   virtual int success();
-  int hold_snapshot(const int64_t snapshot_version);
-  int release_snapshot(const int64_t snapshot_version);
   int add_constraint_ddl_task(const int64_t constraint_id);
   int add_fk_ddl_task(const int64_t fk_id);
   int sync_auto_increment_position();

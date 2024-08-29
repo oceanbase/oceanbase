@@ -20,6 +20,7 @@
 #include "share/scn.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
+#include "share/vector_index/ob_vector_index_util.h"
 #include "share/ob_ddl_common.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/basic/chunk_store/ob_compact_store.h"
@@ -133,7 +134,8 @@ struct ObTableSchemaItem final
 public:
   ObTableSchemaItem()
     : is_column_store_(false), is_index_table_(false), is_unique_index_(false), rowkey_column_num_(0),
-      compress_type_(NONE_COMPRESSOR), lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+      compress_type_(NONE_COMPRESSOR), lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+      vec_idx_param_(), vec_dim_(0)
   {}
   ~ObTableSchemaItem() { reset(); }
   void reset()
@@ -144,9 +146,11 @@ public:
     rowkey_column_num_ = 0;
     compress_type_ = NONE_COMPRESSOR;
     lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+    vec_idx_param_.reset();
+    vec_dim_ = 0;
   }
   TO_STRING_KV(K(is_column_store_), K(is_index_table_), K(is_unique_index_), K(rowkey_column_num_),
-               K(compress_type_), K_(lob_inrow_threshold));
+               K(compress_type_), K_(lob_inrow_threshold), K_(vec_idx_param), K_(vec_dim));
 
 public:
   bool is_column_store_;
@@ -155,13 +159,15 @@ public:
   int64_t rowkey_column_num_;
   common::ObCompressorType compress_type_;
   int64_t lob_inrow_threshold_;
+  ObString vec_idx_param_;
+  int64_t vec_dim_;
 };
 
 struct ObColumnSchemaItem final
 {
 public:
   ObColumnSchemaItem()
-    : is_valid_(false), col_type_(), col_accuracy_()
+    : is_valid_(false), col_type_(), col_accuracy_(), column_flags_(0)
   {}
   ObColumnSchemaItem(const ObColumnSchemaItem &other)
   {
@@ -173,12 +179,14 @@ public:
     is_valid_ = false;
     col_type_.reset();
     col_accuracy_.reset();
+    column_flags_ = 0;
   }
   ObColumnSchemaItem &operator=(const ObColumnSchemaItem &other)
   {
     is_valid_ = other.is_valid_;
     col_type_ = other.col_type_;
     col_accuracy_ = other.col_accuracy_;
+    column_flags_ = other.column_flags_;
     return *this;
   }
   int assign(const ObColumnSchemaItem &other)
@@ -186,13 +194,15 @@ public:
     is_valid_ = other.is_valid_;
     col_type_ = other.col_type_;
     col_accuracy_ = other.col_accuracy_;
+    column_flags_ = other.column_flags_;
     return OB_SUCCESS;
   }
-  TO_STRING_KV(K(is_valid_), K(col_type_), K(col_accuracy_));
+  TO_STRING_KV(K(is_valid_), K(col_type_), K(col_accuracy_), K(column_flags_));
 public:
   bool is_valid_;
   common::ObObjMeta col_type_;
   ObAccuracy col_accuracy_;
+  int64_t column_flags_;
 };
 
 // usued in replay replay and runtime execution
@@ -281,15 +291,16 @@ public:
       const int64_t rowkey_cnt,
       const int64_t snapshot_version,
       const int64_t context_id,
-      const int64_t parallel_idx);
+      const int64_t parallel_idx,
+      const bool is_skip_lob = false);
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override
   {
-    const bool skip_lob = false;
-    return get_next_row(skip_lob, row);
+    // const bool skip_lob = false;
+    return get_next_row(is_skip_lob_, row);
   }
   int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row);
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(current_tablet_id), K_(current_row), K_(is_slice_empty), K_(is_next_row_cached), K_(rowkey_count), K_(snapshot_version),
-      K_(lob_slice_id), K_(lob_id_cache), K_(context_id), K_(macro_seq));
+      K_(lob_slice_id), K_(lob_id_cache), K_(context_id), K_(macro_seq), K_(is_skip_lob));
 public:
   int switch_to_new_lob_slice();
   int close_lob_sstable_slice();
@@ -311,6 +322,7 @@ private:
   share::ObTabletCacheInterval lob_id_cache_;
   int64_t context_id_;
   blocksstable::ObMacroDataSeq macro_seq_;
+  bool is_skip_lob_;
 };
 
 class ObLobMetaRowIterator : public ObIStoreRowIterator
@@ -417,6 +429,57 @@ public:
   virtual int64_t get_row_count() const { return 0; } // dummy one
   virtual int64_t get_next_block_start_seq() const { return -1; } // invalid block start seq.
   DECLARE_PURE_VIRTUAL_TO_STRING;
+};
+
+class ObVectorIndexSliceStore : public ObTabletSliceStore
+{
+public:
+  ObVectorIndexSliceStore()
+    : is_inited_(false), vec_allocator_("VecIdxSS", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      tmp_allocator_("VecIdxSSAR", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      row_cnt_(0), ctx_(), tablet_id_(),
+      vec_idx_param_(), vec_dim_(0), vector_vid_col_idx_(-1),
+      vector_col_idx_(-1), current_row_(), cur_row_pos_(0)
+  {}
+  virtual ~ObVectorIndexSliceStore() { reset(); }
+  int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
+      const ObString vec_idx_param,
+      const int64_t vec_dim,
+      const ObIArray<ObColumnSchemaItem> &col_array);
+  virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
+  virtual int close() override;
+  virtual int64_t get_row_count() const { return row_cnt_; }
+  void reset();
+  // vector index functions
+  int serialize_vector_index(
+    ObIAllocator *allocator,
+    transaction::ObTxDesc *tx_desc,
+    int64_t lob_inrow_threshold);
+  int get_next_vector_data_row(
+    const int64_t rowkey_cnt,
+    const int64_t column_cnt,
+    const int64_t snapshot_version,
+    blocksstable::ObDatumRow *&datum_row);
+  TO_STRING_KV(K(is_inited_), K(row_cnt_), K(ctx_), K(tablet_id_), K(vec_idx_param_), K(vec_dim_),
+               K(vector_vid_col_idx_), K(vector_col_idx_), K(vector_key_col_idx_), K(vector_data_col_idx_));
+private:
+  static const int64_t OB_VEC_IDX_SNAPSHOT_KEY_LENGTH = 256;
+  bool is_vec_idx_col_invalid(const int64_t column_cnt) const;
+public:
+  bool is_inited_;
+  ObArenaAllocator vec_allocator_;
+  ObArenaAllocator tmp_allocator_;
+  int64_t row_cnt_;
+  ObVecIdxSnapshotDataWriteCtx ctx_;
+  ObTabletID tablet_id_;
+  ObString vec_idx_param_;
+  int64_t vec_dim_;
+  int32_t vector_vid_col_idx_;
+  int32_t vector_col_idx_;
+  int32_t vector_key_col_idx_;
+  int32_t vector_data_col_idx_;
+  blocksstable::ObDatumRow current_row_;
+  int64_t cur_row_pos_;
 };
 
 class ObChunkSliceStore : public ObTabletSliceStore
@@ -579,6 +642,12 @@ public:
       const int64_t cg_idx,
       ObCOSliceWriter *cur_writer,
       ObIArray<sql::ObCompactStore *> &datum_stores);
+  int fill_vector_index_data(
+    const int64_t snapshot_version,
+    const ObStorageSchema *storage_schema,
+    const SCN &start_scn,
+    const int64_t lob_inrow_threshold,
+    ObInsertMonitor* insert_monitor);
   void set_row_offset(const int64_t row_offset) { row_offset_ = row_offset; }
   int64_t get_row_count() const { return nullptr == slice_store_ ? 0 : slice_store_->get_row_count(); }
   int64_t get_row_offset() const { return row_offset_; }
@@ -622,7 +691,9 @@ private:
       const int64_t dir_id,
       const int64_t parallelism,
       const ObStorageSchema *storage_schema,
-      const share::SCN &start_scn);
+      const share::SCN &start_scn,
+      const ObString vec_idx_param,
+      const int64_t vec_dim);
   int report_unique_key_dumplicated(
       const int ret_code,
       const uint64_t table_id,

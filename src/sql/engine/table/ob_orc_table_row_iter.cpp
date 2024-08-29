@@ -332,11 +332,12 @@ int ObOrcTableRowIterator::next_file()
                         "INVALID ORC TYPE" : row_reader_->getSelectedType().getSubtype(i)->toString();
                 int64_t pos = 0;
                 ObArrayWrap<char> buf;
+                ObArray<ObString> extended_type_info;
                 ObDatumMeta &meta = file_column_exprs_.at(i)->datum_meta_;
                 const char *ob_type = ob_obj_type_str(file_column_exprs_.at(i)->datum_meta_.type_);
                 if (OB_SUCCESS == buf.allocate_array(allocator_, 100)) {
                   ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_,
-                                  OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_);
+                                  OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_, extended_type_info);
                   if (pos < buf.count()) {
                     buf.at(pos++) = '\0';
                     ob_type = buf.get_data();

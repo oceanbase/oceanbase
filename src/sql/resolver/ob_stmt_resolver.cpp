@@ -126,7 +126,8 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
     int tmp_ret = ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, table_name);
     //因索引表存在前缀,故第1次检查table_name超长时,需要继续获取db信息以判断是否索引表
     if (OB_SUCCESS == tmp_ret || OB_ERR_TOO_LONG_IDENT == tmp_ret
-        || (session_info_->get_ddl_info().is_ddl() && OB_WRONG_TABLE_NAME == tmp_ret)) {
+        || ((session_info_->get_ddl_info().is_ddl() || session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility()) &&
+            OB_WRONG_TABLE_NAME == tmp_ret)) {
       if (NULL == db_node) {
         if (is_oracle_sys_view) {
           // ObString tmp(OB_ORA_SYS_SCHEMA_NAME); // right code

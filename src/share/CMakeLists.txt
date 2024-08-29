@@ -195,6 +195,8 @@ ob_set_subtarget(ob_share common
   ob_throttling_utils.cpp
   ob_storage_ha_diagnose_struct.cpp
   ob_storage_ha_diagnose_operator.cpp
+  ob_vec_index_builder_util.cpp
+  ob_domain_index_builder_util.cpp
   ob_service_name_proxy.cpp
   ob_compatibility_control.cpp
 )
@@ -571,6 +573,24 @@ ob_set_subtarget(ob_share vector
   vector/ob_fixed_length_base.cpp
   vector/ob_discrete_base.cpp
   vector/ob_continuous_base.cpp
+)
+
+ob_set_subtarget(ob_share vector_index
+  vector_index/ob_plugin_vector_index_adaptor.cpp
+  vector_index/ob_plugin_vector_index_util.cpp
+  vector_index/ob_plugin_vector_index_scheduler.cpp
+  vector_index/ob_plugin_vector_index_service.cpp
+  vector_index/ob_plugin_vector_index_serialize.cpp
+  vector_index/ob_plugin_vector_index_utils.cpp
+  vector_index/ob_vector_index_util.cpp
+)
+
+ob_set_subtarget(ob_share vector_type
+  vector_type/ob_vector_l2_distance.cpp
+  vector_type/ob_vector_ip_distance.cpp
+  vector_type/ob_vector_cosine_distance.cpp
+  vector_type/ob_vector_l1_distance.cpp
+  vector_type/ob_vector_norm.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

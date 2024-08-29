@@ -39,6 +39,7 @@ devdeps-hyperscan-5.4.2-152024071714.el8.x86_64.rpm
 devdeps-apache-orc-1.8.3-202024072510.el8.x86_64.rpm
 devdeps-odps-cpp-sdk-1.0.0-482024080517.el8.x86_64.rpm
 # devdeps-apache-orc-1.8.3-202024072510.el8.x86_64.rpm
+devdeps-vsag-1.0.0-102024082710.el8.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.x86_64.rpm

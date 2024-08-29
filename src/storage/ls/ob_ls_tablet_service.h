@@ -606,6 +606,11 @@ private:
       ObDMLRunningCtx &run_ctx,
       blocksstable::ObDatumRow *rows,
       int64_t row_count);
+  static int insert_vector_index_rows(
+      ObTabletHandle &data_tablet,
+      ObDMLRunningCtx &run_ctx,
+      blocksstable::ObDatumRow *rows,
+      int64_t row_count);
   static int extract_rowkey(
       const ObRelativeTable &table,
       const common::ObStoreRowkey &rowkey,

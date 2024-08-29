@@ -122,6 +122,9 @@ OB_INLINE int init_exprs_uniform_header(
   return ret;
 }
 
+int distribute_attrs_on_rich_format_columns(const int64_t row_count, const int64_t vec_offset,
+                                            sql::ObExpr &expr, sql::ObEvalCtx &eval_ctx);
+
 int init_exprs_new_format_header(
     const common::ObIArray<int32_t> &cols_projector,
     const sql::ObExprPtrIArray &exprs,

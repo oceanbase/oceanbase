@@ -2103,3 +2103,7 @@ DEF_BOOL(_enable_check_trigger_const_variables_assign, OB_TENANT_PARAMETER, "Tru
 DEF_BOOL(_enable_unit_gc_wait, OB_CLUSTER_PARAMETER, "True",
          "Used to control enable or disable the unit smooth gc feature, enabled by default.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
+        "[0,100)",
+        "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

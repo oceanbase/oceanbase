@@ -110,12 +110,14 @@ struct ObIndexMetaInfo
       is_geo_index_(false),
       is_fulltext_index_(false),
       is_multivalue_index_(false),
+      is_vector_index_(false),
       index_micro_block_count_(-1)
   { }
   virtual ~ObIndexMetaInfo()
   { }
   void assign(const ObIndexMetaInfo &index_meta_info);
   double get_micro_block_numbers() const;
+  inline bool is_domain_index() const { return is_geo_index_ || is_fulltext_index_ || is_multivalue_index_ || is_vector_index_;}
   TO_STRING_KV(K_(ref_table_id), K_(index_id), K_(index_micro_block_size),
                K_(index_part_count), K_(index_part_size),
                K_(index_column_count), K_(is_index_back),
@@ -132,6 +134,7 @@ struct ObIndexMetaInfo
   bool is_geo_index_; // whether is spatial index
   bool is_fulltext_index_; // is fulltext index
   bool is_multivalue_index_; // is multivalue index
+  bool is_vector_index_;   // is vector index
   int64_t index_micro_block_count_;  // micro block count from table static info
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);

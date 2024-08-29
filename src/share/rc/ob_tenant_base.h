@@ -225,6 +225,7 @@ class ObTenantErrsimEventMgr;
 class ObSharedMemAllocMgr;
 class ObIndexUsageInfoMgr;
 class ObResourceLimitCalculator;
+class ObPluginVectorIndexService;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -375,6 +376,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObStorageHADiagMgr*,                  \
       common::sqlclient::ObTenantDblinkKeeper*,      \
       storage::ObGlobalIteratorPool*,                \
+      share::ObPluginVectorIndexService*,            \
       common::ObRbMemMgr*,                           \
       storage::ObTenantRestoreInfoMgr*,              \
       sql::ObAuditLogger*,                           \

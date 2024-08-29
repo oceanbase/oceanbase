@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_AGGREGATE_FIRST_ROW_H_
 
 #include "iaggregate.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -156,7 +157,12 @@ public:
     if (OB_LIKELY(not_nulls.at(agg_col_id) && agg_cell_len != INT32_MAX)) {
       const char *payload = (const char *)(*reinterpret_cast<const int64_t *>(agg_cell));
       char *res_buf = nullptr;
-      if (is_discrete_vec(vec_tc)) {
+      if (agg_expr.is_nested_expr() && !is_uniform_format(res_vec->get_format())) {
+        ObString nested_data(agg_cell_len, payload);
+        if (OB_FAIL(ObArrayExprUtils::dispatch_array_attrs(ctx, const_cast<sql::ObExpr &>(agg_expr), nested_data, output_idx))) {
+          LOG_WARN("fail to do nested expr from rows", K(ret));
+        }
+      } else if (is_discrete_vec(vec_tc)) {
         // implicit aggr expr may be shared between operators and its
         // data is shallow copied for variable-length types while do backup/restore operations.
         // Hence child op's data is unexpected modified if deep copy happened here.
@@ -169,6 +175,9 @@ public:
       }
     } else {
       res_vec->set_null(output_idx);
+      if (agg_expr.is_nested_expr() && !is_uniform_format(res_vec->get_format())) {
+        ObArrayExprUtils::set_expr_attrs_null(agg_expr, ctx, output_idx);
+      }
     }
     return ret;
   }

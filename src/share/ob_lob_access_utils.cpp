@@ -1248,6 +1248,32 @@ int ObTextStringResult::init(int64_t res_len, ObIAllocator *allocator)
   return ret;
 }
 
+int ObTextStringResult::init(const int64_t res_len, ObString &res_buffer)
+{
+  int ret = OB_SUCCESS;
+  if (is_init_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Lob: textstring result init already", K(ret), K(*this));
+  } else if (!(ob_is_string_or_lob_type(type_) || is_lob_storage(type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Lob: unexpected expr result type for textstring result", K(ret), K(type_));
+  } else if (OB_FAIL(calc_buffer_len(res_len))) {
+    LOG_WARN("fail to calc buffer len", K(ret), K(res_len));
+  } else if (buff_len_ != res_buffer.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Lob: res buffer is not enough", K(ret), K(buff_len_), K(res_buffer));
+  } else {
+    buffer_ = res_buffer.ptr();
+    if (OB_FAIL(fill_temp_lob_header(res_len))) {
+      LOG_WARN("Lob: fill_temp_lob_header failed", K(ret), K(type_), K(res_len));
+    } else {
+      is_init_ = true;
+    }
+  }
+
+  return ret;
+}
+
 int ObTextStringResult::copy(const ObLobLocatorV2 *loc)
 {
   int ret = OB_SUCCESS;

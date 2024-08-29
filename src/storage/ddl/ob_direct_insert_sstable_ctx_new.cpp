@@ -1422,6 +1422,49 @@ int ObTabletDirectLoadMgr::open_sstable_slice(
   return ret;
 }
 
+int ObTabletDirectLoadMgr::prepare_schema_item_for_vec_idx_data(
+    const uint64_t tenant_id,
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema *table_schema,
+    const ObTableSchema *&data_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t , 1> col_ids;
+  uint64_t delta_buffer_table_tid;
+  const ObTableSchema *delta_buffer_table_schema = nullptr;
+  // get data schema
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_schema->get_data_table_id(), data_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_schema->get_data_table_id()));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(table_schema->get_data_table_id()));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_id(*data_table_schema, *table_schema, col_ids))) {
+    LOG_WARN("fail to get vector index id", K(ret));
+  } else if (col_ids.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid col id array", K(ret), K(col_ids));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(&schema_guard,
+                                                            *data_table_schema,
+                                                            INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
+                                                            col_ids.at(0),
+                                                            delta_buffer_table_tid))) {
+    LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(col_ids), KPC(data_table_schema));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, delta_buffer_table_tid, delta_buffer_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(delta_buffer_table_tid));
+  } else if (OB_ISNULL(delta_buffer_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(delta_buffer_table_tid));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*delta_buffer_table_schema, schema_item_.vec_dim_))) {
+    LOG_WARN("fail to get vector col dim", K(ret));
+  } else if (schema_item_.vec_dim_ == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(schema_item_.vec_dim_), KPC(delta_buffer_table_schema));
+  } else if (OB_FAIL(ob_write_string(sqc_build_ctx_.schema_allocator_, delta_buffer_table_schema->get_index_params(), schema_item_.vec_idx_param_))) {
+    LOG_WARN("fail to write string", K(ret), K(delta_buffer_table_schema->get_index_params()));
+  }
+  return ret;
+}
+
 int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id,
                                                          const int64_t parallel)
 {
@@ -1443,6 +1486,8 @@ int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id
       ObSchemaGetterGuard schema_guard;
       const ObDataStoreDesc &data_desc = sqc_build_ctx_.data_block_desc_.get_desc();
       const ObTableSchema *table_schema = nullptr;
+      const ObTableSchema *data_table_schema = nullptr;
+      bool is_vector_data_complement = false;
       if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("get tenant schema failed", K(ret), K(tenant_id), K(table_id));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
@@ -1454,11 +1499,21 @@ int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id
         LOG_WARN("prepare sstable index builder failed", K(ret), K(sqc_build_ctx_));
       } else if (OB_FAIL(table_schema->get_is_column_store(schema_item_.is_column_store_))) {
         LOG_WARN("fail to get is column store", K(ret));
+      } else if (FALSE_IT(is_vector_data_complement = table_schema->is_vec_index_snapshot_data_type())) {
+      } else if (is_vector_data_complement && OB_FAIL(prepare_schema_item_for_vec_idx_data(tenant_id,
+                                                                                           schema_guard,
+                                                                                           table_schema,
+                                                                                           data_table_schema))) {
+        LOG_WARN("fail to prepare vector index data", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else {
         schema_item_.is_index_table_ = table_schema->is_index_table();
         schema_item_.rowkey_column_num_ = table_schema->get_rowkey_column_num();
         schema_item_.is_unique_index_ = table_schema->is_unique_index();
-        schema_item_.lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
+        schema_item_.lob_inrow_threshold_ = is_vector_data_complement ?
+                                            data_table_schema->get_lob_inrow_threshold() :
+                                            table_schema->get_lob_inrow_threshold();
 
         if (OB_FAIL(column_items_.reserve(data_desc.get_col_desc_array().count()))) {
           LOG_WARN("reserve column schema array failed", K(ret), K(data_desc.get_col_desc_array().count()), K(column_items_));
@@ -1466,16 +1521,23 @@ int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id
           for (int64_t i = 0; OB_SUCC(ret) && i < data_desc.get_col_desc_array().count(); ++i) {
             const ObColDesc &col_desc = data_desc.get_col_desc_array().at(i);
             const schema::ObColumnSchemaV2 *column_schema = nullptr;
+            const schema::ObColumnSchemaV2 *data_column_schema = nullptr;
             ObColumnSchemaItem column_item;
             if (i >= table_schema->get_rowkey_column_num() && i < table_schema->get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()) {
               // skip multi version column, keep item invalid
             } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(col_desc.col_id_))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column schema is null", K(ret), K(i), K(data_desc.get_col_desc_array()), K(col_desc.col_id_));
+            } else if (is_vector_data_complement && OB_ISNULL(data_column_schema = data_table_schema->get_column_schema(col_desc.col_id_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("data column schema is null", K(ret), K(i), K(data_desc.get_col_desc_array()), K(col_desc.col_id_));
             } else {
               column_item.is_valid_ = true;
               column_item.col_type_ = column_schema->get_meta_type();
               column_item.col_accuracy_ = column_schema->get_accuracy();
+              if (is_vector_data_complement) {
+                column_item.column_flags_ = data_column_schema->get_column_flags();
+              }
             }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(column_items_.push_back(column_item))) {
@@ -2030,8 +2092,18 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
         LOG_WARN("invalid tablet handle", K(ret), KP(sqc_build_ctx_.storage_schema_));
       } else if (!need_fill_column_group_) {
         if (task_finish_count >= sqc_build_ctx_.task_total_cnt_) {
+          if (schema::is_vec_index_snapshot_data_type(sqc_build_ctx_.storage_schema_->get_index_type())) {
+            if (OB_FAIL(slice_writer->fill_vector_index_data(sqc_build_ctx_.build_param_.common_param_.read_snapshot_,
+                                                             sqc_build_ctx_.storage_schema_,
+                                                             start_scn,
+                                                             schema_item_.lob_inrow_threshold_,
+                                                             insert_monitor))) {
+              LOG_WARN("fail to fill vector index data", K(ret));
+            }
+          }
           // for ddl, write commit log when all slices ready.
-          if (OB_FAIL(close(execution_id, start_scn))) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(close(execution_id, start_scn))) {
             LOG_WARN("close sstable slice failed", K(ret), K(sqc_build_ctx_.build_param_));
           }
         }

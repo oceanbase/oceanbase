@@ -29,6 +29,7 @@ struct ObAlterTableArg;
 struct ObDropDatabaseArg;
 struct ObDropTableArg;
 struct ObDropIndexArg;
+struct ObRebuildIndexArg;
 struct ObTruncateTableArg;
 struct ObCreateIndexArg;
 struct ObIndexArg;
@@ -44,6 +45,11 @@ class ObTabletHandle;
 class ObLSHandle;
 struct ObStorageColumnGroupSchema;
 class ObCOSSTableV2;
+}
+namespace rootserver
+{
+class ObDDLTask;
+class ObDDLWaitTransEndCtx;
 }
 namespace share
 {
@@ -140,7 +146,8 @@ enum ObDDLTaskType
   MODIFY_NOT_NULL_COLUMN_STATE_TASK = 11,
   MAKE_RECOVER_RESTORE_TABLE_TASK_TAKE_EFFECT = 12,
   PARTITION_SPLIT_RECOVERY_TASK = 13,
-  PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14
+  PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
+  SWITCH_VEC_INDEX_NAME_TASK = 15,
 };
 
 enum ObDDLTaskStatus {
@@ -377,6 +384,11 @@ static inline bool is_complement_data_relying_on_dag(const ObDDLType type)
       || DDL_ADD_COLUMN_OFFLINE == type
       || DDL_COLUMN_REDEFINITION == type
       || DDL_TABLE_RESTORE == type;
+}
+
+static inline bool is_delete_lob_meta_row_relying_on_dag(const ObDDLType type)
+{
+  return DDL_DROP_VEC_INDEX == type;
 }
 
 static inline bool is_invalid_ddl_type(const ObDDLType type)
@@ -686,6 +698,7 @@ public:
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropDatabaseArg &drop_db_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropTableArg &drop_table_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropIndexArg &drop_index_arg);
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObRebuildIndexArg &rebuild_index_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObTruncateTableArg &trucnate_table_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObCreateIndexArg &create_index_arg);
 
@@ -781,6 +794,7 @@ public:
       case DDL_CREATE_INDEX:
       case DDL_CREATE_MLOG:
       case DDL_CREATE_FTS_INDEX:
+      case DDL_CREATE_VEC_INDEX:
       case DDL_CREATE_PARTITIONED_LOCAL_INDEX:
       case DDL_AUTO_SPLIT_BY_RANGE:
       case DDL_AUTO_SPLIT_NON_RANGE:
@@ -798,8 +812,33 @@ public:
   }
   static bool use_idempotent_mode(const int64_t data_format_version, const share::ObDDLType task_type);
   static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);
-
+  static int obtain_snapshot(
+      const share::ObDDLTaskStatus next_task_status,
+      const uint64_t table_id,
+      const uint64_t target_table_id,
+      int64_t &snapshot_version,
+      bool &snapshot_held,
+      rootserver::ObDDLTask* task);
+  static int release_snapshot(
+      rootserver::ObDDLTask* task,
+      const uint64_t table_id,
+      const uint64_t target_table_id,
+      const int64_t snapshot_version);
+  static int check_and_cancel_single_replica_dag(
+      rootserver::ObDDLTask* task,
+      const uint64_t table_id,
+      const uint64_t target_table_id,
+      common::hash::ObHashMap<common::ObTabletID, common::ObTabletID>& check_dag_exit_tablets_map,
+      int64_t &check_dag_exit_retry_cnt,
+      bool is_complement_data_dag,
+      bool &all_dag_exit);
 private:
+  static int hold_snapshot(
+      rootserver::ObDDLTask* task,
+      const uint64_t table_id,
+      const uint64_t target_table_id,
+      rootserver::ObRootService *root_service,
+      const int64_t snapshot_version);
   static int batch_check_tablet_checksum(
       const uint64_t tenant_id,
       const int64_t start_idx,

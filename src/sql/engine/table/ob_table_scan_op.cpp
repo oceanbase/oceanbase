@@ -243,6 +243,32 @@ ObDASScanCtDef *ObTableScanCtDef::get_lookup_ctdef()
   return lookup_ctdef;
 }
 
+ObDASScanCtDef *ObTableScanCtDef::get_rowkey_vid_ctdef()
+{
+  ObDASScanCtDef *rowkey_vid_ctdef = nullptr;
+  const ObDASBaseCtDef *attach_ctdef = attach_spec_.attach_ctdef_;
+  if (OB_NOT_NULL(attach_ctdef)) {
+    /**
+     * The iter tree of das scan with vid:
+     *
+     * CASE 1: Partition Scan Tree
+     *
+     *                DOC_ID_MERGE_ITER
+     *                 /              \
+     *               /                  \
+     * DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyVid)
+     *
+     *
+     *
+     **/
+    if (DAS_OP_VID_MERGE == attach_ctdef->op_type_) {
+      OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
+      rowkey_vid_ctdef = static_cast<ObDASScanCtDef *>(attach_ctdef->children_[1]);
+    }
+  }
+  return rowkey_vid_ctdef;
+}
+
 int ObTableScanCtDef::allocate_dppr_table_loc()
 {
   int ret = OB_SUCCESS;

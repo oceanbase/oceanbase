@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_less_than.h"
 #include "sql/engine/expr/ob_expr_div.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_estimate_ndv.h"
 #include "sql/engine/user_defined_function/ob_udf_util.h"
@@ -5446,7 +5447,8 @@ int ObAggregateProcessor::prepare_add_calc(
       break;
     }
     case ObFloatTC:
-    case ObDoubleTC: {
+    case ObDoubleTC:
+    case ObCollectionSQLTC: {
       ret = clone_aggr_cell(aggr_cell, first_value, false);
       break;
     }
@@ -5626,6 +5628,14 @@ int ObAggregateProcessor::add_calc(
       }
       break;
     }
+    case ObCollectionSQLTC: {
+      if (result_datum.is_null()) {
+        ret = clone_aggr_cell(aggr_cell, iter_value, false);
+      } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_))) {
+        LOG_WARN("failed to add vector", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(column_tc), K(ret));
@@ -5787,6 +5797,14 @@ int ObAggregateProcessor::sub_calc(
         LOG_WARN("ctx is null", K(ret));
       } else if (OB_FAIL(ctx->sub_func(result_datum, iter_value.get_decimal_int(), scale))) {
         LOG_WARN("fail to add decimal int", K(ret));
+      }
+      break;
+    }
+    case ObCollectionSQLTC: {
+      if (result_datum.is_null()) {
+        ret = clone_aggr_cell(aggr_cell, iter_value, false);
+      } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_, true /*negative*/))) {
+        LOG_WARN("failed to sub vector", K(ret));
       }
       break;
     }
@@ -6322,6 +6340,21 @@ int ObAggregateProcessor::add_calc_batch(
       } else if (OB_FAIL(ctx->add_batch_func[T::DECIMAL_INT_BATCH_FUNC_IDX](
           result_datum, this, aggr_cell, src, &selector, scale))) {
         LOG_WARN("fail to add batch decimal int", K(ret));
+      }
+      break;
+    }
+    case ObCollectionSQLTC: {
+      uint16_t i = 0; // row num in a batch
+      for (uint16_t it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
+        i = selector.get_batch_index(it);
+        if (src.at(i)->is_null()) {
+          continue;
+        }
+        if (result_datum.is_null()) {
+          ret = clone_aggr_cell(aggr_cell, *src.at(i), false);
+        } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, *src.at(i), aggr_alloc_))) {
+          LOG_WARN("failed to add vector", K(ret));
+        }
       }
       break;
     }

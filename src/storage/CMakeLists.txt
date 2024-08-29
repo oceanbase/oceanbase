@@ -572,6 +572,7 @@ ob_set_subtarget(ob_storage access
 ob_set_subtarget(ob_storage ddl
   ddl/ob_build_index_task.cpp
   ddl/ob_complement_data_task.cpp
+  ddl/ob_delete_lob_meta_row_task.cpp
   ddl/ob_ddl_clog.cpp
   ddl/ob_ddl_merge_task.cpp
   ddl/ob_ddl_redo_log_replayer.cpp
@@ -879,6 +880,13 @@ ob_set_subtarget(ob_storage mview
   mview/ob_mview_transaction.cpp
   mview/ob_mview_sched_job_utils.cpp
   mview/ob_major_mv_merge_info.cpp
+)
+
+ob_set_subtarget(ob_storage vector_index
+  vector_index/cmd/ob_vector_refresh_index_executor.cpp
+  vector_index/ob_vector_index_refresh.cpp
+  vector_index/ob_vector_refresh_idx_transaction.cpp
+  vector_index/ob_vector_index_sched_job_utils.cpp
 )
 
 ob_set_subtarget(ob_storage tenant_snapshot

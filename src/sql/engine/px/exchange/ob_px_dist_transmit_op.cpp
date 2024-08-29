@@ -910,7 +910,7 @@ int ObPxDistTransmitOp::add_batch_row_for_piece_msg_vec(ObChunkDatumStore &sampl
         if (cnt > 0) {
           ret = inner_get_next_batch(cnt);
           FOREACH_CNT_X(e, MY_SPEC.sampling_saving_row_, OB_SUCC(ret)) {
-            if (OB_FAIL((*e)->cast_to_uniform(brs_.size_, eval_ctx_))) {
+            if (OB_FAIL((*e)->cast_to_uniform(brs_.size_, eval_ctx_, brs_.skip_))) {
               LOG_WARN("cast expr to uniform failed", K(ret), KPC(*e), K_(eval_ctx));
             }
           }

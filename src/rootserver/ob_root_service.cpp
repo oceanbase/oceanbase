@@ -4186,6 +4186,12 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
         }
         break;
       }
+      case share::SWITCH_VEC_INDEX_NAME_TASK: {
+        if (OB_FAIL(ddl_service_.switch_index_name_and_status_for_vec_index_table(const_cast<ObAlterTableArg &>(arg)))) {
+          LOG_WARN("make recovert restore task visible failed", K(ret), K(arg));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown ddl task type", K(ret), K(arg.ddl_task_type_));
@@ -4674,15 +4680,15 @@ int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, 
   return ret;
 }
 
-int ObRootService::generate_aux_index_schema(
-    const ObGenerateAuxIndexSchemaArg &arg,
-    ObGenerateAuxIndexSchemaRes &result)
+int ObRootService::create_aux_index(
+    const ObCreateAuxIndexArg &arg,
+    ObCreateAuxIndexRes &result)
 {
   int ret = OB_SUCCESS;
   if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_service_.generate_aux_index_schema(arg, result))) {
+  } else if (OB_FAIL(ddl_service_.create_aux_index(arg, result))) {
     LOG_WARN("failed to generate aux index schema", K(ret), K(arg), K(result));
   }
   LOG_INFO("finish generate aux index schema", K(ret), K(arg), K(result), "ddl_event_info", ObDDLEventInfo());
@@ -4986,9 +4992,24 @@ int ObRootService::drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropInd
 
 int ObRootService::rebuild_vec_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(arg);
-  UNUSED(res);
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.rebuild_vec_index(arg, res))) {
+    LOG_WARN("ddl_service rebuild index failed", K(arg), K(ret));
+  }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "rebuild index",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", arg.index_table_id_,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish rebuild index ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -10452,6 +10473,8 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_tx_share_memory_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), MEMSTORE_LIMIT_PERCENTAGE)) {
       ret = check_memstore_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), OB_VECTOR_MEMORY_LIMIT_PERCENTAGE)) {
+      ret = check_vector_memory_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), DATA_DISK_WRITE_LIMIT_PERCENTAGE)) {
       ret = check_data_disk_write_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), DATA_DISK_USAGE_LIMIT_PERCENTAGE)) {
@@ -10602,6 +10625,15 @@ int ObRootService::check_memstore_limit_(obrpc::ObAdminSetConfigItem &item)
   } else {
     CHECK_CLUSTER_CONFIG_WITH_FUNC(ObConfigMemstoreLimitChecker, warn_log);
   }
+  return ret;
+}
+
+int ObRootService::check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "ob_vector_limit_percentage. "
+                         "It should be less than (85 - memstore_limit_percentage), check parameter 'memstore_limit_percentage' or '_memstore_limit_percentage'";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigVectorMemoryChecker, warn_log);
   return ret;
 }
 

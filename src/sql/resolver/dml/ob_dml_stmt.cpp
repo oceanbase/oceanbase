@@ -429,6 +429,7 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type)
       check_constraint_items_(),
       dblink_id_(OB_INVALID_ID),
       is_reverse_link_(false),
+      has_vec_approx_(false),
       match_exprs_()
 {
 }
@@ -541,6 +542,7 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     transpose_item_ = other.transpose_item_;
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
+    has_vec_approx_ = other.has_vec_approx_;
   }
   return ret;
 }
@@ -706,6 +708,7 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_fetch_with_ties_ = other.is_fetch_with_ties_;
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
+    has_vec_approx_ = other.has_vec_approx_;
   }
   if (OB_SUCC(ret)) {
     TransposeItem *tmp = NULL;
@@ -1835,10 +1838,15 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret));
       } else if (column_expr->is_virtual_generated_column() &&
-                 (!column_expr->is_fulltext_column() && !column_expr->is_multivalue_generated_column())) {
+                 (!column_expr->is_fulltext_column() &&
+                  !column_expr->is_multivalue_generated_column() &&
+                  !column_expr->is_vec_index_column())) {
         ObRawExpr *dependant_expr = static_cast<ObColumnRefRawExpr *>(
                                     column_expr)->get_dependant_expr();
-        if (OB_FAIL(dependant_expr->formalize(session_info))) {
+        if (dependant_expr == nullptr) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(dependant_expr->formalize(session_info))) {
           LOG_WARN("failed to formalize expr", K(ret));
         } else if (OB_FAIL(dependant_expr->pull_relation_id())) {
           LOG_WARN("pull expr relation ids failed", K(ret), K(*dependant_expr));
@@ -4639,6 +4647,20 @@ int ObDMLStmt::has_virtual_generated_column(int64_t table_id,
     }
   }
   return ret;
+}
+
+ObRawExpr* ObDMLStmt::get_first_vector_expr() const
+{
+  ObRawExpr* ret_expr = nullptr;
+  int order_size = get_order_item_size();
+  bool found = false;
+  for (int i = 0; i < order_size && OB_ISNULL(ret_expr); ++i) {
+    ObRawExpr *tmp_expr = get_order_item(i).expr_;
+    if (OB_NOT_NULL(tmp_expr) && tmp_expr->is_vector_sort_expr()) {
+      ret_expr = tmp_expr;
+    }
+  }
+  return ret_expr;
 }
 
 int ObDMLStmt::check_hint_table_matched_table_item(ObCollationType cs_type,

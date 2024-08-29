@@ -810,6 +810,13 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
           if (NULL != out_ctx->get_original_package_guard()) {
             exec_ctx.set_package_guard(out_ctx->get_original_package_guard());
           }
+          if (NULL != out_ctx->get_physical_plan_ctx()) {
+            ObSubSchemaCtx & subschema_ctx = out_ctx->get_physical_plan_ctx()->get_subschema_ctx();
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(exec_ctx.get_physical_plan_ctx()->get_subschema_ctx().assgin(subschema_ctx))) {
+              LOG_WARN("failed to assgin subschema_ctx", K(tmp_ret));
+            }
+          }
         }
         void *frame_buf = NULL;
         ObPreCalcExprFrameInfo *pre_calc_frame = NULL;

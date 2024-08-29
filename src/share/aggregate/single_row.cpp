@@ -244,6 +244,15 @@ static int init_single_row_sum_agg(VecValueTypeClass in_tc, VecValueTypeClass ou
     }
     break;
   }
+  case VEC_TC_COLLECTION: {
+    if (out_tc != VEC_TC_COLLECTION) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      ret = init_agg_func<SingleRowAggregate<T_FUN_SUM, VEC_TC_COLLECTION, VEC_TC_COLLECTION>>(
+        agg_ctx, i, allocator, agg);
+    }
+    break;
+  }
   default: {
     ret = OB_ERR_UNEXPECTED;
     break;

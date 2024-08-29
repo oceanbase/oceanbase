@@ -693,6 +693,14 @@ const char *const OB_PARTITION_SHARDING_NONE = "NONE";
 const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
 const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
 
+// vector index search
+const char *const OB_VEC_VID_COLUMN_NAME = "__vid";
+const char *const OB_VEC_TYPE_COLUMN_NAME_PREFIX = "__type";
+const char *const OB_VEC_VECTOR_COLUMN_NAME_PREFIX = "__vector";
+const char *const OB_VEC_SCN_COLUMN_NAME_PREFIX = "__scn";
+const char *const OB_VEC_KEY_COLUMN_NAME_PREFIX = "__key";
+const char *const OB_VEC_DATA_COLUMN_NAME_PREFIX = "__data";
+
 // fulltext search
 const char *const OB_DOC_ID_COLUMN_NAME = "__doc_id";
 const char *const OB_WORD_SEGMENT_COLUMN_NAME_PREFIX = "__word_segment";

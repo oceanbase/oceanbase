@@ -164,6 +164,8 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("Table not exist", K(MY_SPEC.plan_->get_ddl_table_id()), K(ret));
+  } else if (OB_FALSE_IT(is_vec_gen_vid_ = table_schema->is_vec_rowkey_vid_type())) {
+  } else if (OB_FALSE_IT(is_vec_data_complement_ = table_schema->is_vec_index_snapshot_data_type())) {
   } else if (need_count_rows() && OB_FAIL(get_all_rows_and_count())) {
     LOG_WARN("fail to get all rows and count", K(ret));
   } else {
@@ -175,6 +177,8 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
     if (OB_ISNULL(ctx_.get_physical_plan_ctx()) || OB_ISNULL(phy_plan = ctx_.get_physical_plan_ctx()->get_phy_plan())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get phy_plan failed", K(ret), KP(ctx_.get_physical_plan_ctx()), KP(phy_plan));
+    } else if (table_schema->is_vec_delta_buffer_type() || table_schema->is_vec_index_id_type()) {
+      all_slices_empty = true;
     } else if (OB_FAIL(get_next_row_with_cache())) {// get one row first for calc part_id
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail get next row from child", K(ret));
@@ -227,7 +231,8 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
                                 notify_tablet_id,
                                 table_schema->get_rowkey_column_num(),
                                 snapshot_version_,
-                                slice_info.context_id_, parallel_idx))) {
+                                slice_info.context_id_, parallel_idx,
+                                is_vec_data_complement_))) {
           LOG_WARN("init failed", K(ret));
         } else if (OB_FAIL(tenant_direct_load_mgr->fill_sstable_slice(slice_info,
                                                               &row_iter,
@@ -299,7 +304,11 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
           break;
         }
       }
-      if (OB_ISNULL(auto_inc_expr)) {
+      if (OB_SUCC(ret) && is_vec_gen_vid_ && child_expr.count() > 0) {
+        auto_inc_expr = child_expr.at(child_expr.count() - 1);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(auto_inc_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cannot find tablet autoinc expr", K(child_->get_spec().output_));
       } else if (curr_tablet_idx_ < 0 || curr_tablet_idx_ >= tablet_seq_caches_.count()) {
@@ -316,7 +325,13 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
 
       if (OB_SUCC(ret)) {
         ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx_);
-        datum.set_uint(next_autoinc_val);
+        ObTabletID tablet_id = tablet_seq_caches_.at(curr_tablet_idx_).tablet_id_;
+        if (is_vec_gen_vid_) {
+          // TODO @lhd make vid into struct
+          datum.set_uint(next_autoinc_val);
+        } else {
+          datum.set_uint(next_autoinc_val);
+        }
         auto_inc_expr->set_evaluated_projected(eval_ctx_);
       }
     }

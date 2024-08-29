@@ -255,7 +255,8 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                                                               routine_info->get_ret_type()->get_length(),
                                                               routine_info->get_ret_type()->get_precision(),
                                                               routine_info->get_ret_type()->get_scale(),
-                                                              routine_info->get_ret_type()->get_collation_type()))) {
+                                                              routine_info->get_ret_type()->get_collation_type(),
+                                                              *routine_info->get_ret_type_info()))) {
                           SHARE_SCHEMA_LOG(WARN, "fail to get data type str with coll", KPC(routine_info->get_ret_type()));
                         }
                       } else {

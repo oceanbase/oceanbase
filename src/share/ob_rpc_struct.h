@@ -2003,6 +2003,73 @@ public:
   share::ObTaskId trace_id_;
 };
 
+struct ObVectorIndexRebuildArg final : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObVectorIndexRebuildArg()
+    : ObDDLArg(),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      data_table_id_(OB_INVALID_ID),
+      index_id_table_id_(OB_INVALID_ID),
+      session_id_(OB_INVALID_ID),
+      sql_mode_(0),
+      tz_info_(),
+      tz_info_wrap_(),
+      nls_formats_()
+  {
+  }
+  ~ObVectorIndexRebuildArg() = default;
+  bool is_valid() const;
+  void reset();
+  int assign(const ObVectorIndexRebuildArg &other);
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
+                       K_(tenant_id),
+                       K_(data_table_id),
+                       K_(index_id_table_id),
+                       K_(session_id),
+                       K_(sql_mode),
+                       K_(tz_info),
+                       K_(tz_info_wrap),
+                       "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+public:
+  uint64_t tenant_id_;
+  uint64_t data_table_id_;
+  uint64_t index_id_table_id_;
+  uint64_t session_id_;
+  ObSQLMode sql_mode_;
+
+  common::ObArenaAllocator allocator_;
+  common::ObTimeZoneInfo tz_info_;
+  common::ObTimeZoneInfoWrap tz_info_wrap_;
+  common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+};
+
+struct ObVectorIndexRebuildRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObVectorIndexRebuildRes() : task_id_(0), trace_id_() {}
+  ~ObVectorIndexRebuildRes() = default;
+  void reset()
+  {
+    task_id_ = 0;
+    trace_id_.reset();
+  }
+  int assign(const ObVectorIndexRebuildRes &other)
+  {
+    if (this != &other) {
+      task_id_ = other.task_id_;
+      trace_id_ = other.trace_id_;
+    }
+    return OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(task_id), K_(trace_id));
+public:
+  int64_t task_id_;
+  share::ObTaskId trace_id_;
+};
+
 struct ObMViewCompleteRefreshArg final : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -2720,6 +2787,7 @@ public:
   DECLARE_VIRTUAL_TO_STRING;
   inline bool is_spatial_index() const { return ObSimpleTableSchemaV2::is_spatial_index(index_type_); }
   inline bool is_multivalue_index() const { return is_multivalue_index_aux(index_type_); }
+  inline bool is_vec_index() const { return ObSimpleTableSchemaV2::is_vec_index(index_type_); }
 
 //todo @qilu:only for each_cg now, when support customized cg ,refine this
   typedef common::ObSEArray<uint64_t, common::DEFAULT_CUSTOMIZED_CG_NUM> ObCGColumnList;
@@ -2780,22 +2848,22 @@ public:
   bool is_rebuild_index_;
 };
 
-struct ObGenerateAuxIndexSchemaArg : public ObDDLArg
+struct ObCreateAuxIndexArg : public ObDDLArg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObGenerateAuxIndexSchemaArg()
+  ObCreateAuxIndexArg()
     : tenant_id_(OB_INVALID_TENANT_ID),
       data_table_id_(OB_INVALID_ID)
   {}
-  ~ObGenerateAuxIndexSchemaArg() {}
+  ~ObCreateAuxIndexArg() {}
   bool is_valid() const
   {
     return tenant_id_ != OB_INVALID_TENANT_ID &&
-           data_table_id_ != OB_INVALID_ID&&
+           data_table_id_ != OB_INVALID_ID &&
            create_index_arg_.is_valid();
   }
-  int assign(const ObGenerateAuxIndexSchemaArg &other);
+  int assign(const ObCreateAuxIndexArg &other);
   void reset()
   {
     tenant_id_ = OB_INVALID_TENANT_ID;
@@ -2810,31 +2878,35 @@ public:
   ObCreateIndexArg create_index_arg_;
 };
 
-struct ObGenerateAuxIndexSchemaRes final
+struct ObCreateAuxIndexRes final
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObGenerateAuxIndexSchemaRes()
+  ObCreateAuxIndexRes()
     : aux_table_id_(OB_INVALID_ID),
+      ddl_task_id_(OB_INVALID_ID),
       schema_generated_(false)
   {}
-  ~ObGenerateAuxIndexSchemaRes() {}
-  int assign(const ObGenerateAuxIndexSchemaRes &other)
+  ~ObCreateAuxIndexRes() {}
+  int assign(const ObCreateAuxIndexRes &other)
   {
     int ret = OB_SUCCESS;
     aux_table_id_ = other.aux_table_id_;
+    ddl_task_id_ = other.ddl_task_id_;
     schema_generated_ = other.schema_generated_;
     return ret;
   }
   void reset()
   {
     aux_table_id_ = OB_INVALID_ID;
+    ddl_task_id_ = OB_INVALID_ID;
     schema_generated_ = false;
   }
-  TO_STRING_KV(K(aux_table_id_), K(schema_generated_));
+  TO_STRING_KV(K(aux_table_id_), K(ddl_task_id_), K(schema_generated_));
 
 public:
   uint64_t aux_table_id_;
+  int64_t ddl_task_id_;
   bool schema_generated_;
 };
 

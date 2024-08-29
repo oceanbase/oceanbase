@@ -73,7 +73,9 @@ public:
       count_rows_finish_(false),
       is_all_partition_finished_(false),
       curr_part_idx_(0),
-      snapshot_version_(0)
+      snapshot_version_(0),
+      is_vec_data_complement_(false),
+      is_vec_gen_vid_(false)
   {}
   virtual ~ObPxMultiPartSSTableInsertOp() { destroy(); }
   const ObPxMultiPartSSTableInsertSpec &get_spec() const;
@@ -101,7 +103,7 @@ private:
 private:
   int get_all_rows_and_count();
   int create_tablet_store(common::ObTabletID &tablet_id, ObChunkDatumStore *&tablet_store);
-  bool need_count_rows() const { return MY_SPEC.regenerate_heap_table_pk_ && !count_rows_finish_; }      
+  bool need_count_rows() const { return (MY_SPEC.regenerate_heap_table_pk_ || is_vec_gen_vid_) && !count_rows_finish_; }
   int get_next_tablet_id(common::ObTabletID &tablet_id);
 private:
   friend class storage::ObSSTableInsertRowIterator;
@@ -118,6 +120,9 @@ private:
   bool is_all_partition_finished_;
   int64_t curr_part_idx_;
   int64_t snapshot_version_; // ddl snapshot version.
+  // vector index
+  bool is_vec_data_complement_;
+  bool is_vec_gen_vid_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);
 };
 

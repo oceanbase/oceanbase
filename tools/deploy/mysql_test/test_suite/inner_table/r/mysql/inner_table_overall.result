@@ -762,6 +762,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12487	__all_virtual_nic_info	2	201001	1
 12488	__all_virtual_scheduler_job_run_detail_v2	2	201001	1
 12490	__all_virtual_spatial_reference_systems	2	201001	1
+12496	__all_virtual_vector_index_info	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1

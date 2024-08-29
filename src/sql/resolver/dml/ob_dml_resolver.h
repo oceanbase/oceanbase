@@ -383,6 +383,7 @@ protected:
                                 ObDMLStmt *stmt = NULL);
   int adjust_values_desc_position(ObInsertTableInfo& table_info,
                                   ObIArray<int64_t> &value_idxs);
+  int generate_subschema_id(ObColumnRefRawExpr &col_expr);
 public:
   virtual int resolve_table(const ParseNode &parse_tree, TableItem *&table_item);
 protected:
@@ -436,6 +437,7 @@ protected:
   int resolve_where_clause(const ParseNode *node);
   int resolve_order_clause(const ParseNode *node, bool is_for_set_query = false);
   int resolve_limit_clause(const ParseNode *node, bool disable_offset = false);
+  int resolve_approx_clause(const ParseNode *approx_node);
   int resolve_into_clause(const ParseNode *node);
   int resolve_hints(const ParseNode *node);
   int resolve_outline_data_hints();
@@ -476,6 +478,11 @@ protected:
       const uint64_t index_tid,
       const ObTableSchema *table_schema,
       ObRawExpr *&doc_id_expr);
+  int fill_vec_id_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const ObTableSchema *table_schema,
+    ObRawExpr *&vec_id_expr);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
   virtual int resolve_inlist_info(common::ObIArray<ObInListInfo> &inlist_infos);
@@ -1058,6 +1065,9 @@ protected:
       const TableItem &table_item,
       TableItem *rowkey_doc_table,
       common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
+  int check_vec_vid_need_column_ref_expr(
+      ObDMLStmt &stmt,
+      bool &need_column_ref_expr);
 protected:
   ObStmtScope current_scope_;
   int32_t current_level_;

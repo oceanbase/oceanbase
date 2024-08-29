@@ -572,6 +572,7 @@ private:
   int eval_float(const common::ObDatum &datum, const int32_t datum_offset);
   int eval_double(const common::ObDatum &datum, const int32_t datum_offset);
   int eval_number(const common::ObDatum &datum, const int32_t datum_offset);
+  int eval_vector(const common::ObDatum &datum, const int32_t datum_offset);
   template<typename RES_T>
   int eval_number_decimal_int(const common::ObDatum &datum, const int32_t datum_offset);
   int init_eval_skip_index_func_for_decimal();
@@ -586,6 +587,7 @@ private:
   int eval_float_batch(const common::ObDatum *datums, const int64_t count);
   int eval_double_batch(const common::ObDatum *datums, const int64_t count);
   int eval_number_batch(const common::ObDatum *datums, const int64_t count);
+  int eval_vector_batch(const common::ObDatum *datums, const int64_t count);
   template<typename RES_T, typename CALC_T, typename ARG_T>
   int eval_decimal_int_batch(const common::ObDatum *datums, const int64_t count);
   template<typename CALC_T, typename ARG_T>
@@ -609,6 +611,7 @@ private:
   int copy_float(const ObDatum &datum, ObDatum &result_datum);
   int copy_double(const ObDatum &datum, ObDatum &result_datum);
   int copy_number(const ObDatum &datum, ObDatum &result_datum);
+  int copy_vector(const ObDatum &datum, ObDatum &result_datum);
   template<typename RES_T, typename ARG_T>
   int copy_decimal_int(const ObDatum &datum, ObDatum &result_datum);
   template<typename ARG_T>
@@ -640,6 +643,7 @@ private:
   blocksstable::ObStorageDatum cast_datum_;
   char *sum_temp_buffer_;
   char *cast_temp_buffer_;
+  common::ObArenaAllocator datum_allocator_;
 };
 
 // mysql compatibility, select a,count(a), output first value of a

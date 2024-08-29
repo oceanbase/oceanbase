@@ -42,6 +42,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_delete_op.cpp
   das/ob_das_dml_ctx_define.cpp
   das/ob_domain_index_lookup_op.cpp
+  das/ob_vector_index_lookup_op.cpp
   das/ob_das_extra_data.cpp
   das/ob_das_factory.cpp
   das/ob_das_insert_op.cpp
@@ -58,6 +59,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_id_rpc.cpp
   das/ob_das_id_cache.cpp
   das/ob_das_ir_define.cpp
+  das/ob_das_vec_define.cpp
   das/ob_das_task_result.cpp
   das/ob_das_spatial_index_lookup_op.cpp
   das/ob_das_retry_ctrl.cpp
@@ -65,6 +67,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_domain_utils.cpp
   das/ob_das_attach_define.cpp
   das/ob_group_scan_iter.cpp
+  das/ob_das_dml_vec_iter.cpp
   das/iter/ob_das_iter.cpp
   das/iter/ob_das_merge_iter.cpp
   das/iter/ob_das_lookup_iter.cpp
@@ -76,6 +79,7 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_text_retrieval_iter.cpp
   das/iter/ob_das_text_retrieval_merge_iter.cpp
   das/iter/ob_das_iter_utils.cpp
+  das/iter/ob_das_vid_merge_iter.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
@@ -758,6 +762,16 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_inner_row_cmp_val.cpp
   engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
+  engine/expr/ob_expr_array.cpp
+  engine/expr/ob_expr_vector.cpp
+  engine/expr/ob_array_expr_utils.cpp
+  engine/expr/ob_array_cast.cpp
+  engine/expr/ob_expr_vec_vid.cpp
+  engine/expr/ob_expr_vec_type.cpp
+  engine/expr/ob_expr_vec_vector.cpp
+  engine/expr/ob_expr_vec_scn.cpp
+  engine/expr/ob_expr_vec_key.cpp
+  engine/expr/ob_expr_vec_data.cpp
   engine/expr/ob_expr_topn_filter.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
   engine/expr/ob_expr_rb_build_empty.cpp
@@ -770,6 +784,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_rb_calc.cpp
   engine/expr/ob_expr_rb_to_string.cpp
   engine/expr/ob_expr_rb_from_string.cpp
+  engine/expr/ob_expr_array_contains.cpp
   engine/expr/ob_expr_decode_trace_id.cpp
   engine/expr/ob_expr_split_part.cpp
 )

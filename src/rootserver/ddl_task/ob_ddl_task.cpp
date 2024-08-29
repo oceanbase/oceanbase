@@ -42,6 +42,7 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_ddl_sim_point.h"
+#include "rootserver/ddl_task/ob_rebuild_index_task.h"
 
 const bool OB_DDL_TASK_ENABLE_TRACING = false;
 
@@ -178,6 +179,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam()
     consumer_group_id_(0), parent_task_id_(0), task_id_(0), type_(DDL_INVALID), src_table_schema_(nullptr),
     dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr),
     aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr), aux_doc_word_schema_(nullptr),
+    vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
     tenant_data_version_(0), ddl_need_retry_at_executor_(false), is_pre_split_(false)
 {
 }
@@ -198,7 +200,9 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
   : sub_task_trace_id_(0), tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism), consumer_group_id_(consumer_group_id),
     parent_task_id_(parent_task_id), task_id_(task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
     ddl_arg_(ddl_arg), allocator_(allocator), aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr),
-    aux_doc_word_schema_(nullptr), ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false)
+    aux_doc_word_schema_(nullptr),
+    vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
+    ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false)
 {
 }
 
@@ -698,6 +702,26 @@ int ObFTSDDLChildTaskInfo::deep_copy_from_other(
 
 OB_SERIALIZE_MEMBER(ObFTSDDLChildTaskInfo, index_name_, table_id_);
 
+
+int ObVecIndexDDLChildTaskInfo::deep_copy_from_other(
+    const ObVecIndexDDLChildTaskInfo &other,
+    common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(ob_write_string(allocator, other.index_name_, index_name_))) {
+      LOG_WARN("fail to copy table name", K(ret), K(other));
+    } else {
+      table_id_ = other.table_id_;
+      task_id_ = other.task_id_;
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObVecIndexDDLChildTaskInfo, index_name_, table_id_);
+
+
 int ObDDLTask::cleanup()
 {
   int ret = cleanup_impl();
@@ -738,6 +762,13 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       break;
     case DDL_CREATE_FTS_INDEX:
       ddl_type_str =  "create fts index";
+      break;
+    case DDL_CREATE_VEC_INDEX:
+      ddl_type_str =  "create vec index";
+      break;
+    case DDL_REBUILD_INDEX:
+      ddl_type_str =  "rebuild vec index";
+      break;
     case DDL_CREATE_PARTITIONED_LOCAL_INDEX:
       ddl_type_str =  "create partitioned local index";
       break;
@@ -1009,6 +1040,16 @@ int64_t ObDDLTask::get_serialize_param_size() const
   return serialize_field.get_serialize_size();
 }
 
+bool ObDDLTask::is_ddl_task_can_be_cancelled() const
+{
+  bool can_be_cancelled = true;
+  if (task_type_ == ObDDLType::DDL_DROP_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_VEC_INDEX) {
+    can_be_cancelled = false;
+  }
+  return can_be_cancelled;
+}
+
 int ObDDLTask::convert_to_record(
     ObDDLTaskRecord &task_record,
     common::ObIAllocator &allocator)
@@ -1095,7 +1136,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   }
   if (is_cancel) {
     real_ret_code = (OB_SUCCESS == ret_code || error_need_retry) ? OB_CANCELED : ret_code;
-    FLOG_INFO("ddl task is canceled", K(task_id_), K(parent_task_id_), K(object_id_),
+    FLOG_INFO("ddl task is cancelled", K(task_type_), K(task_id_), K(parent_task_id_), K(object_id_),
         K(target_object_id_), K(ret_code), K(error_need_retry), K(real_ret_code));
   } else if (SUCCESS == old_status || error_need_retry) {
     LOG_INFO("error code found, but execute again", K(task_id_), K(parent_task_id_),
@@ -1318,6 +1359,12 @@ int ObDDLTask::check_ddl_task_is_cancel(const TraceId &trace_id, bool &is_cancel
     LOG_WARN("trace id is invalid", K(ret), K(trace_id));
   } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id, is_cancel))) {
     LOG_WARN("failed to check task is cancel", K(ret), K(trace_id));
+  }
+  if (OB_SUCC(ret) && is_cancel) {
+    if (!is_ddl_task_can_be_cancelled()) {
+      is_cancel = false;
+      LOG_INFO("ddl task can not be cancelled", K(task_type_), K(task_id_));
+    }
   }
   return ret;
 }
@@ -3133,37 +3180,116 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
   return ret;
 }
 
-int ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
-    common::ObISQLClient &proxy,
+int ObDDLTaskRecordOperator::check_rebuild_vec_index_task_exist(
     const uint64_t tenant_id,
     const uint64_t data_table_id,
     const uint64_t index_table_id,
+    common::ObISQLClient &proxy,
+    common::ObIAllocator &allocator,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  is_exist = false;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id ||
+                  OB_INVALID_ID == data_table_id ||
+                  OB_INVALID_ID == index_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(index_table_id), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT object_id, target_object_id, UNHEX(message) as message_unhex FROM %s WHERE ddl_type = %d",
+                                             OB_ALL_DDL_TASK_STATUS_TNAME, ObDDLType::DDL_REBUILD_INDEX))) {
+    LOG_WARN("assign sql string failed", K(ret));
+  } else {
+    LOG_DEBUG("check_rebuild_vec_index_task_exist target id", K(data_table_id), K(index_table_id));
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObDDLTaskRecord task_record;
+      ObString task_message;
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_INVALID_TENANT_ID == tenant_id) {
+        if (OB_FAIL(proxy.read(res, sql_string.ptr()))) {
+          LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+        }
+      } else {
+        if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
+          LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else {
+        while (OB_SUCC(ret) && !is_exist && OB_SUCC(result->next())) {
+          EXTRACT_INT_FIELD_MYSQL(*result, "object_id", task_record.object_id_, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "target_object_id", task_record.target_object_id_, uint64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message_unhex", task_message);
+          LOG_DEBUG("task record", K(task_record.object_id_), K(task_record.target_object_id_));
+          if (OB_SUCC(ret) && !task_message.empty()) {
+            uint64_t new_index_id = OB_INVALID_ID;
+            int64_t pos = 0;
+            SMART_VAR(rootserver::ObRebuildIndexTask, task) {
+              if (OB_FAIL(task.deserialize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
+                LOG_WARN("deserialize from msg failed", K(ret));
+              } else {
+                new_index_id = task.get_new_index_id();
+                LOG_DEBUG("new index id", K(new_index_id));
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if ((data_table_id == task_record.object_id_ && index_table_id == new_index_id) ||  // new or old index match
+                       (data_table_id == task_record.object_id_ && index_table_id == task_record.target_object_id_)) {
+              is_exist = true;
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
+    common::ObISQLClient &proxy,
+    const ObTableSchema &index_schema,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
     bool &has_index_task)
 {
   int ret = OB_SUCCESS;
   has_index_task = false;
+  const uint64_t index_table_id = index_schema.get_table_id();
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
     || OB_INVALID_ID == data_table_id
     || OB_INVALID_ID == index_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(data_table_id));
   } else {
-    ObSqlString sql_string;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND target_object_id = %lu AND ddl_type IN (%d, %d, %d, %d, %d)) as has",
-          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, index_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX, ObDDLType::DDL_DROP_INDEX,
-          ObDDLType::DDL_CREATE_MLOG, ObDDLType::DDL_DROP_MLOG))) {
-        LOG_WARN("assign sql string failed", K(ret));
-      } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
-        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get sql result", K(ret), KP(result));
-      } else if (OB_FAIL(result->next())) {
-        LOG_WARN("result next failed", K(ret), K(tenant_id), K(index_table_id));
-      } else {
-        EXTRACT_BOOL_FIELD_MYSQL(*result, "has", has_index_task);
+    if (index_schema.is_vec_index()) {
+      ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+      if (OB_FAIL(check_rebuild_vec_index_task_exist(tenant_id, data_table_id, index_table_id, proxy, allocator, has_index_task))) {
+        LOG_WARN("fail to check rebuild vec index task", K(ret), K(data_table_id), K(index_table_id));
+      }
+    } else {
+      ObSqlString sql_string;
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        sqlclient::ObMySQLResult *result = NULL;
+        if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND target_object_id = %lu AND ddl_type IN (%d, %d, %d, %d, %d)) as has",
+            OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, index_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX, ObDDLType::DDL_DROP_INDEX,
+            ObDDLType::DDL_CREATE_MLOG, ObDDLType::DDL_DROP_MLOG))) {
+          LOG_WARN("assign sql string failed", K(ret));
+        } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
+          LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get sql result", K(ret), KP(result));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("result next failed", K(ret), K(tenant_id), K(index_table_id));
+        } else {
+          EXTRACT_BOOL_FIELD_MYSQL(*result, "has", has_index_task);
+        }
       }
     }
   }

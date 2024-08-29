@@ -925,6 +925,16 @@ private:
 
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
+
+class ObConfigVectorMemoryChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigVectorMemoryChecker);
+};
+
 } // namespace common
 } // namespace oceanbase
 

@@ -83,6 +83,8 @@
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -3905,6 +3907,8 @@ int ObLSTabletService::insert_rows_to_tablet(
     } else {
       LOG_WARN("fail to check duplicate", K(ret));
     }
+  } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, rows, row_count))) {
+    LOG_WARN("failed to process vector index rows", K(ret));
   } else if (OB_FAIL(insert_lob_tablet_rows(tablet_handle, run_ctx, rows, row_count))) {
     LOG_WARN("failed to insert rows to lob tablet", K(ret));
   } else if (OB_FAIL(insert_tablet_rows(row_count, tablet_handle, run_ctx, rows, rows_info))) {
@@ -4135,6 +4139,64 @@ int ObLSTabletService::insert_lob_tablet_rows(
     for (int64_t k = 0; OB_SUCC(ret) && k < row_count; k++) {
       if (OB_FAIL(insert_lob_tablet_row(data_tablet, run_ctx, rows[k]))) {
         LOG_WARN("[STORAGE_LOB]failed to insert lob row.", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::insert_vector_index_rows(
+      ObTabletHandle &data_tablet,
+      ObDMLRunningCtx &run_ctx,
+      blocksstable::ObDatumRow *rows,
+      int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  if (run_ctx.dml_param_.table_param_->get_data_table().is_vector_delta_buffer()) {
+    ObString vec_idx_param = run_ctx.dml_param_.table_param_->get_data_table().get_vec_index_param();
+    int64_t vec_dim = run_ctx.dml_param_.table_param_->get_data_table().get_vec_dim();
+    const uint64_t vec_id_col_id = run_ctx.dml_param_.table_param_->get_data_table().get_vec_id_col_id();
+    const uint64_t vec_vector_col_id = run_ctx.dml_param_.table_param_->get_data_table().get_vec_vector_col_id();
+    const uint64_t vec_type_col_id = vec_vector_col_id - 1;
+    LOG_DEBUG("[vec index debug] show vector index params", K(vec_idx_param), K(vec_dim),
+              K(vec_id_col_id), K(vec_type_col_id), K(vec_vector_col_id));
+    // get vector col idx
+    int64_t vec_id_idx = OB_INVALID_INDEX;
+    int64_t type_idx = OB_INVALID_INDEX;
+    int64_t vector_idx = OB_INVALID_INDEX;
+    for (int64_t i = 0; i < run_ctx.dml_param_.table_param_->get_col_descs().count(); i++) {
+      uint64_t col_id = run_ctx.dml_param_.table_param_->get_col_descs().at(i).col_id_;
+      if (col_id == vec_id_col_id) {
+        vec_id_idx = i;
+      } else if (col_id == vec_type_col_id) {
+        type_idx = i;
+      } else if (col_id == vec_vector_col_id) {
+        vector_idx = i;
+      }
+    }
+    if (OB_UNLIKELY(vec_id_idx == OB_INVALID_INDEX || type_idx == OB_INVALID_INDEX || vector_idx == OB_INVALID_INDEX)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get vec index column idxs", K(ret), K(vec_id_col_id), K(vec_type_col_id), K(vec_vector_col_id),
+          K(vec_id_idx), K(type_idx), K(vector_idx));
+    } else {
+      ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+      ObPluginVectorIndexAdapterGuard adaptor_guard;
+      if (OB_FAIL(vec_index_service->acquire_adapter_guard(run_ctx.store_ctx_.ls_id_,
+                                                          run_ctx.relative_table_.get_tablet_id(),
+                                                          ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
+                                                          adaptor_guard,
+                                                          &vec_idx_param,
+                                                          vec_dim))) {
+        LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
+      } else if (OB_FAIL(adaptor_guard.get_adatper()->insert_rows(rows, vec_id_idx, type_idx, vector_idx, row_count))) {
+        LOG_WARN("fail to insert vector to adaptor", K(ret), KP(rows), K(row_count));
+      } else {
+        for (int64_t k = 0; OB_SUCC(ret) && k < row_count; k++) {
+          // process for each row or call batch
+          LOG_DEBUG("show all vector del buffer row for insert", K(rows[k].storage_datums_));
+          // set vector null for not to storage
+          rows[k].storage_datums_[vector_idx].set_null();
+        }
       }
     }
   }
@@ -4594,6 +4656,8 @@ int ObLSTabletService::update_row_to_tablet(
       LOG_WARN("fail to process old row", K(ret), K(col_descs),
           K(old_datum_row), K(data_tbl_rowkey_change));
     }
+  } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, &new_datum_row, 1))) {
+    LOG_WARN("failed to process vector index insert", K(ret), K(new_datum_row));
   } else if (OB_FAIL(process_lob_row(tablet_handle,
                                      run_ctx,
                                      update_idx,
@@ -5138,6 +5202,8 @@ int ObLSTabletService::insert_row_to_tablet(
   } else if (GCONF.enable_defensive_check()
       && OB_FAIL(check_new_row_legitimacy(run_ctx, datum_row))) {
     LOG_WARN("check new row legitimacy failed", K(ret), K(datum_row));
+  } else if (OB_FAIL(insert_vector_index_rows(tablet_handle, run_ctx, &datum_row, 1))) {
+    LOG_WARN("failed to process vector index rows", K(ret));
   } else if (OB_FAIL(insert_lob_tablet_row(tablet_handle, run_ctx, datum_row))) {
     LOG_WARN("failed to write lob tablets rows", K(ret));
   } else {

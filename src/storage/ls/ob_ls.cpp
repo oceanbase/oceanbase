@@ -1048,6 +1048,8 @@ int ObLS::register_user_service()
         LOG_WARN("fail to init tablet ttl manager", KR(ret));
       } else {
         REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+        // reuse ttl timer
+        REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
       }
     }
   }
@@ -1172,6 +1174,7 @@ void ObLS::unregister_user_service_()
     UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
+    UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
     UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
     tablet_ttl_mgr_.destroy();
   }

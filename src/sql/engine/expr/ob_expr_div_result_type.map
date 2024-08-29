@@ -2991,13 +2991,13 @@ static constexpr ObObjType DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* SmallIntType  */
     ObMaxType,         /* MediumIntType  */
     ObMaxType,         /* Int32Type  */
-    ObMaxType,         /* IntType  */
+    ObCollectionSQLType,         /* IntType  */
     ObMaxType,         /* UTinyIntType  */
     ObMaxType,         /* USmallIntType  */
     ObMaxType,         /* UMediumIntType  */
     ObMaxType,         /* UInt32Type  */
     ObMaxType,         /* UInt64Type  */
-    ObMaxType,         /* FloatType  */
+    ObCollectionSQLType,         /* FloatType  */
     ObMaxType,         /* DoubleType  */
     ObMaxType,         /* UFloatType  */
     ObMaxType,         /* UDoubleType  */

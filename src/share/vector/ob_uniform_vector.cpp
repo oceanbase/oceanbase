@@ -152,6 +152,7 @@ template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT64>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT128>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT256>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT512>>;
+template class ObUniformVector<true, VectorBasicOp<VEC_TC_COLLECTION>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_ROARINGBITMAP>>;
 
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_NULL>>;
@@ -186,6 +187,7 @@ template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT64>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT128>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT256>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT512>>;
+template class ObUniformVector<false, VectorBasicOp<VEC_TC_COLLECTION>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_ROARINGBITMAP>>;
 } // end namespace common
 } // end namespace oceanbase

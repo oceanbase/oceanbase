@@ -215,6 +215,23 @@ public:
     return ret;
   }
 
+  inline int get_nested_expr_vec(RuntimeContext &agg_ctx, const ObExpr *param_expr, ObIVector *&param_vec)
+  {
+    int ret = OB_SUCCESS;
+    ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
+    param_vec = param_expr->get_vector(eval_ctx);
+    VectorFormat fmt = param_expr->get_format(eval_ctx);
+    if (param_expr->is_nested_expr()) {
+      if (param_expr->attrs_cnt_ != 3) { // only vector type supported
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected attrs_cnt_", K(param_expr->attrs_cnt_));
+      } else if (fmt == common::VEC_DISCRETE || fmt == common::VEC_CONTINUOUS) {
+        param_vec = param_expr->attrs_[2]->get_vector(eval_ctx);
+      }
+    }
+    return ret;
+  }
+
   inline int add_batch_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
                                         RowSelector &row_sel, const int64_t batch_size,
                                         const int32_t agg_col_id) override
@@ -230,6 +247,7 @@ public:
     ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
     VectorFormat fmt = VEC_INVALID;
     ObExpr *param_expr = nullptr;
+    ObIVector *param_vec = nullptr;
     Derived *derived_this = static_cast<Derived *>(this);
 #ifndef NDEBUG
     int64_t mock_skip_data = 0;
@@ -253,27 +271,29 @@ public:
           SQL_LOG(WARN, "inner add one row failed", K(ret));
         }
       }
+    } else if (OB_FAIL(get_nested_expr_vec(agg_ctx, param_expr, param_vec))) {
+      SQL_LOG(WARN, "get nested expr vec failed", K(ret));
     } else {
       VecValueTypeClass vec_tc = param_expr->get_vec_value_tc();
       switch(fmt) {
       case common::VEC_UNIFORM: {
         ret = inner_add_for_multi_groups<ObUniformFormat<false>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_UNIFORM_CONST: {
         ret = inner_add_for_multi_groups<ObUniformFormat<true>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_DISCRETE: {
         ret = inner_add_for_multi_groups<ObDiscreteFormat>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_CONTINUOUS: {
         ret = inner_add_for_multi_groups<ObContinuousFormat>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_FIXED: {
@@ -446,17 +466,22 @@ protected:
   {
     int ret = OB_SUCCESS;
     ObEvalCtx &ctx = agg_ctx.eval_ctx_;
-    ColumnFmt &columns = *static_cast<ColumnFmt *>(param_expr.get_vector(ctx));
-    bool all_not_null = !columns.has_null();
+    ColumnFmt *columns = nullptr;
+    ObIVector *ivec = nullptr;
+    bool all_not_null = false;
     Derived &derived = *static_cast<Derived *>(this);
     void *tmp_res = derived.get_tmp_res(agg_ctx, agg_col_id, agg_cell);
     int64_t calc_info = derived.get_batch_calc_info(agg_ctx, agg_col_id, agg_cell);
-    if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)) {
+    if (OB_FAIL(get_nested_expr_vec(agg_ctx, &param_expr, ivec))) {
+      SQL_LOG(WARN, "get nested expr vec failed", K(ret));
+    } else if (FALSE_IT(columns = static_cast<ColumnFmt *>(ivec))) {
+    } else if (FALSE_IT(all_not_null = !columns->has_null())) {
+    } else if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)) {
       if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
         if (all_not_null) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (OB_FAIL(
-                  derived.add_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
+                  derived.add_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -466,7 +491,7 @@ protected:
           }
         } else {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-            if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res,
+            if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
                                                  calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
@@ -475,7 +500,7 @@ protected:
       } else if (!row_sel.is_empty()) {
         if (all_not_null) {
           for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-            if (OB_FAIL(derived.add_row(agg_ctx, columns, row_sel.index(i), agg_col_id, agg_cell,
+            if (OB_FAIL(derived.add_row(agg_ctx, *columns, row_sel.index(i), agg_col_id, agg_cell,
                                         tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
@@ -486,7 +511,7 @@ protected:
           }
         } else {
           for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-            if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, row_sel.index(i), agg_col_id,
+            if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, row_sel.index(i), agg_col_id,
                                                  agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
@@ -496,7 +521,7 @@ protected:
         if (all_not_null) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
-            } else if (OB_FAIL(derived.add_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res,
+            } else if (OB_FAIL(derived.add_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
                                                calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
@@ -508,7 +533,7 @@ protected:
         } else {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
-            } else if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, i, agg_col_id, agg_cell,
+            } else if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, i, agg_col_id, agg_cell,
                                                         tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
@@ -519,7 +544,7 @@ protected:
       if (row_sel.is_empty()) {
         if (bound.get_all_rows_active()) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-            ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, columns, i, agg_col_id, agg_cell,
+            ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, *columns, i, agg_col_id, agg_cell,
                                                        tmp_res, calc_info);
             if (OB_FAIL(ret)) { SQL_LOG(WARN, "add or sub row failed", K(ret)); }
           }
@@ -527,7 +552,7 @@ protected:
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
             } else {
-              ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, columns, i, agg_col_id, agg_cell,
+              ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, *columns, i, agg_col_id, agg_cell,
                                                          tmp_res, calc_info);
               if (OB_FAIL(ret)) { SQL_LOG(WARN, "add or sub row failed", K(ret)); }
             }
@@ -535,7 +560,7 @@ protected:
         }
       } else {
         for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-          ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, columns, i, agg_col_id, agg_cell,
+          ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, *columns, i, agg_col_id, agg_cell,
                                                      tmp_res, calc_info);
           if (OB_FAIL(ret)) { SQL_LOG(WARN, "add or sub row failed", K(ret)); }
         }
@@ -978,6 +1003,7 @@ inline constexpr bool is_var_len_agg_cell(VecValueTypeClass vec_tc)
          || vec_tc == VEC_TC_JSON
          || vec_tc == VEC_TC_GEO
          || vec_tc == VEC_TC_UDT
+         || vec_tc == VEC_TC_COLLECTION
          || vec_tc == VEC_TC_ROARINGBITMAP
          || vec_tc == VEC_TC_EXTEND;
 }

@@ -123,6 +123,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_ddl_task.cpp
   ddl_task/ob_drop_index_task.cpp
   ddl_task/ob_drop_fts_index_task.cpp
+  ddl_task/ob_drop_vec_index_task.cpp
   ddl_task/ob_drop_primary_key_task.cpp
   ddl_task/ob_index_build_task.cpp
   ddl_task/ob_build_mview_task.cpp
@@ -131,6 +132,8 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_table_redefinition_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
   ddl_task/ob_ddl_tablet_scheduler.cpp
+  ddl_task/ob_rebuild_index_task.cpp
+  ddl_task/ob_vec_index_build_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl

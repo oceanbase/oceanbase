@@ -974,6 +974,132 @@ OB_SERIALIZE_MEMBER((ObDropResourceUnitArg, ObDDLArg),
                     unit_name_,
                     if_exist_);
 
+bool ObVectorIndexRebuildArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != exec_tenant_id_ &&
+         OB_INVALID_TENANT_ID != tenant_id_ &&
+         OB_INVALID_ID != data_table_id_ &&
+         OB_INVALID_ID != index_id_table_id_;
+}
+
+void ObVectorIndexRebuildArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  data_table_id_ = OB_INVALID_ID;
+  index_id_table_id_ = OB_INVALID_ID;
+  session_id_ = OB_INVALID_ID;
+  sql_mode_ = 0;
+  tz_info_.reset();
+  tz_info_wrap_.reset();
+  for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
+    nls_formats_[i].reset();
+  }
+  allocator_.reset();
+  ObDDLArg::reset();
+}
+
+int ObVectorIndexRebuildArg::assign(const ObVectorIndexRebuildArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  data_table_id_ = other.data_table_id_;
+  index_id_table_id_ = other.index_id_table_id_;
+  session_id_ = other.session_id_;
+  sql_mode_ = other.sql_mode_;
+  if (OB_FAIL(tz_info_.assign(other.tz_info_))) {
+    LOG_WARN("fail to assign tz info", KR(ret), "tz_info", other.tz_info_);
+  } else if (OB_FAIL(tz_info_wrap_.deep_copy(other.tz_info_wrap_))) {
+    LOG_WARN("fail to deep copy tz info wrap", KR(ret), "tz_info_wrap", other.tz_info_wrap_);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
+    if (OB_FAIL(ob_write_string(allocator_, other.nls_formats_[i], nls_formats_[i]))) {
+      LOG_WARN("fail to deep copy nls format", KR(ret), K(i), "nls_format", other.nls_formats_[i]);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObVectorIndexRebuildArg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KPC(this));
+  } else {
+    BASE_SER((, ObDDLArg));
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                tenant_id_,
+                data_table_id_,
+                index_id_table_id_,
+                session_id_,
+                sql_mode_,
+                tz_info_,
+                tz_info_wrap_);
+    OB_UNIS_ENCODE_ARRAY(nls_formats_, ObNLSFormatEnum::NLS_MAX);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObVectorIndexRebuildArg)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  int64_t nls_formats_count = -1;
+  ObString nls_formats[ObNLSFormatEnum::NLS_MAX];
+  BASE_DESER((, ObDDLArg));
+  LST_DO_CODE(OB_UNIS_DECODE,
+              tenant_id_,
+              data_table_id_,
+              index_id_table_id_,
+              session_id_,
+              sql_mode_,
+              tz_info_,
+              tz_info_wrap_);
+  OB_UNIS_DECODE(nls_formats_count);
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(ObNLSFormatEnum::NLS_MAX != nls_formats_count)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nls formats count", KR(ret), K(nls_formats_count));
+    }
+    OB_UNIS_DECODE_ARRAY(nls_formats, nls_formats_count);
+    for (int64_t i = 0; OB_SUCC(ret) && i < nls_formats_count; i++) {
+      if (OB_FAIL(ob_write_string(allocator_, nls_formats[i], nls_formats_[i]))) {
+        LOG_WARN("fail to deep copy nls format", KR(ret), K(i), K(nls_formats[i]));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObVectorIndexRebuildArg)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KPC(this));
+  } else {
+    BASE_ADD_LEN((, ObDDLArg));
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                tenant_id_,
+                data_table_id_,
+                index_id_table_id_,
+                session_id_,
+                sql_mode_,
+                tz_info_,
+                tz_info_wrap_);
+    OB_UNIS_ADD_LEN_ARRAY(nls_formats_, ObNLSFormatEnum::NLS_MAX);
+  }
+  if (OB_FAIL(ret)) {
+    len = -1;
+  }
+  return len;
+}
+
+OB_SERIALIZE_MEMBER(ObVectorIndexRebuildRes,
+                    task_id_,
+                    trace_id_);
+
 bool ObMViewCompleteRefreshArg::is_valid() const
 {
   bool bret = OB_INVALID_TENANT_ID != exec_tenant_id_ &&
@@ -3271,6 +3397,7 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(local_session_var),
        K_(exist_all_column_group),
        K_(index_cgs),
+       K_(vidx_refresh_info),
        K_(is_rebuild_index));
   J_OBJ_END();
   return pos;
@@ -3299,9 +3426,10 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     exist_all_column_group_,
                     index_cgs_,
                     vidx_refresh_info_,
-                    is_rebuild_index_);
+                    is_rebuild_index_
+                    );
 
-int ObGenerateAuxIndexSchemaArg::assign(const ObGenerateAuxIndexSchemaArg &other)
+int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(create_index_arg_.assign(other.create_index_arg_))) {
@@ -3313,12 +3441,13 @@ int ObGenerateAuxIndexSchemaArg::assign(const ObGenerateAuxIndexSchemaArg &other
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObGenerateAuxIndexSchemaArg, ObDDLArg),
+OB_SERIALIZE_MEMBER((ObCreateAuxIndexArg, ObDDLArg),
                     tenant_id_,
                     data_table_id_,
                     create_index_arg_);
-OB_SERIALIZE_MEMBER(ObGenerateAuxIndexSchemaRes,
+OB_SERIALIZE_MEMBER(ObCreateAuxIndexRes,
                     aux_table_id_,
+                    ddl_task_id_,
                     schema_generated_);
 
 bool ObAlterIndexArg::is_valid() const

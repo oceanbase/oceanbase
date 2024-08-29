@@ -59,7 +59,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool enable_lob_locator_v2() const { return enable_locator_v2_; }
   TO_STRING_KV(K_(table_id), K_(ls_id), K_(snapshot_version), K_(rowid_version),
-               KPC(rowid_project_), K_(enable_locator_v2), K_(is_inited), K_(scan_flag));
+               KPC(rowid_project_), K_(enable_locator_v2), K_(is_inited), K_(scan_flag), K_(is_access_index));
 private:
   static const int64_t DEFAULT_LOCATOR_OBJ_ARRAY_SIZE = 8;
   static const int64_t LOB_FORCE_INROW_SIZE = 64 * 1024L; // 64K
@@ -96,6 +96,7 @@ private:
   bool enable_locator_v2_;
   bool is_inited_;
   ObQueryFlag scan_flag_;
+  bool is_access_index_;
 };
 
 } // namespace storage

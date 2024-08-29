@@ -1142,6 +1142,22 @@ void ObPxTransmitOp::fill_batch_ptrs_fixed(const int64_t *indexes)
   }
 }
 
+int ObPxTransmitOp::prepare_for_nested_expr()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); ++i) {
+    ObExpr *expr = get_spec().output_.at(i);
+    if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx_))) {
+      if (OB_FAIL(expr->nested_cast_to_uniform(brs_.size_, eval_ctx_, brs_.skip_))) {
+        LOG_WARN("failed to cast nested expr to uniform", K(ret));
+      } else {
+        params_.vectors_.at(i) = expr->get_vector(eval_ctx_);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes)
 {
   int ret = OB_SUCCESS;
@@ -1155,6 +1171,8 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(prepare_for_nested_expr())) {
+    LOG_WARN("failed to prepare for nested expr", K(ret));
   } else if (OB_FAIL(ObTempRowStore::DtlRowBlock::calc_rows_size(params_.vectors_, params_.meta_,
                                                     brs_, params_.row_size_array_))) {
     LOG_WARN("failed to calc size", K(ret));
@@ -1791,6 +1809,8 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
   }
   const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(prepare_for_nested_expr())) {
+    LOG_WARN("failed to prepare for nested expr", K(ret));
   } else {
     switch (data_msg_type_) {
       case dtl::ObDtlMsgType::PX_VECTOR_FIXED: {

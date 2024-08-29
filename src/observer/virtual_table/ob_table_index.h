@@ -85,6 +85,12 @@ private:
                                 common::ObObj *cells,
                                 int64_t col_count,
                                 const uint64_t column_id);
+  int add_vec_index_column(const common::ObString &database_name,
+                           const share::schema::ObTableSchema &table_schema,
+                           const share::schema::ObTableSchema *index_schema,
+                           common::ObObj *cells,
+                           int64_t col_count,
+                           const uint64_t column_id);
   int get_show_column_name(const share::schema::ObTableSchema &table_schema,
                            const share::schema::ObColumnSchemaV2 &column_schema,
                            common::ObString &column_name);
@@ -103,6 +109,7 @@ private:
   bool is_normal_end_;
   int64_t ft_dep_col_idx_;
   uint64_t min_data_version_;
+  int64_t vec_dep_col_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObTableIndex);
 };
 }

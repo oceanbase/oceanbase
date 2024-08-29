@@ -480,6 +480,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
   } else {
     // these functions should not be calculated first
     if (T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type()
+        || T_FUN_SYS_VEC_VID == expr.get_expr_type()
         || T_FUN_SYS_DOC_ID == expr.get_expr_type()
         || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == expr.get_expr_type()
         || T_FUN_SYS_SLEEP == expr.get_expr_type()

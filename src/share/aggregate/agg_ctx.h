@@ -321,6 +321,7 @@ struct RuntimeContext
       MEMCPY(agg_cell, src, data_len);
     }
   }
+
   void reuse()
   {
     agg_rows_.reuse();

@@ -17,6 +17,7 @@
 #include "share/vector/ob_discrete_format.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 #include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
@@ -334,6 +335,12 @@ int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
   return ret;
 }
 
+int distribute_attrs_on_rich_format_columns(const int64_t row_count, const int64_t vec_offset,
+                                            sql::ObExpr &expr, sql::ObEvalCtx &eval_ctx)
+{
+  return ObArrayExprUtils::batch_dispatch_array_attrs(eval_ctx, expr, vec_offset, row_count);
+}
+
 int cast_obj(const common::ObObjMeta &src_meta,
              common::ObIAllocator &cast_allocator,
              common::ObObj &obj)
@@ -430,7 +437,11 @@ int init_exprs_new_format_header(
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
     sql::ObExpr *expr = exprs.at(i);
-    if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
+    if (expr->is_nested_expr()) {
+      if (OB_FAIL(expr->init_vector(eval_ctx, VEC_DISCRETE, eval_ctx.max_batch_size_))) {
+        STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
+      }
+    } else if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
       STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
     }
   }

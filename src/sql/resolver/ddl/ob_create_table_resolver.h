@@ -152,6 +152,7 @@ private:
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
 
   uint64_t cur_udt_set_id_;
+  common::ObSEArray<uint64_t, 4> vec_index_col_ids_;
 };
 
 } // end namespace sql

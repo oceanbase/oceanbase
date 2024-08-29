@@ -49,6 +49,8 @@ int ObJoinVecOp::blank_row_batch(const ExprFixedArray &exprs, int64_t batch_size
       ObIVector *vec = exprs.at(col_idx)->get_vector(eval_ctx_);
       if (OB_UNLIKELY(VEC_UNIFORM_CONST == exprs.at(col_idx)->get_format(eval_ctx_))) {
         reinterpret_cast<ObUniformFormat<true> *>(vec)->set_null(0);
+      } else if (VEC_UNIFORM == exprs.at(col_idx)->get_format(eval_ctx_)) {
+        reinterpret_cast<ObUniformFormat<false> *>(vec)->set_all_null(batch_size);
       } else {
         reinterpret_cast<ObBitmapNullVectorBase *>(vec)->get_nulls()->set_all(batch_size);
         reinterpret_cast<ObBitmapNullVectorBase *>(vec)->set_has_null();

@@ -85,9 +85,10 @@ public:
       uint64_t is_insert_up_                    : 1;
       uint64_t is_table_api_                    : 1;
       uint64_t is_access_mlog_as_master_table_  : 1;
+      uint64_t is_access_vidx_as_master_table_  : 1;
       uint64_t is_update_partition_key_         : 1;
       uint64_t is_update_uk_                    : 1;
-      uint64_t reserved_                        : 56;
+      uint64_t reserved_                        : 55;
     };
   };
 protected:

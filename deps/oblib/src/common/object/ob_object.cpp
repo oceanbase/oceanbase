@@ -1311,7 +1311,8 @@ int ObObj::build_not_strict_default_value(int16_t precision)
     case ObTextType:
     case ObMediumTextType:
     case ObLongTextType:
-    case ObGeometryType:{
+    case ObGeometryType:
+    case ObCollectionSQLType:{
         ObString null_str;
         set_string(data_type, null_str);
         meta_.set_inrow();

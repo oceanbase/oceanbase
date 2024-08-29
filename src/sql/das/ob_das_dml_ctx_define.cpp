@@ -148,7 +148,8 @@ int ObDASDMLIterator::get_next_row(blocksstable::ObDatumRow *&datum_row)
   }
 
   if (OB_SUCC(ret)) {
-    if (das_ctdef_->table_param_.get_data_table().is_domain_index()) {
+    if (das_ctdef_->table_param_.get_data_table().is_domain_index()
+        && !das_ctdef_->is_access_vidx_as_master_table_) {
       if (OB_FAIL(get_next_domain_index_row(datum_row))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get next domain index row", K(ret), K(das_ctdef_->table_param_.get_data_table()));
@@ -196,7 +197,7 @@ int ObDASDMLIterator::get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &ro
         LOG_WARN("Failed to begin write iterator", K(ret));
       }
     }
-    if (OB_SUCC(ret) && is_domain_index) {
+    if (OB_SUCC(ret) && is_domain_index && !das_ctdef_->is_access_vidx_as_master_table_) {
       if (OB_FAIL(get_next_domain_index_rows(rows, row_count))) {
         LOG_WARN("fail to get next domain index rows", K(ret));
       }

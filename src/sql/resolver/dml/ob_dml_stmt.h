@@ -1075,6 +1075,8 @@ public:
   inline bool is_dblink_stmt() const { return OB_INVALID_ID != dblink_id_; }
   inline void set_reverse_link() { is_reverse_link_ = true; }
   inline bool is_reverse_link() const { return is_reverse_link_; }
+  inline void set_has_vec_approx(bool has_vec_approx) { has_vec_approx_ = has_vec_approx; }
+  inline bool has_vec_approx() const { return has_vec_approx_; }
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
   int64_t get_subquery_expr_size() const { return subquery_exprs_.count(); }
@@ -1146,7 +1148,8 @@ public:
                N_SUBQUERY_EXPRS, subquery_exprs_,
                N_USER_VARS, user_var_exprs_,
                K_(dblink_id),
-               K_(is_reverse_link));
+               K_(is_reverse_link),
+               K_(has_vec_approx));
 
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
   int check_if_contain_select_for_update(bool &is_contain_select_for_update) const;
@@ -1201,6 +1204,7 @@ public:
   int has_virtual_generated_column(int64_t table_id,
                                    bool &has_virtual_col,
                                    bool ignore_fulltext_gen_col = false) const;
+  ObRawExpr *get_first_vector_expr() const;
 
   struct TempTableInfo {
     TempTableInfo()
@@ -1335,6 +1339,7 @@ protected:
    */
   int64_t dblink_id_;
   bool is_reverse_link_;
+  bool has_vec_approx_;
   // fulltext search exprs
   common::ObSEArray<ObMatchFunRawExpr*, 2, common::ModulePageAllocator, true> match_exprs_;
 };

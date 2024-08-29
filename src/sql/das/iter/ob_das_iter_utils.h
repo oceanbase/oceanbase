@@ -22,6 +22,7 @@
 #include "sql/das/iter/ob_das_sort_iter.h"
 #include "sql/das/iter/ob_das_text_retrieval_iter.h"
 #include "sql/das/iter/ob_das_text_retrieval_merge_iter.h"
+#include "sql/das/iter/ob_das_vid_merge_iter.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 
 namespace oceanbase
@@ -77,6 +78,11 @@ private:
                                         common::ObIAllocator &alloc,
                                         const ObDASScanCtDef *scan_ctdef,
                                         ObDASScanRtDef *scan_rtdef,
+                                        const ObDASBaseCtDef *attach_ctdef,
+                                        ObDASBaseRtDef *attach_rtdef,
+                                        const ObDASRelatedTabletID &related_tablet_ids,
+                                        transaction::ObTxDesc *trans_desc,
+                                        transaction::ObTxReadSnapshot *snapshot,
                                         ObDASIter *&iter_tree);
 
   static int create_local_lookup_tree(ObTableScanParam &scan_param,
@@ -104,6 +110,15 @@ private:
                                         transaction::ObTxDesc *trans_desc,
                                         transaction::ObTxReadSnapshot *snapshot,
                                         ObDASIter *&iter_tree);
+
+  static int create_vid_scan_sub_tree(ObTableScanParam &scan_param,
+                                      common::ObIAllocator &alloc,
+                                      const ObDASVIdMergeCtDef *merge_ctdef,
+                                      ObDASVIdMergeRtDef *merge_rtdef,
+                                      const ObDASRelatedTabletID &related_tablet_ids,
+                                      transaction::ObTxDesc *trans_desc,
+                                      transaction::ObTxReadSnapshot *snapshot,
+                                      ObDASIter *&iter_tree);
 
   static int create_domain_lookup_sub_tree(const ObLSID &ls_id,
                                            common::ObIAllocator &alloc,

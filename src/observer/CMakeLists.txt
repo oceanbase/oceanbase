@@ -447,6 +447,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sys_variable_default_value.cpp
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
+  virtual_table/ob_all_virtual_vector_index_info.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
   virtual_table/ob_all_virtual_tmp_file.cpp
 )

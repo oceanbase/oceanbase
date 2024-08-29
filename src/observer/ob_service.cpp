@@ -55,6 +55,7 @@
 #include "ob_server_event_history_table_operator.h"
 #include "share/ob_alive_server_tracer.h"
 #include "storage/ddl/ob_complement_data_task.h" // complement data for drop column
+#include "storage/ddl/ob_delete_lob_meta_row_task.h" // delete lob meta row for drop vec index
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_build_index_task.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
@@ -2632,6 +2633,39 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         ret = OB_SIZE_OVERFLOW == saved_ret ? OB_EAGAIN : ret;
       }
       LOG_INFO("obs get rpc to build drop column dag", K(ret));
+    } else if (ObDDLType(arg.ddl_type_) == ObDDLType::DDL_DROP_VEC_INDEX) {
+      ObTenantDagScheduler *dag_scheduler = nullptr;
+      ObDeleteLobMetaRowDag *dag = nullptr;
+      if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag scheduler is null", K(ret));
+      } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
+        LOG_WARN("fail to alloc dag", K(ret));
+      } else if (OB_ISNULL(dag)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
+      } else if (OB_FAIL(dag->init(arg))) {
+        LOG_WARN("fail to init delete drop lob meta row dag", K(ret), K(arg));
+      } else if (OB_FAIL(dag->create_first_task())) {
+        LOG_WARN("create first task failed", K(ret));
+      } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
+        if (OB_EAGAIN == ret) {
+          LOG_WARN("delete lob meta row dag already exists, no need to schedule once again", KR(ret));
+          ret = OB_SUCCESS;
+        } else if (OB_SIZE_OVERFLOW == ret) {
+          LOG_WARN("dag is full", KR(ret));
+          ret = OB_EAGAIN;
+        } else {
+          LOG_WARN("fail to add dag to queue", KR(ret));
+        }
+      } else {
+        dag = nullptr;
+      }
+      if (OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(dag)) {
+        (void) dag->handle_init_failed_ret_code(ret);
+        dag_scheduler->free_dag(*dag);
+        dag = nullptr;
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported ddl type", K(ret), K(arg));
@@ -2649,6 +2683,47 @@ int ObService::check_and_cancel_ddl_complement_data_dag(const ObDDLBuildSingleRe
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_UNLIKELY(!is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ddl type", K(ret), K(arg));
+  } else {
+    ObTenantDagScheduler *dag_scheduler = nullptr;
+    ObComplementDataDag *dag = nullptr;
+    if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag scheduler is null", K(ret));
+    } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
+      LOG_WARN("fail to alloc dag", K(ret));
+    } else if (OB_ISNULL(dag)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
+    } else if (OB_FAIL(dag->init(arg))) {
+      LOG_WARN("fail to init complement data dag", K(ret), K(arg));
+    } else if (OB_FAIL(dag_scheduler->check_dag_exist(dag, is_dag_exist))) {
+      LOG_WARN("check dag exist failed", K(ret));
+    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag))) {
+      // sync to cancel ready dag only, not including running dag.
+      LOG_WARN("cancel dag failed", KP(dag), K(ret));
+    }
+    if (OB_NOT_NULL(dag)) {
+      (void) dag->handle_init_failed_ret_code(ret);
+      dag_scheduler->free_dag(*dag);
+      dag = nullptr;
+    }
+  }
+  if (REACH_COUNT_INTERVAL(1000L)) {
+    LOG_INFO("receive cancel ddl complement dag request", K(ret), K(is_dag_exist), K(arg));
+  }
+  return ret;
+}
+
+int ObService::check_and_cancel_delete_lob_meta_row_dag(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist)
+{
+  int ret = OB_SUCCESS;
+  is_dag_exist = true;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(arg));
+  } else if (OB_UNLIKELY(!is_delete_lob_meta_row_relying_on_dag(ObDDLType(arg.ddl_type_)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ddl type", K(ret), K(arg));
   } else {

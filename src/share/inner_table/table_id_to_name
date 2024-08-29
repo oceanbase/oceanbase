@@ -1137,6 +1137,7 @@
 # 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 12496: __all_virtual_vector_index_info
 # 12505: __all_virtual_temp_file
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
@@ -1749,6 +1750,8 @@
 # 15458: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 15459: ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT
 # 15459: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 15467: ALL_VIRTUAL_VECTOR_INDEX_INFO
+# 15467: __all_virtual_vector_index_info  # BASE_TABLE_NAME
 # 15485: ALL_VIRTUAL_TEMP_FILE
 # 15485: __all_virtual_temp_file  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT

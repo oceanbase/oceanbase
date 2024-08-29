@@ -195,6 +195,7 @@ private:
   int try_wait_channel();
   void init_data_msg_type(const common::ObIArray<ObExpr *> &output);
   void fill_batch_ptrs(const int64_t *indexes);
+  int prepare_for_nested_expr();
   void fill_batch_ptrs_fixed(const int64_t *indexes);
   dtl::ObDtlMsgType get_data_msg_type() const { return data_msg_type_; }
 protected:

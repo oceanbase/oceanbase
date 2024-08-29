@@ -41,6 +41,7 @@ public:
   static bool is_string_type(const ObObjType type);
   static bool is_json(const ObObjType type);
   static bool is_geometry(const ObObjType type);
+  static bool is_collection(const ObObjType type);
   static bool is_varying_len_char_type(const ObObjType type, const ObCollationType cs_type) {
     return (type == ObNVarchar2Type || (type == ObVarcharType && cs_type != CS_TYPE_BINARY));
   }

@@ -281,6 +281,7 @@ enum class ObLockOBJType : char
   OBJ_TYPE_DBMS_LOCK = 11,  // for dbms lock
   OBJ_TYPE_MATERIALIZED_VIEW = 12, // for materialized view operations
   OBJ_TYPE_MYSQL_LOCK_FUNC = 13,  // for mysql lock function
+  OBJ_TYPE_REFRESH_VECTOR_INDEX = 14,
   OBJ_TYPE_MAX
 };
 
@@ -341,6 +342,10 @@ int lock_obj_type_to_string(const ObLockOBJType obj_type,
   }
   case ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC: {
     strncpy(str, "MYSQL_LOCK_FUNC", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_REFRESH_VECTOR_INDEX: {
+    strncpy(str, "REFRESH_VECTOR_INDEX", str_len);
     break;
   }
   default: {

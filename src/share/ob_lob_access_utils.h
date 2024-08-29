@@ -252,6 +252,7 @@ public:
   // 1. all lobs created by this class should be temp lobs
   // 2. if has_lob_header_ is false, the text result should be 4.0 compatible
   int init(const int64_t res_len, ObIAllocator *allocator = NULL);
+  int init(const int64_t res_len, ObString &res_buffer);
 
   // copy existent loc to result
   int copy(const ObLobLocatorV2 *loc);
@@ -288,9 +289,10 @@ public:
   static int calc_inrow_templob_len(uint32 inrow_data_len, int64_t &templob_len);
   static int64_t calc_inrow_templob_locator_len();
   static int fill_inrow_templob_header(const int64_t inrow_data_len, char *buf, int64_t buf_len);
+  int calc_buffer_len(const int64_t res_len);
+  OB_INLINE int64_t get_buff_len() { return buff_len_; }
 
 protected:
-  int calc_buffer_len(const int64_t res_len);
   int fill_temp_lob_header(const int64_t res_len);
 
 protected:

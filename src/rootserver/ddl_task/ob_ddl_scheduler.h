@@ -377,6 +377,17 @@ private:
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
+  int create_build_vec_index_task(
+      common::ObISQLClient &proxy,
+      const share::schema::ObTableSchema *data_table_schema,
+      const share::schema::ObTableSchema *index_schema,
+      const int64_t parallelism,
+      const int64_t parent_task_id,
+      const int64_t consumer_group_id,
+      const obrpc::ObCreateIndexArg *create_index_arg,
+      const uint64_t tenant_data_version,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
   int create_constraint_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *table_schema,
@@ -454,6 +465,19 @@ private:
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
+  int create_rebuild_index_task(
+      common::ObISQLClient &proxy,
+      const share::ObDDLType &ddl_type,
+      const ObTableSchema *index_schema,
+      const int64_t parallelism,
+      const int64_t parent_task_id,
+      const int64_t consumer_group_id,
+      const int32_t sub_task_trace_id,
+      const obrpc::ObRebuildIndexArg *rebuild_index_arg,
+      const uint64_t tenant_data_version,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
+
   int create_drop_index_task(
       common::ObISQLClient &proxy,
       const share::ObDDLType &ddl_type,
@@ -473,6 +497,20 @@ private:
       const share::schema::ObTableSchema *rowkey_doc_schema,
       const share::schema::ObTableSchema *doc_rowkey_schema,
       const share::schema::ObTableSchema *doc_word_schema,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
+
+  int create_drop_vec_index_task(
+      common::ObISQLClient &proxy,
+      const share::schema::ObTableSchema *index_schema,
+      const int64_t schema_version,
+      const int64_t consumer_group_id,
+      const share::schema::ObTableSchema *vid_rowkey_schema_,
+      const share::schema::ObTableSchema *rowkey_vid_schema_,
+      const share::schema::ObTableSchema *delta_buffer_schema_,
+      const share::schema::ObTableSchema *index_snapshot_data_schema_,
+      const uint64_t tenant_data_version,
+      const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
@@ -503,6 +541,8 @@ private:
       ObDDLTaskRecord &task_record);
 
   int schedule_build_fts_index_task(
+    const ObDDLTaskRecord &task_record);
+  int schedule_build_vec_index_task(
       const ObDDLTaskRecord &task_record);
   int schedule_build_index_task(
       const ObDDLTaskRecord &task_record);
@@ -513,6 +553,8 @@ private:
   int schedule_column_redefinition_task(const ObDDLTaskRecord &task_record);
   int schedule_modify_autoinc_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_index_task(const ObDDLTaskRecord &task_record);
+  int schedule_drop_vec_index_task(const ObDDLTaskRecord &task_record);
+  int schedule_rebuild_index_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_fts_index_task(const ObDDLTaskRecord &task_record);
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
   int schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record);

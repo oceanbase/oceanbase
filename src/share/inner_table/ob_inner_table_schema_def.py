@@ -14721,7 +14721,41 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12493: __all_virtual_kv_group_commit_status
 # 12494: __all_virtual_session_sys_variable
 # 12495: __all_virtual_spm_evo_result
-# 12496: __all_virtual_vector_index_info
+def_table_schema(
+  owner = 'huhaosheng.hhs',
+  table_name     = '__all_virtual_vector_index_info',
+  table_id       = '12496',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('rowkey_vid_table_id', 'int'),
+    ('vid_rowkey_table_id', 'int'),
+    ('inc_index_table_id', 'int'),
+    ('vbitmap_table_id', 'int'),
+    ('snapshot_index_table_id', 'int'),
+    ('data_table_id', 'int'),
+    ('rowkey_vid_tablet_id', 'int'),
+    ('vid_rowkey_tablet_id', 'int'),
+    ('inc_index_tablet_id', 'int'),
+    ('vbitmap_tablet_id', 'int'),
+    ('snapshot_index_tablet_id', 'int'),
+    ('data_tablet_id', 'int'),
+    # memory usage, status..., logic_version
+    ('statistics', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
+    # sync snapshot...
+    ('sync_info', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 # 12497: __all_virtual_pkg_type
 # 12498: __all_virtual_pkg_type_attr
@@ -15271,6 +15305,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15478: __all_pkg_coll_type
 # 15479: __all_pkg_coll_type
 # 15480: __all_virtual_kv_client_info
+#
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15467', all_def_keywords['__all_virtual_vector_index_info'])))
 # 15481: __all_virtual_wr_sql_plan
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat

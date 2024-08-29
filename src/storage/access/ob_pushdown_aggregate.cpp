@@ -20,6 +20,7 @@
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -1975,7 +1976,8 @@ ObSumAggCell::ObSumAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllo
       copy_datum_func_(nullptr),
       cast_datum_(),
       sum_temp_buffer_(nullptr),
-      cast_temp_buffer_(nullptr)
+      cast_temp_buffer_(nullptr),
+      datum_allocator_("ObStorageAgg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
   agg_type_ = ObPDAggType::PD_SUM;
   result_datum_.set_null();
@@ -2004,6 +2006,7 @@ void ObSumAggCell::reset()
   }
   cast_datum_.reset();
   ObAggCell::reset();
+  datum_allocator_.reset();
 }
 
 void ObSumAggCell::reuse()
@@ -2016,6 +2019,7 @@ void ObSumAggCell::reuse()
   sum_use_int_flag_ = false;
   num_int_ = 0;
   // reset_aggregate_info();
+  datum_allocator_.reset();
 }
 
 void ObSumAggCell::clear_group_by_info()
@@ -2149,6 +2153,13 @@ int ObSumAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
       }
       case ObObjTypeClass::ObDecimalIntTC: {
         ret = ObSumAggCell::init_decimal_int_func();
+        break;
+      }
+      case ObObjTypeClass::ObCollectionSQLTC: {
+        eval_func_ = &ObSumAggCell::eval_vector;
+        eval_batch_func_ = &ObSumAggCell::eval_vector_batch;
+        copy_datum_func_ = &ObSumAggCell::copy_vector;
+        eval_skip_index_func_ = &ObSumAggCell::eval_vector;
         break;
       }
       default: {
@@ -2571,6 +2582,13 @@ int ObSumAggCell::copy_number(const ObDatum &datum, ObDatum &result_datum)
   return ret;
 }
 
+int ObSumAggCell::copy_vector(const ObDatum &datum, ObDatum &result_datum)
+{
+  int ret = OB_SUCCESS;
+  result_datum.set_string(datum.get_string());
+  return ret;
+}
+
 template<typename RES_T, typename ARG_T>
 int ObSumAggCell::copy_decimal_int(const ObDatum &datum, ObDatum &result_datum)
 {
@@ -2719,6 +2737,21 @@ int ObSumAggCell::eval_number(const common::ObDatum &datum, const int32_t datum_
     } else {
       result_datum.set_number(result_nmb);
     }
+  }
+  return ret;
+}
+
+int ObSumAggCell::eval_vector(const common::ObDatum &datum, const int32_t datum_offset)
+{
+  int ret = OB_SUCCESS;
+  common::ObDatum &result_datum = get_group_by_result_datum(datum_offset);
+  if (datum.is_null()) {
+  } else if (result_datum.is_null()) {
+    if (OB_FAIL(result_datum.deep_copy(datum, datum_allocator_))) {
+      LOG_WARN("fail to deep copy datum", K(ret));
+    }
+  } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, datum, datum_allocator_))){
+    LOG_WARN("fail to add vector", K(ret));
   }
   return ret;
 }
@@ -2895,6 +2928,17 @@ int ObSumAggCell::eval_number_batch(const common::ObDatum *datums, const int64_t
     result_datum_.set_number(result_nmb);
   }
   LOG_DEBUG("number result", K(result_nmb));
+  return ret;
+}
+
+int ObSumAggCell::eval_vector_batch(const common::ObDatum *datums, const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+    if (OB_FAIL(eval_vector(datums[i], -1))) {
+      LOG_WARN("Failed to eval float", K(ret));
+    }
+  }
   return ret;
 }
 

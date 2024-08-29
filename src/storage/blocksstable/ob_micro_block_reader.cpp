@@ -965,6 +965,7 @@ int ObMicroBlockReader::get_rows(
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
         const bool need_padding = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_fixed_len_char_type();
+        const bool need_dispatch_collection = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_collection_sql_type();
         if (need_padding) {
           if (OB_FAIL(storage::pad_on_rich_format_columns(
                       col_params.at(i)->get_accuracy(),
@@ -976,6 +977,9 @@ int ObMicroBlockReader::get_rows(
                       eval_ctx))) {
             LOG_WARN("Failed pad on rich format columns", K(ret), KPC(exprs.at(i)));
           }
+        } else if (need_dispatch_collection
+                   && OB_FAIL(storage::distribute_attrs_on_rich_format_columns(row_cap, vector_offset, *(exprs.at(i)), eval_ctx))) {
+          LOG_WARN("failed to dispatch collection cells", K(ret), K(i), K(row_cap), K(vector_offset));
         }
       }
     }

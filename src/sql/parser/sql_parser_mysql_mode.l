@@ -1463,7 +1463,7 @@ BEGIN(in_c_comment);
   ((ParseResult *)yyextra)->has_encount_comment_ = true;
 /* ignore */ }
 
-[-+&~|^/%*(),.:!{}] {
+[-+&~|^/%*(),.:!{}\[\]] {
   if (IS_FAST_PARAMETERIZE) {
     ParseResult *p = (ParseResult *)yyextra;
     // for 'select -   -1 from dual'

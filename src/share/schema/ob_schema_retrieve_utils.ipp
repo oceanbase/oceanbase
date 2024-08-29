@@ -1505,6 +1505,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         int64_t, true, true, 0);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_properties, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, index_params, table_schema, true, ignore_column_error, "");
     if (OB_SUCC(ret) && table_schema.is_materialized_view()) {
       bool skip_null_error = true;
       bool skip_column_error = true;
@@ -1621,7 +1623,7 @@ int ObSchemaRetrieveUtils::fill_column_schema(
       }
     }
 
-    if (OB_SUCC(ret) && column.is_enum_or_set()) {
+    if (OB_SUCC(ret) && (column.is_enum_or_set() || column.is_collection())) {
       ObString extend_type_info;
       EXTRACT_VARCHAR_FIELD_MYSQL(result, "extended_type_info", extend_type_info);
       int64_t pos = 0;

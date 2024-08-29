@@ -430,6 +430,12 @@ public:
 private:
   int prepare_schema_item_on_demand(const uint64_t table_id,
                                     const int64_t parallel);
+  int prepare_schema_item_for_vec_idx_data(
+      const uint64_t tenant_id,
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema *table_schema,
+      const ObTableSchema *&data_table_schema);
+
   void calc_cg_idx(const int64_t thread_cnt, const int64_t thread_id, int64_t &strat_idx, int64_t &end_idx);
   int fill_aggregated_column_group(
       const int64_t start_idx,

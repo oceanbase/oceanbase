@@ -136,14 +136,14 @@ int ObDDLLock::lock_for_add_drop_index(
 
 int ObDDLLock::unlock_for_add_drop_index(
     const ObTableSchema &data_table_schema,
-    const ObTableSchema &index_schema,
+    const uint64_t index_table_id,
+    const bool is_global_index,
     const ObTableLockOwnerID lock_owner,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = index_schema.get_tenant_id();
+  const uint64_t tenant_id = data_table_schema.get_tenant_id();
   const uint64_t data_table_id = data_table_schema.get_table_id();
-  const uint64_t index_table_id = index_schema.get_table_id();
   const int64_t timeout_us = DEFAULT_TIMEOUT;
   ObSEArray<ObTabletID, 1> data_tablet_ids;
   bool some_lock_not_exist = false;
@@ -157,8 +157,79 @@ int ObDDLLock::unlock_for_add_drop_index(
     LOG_WARN("failed to unlock data tablet", K(ret));
   } else if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, data_table_id, ROW_EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
     LOG_WARN("failed to unlock data table", K(ret));
-  } else if (!index_schema.is_storage_local_index_table()) {
+  }  else if (is_global_index) {
     if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, index_table_id, EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
+      LOG_WARN("failed to unlock index table", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLLock::lock_for_rebuild_index(
+    const share::schema::ObTableSchema &data_table_schema,
+    const uint64_t old_index_table_id,
+    const uint64_t new_index_table_id,
+    const bool is_global_index,
+    const transaction::tablelock::ObTableLockOwnerID lock_owner,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = data_table_schema.get_tenant_id();
+  const uint64_t data_table_id = data_table_schema.get_table_id();
+  const int64_t timeout_us = DEFAULT_TIMEOUT;
+  ObSEArray<ObTabletID, 1> data_tablet_ids;
+  ObInnerSQLConnection *iconn = nullptr;
+  if (data_table_schema.is_user_hidden_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lock for rebuild hidden table index", K(ret));
+  } else if (!need_lock(data_table_schema)) {
+    LOG_INFO("skip ddl lock", K(data_table_id));
+  } else if (OB_FAIL(data_table_schema.get_tablet_ids(data_tablet_ids))) {
+    LOG_WARN("failed to get data tablet ids", K(ret));
+  } else if (OB_FAIL(ObOnlineDDLLock::lock_table(tenant_id, data_table_id, ROW_EXCLUSIVE, lock_owner, timeout_us, trans))) {
+    LOG_WARN("failed to lock data table", K(ret));
+  } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets(tenant_id, data_tablet_ids, ROW_EXCLUSIVE, lock_owner, timeout_us, trans))) {
+    LOG_WARN("failed to lock data table tablet", K(ret));
+  } else if (OB_FAIL(do_table_lock(tenant_id, data_table_id, data_tablet_ids, ROW_SHARE, lock_owner, timeout_us, true/*is_lock*/, trans))) {
+    LOG_WARN("failed to lock data tablet", K(ret));
+  } else if (is_global_index) {
+    if (OB_FAIL(ObOnlineDDLLock::lock_table(tenant_id, old_index_table_id, EXCLUSIVE, lock_owner, timeout_us, trans))) {
+      LOG_WARN("failed to lock index table", K(ret));
+    } else if (OB_FAIL(ObOnlineDDLLock::lock_table(tenant_id, new_index_table_id, EXCLUSIVE, lock_owner, timeout_us, trans))) {
+      LOG_WARN("failed to lock index table", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLLock::unlock_for_rebuild_index(
+    const share::schema::ObTableSchema &data_table_schema,
+    const uint64_t old_index_table_id,
+    const uint64_t new_index_table_id,
+    const bool is_global_index,
+    const transaction::tablelock::ObTableLockOwnerID lock_owner,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = data_table_schema.get_tenant_id();
+  const uint64_t data_table_id = data_table_schema.get_table_id();
+  const int64_t timeout_us = DEFAULT_TIMEOUT;
+  ObSEArray<ObTabletID, 1> data_tablet_ids;
+  bool some_lock_not_exist = false;
+  if (!need_lock(data_table_schema) || data_table_schema.is_user_hidden_table()) {
+    LOG_INFO("skip ddl lock", K(data_table_id));
+  } else if (OB_FAIL(data_table_schema.get_tablet_ids(data_tablet_ids))) {
+    LOG_WARN("failed to get data tablet ids", K(ret));
+  } else if (OB_FAIL(do_table_lock(tenant_id, data_table_id, data_tablet_ids, ROW_SHARE, lock_owner, timeout_us, false/*is_lock*/, trans))) {
+    LOG_WARN("failed to unlock data tablet", K(ret));
+  } else if (OB_FAIL(ObOnlineDDLLock::unlock_tablets(tenant_id, data_tablet_ids, ROW_EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
+    LOG_WARN("failed to unlock data tablet", K(ret));
+  } else if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, data_table_id, ROW_EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
+    LOG_WARN("failed to unlock data table", K(ret));
+  } else if (is_global_index) {
+    if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, old_index_table_id, EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
+      LOG_WARN("failed to unlock index table", K(ret));
+    } else if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, new_index_table_id, EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
       LOG_WARN("failed to unlock index table", K(ret));
     }
   }

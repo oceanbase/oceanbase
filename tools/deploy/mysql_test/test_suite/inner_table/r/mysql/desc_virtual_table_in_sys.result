@@ -9751,6 +9751,32 @@ description	varchar(2048)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_spatial_reference_systems;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_vector_index_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+rowkey_vid_table_id	bigint(20)	NO		NULL	
+vid_rowkey_table_id	bigint(20)	NO		NULL	
+inc_index_table_id	bigint(20)	NO		NULL	
+vbitmap_table_id	bigint(20)	NO		NULL	
+snapshot_index_table_id	bigint(20)	NO		NULL	
+data_table_id	bigint(20)	NO		NULL	
+rowkey_vid_tablet_id	bigint(20)	NO		NULL	
+vid_rowkey_tablet_id	bigint(20)	NO		NULL	
+inc_index_tablet_id	bigint(20)	NO		NULL	
+vbitmap_tablet_id	bigint(20)	NO		NULL	
+snapshot_index_tablet_id	bigint(20)	NO		NULL	
+data_tablet_id	bigint(20)	NO		NULL	
+statistics	varchar(2048)	NO		NULL	
+sync_info	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_vector_index_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_temp_file;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	

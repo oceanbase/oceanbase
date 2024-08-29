@@ -251,6 +251,53 @@ struct ObCompactRow
     MEMCPY(payload_ + offset, payload, len);
   }
 
+  // only for nested expr
+  inline void append_cell_payload(const RowMeta &meta,
+                                  const int64_t col_idx,
+                                  const char *payload,
+                                  const ObLength len,
+                                  int64_t &pos) {
+    int64_t off = 0;
+    if (meta.fixed_expr_reordered()) {
+      const int32_t idx = meta.project_idx(col_idx);
+      if (idx < meta.fixed_cnt_) {
+        off = meta.fixed_offsets_[idx];
+      } else {
+        int32_t *var_offset_arr = var_offsets(meta);
+        int64_t var_idx = idx - meta.fixed_cnt_;
+        off = meta.var_data_off_ + var_offset_arr[var_idx];
+        var_offset_arr[var_idx + 1] = var_offset_arr[var_idx] + len;
+      }
+    } else {
+      int32_t *var_offset_arr = var_offsets(meta);
+      off = meta.var_data_off_ + var_offset_arr[col_idx];
+      var_offset_arr[col_idx + 1] = var_offset_arr[col_idx] + len;
+    }
+    off += pos;
+    MEMCPY(payload_ + off, payload, len);
+    pos += len;
+  }
+  inline void update_var_offset(const RowMeta &meta,
+                                const int64_t col_idx,
+                                const ObLength len) {
+    int64_t off = 0;
+    if (meta.fixed_expr_reordered()) {
+      const int32_t idx = meta.project_idx(col_idx);
+      if (idx < meta.fixed_cnt_) {
+        off = meta.fixed_offsets_[idx];
+      } else {
+        int32_t *var_offset_arr = var_offsets(meta);
+        int64_t var_idx = idx - meta.fixed_cnt_;
+        off = meta.var_data_off_ + var_offset_arr[var_idx];
+        var_offset_arr[var_idx + 1] = var_offset_arr[var_idx] + len;
+      }
+    } else {
+      int32_t *var_offset_arr = var_offsets(meta);
+      off = meta.var_data_off_ + var_offset_arr[col_idx];
+      var_offset_arr[col_idx + 1] = var_offset_arr[col_idx] + len;
+    }
+  }
+
   inline void get_cell_payload(const RowMeta &meta,
                                const int64_t col_idx,
                                const char *&payload,
@@ -360,6 +407,13 @@ struct ObCompactRow
                            const ObBatchRows &brs,
                            ObEvalCtx &ctx,
                            int64_t &size);
+  static int nested_vec_to_row(const ObExpr &expr, ObEvalCtx &ctx, const RowMeta &row_meta,
+                               ObCompactRow *stored_row, const uint64_t row_idx, const int64_t col_idx);
+  static int nested_vec_to_row(const ObExpr &expr, ObEvalCtx &ctx, const RowMeta &row_meta,
+                               ObCompactRow *stored_row, const uint64_t row_idx, const int64_t col_idx,
+                               const int64_t remain_size, int64_t &row_size);
+  static int nested_vec_to_rows(const ObExpr &expr, ObEvalCtx &ctx, const RowMeta &row_meta,
+                                ObCompactRow **stored_rows, const uint16_t selector[], const int64_t size, const int64_t col_idx);
   TO_STRING_KV(K_(header))
 protected:
   RowHeader header_;
@@ -429,8 +483,13 @@ public:
       compact_row_->init(row_meta);
       compact_row_->set_row_size(static_cast<uint32_t>(row_size));
       for (int64_t col_idx = 0; col_idx < exprs.count() && OB_SUCC(ret); ++col_idx) {
-        ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-        vec->to_row(row_meta, compact_row_, ctx.get_batch_idx(), col_idx);
+        if (exprs.at(col_idx)->is_nested_expr()
+            && !is_uniform_format(exprs.at(col_idx)->get_format(ctx))) {
+          ObCompactRow::nested_vec_to_row(*exprs.at(col_idx), ctx, row_meta, compact_row_, ctx.get_batch_idx(), col_idx); // Check row_meta
+        } else {
+          ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
+          vec->to_row(row_meta, compact_row_, ctx.get_batch_idx(), col_idx);
+        }
       }
     }
     return ret;

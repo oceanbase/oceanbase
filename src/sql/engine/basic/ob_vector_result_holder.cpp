@@ -284,9 +284,113 @@ int ObVectorsResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalC
     } else {
       for (int64_t i = 0; i < exprs.count(); ++i) {
         new (&backup_cols_[i]) ObColResultHolder(eval_ctx.max_batch_size_, exprs.at(i));
+        if (exprs.at(i)->is_nested_expr() && !is_uniform_format(exprs_->at(i)->get_format(*eval_ctx_))) {
+          backup_cols_[i].expr_attrs_ = exprs.at(i)->attrs_;
+          backup_cols_[i].attrs_cnt_ = exprs.at(i)->attrs_cnt_;
+          if (OB_ISNULL(backup_cols_[i].attrs_res_ = static_cast<ObColResultHolder *>
+                      (eval_ctx.exec_ctx_.get_allocator().alloc(sizeof(ObColResultHolder)
+                                                                * backup_cols_[i].attrs_cnt_)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc ptrs", K(ret));
+          } else {
+            for (uint32_t j = 0; j < backup_cols_[i].attrs_cnt_; ++j) {
+              new (&backup_cols_[i].attrs_res_[j]) ObColResultHolder(eval_ctx.max_batch_size_,
+                                                                     backup_cols_[i].expr_attrs_[j]);
+            }
+          }
+        }
       }
     }
     inited_ = true;
+  }
+  return ret;
+}
+
+int ObVectorsResultHolder::ObColResultHolder::save_nested(ObIAllocator &alloc, const int64_t batch_size,
+                                                          ObEvalCtx *eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; OB_SUCC(ret) && i < attrs_cnt_; ++i) {
+    if (OB_FAIL(attrs_res_[i].header_.assign(expr_attrs_[i]->get_vector_header(*eval_ctx)))) {
+      LOG_WARN("failed to assign vector", K(ret));
+    } else if (OB_FAIL(attrs_res_[i].save(alloc, batch_size, eval_ctx))) {
+      LOG_WARN("failed to backup col", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObVectorsResultHolder::ObColResultHolder::save(ObIAllocator &alloc, const int64_t batch_size,
+                                                   ObEvalCtx *eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  VectorFormat format = header_.format_;
+  switch (format) {
+    case VEC_FIXED:
+      OZ(copy_fixed_base(
+          static_cast<const ObFixedLengthBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
+      break;
+    case VEC_DISCRETE:
+      OZ(copy_discrete_base(
+          static_cast<const ObDiscreteBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
+      break;
+    case VEC_CONTINUOUS:
+      OZ(copy_continuous_base(
+          static_cast<const ObContinuousBase &>(*expr_->get_vector(*eval_ctx)), alloc, batch_size, *eval_ctx));
+      break;
+    case VEC_UNIFORM:
+      OZ(copy_uniform_base(expr_, static_cast<const ObUniformBase &>(*expr_->get_vector(*eval_ctx)),
+          false, *eval_ctx, alloc, batch_size));
+      break;
+    case VEC_UNIFORM_CONST:
+      OZ(copy_uniform_base(expr_, static_cast<const ObUniformBase &>(*expr_->get_vector(*eval_ctx)),
+          true, *eval_ctx, alloc, batch_size));
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get wrong vector format", K(format), K(ret));
+      break;
+  }
+  return ret;
+}
+
+int ObVectorsResultHolder::ObColResultHolder::restore_nested(const int64_t saved_size, ObEvalCtx *eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; OB_SUCC(ret) && i < attrs_cnt_; ++i) {
+    if (OB_FAIL(attrs_res_[i].header_.assign(expr_attrs_[i]->get_vector_header(*eval_ctx)))) {
+      LOG_WARN("failed to assign vector", K(ret));
+    } else if (OB_FAIL(attrs_res_[i].restore(saved_size, eval_ctx))) {
+      LOG_WARN("failed to backup col", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObVectorsResultHolder::ObColResultHolder::restore(const int64_t saved_size, ObEvalCtx *eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  VectorFormat format = header_.format_;
+  switch (format) {
+    case VEC_FIXED:
+      restore_fixed_base(static_cast<ObFixedLengthBase &>(*expr_->get_vector(*eval_ctx)), saved_size, *eval_ctx);
+      break;
+    case VEC_DISCRETE:
+      restore_discrete_base(static_cast<ObDiscreteBase &>(*expr_->get_vector(*eval_ctx)), saved_size, *eval_ctx);
+      break;
+    case VEC_CONTINUOUS:
+      restore_continuous_base(static_cast<ObContinuousBase &>(*expr_->get_vector(*eval_ctx)), saved_size, *eval_ctx);
+      break;
+    case VEC_UNIFORM:
+      restore_uniform_base(expr_, static_cast<ObUniformBase &>(*expr_->get_vector(*eval_ctx)), false, *eval_ctx, saved_size);
+      break;
+    case VEC_UNIFORM_CONST:
+      restore_uniform_base(expr_, static_cast<ObUniformBase &>(*expr_->get_vector(*eval_ctx)), true, *eval_ctx, saved_size);
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get wrong vector format", K(format), K(ret));
+      break;
   }
   return ret;
 }
@@ -315,39 +419,11 @@ int ObVectorsResultHolder::save(const int64_t batch_size)
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs_->count(); ++i) {
       if (OB_FAIL(backup_cols_[i].header_.assign(exprs_->at(i)->get_vector_header(*eval_ctx_)))) {
         LOG_WARN("failed to assign vector", K(ret));
-      } else {
-        VectorFormat format = backup_cols_[i].header_.format_;
-        switch (format) {
-          case VEC_FIXED:
-            OZ (backup_cols_[i].copy_fixed_base(static_cast<const ObFixedLengthBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)),
-                                            alloc, batch_size, *eval_ctx_));
-            break;
-          case VEC_DISCRETE:
-            OZ (backup_cols_[i].copy_discrete_base(static_cast<const ObDiscreteBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)),
-                                            alloc, batch_size, *eval_ctx_));
-            break;
-          case VEC_CONTINUOUS:
-            OZ (backup_cols_[i].copy_continuous_base(static_cast<const ObContinuousBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)),
-                                            alloc, batch_size, *eval_ctx_));
-            break;
-          case VEC_UNIFORM:
-            OZ (backup_cols_[i].copy_uniform_base(exprs_->at(i), static_cast<const ObUniformBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)), false,
-                                            *eval_ctx_, alloc, batch_size));
-            break;
-          case VEC_UNIFORM_CONST:
-            OZ (backup_cols_[i].copy_uniform_base(exprs_->at(i), static_cast<const ObUniformBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)), true,
-                                            *eval_ctx_, alloc, batch_size));
-            break;
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get wrong vector format", K(format), K(ret));
-            break;
-        }
+      } else if (OB_FAIL(backup_cols_[i].save(alloc, batch_size, eval_ctx_))) {
+        LOG_WARN("failed to backup col", K(ret), K(i));
+      } else if (exprs_->at(i)->is_nested_expr() && !is_uniform_format(exprs_->at(i)->get_format(*eval_ctx_))
+                 && OB_FAIL(backup_cols_[i].save_nested(alloc, batch_size, eval_ctx_))) {
+        LOG_WARN("failed to backup nested col", K(ret), K(i));
       }
     }
   }
@@ -366,39 +442,11 @@ int ObVectorsResultHolder::restore() const
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs_->count(); ++i) {
       if (OB_FAIL(exprs_->at(i)->get_vector_header(*eval_ctx_).assign(backup_cols_[i].header_))) {
         LOG_WARN("failed to assign vector", K(ret));
-      } else {
-        VectorFormat format = backup_cols_[i].header_.format_;
-        switch (format) {
-          case VEC_FIXED:
-            backup_cols_[i].restore_fixed_base(static_cast<ObFixedLengthBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)),
-                                            saved_size_, *eval_ctx_);
-            break;
-          case VEC_DISCRETE:
-            backup_cols_[i].restore_discrete_base(static_cast<ObDiscreteBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)),
-                                            saved_size_, *eval_ctx_);
-            break;
-          case VEC_CONTINUOUS:
-            backup_cols_[i].restore_continuous_base(static_cast<ObContinuousBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)),
-                                            saved_size_, *eval_ctx_);
-            break;
-          case VEC_UNIFORM:
-            backup_cols_[i].restore_uniform_base(exprs_->at(i), static_cast<ObUniformBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)), false,
-                                            *eval_ctx_, saved_size_);
-            break;
-          case VEC_UNIFORM_CONST:
-            backup_cols_[i].restore_uniform_base(exprs_->at(i), static_cast<ObUniformBase &>
-                                            (*exprs_->at(i)->get_vector(*eval_ctx_)), true,
-                                            *eval_ctx_, saved_size_);
-            break;
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get wrong vector format", K(format), K(ret));
-            break;
-        }
+      } else if (OB_FAIL(backup_cols_[i].restore(saved_size_, eval_ctx_))) {
+        LOG_WARN("failed to restore col", K(ret), K(saved_size_), K(i));
+      } else if (exprs_->at(i)->is_nested_expr() && !is_uniform_format(exprs_->at(i)->get_format(*eval_ctx_))
+                 && OB_FAIL(backup_cols_[i].restore_nested(saved_size_, eval_ctx_))) {
+        LOG_WARN("failed to backup nested col", K(ret), K(i));
       }
     }
   }

@@ -519,9 +519,9 @@ public:
   int truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res);
-  int generate_aux_index_schema(
-      const obrpc::ObGenerateAuxIndexSchemaArg &arg,
-      obrpc::ObGenerateAuxIndexSchemaRes &result);
+  int create_aux_index(
+      const obrpc::ObCreateAuxIndexArg &arg,
+      obrpc::ObCreateAuxIndexRes &result);
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
@@ -965,6 +965,7 @@ private:
   int add_rs_event_for_alter_ls_replica_(const obrpc::ObAdminAlterLSReplicaArg &arg, const int ret_val);
   int check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

@@ -42,6 +42,7 @@ devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.x86_64.rpm
 devdeps-hyperscan-5.4.2-152024071714.el8.x86_64.rpm
 devdeps-apache-orc-1.8.3-202024072510.el8.x86_64.rpm
 # devdeps-apache-orc-1.8.3-202024072510.el8.x86_64.rpm
+devdeps-vsag-1.0.0-102024082710.el8.x86_64.rpm
 
 [deps-el9]
 devdeps-apr-1.6.5-232023090616.el9.x86_64.rpm target=el9

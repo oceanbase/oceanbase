@@ -233,6 +233,7 @@
 #include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
+#include "observer/virtual_table/ob_all_virtual_vector_index_info.h"
 #include "observer/virtual_table/ob_all_virtual_tmp_file.h"
 
 namespace oceanbase
@@ -2789,6 +2790,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "fail to init all_tmp_file_info", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_tmp_file_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_VECTOR_INDEX_INFO_TID:
+          {
+            ObAllVirtualVectorIndexInfo *all_virtual_vector_index_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualVectorIndexInfo, all_virtual_vector_index_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualVectorIndexInfo construct failed", K(ret));
+            } else {
+              all_virtual_vector_index_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_vector_index_info);
             }
             break;
           }

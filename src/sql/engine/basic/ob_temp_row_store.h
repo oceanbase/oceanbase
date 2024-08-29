@@ -65,6 +65,7 @@ public:
    * During random reading, use get_buffer() to find the end of indexes, then get the position by
    * index, and finally obtain the compact row based on the position.
    */
+  struct BatchCtx;
   struct RowBlock : public Block
   {
     int add_row(ShrinkBuffer &buf,
@@ -91,6 +92,8 @@ public:
                               const int64_t size,
                               uint32_t row_size_arr[],
                               const common::ObIArray<int64_t> *dup_length = nullptr);
+    static int calc_rows_size_inner(const RowMeta &row_meta, ObEvalCtx &ctx,
+                                    const int64_t size, BatchCtx &batch_ctx);
     static int calc_row_size(const common::ObIArray<ObExpr*> &exprs,
                              const RowMeta &row_meta,
                              ObEvalCtx &ctx,
@@ -98,6 +101,8 @@ public:
     int32_t rows() const { return cnt_; }
     int get_store_row(int64_t &cur_pos, const ObCompactRow *&sr);
     int get_row(const int64_t row_id, const ObCompactRow *&sr) const;
+    int add_batch_inner(ObEvalCtx &ctx,  ShrinkBuffer &buf, const BatchCtx &batch_ctx, const RowMeta &row_meta,
+                        const int64_t size, int64_t batch_mem_size, ObCompactRow **stored_rows);
 
   private:
     static int vector_to_nulls(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
@@ -219,12 +224,16 @@ public:
       rows_ = nullptr;
       row_size_array_ = nullptr;
       selector_ = nullptr;
+      nested_exprs_.reset();
+      nested_col_id_.reset();
     }
     ObArray<ObIVector *> vectors_;
     ObCompactRow **rows_;
     uint32_t *row_size_array_;
     int64_t max_batch_size_;
     uint16_t *selector_;
+    ObArray<ObExpr *> nested_exprs_;
+    ObArray<uint32_t> nested_col_id_;
   };
 
 public:
@@ -255,7 +264,8 @@ public:
            const common::ObCompressorType compressor_type,
            const bool enable_trunc = false);
 
-  int init_batch_ctx();
+  int init_batch_ctx(const ObExprPtrIArray *exprs = NULL);
+  int init_batch_nested_ctx(const ObExprPtrIArray *exprs);
 
   int begin(Iterator &it)
   {
@@ -345,6 +355,9 @@ private:
   inline RowBlock *cur_blk() {
     return reinterpret_cast<RowBlock *>(blk_);
   }
+
+private :
+  int add_batch_inner(ObEvalCtx &ctx, const int64_t size, ObCompactRow **stored_rows);
 
 private:
   lib::ObMemAttr mem_attr_;
@@ -455,6 +468,16 @@ private:
   ObCompactRow **return_rows_;
   int64_t selector_cnt_;
   int64_t part_cnt_;
+};
+
+class ObTempRowStoreHelper
+{
+public:
+  static void calc_rows_size(ObIVector *vec, const uint16_t selector[],
+                             const int64_t size, uint32_t row_size_arr[]);
+  static int calc_nested_expr_batch_data_size(const ObExpr &expr, ObEvalCtx &ctx,
+                                              const uint16_t selector[], const int64_t size,
+                                              uint32_t row_size_arr[]);
 };
 
 } // end namespace sql

@@ -832,7 +832,13 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             field.type_.meta_.set_ext();
             field.accuracy_.set_accuracy(T_OBJ_SDO_GEOMETRY);
           }
-          if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
+          if (expr->get_result_type().is_collection_sql_type()
+              && !ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
+            // array type
+            field.type_.set_subschema_id(subschema_id);
+            field.charsetnr_ = CS_TYPE_BINARY;
+            field.length_ = OB_MAX_LONGTEXT_LENGTH;
+          } else if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
             LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
           } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(tmp_subschema_id, udt_meta))) {
             LOG_WARN("failed to get udt meta", K(ret), K(tmp_subschema_id));
@@ -847,14 +853,14 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             field.type_.set_subschema_id(tmp_subschema_id);
             field.charsetnr_ = CS_TYPE_BINARY;
             field.length_ = OB_MAX_LONGTEXT_LENGTH;
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
+                LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
+              }
+            }
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("udt type not supported", K(ret), K(tmp_subschema_id));
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
-              LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
-            }
           }
         } else if (expr->get_result_type().is_ext()
                    && OB_INVALID_ID != expr->get_result_type().get_udt_id()
