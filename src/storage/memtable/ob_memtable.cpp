@@ -244,10 +244,12 @@ void ObMemtable::destroy()
   ObTimeGuard time_guard("ObMemtable::destroy()", 100 * 1000);
   int ret = OB_SUCCESS;
   if (is_inited_) {
-    const int64_t cost_time = ObTimeUtility::current_time() - mt_stat_.release_time_;
-    if (cost_time > 1 * 1000 * 1000) {
-      STORAGE_LOG(WARN, "it costs too much time from release to destroy", K(cost_time), KP(this));
+    // check release to destroy
+    const int64_t release_to_destroy_time = ObTimeUtility::current_time() - mt_stat_.release_time_;
+    if (release_to_destroy_time > 1LL * 1000LL * 1000LL /* 1 second */) {
+      STORAGE_LOG(WARN, "it costs too much time from release to destroy", K(release_to_destroy_time), KP(this));
     }
+
     set_allow_freeze(true);
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
     time_guard.click();
@@ -299,6 +301,13 @@ void ObMemtable::destroy()
 int ObMemtable::safe_to_destroy(bool &is_safe)
 {
   int ret = OB_SUCCESS;
+
+  // check frozen to flush
+  const int64_t frozen_to_flush_time = mt_stat_.create_flush_dag_time_ - mt_stat_.ready_for_flush_time_;
+  if (frozen_to_flush_time > 60LL * 1000LL * 1000LL /* 60 seconds */) {
+    STORAGE_LOG(WARN, "it costs too much time from forzen to flush", K(frozen_to_flush_time), KP(this));
+  }
+
   int64_t ref_cnt = get_ref();
   int64_t write_ref_cnt = get_write_ref();
   int64_t unsubmitted_cnt = get_unsubmitted_cnt();
