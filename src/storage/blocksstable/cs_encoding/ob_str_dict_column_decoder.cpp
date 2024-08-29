@@ -57,7 +57,7 @@ int ObStrDictColumnDecoder::decode_and_aggregate(
     const ObColumnCSDecoderCtx &ctx,
     const int64_t row_id,
     ObStorageDatum &datum,
-    storage::ObAggCell &agg_cell) const
+    storage::ObAggCellBase &agg_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;

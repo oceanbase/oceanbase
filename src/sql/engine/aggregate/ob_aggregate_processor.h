@@ -114,7 +114,8 @@ public:
     max_disuse_param_expr_(NULL)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
-  : expr_(NULL),
+  : alloc_(&alloc),
+    expr_(NULL),
     real_aggr_type_(T_INVALID),
     has_distinct_(false),
     is_implicit_first_aggr_(false),

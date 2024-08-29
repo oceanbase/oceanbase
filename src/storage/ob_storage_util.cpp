@@ -416,38 +416,6 @@ int cast_obj(const common::ObObjMeta &src_meta,
   return ret;
 }
 
-int init_expr_vector_header(
-    sql::ObExpr &expr,
-    sql::ObEvalCtx &eval_ctx,
-    const int64_t size,
-    const VectorFormat format)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.init_vector(eval_ctx, format, size, true))) {
-    STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(expr));
-  }
-  return ret;
-}
-
-int init_exprs_new_format_header(
-    const common::ObIArray<int32_t> &cols_projector,
-    const sql::ObExprPtrIArray &exprs,
-    sql::ObEvalCtx &eval_ctx)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
-    sql::ObExpr *expr = exprs.at(i);
-    if (expr->is_nested_expr()) {
-      if (OB_FAIL(expr->init_vector(eval_ctx, VEC_DISCRETE, eval_ctx.max_batch_size_))) {
-        STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
-      }
-    } else if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
-      STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
-    }
-  }
-  return ret;
-}
-
 int fill_datums_lob_locator(
     const ObTableIterParam &iter_param,
     const ObTableAccessContext &context,

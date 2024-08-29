@@ -386,7 +386,8 @@ public:
 
   int collect_batch_group_results(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                                   const int32_t output_start_idx, const int32_t batch_size,
-                                  const ObCompactRow **rows, const RowMeta &row_meta) override
+                                  const ObCompactRow **rows, const RowMeta &row_meta,
+                                  const int32_t row_start_idx = 0, const bool need_init_vector = true) override
   {
     int ret = OB_SUCCESS;
     OB_ASSERT(agg_col_id < agg_ctx.aggr_infos_.count());
@@ -394,7 +395,7 @@ public:
 
     ObExpr &agg_expr = *agg_ctx.aggr_infos_.at(agg_col_id).expr_;
     if (OB_LIKELY(batch_size > 0)) {
-      if (OB_FAIL(agg_expr.init_vector_for_write(
+      if (need_init_vector && OB_FAIL(agg_expr.init_vector_for_write(
             agg_ctx.eval_ctx_, agg_expr.get_default_res_format(), batch_size))) {
         SQL_LOG(WARN, "init vector for write failed", K(ret));
       } else {
@@ -404,24 +405,24 @@ public:
         switch (res_fmt) {
         case VEC_FIXED: {
           ret = collect_group_results<fixlen_fmt<Derived::OUT_TC>>(
-            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta);
+            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta, row_start_idx, need_init_vector);
           break;
         }
         case VEC_DISCRETE: {
           ret = collect_group_results<discrete_fmt<Derived::OUT_TC>>(
-            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta);
+            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta, row_start_idx, need_init_vector);
           break;
         }
         case VEC_UNIFORM_CONST: {
           // must be null type
           ret = collect_group_results<uniform_fmt<VEC_TC_NULL, true>>(
-            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta);
+            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta, row_start_idx, need_init_vector);
           break;
         }
         case VEC_UNIFORM: {
           // must be null type
           ret = collect_group_results<uniform_fmt<VEC_TC_NULL, false>>(
-            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta);
+            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta, row_start_idx, need_init_vector);
           break;
         }
         default: {
@@ -635,7 +636,8 @@ protected:
   template <typename ResultFmt>
   int collect_group_results(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                             const int32_t output_start_idx, const int32_t batch_size,
-                            const ObCompactRow **rows, const RowMeta &row_meta)
+                            const ObCompactRow **rows, const RowMeta &row_meta,
+                            const int32_t row_start_idx, const bool need_init_vector)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(rows)) {
@@ -647,22 +649,23 @@ protected:
       ObExpr *agg_expr = agg_ctx.aggr_infos_.at(agg_col_id).expr_;
       const char *agg_cell = nullptr;
       int32_t agg_cell_len = 0;
-      if (OB_FAIL(agg_expr->init_vector_for_write(
+      if (need_init_vector && OB_FAIL(agg_expr->init_vector_for_write(
             agg_ctx.eval_ctx_, agg_expr->get_default_res_format(), batch_size))) {
         SQL_LOG(WARN, "init vector for write failed", K(ret));
       }
       for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
         batch_guard.set_batch_idx(output_start_idx + i);
-        if (OB_ISNULL(rows[i])) {
+        const ObCompactRow *row = rows[row_start_idx + i];
+        if (OB_ISNULL(row)) {
           ret = OB_ERR_UNEXPECTED;
-          SQL_LOG(WARN, "invalid compact row", K(ret), K(i));
+          SQL_LOG(WARN, "invalid compact row", K(ret), K(row_start_idx), K(i));
         } else {
-          const char *agg_row = static_cast<const char *>(rows[i]->get_extra_payload(row_meta));
+          const char *agg_row = static_cast<const char *>(row->get_extra_payload(row_meta));
           agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
           agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
-          SQL_LOG(DEBUG, "collect group results", K(agg_col_id),
-                  K(agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type()), KP(agg_cell),
-                  K(agg_cell_len), K(agg_cell), K(row_meta), KP(rows[i]));
+          SQL_LOG(DEBUG, "collect group results", K(agg_col_id), K(output_start_idx), K(i), K(batch_size),
+                  K(row_start_idx), K(agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type()), KP(agg_cell),
+                  K(agg_cell_len), K(agg_cell), K(row_meta), KP(row), KP(agg_expr), KPC(agg_expr));
           if (helper::has_extra_info(aggr_info)) {
             VecExtraResult *&extra = agg_ctx.get_extra(agg_col_id, agg_cell);
             if (!extra->is_evaluated()
@@ -683,7 +686,8 @@ protected:
   template <>
   int collect_group_results<ObVectorBase>(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                                           const int32_t output_start_idx, const int32_t batch_size,
-                                          const ObCompactRow **rows, const RowMeta &row_meta)
+                                          const ObCompactRow **rows, const RowMeta &row_meta,
+                                          const int32_t row_start_idx, const bool need_init_vector)
   {
     int ret = OB_NOT_IMPLEMENT;
     SQL_LOG(WARN, "not implemented", K(ret));

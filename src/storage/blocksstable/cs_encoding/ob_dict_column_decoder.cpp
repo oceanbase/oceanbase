@@ -2201,7 +2201,7 @@ int ObDictColumnDecoder::get_distinct_count(const ObColumnCSDecoderCtx &ctx, int
 
 int ObDictColumnDecoder::read_distinct(
     const ObColumnCSDecoderCtx &ctx,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
@@ -2237,7 +2237,7 @@ int ObDictColumnDecoder::read_reference(
     const ObColumnCSDecoderCtx &ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
@@ -2270,7 +2270,7 @@ int ObDictColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &col_ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObAggCell &agg_cell) const
+    storage::ObAggCellBase &agg_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = col_ctx.dict_ctx_;
@@ -2312,7 +2312,7 @@ int ObDictColumnDecoder::get_aggregate_result(
 
 int ObDictColumnDecoder::traverse_datum_dict_agg(
     const ObDictColumnDecoderCtx &ctx,
-    storage::ObAggCell &agg_cell)
+    storage::ObAggCellBase &agg_cell)
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;

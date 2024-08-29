@@ -831,7 +831,7 @@ TEST_F(TestPushdownAggregate, test_copy_output_rows)
 
   ObIArray<ObAggCell*> &agg_cell = group_by_cell.get_agg_cells();
   ASSERT_EQ(6, group_by_cell.get_agg_cells().count());
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.copy_output_rows(SQL_BATCH_SIZE));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.copy_output_rows(SQL_BATCH_SIZE, access_param_.iter_param_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_distinct_cnt());
 
   for (int64_t agg_idx = 1; agg_idx < 6; ++agg_idx) {

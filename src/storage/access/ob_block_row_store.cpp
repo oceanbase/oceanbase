@@ -31,6 +31,7 @@ namespace storage
 
 ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
     : is_inited_(false),
+      is_vec2_(false),
       pd_filter_info_(),
       context_(context),
       iter_param_(nullptr),
@@ -63,8 +64,9 @@ void ObBlockRowStore::reuse()
   is_aggregated_in_prefetch_ = false;
 }
 
-int ObBlockRowStore::init(const ObTableAccessParam &param)
+int ObBlockRowStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)
 {
+  UNUSED(agg_col_mask);
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;

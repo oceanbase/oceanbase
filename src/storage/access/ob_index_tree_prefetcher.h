@@ -27,7 +27,7 @@
 namespace oceanbase {
 using namespace blocksstable;
 namespace storage {
-class ObAggregatedStore;
+class ObAggStoreBase;
 class ObRowsInfo;
 
 struct ObSSTableReadHandle
@@ -385,7 +385,7 @@ public:
       cur_micro_data_fetch_idx_(-1),
       micro_data_prefetch_idx_(0),
       row_lock_check_version_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
-      agg_row_store_(nullptr),
+      agg_store_(nullptr),
       can_blockscan_(false),
       need_check_prefetch_depth_(false),
       use_multi_block_prefetch_(false),
@@ -700,7 +700,7 @@ public:
   int64_t cur_micro_data_fetch_idx_;
   int64_t micro_data_prefetch_idx_;
   int64_t row_lock_check_version_;
-  ObAggregatedStore *agg_row_store_;
+  ObAggStoreBase *agg_store_;
 protected:
   bool can_blockscan_;
   bool need_check_prefetch_depth_;

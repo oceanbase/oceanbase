@@ -32,24 +32,26 @@ static const int64_t AGG_ROW_MODE_COUNT_THRESHOLD = 3;
 static const double AGG_ROW_MODE_RATIO_THRESHOLD = 0.5;
 
 // for column store
-class ObCGAggCells
+class ObCGAggCells : public ObAggGroupBase
 {
 public:
   ObCGAggCells() : agg_cells_() {}
-  ~ObCGAggCells() { reset(); }
+  virtual ~ObCGAggCells() { reset(); }
   void reset();
   bool check_finished() const;
-  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg);
+  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) override;
   int add_agg_cell(ObAggCell *cell);
-  int process(
-      const ObTableIterParam &iter_param,
-      const ObTableAccessContext &context,
+  int eval_batch(
+      const ObTableIterParam *iter_param,
+      const ObTableAccessContext *context,
       const int32_t col_idx,
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t *row_ids,
-      const int64_t row_count);
-  int process(blocksstable::ObStorageDatum &datum, const uint64_t row_count);
-  int process(const blocksstable::ObMicroIndexInfo &index_info);
+      const int64_t row_count,
+      const bool projected) override;
+  int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count) override;
+  int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
+  OB_INLINE bool is_vec() const override { return false; }
   TO_STRING_KV(K_(agg_cells));
 private:
   common::ObSEArray<ObAggCell*, 1> agg_cells_;
@@ -83,7 +85,7 @@ private:
   ObPDAggFactory agg_cell_factory_;
 };
 
-class ObAggregatedStore : public ObBlockBatchedRowStore
+class ObAggregatedStore : public ObBlockBatchedRowStore, public ObAggStoreBase
 {
 public:
   ObAggregatedStore(
@@ -93,20 +95,20 @@ public:
   virtual ~ObAggregatedStore();
   virtual void reset() override;
   virtual void reuse() override;
-  virtual int init(const ObTableAccessParam &param) override;
-  int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info);
+  int reuse_capacity(const int64_t capacity) override;
+  virtual int init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask = nullptr) override;
+  int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   virtual int fill_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockRowScanner *scanner,
+      blocksstable::ObIMicroBlockRowScanner &scanner,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res) override;
   virtual int fill_rows(const int64_t group_idx, const int64_t row_count) override;
   virtual int fill_row(blocksstable::ObDatumRow &out_row) override;
-  int collect_aggregated_row(blocksstable::ObDatumRow *&row);
+  int collect_aggregated_result() override;
   int get_agg_cell(const sql::ObExpr *expr, ObAggCell *&agg_cell);
-  OB_INLINE void reuse_aggregated_row() { agg_row_.reuse(); }
-  OB_INLINE bool can_agg_index_info(const blocksstable::ObMicroIndexInfo &index_info)
+  OB_INLINE int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) override
   {
     // TODO(yht146439) can not use pre-aggregated data in row store now
     // as 'has_agg_data()' only tells there is pre-aggregated data, but without info of which column
@@ -117,13 +119,14 @@ public:
     //        index_info.can_blockscan(agg_row_.has_lob_column_out()) &&
     //        !index_info.is_left_border() &&
     //        !index_info.is_right_border();
-    return filter_is_null() &&
-           !agg_row_.check_need_access_data() &&
-           index_info.can_blockscan(agg_row_.has_lob_column_out()) &&
-           !index_info.is_left_border() &&
-           !index_info.is_right_border();
+    can_agg = filter_is_null() &&
+              !agg_row_.check_need_access_data() &&
+              index_info.can_blockscan(agg_row_.has_lob_column_out()) &&
+              !index_info.is_left_border() &&
+              !index_info.is_right_border();
+    return OB_SUCCESS;
   }
-  OB_INLINE void set_end() { iter_end_flag_ = IterEndState::ITER_END; }
+  // OB_INLINE void set_end() override { iter_end_flag_ = IterEndState::ITER_END; }
   int check_agg_in_row_mode(const ObTableIterParam &iter_param);
   bool has_data();
   INHERIT_TO_STRING_KV("ObBlockBatchedRowStore", ObBlockBatchedRowStore, K_(agg_row), K_(agg_flat_row_mode));

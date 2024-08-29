@@ -1685,7 +1685,7 @@ int ObDictDecoder::get_distinct_count(int64_t &distinct_count) const
 int ObDictDecoder::read_distinct(
     const ObColumnDecoderCtx &ctx,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   bool has_null = false;
@@ -1703,7 +1703,7 @@ int ObDictDecoder::batch_read_distinct(
     const ObColumnDecoderCtx &ctx,
     const char **cell_datas,
     const int64_t meta_length,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   const int64_t count = meta_header_->count_;
@@ -1755,7 +1755,7 @@ int ObDictDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited())) {

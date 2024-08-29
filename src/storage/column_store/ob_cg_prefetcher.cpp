@@ -11,7 +11,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_prefetcher.h"
 #include "ob_i_cg_iterator.h"
-#include "storage/access/ob_aggregated_store.h"
+#include "storage/access/ob_aggregate_base.h"
 
 namespace oceanbase {
 using namespace common;
@@ -30,7 +30,7 @@ void ObCGPrefetcher::reset()
   filter_bitmap_ = nullptr;
   micro_data_prewarm_idx_ = 0;
   cur_micro_data_read_idx_ = -1;
-  cg_agg_cells_ = nullptr;
+  agg_group_ = nullptr;
   ObIndexTreeMultiPassPrefetcher::reset();
 }
 
@@ -92,7 +92,7 @@ int ObCGPrefetcher::init(
         (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
          ((ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ || ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_iter_type_) &&
           is_project_without_filter_)) &&
-        nullptr == cg_agg_cells_ &&
+        nullptr == agg_group_ &&
         nullptr == access_ctx_->limit_param_ ;
   }
   return ret;
@@ -126,7 +126,7 @@ int ObCGPrefetcher::switch_context(
         (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
          ((ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ || ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_iter_type_) &&
           is_project_without_filter_)) &&
-        nullptr == cg_agg_cells_ &&
+        nullptr == agg_group_ &&
         nullptr == access_ctx_->limit_param_ ;
   }
   return ret;
@@ -433,10 +433,10 @@ int ObCGPrefetcher::prefetch_micro_data()
             micro_data_prefetch_idx_++;
             tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
           } else if (OB_FAIL(can_agg_micro_index(block_info, can_agg))) {
-            LOG_WARN("fail to check can agg index info", K(ret), K(block_info), KPC(cg_agg_cells_));
+            LOG_WARN("fail to check can agg index info", K(ret), K(block_info), KPC_(agg_group));
           } else if (can_agg) {
-            if (OB_FAIL(cg_agg_cells_->process(block_info))) {
-              LOG_WARN("Fail to agg index info", K(ret));
+            if (OB_FAIL(agg_group_->fill_index_info(block_info, true))) {
+              LOG_WARN("Fail to agg index info", K(ret), KPC_(agg_group));
             } else {
               LOG_DEBUG("[COLUMNSTORE] success to agg index info", K(ret), K(block_info));
             }
@@ -502,13 +502,12 @@ int ObCGPrefetcher::can_agg_micro_index(const blocksstable::ObMicroIndexInfo &in
 {
   int ret = OB_SUCCESS;
   const ObCSRange &index_range = index_info.get_row_range();
-  can_agg = nullptr != cg_agg_cells_&&
-                 index_range.start_row_id_ >= query_index_range_.start_row_id_ &&
-                 index_range.end_row_id_ <= query_index_range_.end_row_id_ &&
-                 (nullptr == filter_bitmap_ || filter_bitmap_->is_all_true(index_range));
-  if (can_agg && OB_FAIL(cg_agg_cells_->can_use_index_info(index_info, can_agg))) {
-    LOG_WARN("fail to check index info", K(ret),
-                      K(index_info), KPC(cg_agg_cells_));
+  can_agg = nullptr != agg_group_ &&
+            index_range.start_row_id_ >= query_index_range_.start_row_id_ &&
+            index_range.end_row_id_ <= query_index_range_.end_row_id_ &&
+            (nullptr == filter_bitmap_ || filter_bitmap_->is_all_true(index_range));
+  if (can_agg && OB_FAIL(agg_group_->can_use_index_info(index_info, can_agg))) {
+    LOG_WARN("fail to check index info", K(ret), K(index_info), KPC_(agg_group));
   }
   return ret;
 }
@@ -564,10 +563,10 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
         // TODO: skip data block which is always_false/always_true and record the result in filter bitmap
       } else if (OB_FAIL(prefetcher.can_agg_micro_index(index_info, can_agg))) {
-        LOG_WARN("fail to check index info", K(ret), K(index_info), KPC(prefetcher.cg_agg_cells_));
+        LOG_WARN("fail to check index info", K(ret), K(index_info), KPC(prefetcher.agg_group_));
       } else if (can_agg) {
-        if (OB_FAIL(prefetcher.cg_agg_cells_->process(index_info))) {
-          LOG_WARN("Fail to agg index info", K(ret));
+        if (OB_FAIL(prefetcher.agg_group_->fill_index_info(index_info, true))) {
+          LOG_WARN("Fail to agg index info", K(ret), KPC(prefetcher.agg_group_));
         } else {
           LOG_DEBUG("[COLUMNSTORE] success to agg index info", K(ret), K(index_info));
         }

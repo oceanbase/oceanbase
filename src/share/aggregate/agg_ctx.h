@@ -471,7 +471,9 @@ public:
                                                  const int32_t output_start_idx,
                                                  const int32_t batch_size,
                                                  const ObCompactRow **rows,
-                                                 const RowMeta &row_meta) = 0;
+                                                 const RowMeta &row_meta,
+                                                 const int32_t row_start_idx = 0,
+                                                 const bool need_init_vector = true) = 0;
   inline virtual int add_batch_rows(RuntimeContext &agg_ctx,
                                     int32_t agg_col_idx,
                                     const sql::ObBitVector &skip, const sql::EvalBound &bound,

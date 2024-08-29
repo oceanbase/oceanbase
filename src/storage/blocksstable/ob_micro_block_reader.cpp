@@ -886,7 +886,8 @@ int ObMicroBlockReader::get_rows(
     const int64_t row_cap,
     ObDatumRow &row_buf,
     sql::ObExprPtrIArray &exprs,
-    sql::ObEvalCtx &eval_ctx)
+    sql::ObEvalCtx &eval_ctx,
+    const bool need_init_vector)
 {
   int ret = OB_SUCCESS;
   int64_t row_idx = common::OB_INVALID_INDEX;
@@ -899,9 +900,16 @@ int ObMicroBlockReader::get_rows(
     LOG_WARN("Invalid argument", K(ret), KPC(header_), KPC_(read_info), K(row_cap), K(row_buf));
   } else if (OB_FAIL(row_buf.reserve(read_info_->get_request_count()))) {
     LOG_WARN("Failed to reserve row buf", K(ret), K(row_buf), KPC(read_info_));
-  } else if (0 == vector_offset && OB_FAIL(init_exprs_new_format_header(cols_projector, exprs, eval_ctx))) {
-    LOG_WARN("Failed to init vector header", K(ret), KPC_(read_info));
-  } else {
+  } else if (0 == vector_offset) {
+    if (need_init_vector) {
+      if (OB_FAIL(init_exprs_new_format_header(cols_projector, exprs, eval_ctx))) {
+        LOG_WARN("Failed to init vector header", K(ret), KPC_(read_info));
+      }
+    } else {
+      set_not_null_for_exprs(cols_projector, exprs, eval_ctx);
+    }
+  }
+  if (OB_SUCC(ret)) {
     for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap; ++idx) {
       row_idx = row_ids[idx];
       if (OB_UNLIKELY(row_idx < 0 || row_idx >= header_->row_count_)) {

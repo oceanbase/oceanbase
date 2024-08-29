@@ -178,6 +178,7 @@ public:
   ObPushdownFilterExecutor *filter_;
   ObPushdownOperator *pushdown_operator_;
   ObPushdownExprSpec *expr_spec_;
+  ObBitVector *skip_bit_;
   MockObCOSSTableRowsFilter co_filter_;
 };
 
@@ -186,7 +187,9 @@ void TestCOSSTableRowsFilter::init_vector_store()
   ObIAllocator* allocator_ptr = &allocator_;
   exec_ctx_ = OB_NEWx(ObExecContext, allocator_ptr, allocator_);
   eval_ctx_ = OB_NEWx(ObEvalCtx, allocator_ptr, *exec_ctx_);
-  vector_store_ = OB_NEWx(ObVectorStore, allocator_ptr, 64, *eval_ctx_, context_);
+  skip_bit_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(64)));
+  ASSERT_NE(nullptr, skip_bit_);
+  vector_store_ = OB_NEWx(ObVectorStore, allocator_ptr, 64, *eval_ctx_, context_, skip_bit_);
   vector_store_->is_inited_ = true;
 }
 

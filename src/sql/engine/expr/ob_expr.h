@@ -39,6 +39,7 @@ namespace storage
 {
   // forward declaration for friends
   class ObVectorStore;
+  class ObAggregatedStoreVec;
 }
 namespace sql
 {
@@ -163,6 +164,7 @@ struct ObEvalCtx
   friend class ObOperator;
   friend class ObSubPlanFilterOp; // FIXME qubin.qb: remove this line from friend
   friend class oceanbase::storage::ObVectorStore;
+  friend class oceanbase::storage::ObAggregatedStoreVec;
   friend class ObDatumCaster;
   class TempAllocGuard
   {
@@ -744,6 +746,12 @@ public:
   void reset_attrs_datums(char *frame, const int64_t size) const;
   OB_INLINE bool is_nested_expr() const { return attrs_cnt_ > 0; }
 
+
+  OB_INLINE void set_all_not_null(ObEvalCtx &ctx, const int64_t size) {
+    if (!is_uniform_format(get_format(ctx))) {
+      get_nulls(ctx).reset(size);
+    }
+  }
 
   TO_STRING_KV("type", get_type_name(type_),
               K_(datum_meta),

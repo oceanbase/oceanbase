@@ -540,6 +540,7 @@ ob_set_subtarget(ob_storage access
   access/ob_block_row_store.cpp
   access/ob_vector_store.cpp
   access/ob_aggregated_store.cpp
+  access/ob_aggregated_store_vec.cpp
   access/ob_scan_merge_loser_tree.cpp
   access/ob_single_merge.cpp
   access/ob_sstable_index_filter.cpp
@@ -564,7 +565,9 @@ ob_set_subtarget(ob_storage access
   access/ob_fuse_row_cache_fetcher.cpp
   access/ob_dml_param.cpp
   access/ob_micro_block_handle_mgr.cpp
+  access/ob_aggregate_base.cpp
   access/ob_pushdown_aggregate.cpp
+  access/ob_pushdown_aggregate_vec.cpp
   access/ob_empty_read_bucket.cpp
   access/ob_global_iterator_pool.cpp
 )

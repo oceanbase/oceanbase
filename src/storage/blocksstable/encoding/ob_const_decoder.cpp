@@ -974,7 +974,7 @@ int ObConstDecoder::get_distinct_count(int64_t &distinct_count) const
 int ObConstDecoder::read_distinct(
     const ObColumnDecoderCtx &ctx,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (0 == meta_header_->count_) {
@@ -1004,7 +1004,7 @@ int ObConstDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   UNUSED(ctx);
   int ret = OB_SUCCESS;
