@@ -912,6 +912,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigMigrationChooseSourceChecker);
 };
 
+class ObConfigReplicaParallelMigrationChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigReplicaParallelMigrationChecker() {}
+  virtual ~ObConfigReplicaParallelMigrationChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigReplicaParallelMigrationChecker);
+};
+
 class ObConfigKvGroupCommitRWModeChecker
   : public ObConfigChecker
 {

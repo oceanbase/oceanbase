@@ -298,7 +298,6 @@ int ObDRTaskTableUpdater::process_task_(
     }
     if (FAILEDx(task_mgr_->do_cleaning(
                      task.get_task_id(),
-                     task.get_task_key(),
                      task.get_ret_code(),
                      task.get_need_clear_server_data_in_limit(),
                      task.get_need_record_event(),

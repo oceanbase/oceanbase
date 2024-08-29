@@ -3810,7 +3810,8 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     paxos_replica_number_,
                     skip_change_member_list_,
                     discarded_force_use_data_source_, // FARM COMPAT WHITELIST
-                    force_data_source_);
+                    force_data_source_,
+                    prioritize_same_zone_src_);
 
 int ObLSMigrateReplicaArg::assign(
     const ObLSMigrateReplicaArg &that)
@@ -3826,6 +3827,7 @@ int ObLSMigrateReplicaArg::assign(
   skip_change_member_list_ = that.skip_change_member_list_;
   discarded_force_use_data_source_ = that.discarded_force_use_data_source_;
   force_data_source_ = that.force_data_source_;
+  prioritize_same_zone_src_ = that.prioritize_same_zone_src_;
   return ret;
 }
 
@@ -3838,7 +3840,8 @@ int ObLSMigrateReplicaArg::init(
     const common::ObReplicaMember &discarded_data_source,
     const int64_t paxos_replica_number,
     const bool skip_change_member_list,
-    const common::ObReplicaMember &force_data_source)
+    const common::ObReplicaMember &force_data_source,
+    const bool prioritize_same_zone_src)
 {
   int ret = OB_SUCCESS;
   task_id_ = task_id;
@@ -3850,6 +3853,7 @@ int ObLSMigrateReplicaArg::init(
   paxos_replica_number_ = paxos_replica_number;
   skip_change_member_list_ = skip_change_member_list;
   force_data_source_ = force_data_source;
+  prioritize_same_zone_src_ = prioritize_same_zone_src;
   return ret;
 }
 

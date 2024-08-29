@@ -106,7 +106,6 @@ void response_rpc_error_packet(ObRequest* req, int ret)
 };
 namespace observer
 {
-
 int ObErrorP::process()
 {
   if (ret_ == OB_SUCCESS) {

@@ -533,7 +533,8 @@ const char *ObStorageHASrcProvider::ObChooseSourcePolicyStr[static_cast<int64_t>
   "idc",
   "region",
   "checkpoint",
-  "recommend"
+  "recommend",
+  "zone"
 };
 
 const char *ObStorageHASrcProvider::get_policy_str(const ChooseSourcePolicy policy_type)
@@ -634,8 +635,10 @@ int ObMigrationSrcByLocationProvider::inner_choose_ob_src(
 {
   int ret = OB_SUCCESS;
   common::ObArray<common::ObAddr> sorted_addr_list;
+  int64_t zone_end_index = 0;
   int64_t idc_end_index = 0;
   int64_t region_end_index = 0;
+  ObMigrationFindSrcParam param;
   choosen_src_addr.reset();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -643,27 +646,28 @@ int ObMigrationSrcByLocationProvider::inner_choose_ob_src(
   } else if (!leader_addr.is_valid() || addr_list.empty() || !arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(addr_list), K(arg));
-  } else if (OB_FAIL(divide_addr_list(addr_list, arg.dst_, sorted_addr_list, idc_end_index, region_end_index))) {
+  } else if (OB_FAIL(divide_addr_list(addr_list, arg.dst_, sorted_addr_list,
+      zone_end_index, idc_end_index, region_end_index))) {
     LOG_WARN("failed to divide addr", K(ret), K(addr_list), K(arg.dst_));
   } else {
     bool is_idc_policy = ChooseSourcePolicy::IDC == get_policy_type() ? true : false;
+    int64_t idc_start_index = 0;
     int64_t region_start_index = is_idc_policy ? idc_end_index + 1 : 0;
-    if (is_idc_policy && OB_FAIL(find_src(sorted_addr_list, 0/*idc_start_index*/, idc_end_index,
-        learner_list, leader_addr, arg.dst_, choosen_src_addr))) { // find in same idc
-      LOG_WARN("failed to find source in same idc scope", K(ret), K(sorted_addr_list),
-          K(idc_end_index), K(learner_list), K(leader_addr), K(arg.dst_));
-    } else if (!choosen_src_addr.is_valid() && OB_FAIL(find_src(sorted_addr_list, region_start_index, region_end_index,
-        learner_list, leader_addr, arg.dst_, choosen_src_addr))) { // find in same region
-      LOG_WARN("failed to find source in same region scope", K(ret), K(sorted_addr_list),
-          K(region_start_index), K(region_end_index), K(learner_list), K(leader_addr), K(arg.dst_));
-    } else if (!choosen_src_addr.is_valid() && OB_FAIL(find_src(sorted_addr_list, region_end_index + 1, addr_list.count() - 1,
-        learner_list, leader_addr, arg.dst_, choosen_src_addr))) { // find in different region
-      LOG_WARN("failed to find source in different region scope", K(ret), K(sorted_addr_list),
-          K(region_end_index), K(addr_list.count()), K(learner_list), K(leader_addr), K(arg.dst_));
-    } else if (!choosen_src_addr.is_valid()) {
-      ret = OB_DATA_SOURCE_NOT_EXIST;
-      LOG_WARN("all region no available data source exist", K(ret), "tenant_id", get_tenant_id(),
-          "ls_id", get_ls_id(), K(leader_addr), K(learner_list), K(addr_list), K(arg));
+    param.find_in_idc_scope_ = is_idc_policy;
+    param.idc_start_index_ = idc_start_index;
+    param.idc_end_index_ = idc_end_index;
+    param.region_start_index_ = region_start_index;
+    param.region_end_index_ = region_end_index;
+    param.leader_addr_ = leader_addr;
+    param.arg_ = arg;
+    if (OB_FAIL(param.learner_list_.deep_copy(learner_list))) {
+      LOG_WARN("failed to copy learner list", K(ret), K(learner_list));
+    } else if (OB_FAIL(param.addr_list_.assign(addr_list))) {
+      LOG_WARN("failed to assign addr list", K(ret), K(addr_list));
+    } else if (OB_FAIL(param.sorted_addr_list_.assign(sorted_addr_list))) {
+      LOG_WARN("failed to assign sorted addr list", K(ret), K(sorted_addr_list));
+    } else if (OB_FAIL(find_migration_src(param, choosen_src_addr))) {
+      LOG_WARN("failed to find migration src", K(ret), K(param));
     }
   }
   return ret;
@@ -673,6 +677,7 @@ int ObMigrationSrcByLocationProvider::divide_addr_list(
     const common::ObIArray<common::ObAddr> &addr_list,
     const common::ObReplicaMember &dst,
     common::ObIArray<common::ObAddr> &sorted_addr_list,
+    int64_t &zone_end_index,
     int64_t &idc_end_index,
     int64_t &region_end_index)
 {
@@ -680,13 +685,18 @@ int ObMigrationSrcByLocationProvider::divide_addr_list(
   sorted_addr_list.reset();
   common::ObRegion dst_region;
   common::ObIDC dst_idc;
+  common::ObZone dst_zone;
   common::ObRegion src_region;
   common::ObIDC src_idc;
+  common::ObZone src_zone;
+  int64_t same_zone_count = 0;
   int64_t same_idc_count = 0;
   int64_t same_region_count = 0;
+  common::ObArray<common::ObAddr> same_zone_addr;
   common::ObArray<common::ObAddr> same_idc_addr;
   common::ObArray<common::ObAddr> same_region_addr;
   common::ObArray<common::ObAddr> different_region_addr;
+  zone_end_index = 0;
   idc_end_index = 0;
   region_end_index = 0;
   if (!is_inited_) {
@@ -698,22 +708,29 @@ int ObMigrationSrcByLocationProvider::divide_addr_list(
   } else if (OB_ISNULL(locality_manager_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("locality manager is null", K(ret), KP(locality_manager_));
-  } else if (OB_FAIL(get_server_region_and_idc_(dst.get_server(), dst_region, dst_idc))) {
-    LOG_WARN("failed to get dst idc", K(ret), "addr", dst.get_server());
+  } else if (OB_FAIL(get_server_geography_info_(dst.get_server(), dst_region, dst_idc, dst_zone))) {
+    LOG_WARN("failed to get dst geography info", K(ret), "addr", dst.get_server());
   } else {
     LOG_INFO("succeed to get dst region and idc", K(dst_idc), K(dst_region));
     for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
-      if (OB_FAIL(get_server_region_and_idc_(addr_list.at(i), src_region, src_idc))) {
-        LOG_WARN("failed to get src region and idc", K(ret), "addr", addr_list.at(i), K(dst));
+      if (OB_FAIL(get_server_geography_info_(addr_list.at(i), src_region, src_idc, src_zone))) {
+        LOG_WARN("failed to get src geography info", K(ret), "addr", addr_list.at(i), K(dst));
+      }
+      // TODO(zhixing.yh) need to confirm the relationship of zone and idc
+      else if (src_region == dst_region && src_idc == dst_idc && src_zone == dst_zone) {
+        same_zone_count++;
+        if (OB_FAIL(same_zone_addr.push_back(addr_list.at(i)))) {
+          LOG_WARN("failed to add zone addr", K(ret), "addr", addr_list.at(i), K(dst));
+        }
       } else if (src_region == dst_region && src_idc == dst_idc) { // get distinct region server
         same_idc_count++;
         if (OB_FAIL(same_idc_addr.push_back(addr_list.at(i)))) {
-          LOG_WARN("failed to add distinct region addr", K(ret), "addr", addr_list.at(i), K(dst));
+          LOG_WARN("failed to add idc addr", K(ret), "addr", addr_list.at(i), K(dst));
         }
       } else if (src_region == dst_region) {
         same_region_count++;
         if (OB_FAIL(same_region_addr.push_back(addr_list.at(i)))) {
-          LOG_WARN("failed to add distinct region addr", K(ret), "addr", addr_list.at(i), K(dst));
+          LOG_WARN("failed to add region addr", K(ret), "addr", addr_list.at(i), K(dst));
         }
       } else if (src_region != dst_region) {
         if (OB_FAIL(different_region_addr.push_back(addr_list.at(i)))) {
@@ -726,6 +743,8 @@ int ObMigrationSrcByLocationProvider::divide_addr_list(
     }
     if (OB_FAIL(ret)) {
       // do nothing
+    } else if (OB_FAIL(common::append(sorted_addr_list, same_zone_addr))) {
+      LOG_WARN("failed to append same_zone_addr to sorted_addr_list", K(ret), K(sorted_addr_list), K(same_zone_addr));
     } else if (OB_FAIL(common::append(sorted_addr_list, same_idc_addr))) {
       LOG_WARN("failed to append same_idc_addr to sorted_addr_list", K(ret), K(sorted_addr_list), K(same_idc_addr));
     } else if (OB_FAIL(common::append(sorted_addr_list, same_region_addr))) {
@@ -733,10 +752,11 @@ int ObMigrationSrcByLocationProvider::divide_addr_list(
     } else if (OB_FAIL(common::append(sorted_addr_list, different_region_addr))) {
       LOG_WARN("failed to append different_region_addr to sorted_addr_list", K(ret), K(sorted_addr_list), K(different_region_addr));
     } else {
-      idc_end_index = same_idc_count - 1;
-      region_end_index = same_idc_count + same_region_count - 1;
-      LOG_INFO("succeed to divide addr list", K(ret), K(sorted_addr_list), K(same_idc_addr),
-          K(same_region_addr), K(different_region_addr), K(idc_end_index), K(region_end_index));
+      zone_end_index = same_zone_count - 1;
+      idc_end_index = same_zone_count + same_idc_count - 1;
+      region_end_index = same_zone_count + same_idc_count + same_region_count - 1;
+      LOG_INFO("succeed to divide addr list", K(ret), K(sorted_addr_list), K(same_zone_addr), K(same_idc_addr),
+          K(same_region_addr), K(different_region_addr), K(zone_end_index), K(idc_end_index), K(region_end_index));
     }
   }
   return ret;
@@ -812,12 +832,13 @@ int ObMigrationSrcByLocationProvider::find_src(
   return ret;
 }
 
-int ObMigrationSrcByLocationProvider::get_server_region_and_idc_(
-    const common::ObAddr &addr, common::ObRegion &region, common::ObIDC &idc)
+int ObMigrationSrcByLocationProvider::get_server_geography_info_(
+    const common::ObAddr &addr, common::ObRegion &region, common::ObIDC &idc, common::ObZone &zone)
 {
   int ret = OB_SUCCESS;
   region.reset();
   idc.reset();
+  zone.reset();
   if (OB_ISNULL(locality_manager_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("locality manager is null", K(ret), KP(locality_manager_));
@@ -825,8 +846,15 @@ int ObMigrationSrcByLocationProvider::get_server_region_and_idc_(
     LOG_WARN("failed to get src region", K(ret), K(addr));
   } else if (OB_FAIL(locality_manager_->get_server_idc(addr, idc))) {
     LOG_WARN("failed to get src idc", K(ret), K(addr));
+  } else if (OB_FAIL(locality_manager_->get_server_zone(addr, zone))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("not set zone, default same.", K(zone));
+    } else {
+      LOG_WARN("failed to get src idc", K(ret), K(addr));
+    }
   } else {
-    LOG_INFO("succeed to get region and idc", K(addr), K(region), K(idc));
+    LOG_INFO("succeed to get region and idc", K(addr), K(region), K(idc), K(zone));
   }
   return ret;
 }
@@ -840,6 +868,126 @@ void ObMigrationSrcByLocationProvider::set_locality_manager_(ObLocalityManager *
   } else {
     locality_manager_ = locality_manager;
   }
+}
+
+int ObMigrationSrcByLocationProvider::find_migration_src(
+    const ObMigrationFindSrcParam &param,
+    common::ObAddr &choosen_src_addr)
+{
+  int ret = OB_SUCCESS;
+  choosen_src_addr.reset();
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMigrationSrcByLocationProvider is not init.", K(ret));
+  } else if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(param));
+  } else if (param.find_in_idc_scope_ && OB_FAIL(find_src(param.sorted_addr_list_, param.idc_start_index_, param.idc_end_index_,
+      param.learner_list_, param.leader_addr_, param.arg_.dst_, choosen_src_addr))) { // find in same idc
+    LOG_WARN("failed to find source in same idc scope", K(ret), K(param));
+  } else if (!choosen_src_addr.is_valid() && OB_FAIL(find_src(param.sorted_addr_list_, param.region_start_index_, param.region_end_index_,
+      param.learner_list_, param.leader_addr_, param.arg_.dst_, choosen_src_addr))) { // find in same region
+    LOG_WARN("failed to find source in same region scope", K(ret), K(param));
+  } else if (!choosen_src_addr.is_valid() && OB_FAIL(find_src(param.sorted_addr_list_, param.region_end_index_ + 1, param.addr_list_.count() - 1,
+      param.learner_list_, param.leader_addr_, param.arg_.dst_, choosen_src_addr))) { // find in different region
+    LOG_WARN("failed to find source in different region scope", K(ret), K(param));
+  } else if (!choosen_src_addr.is_valid()) {
+    ret = OB_DATA_SOURCE_NOT_EXIST;
+    LOG_WARN("all region no available data source exist", K(ret), "tenant_id", get_tenant_id(),
+        "ls_id", get_ls_id(), K(param));
+  }
+  return ret;
+}
+/**
+ * ------------------------------ObMigrationSrcZonePriorityProvider---------------------
+ */
+ObMigrationSrcZonePriorityProvider::ObMigrationSrcZonePriorityProvider()
+  : ObMigrationSrcByLocationProvider()
+{
+}
+
+ObMigrationSrcZonePriorityProvider::~ObMigrationSrcZonePriorityProvider()
+{
+}
+
+int ObMigrationSrcZonePriorityProvider::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
+      const ChooseSourcePolicy policy_type,
+      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObMigrationSrcZonePriorityProvider init twice", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || OB_ISNULL(storage_rpc)
+      || !local_clog_checkpoint_scn.is_valid()
+      || policy_type < ChooseSourcePolicy::IDC
+      || policy_type >= ChooseSourcePolicy::MAX_POLICY
+      || replica_type < common::ObReplicaType::REPLICA_TYPE_FULL || replica_type >= common::ObReplicaType::REPLICA_TYPE_MAX
+      || type < ObMigrationOpType::ADD_LS_OP || type >= ObMigrationOpType::MAX_LS_OP
+      || OB_ISNULL(member_helper)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), K(type),
+        K(local_clog_checkpoint_scn), K(policy_type), K(replica_type), KP(storage_rpc), KP(member_helper));
+  } else if (OB_FAIL(ObMigrationSrcByLocationProvider::init(tenant_id, ls_id, type, local_clog_checkpoint_scn, policy_type,
+      replica_type, storage_rpc, member_helper))) {
+    LOG_WARN("failed to init src provider", K(ret), K(tenant_id), K(ls_id), K(type), K(local_clog_checkpoint_scn),
+        K(replica_type), KP(storage_rpc), K(policy_type), KP(member_helper));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObMigrationSrcZonePriorityProvider::inner_choose_ob_src(
+    const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
+    const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg,
+    common::ObAddr &choosen_src_addr)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<common::ObAddr> sorted_addr_list;
+  int64_t zone_end_index = 0;
+  int64_t idc_end_index = 0;
+  int64_t region_end_index = 0;
+  ObMigrationFindSrcParam param;
+  choosen_src_addr.reset();
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMigrationSrcByLocationProvider is not init.", K(ret));
+  } else if (!leader_addr.is_valid() || addr_list.empty() || !arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(addr_list), K(arg));
+  } else if (OB_FAIL(divide_addr_list(addr_list, arg.dst_, sorted_addr_list,
+      zone_end_index, idc_end_index, region_end_index))) {
+    LOG_WARN("failed to divide addr", K(ret), K(addr_list), K(arg.dst_));
+  } else {
+    int64_t idc_start_index = zone_end_index + 1;
+    int64_t region_start_index = idc_end_index + 1;
+    if (OB_FAIL(find_src(sorted_addr_list, 0/*zone_start_index*/, zone_end_index,
+        learner_list, leader_addr, arg.dst_, choosen_src_addr))) { // find in same idc
+      LOG_WARN("failed to find source in same zone scope", K(ret), K(sorted_addr_list),
+          K(zone_end_index), K(learner_list), K(leader_addr), K(arg.dst_));
+    } else if (!choosen_src_addr.is_valid()) {
+      param.find_in_idc_scope_ = true;
+      param.idc_start_index_ = idc_start_index;
+      param.idc_end_index_ = idc_end_index;
+      param.region_start_index_ = region_start_index;
+      param.region_end_index_ = region_end_index;
+      param.leader_addr_ = leader_addr;
+      param.arg_ = arg;
+      if (OB_FAIL(param.learner_list_.deep_copy(learner_list))) {
+        LOG_WARN("failed to copy learner list", K(ret), K(learner_list));
+      } else if (OB_FAIL(param.addr_list_.assign(addr_list))) {
+        LOG_WARN("failed to assign addr list", K(ret), K(addr_list));
+      } else if (OB_FAIL(param.sorted_addr_list_.assign(sorted_addr_list))) {
+        LOG_WARN("failed to assign sorted addr list", K(ret), K(sorted_addr_list));
+      } else if (OB_FAIL(find_migration_src(param, choosen_src_addr))) {
+        LOG_WARN("failed to find migration src", K(ret), K(param));
+      }
+    }
+  }
+  return ret;
 }
 /**
  * ------------------------------ObMigrationSrcByCheckpointProvider---------------------
@@ -1116,6 +1264,14 @@ int ObStorageHAChooseSrcHelper::init(const uint64_t tenant_id, const share::ObLS
         }
         break;
       }
+      case ObStorageHASrcProvider::ChooseSourcePolicy::ZONE: {
+        if (OB_FAIL(init_choose_source_by_zone_priority_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg,
+            storage_rpc, member_helper))) {
+          LOG_WARN("failed to init choose source by location provider", K(ret), K(tenant_id),
+              K(ls_id), K(local_clog_checkpoint_scn), K(arg), K(policy));
+        }
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected choose source policy", K(ret), K(arg), K(policy));
@@ -1248,6 +1404,37 @@ int ObStorageHAChooseSrcHelper::init_choose_source_by_checkpoint_provider_(
   return ret;
 }
 
+int ObStorageHAChooseSrcHelper::init_choose_source_by_zone_priority_provider_(
+    const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg,
+    storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  ObMigrationSrcZonePriorityProvider *choose_src_by_zone_priority_provider = nullptr;
+  const ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ZONE;
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMigrationSrcZonePriorityProvider)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret));
+  } else if (OB_ISNULL(choose_src_by_zone_priority_provider = (new (buf) ObMigrationSrcZonePriorityProvider()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("provider is nullptr", K(ret));
+  } else if (OB_FAIL(choose_src_by_zone_priority_provider->init(tenant_id, ls_id, arg.type_, local_clog_checkpoint_scn,
+      policy, arg.dst_.get_replica_type(), storage_rpc, member_helper))) {
+    LOG_WARN("failed to init src by zone priority provider", K(ret), K(tenant_id), K(ls_id),
+        "type", arg.type_, K(local_clog_checkpoint_scn), K(arg.dst_), KP(storage_rpc), KP(member_helper));
+  } else {
+    provider_ = choose_src_by_zone_priority_provider;
+    choose_src_by_zone_priority_provider = nullptr;
+  }
+  if (OB_NOT_NULL(choose_src_by_zone_priority_provider)) {
+    choose_src_by_zone_priority_provider->~ObMigrationSrcZonePriorityProvider();
+    choose_src_by_zone_priority_provider = nullptr;
+  }
+  buf = nullptr;
+  return ret;
+}
+
 int ObStorageHAChooseSrcHelper::get_policy_type(
     const ObMigrationOpArg &arg,
     const uint64_t tenant_id,
@@ -1267,6 +1454,9 @@ int ObStorageHAChooseSrcHelper::get_policy_type(
   } else if (!enable_choose_source_policy) {
     policy = ObStorageHASrcProvider::ChooseSourcePolicy::CHECKPOINT;
     LOG_INFO("set checkpoint policy", K(tenant_id));
+  } else if (arg.prioritize_same_zone_src_) {
+    policy = ObStorageHASrcProvider::ChooseSourcePolicy::ZONE;
+    LOG_INFO("set zone policy", K(tenant_id));
   } else if (0 == strcmp(policy_str, ObStorageHASrcProvider::get_policy_str(ObStorageHASrcProvider::ChooseSourcePolicy::IDC))) {
     policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
     LOG_INFO("set idc policy", K(tenant_id));

@@ -44,12 +44,59 @@ using namespace lib;
 using namespace obrpc;
 namespace rootserver
 {
+
+static const char* ls_replica_parallel_migration_mode[] = {
+  "AUTO",
+  "ON",
+  "OFF"
+};
+
+const char* ObParallelMigrationMode::get_mode_str() const {
+  STATIC_ASSERT(ARRAYSIZEOF(ls_replica_parallel_migration_mode) == (int64_t)MAX,
+                "ls_replica_parallel_migration_mode string array size mismatch enum ParallelMigrationMode count");
+  const char *str = NULL;
+  if (mode_ >= AUTO && mode_ < MAX) {
+    str = ls_replica_parallel_migration_mode[static_cast<int64_t>(mode_)];
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid ParallelMigrationMode", K_(mode));
+  }
+  return str;
+}
+
+int64_t ObParallelMigrationMode::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(mode), "mode", get_mode_str());
+  J_OBJ_END();
+  return pos;
+}
+
+int ObParallelMigrationMode::parse_from_string(const ObString &mode)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  STATIC_ASSERT(ARRAYSIZEOF(ls_replica_parallel_migration_mode) == (int64_t)MAX,
+                "ls_replica_parallel_migration_mode string array size mismatch enum ParallelMigrationMode count");
+  for (int64_t i = 0; i < ARRAYSIZEOF(ls_replica_parallel_migration_mode) && !found; i++) {
+    if (0 == mode.case_compare(ls_replica_parallel_migration_mode[i])) {
+      mode_ = static_cast<ParallelMigrationMode>(i);
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to parse type from string", KR(ret), K(mode), K_(mode));
+  }
+  return ret;
+}
+
 ObDRTaskQueue::ObDRTaskQueue() : inited_(false),
                                  config_(nullptr),
                                  task_alloc_(),
                                  wait_list_(),
                                  schedule_list_(),
-                                 task_map_(),
                                  rpc_proxy_(nullptr),
                                  priority_(ObDRTaskPriority::MAX_PRI)
 {
@@ -65,20 +112,18 @@ void ObDRTaskQueue::reuse()
 {
   while (!wait_list_.is_empty()) {
     ObDRTask *t = wait_list_.remove_first();
-    remove_task_from_map_and_free_it_(t);
+    free_task_(t);
   }
   while (!schedule_list_.is_empty()) {
     ObDRTask *t = schedule_list_.remove_first();
-    remove_task_from_map_and_free_it_(t);
+    free_task_(t);
   }
-  task_map_.clear();
 }
 
 void ObDRTaskQueue::reset()
 {
   wait_list_.reset();
   schedule_list_.reset();
-  task_map_.clear();
 }
 
 void ObDRTaskQueue::free_task_(ObDRTask *&task)
@@ -90,17 +135,8 @@ void ObDRTaskQueue::free_task_(ObDRTask *&task)
   }
 }
 
-void ObDRTaskQueue::remove_task_from_map_and_free_it_(ObDRTask *&task)
-{
-  if (OB_NOT_NULL(task)) {
-    task_map_.erase_refactored(task->get_task_key());
-    free_task_(task);
-  }
-}
-
 int ObDRTaskQueue::init(
     common::ObServerConfig &config,
-    const int64_t bucket_num,
     obrpc::ObSrvRpcProxy *rpc_proxy,
     ObDRTaskPriority priority)
 {
@@ -108,13 +144,10 @@ int ObDRTaskQueue::init(
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_UNLIKELY(bucket_num <= 0)
-             || OB_ISNULL(rpc_proxy)
-             || (ObDRTaskPriority::LOW_PRI != priority && ObDRTaskPriority::HIGH_PRI != priority)) {
+  } else if (OB_ISNULL(rpc_proxy)
+          || (ObDRTaskPriority::LOW_PRI != priority && ObDRTaskPriority::HIGH_PRI != priority)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(bucket_num), KP(rpc_proxy), K(priority));
-  } else if (OB_FAIL(task_map_.create(bucket_num, "DRTaskMap"))) {
-    LOG_WARN("fail to create task map", KR(ret), K(bucket_num));
+    LOG_WARN("invalid argument", KR(ret), KP(rpc_proxy), K(priority));
   } else if (OB_FAIL(task_alloc_.init(
           ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE,
           ObMemAttr(common::OB_SERVER_TENANT_ID, "DRTaskAlloc")))) {
@@ -128,100 +161,11 @@ int ObDRTaskQueue::init(
   return ret;
 }
 
-int ObDRTaskQueue::check_task_in_scheduling(
-    const ObDRTaskKey &task_key,
-    bool &task_in_scheduling) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!task_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(task_key));
-  } else {
-    ObDRTask *task = nullptr;
-    int tmp_ret = task_map_.get_refactored(task_key, task);
-    if (OB_SUCCESS == tmp_ret) {
-      if (OB_ISNULL(task)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("a null task ptr getted from task_map", KR(ret), K(task_key));
-      } else {
-        task_in_scheduling = task->in_schedule();
-      }
-    } else if (OB_HASH_NOT_EXIST == tmp_ret) {
-      // task not exist means task not executing
-      task_in_scheduling = false;
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("fail to get from map", KR(ret), K(task_key));
-    }
-  }
-  return ret;
-}
-
-int ObDRTaskQueue::check_task_exist(
-    const ObDRTaskKey &task_key,
-    bool &task_exist)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!task_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(task_key));
-  } else {
-    ObDRTask *task = nullptr;
-    int tmp_ret = task_map_.get_refactored(task_key, task);
-    if (OB_SUCCESS == tmp_ret) {
-      task_exist = true;
-    } else if (OB_HASH_NOT_EXIST == tmp_ret) {
-      task_exist = false;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get from task_map", KR(ret), K(task_key));
-    }
-  }
-  return ret;
-}
-
-int ObDRTaskQueue::push_task_in_wait_list(
-    ObDRTaskMgr &task_mgr,
-    const ObDRTaskQueue &sibling_queue,
-    const ObDRTask &task,
-    bool &has_task_in_schedule)
-{
-  int ret = OB_SUCCESS;
-  has_task_in_schedule = false;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else {
-    const ObDRTaskKey &task_key = task.get_task_key();
-    ObDRTask *task_ptr = nullptr;
-    int tmp_ret = task_map_.get_refactored(task_key, task_ptr);
-    if (OB_HASH_NOT_EXIST == tmp_ret) {
-      if (OB_FAIL(do_push_task_in_wait_list_(task_mgr, sibling_queue, task, has_task_in_schedule))) {
-        LOG_WARN("fail to push back", KR(ret));
-      }
-    } else if (OB_SUCCESS == tmp_ret) {
-      ret = OB_ENTRY_EXIST;
-      LOG_INFO("disaster recovery task exist", KR(ret), K(task_key), K(task), KP(this));
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("fail to check task exist", KR(ret), K(task_key));
-    }
-  }
-  return ret;
-}
-
 int ObDRTaskQueue::push_task_in_schedule_list(
     const ObDRTask &task)
 {
   // STEP 1: push task into schedule list
-  // STEP 2: push task into task_map
-  // STEP 3: set task in schedule
+  // STEP 2: set task in schedule
   int ret = OB_SUCCESS;
   void *raw_ptr = nullptr;
   ObDRTask *new_task = nullptr;
@@ -237,8 +181,6 @@ int ObDRTaskQueue::push_task_in_schedule_list(
   } else if (OB_ISNULL(new_task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new_task is nullptr", KR(ret));
-  } else if (OB_FAIL(task_map_.set_refactored(new_task->get_task_key(), new_task))) {
-    LOG_WARN("fail to set map", KR(ret), "task_key", new_task->get_task_key());
   } else {
     // set schedule_time for this task
     new_task->set_schedule();
@@ -252,7 +194,7 @@ int ObDRTaskQueue::push_task_in_schedule_list(
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(new_task)) {
-      remove_task_from_map_and_free_it_(new_task);
+      free_task_(new_task);
     } else if (OB_NOT_NULL(raw_ptr)) {
       task_alloc_.free(raw_ptr);
       raw_ptr = nullptr;
@@ -261,11 +203,9 @@ int ObDRTaskQueue::push_task_in_schedule_list(
   return ret;
 }
 
-int ObDRTaskQueue::do_push_task_in_wait_list_(
+int ObDRTaskQueue::do_push_task_in_wait_list(
     ObDRTaskMgr &task_mgr,
-    const ObDRTaskQueue &sibling_queue,
-    const ObDRTask &task,
-    bool &has_task_in_schedule)
+    const ObDRTask &task)
 {
   int ret = OB_SUCCESS;
   void *raw_ptr = nullptr;
@@ -273,11 +213,7 @@ int ObDRTaskQueue::do_push_task_in_wait_list_(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(config_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("config_ ptr is null", KR(ret), KP(config_));
-  } else if (OB_ISNULL(raw_ptr = task_alloc_.alloc(
-            task.get_clone_size()))) {
+  } else if (OB_ISNULL(raw_ptr = task_alloc_.alloc(task.get_clone_size()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc task", KR(ret), "size", task.get_clone_size());
   } else if (OB_FAIL(task.clone(raw_ptr, new_task))) {
@@ -289,36 +225,12 @@ int ObDRTaskQueue::do_push_task_in_wait_list_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to add new task to wait list", KR(ret), "task", *new_task);
   } else {
-    has_task_in_schedule = false;
-    bool sibling_in_schedule = false;
-    if (OB_FAIL(sibling_queue.check_task_in_scheduling(
-            new_task->get_task_key(), sibling_in_schedule))) {
-      LOG_WARN("fail to check has in schedule task", KR(ret),
-               "task_key", new_task->get_task_key());
-    } else if (OB_FAIL(task_map_.set_refactored(
-            new_task->get_task_key(), new_task))) {
-      LOG_WARN("fail to set map", KR(ret), "task_key", new_task->get_task_key());
-    } else if (task_mgr.get_reach_concurrency_limit() && !sibling_in_schedule) {
-      task_mgr.clear_reach_concurrency_limit();
-    }
-    if (OB_SUCC(ret)) {
-      has_task_in_schedule = sibling_in_schedule;
-      if (OB_FAIL(set_sibling_in_schedule(new_task->get_task_key(), sibling_in_schedule))) {
-        LOG_WARN("fail to set sibling in schedule", KR(ret),
-                 "task_key", new_task->get_task_key(), K(sibling_in_schedule));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      wait_list_.remove(new_task);
-    } else {
-      LOG_INFO("success to push a task in waiting list", K(task), K(has_task_in_schedule));
-    }
+    LOG_INFO("success to push a task in waiting list", K(task));
   }
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(new_task)) {
-      remove_task_from_map_and_free_it_(new_task);
+      free_task_(new_task);
     } else if (OB_NOT_NULL(raw_ptr)) {
       task_alloc_.free(raw_ptr);
       raw_ptr = nullptr;
@@ -340,13 +252,8 @@ int ObDRTaskQueue::pop_task(
     LOG_WARN("config_ ptr is null", KR(ret), KP(config_));
   } else {
     DLIST_FOREACH(t, wait_list_) {
-      if (t->is_sibling_in_schedule()) {
-        // task can not pop
-        LOG_INFO("can not pop this task because a sibling task already in schedule", KPC(t));
-      } else {
-        task = t;
-        break;
-      }
+      task = t; // any task can be pop, no other task in double queue is conflict with it.
+      break;
     }
     if (OB_NOT_NULL(task)) {
       // when task not empty, we move it from wait to schedule list,
@@ -361,39 +268,56 @@ int ObDRTaskQueue::pop_task(
       }
       // if fail to add to schedule list, clean it directly
       if (OB_FAIL(ret)) {
-        remove_task_from_map_and_free_it_(task);
+        free_task_(task);
       }
     }
   }
   return ret;
 }
 
-int ObDRTaskQueue::get_task(
+int ObDRTaskQueue::get_task_by_task_id(
     const share::ObTaskId &task_id,
-    const ObDRTaskKey &task_key,
     ObDRTask *&task)
 {
   int ret = OB_SUCCESS;
+  task = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_id));
+  } else if (OB_FAIL(get_task_by_task_id_in_list_(task_id, wait_list_, task))) {
+    LOG_WARN("check task exist in wait list failed", KR(ret), K(task_id), K(wait_list_));
+  } else if (OB_NOT_NULL(task)) {
+  } else if (OB_FAIL(get_task_by_task_id_in_list_(task_id, schedule_list_, task))) {
+    LOG_WARN("check task exist in schedule list failed", KR(ret), K(task_id), K(schedule_list_));
+  }
+  return ret;
+}
+
+int ObDRTaskQueue::get_task_by_task_id_in_list_(
+    const share::ObTaskId &task_id,
+    TaskList &list,
+    ObDRTask *&task)
+{
+  int ret = OB_SUCCESS;
+  task = nullptr;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_id));
   } else {
-    ObDRTask *my_task = nullptr;
-    int tmp_ret = task_map_.get_refactored(task_key, my_task);
-    if (OB_HASH_NOT_EXIST == tmp_ret) {
-      task = nullptr;
-    } else if (OB_SUCCESS == tmp_ret) {
-      if (OB_ISNULL(my_task)) {
+    DLIST_FOREACH(task_in_list, list) {
+      if (OB_ISNULL(task_in_list)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("my_task ptr is null", KR(ret), KP(my_task));
-      } else if (my_task->get_task_id() == task_id) {
-        task = my_task;
-      } else {
-        task = nullptr;
+        LOG_WARN("task_in_list is null ptr", KR(ret), K(task_id), K(list));
+      } else if (task_in_list->get_task_id() == task_id) {
+        task = task_in_list;
+        break;
       }
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("fail to get task from map", KR(ret), K(task_key), K(task_id));
     }
   }
   return ret;
@@ -524,7 +448,7 @@ int ObDRTaskQueue::try_clean_and_cancel_task(
         FLOG_INFO("need cancel migrate task in wait list", K(*t));
         // remove from wait_list_, need use DLIST_FOREACH_REMOVESAFE
         wait_list_.remove(t);
-        remove_task_from_map_and_free_it_(t);
+        free_task_(t);
       }
     }
   }
@@ -548,45 +472,19 @@ int ObDRTaskQueue::finish_schedule(
     // remove from schedule_list_
     schedule_list_.remove(task);
     FLOG_INFO("[DRTASK_NOTICE] success to finish schedule task", KR(ret), KPC(task));
-    remove_task_from_map_and_free_it_(task);
+    free_task_(task);
   }
   return ret;
 }
 
-int ObDRTaskQueue::set_sibling_in_schedule(
-    const ObDRTask &task,
-    const bool in_schedule)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else {
-    const ObDRTaskKey &task_key = task.get_task_key();
-    ObDRTask *my_task = nullptr;
-    int tmp_ret = task_map_.get_refactored(task_key, my_task);
-    if (OB_HASH_NOT_EXIST == tmp_ret) {
-      // bypass
-    } else if (OB_SUCCESS == tmp_ret) {
-      if (OB_ISNULL(my_task)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("my_task ptr is null", KR(ret), K(task));
-      } else {
-        my_task->set_sibling_in_schedule(in_schedule);
-      }
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("fail to get task from map", KR(ret), K(task_key));
-    }
-  }
-  return ret;
-}
-
-int ObDRTaskQueue::set_sibling_in_schedule(
+int ObDRTaskQueue::check_whether_task_conflict_in_list_(
     const ObDRTaskKey &task_key,
-    const bool in_schedule)
+    const TaskList &list,
+    const bool enable_parallel_migration,
+    bool &is_conflict) const
 {
   int ret = OB_SUCCESS;
+  is_conflict = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -594,21 +492,59 @@ int ObDRTaskQueue::set_sibling_in_schedule(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task_key));
   } else {
-    ObDRTask *my_task = nullptr;
-    int tmp_ret = task_map_.get_refactored(task_key, my_task);
-    if (OB_HASH_NOT_EXIST == tmp_ret) {
-      // bypass
-    } else if (OB_SUCCESS == tmp_ret) {
-      if (OB_ISNULL(my_task)) {
+    DLIST_FOREACH(task_in_list, list) {
+      if (OB_ISNULL(task_in_list)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("my_task ptr is null", KR(ret), K(task_key), KP(my_task));
-      } else {
-        my_task->set_sibling_in_schedule(in_schedule);
-      }
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("fail to get task from map", KR(ret), K(task_key));
+        LOG_WARN("task_in_list is null ptr", KR(ret), K(task_key), K(list));
+      } else if (task_in_list->get_task_key().get_tenant_id() == task_key.get_tenant_id()
+              && task_in_list->get_task_key().get_ls_id() == task_key.get_ls_id()) {
+        // tenant_id + ls_id is same
+        if (!enable_parallel_migration) {
+          LOG_INFO("enable_parallel_migration is false, tenant_id + ls_id is the same, prohibit parallel",
+                    KR(ret), K(enable_parallel_migration), K(task_key));
+          // if tenant_id + ls_id is the same, then task conflict
+          is_conflict = true;
+        } else if (ObDRTaskType::LS_MIGRATE_REPLICA != task_key.get_task_type()
+                || ObDRTaskType::LS_MIGRATE_REPLICA != task_in_list->get_disaster_recovery_task_type()) {
+          // if one of the two task is not a migration task, the task is conflict.
+          LOG_INFO("there is a task is not migration task, prohibit parallel", KR(ret),
+                    K(task_key), K(task_in_list->get_disaster_recovery_task_type()));
+          is_conflict = true;
+        } else if (task_in_list->get_task_key().get_zone() == task_key.get_zone()) {
+          LOG_INFO("two migrate task conflict, task execution zone is the same, prohibit parallel",
+                  KR(ret), K(task_key), K(task_in_list->get_task_key()));
+          is_conflict = true;
+        }
+        if (is_conflict) {
+          break;
+        }
+      } // end with tenant_id + ls_id is same
     }
+  }
+  return ret;
+}
+
+int ObDRTaskQueue::check_whether_task_conflict(
+    const ObDRTaskKey &task_key,
+    const bool enable_parallel_migration,
+    bool &is_conflict)
+{
+  int ret = OB_SUCCESS;
+  is_conflict = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!task_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_key));
+  } else if (OB_FAIL(check_whether_task_conflict_in_list_(task_key, wait_list_, enable_parallel_migration, is_conflict))) {
+    LOG_WARN("check task conflict in wait list failed", KR(ret), K(task_key), K(wait_list_), K(enable_parallel_migration));
+  } else if (is_conflict) {
+    LOG_INFO("task conflict in wait list", KR(ret), K(task_key), K(enable_parallel_migration), K(priority_));
+  } else if (OB_FAIL(check_whether_task_conflict_in_list_(task_key, schedule_list_, enable_parallel_migration, is_conflict))) {
+    LOG_WARN("check task conflict in schedule list failed", KR(ret), K(task_key), K(schedule_list_), K(enable_parallel_migration));
+  } else if (is_conflict) {
+    LOG_INFO("task conflict in schedule list", KR(ret), K(task_key), K(enable_parallel_migration), K(priority_));
   }
   return ret;
 }
@@ -662,10 +598,10 @@ int ObDRTaskMgr::init(
     sql_proxy_ = sql_proxy;
     schema_service_ = schema_service;
     if (OB_FAIL(high_task_queue_.init(
-            config, TASK_QUEUE_LIMIT, rpc_proxy_, ObDRTaskPriority::HIGH_PRI))) {
+            config, rpc_proxy_, ObDRTaskPriority::HIGH_PRI))) {
       LOG_WARN("fail to init high priority task queue", KR(ret));
     } else if (OB_FAIL(low_task_queue_.init(
-            config, TASK_QUEUE_LIMIT, rpc_proxy_, ObDRTaskPriority::LOW_PRI))) {
+            config, rpc_proxy_, ObDRTaskPriority::LOW_PRI))) {
       LOG_WARN("fail to init low priority task queue", KR(ret));
     } else if (OB_FAIL(disaster_recovery_task_table_updater_.init(sql_proxy, this))) {
       LOG_WARN("fail to init a ObDRTaskTableUpdater", KR(ret));
@@ -794,55 +730,7 @@ void ObDRTaskMgr::run3()
   FLOG_INFO("disaster task mgr exits");
 }
 
-int ObDRTaskMgr::check_task_in_executing(
-    const ObDRTaskKey &task_key,
-    const ObDRTaskPriority priority,
-    bool &task_in_executing)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
-  } else if (ObDRTaskPriority::HIGH_PRI != priority
-             && ObDRTaskPriority::LOW_PRI != priority) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(priority));
-  } else {
-    ObThreadCondGuard guard(get_cond());
-    ObDRTaskQueue &queue = ObDRTaskPriority::LOW_PRI == priority
-                           ? low_task_queue_
-                           : high_task_queue_;
-    if (OB_FAIL(queue.check_task_in_scheduling(task_key, task_in_executing))) {
-      LOG_WARN("fail to check task exist", KR(ret), K(task_key));
-    }
-  }
-  return ret;
-}
-
-int ObDRTaskMgr::check_task_exist(
-    const ObDRTaskKey &task_key,
-    const ObDRTaskPriority priority,
-    bool &task_exist)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
-  } else if (ObDRTaskPriority::HIGH_PRI != priority
-             && ObDRTaskPriority::LOW_PRI != priority) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(priority));
-  } else {
-    ObThreadCondGuard guard(get_cond());
-    ObDRTaskQueue &queue = ObDRTaskPriority::LOW_PRI == priority
-                           ? low_task_queue_
-                           : high_task_queue_;
-    if (OB_FAIL(queue.check_task_exist(task_key, task_exist))) {
-      LOG_WARN("fail to check task exist", KR(ret), K(task_key));
-    }
-  }
-  return ret;
-}
-
-int ObDRTaskMgr::add_task_in_queue_and_execute(const ObDRTask &task)
+int ObDRTaskMgr::add_task_in_queue_and_execute(ObDRTask &task)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -853,31 +741,19 @@ int ObDRTaskMgr::add_task_in_queue_and_execute(const ObDRTask &task)
     LOG_WARN("invalid dr task", KR(ret), K(task));
   } else {
     ObThreadCondGuard guard(get_cond());
-    bool task_exist = false;
-    bool sibling_in_schedule = false;
+    bool is_conflict = false;
     ObDRTaskQueue &queue = task.is_high_priority_task() ? high_task_queue_ : low_task_queue_;
-    ObDRTaskQueue &sibling_queue = task.is_high_priority_task() ? low_task_queue_ : high_task_queue_;
     if (OB_UNLIKELY(queue.task_cnt() >= TASK_QUEUE_LIMIT)) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("disaster recovery task queue is full", KR(ret), "task_cnt", queue.task_cnt());
-    } else if (OB_FAIL(queue.check_task_exist(task.get_task_key(), task_exist))) {
-      LOG_WARN("fail to check task in scheduling", KR(ret), K(task));
-    } else if (task_exist) {
+    } else if (OB_FAIL(check_whether_task_conflict_(task, is_conflict))) {
+      LOG_WARN("fail to check whether task conflict", KR(ret), K(task));
+    } else if (is_conflict) {
+      // task conflict return error code, report an error to user
       ret = OB_ENTRY_EXIST;
-      LOG_WARN("ls disaster recovery task has existed in queue", KR(ret), K(task), K(task_exist));
-    } else if (OB_FAIL(sibling_queue.check_task_in_scheduling(task.get_task_key(), sibling_in_schedule))) {
-      LOG_WARN("fail to check task in scheduling", KR(ret), K(task));
-    } else if (sibling_in_schedule) {
-      ret = OB_ENTRY_EXIST;
-      LOG_WARN("ls disaster recovery task has existed in sibling_queue",
-                  KR(ret), K(task), K(sibling_in_schedule));
+      LOG_WARN("ls disaster recovery task has existed in queue", KR(ret), K(task), K(is_conflict));
     } else if (OB_FAIL(queue.push_task_in_schedule_list(task))) {
       LOG_WARN("fail to add task to schedule list", KR(ret), K(task));
-    } else if (OB_FAIL(set_sibling_in_schedule(task, true/*in_schedule*/))) {
-      //after successfully adding the scheduling queue,
-      //need mark in both queues that the task has been scheduled in the queue.
-      //if there is a task in the waiting queue of another queue, need update its mark
-      LOG_WARN("set sibling in schedule failed", KR(ret), K(task));
     } else {
       if (OB_SUCCESS != (tmp_ret = task.log_execute_start())) {
         LOG_WARN("fail to log task start", KR(tmp_ret), K(task));
@@ -892,45 +768,30 @@ int ObDRTaskMgr::add_task_in_queue_and_execute(const ObDRTask &task)
 }
 
 int ObDRTaskMgr::add_task(
-    const ObDRTask &task)
+    ObDRTask &task)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
-    ret = OB_NOT_INIT;
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(loaded), K_(stopped));
   } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid dr task", KR(ret), K(task));
   } else {
     ObThreadCondGuard guard(get_cond());
-    ObDRTaskQueue &queue = task.is_high_priority_task()
-                           ? high_task_queue_
-                           : low_task_queue_;
-    ObDRTaskQueue &sibling_queue = task.is_high_priority_task()
-                                   ? low_task_queue_
-                                   : high_task_queue_;
-    bool has_task_in_schedule = false;
+    ObDRTaskQueue &queue = task.is_high_priority_task() ? high_task_queue_ : low_task_queue_;
+    bool is_conflict = false;
     if (OB_UNLIKELY(queue.task_cnt() >= TASK_QUEUE_LIMIT)) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("disaster recovery task queue is full", KR(ret), "task_cnt", queue.task_cnt());
-    } else if (OB_FAIL(queue.push_task_in_wait_list(*this, sibling_queue, task, has_task_in_schedule))) {
-      if (OB_ENTRY_EXIST != ret) {
-        LOG_WARN("fail to push task", KR(ret), K(task));
-      } else {
-        ret = OB_SUCCESS;
-        LOG_INFO("task already exist in queue", K(task));
-      }
+    } else if (OB_FAIL(check_whether_task_conflict_(task, is_conflict))) {
+      LOG_WARN("fail to check whether task conflict", KR(ret), K(task));
+    } else if (is_conflict) {
+      ret = OB_ENTRY_EXIST;
+      LOG_WARN("ls disaster recovery task has existed in queue", KR(ret), K(task), K(is_conflict));
+    } else if (OB_FAIL(queue.do_push_task_in_wait_list(*this, task))) {
+      LOG_WARN("fail to push task", KR(ret), K(task));
     } else {
-      int64_t wait_cnt = 0;
-      int64_t schedule_cnt = 0;
-      if (OB_FAIL(inner_get_task_cnt_(wait_cnt, schedule_cnt))) {
-        LOG_WARN("fail to get task cnt", KR(ret));
-      } else if (!has_task_in_schedule
-                 && 0 == get_reach_concurrency_limit()) {
-        get_cond().broadcast();
-        LOG_INFO("success to broad cast get_cond()", K(wait_cnt), K(schedule_cnt));
-      }
-      clear_reach_concurrency_limit();
+      get_cond().broadcast();
       LOG_INFO("[DRTASK_NOTICE] add task to disaster recovery task mgr finish", KR(ret), K(task));
     }
   }
@@ -941,22 +802,13 @@ int ObDRTaskMgr::deal_with_task_reply(
     const ObDRTaskReplyResult &reply)
 {
   int ret = OB_SUCCESS;
-  ObDRTaskKey task_key;
   if (OB_FAIL(check_inner_stat_())) {
-    ret = OB_NOT_INIT;
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(loaded), K_(stopped));
-  } else if (OB_FAIL(task_key.init(
-          reply.tenant_id_,
-          reply.ls_id_.id(),
-          0, /* set to 0 */
-          0, /* set to 0 */
-          ObDRTaskKeyType::FORMAL_DR_KEY))) {
-    LOG_WARN("fail to init task key", KR(ret), K(reply));
   } else {
     int tmp_ret = OB_SUCCESS;
     ObDRTask *task = nullptr;
     ObThreadCondGuard guard(get_cond());
-    if (OB_SUCCESS != (tmp_ret = get_task_by_id_(reply.task_id_, task_key, task))) {
+    if (OB_SUCCESS != (tmp_ret = get_task_by_id_(reply.task_id_, task))) {
       if (OB_ENTRY_NOT_EXIST == tmp_ret) {
         // task not exist, try record this reply result
         ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_disaster_recovery_task",
@@ -966,7 +818,7 @@ int ObDRTaskMgr::deal_with_task_reply(
                             "execute_result", reply.result_,
                             "ret_comment", ob_disaster_recovery_task_ret_comment_strs(ObDRTaskRetComment::RECEIVE_FROM_STORAGE_RPC));
       } else {
-        LOG_WARN("fail to get task from task manager", KR(tmp_ret), K(reply), K(task_key));
+        LOG_WARN("fail to get task from task manager", KR(tmp_ret), K(reply));
       }
     } else if (OB_SUCCESS != (tmp_ret = task->log_execute_result(reply.result_, ObDRTaskRetComment::RECEIVE_FROM_STORAGE_RPC))){
       LOG_WARN("fail to log execute result", KR(tmp_ret), K(reply));
@@ -974,7 +826,7 @@ int ObDRTaskMgr::deal_with_task_reply(
 
     if (OB_FAIL(async_add_cleaning_task_to_updater(
                     reply.task_id_,
-                    task_key,
+                    task->get_task_key(),
                     reply.result_,
                     false,/*need_record_event*/
                     ObDRTaskRetComment::RECEIVE_FROM_STORAGE_RPC,
@@ -997,12 +849,12 @@ int ObDRTaskMgr::async_add_cleaning_task_to_updater(
   ObDRTask *task = nullptr;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
-  } else if (OB_FAIL(get_task_by_id_(task_id, task_key, task))) {
+  } else if (OB_FAIL(get_task_by_id_(task_id, task))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_WARN("fail to get task, task may be cleaned earlier", KR(ret), K(task_id), K(task_key));
+      LOG_WARN("fail to get task, task may be cleaned earlier", KR(ret), K(task_id));
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("fail to get task from task manager", KR(ret), K(task_id), K(task_key));
+      LOG_WARN("fail to get task from task manager", KR(ret), K(task_id));
     }
   }
   if (OB_SUCC(ret)
@@ -1025,7 +877,6 @@ int ObDRTaskMgr::async_add_cleaning_task_to_updater(
 
 int ObDRTaskMgr::do_cleaning(
     const share::ObTaskId &task_id,
-    const ObDRTaskKey &task_key,
     const int ret_code,
     const bool need_clear_server_data_in_limit,
     const bool need_record_event,
@@ -1040,7 +891,7 @@ int ObDRTaskMgr::do_cleaning(
     ObDRTask *task = nullptr;
     common::ObAddr dst_server;
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(queues_); ++i) {
-      if (OB_FAIL(queues_[i].get_task(task_id, task_key, task))) {
+      if (OB_FAIL(queues_[i].get_task_by_task_id(task_id, task))) {
         LOG_WARN("fail to get schedule task from queue", KR(ret), "priority", queues_[i].get_priority_str());
       } else if (OB_NOT_NULL(task)) {
         task_queue = &queues_[i];
@@ -1051,21 +902,18 @@ int ObDRTaskMgr::do_cleaning(
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(task)) {
         LOG_INFO("in schedule taks not found, maybe not sync because of network traffic",
-                 K(task_id), K(task_key), K(ret_code));
+                 K(task_id), K(ret_code));
       } else {
         if (need_record_event) {
           (void)log_task_result(*task, ret_code, ret_comment);
         }
         dst_server = task->get_dst_server();
-        if (OB_FAIL(set_sibling_in_schedule(*task, false/* not in schedule*/))) {
-          LOG_WARN("fail to set sibling in schedule", KR(ret), KPC(task));
-        } else if (OB_ISNULL(task_queue)) {
+        if (OB_ISNULL(task_queue)) {
           LOG_INFO("task_queue is null"); // by pass
         } else if (OB_FAIL(task_queue->finish_schedule(task))) {
           LOG_WARN("fail to finish scheduling task", KR(ret), KPC(task));
         }
       }
-      clear_reach_concurrency_limit();
     }
   }
   return ret;
@@ -1079,7 +927,6 @@ int ObDRTaskMgr::get_all_task_count(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
-    ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(inited), K_(loaded), K_(stopped));
   } else {
     ObThreadCondGuard guard(get_cond());
@@ -1105,14 +952,13 @@ int ObDRTaskMgr::log_task_result(
 
 int ObDRTaskMgr::get_task_by_id_(
     const share::ObTaskId &task_id,
-    const ObDRTaskKey &task_key,
     ObDRTask *&task)
 {
   int ret = OB_SUCCESS;
   ObDRTask *task_to_get = nullptr;
   void *raw_ptr = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(queues_); ++i) {
-    if (OB_FAIL(queues_[i].get_task(task_id, task_key, task_to_get))) {
+    if (OB_FAIL(queues_[i].get_task_by_task_id(task_id, task_to_get))) {
       LOG_WARN("fail to get schedule task from queue", KR(ret), "priority", queues_[i].get_priority_str());
     } else if (OB_NOT_NULL(task_to_get)) {
       break;
@@ -1121,7 +967,7 @@ int ObDRTaskMgr::get_task_by_id_(
   if (OB_SUCC(ret) && OB_ISNULL(task_to_get)) {
     task = nullptr;
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("task not exist, maybe cleaned earier", KR(ret), K(task_id), K(task_key));
+    LOG_WARN("task not exist, maybe cleaned earier", KR(ret), K(task_id));
   } else {
     task = task_to_get;
   }
@@ -1158,7 +1004,6 @@ int ObDRTaskMgr::load_task_to_schedule_list_()
     for (int64_t i = 0; i < static_cast<int64_t>(ObDRTaskPriority::MAX_PRI); ++i) {
       queues_[i].reuse();
     }
-    clear_reach_concurrency_limit();
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_id_array.count(); ++i) {
       // load this tenant's task info into schedule_list
       // TODO@jingyu.cr: need to isolate different tenant
@@ -1415,8 +1260,7 @@ int ObDRTaskMgr::try_pop_task(
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (OB_FAIL(inner_get_task_cnt_(wait_cnt, in_schedule_cnt))) {
     LOG_WARN("fail to get task cnt", KR(ret));
-  } else if (wait_cnt > 0
-             && 0 == concurrency_limited_ts_) {
+  } else if (wait_cnt > 0) {
     if (OB_FAIL(pop_task(my_task))) {
       LOG_WARN("fail to pop task", KR(ret));
     } else if (OB_ISNULL(my_task)) {
@@ -1444,14 +1288,9 @@ int ObDRTaskMgr::try_pop_task(
   } else {
     int64_t now = ObTimeUtility::current_time();
     idle_wait(get_schedule_interval());
-
-    if (get_reach_concurrency_limit() + CONCURRENCY_LIMIT_INTERVAL < now) {
-      clear_reach_concurrency_limit();
-      LOG_TRACE("success to clear concurrency limit");
-    }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(task)) {
-    LOG_INFO("[DRTASK_NOTICE] success to pop a task", KPC(task), K_(concurrency_limited_ts),
+    LOG_INFO("[DRTASK_NOTICE] success to pop a task", KPC(task),
              K(in_schedule_cnt));
   }
   return ret;
@@ -1473,18 +1312,6 @@ int ObDRTaskMgr::pop_task(
           LOG_WARN("pop_task from queue failed", KR(ret), "priority", queues_[i].get_priority_str());
         } else if (OB_NOT_NULL(task)) {
           break;
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(task)) {
-        if (wait_cnt > 0) {
-          set_reach_concurrency_limit();
-        }
-      } else {
-        const bool in_schedule = true;
-        if (OB_FAIL(set_sibling_in_schedule(*task, in_schedule))) {
-          LOG_WARN("set sibling in schedule failed", KR(ret), KPC(task));
         }
       }
     }
@@ -1561,22 +1388,111 @@ int ObDRTaskMgr::execute_task(
   return ret;
 }
 
-int ObDRTaskMgr::set_sibling_in_schedule(
-    const ObDRTask &task,
-    const bool in_schedule)
+int ObDRTaskMgr::check_whether_task_conflict_(
+    ObDRTask &task,
+    bool &is_conflict)
+{
+  int ret = OB_SUCCESS;
+  is_conflict = false;
+  bool enable_parallel_migration = false;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else if (OB_FAIL(check_tenant_enable_parallel_migration_(task.get_tenant_id(), enable_parallel_migration))) {
+    LOG_WARN("check tenant enable parallel migration failed", KR(ret), K(task), K(enable_parallel_migration));
+  } else if (OB_FAIL(high_task_queue_.check_whether_task_conflict(task.get_task_key(), enable_parallel_migration, is_conflict))) {
+    LOG_WARN("fail to check task conflict", KR(ret), K(task), K(enable_parallel_migration));
+  } else if (is_conflict) {
+    LOG_INFO("task conflict in high_task_queue", K(task.get_task_key()), K(enable_parallel_migration));
+  } else if (OB_FAIL(low_task_queue_.check_whether_task_conflict(task.get_task_key(), enable_parallel_migration, is_conflict))) {
+    LOG_WARN("fail to check task conflict", KR(ret), K(task), K(enable_parallel_migration));
+  } else if (is_conflict) {
+    LOG_INFO("task conflict in low_task_queue", K(task.get_task_key()), K(enable_parallel_migration));
+  } else if (enable_parallel_migration && OB_FAIL(set_migrate_task_prioritize_src_(enable_parallel_migration, task))) {
+    // migrate task need set prioritize_same_zone_src_
+    LOG_WARN("failed to set enable_parallel_migration", KR(ret), K(enable_parallel_migration), K(task));
+  }
+  return ret;
+}
+
+int ObDRTaskMgr::check_tenant_enable_parallel_migration_(
+    const uint64_t &tenant_id,
+    bool &enable_parallel_migration)
+{
+  int ret = OB_SUCCESS;
+  const char *str = "auto";
+  ObParallelMigrationMode mode;
+  enable_parallel_migration = false;
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(loaded), K_(stopped));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    share::ObTenantRole tenant_role;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), tenant_data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+    } else if (tenant_data_version < DATA_VERSION_4_2_5_0) {
+      enable_parallel_migration = false;
+    } else if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant config is invalid", KR(ret), K(tenant_id));
+    } else if (FALSE_IT(str = tenant_config->replica_parallel_migration_mode.str())) {
+    } else if (OB_FAIL(mode.parse_from_string(str))) {
+      LOG_WARN("mode parse failed", KR(ret), K(str));
+    } else if (!mode.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("parallel migration mode is invalid", KR(ret), K(mode));
+    } else if (mode.is_on_mode()) {
+      enable_parallel_migration = true;
+    } else if (mode.is_off_mode()) {
+      enable_parallel_migration = false;
+    } else if (mode.is_auto_mode()) {
+      if (!is_user_tenant(tenant_id)) {
+        // sys and meta tenant is primary tenant
+        enable_parallel_migration = false;
+      } else if (OB_FAIL(ObAllTenantInfoProxy::get_tenant_role(GCTX.sql_proxy_, tenant_id, tenant_role))) {
+        LOG_WARN("fail to get tenant_role", KR(ret), K(tenant_id));
+      } else if (!tenant_role.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant_role is invalid", KR(ret), K(tenant_role));
+      } else if (tenant_role.is_primary()) {
+        enable_parallel_migration = false;
+      } else {
+        enable_parallel_migration = true;
+        // in auto mode, other tenant(clone restore standby) enable_parallel_migration is true
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("parallel migration mode is invalid", KR(ret), K(mode));
+    }
+    LOG_INFO("check tenant enable_parallel_migration over", KR(ret),
+              K(tenant_id), K(enable_parallel_migration), K(tenant_role), K(mode));
+  }
+  return ret;
+}
+
+int ObDRTaskMgr::set_migrate_task_prioritize_src_(
+    const bool enable_parallel_migration,
+    ObDRTask &task)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(queues_); ++i) {
-      if (OB_FAIL(queues_[i].set_sibling_in_schedule(task, in_schedule))) {
-        if (i == 0) {
-          LOG_WARN("fail to set sibling in schedule in high priority queue", KR(ret), K(task));
-        } else {
-          LOG_WARN("fail to set sibling in schedule in low priority queue", KR(ret), K(task));
-        }
-      }
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(loaded), K_(stopped));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dr task", KR(ret), K(task));
+  } else if (ObDRTaskType::LS_MIGRATE_REPLICA == task.get_task_key().get_task_type()) {
+    ObMigrateLSReplicaTask *migrate_task = static_cast<ObMigrateLSReplicaTask*>(&task);
+    if (OB_ISNULL(migrate_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("migrate_task is nullptr", KR(ret), K(task));
+    } else {
+      migrate_task->set_prioritize_same_zone_src(enable_parallel_migration);
     }
   }
   return ret;

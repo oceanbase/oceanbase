@@ -793,6 +793,15 @@ DEF_BOOL(enable_sys_unit_standalone, OB_CLUSTER_PARAMETER, "False",
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(replica_parallel_migration_mode, OB_TENANT_PARAMETER, "auto",
+        common::ObConfigReplicaParallelMigrationChecker,
+        "specify the strategy for parallel migration of LS replicas. "
+        "'auto' means to allow parallel migration of LS replica of standby tenant "
+        "and prohibit the parallel migration of LS replica of primary tenant. "
+        "'on' means to allow parallel migration of LS replica of primary tenant and standby tenant. "
+        "'off' means to prohibit parallel migration of LS replica of primary tenant and standby tenant",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 //// daily merge  config
 // set to disable if don't want major freeze launch auto
 DEF_MOMENT(major_freeze_duty_time, OB_TENANT_PARAMETER, "02:00",
@@ -2045,6 +2054,11 @@ DEF_BOOL(_enable_dbms_lob_partial_update, OB_TENANT_PARAMETER, "False",
 DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
         "The maximum number of threads that an observer node can compile PL concurrently.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_BOOL(enable_parallel_migration, OB_CLUSTER_PARAMETER, "False",
+         "turn on parallel migration, observer preferentially choose same zone as src",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_check_trigger_const_variables_assign, OB_TENANT_PARAMETER, "True",
         "Used to control whether an error is reported when assigning a value to a const variable in a trigger under an Oracle tenant",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

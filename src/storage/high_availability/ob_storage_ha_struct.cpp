@@ -1085,7 +1085,8 @@ ObMigrationOpArg::ObMigrationOpArg()
     src_(),
     dst_(),
     data_src_(),
-    paxos_replica_number_(0)
+    paxos_replica_number_(0),
+    prioritize_same_zone_src_(false)
 {
 }
 
@@ -1111,6 +1112,7 @@ void ObMigrationOpArg::reset()
   dst_.reset();
   data_src_.reset();
   paxos_replica_number_ = 0;
+  prioritize_same_zone_src_ = false;
 }
 
 /******************ObTabletsTransferArg*********************/
@@ -1667,6 +1669,69 @@ bool ObTabletBackfillInfo::operator == (const ObTabletBackfillInfo &other) const
     is_same = true;
   }
   return is_same;
+}
+/******************ObMigrationFindSrcParam*********************/
+ObMigrationFindSrcParam::ObMigrationFindSrcParam()
+  : find_in_idc_scope_(true),
+    idc_start_index_(0),
+    idc_end_index_(0),
+    region_start_index_(0),
+    region_end_index_(0),
+    leader_addr_(),
+    learner_list_(),
+    addr_list_(),
+    arg_(),
+    sorted_addr_list_()
+{
+}
+
+void ObMigrationFindSrcParam::reset()
+{
+  find_in_idc_scope_ = true;
+  idc_start_index_ = 0;
+  idc_end_index_ = 0;
+  region_start_index_ = 0;
+  region_end_index_ = 0;
+  leader_addr_.reset();
+  learner_list_.reset();
+  addr_list_.reset();
+  arg_.reset();
+  sorted_addr_list_.reset();
+}
+
+bool ObMigrationFindSrcParam::is_valid() const
+{
+  return idc_start_index_ >= 0 && idc_end_index_ >= -1
+      && region_start_index_ >= 0 && region_end_index_ >= -1
+      && leader_addr_.is_valid()
+      && !addr_list_.empty() && arg_.is_valid()
+      && !sorted_addr_list_.empty();
+}
+
+int ObMigrationFindSrcParam::assign(const ObMigrationFindSrcParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(param));
+  } else if (this == &param) {
+    // do nothing
+  } else if (OB_FAIL(learner_list_.deep_copy(param.learner_list_))) {
+    LOG_WARN("failed to copy learner list", K(ret), K(param));
+  } else if (OB_FAIL(addr_list_.assign(param.addr_list_))) {
+    LOG_WARN("failed to assign addr list", K(ret), K(param));
+  } else if (OB_FAIL(sorted_addr_list_.assign(param.sorted_addr_list_))) {
+    LOG_WARN("failed to assign sorted addr list", K(ret), K(param));
+  } else {
+    find_in_idc_scope_ = param.find_in_idc_scope_;
+    idc_start_index_ = param.idc_start_index_;
+    idc_end_index_ = param.idc_end_index_;
+    region_start_index_ = param.region_start_index_;
+    region_end_index_ = param.region_end_index_;
+    leader_addr_ = param.leader_addr_;
+    arg_ = param.arg_;
+  }
+  return ret;
 }
 
 ObLogicTabletID::ObLogicTabletID()

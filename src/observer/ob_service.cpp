@@ -1719,6 +1719,10 @@ int ObService::do_migrate_ls_replica(const obrpc::ObLSMigrateReplicaArg &arg)
       migration_op_arg.paxos_replica_number_ = arg.paxos_replica_number_;
       migration_op_arg.src_ = arg.src_;
       migration_op_arg.type_ = ObMigrationOpType::MIGRATE_LS_OP;
+      migration_op_arg.prioritize_same_zone_src_ = arg.prioritize_same_zone_src_;
+#ifdef ERRSIM
+      migration_op_arg.prioritize_same_zone_src_ = GCONF.enable_parallel_migration;
+#endif
       if (OB_FAIL(ls_service->create_ls_for_ha(arg.task_id_, migration_op_arg))) {
         LOG_WARN("failed to create ls for ha", KR(ret), K(arg), K(migration_op_arg));
       }
@@ -1765,6 +1769,7 @@ int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
       // for add tasks, the src_ field is useless, but must be valid
       migration_op_arg.src_ = arg.dst_;
       migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
+      migration_op_arg.prioritize_same_zone_src_ = false;
       if (OB_FAIL(ls_service->create_ls_for_ha(arg.task_id_, migration_op_arg))) {
         LOG_WARN("failed to create ls for ha", KR(ret), K(arg), K(migration_op_arg));
       }

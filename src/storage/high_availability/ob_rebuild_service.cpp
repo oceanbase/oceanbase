@@ -1088,6 +1088,7 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       arg.priority_ = ObMigrationOpPriority::PRIO_MID;
       arg.src_ = src_replica_member;
       arg.type_ = ObMigrationOpType::REBUILD_LS_OP;
+      arg.prioritize_same_zone_src_ = false;
 
       if (OB_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(rebuild_ctx_.task_id_, arg))) {
         LOG_WARN("failed to add ls migration task", K(ret), K(arg), KPC(ls));

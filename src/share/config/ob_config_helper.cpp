@@ -1401,6 +1401,14 @@ bool ObConfigMigrationChooseSourceChecker::check(const ObConfigItem &t) const
       || 0 == v_str.case_compare("region");
 }
 
+bool ObConfigReplicaParallelMigrationChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("auto")
+      || 0 == v_str.case_compare("on")
+      || 0 == v_str.case_compare("off");
+}
+
 bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAdminSetConfigItem &t)
 {
   bool is_valid = false;

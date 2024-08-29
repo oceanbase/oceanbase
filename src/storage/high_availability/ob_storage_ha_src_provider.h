@@ -58,6 +58,7 @@ public:
     REGION = 1,
     CHECKPOINT = 2,
     RECOMMEND = 3,
+    ZONE = 4,
     MAX_POLICY
   };
 
@@ -145,7 +146,7 @@ public:
       const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr) override;
 
 protected:
-  int inner_choose_ob_src(
+  virtual int inner_choose_ob_src(
       const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
       const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg,
       common::ObAddr &choosen_src_addr);
@@ -153,6 +154,7 @@ protected:
       const common::ObIArray<common::ObAddr> &addr_list,
       const common::ObReplicaMember &dst,
       common::ObIArray<common::ObAddr> &sorted_addr_list,
+      int64_t &zone_end_index,
       int64_t &idc_end_index,
       int64_t &region_end_index);
   int find_src(
@@ -163,12 +165,14 @@ protected:
       const common::ObAddr &leader_addr,
       const common::ObReplicaMember &dst,
       common::ObAddr &choosen_src_addr);
+  int find_migration_src(const ObMigrationFindSrcParam &param, common::ObAddr &choosen_src_addr);
+protected:
+  ObLocalityManager *locality_manager_;
+
 private:
   void set_locality_manager_(ObLocalityManager *locality_manager);
-  int get_server_region_and_idc_(
-      const common::ObAddr &addr, common::ObRegion &region, common::ObIDC &idc);
-private:
-  ObLocalityManager *locality_manager_;
+  int get_server_geography_info_(
+      const common::ObAddr &addr, common::ObRegion &region, common::ObIDC &idc, common::ObZone &zone);
 
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSrcByLocationProvider);
 };
@@ -214,6 +218,27 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRSRecommendSrcProvider);
 };
 
+class ObMigrationSrcZonePriorityProvider : public ObMigrationSrcByLocationProvider
+{
+public:
+  ObMigrationSrcZonePriorityProvider();
+  virtual ~ObMigrationSrcZonePriorityProvider();
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
+      const ChooseSourcePolicy policy_type,
+      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
+
+protected:
+  virtual int inner_choose_ob_src(
+      const common::ObAddr &leader_addr, const common::GlobalLearnerList &learner_list,
+      const common::ObIArray<common::ObAddr> &addr_list, const ObMigrationOpArg &arg,
+      common::ObAddr &choosen_src_addr) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMigrationSrcZonePriorityProvider);
+};
+
 class ObStorageHAChooseSrcHelper final
 {
 public:
@@ -239,6 +264,10 @@ private:
       const uint64_t tenant_id, const share::ObLSID &ls_id,
       const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg, storage::ObStorageRpc *storage_rpc,
       ObStorageHAGetMemberHelper *member_helper);
+  int init_choose_source_by_zone_priority_provider_(
+      const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg,
+      storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper);
   void errsim_test_(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info);
   ObStorageHASrcProvider * get_provider() const { return provider_; }
 

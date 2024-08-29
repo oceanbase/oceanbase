@@ -24,7 +24,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/ls/ob_ls_i_life_manager.h"
 #include "ob_ls_transfer_info.h"
-
+#include "common/ob_learner_list.h"
 
 namespace oceanbase
 {
@@ -172,7 +172,8 @@ struct ObMigrationOpArg
       K_(src),
       K_(dst),
       K_(data_src),
-      K_(paxos_replica_number));
+      K_(paxos_replica_number),
+      K_(prioritize_same_zone_src));
   share::ObLSID ls_id_;
   ObMigrationOpType::TYPE type_;
   int64_t cluster_id_;
@@ -181,6 +182,7 @@ struct ObMigrationOpArg
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_src_;
   int64_t paxos_replica_number_;
+  bool prioritize_same_zone_src_;
 };
 
 struct ObTabletsTransferArg
@@ -453,6 +455,31 @@ public:
   bool is_committed_;
 };
 
+struct ObMigrationFindSrcParam final
+{
+public:
+  ObMigrationFindSrcParam();
+  ~ObMigrationFindSrcParam() = default;
+  void reset();
+  bool is_valid() const;
+  int assign(const ObMigrationFindSrcParam &param);
+
+  TO_STRING_KV(K_(find_in_idc_scope), K_(idc_start_index), K_(idc_end_index), K_(region_start_index),
+      K_(region_end_index), K_(leader_addr), K_(learner_list), K_(addr_list), K_(arg), K_(sorted_addr_list));
+public:
+  bool find_in_idc_scope_;
+  int64_t idc_start_index_;
+  int64_t idc_end_index_;
+  int64_t region_start_index_;
+  int64_t region_end_index_;
+  common::ObAddr leader_addr_;
+  common::GlobalLearnerList learner_list_;
+  common::ObArray<common::ObAddr> addr_list_;
+  ObMigrationOpArg arg_;
+  common::ObArray<common::ObAddr> sorted_addr_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMigrationFindSrcParam);
+};
 struct ObLogicTabletID final
 {
 public:
