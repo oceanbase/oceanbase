@@ -737,7 +737,7 @@ void ObFreezer::submit_an_async_freeze_task(const int64_t trace_id, const bool i
     }
   }
 
-  if (!submit_succ) {
+  if (!submit_succ && REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
     TRANS_LOG(INFO,
               "async freeze task already exists, skip submitting one task",
               K(ls_id),
@@ -820,7 +820,7 @@ void ObFreezer::async_tablet_freeze_consumer(const int64_t trace_id)
 void ObFreezer::try_freeze_tx_data_()
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_RETRY_DURATION = 10LL * 1000LL * 1000LL;  // 10 seconds
+  const int64_t MAX_RETRY_DURATION = 5LL * 1000LL * 1000LL;  // 5 seconds
   int64_t retry_times = 0;
   int64_t start_freeze_ts = ObClockGenerator::getClock();
   do {
@@ -828,7 +828,7 @@ void ObFreezer::try_freeze_tx_data_()
       if (OB_EAGAIN == ret) {
         // sleep 100ms and retry
         retry_times++;
-        usleep(100 * 1000);
+        usleep(100LL * 1000LL);
       } else {
         STORAGE_LOG(WARN, "freeze tx data table failed", KR(ret), K(get_ls_id()));
       }
