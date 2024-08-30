@@ -36,11 +36,21 @@ namespace transaction {
 // recover flags which should not be overwriten
 #define PRE_DYNAMIC_DECODE                      \
   FLAG save_flags = flags_;                     \
-  int save_abort_cause = abort_cause_;
+  int save_abort_cause = abort_cause_;          \
+  State save_state = state_;                    \
+  uint64_t save_op_sn = op_sn_;
+
 // for txn start node, if current abort_cause was set, use current
+// keep the state and op_sn will not go backwards
 #define POST_DYNAMIC_DECODE                             \
   flags_ = save_flags.update_with(flags_);              \
-  abort_cause_ = save_abort_cause ?: abort_cause_;
+  abort_cause_ = save_abort_cause ?: abort_cause_;      \
+  if (save_state > state_) {                            \
+    state_ = save_state;                                \
+  }                                                     \
+  if (save_op_sn > op_sn_) {                            \
+    op_sn_ = save_op_sn;                                \
+  }
 
 #define PRE_EXTRA_DECODE
 #define POST_EXTRA_DECODE                                               \
