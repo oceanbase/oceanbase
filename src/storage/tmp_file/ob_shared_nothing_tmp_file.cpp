@@ -329,6 +329,7 @@ int ObSharedNothingTmpFile::destroy()
 {
   int ret = OB_SUCCESS;
   int64_t fd_backup = fd_;
+  int64_t free_cnt = 0;
 
   LOG_INFO("tmp file destroy start", KR(ret), K(fd_), KPC(this));
 
@@ -342,10 +343,14 @@ int ObSharedNothingTmpFile::destroy()
       } else if (OB_FAIL(wbp_->free_page(fd_, cur_page_id, ObTmpFilePageUniqKey(begin_page_virtual_id_), next_page_id))) {
         LOG_WARN("fail to free page", KR(ret), K(fd_), K(cur_page_id), K(begin_page_virtual_id_));
       } else {
+        free_cnt++;
         cur_page_id = next_page_id;
         begin_page_virtual_id_ += 1;
       }
     }
+  }
+  if (OB_SUCC(ret) && cached_page_nums_ != free_cnt) {
+    LOG_ERROR("tmp file destroy, cached_page_nums_ and free_cnt are not equal", KR(ret), K(fd_), K(free_cnt), KPC(this));
   }
 
   LOG_INFO("tmp file destroy, free wbp page phase over", KR(ret), K(fd_), KPC(this));
@@ -2712,7 +2717,7 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
     data_item.physical_page_id_ = info.flush_data_page_disk_begin_id_;
     data_item.physical_page_num_ = info.flush_data_page_num_;
     data_item.virtual_page_id_ = info.flush_virtual_page_id_;
-    ObArray<ObSharedNothingTmpFileDataItem> data_items;
+    ObSEArray<ObSharedNothingTmpFileDataItem, 1> data_items;
 
     if (OB_FAIL(data_items.push_back(data_item))) {
       LOG_WARN("fail to push back data item", KR(ret), K(info), K(block_index), KPC(this));
