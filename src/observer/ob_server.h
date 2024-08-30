@@ -62,6 +62,7 @@
 #include "observer/ob_inner_sql_rpc_proxy.h"
 #include "observer/ob_startup_accel_task_handler.h"
 #include "share/ls/ob_ls_table_operator.h" // for ObLSTableOperator
+#include "share/deadlock/ob_lcl_time_sync/ob_lcl_time_sync_thread.h"
 #include "storage/ob_locality_manager.h"
 #include "storage/ddl/ob_ddl_heart_beat_task.h"
 
@@ -122,7 +123,7 @@ public:
   bool is_prepare_stopped();
   void set_stop();
   bool is_stopped();
-
+  
 public:
   //Refer to ObPurgeCompletedMonitorInfoTask
   class ObCTASCleanUpTask: public common::ObTimerTask

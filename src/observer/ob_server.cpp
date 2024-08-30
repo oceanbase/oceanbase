@@ -213,12 +213,12 @@ ObServer::ObServer()
     conn_res_mgr_(),
     unix_domain_listener_(),
     disk_usage_report_task_(),
-    log_block_mgr_()
+    log_block_mgr_(),
 #ifdef OB_BUILD_ARBITRATION
     ,arb_gcs_(),
-    arb_timer_()
+    arb_timer_(),
 #endif
-    ,wr_service_()
+    wr_service_()
 {
   memset(&gctx_, 0, sizeof (gctx_));
 }
@@ -544,6 +544,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_WARN("failed to init wr service", K(ret));
     } else if (OB_FAIL(ObStorageHADiagService::instance().init(GCTX.sql_proxy_))) {
       LOG_WARN("init storage ha diagnose service failed", K(ret));
+    } else if (OB_FAIL(share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().init())){
+      LOG_WARN("lcl time sync thread init failed", K(ret));
     } else {
       GDS.set_rpc_proxy(&rs_rpc_proxy_);
     }
@@ -857,6 +859,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy WR service");
     wr_service_.destroy();
     FLOG_INFO("WR service destroyed");
+
+    FLOG_INFO("begin to destroy time sync thread");
+    share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().destroy();
+    FLOG_INFO("time sync thread destroyed");
 
     deinit_zlib_lite_compressor();
 
@@ -1184,6 +1190,9 @@ int ObServer::start()
                         "you may find solutions in previous error logs or seek help from official technicians.");
   }
 
+  if (OB_FAIL(share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().start())) {
+    LOG_ERROR("lcl time sync thread start failed", KR(ret));
+  }
   return ret;
 }
 
@@ -1621,6 +1630,9 @@ int ObServer::stop()
     ObClockGenerator::get_instance().stop();
     FLOG_INFO("clock generator stopped");
 
+    FLOG_INFO("begin to stop time sync thread");
+    share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().stop();
+    FLOG_INFO("time sync thread stopped");
   }
 
   has_stopped_ = true;
@@ -1895,6 +1907,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait storage ha diagnose");
     ObStorageHADiagService::instance().wait();
     FLOG_INFO("wait storage ha diagnose success");
+
+    FLOG_INFO("time sync thread wait");
+    share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().wait();
+    FLOG_INFO("wait time_sync_thread success");
 
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));
@@ -4090,7 +4106,6 @@ bool ObServer::is_arbitration_mode() const
 #endif
 
 }
-
 
 // ------------------------------- arb server end -------------------------------------------
 } // end of namespace observer

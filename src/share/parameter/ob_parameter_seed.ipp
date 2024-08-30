@@ -796,6 +796,14 @@ DEF_INT(server_balance_cpu_mem_tolerance_percent, OB_CLUSTER_PARAMETER, "5", "[1
         "Range: [1, 100] in percentage",
         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_lcl_time_skew_rate, OB_CLUSTER_PARAMETER, "0", 
+        "every 100ms the clock skews lcl_time_skew_rate us",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_lcl_time_client_offset, OB_CLUSTER_PARAMETER, "0", 
+        "client add some offset between 0 and lcl_time_client_offset us",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(_lcl_op_interval, OB_CLUSTER_PARAMETER, "30ms", "[0ms, 1s]",
          "Scan interval for every detector node, smaller interval support larger deadlock scale, but cost more system resource. "
          "0ms means disable deadlock, default value is 30ms. Range:[0ms, 1s]",
