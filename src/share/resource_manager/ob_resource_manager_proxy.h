@@ -105,12 +105,25 @@ public:
     const common::ObString &value,
     const common::ObString &consumer_group,
     const sql::ObSQLSessionInfo &session);
-  int replace_all_attribute_mapping_rule(
+  int replace_user_mapping_rule(
     common::ObMySQLTransaction &trans,
     uint64_t tenant_id,
     const common::ObString &attribute,
     const common::ObString &value,
     const common::ObString &consumer_group);
+  int replace_function_mapping_rule(
+    common::ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    const common::ObString &attribute,
+    const common::ObString &value,
+    const common::ObString &consumer_group);
+  int replace_column_mapping_rule(
+    common::ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    const common::ObString &attribute,
+    const common::ObString &value,
+    const common::ObString &consumer_group,
+    const sql::ObSQLSessionInfo &session);
   int update_resource_mapping_version(common::ObMySQLTransaction &trans, uint64_t tenant_id);
   int get_all_resource_mapping_rules(
       uint64_t tenant_id,
