@@ -1478,7 +1478,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
 
   if (OB_SUCC(ret) && !context.is_text_ps_mode_) {
     if (OB_FAIL(after_get_plan(pc_ctx, *session, result.get_physical_plan(),
-                result.get_is_from_plan_cache(), &params, pc_ctx.exec_ctx_.get_min_cluster_version()))) {
+                result.get_is_from_plan_cache(), (mode == PC_PS_MODE || mode == PC_PL_MODE) ? &params : nullptr, pc_ctx.exec_ctx_.get_min_cluster_version()))) {
       LOG_WARN("fail to handle after get plan", K(ret));
     }
   }
@@ -1553,7 +1553,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
     LOG_WARN("failed to set timeout for pl", K(ret));
   } else if (OB_FAIL(session.store_query_string(sql))) {
     LOG_WARN("store query string fail", K(ret));
-  } else if (OB_FAIL(handle_sql_execute(sql, context, result, params, PC_PL_MODE))) {
+  } else if (OB_FAIL(handle_sql_execute(sql, context, result, params, is_prepare_protocol ? PC_PL_MODE : PC_TEXT_MODE))) {
     LOG_WARN("failed to handle sql execute", K(ret));
   } else {
     result.get_session().set_exec_min_cluster_version();
@@ -4553,7 +4553,6 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           pctx->get_remote_sql_info().ps_param_cnt_ = static_cast<int32_t>(param_store.count());
         } else {
           //没有进plan cache，并且是文本协议，在远端再走一次文本解析
-          param_store.reset(); //走文本协议不需要携带参数，清空掉
           pctx->get_remote_sql_info().use_ps_ = false;
           pctx->get_remote_sql_info().is_batched_stmt_ =
               pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
