@@ -263,6 +263,7 @@ public:
   const char *get_data(); //get data buf after io_buf recycle
   const ObIOFlag &get_flag() const;
   ObIOMode get_mode() const;
+  uint64_t get_tenant_id() const;
   void cancel();
   int alloc_io_buf();
   int prepare();

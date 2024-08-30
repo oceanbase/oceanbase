@@ -18,7 +18,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "lib/time/ob_time_utility.h"
-
+#include "deps/oblib/src/lib/stat/ob_session_stat.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
@@ -601,6 +601,11 @@ ObIOMode ObIORequest::get_mode() const
   return io_info_.flag_.get_mode();
 }
 
+uint64_t ObIORequest::get_tenant_id() const
+{
+  return io_info_.tenant_id_;
+}
+
 int ObIORequest::alloc_io_buf()
 {
   int ret = OB_SUCCESS;
@@ -1019,6 +1024,7 @@ void ObIOHandle::estimate()
     const int64_t callback_process_delay = get_io_interval(time_log.callback_finish_ts_, time_log.callback_dequeue_ts_);
     const int64_t finish_notify_delay = get_io_interval(time_log.end_ts_, max(time_log.callback_finish_ts_, time_log.return_ts_));
     const int64_t request_delay = get_io_interval(time_log.end_ts_, time_log.begin_ts_);
+    oceanbase::common::ObTenantStatEstGuard guard(req_->get_tenant_id());
     if (req_->io_info_.flag_.is_read()) {
       EVENT_INC(ObStatEventIds::IO_READ_COUNT);
       EVENT_ADD(ObStatEventIds::IO_READ_BYTES, req_->io_info_.size_);
