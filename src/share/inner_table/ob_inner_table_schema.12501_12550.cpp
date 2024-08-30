@@ -392,6 +392,7 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;

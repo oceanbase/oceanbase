@@ -1426,6 +1426,7 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     rls_context_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    micro_index_clustered_(false),
     local_session_vars_(allocator),
     index_params_()
 {
@@ -1505,6 +1506,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       auto_increment_cache_size_ = src_schema.auto_increment_cache_size_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
+      micro_index_clustered_ = src_schema.micro_index_clustered_;
       mlog_tid_ = src_schema.mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
@@ -3420,6 +3422,7 @@ void ObTableSchema::reset()
   name_hash_array_ = NULL;
   generated_columns_.reset();
   virtual_column_cnt_ = 0;
+  micro_index_clustered_ = false;
 
   cst_cnt_ = 0;
   cst_array_capacity_ = 0;
@@ -6812,6 +6815,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(index_params_);
   }
+  OB_UNIS_ENCODE(micro_index_clustered_);
   return ret;
 }
 
@@ -7255,6 +7259,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
       LOG_WARN("deep_copy_str failed", K(ret), K(index_params));
     }
   }
+  OB_UNIS_DECODE(micro_index_clustered_);
   return ret;
 }
 
@@ -7409,6 +7414,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(local_session_vars_);
   OB_UNIS_ADD_LEN(duplicate_read_consistency_);
   OB_UNIS_ADD_LEN(index_params_);
+  OB_UNIS_ADD_LEN(micro_index_clustered_);
   return len;
 }
 

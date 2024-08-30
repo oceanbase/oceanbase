@@ -120,7 +120,8 @@ fields = [
     'is_real_virtual_table',
     'owner',
     'vtable_route_policy', # value: only_rs, distributed, local(default)
-    'tablet_id'
+    'tablet_id',
+    'micro_index_clustered'
 ]
 
 global index_only_fields
@@ -161,6 +162,7 @@ default_filed_values = {
     'owner' : '',
     'vtable_route_policy' : 'local',
     'tablet_id' : '0',
+    'micro_index_clustered' : 'false'
 }
 
 ################################################################################
@@ -316,7 +318,8 @@ all_table_def = dict(
       ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('local_session_vars', 'longtext', 'true'),
       ('duplicate_read_consistency', 'int', 'false', '0'),
-      ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', '')
+      ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', ''),
+      ('micro_index_clustered', 'bool', 'false', 'false')
     ],
 )
 
