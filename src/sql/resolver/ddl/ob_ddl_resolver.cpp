@@ -4175,7 +4175,11 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
       }
       case T_CONSTR_UNIQUE_KEY: {
         resolve_stat.is_unique_key_ = true;
-        if (ob_is_text_tc(column.get_data_type())) {
+        if (ob_is_collection_sql_type(column.get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+          SQL_RESV_LOG(WARN, "VECTOR, TEXT column can't be unique key", K(column), K(ret));
+        } else if (ob_is_text_tc(column.get_data_type())) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be unique key", K(column), K(ret));
