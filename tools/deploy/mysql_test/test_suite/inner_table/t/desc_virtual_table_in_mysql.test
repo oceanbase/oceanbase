@@ -12,6 +12,7 @@ let $svr_ip = query_get_value(select svr_ip from oceanbase.__all_virtual_unit or
 let $svr_port = query_get_value(select svr_port from oceanbase.__all_virtual_unit order by svr_ip limit 1, svr_port, 1);
 
 let $idx = 1;
+
 while ($idx <= $cnt)
 {
 connection sys;

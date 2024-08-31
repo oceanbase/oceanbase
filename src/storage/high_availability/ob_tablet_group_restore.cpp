@@ -16,6 +16,7 @@
 #include "ob_physical_copy_task.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "share/backup/ob_backup_connectivity.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_ls_restore.h"
 #include "storage/backup/ob_backup_data_store.h"
@@ -306,6 +307,11 @@ int ObTabletGroupRestoreDagNet::init_by_param(const ObIDagInitParam *param)
       index_store_param.backup_data_type_ = data_type;
       index_store_param.turn_id_ = backup_set_file_desc.backup_set_file_.data_turn_id_;
       index_store_param.retry_id_ = 0; // unused retry id.
+      const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::DEST_TYPE_RESTORE_DATA;
+      if (OB_FAIL(share::ObBackupStorageInfoOperator::get_restore_dest_id(
+          *GCTX.sql_proxy_, MTL_ID(), backup_dest_type, index_store_param.dest_id_))) {
+        LOG_WARN("failed to get restore dest id", K(ret));
+      }
     }
 
     share::ObBackupDest dest;
@@ -814,6 +820,9 @@ int ObInitialTabletGroupRestoreTask::check_local_ls_restore_status_()
   } else {
     if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
       LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
+    } else if (ls_restore_status.is_failed()) {
+      ret = OB_CANCELED;
+      LOG_WARN("cancel task due to local ls restore has failed", K(ret));
     } else if (!ls_restore_status.is_restore_tablets_meta()
                && !ls_restore_status.is_quick_restore()
                && !ls_restore_status.is_restore_major_data()) {
@@ -1049,7 +1058,7 @@ int ObInitialTabletGroupRestoreTask::renew_tablets_meta_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial tablet group restore task do not init", K(ret));
-  } else if (share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(
+  } else if (share::ObBackupSetFileDesc::is_allow_quick_restore(
                            ctx_->arg_.restore_base_info_.backup_compatible_)) {
     // tablet restore status can skip pending state after 4.3.2.0 (support quick restore)
   } else if ((!ObTabletRestoreAction::is_restore_tablet_meta(ctx_->arg_.action_)
@@ -2279,6 +2288,8 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
   ObSSTableCopyFinishTask *finish_task = NULL;
   const int64_t task_idx = 0;
   ObPhysicalCopyTaskInitParam init_param;
+  bool need_copy = true;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore task do not init", K(ret));
@@ -2314,12 +2325,14 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
     LOG_WARN("failed to init finish task", K(ret), K(init_param), K(copy_table_key), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(finish_task->add_child(*child_task))) {
     LOG_WARN("failed to add child", K(ret));
-  } else if (!ObTabletRestoreAction::is_restore_remote_sstable(tablet_restore_ctx_->action_)
-      && init_param.sstable_macro_range_info_.copy_macro_range_array_.count() > 0) {
+  } else if (OB_FAIL(check_need_copy_macro_blocks_(*init_param.sstable_param_,
+                                                   need_copy))) {
+    LOG_WARN("failed to check need copy macro blocks", K(ret), K(init_param), KPC(tablet_restore_ctx_));
+  } else if (need_copy) {
     // parent->copy->finish->child
     if (OB_FAIL(dag_->alloc_task(copy_task))) {
       LOG_WARN("failed to alloc copy task", K(ret));
-    } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task, 0))) {
+    } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task))) {
       LOG_WARN("failed to init copy task", K(ret));
     } else if (OB_FAIL(parent_task->add_child(*copy_task))) {
       LOG_WARN("failed to add child copy task", K(ret));
@@ -2455,7 +2468,6 @@ int ObTabletRestoreTask::generate_restore_task_(
 int ObTabletRestoreTask::build_copy_table_key_info_()
 {
   int ret = OB_SUCCESS;
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore task do not init", K(ret));
@@ -2526,7 +2538,8 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter,
       tablet_restore_ctx_->action_, src_tablet_meta, tablet_restore_ctx_))) {
-    LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+    LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_),
+        KPC(tablet_restore_ctx_));
   }
   return ret;
 }
@@ -2737,10 +2750,7 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
   ObTablet *tablet = nullptr;
   bool is_major_sstable_exist = false;
 
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_ISNULL(tablet = tablet_restore_ctx_->tablet_handle_.get_obj())) {
+  if (OB_ISNULL(tablet = tablet_restore_ctx_->tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet_restore_ctx_));
   } else {
@@ -2799,6 +2809,22 @@ int ObTabletRestoreTask::generate_mds_restore_tasks_(
   } else if (OB_FAIL(generate_restore_task_(ObITable::is_mds_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate mds restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   }
+  return ret;
+}
+
+int ObTabletRestoreTask::check_need_copy_macro_blocks_(
+    const ObMigrationSSTableParam &param,
+    bool &need_copy)
+{
+  int ret = OB_SUCCESS;
+  if (ObTabletRestoreAction::is_restore_remote_sstable(tablet_restore_ctx_->action_)) {
+    need_copy = false;
+  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(param,
+                                                                 tablet_restore_ctx_->is_leader_,
+                                                                 need_copy))) {
+    LOG_WARN("failed to check need copy macro blocks", K(ret), K(param), KPC(tablet_restore_ctx_));
+  }
+
   return ret;
 }
 

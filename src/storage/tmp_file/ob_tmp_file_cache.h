@@ -186,7 +186,7 @@ public:
   class ObITmpPageIOCallback : public common::ObIOCallback
   {
   public:
-    ObITmpPageIOCallback();
+    ObITmpPageIOCallback(const common::ObIOCallbackType type);
     virtual ~ObITmpPageIOCallback();
     virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override;
     const char *get_data() override { return data_buf_; }
@@ -217,7 +217,7 @@ public:
   class ObTmpDirectReadPageIOCallback final : public ObITmpPageIOCallback
   {
   public:
-    ObTmpDirectReadPageIOCallback() {}
+    ObTmpDirectReadPageIOCallback() : ObITmpPageIOCallback(ObIOCallbackType::TMP_DIRECT_READ_PAGE_CALLBACK) {}
     ~ObTmpDirectReadPageIOCallback() {}
     int64_t size() const override { return sizeof(*this); }
     int inner_process(const char *data_buffer, const int64_t size) override;

@@ -59,6 +59,8 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   encrypt_id_ = desc.encrypt_id_;
   master_key_id_ = desc.master_key_id_;
   MEMCPY(encrypt_key_, desc.encrypt_key_, sizeof(encrypt_key_));
+  exec_mode_ = desc.exec_mode_;
+  micro_index_clustered_ = desc.micro_index_clustered_;
   need_submit_io_ = desc.need_submit_io_;
   return ret;
 }
@@ -86,7 +88,7 @@ int ObStaticDataStoreDesc::init_encryption_info(const ObMergeSchema &merge_schem
 void ObStaticDataStoreDesc::init_block_size(const ObMergeSchema &merge_schema)
 {
   const int64_t pct_free = merge_schema.get_pctfree();
-  macro_block_size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  macro_block_size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   if (pct_free >= 0 && pct_free <= 50) {
     macro_store_size_ = macro_block_size_ * (100 - pct_free) / 100;
   } else {
@@ -107,20 +109,30 @@ int ObStaticDataStoreDesc::init(
     const int64_t snapshot_version,
     const share::SCN &end_scn,
     const int64_t cluster_version,
+    const compaction::ObExecMode exec_mode,
+    const bool micro_index_clustered,
     const bool need_submit_io)
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(merge_type);
   if (OB_UNLIKELY(!merge_schema.is_valid() || !ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0
-    || (!is_major && !end_scn.is_valid()))) {
+    || (!is_major && !end_scn.is_valid()) || !is_valid_exec_mode(exec_mode))) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "arguments is invalid", K(ret), K(merge_schema), K(snapshot_version), K(end_scn));
+    STORAGE_LOG(WARN, "arguments is invalid", K(ret), K(merge_schema), K(snapshot_version), K(end_scn),
+      "exec_mode", exec_mode_to_str(exec_mode));
   } else {
     reset();
     is_ddl_ = is_ddl;
     merge_type_ = merge_type;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
+    exec_mode_ = exec_mode;
+
+    if (compaction::is_mds_merge(merge_type_)) {
+      micro_index_clustered_ = false;
+    } else {
+      micro_index_clustered_ = micro_index_clustered;
+    }
     need_submit_io_ = need_submit_io;
 
     if (!is_major) {
@@ -320,7 +332,7 @@ int ObColDataStoreDesc::add_col_desc_from_cg_schema(
   }
 
   for (uint16_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
-    const uint16_t idx = cg_schema.column_idxs_[i];
+    const uint16_t idx = cg_schema.get_column_idx(i);
     if (idx >= multi_version_column_desc_array.count()) {
       if (OB_FAIL(add_binary_col_desc(column_cnt))) {
         STORAGE_LOG(WARN, "failed to add fake col desc when merge schema is simplified",
@@ -496,7 +508,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   } else {
     // generate skip index for column in column group
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_schema->column_cnt_; ++i) {
-      const uint16_t column_idx = cg_schema->column_idxs_[i];
+      const uint16_t column_idx = cg_schema->get_column_idx(i);
       if (!skip_idx_attrs.at(column_idx).has_skip_index()) {
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
           skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
@@ -734,6 +746,11 @@ int ObDataStoreDesc::inner_init(
   return ret;
 }
 
+bool ObDataStoreDesc::micro_index_clustered() const
+{
+  return static_desc_->micro_index_clustered_;
+}
+
 int ObDataStoreDesc::update_basic_info_from_macro_meta(const ObSSTableBasicMeta &meta)
 {
   int ret = OB_SUCCESS;
@@ -778,12 +795,14 @@ bool ObDataStoreDesc::is_store_type_valid() const
   } else if (is_mini_or_minor_merge) {
     ret = (!ObStoreFormat::is_row_store_type_with_encoding(row_store_type_));
   } else {
-    ret = true;
+    ret = (ObMacroBlockCommonHeader::SSTableData == data_store_type_ ||
+           ObMacroBlockCommonHeader::SSTableIndex == data_store_type_ ||
+           ObMacroBlockCommonHeader::SSTableMacroMeta == data_store_type_);
   }
 
   if (!ret) {
     STORAGE_LOG(WARN, "invalid row store type",
-        K_(row_store_type), K_(is_force_flat_store_type));
+        K_(row_store_type), K_(is_force_flat_store_type), K_(data_store_type));
   }
   return ret;
 }
@@ -794,9 +813,11 @@ void ObDataStoreDesc::reset()
   col_desc_ = nullptr;
   row_store_type_ = ENCODING_ROW_STORE;
   encoder_opt_.reset();
-  merge_info_ = NULL;
   sstable_index_builder_ = nullptr;
   is_force_flat_store_type_ = false;
+  need_pre_warm_ = false;
+  need_build_hash_index_for_micro_block_ = false;
+  data_store_type_ = ObMacroBlockCommonHeader::SSTableData;
   micro_block_size_ = 0;
 }
 
@@ -808,9 +829,9 @@ int ObDataStoreDesc::shallow_copy(const ObDataStoreDesc &desc)
   micro_block_size_ = desc.micro_block_size_;
   row_store_type_ = desc.get_row_store_type();
   encoder_opt_ = desc.encoder_opt_;
-  merge_info_ = desc.merge_info_;
   is_force_flat_store_type_ = desc.is_force_flat_store_type_;
   sstable_index_builder_ = desc.sstable_index_builder_;
+  data_store_type_ = desc.data_store_type_;
   return ret;
 }
 /**
@@ -865,14 +886,18 @@ int ObWholeDataStoreDesc::init(
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const int64_t cluster_version,
+    const bool micro_index_clustered,
     const share::SCN &end_scn,
     const storage::ObStorageColumnGroupSchema *cg_schema,
     const uint16_t table_cg_idx,
+    const compaction::ObExecMode exec_mode,
     const bool need_submit_io /*=true*/)
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type, snapshot_version, end_scn, cluster_version, need_submit_io))) {
+  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type,
+                                snapshot_version, end_scn, cluster_version,
+                                exec_mode, micro_index_clustered, need_submit_io))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));
@@ -910,7 +935,7 @@ int ObWholeDataStoreDesc::gen_index_store_desc(const ObDataStoreDesc &data_desc)
     col_desc_.col_desc_array_.reset();
     col_desc_.agg_meta_array_.reset();
     desc_.sstable_index_builder_ = nullptr;
-    desc_.merge_info_ = nullptr;
+    desc_.data_store_type_ = ObMacroBlockCommonHeader::SSTableIndex;
     if (!data_desc.is_cg()) {
       col_desc_.row_column_count_ = data_desc.get_rowkey_column_count() + 1;
       if (OB_FAIL(col_desc_.col_desc_array_.init(col_desc_.row_column_count_))) {

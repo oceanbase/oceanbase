@@ -17,7 +17,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ob_sstable_struct.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 
@@ -455,7 +455,7 @@ int ObTenantCompactionProgressMgr::update_unfinish_tablet(const int64_t major_sn
 
 int ObTenantCompactionProgressMgr::update_compression_ratio(
     const int64_t major_snapshot_version,
-    ObSSTableMergeInfo &info)
+    compaction::ObSSTableMergeHistory &merge_history)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(major_snapshot_version < 0)) {
@@ -467,8 +467,8 @@ int ObTenantCompactionProgressMgr::update_compression_ratio(
     if (OB_FAIL(get_pos_(major_snapshot_version, pos))) {
       LOG_WARN("pos is invalid", K(ret), K(pos), K(major_snapshot_version));
     } else {
-      array_[pos].original_size_ += info.original_size_;
-      array_[pos].compressed_size_ += info.compressed_size_;
+      array_[pos].original_size_ += merge_history.block_info_.original_size_;
+      array_[pos].compressed_size_ += merge_history.block_info_.compressed_size_;
     }
   }
   return ret;

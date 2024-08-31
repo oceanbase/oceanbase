@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_backup_file_writer_ctx.h"
 #include "ob_backup_data_struct.h"
+#include "share/backup/ob_backup_io_adapter.h"
 namespace oceanbase {
 
 namespace backup {
@@ -113,12 +114,14 @@ int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)
   int ret = OB_SUCCESS;
   int64_t write_size = 0;
   const int64_t offset = file_size_;
+  common::ObBackupIoAdapter io_adapter;
   if (!check_can_flush_(is_last_part)) {
     LOG_DEBUG("can not flush now", K(is_last_part), K(data_buffer_));
   } else if (OB_ISNULL(dev_handle_) || OB_ISNULL(bandwidth_throttle_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dev handle or bandwidth throttle should not be null", K(ret), KP_(dev_handle), KP_(bandwidth_throttle));
-  } else if (OB_FAIL(dev_handle_->pwrite(io_fd_, offset, data_buffer_.length(), data_buffer_.data(), write_size))) {
+    LOG_WARN("dev handle should not be null", K(ret));
+  } else if (OB_FAIL(io_adapter.pwrite(*dev_handle_, io_fd_, data_buffer_.data(), offset,
+                                       data_buffer_.length(), write_size, false/*is_can_seal*/))) {
     LOG_WARN("failed to write data buffer", K(ret), K(data_buffer_));
   } else if (data_buffer_.length() != write_size) {
     ret = OB_IO_ERROR;

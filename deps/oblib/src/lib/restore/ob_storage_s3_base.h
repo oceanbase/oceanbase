@@ -20,6 +20,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_se_array_iterator.h"
+#include "lib/allocator/ob_vslice_alloc.h"
 #include <algorithm>
 #include <iostream>
 
@@ -49,6 +50,7 @@
 #include <aws/core/utils/HashingUtils.h>
 #include <aws/core/utils/crypto/CRC32.h>
 #include <aws/core/client/DefaultRetryStrategy.h>
+#include <aws/s3/model/DeleteObjectsRequest.h>
 #pragma pop_macro("private")
 
 namespace oceanbase
@@ -85,6 +87,48 @@ static constexpr char OB_S3_APPENDABLE_FORMAT_CONTENT_V1[] = "version=1";
 static constexpr char OB_STORAGE_S3_ALLOCATOR[] = "StorageS3";
 static constexpr char S3_SDK[] = "S3SDK";
 
+// TODO @fangdan: Validate the effectiveness of the ZeroCopyStreambuf
+class ZeroCopyStreambuf : public std::streambuf
+{
+public:
+  ZeroCopyStreambuf(const char *base, std::size_t size)
+  {
+    setg(const_cast<char*>(base), const_cast<char*>(base), const_cast<char*>(base) + size);
+  }
+
+protected:
+  virtual std::streampos seekoff(
+      std::streamoff off,
+      std::ios_base::seekdir dir,
+      std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override
+  {
+    std::streampos result = std::streampos(std::streamoff(-1));
+    if (which & std::ios_base::in) {
+      char *new_pos = gptr();
+      if (dir == std::ios_base::beg) {
+        new_pos = eback() + off;
+      } else if (dir == std::ios_base::end) {
+        new_pos = egptr() + off;
+      } else if (dir == std::ios_base::cur) {
+        new_pos = gptr() + off;
+      }
+
+      if (new_pos >= eback() && new_pos <= egptr()) {
+        setg(eback(), new_pos, egptr());
+        result = gptr() - eback();
+      }
+    }
+    return result;
+  }
+
+  virtual std::streampos seekpos(
+      std::streampos pos,
+      std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override
+  {
+    return seekoff(std::streamoff(pos), std::ios_base::beg, which);
+  }
+};
+
 struct ObS3Account
 {
   ObS3Account();
@@ -107,8 +151,13 @@ struct ObS3Account
 
 class ObS3MemoryManager : public Aws::Utils::Memory::MemorySystemInterface
 {
+  enum
+  {
+    N_WAY = 32,
+    DEFAULT_BLOCK_SIZE = 128 * 1024, // 128KB
+  };
 public:
-  ObS3MemoryManager() : attr_()
+  ObS3MemoryManager() : attr_(), mem_limiter_(), allocator_()
   {
     attr_.label_ = S3_SDK;
   }
@@ -116,29 +165,17 @@ public:
   // when aws init/shutdown, it will execute like this: init/shutdown_memory_system->Begin()/End()
   virtual void Begin() override {}
   virtual void End() override {}
-
   virtual void *AllocateMemory(std::size_t blockSize,
-      std::size_t alignment, const char *allocationTag = NULL) override
-  {
-    // When memory allocation fails, S3 SDK calls abort, causing a program crash.
-    // Replaced ob_malloc_align with memalign,, which retries allocation with ob_malloc_retry,
-    // thus hanging the thread instead of crashing.
-    // The ob_malloc_retry function exits the loop only when it successfully allocates memory or
-    // when the requested allocation is greater than or equal to 2GB. Thus, if an allocation of
-    // 2GB or more fails, it may still cause the program to crash.
-    lib::ObMallocHookAttrGuard guard(attr_);
-    UNUSED(allocationTag);
-    std::size_t real_alignment = MAX(alignment, 16); // should not be smaller than 16
-    return memalign(real_alignment, blockSize);
-  }
-  virtual void FreeMemory(void *memoryPtr) override
-  {
-    free(memoryPtr);
-    memoryPtr = NULL;
-  }
-
+      std::size_t alignment, const char *allocationTag = nullptr) override;
+  virtual void FreeMemory(void *memoryPtr) override;
+  int init();
 private:
   ObMemAttr attr_;
+  // mem_limiter_ is the allocator that actually allocates memory internally for allocator_
+  // which can set the limit of memory that can be requestd, default to infinity
+  // mem_limiter_ is passed in during allocator_ init
+  ObBlockAllocMgr mem_limiter_;
+  ObVSliceAlloc allocator_;
 };
 
 class ObS3Logger : public Aws::Utils::Logging::LogSystemInterface
@@ -178,6 +215,8 @@ public:
       Aws::S3::Model::GetObjectOutcome &outcome);
   int delete_object(const Aws::S3::Model::DeleteObjectRequest &request,
       Aws::S3::Model::DeleteObjectOutcome &outcome);
+  int delete_objects(const Aws::S3::Model::DeleteObjectsRequest &request,
+      Aws::S3::Model::DeleteObjectsOutcome &outcome);
   int put_object_tagging(const Aws::S3::Model::PutObjectTaggingRequest &request,
       Aws::S3::Model::PutObjectTaggingOutcome &outcome);
   int list_objects_v2(const Aws::S3::Model::ListObjectsV2Request &request,
@@ -278,6 +317,7 @@ public:
   virtual void reset();
 
   virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info);
+  virtual int inner_open(const ObString &uri, ObObjectStorageInfo *storage_info);
   virtual bool is_inited() const { return is_inited_; }
 
   int get_s3_file_meta(S3ObjectMeta &meta)
@@ -407,6 +447,14 @@ public:
   {
     return do_safely(&ObStorageS3Util::del_file_, this, uri);
   }
+  virtual int batch_del_files(
+      const ObString &uri,
+      hash::ObHashMap<ObString, int64_t> &files_to_delete,
+      ObIArray<int64_t> &failed_files_idx) override
+  {
+    return do_safely(&ObStorageS3Util::batch_del_files_, this,
+                     uri, files_to_delete, failed_files_idx);
+  }
   virtual int write_single_file(const ObString &uri, const char *buf, const int64_t size) override
   {
     return do_safely(&ObStorageS3Util::write_single_file_, this, uri, buf, size);
@@ -444,6 +492,10 @@ private:
   int is_exist_(const ObString &uri, bool &exist);
   int get_file_length_(const ObString &uri, int64_t &file_length);
   int del_file_(const ObString &uri);
+  int batch_del_files_(
+      const ObString &uri,
+      hash::ObHashMap<ObString, int64_t> &files_to_delete,
+      ObIArray<int64_t> &failed_files_idx);
   int write_single_file_(const ObString &uri, const char *buf, const int64_t size);
   int mkdir_(const ObString &uri);
   int list_files_(const ObString &uri, ObBaseDirEntryOperator &op);
@@ -498,7 +550,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3AppendWriter);
 };
 
-class ObStorageS3MultiPartWriter : public ObStorageS3Writer, public ObIStorageMultiPartWriter
+class ObStorageS3MultiPartWriter : public ObStorageS3Writer,
+                                   public ObIStorageMultiPartWriter,
+                                   public ObStoragePartInfoHandler
 {
 public:
   ObStorageS3MultiPartWriter();
@@ -549,6 +603,51 @@ protected:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3MultiPartWriter);
+};
+
+class ObStorageParallelS3MultiPartWriter : public ObStorageS3Writer,
+                                           public ObIStorageParallelMultipartWriter,
+                                           public ObStoragePartInfoHandler
+{
+public:
+  ObStorageParallelS3MultiPartWriter();
+  virtual ~ObStorageParallelS3MultiPartWriter();
+  virtual void reset() override;
+
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override
+  {
+    return do_safely(&ObStorageParallelS3MultiPartWriter::open_, this, uri, storage_info);
+  }
+  virtual int upload_part(const char *buf, const int64_t size, const int64_t part_id) override
+  {
+    return do_safely(&ObStorageParallelS3MultiPartWriter::upload_part_, this, buf, size, part_id);
+  }
+  virtual int complete() override
+  {
+    return do_safely(&ObStorageParallelS3MultiPartWriter::complete_, this);
+  }
+  virtual int abort() override
+  {
+    return do_safely(&ObStorageParallelS3MultiPartWriter::abort_, this);
+  }
+  virtual int close() override
+  {
+    return do_safely(&ObStorageParallelS3MultiPartWriter::close_, this);
+  }
+  virtual bool is_opened() const override { return is_opened_; }
+
+private:
+  int open_(const ObString &uri, ObObjectStorageInfo *storage_info);
+  int upload_part_(const char *buf, const int64_t size, const int64_t part_id);
+  int complete_();
+  int abort_();
+  int close_();
+
+protected:
+  char *upload_id_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageParallelS3MultiPartWriter);
 };
 
 } // common

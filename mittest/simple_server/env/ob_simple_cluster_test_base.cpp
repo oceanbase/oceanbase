@@ -89,13 +89,15 @@ const char *ObSimpleClusterTestBase::POOL_BASE ="pool_ym_";
 
 ObSimpleClusterTestBase::ObSimpleClusterTestBase(const std::string &env_prefix,
                                                  const char *log_disk_size,
-                                                 const char *memory_limit)
+                                                 const char *memory_limit,
+                                                 const char *datafile_size)
 {
   if (cluster_ == nullptr) {
     env_prefix_ = env_prefix + "_test_data"; //+ std::to_string(ObTimeUtility::current_time()) + "_";
     cluster_ = std::make_shared<observer::ObSimpleServer>(env_prefix_,
                                                           log_disk_size,
-                                                          memory_limit);
+                                                          memory_limit,
+                                                          datafile_size);
     curr_dir_ = get_current_dir_name();
   }
 }

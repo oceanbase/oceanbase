@@ -3052,6 +3052,9 @@ int ObTableSqlService::gen_table_dml(
                K(table));
     } else if (OB_FAIL(check_column_store_valid(table, data_version))) {
       LOG_WARN("fail to check column store valid", KR(ret), K(table), K(data_version));
+    } else if (data_version < DATA_VERSION_4_3_3_0 && table.get_micro_index_clustered()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't set micro_index_clustered in current version", KR(ret), K(table));
     } else if (table.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
                && OB_FAIL(table.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
       LOG_WARN("fail to gen local session var str", K(ret));
@@ -3168,6 +3171,8 @@ int ObTableSqlService::gen_table_dml(
             OB_FAIL(dml.add_column("external_properties", ObHexEscapeSqlStr(table.get_external_properties()))))
         || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("index_params", ObHexEscapeSqlStr(index_params))))
+        || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("micro_index_clustered", table.get_micro_index_clustered())))
         || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
         ) {

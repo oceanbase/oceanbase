@@ -774,7 +774,7 @@ int ObInnerTableSchema::gv_ob_servers_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SQL_PORT,   CPU_CAPACITY,   CPU_CAPACITY_MAX,   CPU_ASSIGNED,   CPU_ASSIGNED_MAX,   MEM_CAPACITY,   MEM_ASSIGNED,   LOG_DISK_CAPACITY,   LOG_DISK_ASSIGNED,   LOG_DISK_IN_USE,   DATA_DISK_CAPACITY,   DATA_DISK_IN_USE,   DATA_DISK_HEALTH_STATUS,   MEMORY_LIMIT,   DATA_DISK_ALLOCATED,   (CASE       WHEN data_disk_abnormal_time > 0 THEN usec_to_time(data_disk_abnormal_time)       ELSE NULL    END) AS DATA_DISK_ABNORMAL_TIME,   (CASE       WHEN ssl_cert_expired_time > 0 THEN usec_to_time(ssl_cert_expired_time)       ELSE NULL    END) AS SSL_CERT_EXPIRED_TIME FROM oceanbase.__all_virtual_server )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SQL_PORT,   CPU_CAPACITY,   CPU_CAPACITY_MAX,   CPU_ASSIGNED,   CPU_ASSIGNED_MAX,   MEM_CAPACITY,   MEM_ASSIGNED,   LOG_DISK_CAPACITY,   LOG_DISK_ASSIGNED,   LOG_DISK_IN_USE,   DATA_DISK_CAPACITY,   DATA_DISK_ASSIGNED,   DATA_DISK_IN_USE,   DATA_DISK_HEALTH_STATUS,   MEMORY_LIMIT,   DATA_DISK_ALLOCATED,   (CASE       WHEN data_disk_abnormal_time > 0 THEN usec_to_time(data_disk_abnormal_time)       ELSE NULL    END) AS DATA_DISK_ABNORMAL_TIME,   (CASE       WHEN ssl_cert_expired_time > 0 THEN usec_to_time(ssl_cert_expired_time)       ELSE NULL    END) AS SSL_CERT_EXPIRED_TIME FROM oceanbase.__all_virtual_server )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -825,7 +825,7 @@ int ObInnerTableSchema::v_ob_servers_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,   SVR_PORT,   ZONE,   SQL_PORT,   CPU_CAPACITY,   CPU_CAPACITY_MAX,   CPU_ASSIGNED,   CPU_ASSIGNED_MAX,   MEM_CAPACITY,   MEM_ASSIGNED,   LOG_DISK_CAPACITY,   LOG_DISK_ASSIGNED,   LOG_DISK_IN_USE,   DATA_DISK_CAPACITY,   DATA_DISK_IN_USE,   DATA_DISK_HEALTH_STATUS,   MEMORY_LIMIT,   DATA_DISK_ALLOCATED,   DATA_DISK_ABNORMAL_TIME,   SSL_CERT_EXPIRED_TIME     FROM oceanbase.GV$OB_SERVERS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,   SVR_PORT,   ZONE,   SQL_PORT,   CPU_CAPACITY,   CPU_CAPACITY_MAX,   CPU_ASSIGNED,   CPU_ASSIGNED_MAX,   MEM_CAPACITY,   MEM_ASSIGNED,   LOG_DISK_CAPACITY,   LOG_DISK_ASSIGNED,   LOG_DISK_IN_USE,   DATA_DISK_CAPACITY,   DATA_DISK_ASSIGNED,   DATA_DISK_IN_USE,   DATA_DISK_HEALTH_STATUS,   MEMORY_LIMIT,   DATA_DISK_ALLOCATED,   DATA_DISK_ABNORMAL_TIME,   SSL_CERT_EXPIRED_TIME     FROM oceanbase.GV$OB_SERVERS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -876,7 +876,7 @@ int ObInnerTableSchema::gv_ob_units_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_IN_USE,            STATUS,            usec_to_time(create_time) AS CREATE_TIME     FROM oceanbase.__all_virtual_unit )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            usec_to_time(create_time) AS CREATE_TIME     FROM oceanbase.__all_virtual_unit )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -927,7 +927,7 @@ int ObInnerTableSchema::v_ob_units_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME     FROM oceanbase.GV$OB_UNITS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME     FROM oceanbase.GV$OB_UNITS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1590,7 +1590,7 @@ int ObInnerTableSchema::gv_ob_tablet_compaction_history_schema(ObTableSchema &ta
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS,       START_CG_ID,       END_CG_ID,       KEPT_SNAPSHOT,       MERGE_LEVEL     FROM oceanbase.__all_virtual_tablet_compaction_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS,       START_CG_ID,       END_CG_ID,       KEPT_SNAPSHOT,       MERGE_LEVEL,       EXEC_MODE     FROM oceanbase.__all_virtual_tablet_compaction_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1641,7 +1641,7 @@ int ObInnerTableSchema::v_ob_tablet_compaction_history_schema(ObTableSchema &tab
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS,       START_CG_ID,       END_CG_ID,       KEPT_SNAPSHOT,       MERGE_LEVEL     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS,       START_CG_ID,       END_CG_ID,       KEPT_SNAPSHOT,       MERGE_LEVEL,       EXEC_MODE     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

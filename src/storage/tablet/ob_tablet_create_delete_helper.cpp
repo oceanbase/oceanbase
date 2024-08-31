@@ -38,6 +38,7 @@
 #include "share/scn.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_occam_time_guard.h"
+#include "storage/meta_store/ob_storage_meta_io_util.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -66,6 +67,64 @@ int ObTabletCreateDeleteHelper::ReadMdsFunctor::operator()(const ObTabletCreateD
   }
   return ret;
 }
+
+int ObTabletCreateDeleteHelper::replay_mds_get_tablet(
+    const ObTabletMapKey &key, ObLS *ls, ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls is null", K(ret));
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(try_get_current_version_tablet_(key, ls, handle))) {
+        if (OB_TABLET_NOT_EXIST != ret) {
+          LOG_WARN("fail to get current version tablet", K(ret), K(key));
+        }
+      }
+#endif
+    } else {
+      LOG_WARN("fail to get tablet", K(ret), K(key));
+    }
+  }
+  return ret;
+}
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObTabletCreateDeleteHelper::try_get_current_version_tablet_(
+    const ObTabletMapKey &key, ObLS *ls, ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObPrivateTabletCurrentVersion current_version;
+  ObStorageObjectOpt opt;
+  bool is_exist = false;
+  opt.set_ss_private_tablet_meta_current_verison_object_opt(key.ls_id_.id(), key.tablet_id_.id());
+  ObLSTabletService *ls_tablet_svr;
+
+  if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, ls->get_ls_epoch(), is_exist))) {
+    LOG_WARN("fail to check existence", K(ret), K(opt));
+  } else if (!is_exist) {
+    ret = OB_TABLET_NOT_EXIST;
+  } else if (OB_FAIL(ObStorageMetaIOUtil::read_storage_meta_object(
+      opt, allocator, MTL_ID(), ls->get_ls_epoch(), current_version))) {
+    LOG_WARN("fail to read current version tablet addr", K(ret), K(opt));
+  } else if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet service is null", K(ret), K(key));
+  } else if (OB_FAIL(ls_tablet_svr->s2_replay_create_tablet(current_version.tablet_addr_, key.tablet_id_))) {
+    LOG_WARN("fail to replay create tablet", K(ret), K(current_version));
+  } else if (OB_FAIL(get_tablet(key, handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get tablet", K(ret), K(key));
+    }
+  }
+  LOG_INFO("try get current version tablet", K(ret), K(key), K(is_exist));
+  return ret;
+}
+#endif
 
 int ObTabletCreateDeleteHelper::get_tablet(
     const ObTabletMapKey &key,
@@ -665,6 +724,8 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.filled_tx_scn_.set_min();
     param.original_size_ = 0;
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+    param.table_backup_flag_.reset();
+    param.table_shared_flag_.reset();
     if (OB_FAIL(storage_schema.get_store_column_count(param.column_cnt_, true/*is_full*/))) {
       LOG_WARN("fail to get stored col cnt of table schema", K(ret), K(storage_schema));
     } else if (FALSE_IT(param.column_cnt_ += multi_version_col_cnt)) {

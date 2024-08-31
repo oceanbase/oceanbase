@@ -15,7 +15,6 @@
 #include "lib/thread/ob_reentrant_thread.h"//ObRsReentrantThread
 #include "logservice/ob_log_base_type.h"//ObIRoleChangeSubHandler ObICheckpointSubHandler ObIReplaySubHandler
 #include "logservice/palf/lsn.h"//palf::LSN
-#include "logservice/palf/palf_iterator.h"          //PalfBufferIterator
 #include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreStatusInfo
 #include "rootserver/ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
@@ -91,7 +90,6 @@ private:
  //interface for thread0
  int init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard);
  int seek_log_iterator_(const share::SCN &syn_scn,
-                       palf::PalfHandleGuard &palf_handle_guard,
                         palf::PalfBufferIterator &iterator);
  int process_ls_log_(const ObAllTenantInfo &tenant_info,
                      share::SCN &start_scn,

@@ -16,10 +16,10 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "share/backup/ob_backup_io_adapter.h"
 #include "share/ob_device_manager.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "lib/charset/ob_charset_string_helper.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 namespace oceanbase
@@ -27,6 +27,158 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+
+static constexpr uint64_t OB_STORAGE_ID_EXPORT = 2002;
+
+ObStorageAppender::ObStorageAppender()
+    : is_opened_(false),
+      offset_(0),
+      fd_(),
+      device_handle_(nullptr),
+      access_type_(OB_STORAGE_ACCESS_MAX_TYPE)
+{}
+
+ObStorageAppender::~ObStorageAppender()
+{
+  reset();
+}
+
+void ObStorageAppender::reset()
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter adapter;
+  if (is_opened_) {
+    if (OB_FAIL(adapter.close_device_and_fd(device_handle_, fd_))) {
+      LOG_WARN("fail to close device and fd", KR(ret), K_(fd), KP_(device_handle));
+    }
+  }
+  offset_ = 0;
+  fd_.reset();
+  device_handle_ = nullptr;
+  access_type_ = OB_STORAGE_ACCESS_MAX_TYPE;
+  is_opened_ = false;
+}
+
+int ObStorageAppender::open(const share::ObBackupStorageInfo *storage_info,
+    const ObString &uri, const ObStorageAccessType &access_type)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter adapter;
+  if (OB_UNLIKELY(is_opened_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObStorageAppender has been opened",
+        KR(ret), K_(is_opened), KPC(storage_info), K(uri), K(access_type));
+  } else if (OB_UNLIKELY(access_type != OB_STORAGE_ACCESS_APPENDER
+      && access_type != OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("access type is not supported",
+        KR(ret), K_(is_opened), KPC(storage_info), K(uri), K(access_type));
+  // The validity of the input parameters is verified by the open_with_access_type function.
+  } else if (OB_FAIL(adapter.open_with_access_type(device_handle_, fd_,
+      storage_info, uri, access_type,
+      ObStorageIdMod(OB_STORAGE_ID_EXPORT, ObStorageUsedMod::STORAGE_USED_EXPORT)))) {
+    LOG_WARN("fail to open appender", KR(ret), KPC(storage_info), K(uri), K(access_type));
+  } else {
+    offset_ = 0;
+    access_type_ = access_type;
+    is_opened_ = true;
+  }
+  return ret;
+}
+
+int ObStorageAppender::append(const char *buf, const int64_t size, int64_t &write_size)
+{
+  int ret = OB_SUCCESS;
+  write_size = 0;
+  ObBackupIoAdapter adapter;
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXPORT);
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObStorageAppender not opened", KR(ret), K_(is_opened));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(buf), K(size));
+  } else if (OB_STORAGE_ACCESS_APPENDER == access_type_) {
+    if (OB_FAIL(adapter.pwrite(*device_handle_, fd_,
+        buf, offset_, size, write_size, false/*is_can_seal*/))) {
+      LOG_WARN("fail to append data",
+          KR(ret), KP_(device_handle), K_(fd), KP(buf), K_(offset), K(size));
+    } else if (OB_UNLIKELY(size != write_size)) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("write size not equal to expected size",
+          KR(ret), K_(fd), K_(offset), K(size), K(write_size));
+    }
+  } else if (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == access_type_) {
+    ObIOHandle io_handle;
+    // The BUFFERED_MULTIPART_WRITER writes to the buffer first during upload,
+    // and only uploads when the buffer is full.
+    // Therefore, the return value of io_handle.get_data_size() may be 0
+    // or the total size of the buffer during upload.
+    if (OB_FAIL(adapter.async_upload_data(*device_handle_, fd_, buf, offset_, size, io_handle))) {
+      LOG_WARN("fail to upload data",
+          KR(ret), KP_(device_handle), K_(fd), KP(buf), K_(offset), K(size));
+    } else if (OB_FAIL(io_handle.wait())) {
+      LOG_WARN("fail to wait uploading data",
+          KR(ret), KP_(device_handle), K_(fd), KP(buf), K_(offset), K(size));
+    } else {
+      write_size = io_handle.get_data_size();
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("access type is invalid, please check open status",
+        KR(ret), KP_(device_handle), K_(fd), K_(access_type));
+  }
+
+  if (OB_SUCC(ret)) {
+    offset_ += size;
+  }
+  return ret;
+}
+
+int ObStorageAppender::close()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObBackupIoAdapter adapter;
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXPORT);
+  // ignore error if not opened
+  if (OB_LIKELY(is_opened_)) {
+    if (OB_STORAGE_ACCESS_APPENDER == access_type_) {
+      if (OB_FAIL(device_handle_->seal_file(fd_))) {
+        LOG_WARN("fail to seal file",
+            KR(ret), K_(fd), KP_(device_handle), K_(offset), K_(access_type));
+      }
+    } else if (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == access_type_) {
+      if (OB_FAIL(adapter.complete(*device_handle_, fd_))) {
+        LOG_WARN("fail to complete",
+            KR(ret), K_(fd), KP_(device_handle), K_(offset), K_(access_type));
+      }
+
+      // if complete failed, need to abort
+      if (OB_FAIL(ret)) {
+        if (OB_TMP_FAIL(adapter.abort(*device_handle_, fd_))) {
+          LOG_WARN("fail to abort",
+              KR(ret), KR(tmp_ret), K_(fd), KP_(device_handle), K_(offset), K_(access_type));
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("access type is invalid, please check open status",
+          KR(ret), KP_(device_handle), K_(fd), K_(access_type));
+    }
+
+    if (OB_TMP_FAIL(adapter.close_device_and_fd(device_handle_, fd_))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("fail to close device and fd", KR(ret), KR(tmp_ret), K_(fd), KP_(device_handle));
+    }
+  }
+  offset_ = 0;
+  fd_.reset();
+  device_handle_ = nullptr;
+  is_opened_ = false;
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObSelectIntoOpInput, task_id_, sqc_id_);
 OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_, outfile_name_,
     field_str_, // FARM COMPAT WHITELIST FOR filed_str_: renamed
@@ -169,12 +321,9 @@ int ObSelectIntoOp::init_csv_env()
       }
       //init device handle
       if (OB_SUCC(ret)) {
-        ObBackupIoAdapter util;
         if (basic_url_.empty() || !access_info_.is_valid()) {
           ret = OB_FILE_NOT_EXIST;
           LOG_WARN("file path not exist", K(ret), K(basic_url_), K(access_info_));
-        } else if (OB_FAIL(util.get_and_init_device(device_handle_, &access_info_, basic_url_))) {
-          LOG_WARN("failed to init device", K(ret), K(basic_url_), K(access_info_));
         }
       }
     } else { // IntoFileLocation::SERVER_DISK
@@ -500,19 +649,17 @@ int ObSelectIntoOp::open_file(ObIOBufferWriter &data_writer)
 {
   int ret = OB_SUCCESS;
   if (IntoFileLocation::REMOTE_OSS == file_location_) {
-    ObIODOpt opt;
-    ObIODOpts iod_opts;
-    opt.set("AccessType", "appender");
-    iod_opts.opts_ = &opt;
-    iod_opts.opt_cnt_ = 1;
     bool is_exist = false;
-    if (OB_FAIL(device_handle_->exist(data_writer.url_.ptr(), is_exist))) {
-      LOG_WARN("failed to check file exist", K(ret), K(data_writer.url_));
+    ObBackupIoAdapter adapter;
+    // TODO @linyi.cl: for S3, should use OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER
+    const ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
+    if (OB_FAIL(adapter.is_exist(data_writer.url_, &access_info_, is_exist))) {
+      LOG_WARN("fail to check file exist", KR(ret), K(data_writer.url_), K_(access_info));
     } else if (is_exist) {
       ret = OB_FILE_ALREADY_EXIST;
-      LOG_WARN("file already exist", K(ret), K(data_writer.url_));
-    } else if (OB_FAIL(device_handle_->open(data_writer.url_.ptr(), -1, 0, data_writer.fd_, &iod_opts))) {
-      LOG_WARN("failed to open file", K(ret));
+      LOG_WARN("file already exist", KR(ret), K(data_writer.url_), K_(access_info));
+    } else if (OB_FAIL(data_writer.storage_appender_.open(&access_info_, data_writer.url_, access_type))) {
+      LOG_WARN("fail to open file", KR(ret), K(data_writer.url_), K_(access_info));
     } else {
       data_writer.is_file_opened_ = true;
     }
@@ -634,17 +781,19 @@ int ObSelectIntoOp::calc_file_path_with_partition(ObString partition, ObIOBuffer
   return ret;
 }
 
+// TODO @linyi.cl: should handle failure of `close_file`
 void ObSelectIntoOp::close_file(ObIOBufferWriter &data_writer)
 {
+  int ret = OB_SUCCESS;
   if (IntoFileLocation::SERVER_DISK == file_location_) {
     data_writer.file_appender_.close();
-  } else {
-    if (data_writer.fd_.is_valid()) {
-      device_handle_->close(data_writer.fd_);
-      data_writer.fd_.reset();
-    }
+  } else if (OB_FAIL(data_writer.storage_appender_.close())) {
+    LOG_WARN("fail to close storage appender", KR(ret), K(data_writer.url_), K(access_info_));
   }
-  data_writer.is_file_opened_ = false;
+
+  if (OB_SUCC(ret)) {
+    data_writer.is_file_opened_ = false;
+  }
 }
 
 std::function<int(const char *, int64_t, ObSelectIntoOp::ObIOBufferWriter *)> ObSelectIntoOp::get_flush_function()
@@ -665,11 +814,8 @@ std::function<int(const char *, int64_t, ObSelectIntoOp::ObIOBufferWriter *)> Ob
     } else if (file_location_ == IntoFileLocation::REMOTE_OSS) {
       int64_t write_size = 0;
       int64_t begin_ts = ObTimeUtility::current_time();
-      if (OB_FAIL(device_handle_->write(data_writer->fd_, data, data_len, write_size))) {
-        LOG_WARN("failed to write device", K(ret));
-      } else if (OB_UNLIKELY(write_size != data_len)) {
-        ret = OB_IO_ERROR;
-        LOG_WARN("write size not equal super block size", K(ret), K(write_size), K(data_len));
+      if (OB_FAIL(data_writer->storage_appender_.append(data, data_len, write_size))) {
+        LOG_WARN("fail to append data", KR(ret), KP(data), K(data_len), K(data_writer->url_), K_(access_info));
       } else {
         write_offset_ += write_size;
         int64_t end_ts = ObTimeUtility::current_time();
@@ -2390,10 +2536,6 @@ void ObSelectIntoOp::destroy()
   } else if (OB_NOT_NULL(data_writer_)) {
     close_file(*data_writer_);
     data_writer_->~ObIOBufferWriter();
-  }
-  if (NULL != device_handle_) {
-    common::ObDeviceManager::get_instance().release_device(device_handle_);
-    device_handle_ = NULL;
   }
   external_properties_.~ObExternalFileFormat();
   partition_map_.destroy();

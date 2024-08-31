@@ -26,7 +26,6 @@
 #endif
 #include "share/scn.h"//SCN
 #include "logservice/ob_garbage_collector.h"//ObGCLSLog
-#include "logservice/palf_handle_guard.h"//ObPalfHandleGuard
 #include "observer/ob_server_struct.h"              //GCTX
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_ls_recovery_reportor.h" //ObLSRecoveryReportor
@@ -130,7 +129,7 @@ void ObRecoveryLSService::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
   } else {
-    palf::PalfBufferIterator iterator(SYS_LS.id(), palf::LogIOUser::RECOVERY);//can not use without palf_guard
+    palf::PalfBufferIterator iterator;//can not use without palf_guard
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
     last_report_ts_ = OB_INVALID_TIMESTAMP;
@@ -205,11 +204,11 @@ int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
   } else {
-    palf::PalfHandleGuard palf_handle_guard;
     ObLSRecoveryStat ls_recovery_stat;
     ObLSRecoveryStatOperator ls_recovery;
+    PalfHandleGuard palf_handle_guard;
     if (OB_FAIL(init_palf_handle_guard_(palf_handle_guard))) {
-      LOG_WARN("failed to init palf handle guard", KR(ret));
+      LOG_WARN("failed to init_palf_handle_guard_", KR(ret), K(start_scn), K(tenant_info));
     } else if (!start_scn.is_valid()) {
       if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
               SYS_LS, false, ls_recovery_stat, *proxy_))) {
@@ -223,7 +222,7 @@ int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
         if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
           LOG_INFO("has recovered to recovery_until_scn", KR(ret), K(ls_recovery_stat), K(tenant_info));
         }
-      } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), palf_handle_guard, iterator))) {
+      } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), iterator))) {
         LOG_WARN("failed to seek log iterator", KR(ret), K(ls_recovery_stat));
       } else {
         start_scn = ls_recovery_stat.get_sync_scn();
@@ -237,6 +236,7 @@ int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
       }
     }
     if (OB_FAIL(ret)) {
+      iterator.destroy();
       start_scn.reset();
     }
   }
@@ -264,10 +264,13 @@ int ObRecoveryLSService::init_palf_handle_guard_(palf::PalfHandleGuard &palf_han
 }
 
 int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn,
-    palf::PalfHandleGuard &palf_handle_guard,
     PalfBufferIterator &iterator)
 {
   int ret = OB_SUCCESS;
+  ObLSService *ls_svr = MTL(ObLSService *);
+  ObLSHandle ls_handle;
+  ObLS *ls = NULL;
+  ObLogHandler *log_handler = NULL;
   palf::LSN start_lsn(0);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -275,13 +278,23 @@ int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn,
   } else if (OB_UNLIKELY(!sync_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sync scn is invalid", KR(ret), K(sync_scn));
+  } else if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, ObLSService must not be NULL");
+  } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD))) {
+    LOG_WARN("failed to get ls", KR(ret));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls is NULL", KR(ret), K(ls_handle));
   } else if (SCN::base_scn() == sync_scn) {
     // start_lsn = 0;
-  } else if (OB_FAIL(palf_handle_guard.locate_by_scn_coarsely(sync_scn, start_lsn))) {
-    LOG_WARN("failed to locate lsn", KR(ret), K(sync_scn));
+  } else if (OB_FAIL(log_handler->locate_by_scn_coarsely(sync_scn, start_lsn))) {
+    LOG_WARN("locate_by_scn_coarsely failed", KR(ret), K(sync_scn));
   }
-  if (FAILEDx(palf_handle_guard.seek(start_lsn, iterator))) {
+  if (FAILEDx(log_handler->seek(start_lsn, iterator))) {
     LOG_WARN("failed to seek iterator", KR(ret), K(sync_scn), K(start_lsn));
+  } else if (OB_FAIL(iterator.set_io_context(palf::LogIOContext(MTL_ID(), SYS_LS.id(), palf::LogIOUser::OTHER)))) {
+    LOG_WARN("failed to set_io_context", KR(ret));
   }
   return ret;
 }

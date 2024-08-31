@@ -1774,6 +1774,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
     ObIndexTreeMultiPassPrefetcher &prefetcher)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 >= level || level >= prefetcher.index_tree_height_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid prefetch level", K(ret), K(level), K(prefetcher.index_tree_height_));
@@ -1851,6 +1852,15 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
         } else if (prefetcher.is_multi_check()) {
           read_handle.row_state_ = ObSSTableRowState::IN_BLOCK;
         }
+#ifdef OB_BUILD_SHARED_STORAGE
+        if (OB_FAIL(ret)) {
+        } else if (prefetcher.use_multi_block_prefetch_ &&
+                   prefetcher.index_tree_height_ - 1 == level &&
+                   index_info.has_valid_shared_macro_id() &&
+                   OB_TMP_FAIL(prefetch_macro_block(index_info.get_shared_data_macro_id()))) {
+          LOG_WARN("fail to prefetch macro block", K(ret), K(level), K(index_info));
+        }
+#endif
       }
     }
   }

@@ -74,6 +74,7 @@ ob_set_subtarget(ob_rootserver common
   ob_vertical_partition_builder.cpp
   ob_vtable_location_getter.cpp
   ob_zone_manager.cpp
+  ob_zone_storage_manager.cpp
   ob_zone_unit_provider.cpp
   ob_tenant_info_loader.cpp
   ob_tenant_thread_helper.cpp

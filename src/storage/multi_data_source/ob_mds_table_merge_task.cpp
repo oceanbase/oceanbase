@@ -106,6 +106,7 @@ int ObMdsTableMergeTask::process()
     const share::SCN &flush_scn = mds_merge_dag_->get_flush_scn();
     ctx.static_param_.scn_range_.end_scn_ = flush_scn;
     ctx.static_param_.version_range_.snapshot_version_ = flush_scn.get_val_for_tx();
+    ctx.static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
     ObTabletHandle new_tablet_handle;
     mds::MdsTableHandle mds_table;
     const int64_t mds_construct_sequence = mds_merge_dag_->get_mds_construct_sequence();
@@ -118,7 +119,7 @@ int ObMdsTableMergeTask::process()
     } else if (ls->is_offline()) {
       ret = OB_CANCELED;
       LOG_INFO("ls offline, skip merge", K(ret), K(ctx), KPC(mds_merge_dag_));
-    } else if (OB_FAIL(ctx.init_tablet_merge_info(false/*need_check*/))) {
+    } else if (OB_FAIL(ctx.init_tablet_merge_info())) {
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
     } else if (OB_ISNULL(tablet = ctx.get_tablet())) {
       ret = OB_ERR_UNEXPECTED;
@@ -156,11 +157,6 @@ int ObMdsTableMergeTask::process()
       mds_table.on_flush(flush_scn, ret);
     }
     ctx.time_guard_click(ObStorageCompactionTimeGuard::DAG_FINISH);
-    if (OB_SUCC(ret)) {
-      ctx.add_sstable_merge_info(ctx.get_merge_info().get_sstable_merge_info(),
-                mds_merge_dag_->get_dag_id(), mds_merge_dag_->hash(),
-                ctx.info_collector_.time_guard_);
-    }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
     FLOG_INFO("sstable merge finish", K(ret), "merge_info", ctx_ptr->get_merge_info(),
         "time_guard", ctx_ptr->info_collector_.time_guard_, KPC(mds_merge_dag_));
@@ -185,7 +181,7 @@ void ObMdsTableMergeTask::try_schedule_compaction_after_mds_mini(compaction::ObT
   // when restoring, some log stream may be not ready,
   // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
   } else if (!MTL(ObTenantTabletScheduler *)->is_restore()) {
-    if (0 == ctx.get_merge_info().get_sstable_merge_info().macro_block_count_) {
+    if (0 == ctx.get_merge_info().get_merge_history().block_info_.macro_block_count_) {
       // no need to schedule mds minor merge
     } else if (OB_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
         compaction::MDS_MINOR_MERGE, ctx.static_param_.ls_handle_, tablet_handle))) {
@@ -201,8 +197,8 @@ void ObMdsTableMergeTask::try_schedule_compaction_after_mds_mini(compaction::ObT
 
 void ObMdsTableMergeTask::set_merge_finish_time(compaction::ObTabletMergeCtx &ctx)
 {
-  ObSSTableMergeInfo &sstable_merge_info = ctx.get_merge_info().get_sstable_merge_info();
-  sstable_merge_info.merge_finish_time_ = ObTimeUtility::fast_current_time();
+  ObSSTableMergeHistory &merge_history = ctx.get_merge_info().get_merge_history();
+  merge_history.running_info_.merge_finish_time_ = ObTimeUtility::fast_current_time();
 }
 
 int ObMdsTableMergeTask::build_mds_sstable(

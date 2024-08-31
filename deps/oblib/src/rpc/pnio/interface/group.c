@@ -51,6 +51,15 @@ static pn_listen_t pn_listen_array[MAX_PN_LISTEN];
 static pn_grp_t* pn_grp_array[MAX_PN_GRP];
 static int pn_has_listened = 0;
 int64_t pnio_keepalive_timeout;
+int64_t pnio_read_bytes;
+int64_t pnio_write_bytes;
+
+void reset_pnio_statistics(int64_t *read_bytes, int64_t *write_bytes)
+{
+  *read_bytes = ATOMIC_SET(&pnio_read_bytes, 0);
+  *write_bytes = ATOMIC_SET(&pnio_write_bytes, 0);
+}
+
 PN_API int64_t pn_set_keepalive_timeout(int64_t user_timeout) {
   if (user_timeout >= 0) {
     pnio_keepalive_timeout = user_timeout;

@@ -93,7 +93,7 @@ public:
       schema_guard_(nullptr),
       simple_schema_(nullptr),
       table_compaction_info_(),
-      replica_ckm_items_(),
+      replica_ckm_items_(false/*need_map*/),
       last_table_ckm_items_(tenant_id),
       ls_locality_cache_(ls_locality_cache)
   {}
@@ -124,6 +124,9 @@ public:
     const common::ObIArray<share::ObTabletLSPair> &tablet_ls_pairs);
   int batch_write_tablet_ckm();
   int batch_update_report_scn();
+  static int check_column_checksum(
+    const share::ObReplicaCkmArray &tablet_replica_checksum_items,
+    const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items);
   int handle_fts_checksum(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const ObFTSGroupArray &fts_group_array);
@@ -154,9 +157,6 @@ private:
   int validate_cross_cluster_checksum();
   int check_tablet_checksum_sync_finish(const bool force_check);
   int validate_replica_and_tablet_checksum();
-  int check_column_checksum(
-    const ObArray<share::ObTabletReplicaChecksumItem> &tablet_replica_checksum_items,
-    const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items);
   bool check_waiting_tablet_checksum_timeout() const;
   int try_update_tablet_checksum_items();
   /* FTS Checksum Section */
@@ -170,6 +170,7 @@ private:
   static const int64_t PRINT_CROSS_CLUSTER_LOG_INVERVAL = 10 * 60 * 1000 * 1000; // 10 mins
   static const int64_t MAX_TABLET_CHECKSUM_WAIT_TIME_US = 36 * 3600 * 1000 * 1000L;  // 36 hours
   static const int64_t MAX_BATCH_INSERT_COUNT = 1500;
+  static const int64_t DEFAULT_TABLET_CNT = 32;
   bool is_inited_;
   bool is_primary_service_;
   bool need_validate_index_ckm_;
@@ -198,7 +199,7 @@ private:
   const share::schema::ObSimpleTableSchemaV2 *simple_schema_;
   compaction::ObTableCompactionInfo table_compaction_info_;
   ObArray<share::ObTabletLSPair> cur_tablet_ls_pair_array_;
-  ObReplicaCkmItems replica_ckm_items_;
+  share::ObReplicaCkmArray replica_ckm_items_;
   compaction::ObTableCkmItems last_table_ckm_items_; // only cached last data table with index
   share::ObCompactionLocalityCache  &ls_locality_cache_;
 };

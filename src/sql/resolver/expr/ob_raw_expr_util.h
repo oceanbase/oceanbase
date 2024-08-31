@@ -1009,6 +1009,9 @@ public:
   static int build_pseudo_rollup_id(ObRawExprFactory &factory,
                                     const ObSQLSessionInfo &session_info,
                                     ObRawExpr *&out);
+  static int build_pseudo_ddl_slice_id(ObRawExprFactory &factory,
+                                       const ObSQLSessionInfo &session_info,
+                                       ObRawExpr *&out);
   static int build_pseudo_random(ObRawExprFactory &factory,
                                  const ObSQLSessionInfo &session_info,
                                  ObRawExpr *&out);

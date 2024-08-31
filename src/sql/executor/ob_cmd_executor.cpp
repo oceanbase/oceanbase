@@ -552,6 +552,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObAdminZoneStmt, ObAdminZoneExecutor);
         break;
       }
+      case stmt::T_ADMIN_STORAGE: {
+        DEFINE_EXECUTE_CMD(ObAdminStorageStmt, ObAdminStorageExecutor);
+        break;
+      }
       case stmt::T_FREEZE: {
         DEFINE_EXECUTE_CMD(ObFreezeStmt, ObFreezeExecutor);
         break;
@@ -566,6 +570,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_FLUSH_ILOGCACHE: {
         DEFINE_EXECUTE_CMD(ObFlushIlogCacheStmt, ObFlushIlogCacheExecutor);
+        break;
+      }
+      case stmt::T_FLUSH_SS_MICRO_CACHE: {
+        DEFINE_EXECUTE_CMD(ObFlushSSMicroCacheStmt, ObFlushSSMicroCacheExecutor);
         break;
       }
       case stmt::T_FLUSH_DAG_WARNINGS: {
@@ -1084,6 +1092,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
        }
       case stmt::T_TRANSFER_PARTITION: {
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
+      }
+      case stmt::T_CHANGE_EXTERNAL_STORAGE_DEST: {
+        DEFINE_EXECUTE_CMD(ObChangeExternalStorageDestStmt, ObChangeExternalStorageDestExecutor);
         break;
       }
       case stmt::T_OLAP_ASYNC_JOB_CANCEL: {

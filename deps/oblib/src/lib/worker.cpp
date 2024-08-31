@@ -18,7 +18,6 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/allocator/ob_malloc.h"
 #include "common/ob_clock_generator.h"
-
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
@@ -74,6 +73,7 @@ Worker::Worker()
       curr_request_level_(0),
       is_th_worker_(false),
       group_id_(0),
+      func_type_(0),
       rpc_stat_srv_(nullptr),
       timeout_ts_(INT64_MAX),
       ntp_offset_(0),

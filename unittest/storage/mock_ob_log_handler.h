@@ -16,6 +16,9 @@
 #include "logservice/palf/palf_env.h"
 #include "share/scn.h"
 #include "logservice/ob_log_base_type.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "log/ob_log_iterator_storage.h"
+#endif
 
 #ifndef MOCK_OB_LOG_HANDLER_H_
 #define MOCK_OB_LOG_HANDLER_H_
@@ -133,7 +136,8 @@ public:
     UNUSED(pending_end_lsn);
     return OB_SUCCESS;
   }
-  int seek(const palf::LSN &start_lsn, palf::PalfBufferIterator &iter)
+  int seek(const palf::LSN &start_lsn,
+           palf::PalfBufferIterator &iter)
   {
     UNUSED(start_lsn);
     UNUSED(iter);
@@ -146,20 +150,6 @@ public:
     UNUSED(iter);
     return OB_SUCCESS;
   };
-  int seek(const share::SCN &start_scn,
-           palf::PalfGroupBufferIterator &iter)
-  {
-    UNUSED(start_scn);
-    UNUSED(iter);
-    return OB_SUCCESS;
-  }
-  int seek(const int64_t start_ts_ns,
-           palf::PalfGroupBufferIterator &iter)
-  {
-    UNUSED(start_ts_ns);
-    UNUSED(iter);
-    return OB_SUCCESS;
-  }
   int set_initial_member_list(const common::ObMemberList &member_list,
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list)

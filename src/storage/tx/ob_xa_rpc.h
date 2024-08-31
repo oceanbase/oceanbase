@@ -24,11 +24,6 @@
 namespace oceanbase
 {
 
-namespace observer
-{
-struct ObGlobalContext;
-}
-
 namespace obrpc
 {
 static const int64_t OB_XA_RPC_TIMEOUT = 5000000;

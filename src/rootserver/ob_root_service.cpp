@@ -644,7 +644,7 @@ ObRootService::ObRootService()
     server_zone_op_service_(),
     root_minor_freeze_(),
     lst_operator_(NULL),
-    zone_manager_(), ddl_service_(), unit_manager_(server_manager_, zone_manager_),
+    zone_manager_(), zone_storage_manager_(), ddl_service_(), unit_manager_(server_manager_, zone_manager_),
     root_balancer_(), empty_server_checker_(), lost_replica_checker_(), thread_checker_(),
     vtable_location_getter_(unit_manager_),
     addr_agent_(NULL), root_inspection_(),
@@ -659,6 +659,7 @@ ObRootService::ObRootService()
     self_check_task_(*this),
     load_ddl_task_(*this),
     refresh_io_calibration_task_(*this),
+    zone_storage_operation_task_(*this),
     event_table_clear_task_(ROOTSERVICE_EVENT_INSTANCE,
                             SERVER_EVENT_INSTANCE,
                             DEALOCK_EVENT_INSTANCE,
@@ -848,6 +849,9 @@ int ObRootService::init(ObServerConfig &config,
   } else if (OB_FAIL(zone_manager_.init(sql_proxy_))) {
     // init zone manager
     FLOG_WARN("init zone manager failed", KR(ret));
+  } else if (OB_FAIL(zone_storage_manager_.init(sql_proxy_, rpc_proxy_))) {
+    // init zone storage manager
+    FLOG_WARN("init zone storage manager failed", KR(ret));
   } else if (OB_FAIL(server_manager_.init(status_change_cb_, server_change_callback_, sql_proxy_,
                                           unit_manager_, zone_manager_, config, self, rpc_proxy_))) {
     // init server management related
@@ -1074,6 +1078,7 @@ int ObRootService::start_service()
     ddl_service_.restart();
     server_manager_.reset();
     zone_manager_.reset();
+    zone_storage_manager_.reset_zone_storage_infos();
     OTC_MGR.reset_version_has_refreshed();
 
     if (OB_FAIL(hb_checker_.start())) {
@@ -1654,6 +1659,24 @@ int ObRootService::schedule_refresh_io_calibration_task()
     LOG_WARN("fail to add timer task", K(ret));
   } else {
     LOG_INFO("succeed to add refresh io calibration task");
+  }
+  return ret;
+}
+
+int ObRootService::schedule_check_storage_operation_status()
+{
+  int ret = OB_SUCCESS;
+  const bool did_repeat = true;
+  const int64_t delay = 10L * 1000L * 1000L; // 10s
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (task_queue_.exist_timer_task(zone_storage_operation_task_)) {
+    LOG_WARN("zone storage operation task already exist", K(ret));
+  } else if (OB_FAIL(task_queue_.add_timer_task(zone_storage_operation_task_, delay, did_repeat))) {
+    LOG_WARN("fail to add timer task", K(ret));
+  } else {
+    LOG_INFO("succeed to add zone storage operation task");
   }
   return ret;
 }
@@ -5775,6 +5798,19 @@ int ObRootService::do_restart()
     FLOG_INFO("success to reload zone_manager_");
   }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    // reload zone storage manager
+    if (OB_FAIL(ret)) {
+    } else if (!zone_storage_manager_.is_reload() &&
+               OB_FAIL(zone_storage_manager_.reload())) {
+      FLOG_WARN("zone storage manager reload failed", KR(ret));
+    } else {
+      FLOG_INFO("success to reload zone storage manager");
+    }
+  }
+#endif
+
   // start timer tasks
   if (FAILEDx(start_timer_tasks())) {
     FLOG_WARN("start timer tasks failed", KR(ret));
@@ -6106,6 +6142,14 @@ int ObRootService::start_timer_tasks()
     }
   }
 
+  if (GCTX.is_shared_storage_mode()) {
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(schedule_check_storage_operation_status())) {
+        LOG_WARN("schedule check storage operation status failed", K(ret));
+      }
+    }
+  }
+
   LOG_INFO("start all timer tasks finish", K(ret));
   return ret;
 }
@@ -6123,6 +6167,9 @@ int ObRootService::stop_timer_tasks()
     task_queue_.cancel_timer_task(self_check_task_);
     task_queue_.cancel_timer_task(update_rs_list_timer_task_);
     task_queue_.cancel_timer_task(update_all_server_config_task_);
+    if (GCTX.is_shared_storage_mode()) {
+      task_queue_.cancel_timer_task(zone_storage_operation_task_);
+    }
     inspect_task_queue_.cancel_timer_task(inspector_task_);
     inspect_task_queue_.cancel_timer_task(purge_recyclebin_task_);
   }
@@ -8130,7 +8177,7 @@ int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
     LOG_WARN("invalid arg", KR(ret), K(arg));
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
-  } else {}
+  }
   if (OB_SUCC(ret)) {
     if (!ObHeartbeatService::is_service_enabled()) { // the old logic
       LOG_INFO("sys tenant data version < 4.2, add_server", K(arg),
@@ -8179,10 +8226,14 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
 #endif
   } else {
     LOG_INFO("add_server", K(arg), "timeout_ts", THIS_WORKER.get_timeout_ts());
-    ObCheckServerEmptyArg new_arg(ObCheckServerEmptyArg::ADD_SERVER,
-                                  sys_data_version);
+    ObCheckServerEmptyArg new_arg;
     ObCheckDeploymentModeArg dp_arg;
-    dp_arg.single_zone_deployment_on_ = OB_FILE_SYSTEM_ROUTER.is_single_zone_deployment_on();
+    // dp_arg.single_zone_deployment_on_ is false
+    if (OB_FAIL(dp_arg.init(GCTX.startup_mode_))) {
+      LOG_WARN("failed to init dp_arg", KR(ret));
+    } else if (OB_FAIL(new_arg.init(ObCheckServerEmptyArg::ADD_SERVER,
+                                    sys_data_version, OB_INVALID_ID /* server_id */))) {
+    }
 
 #ifdef OB_BUILD_TDE_SECURITY
     SpinRLockGuard sync_guard(master_key_mgr_.sync());
@@ -8191,7 +8242,7 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
       const ObAddr &addr = arg.servers_[i];
       Bool is_empty(false);
       Bool is_deployment_mode_match(false);
-      if (OB_FAIL(rpc_proxy_.to(addr).is_empty_server(new_arg, is_empty))) {
+      if (OB_FAIL(rpc_proxy_.to(addr).check_server_empty(new_arg, is_empty))) {
         LOG_WARN("fail to check is server empty", K(ret), K(addr));
       } else if (!is_empty) {
         ret = OB_OP_NOT_ALLOW;
@@ -8534,6 +8585,20 @@ int ObRootService::delete_zone(const obrpc::ObAdminZoneArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    bool storage_exist = false;
+    if (OB_FAIL(zone_storage_manager_.check_zone_storage_exist(arg.zone_, storage_exist))) {
+      LOG_WARN("failed to check zone storage exist", KR(ret), K(arg.zone_));
+    } else if (storage_exist) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("zone storage info not empty", KR(ret), K(arg.zone_));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Zone storage info is not dropped. DELETE ZONE");
+    }
+  } else {
+#endif
+  }
+  if (OB_FAIL(ret)) {
   } else {
     // @note to avoid deadlock risk, put it beside ZoneManager::write_lock_. ObServerManager::add_server also call the interfaces of zone_mgr.
     // it does not matter while add server after check.
@@ -8555,8 +8620,6 @@ int ObRootService::delete_zone(const obrpc::ObAdminZoneArg &arg)
         LOG_USER_ERROR(OB_ERR_ZONE_NOT_EMPTY, alive_count, not_alive_count);
       } else if (OB_FAIL(zone_manager_.delete_zone(arg.zone_))) {
         LOG_WARN("delete zone failed", K(ret), K(arg));
-      } else {
-        LOG_INFO("delete zone ok", K(arg));
       }
     }
   }
@@ -8761,6 +8824,80 @@ int ObRootService::alter_zone(const obrpc::ObAdminZoneArg &arg)
   return ret;
 }
 
+int ObRootService::add_storage(const obrpc::ObAdminStorageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("shared nothing do not support shared storage operation", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (!zone_storage_manager_.is_reload() && OB_FAIL(zone_storage_manager_.reload())) {
+    LOG_WARN("failed to reload zone storage manager", K(ret));
+  } else if (OB_FAIL(zone_storage_manager_.add_storage(arg.path_.str(), arg.access_info_.str(),
+                     arg.attribute_.str(), arg.use_for_, arg.zone_, arg.wait_type_))) {
+    LOG_WARN("failed to add storage", K(ret), K(arg));
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("add storage ok", K(arg));
+  }
+  return ret;
+}
+
+int ObRootService::drop_storage(const obrpc::ObAdminStorageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("shared nothing do not support shared storage operation", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (!zone_storage_manager_.is_reload() && OB_FAIL(zone_storage_manager_.reload())) {
+    LOG_WARN("failed to reload zone storage manager", K(ret));
+  } else if (OB_FAIL(zone_storage_manager_.drop_storage(arg.path_.str(), arg.use_for_, arg.zone_, arg.force_type_, arg.wait_type_))) {
+    LOG_WARN("drop storage failed", K(ret), K(arg));
+  } else {
+    LOG_INFO("drop storage ok", K(arg));
+  }
+  return ret;
+}
+
+int ObRootService::alter_storage(const obrpc::ObAdminStorageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("shared nothing do not support shared storage operation", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if ((arg.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ACCESS_INFO) &&
+              arg.access_info_.is_empty()) ||
+             (arg.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ATTRIBUTE) &&
+              arg.attribute_.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (!zone_storage_manager_.is_reload() && OB_FAIL(zone_storage_manager_.reload())) {
+    LOG_WARN("failed to reload zone storage manager", K(ret));
+  } else if (OB_FAIL(zone_storage_manager_.alter_storage(arg.path_.str(), arg.access_info_.str(),
+                     arg.attribute_.str(), arg.wait_type_))) {
+    LOG_WARN("failed to alter storage", K(ret), K(arg));
+  } else {
+    LOG_INFO("alter storage ok", K(arg));
+  }
+  return ret;
+}
 
 int ObRootService::generate_stop_server_log_in_sync_dest_server_array(
     const common::ObIArray<common::ObAddr> &alive_server_array,
@@ -10254,6 +10391,35 @@ ObAsyncTask *ObRootService::ObRefreshIOCalibrationTask::deep_copy(char *buf, con
   return task;
 }
 
+ObRootService::ObZoneStorageOperationTask::ObZoneStorageOperationTask(ObRootService &root_service)
+  : ObAsyncTimerTask(root_service.task_queue_), root_service_(root_service)
+{
+  set_retry_times(0);
+}
+
+int ObRootService::ObZoneStorageOperationTask::process()
+{
+  int ret = OB_SUCCESS;
+  ObZoneStorageManager &zone_storage_manager = root_service_.get_zone_storage_manager();
+  if (OB_FAIL(zone_storage_manager.check_storage_operation_state())) {
+    LOG_WARN("check storage operation status failed", K(ret));
+  } else {
+    LOG_INFO("check storage operation status succeeded");
+  }
+  return ret;
+}
+
+ObAsyncTask *ObRootService::ObZoneStorageOperationTask::deep_copy(char *buf, const int64_t buf_size) const
+{
+  ObZoneStorageOperationTask *task = nullptr;
+  if (nullptr == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buf is not enough", K(buf_size), "request_size", sizeof(*this));
+  } else {
+    task = new (buf) ObZoneStorageOperationTask(root_service_);
+  }
+  return task;
+}
+
 ////////////////////
 ObRootService::ObSelfCheckTask::ObSelfCheckTask(ObRootService &root_service)
 :ObAsyncTimerTask(root_service.task_queue_),
@@ -11452,9 +11618,9 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
                         "ret", ret,
                         "trace_id", *ObCurTraceId::get_trace_id(),
                         "task_id", arg.task_id_,
-                        "tablet_id_", arg.tablet_id_,
-                        "snapshot_version_", arg.snapshot_version_,
-                        arg.source_table_id_);
+                        "tablet_id", arg.tablet_id_,
+                        "dag_result", arg.ret_code_,
+                        arg.snapshot_version_);
   LOG_INFO("finish build ddl single replica response ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }

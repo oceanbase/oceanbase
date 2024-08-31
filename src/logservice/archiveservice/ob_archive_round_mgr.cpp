@@ -31,6 +31,7 @@ ObArchiveRoundMgr::ObArchiveRoundMgr() :
   compatible_(false),
   log_archive_state_(),
   backup_dest_(),
+  backup_dest_id_(0),
   rwlock_(common::ObLatchIds::ARCHIVE_ROUND_MGR_LOCK)
 {
 }
@@ -55,6 +56,7 @@ void ObArchiveRoundMgr::destroy()
   compatible_ = false;
   log_archive_state_.status_ = ObArchiveRoundState::Status::INVALID;
   backup_dest_.reset();
+  backup_dest_id_ = 0;
 }
 
 
@@ -64,7 +66,8 @@ int ObArchiveRoundMgr::set_archive_start(const ArchiveKey &key,
     const SCN &genesis_scn,
     const int64_t base_piece_id,
     const share::ObTenantLogArchiveStatus::COMPATIBLE compatible,
-    const share::ObBackupDest &dest)
+    const share::ObBackupDest &dest,
+    const int64_t dest_id)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
@@ -93,6 +96,7 @@ int ObArchiveRoundMgr::set_archive_start(const ArchiveKey &key,
     base_piece_id_ = base_piece_id;
     compatible_ = compatible >= share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2;
     log_archive_state_.status_ = ObArchiveRoundState::Status::DOING;
+    backup_dest_id_ = dest_id;
     ARCHIVE_LOG(INFO, "set_archive_start succ", KPC(this));
   }
 
@@ -135,8 +139,9 @@ void ObArchiveRoundMgr::set_archive_suspend(const ArchiveKey &key)
   }
 }
 
-int ObArchiveRoundMgr::get_backup_dest(const ArchiveKey &key,
-    share::ObBackupDest &dest)
+int ObArchiveRoundMgr::get_backup_dest_and_id(const ArchiveKey &key,
+    share::ObBackupDest &dest,
+    int64_t &dest_id)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
@@ -144,6 +149,8 @@ int ObArchiveRoundMgr::get_backup_dest(const ArchiveKey &key,
     ret = OB_EAGAIN;
   } else if (OB_FAIL(dest.deep_copy(backup_dest_))) {
     ARCHIVE_LOG(WARN, "backup dest deep_copy failed", K(ret), K(backup_dest_));
+  } else {
+    dest_id = backup_dest_id_;
   }
   return ret;
 }

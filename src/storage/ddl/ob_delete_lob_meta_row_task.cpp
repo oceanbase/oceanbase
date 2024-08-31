@@ -28,7 +28,6 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/blocksstable/ob_datum_row.h"
-#include "storage/ob_sstable_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_access_service.h"

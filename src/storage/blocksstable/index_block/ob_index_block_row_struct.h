@@ -41,7 +41,7 @@ struct ObIndexBlockRowDesc
 {
   ObIndexBlockRowDesc();
   ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc);
-
+  OB_INLINE void set_for_clustered_index() { is_clustered_index_ = true; }
   OB_INLINE bool is_valid() const
   {
     bool ret = true;
@@ -61,6 +61,9 @@ struct ObIndexBlockRowDesc
   };
   ObDatumRowkey row_key_;
   MacroBlockId macro_id_;
+  ObLogicMicroBlockId logic_micro_id_;
+  MacroBlockId shared_data_macro_id_;
+  int64_t data_checksum_;
   int64_t block_offset_;
   int64_t row_count_;
   int64_t row_count_delta_;
@@ -78,34 +81,66 @@ struct ObIndexBlockRowDesc
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
   bool is_serialized_agg_row_;
+  bool is_clustered_index_;
 
   TO_STRING_KV(KP_(data_store_desc), KP_(aggregated_row), K_(row_key), K_(macro_id),
+      K_(logic_micro_id), K_(data_checksum),
       K_(block_offset), K_(row_count), K_(row_count_delta),
       K_(max_merged_trans_version), K_(block_size),
       K_(macro_block_count), K_(micro_block_count), K_(row_offset),
       K_(is_deleted), K_(contain_uncommitted_row), K_(is_data_block),
       K_(is_secondary_meta), K_(is_macro_node), K_(has_string_out_row), K_(has_lob_out_row),
-      K_(is_last_row_last_flag), K_(is_serialized_agg_row));
+      K_(is_last_row_last_flag), K_(is_serialized_agg_row), K_(is_clustered_index), K_(shared_data_macro_id));
 };
 
 struct ObIndexBlockRowHeader
 {
   static const int64_t INDEX_BLOCK_HEADER_V1 = 1;
+  static const int64_t INDEX_BLOCK_HEADER_V2 = 2;
   static const int64_t DEFAULT_IDX_ROW_MACRO_IDX  = MacroBlockId::AUTONOMIC_BLOCK_INDEX;
   static MacroBlockId DEFAULT_IDX_ROW_MACRO_ID;
+  static MacroBlockId INVALID_MACRO_BLOCK_ID;
+  static ObLogicMicroBlockId INVALID_LOGICAL_MICRO_BLOCK_ID;
 
   ObIndexBlockRowHeader();
+  ObIndexBlockRowHeader& operator =(const ObIndexBlockRowHeader &other)
+  {
+    pack_ = other.pack_;
+    macro_id_first_id_ = other.macro_id_first_id_;
+    macro_id_second_id_ = other.macro_id_second_id_;
+    macro_id_third_id_ = other.macro_id_third_id_;
+    block_offset_ = other.block_offset_;
+    block_size_ = other.block_size_;
+    master_key_id_ = other.master_key_id_;
+    encrypt_id_ = other.encrypt_id_;
+    MEMCPY(encrypt_key_, other.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+    row_count_ = other.row_count_;
+    schema_version_ = other.schema_version_;
+    macro_block_count_ = other.macro_block_count_;
+    micro_block_count_ = other.micro_block_count_;
+    macro_id_fourth_id_ = other.macro_id_fourth_id_;
+    if (other.has_valid_shared_macro_id()) {
+      shared_data_macro_id_ = other.shared_data_macro_id_;
+    } else {
+      logic_micro_id_ = other.logic_micro_id_;
+    }
+    data_checksum_ = other.data_checksum_;
+    return *this;
+  }
 
   void reset();
   OB_INLINE bool is_valid() const
   {
     bool aggregation_valid = (is_pre_aggregated() && is_major_node()) || !is_pre_aggregated();
-    bool version_valid = INDEX_BLOCK_HEADER_V1 == version_;
+    bool version_valid = INDEX_BLOCK_HEADER_V1 == version_ || INDEX_BLOCK_HEADER_V2 == version_;
     bool macro_id_valid =
-        (macro_id_ == DEFAULT_IDX_ROW_MACRO_ID)
-        || !is_data_block()
-        || !is_data_index();
-    return aggregation_valid && version_valid && macro_id_valid;
+        (get_macro_id() == DEFAULT_IDX_ROW_MACRO_ID) ||
+        !is_data_block() ||
+        !is_data_index() ||
+        (get_macro_id() != DEFAULT_IDX_ROW_MACRO_ID && is_data_block() &&
+         is_data_index() /* clustered index */);
+    bool logic_id_valid = !(has_logic_micro_id() && has_shared_data_macro_id());
+    return aggregation_valid && version_valid && macro_id_valid && logic_id_valid;
   }
 
   OB_INLINE uint64_t get_version() const { return version_; }
@@ -114,6 +149,18 @@ struct ObIndexBlockRowHeader
   OB_INLINE ObRowStoreType get_row_store_type() const
   {
     return static_cast<ObRowStoreType>(row_store_type_);
+  }
+  OB_INLINE const ObLogicMicroBlockId &get_logic_micro_id() const
+  {
+    return has_logic_micro_id() ? logic_micro_id_ : INVALID_LOGICAL_MICRO_BLOCK_ID;
+  }
+  OB_INLINE const MacroBlockId &get_shared_data_macro_id() const
+  {
+    return has_shared_data_macro_id() ? shared_data_macro_id_ : INVALID_MACRO_BLOCK_ID;
+  }
+  OB_INLINE int64_t get_data_checksum() const
+  {
+    return has_logic_micro_id() ? data_checksum_ : 0;
   }
   OB_INLINE ObCompressorType get_compressor_type() const
   {
@@ -124,7 +171,52 @@ struct ObIndexBlockRowHeader
   OB_INLINE const char *get_encrypt_key() const { return encrypt_key_; }
   OB_INLINE uint64_t get_row_count() const { return row_count_; }
   OB_INLINE uint64_t get_schema_version() const { return schema_version_; }
-  OB_INLINE const MacroBlockId &get_macro_id() const { return macro_id_; }
+  OB_INLINE MacroBlockId get_macro_id() const
+  {
+    MacroBlockId macro_id;
+    if (INDEX_BLOCK_HEADER_V1 == version_) {
+      macro_id = MacroBlockId(macro_id_first_id_, macro_id_second_id_, macro_id_third_id_, 0);
+      macro_id.set_version_v2();
+    } else {
+      macro_id = MacroBlockId(macro_id_first_id_, macro_id_second_id_, macro_id_third_id_, macro_id_fourth_id_);
+    }
+    return macro_id;
+  }
+  int set_macro_id(const MacroBlockId &macro_id);
+  OB_INLINE void set_logic_micro_id_and_checksum(const ObLogicMicroBlockId &micro_id, const int64_t data_checksum)
+  {
+    logic_micro_id_ = micro_id;
+    data_checksum_ = data_checksum;
+    set_has_logic_micro_id();
+    unset_has_shared_data_macro_id();
+  }
+  OB_INLINE bool has_valid_logic_micro_id() const
+  {
+    return has_logic_micro_id() && get_logic_micro_id().is_valid();
+  }
+  OB_INLINE void set_shared_data_macro_id(const MacroBlockId &macro_id)
+  {
+    shared_data_macro_id_ = macro_id;
+    set_has_shared_data_macro_id();
+    unset_has_logic_micro_id();
+  }
+  OB_INLINE bool has_valid_shared_macro_id() const
+  {
+    return has_shared_data_macro_id() && get_shared_data_macro_id().is_valid();
+  }
+  OB_INLINE int64_t get_serialize_size() const
+  {
+    int64_t header_size = 0;
+    if (INDEX_BLOCK_HEADER_V1 == version_) {
+      header_size = sizeof(ObIndexBlockRowHeader) - sizeof(macro_id_fourth_id_);
+    } else {
+      header_size = sizeof(ObIndexBlockRowHeader);
+    }
+    if (!has_logic_micro_id() && !has_shared_data_macro_id()) {
+      header_size -= (sizeof(logic_micro_id_) + sizeof(data_checksum_));
+    }
+    return header_size;
+  }
   OB_INLINE void fill_deserialize_meta(ObMicroBlockDesMeta &des_meta) const
   {
     des_meta.compressor_type_ = static_cast<common::ObCompressorType>(compressor_type_);
@@ -133,6 +225,12 @@ struct ObIndexBlockRowHeader
     des_meta.encrypt_key_ = encrypt_key_;
   }
   OB_INLINE bool is_data_block() const { return 1 == is_data_block_; }
+  OB_INLINE bool is_clustered_node() const
+  {
+    // is clustered index row
+    return get_macro_id() != DEFAULT_IDX_ROW_MACRO_ID && is_data_block() &&
+           is_data_index();
+  }
   OB_INLINE bool is_leaf_block() const { return 1 == is_leaf_block_; }
   OB_INLINE bool is_major_node() const { return 1 == is_major_node_; }
   OB_INLINE bool is_pre_aggregated() const { return 1 == is_pre_aggregated_; }
@@ -142,6 +240,8 @@ struct ObIndexBlockRowHeader
   OB_INLINE bool is_data_index() const { return 1 == is_data_index_; }
   OB_INLINE bool has_string_out_row() const { return 1 == has_string_out_row_; }
   OB_INLINE bool has_lob_out_row() const { return 0 == all_lob_in_row_; }
+  OB_INLINE bool has_logic_micro_id() const { return 1 == has_logic_micro_id_; }
+  OB_INLINE bool has_shared_data_macro_id() const { return 1 == has_shared_data_macro_id_; }
 
   OB_INLINE void set_data_block() { is_data_block_ = 1; }
   OB_INLINE void set_leaf_block() { is_leaf_block_ = 1; }
@@ -150,6 +250,10 @@ struct ObIndexBlockRowHeader
   OB_INLINE void set_contain_uncommitted_row() { contain_uncommitted_row_ = 1; }
   OB_INLINE void set_deleted() { is_deleted_ = 1; }
   OB_INLINE void set_macro_node() { is_macro_node_ = 1; }
+  OB_INLINE void set_has_logic_micro_id() { has_logic_micro_id_ = 1; }
+  OB_INLINE void unset_has_logic_micro_id() { has_logic_micro_id_ = 0; }
+  OB_INLINE void set_has_shared_data_macro_id() { has_shared_data_macro_id_ = 1; }
+  OB_INLINE void unset_has_shared_data_macro_id() { has_shared_data_macro_id_ = 0; }
 
   int fill_micro_des_meta(const bool need_deep_copy_key, ObMicroBlockDesMeta &des_meta) const;
 
@@ -171,10 +275,14 @@ struct ObIndexBlockRowHeader
       uint64_t is_macro_node_:1;            // Whether this row represent for macro block level meta
       uint64_t has_string_out_row_ : 1;     // Whether sub-tree of this node has string column out row as lob
       uint64_t all_lob_in_row_ : 1;         // Whether sub-tree of this node has out row lob column
-      uint64_t reserved_:30;
+      uint64_t has_logic_micro_id_: 1;      // Whether this row has logic micro id
+      uint64_t has_shared_data_macro_id_: 1;// Whether this row has shared storage macro data id
+      uint64_t reserved_:28;
     };
   };
-  MacroBlockId macro_id_;                   // Physical macro block id, set to default in leaf node
+  int64_t macro_id_first_id_; // Physical macro block id, set to default in leaf node
+  int64_t macro_id_second_id_;
+  int64_t macro_id_third_id_;
   int32_t block_offset_;                    // Offset of micro block in macro block
   int32_t block_size_;                      // Length of micro block data
   int64_t master_key_id_;                   // Master key id for encryption
@@ -190,9 +298,25 @@ struct ObIndexBlockRowHeader
       K_(version), K_(row_store_type), K_(compressor_type),
       K_(is_data_index), K_(is_data_block),K_(is_leaf_block),
       K_(is_major_node), K_(is_pre_aggregated),K_(is_deleted), K_(contain_uncommitted_row),
-      K_(is_macro_node), K_(has_string_out_row), K_(all_lob_in_row), K_(macro_id), K_(block_offset), K_(block_size),
+      K_(is_macro_node), K_(has_string_out_row), K_(all_lob_in_row), K_(has_logic_micro_id),
+      K(get_macro_id()), K_(block_offset), K_(block_size),
       K_(master_key_id), K_(encrypt_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(row_count), K_(schema_version), K_(macro_block_count), K_(micro_block_count));
+      K_(row_count), K_(schema_version), K_(macro_block_count), K_(micro_block_count),
+      K_(logic_micro_id), K_(data_checksum), K_(shared_data_macro_id), K_(has_shared_data_macro_id));
+
+private:
+  // The macro block id of old verison has only three ids, but a fourth id is added since OB4.3.3.
+  // To deal with compatibility, we put the fourth id at the end of ObIndexBlockRowHeader and raise
+  // the version from INDEX_BLOCK_HEADER_V1 to INDEX_BLOCK_HEADER_V2.
+  int64_t macro_id_fourth_id_;
+  union {
+    // The logic id of micro block, will keep unchanged if this block is reuse in compaction.
+    ObLogicMicroBlockId logic_micro_id_;
+    MacroBlockId shared_data_macro_id_;
+  };
+  // The checksum of micro block data.
+  // It's used to verify whether the cached data is consistent with upper logic id.
+  int64_t data_checksum_;
 };
 
 struct ObIndexBlockRowMinorMetaInfo
@@ -324,10 +448,16 @@ public:
     OB_ASSERT(nullptr != row_header_);
     return row_header_->is_data_block();
   }
-  OB_INLINE const MacroBlockId &get_macro_id()
+  OB_INLINE MacroBlockId get_macro_id() const
   {
     OB_ASSERT(nullptr != row_header_);
-    return row_header_->is_data_block() ? parent_macro_id_ : row_header_->get_macro_id();
+    MacroBlockId macro_id;
+    if (row_header_->is_clustered_node()) {
+      macro_id = row_header_->get_macro_id();
+    } else {
+      macro_id = row_header_->is_data_block() ? parent_macro_id_ : row_header_->get_macro_id();
+    }
+    return macro_id;
   }
   OB_INLINE uint64_t get_block_offset() const
   {
@@ -338,6 +468,31 @@ public:
   {
     OB_ASSERT(nullptr != row_header_);
     return row_header_->get_block_size();
+  }
+  OB_INLINE bool has_valid_logic_micro_id() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->has_valid_logic_micro_id();
+  }
+  OB_INLINE bool has_valid_shared_macro_id() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->has_valid_shared_macro_id();
+  }
+  OB_INLINE const ObLogicMicroBlockId &get_logic_micro_id() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->get_logic_micro_id();
+  }
+  OB_INLINE const MacroBlockId &get_shared_data_macro_id() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->get_shared_data_macro_id();
+  }
+  OB_INLINE int64_t get_data_checksum() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->get_data_checksum();
   }
   OB_INLINE ObRowStoreType get_row_store_type() const
   {
@@ -422,11 +577,6 @@ public:
   {
     OB_ASSERT(nullptr != range_);
     return *range_;
-  }
-  OB_INLINE const MacroBlockId &get_macro_id() const
-  {
-    OB_ASSERT(nullptr != row_header_);
-    return row_header_->is_data_block() ? parent_macro_id_ : row_header_->get_macro_id();
   }
   OB_INLINE bool can_blockscan(const bool has_lob_out) const
   {

@@ -62,6 +62,7 @@ bool ObAllVirtualTmpFileInfo::is_need_process(uint64_t tenant_id)
     bool_ret = true;
   }
 
+  bool_ret = bool_ret && !GCTX.is_shared_storage_mode();
   return bool_ret;
 }
 

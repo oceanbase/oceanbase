@@ -18,13 +18,13 @@
 #include "logservice/palf/lsn.h"                // LSN
 #include "logservice/palf/log_group_entry.h"    // LogGroupEntry
 #include "logservice/palf/log_entry.h"          // LogEntry
-#include "logservice/palf/palf_iterator.h"      // PalfGroupBufferIterator
 #include "logservice/palf_handle_guard.h"       // PalfHandleGuard
 #include "ob_cdc_req.h"                         // RPC Request and Response
 #include "ob_cdc_raw_log_req.h"
 #include "ob_cdc_define.h"
 #include "ob_cdc_struct.h"                      // ClientLSCtx
 #include "logservice/archiveservice/large_buffer_pool.h" // LargeBufferPool
+#include "logservice/ob_log_handler.h" // PalfGroupBufferIterator
 
 namespace oceanbase
 {
@@ -79,12 +79,6 @@ private:
   int init_palf_handle_guard_(const ObLSID &ls_id,
       palf::PalfHandleGuard &palf_handle_guard);
 
-  // @retval OB_SUCCESS         Success
-  // @retval OB_ENTRY_NOT_EXIST LS not exist in this server
-  int init_group_iterator_(const ObLSID &ls_id,
-      const LSN &start_lsn,
-      palf::PalfHandleGuard &palf_handle_guard,
-      palf::PalfGroupBufferIterator &group_iter);
   int do_fetch_log_(const obrpc::ObCdcLSFetchLogReq &req,
       FetchRunTime &fetch_runtime,
       obrpc::ObCdcLSFetchLogResp &resp,
@@ -119,8 +113,7 @@ private:
   // return OB_ITER_END when no more log could be iterated
   template <class LogEntryType>
   int fetch_log_in_palf_(const ObLSID &ls_id,
-      palf::PalfIterator<palf::DiskIteratorStorage, LogEntryType> &iter,
-      palf::PalfHandleGuard &palf_guard,
+      palf::PalfIterator<LogEntryType> &iter,
       const LSN &start_lsn,
       const bool need_init_iter,
       const SCN &replayable_point_scn,

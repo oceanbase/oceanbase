@@ -19,7 +19,7 @@ namespace oceanbase
 namespace tmp_file
 {
 
-int ObTmpFilePageCacheController::init(ObTenantTmpFileManager &file_mgr)
+int ObTmpFilePageCacheController::init(ObSNTenantTmpFileManager &file_mgr)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {

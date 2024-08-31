@@ -18,11 +18,12 @@ namespace oceanbase
 namespace share
 {
 class ObTabletReplica;
+class ObTabletReplicaChecksumItem;
 }
 namespace compaction
 {
 
-enum ObTabletCompactionStatus
+enum ObTabletCompactionStatusEnum
 {
   INITIAL = 0,
   COMPACTED, // tablet finished compaction
@@ -90,7 +91,18 @@ public:
   bool need_check_fts_;
 };
 
-struct ObMergeProgress
+
+struct ObBasicMergeProgress
+{
+public:
+  ObBasicMergeProgress() {}
+  virtual ~ObBasicMergeProgress() {}
+  virtual bool is_merge_finished() const = 0;
+  virtual bool is_merge_abnomal() const = 0;
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
+};
+
+struct ObMergeProgress : public ObBasicMergeProgress
 {
 public:
   ObMergeProgress()
@@ -102,7 +114,7 @@ public:
   {
     MEMSET(table_cnt_, 0, sizeof(int64_t) * RECORD_TABLE_TYPE_CNT);
   }
-  ~ObMergeProgress() {}
+  virtual ~ObMergeProgress() {}
   void reset()
   {
     merge_finish_ = false;
@@ -111,7 +123,7 @@ public:
     total_table_cnt_ = 0;
     MEMSET(table_cnt_, 0, sizeof(int64_t) * RECORD_TABLE_TYPE_CNT);
   }
-  bool is_merge_finished() const
+  virtual bool is_merge_finished() const override
   {
     return total_table_cnt_ > 0 && merge_finish_
     && (total_table_cnt_ == get_finish_verified_table_cnt());
@@ -120,7 +132,7 @@ public:
   {
     return table_cnt_[ObTableCompactionInfo::INITIAL] > 0;
   }
-  bool is_merge_abnomal() const
+  virtual bool is_merge_abnomal() const override
   {
     return total_table_cnt_ > 0 && merge_finish_
     && (total_table_cnt_ != get_finish_verified_table_cnt());
@@ -153,7 +165,7 @@ public:
     table_cnt_[ObTableCompactionInfo::COMPACTED] = 0;
     table_cnt_[ObTableCompactionInfo::INDEX_CKM_VERIFIED] = 0;
   }
-  int64_t to_string(char *buf, const int64_t buf_len) const;
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
 private:
   int64_t get_finish_verified_table_cnt() const
   {
@@ -167,6 +179,40 @@ public:
   int64_t table_cnt_[RECORD_TABLE_TYPE_CNT];
   bool merge_finish_;
 };
+
+#ifdef OB_BUILD_SHARED_STORAGE
+struct ObLSMergeProgress : public compaction::ObBasicMergeProgress
+{
+public:
+  ObLSMergeProgress() { reset(); }
+  ~ObLSMergeProgress() { }
+  virtual bool is_merge_finished() const override
+  {
+    return ls_total_cnt_ == ls_refreshed_cnt_;
+  }
+  virtual bool is_merge_abnomal() const override
+  {
+    return ls_total_cnt_ < (ls_merging_cnt_ + ls_verified_cnt_ + ls_refreshed_cnt_);
+  }
+  bool is_verify_finished() const
+  {
+    // ls state can be IDLE when there is no tablet on ls
+    return ls_total_cnt_ == (ls_verified_cnt_ + ls_refreshed_cnt_);
+  }
+  void reset() {
+    ls_total_cnt_ = 0;
+    ls_merging_cnt_ = 0;
+    ls_verified_cnt_ = 0;
+    ls_refreshed_cnt_ = 0;
+  }
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+public:
+  int64_t ls_total_cnt_;
+  int64_t ls_merging_cnt_;
+  int64_t ls_verified_cnt_;
+  int64_t ls_refreshed_cnt_;
+};
+#endif
 
 struct ObUnfinishTableIds
 {
@@ -205,7 +251,7 @@ struct ObUnfinishTableIds
   common::ObArray<uint64_t> array_;
 };
 
-typedef hash::ObHashMap<ObTabletID, ObTabletCompactionStatus> ObTabletStatusMap;
+typedef hash::ObHashMap<ObTabletID, ObTabletCompactionStatusEnum> ObTabletStatusMap;
 typedef common::ObArray<share::ObTabletLSPair> ObTabletLSPairArray;
 typedef hash::ObHashMap<uint64_t, ObTableCompactionInfo> ObTableCompactionInfoMap;
 
@@ -243,6 +289,10 @@ public:
     const uint64_t table_id,
     const ObIArray<ObTabletID> &tablet_ids,
     ObIArray<share::ObTabletLSPair> &pairs) const;
+  int get_tablet_ls_id(
+    const uint64_t table_id,
+    const ObTabletID tablet_id,
+    share::ObLSID &ls_id) const;
   TO_STRING_KV(K_(tenant_id), K_(last_refresh_ts), K_(max_task_id), "map_cnt", map_.size());
 private:
   int refresh();
@@ -265,6 +315,7 @@ public:
   ~ObUncompactInfo();
   void reset();
   void add_table(const uint64_t table_id);
+  void add_skip_verify_table(const uint64_t table_id);
   void add_tablet(const share::ObTabletReplica &replica);
   void add_tablet(
     const uint64_t tenant_id,
@@ -274,10 +325,33 @@ public:
     common::ObIArray<share::ObTabletReplica> &input_tablets,
     common::ObIArray<uint64_t> &input_table_ids) const;
   static const int64_t DEBUG_INFO_CNT = 3;
+  static const int64_t SKIP_VERIFY_TABLE_CNT = 10;
   common::SpinRWLock diagnose_rw_lock_;
   common::ObSEArray<share::ObTabletReplica, DEBUG_INFO_CNT> tablets_; // record for diagnose
   common::ObSEArray<uint64_t, DEBUG_INFO_CNT> table_ids_; // record for diagnose
+  common::ObSEArray<uint64_t, SKIP_VERIFY_TABLE_CNT> skip_verify_tables_; // record for print
 };
+
+
+struct ObReplicaCkmItems
+{
+  ObReplicaCkmItems()
+    : array_(),
+      tablet_cnt_(0)
+  {}
+  DELEGATE_WITH_RET(array_, empty, bool);
+  DELEGATE_WITH_RET(array_, count, int64_t);
+  DELEGATE_WITH_RET(array_, at, const share::ObTabletReplicaChecksumItem&);
+  void reuse()
+  {
+    array_.reuse();
+    tablet_cnt_ = 0;
+  }
+  TO_STRING_KV(K_(array), K_(tablet_cnt));
+  ObArray<share::ObTabletReplicaChecksumItem> array_;
+  int64_t tablet_cnt_;
+};
+
 
 } // namespace compaction
 } // namespace oceanbase

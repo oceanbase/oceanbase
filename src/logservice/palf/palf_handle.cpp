@@ -32,6 +32,11 @@ PalfHandle::PalfHandle() : palf_handle_impl_(NULL),
 {
 }
 
+PalfHandle::PalfHandle(const PalfHandle& rhs)
+{
+  *this = rhs;
+}
+
 PalfHandle::~PalfHandle()
 {
   palf_handle_impl_ = NULL;
@@ -54,22 +59,6 @@ PalfHandle& PalfHandle::operator=(const PalfHandle &rhs)
   rc_cb_ = rhs.rc_cb_;
   fs_cb_ = rhs.fs_cb_;
   rebuild_cb_ = rhs.rebuild_cb_;
-  return *this;
-}
-
-PalfHandle& PalfHandle::operator=(PalfHandle &&rhs)
-{
-  if (this == &rhs) {
-    return *this;
-  }
-  palf_handle_impl_ = rhs.palf_handle_impl_;
-  rc_cb_ = rhs.rc_cb_;
-  fs_cb_ = rhs.fs_cb_;
-  rebuild_cb_ = rhs.rebuild_cb_;
-  rhs.palf_handle_impl_ = NULL;
-  rhs.rc_cb_ = NULL;
-  rhs.fs_cb_ = NULL;
-  rhs.rebuild_cb_ = NULL;
   return *this;
 }
 
@@ -146,6 +135,12 @@ int PalfHandle::seek(const LSN &lsn, PalfBufferIterator &iter)
     ret = palf_handle_impl_->alloc_palf_buffer_iterator(lsn, iter);
   }
   return ret;
+}
+
+int PalfHandle::seek(const SCN &scn, PalfBufferIterator &iter)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->alloc_palf_buffer_iterator(scn, iter);
 }
 
 int PalfHandle::seek(const LSN &lsn, PalfGroupBufferIterator &iter)
@@ -291,6 +286,12 @@ int PalfHandle::get_palf_id(int64_t &palf_id) const
 {
   CHECK_VALID;
   return palf_handle_impl_->get_palf_id(palf_id);
+}
+
+int PalfHandle::get_palf_epoch(int64_t &palf_epoch) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_palf_epoch(palf_epoch);
 }
 
 int PalfHandle::get_end_scn(SCN &scn) const
@@ -488,6 +489,13 @@ int PalfHandle::get_access_mode(AccessMode &access_mode) const
   CHECK_VALID;
   ret = palf_handle_impl_->get_access_mode(access_mode);
   return ret;
+}
+
+int PalfHandle::get_access_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  return palf_handle_impl_->get_access_mode_version(mode_version);
 }
 
 int PalfHandle::get_access_mode_ref_scn(int64_t &mode_version,
@@ -767,10 +775,19 @@ int PalfHandle::diagnose(PalfDiagnoseInfo &diagnose_info) const
 int PalfHandle::raw_read(const palf::LSN &lsn,
                          void *buffer,
                          const int64_t nbytes,
-                         int64_t &read_size)
+                         int64_t &read_size,
+                         palf::LogIOContext &io_ctx)
 {
   CHECK_VALID;
-  return palf_handle_impl_->raw_read(lsn, reinterpret_cast<char*>(buffer), nbytes, read_size);
+  return palf_handle_impl_->raw_read(lsn, reinterpret_cast<char*>(buffer), nbytes, read_size, io_ctx);
+}
+
+int PalfHandle::get_readable_end_lsn(LSN &lsn) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  lsn = palf_handle_impl_->get_readable_end_lsn();
+  return ret;
 }
 
 } // end namespace palf

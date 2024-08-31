@@ -21,6 +21,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/string/ob_sql_string.h"
 #include "common/ob_smart_var.h"
+#include "share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,42 @@ int ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
     LOG_WARN("fail to execute sql", KR(ret), K(meta_tenant_id), K(sql));
   } else {
     LOG_INFO("succ to delete column checksum error info", K(tenant_id), K(min_frozen_scn), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObColumnChecksumErrorOperator::check_exist_ckm_error_table(const uint64_t tenant_id, const int64_t compaction_scn, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  ObSqlString sql;
+  if (OB_UNLIKELY(0 == tenant_id || compaction_scn <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(compaction_scn));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    int64_t exist_cnt = 0;
+    ObMySQLResult *result = NULL;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql.append_fmt(
+          "SELECT count(*) > 0 as c FROM %s WHERE tenant_id = '%lu' AND frozen_scn = %ld",
+          OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TNAME, tenant_id, compaction_scn))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(compaction_scn));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(meta_tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result", KR(ret), K(meta_tenant_id), K(sql));
+      } else if (OB_FAIL(result->get_int("c", exist_cnt))) {
+        LOG_WARN("failed to get int", KR(ret), K(compaction_scn));
+      } else if (exist_cnt > 0) {
+        LOG_INFO("exist ckm error info", KR(ret), K(exist_cnt));
+        exist = true;
+      }
+    }
   }
   return ret;
 }

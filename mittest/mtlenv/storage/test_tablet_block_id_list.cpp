@@ -21,6 +21,7 @@
 #include "mittest/mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 #include "storage/schema_utils.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
+#include "storage/blocksstable/ob_object_manager.h"
 
 using namespace oceanbase::blocksstable;
 namespace oceanbase
@@ -57,7 +58,7 @@ int TestBlockIdList::init_info_set(ObArenaAllocator &allocator, const int64_t id
       LOG_WARN("fail to set refactored for info set", K(ret), K(tmp_macro_id));
     } else if (OB_FAIL(info_set.shared_meta_block_info_set_.set_refactored(tmp_macro_id))) {
       LOG_WARN("fail to set refactored for info set", K(ret), K(tmp_macro_id));
-    } else if (OB_FAIL(info_set.shared_data_block_info_map_.set_refactored(tmp_macro_id, i + 5))) {
+    } else if (OB_FAIL(info_set.clustered_data_block_info_map_.set_refactored(tmp_macro_id, i + 5))) {
       LOG_WARN("fail to set refactored for info set", K(ret), K(tmp_macro_id));
     }
   }
@@ -75,7 +76,8 @@ TEST_F(TestBlockIdList, test_id_list)
 
   // empty set
   ASSERT_EQ(OB_SUCCESS, info_set.init());
-  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(0, macro_info.meta_block_info_arr_.cnt_);
   ASSERT_EQ(0, macro_info.data_block_info_arr_.cnt_);
   ASSERT_EQ(0, macro_info.shared_meta_block_info_arr_.cnt_);
@@ -87,8 +89,8 @@ TEST_F(TestBlockIdList, test_id_list)
   info_set.data_block_info_set_.set_refactored(macro_id);
   info_set.meta_block_info_set_.set_refactored(macro_id);
   info_set.shared_meta_block_info_set_.set_refactored(macro_id);
-  info_set.shared_data_block_info_map_.set_refactored(macro_id, 10);
-  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
+  info_set.clustered_data_block_info_map_.set_refactored(macro_id, 10);
+  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(true, IS_EMPTY_BLOCK_LIST(macro_info.entry_block_));
   ASSERT_EQ(1, macro_info.shared_data_block_info_arr_.cnt_);
   ASSERT_EQ(1, macro_info.shared_meta_block_info_arr_.cnt_);
@@ -98,14 +100,14 @@ TEST_F(TestBlockIdList, test_id_list)
   info_set.data_block_info_set_.reuse();
   info_set.meta_block_info_set_.reuse();
   info_set.shared_meta_block_info_set_.reuse();
-  info_set.shared_data_block_info_map_.reuse();
+  info_set.clustered_data_block_info_map_.reuse();
 
   // large set
   int64_t linked_ref_cnt = 0;
   macro_info.reset();
   macro_id = MacroBlockId(1, 1, 0);
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, TEST_LINKED_NUM, info_set));
-  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(false, IS_EMPTY_BLOCK_LIST(macro_info.entry_block_));
   ASSERT_EQ(0, macro_info.shared_data_block_info_arr_.cnt_);
   ASSERT_EQ(0, macro_info.shared_meta_block_info_arr_.cnt_);
@@ -123,12 +125,13 @@ TEST_F(TestBlockIdList, test_serialize_deep_copy)
   ObBlockInfoSet info_set;
   ObTabletMacroInfo macro_info;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set.data_block_info_set_.set_refactored(tmp_macro_id));
-    ASSERT_EQ(OB_SUCCESS, info_set.shared_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
+    ASSERT_EQ(OB_SUCCESS, info_set.clustered_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
   }
-  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(0, macro_info.data_block_info_arr_.cnt_);
   ASSERT_EQ(0, macro_info.shared_data_block_info_arr_.cnt_);
   ASSERT_EQ(0, macro_info.shared_meta_block_info_arr_.cnt_);
@@ -166,9 +169,9 @@ TEST_F(TestBlockIdList, test_serialize_deep_copy)
   for (int64_t i = 0; i < MEMORY_ID_CNT; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set_2.data_block_info_set_.set_refactored(tmp_macro_id));
-    ASSERT_EQ(OB_SUCCESS, info_set_2.shared_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
+    ASSERT_EQ(OB_SUCCESS, info_set_2.clustered_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
   }
-  ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, &linked_writer));
   ASSERT_EQ(true, IS_EMPTY_BLOCK_LIST(macro_info_2.entry_block_));
   ASSERT_EQ(MEMORY_ID_CNT, macro_info_2.data_block_info_arr_.cnt_);
   ASSERT_EQ(MEMORY_ID_CNT, macro_info_2.shared_data_block_info_arr_.cnt_);
@@ -213,16 +216,19 @@ TEST_F(TestBlockIdList, test_meta_macro_ref_cnt)
   int64_t size = 0;
   ObBlockManager::BlockInfo block_info;
   MacroBlockId table_store_id;
-  ObMacroBlockHandle macro_handle;
+  ObStorageObjectHandle object_handle;
   int64_t ref_cnt = 0;
 
   ObTablet *tablet = tablet_handle.get_obj();
   ObTabletHandle new_tablet_handle;
+  blocksstable::ObStorageObjectOpt default_opt;
 
   // persist 4k tablet
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer().switch_block(macro_handle));
-  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer().switch_block(macro_handle));
+  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
+  ASSERT_EQ(OB_SUCCESS, meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt));
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
+  ASSERT_EQ(OB_SUCCESS, meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt));
   ObTablet *new_tablet = new_tablet_handle.get_obj();
 
   ASSERT_EQ(OB_SUCCESS, new_tablet->table_store_addr_.addr_.get_block_addr(table_store_id, offset, size));
@@ -259,8 +265,9 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set;
   ObTabletMacroInfo macro_info;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, TEST_LINKED_NUM, info_set));
-  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info));
   for (int64_t i = 0; i < TEST_LINKED_NUM * 4; i++) {
     block_info.reset();
@@ -292,8 +299,9 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_2;
   ObTabletMacroInfo macro_info_2;
   ASSERT_EQ(OB_SUCCESS, info_set_2.init());
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, 15, info_set_2));
-  ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, &linked_writer));
   macro_iter.destroy();
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_2));
   for (int64_t i = 0; i < 60; i++) {
@@ -318,7 +326,8 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_3;
   ObTabletMacroInfo macro_info_3;
   ASSERT_EQ(OB_SUCCESS, info_set_3.init());
-  ASSERT_EQ(OB_SUCCESS, macro_info_3.init(allocator, info_set_3, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, macro_info_3.init(allocator, info_set_3, &linked_writer));
   macro_iter.destroy();
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_3));
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next(block_info));
@@ -328,12 +337,13 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_4;
   ObTabletMacroInfo macro_info_4;
   ASSERT_EQ(OB_SUCCESS, info_set_4.init());
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set_4.data_block_info_set_.set_refactored(tmp_macro_id));
-    ASSERT_EQ(OB_SUCCESS, info_set_4.shared_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
+    ASSERT_EQ(OB_SUCCESS, info_set_4.clustered_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
   }
-  ASSERT_EQ(OB_SUCCESS, macro_info_4.init(allocator, info_set_4, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, macro_info_4.init(allocator, info_set_4, &linked_writer));
   macro_iter.destroy();
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_4));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD * 2; i++) {
@@ -355,12 +365,13 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObTabletMacroInfo macro_info_5;
   static const int64_t memory_id_cnt = 100;
   ASSERT_EQ(OB_SUCCESS, info_set_5.init());
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
   for (int64_t i = 0; i < memory_id_cnt; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set_5.data_block_info_set_.set_refactored(tmp_macro_id));
-    ASSERT_EQ(OB_SUCCESS, info_set_5.shared_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
+    ASSERT_EQ(OB_SUCCESS, info_set_5.clustered_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
   }
-  ASSERT_EQ(OB_SUCCESS, macro_info_5.init(allocator, info_set_5, linked_writer));
+  ASSERT_EQ(OB_SUCCESS, macro_info_5.init(allocator, info_set_5, &linked_writer));
   macro_iter.destroy();
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_5));
   for (int64_t i = 0; i < memory_id_cnt * 2; i++) {
@@ -406,7 +417,8 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
   ObBlockManager::BlockInfo block_info;
   int64_t ref_cnt = 0;
   ObTabletHandle new_tablet_handle;
-  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle));
+  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
   ObTablet *new_tablet = new_tablet_handle.get_obj();
   ASSERT_EQ(OB_SUCCESS, new_tablet->tablet_addr_.get_block_addr(macro_id, offset, size));
   {
@@ -432,23 +444,27 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
 
 TEST_F(TestBlockIdList, test_linked_block_ref_cnt)
 {
-  ObMacroBlockHandle tmp_handle;
-  ObSharedBlockReaderWriter &shared_rw = MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer();
-  ASSERT_EQ(OB_SUCCESS, shared_rw.switch_block(tmp_handle));
+  ObStorageObjectHandle object_handle;
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
+  ObSharedObjectReaderWriter &shared_rw = meta_service->get_shared_object_reader_writer();
+  blocksstable::ObStorageObjectOpt default_opt;
+  ASSERT_EQ(OB_SUCCESS, shared_rw.switch_object(object_handle, default_opt));
   common::ObArenaAllocator arena_allocator("unittest");
-  ObSharedBlocksWriteCtx write_ctx;
+  ObSharedObjectsWriteCtx write_ctx;
   static const int64_t BLOCK_CNT = 10;
 
   // write linked blocks and wait
   char *buffer = static_cast<char*>(arena_allocator.alloc(4096));
-  ObSharedBlockWriteInfo write_info;
-  ObSharedBlockLinkHandle write_handle;
+  ObSharedObjectWriteInfo write_info;
+  ObSharedObjectLinkHandle write_handle;
   write_info.buffer_ = buffer;
   write_info.offset_ = 0;
   write_info.size_ = 4096;
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
   for (int64_t i = 0; i < BLOCK_CNT; i++) {
-    ASSERT_EQ(OB_SUCCESS, shared_rw.async_link_write(write_info, write_handle));
+    ASSERT_EQ(OB_SUCCESS, shared_rw.async_link_write(write_info, curr_opt, write_handle));
   }
   ASSERT_EQ(OB_SUCCESS, write_handle.get_write_ctx(write_ctx));
 

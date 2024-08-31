@@ -141,7 +141,7 @@ void TestMultiVersionMerge::SetUpTestCase()
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  MTL(ObTenantTabletScheduler*)->resume_major_merge();
+  MERGE_SCHEDULER_PTR->resume_major_merge();
 
   // create tablet
   share::schema::ObTableSchema table_schema;
@@ -2977,7 +2977,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   const char *micro_data[3];
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag \n"
-      "0        var0  -10       0        2       2     EXIST   N    \n"
+      "0        var0  -10      0        2       2     EXIST   N    \n"
       "1        var1  -30     -11      1       15    EXIST   N    \n"
       "2        var2  -20     -11      2       15    EXIST   N    \n";
 
@@ -2997,7 +2997,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   scn_range.start_scn_.set_min();
   scn_range.end_scn_.convert_for_tx(30);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
-  reset_writer(snapshot_version);
+  reset_writer(snapshot_version, MAJOR_MERGE);
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 2);
   prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);

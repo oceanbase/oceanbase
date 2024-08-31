@@ -80,8 +80,10 @@ enum ObBackupBlockType {
   BACKUP_BLOCK_MARCO_RANGE_INDEX = 4,
   BACKUP_BLOCK_MARCO_RANGE_INDEX_INDEX = 5,
   BACKUP_BLOCK_META_INDEX_INDEX = 6,
-  BACKUP_BLOCK_MACRO_BLOCK_INDEX = 7,
-  BACKUP_BLOCK_MACRO_BLOCK_INDEX_INDEX = 8,
+  BACKUP_BLOCK_OTHER_BLOCK = 7,
+  BACKUP_BLOCK_OTHER_BLOCK_IDS = 8,
+  BACKUP_BLOCK_MACRO_BLOCK_INDEX = 9,
+  BACKUP_BLOCK_MACRO_BLOCK_INDEX_INDEX = 10,
   BACKUP_BLOCK_MAX,
 };
 
@@ -200,12 +202,13 @@ struct ObBackupMacroBlockId {
   bool is_valid() const;
   int assign(const ObBackupMacroBlockId &other);
   void reset();
-  TO_STRING_KV(K_(table_key), K_(logic_id), K_(macro_block_id), K_(nested_offset), K_(nested_size), K_(absolute_row_offset));
+  TO_STRING_KV(K_(table_key), K_(logic_id), K_(macro_block_id), K_(nested_offset), K_(nested_size), K_(absolute_row_offset), K_(is_ss_ddl_other_block));
   storage::ObITable::TableKey table_key_;
   blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::MacroBlockId macro_block_id_;
   int64_t nested_offset_;
   int64_t nested_size_;
+  bool is_ss_ddl_other_block_; // is ddl sstable macro block in shared storage mode
   int64_t absolute_row_offset_;
 };
 
@@ -224,7 +227,7 @@ struct ObBackupPhysicalID final {
   static const ObBackupPhysicalID get_default();
 
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id), K_(offset), K_(length));
+  TO_STRING_KV(K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id), K_(aligned_offset), K_(aligned_length));
 
 public:
   static const int64_t BACKUP_TYPE_BIT = 12;
@@ -265,13 +268,14 @@ public:
     int64_t third_id_;
     struct {
       uint64_t backup_set_id_ : BACKUP_SET_ID_BIT;
-      uint64_t offset_ : BACKUP_OFFSET_BIT;
-      uint64_t length_ : BACKUP_LENGTH_BIT;
+      uint64_t aligned_offset_ : BACKUP_OFFSET_BIT;
+      uint64_t aligned_length_ : BACKUP_LENGTH_BIT;
     };
   };
 };
 
 struct ObBackupDeviceMacroBlockId;
+typedef ObBackupPhysicalID ObBackupLinkedBlockAddr;
 
 struct ObBackupMacroBlockIndex {
   OB_UNIS_VERSION(1);
@@ -569,10 +573,13 @@ public:
   void reset();
   int assign(const ObBackupSSTableMeta &backup_sstable_meta);
 
-  TO_STRING_KV(K_(tablet_id), K_(sstable_meta), K_(logic_id_list));
+  TO_STRING_KV(K_(tablet_id), K_(sstable_meta), K_(logic_id_list),
+      K_(entry_block_addr_for_other_block), K_(total_other_block_count));
   common::ObTabletID tablet_id_;
   blocksstable::ObMigrationSSTableParam sstable_meta_;
   common::ObSArray<blocksstable::ObLogicMacroBlockId> logic_id_list_;
+  ObBackupLinkedBlockAddr entry_block_addr_for_other_block_;
+  int64_t total_other_block_count_;
 };
 
 struct ObBackupMacroBlockIDPair final {

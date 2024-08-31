@@ -2517,13 +2517,13 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
   uint32_t cur_page_id = copy_begin_page_id;
   int64_t cur_page_virtual_id = copy_begin_page_virtual_id;
 
-  if (OB_ISNULL(buf) || OB_UNLIKELY(OB_SERVER_BLOCK_MGR.get_macro_block_size() <= write_offset)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(inner_flush_ctx_.data_flush_infos_.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
   }
-  while (OB_SUCC(ret) && cur_page_id != copy_end_page_id && write_offset < OB_SERVER_BLOCK_MGR.get_macro_block_size()) {
+  while (OB_SUCC(ret) && cur_page_id != copy_end_page_id && write_offset < OB_STORAGE_OBJECT_MGR.get_macro_object_size()) {
     if (need_flush_tail && cur_page_id == end_page_id_ && file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0) {
       if (OB_SUCC(last_page_lock_.trylock())) {
         has_last_page_lock = true;
@@ -2641,7 +2641,7 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush sequence not match", KR(ret), K(flush_sequence), K(inner_flush_ctx_.flush_seq_),
              K(flush_task), KPC(this));
-  } else if (OB_ISNULL(buf) || OB_UNLIKELY(OB_SERVER_BLOCK_MGR.get_macro_block_size() <= write_offset)) {
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(flush_infos_.push_back(InnerFlushInfo()))) {

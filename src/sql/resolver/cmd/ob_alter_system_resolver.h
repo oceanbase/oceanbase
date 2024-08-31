@@ -97,6 +97,8 @@ DEF_SIMPLE_CMD_RESOLVER(ObFlushCacheResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObFlushKVCacheResolver);
 
+DEF_SIMPLE_CMD_RESOLVER(ObFlushSSMicroCacheResolver);
+
 DEF_SIMPLE_CMD_RESOLVER(ObFlushIlogCacheResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObFlushDagWarningsResolver);
@@ -104,6 +106,8 @@ DEF_SIMPLE_CMD_RESOLVER(ObFlushDagWarningsResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAdminServerResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObAdminZoneResolver);
+
+DEF_SIMPLE_CMD_RESOLVER(ObAdminStorageResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObSwitchReplicaRoleResolver);
 
@@ -340,6 +344,7 @@ private:
 
 DEF_SIMPLE_CMD_RESOLVER(ObTableTTLResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCancelCloneResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObChangeExternalStorageDestResolver);
 
 #undef DEF_SIMPLE_CMD_RESOLVER
 

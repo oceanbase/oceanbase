@@ -439,6 +439,20 @@ int ObCreateTableResolver::set_partition_info_for_oracle_temp_table(share::schem
   return ret;
 }
 
+int ObCreateTableResolver::set_default_micro_index_clustered_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  // set default value. If user_specified, it is modifed in resolve_table_option.
+  if (OB_FAIL(ret)) {
+    // error occurred
+  } else if (GCTX.is_shared_storage_mode()) {
+    table_schema.set_micro_index_clustered(true);
+  } else { // shared_nothing
+    table_schema.set_micro_index_clustered(false);
+  }
+  return ret;
+}
+
 int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -670,6 +684,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               pctfree_ = 0; // set default pctfree value for non-sys table
             }
             if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(set_default_micro_index_clustered_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set table options (micro_index_clustered) failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {

@@ -64,7 +64,7 @@ struct ObMajorFreezeRequest
 {
 public:
   ObSimpleFreezeInfo info_;
-  rootserver::ObMajorFreezeReason freeze_reason_; // placeholder for SS feature
+  rootserver::ObMajorFreezeReason freeze_reason_;
 
   ObMajorFreezeRequest()
     : info_(),

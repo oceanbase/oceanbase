@@ -116,7 +116,7 @@ ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
     if (ObTransCtxType::PARTICIPANT == ctx_type) {
       // During restart, the number of transaction contexts is relatively large
       // and cannot be limited, otherwise there will be circular dependencies
-      if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == observer::SS_SERVING) {
+      if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == ObServiceStatus::SS_SERVING) {
         TRANS_LOG_RET(ERROR, tmp_ret, "participant context memory alloc failed", K_(active_part_ctx_count));
         tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
       } else if (NULL != (ctx = mtl_sop_borrow(ObPartTransCtx))) {

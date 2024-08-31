@@ -99,6 +99,10 @@ TG_DEF(LogIOTaskCbThreadPool, LogIOCb, QUEUE_THREAD,
        ThreadCountPair(palf::LogIOTaskCbThreadPool::THREAD_NUM,
        palf::LogIOTaskCbThreadPool::MINI_MODE_THREAD_NUM),
        palf::LogIOTaskCbThreadPool::MAX_LOG_IO_CB_TASK_NUM)
+TG_DEF(LogSubmitLogQueueTh, LogSubmitLogQueueThread, QUEUE_THREAD,
+       ThreadCountPair(palf::LogSharedQueueTh::THREAD_NUM,
+       palf::LogSharedQueueTh::MINI_MODE_THREAD_NUM),
+       palf::LogSharedQueueTh::MAX_LOG_HANDLE_TASK_NUM)
 TG_DEF(LogSharedQueueTh, LogSharedQueueThread, QUEUE_THREAD,
        ThreadCountPair(palf::LogSharedQueueTh::THREAD_NUM,
        palf::LogSharedQueueTh::MINI_MODE_THREAD_NUM),
@@ -166,9 +170,31 @@ TG_DEF(TenantTransferService, TransferSrv, REENTRANT_THREAD_POOL, ThreadCountPai
 TG_DEF(WR_TIMER_THREAD, WrTimer, TIMER)
 
 TG_DEF(StartupAccelHandler, StartupAccelHandler, QUEUE_THREAD, 1, observer::ObStartupAccelTaskHandler::MAX_QUEUED_TASK_NUM)
+TG_DEF(TieredStorageTimer, TieredStorageTimer, TIMER)
 TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
+#ifdef OB_BUILD_SHARED_STORAGE
+TG_DEF(ReplicaPrewarmHdlr, RepPrewarmHdlr, QUEUE_THREAD, 1, storage::ObReplicaPrewarmHandler::MAX_TASK_NUM)
+TG_DEF(MicCacheLTimer, MicCacheLTimer, TIMER)
+TG_DEF(MicCacheMTimer, MicCacheMTimer, TIMER)
+TG_DEF(MicCacheHTimer, MicCacheHTimer, TIMER)
+TG_DEF(SSTmpFileAFlush, TmpFileAFlush, TIMER)
+TG_DEF(SSTmpFileARemove, TmpFileARemove, TIMER)
+TG_DEF(TmpFileFlushTimer, TmpFileFlushTimer, TIMER)
+TG_DEF(TmpFilePrereadTimer, TmpFilePrereadTimer, TIMER)
+TG_DEF(ReplicaPrewarmTimer, ReplicaPrewarmTimer, TIMER)
+TG_DEF(TenantDirGCTimer, TntGCTimer, TIMER)
+TG_DEF(ObPublicBlockGCThread, PubGCThread, QUEUE_THREAD,
+       ThreadCountPair(storage::ObPublicBlockGCThread::THREAD_NUM,
+       storage::ObPublicBlockGCThread::MINI_MODE_THREAD_NUM),
+       storage::ObPublicBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
+TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
+       ThreadCountPair(storage::ObPrivateBlockGCThread::THREAD_NUM,
+       storage::ObPrivateBlockGCThread::MINI_MODE_THREAD_NUM),
+       storage::ObPrivateBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
+#endif
+
 
 TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)
 #endif

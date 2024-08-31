@@ -785,7 +785,7 @@ TEST_F(TestElectionMsgCompat2, old_to_new) {
 }
 
 TEST_F(TestElectionMsgCompat2, new_to_old_fake_new) {
-  observer::ObServer::get_instance().gctx_.startup_mode_ = observer::NORMAL_MODE;
+  observer::ObServer::get_instance().gctx_.startup_mode_ = ObServerMode::NORMAL_MODE;
   oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_1_0_0;
   constexpr int64_t BUFFER_SIZE = 2048;
   char buffer[BUFFER_SIZE] = {0};
@@ -819,7 +819,7 @@ TEST_F(TestElectionMsgCompat2, new_to_old_fake_new) {
 }
 
 TEST_F(TestElectionMsgCompat2, new_to_new_real_new) {
-  observer::ObServer::get_instance().gctx_.startup_mode_ = observer::NORMAL_MODE;
+  observer::ObServer::get_instance().gctx_.startup_mode_ = ObServerMode::NORMAL_MODE;
   oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_2_0_0;
   constexpr int64_t BUFFER_SIZE = 2048;
   char buffer[BUFFER_SIZE] = {0};

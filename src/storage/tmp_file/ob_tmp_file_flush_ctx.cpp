@@ -291,7 +291,7 @@ int ObTmpFileFlushTask::write_one_block()
   write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
   write_info.buffer_ = get_data_buf();
-  write_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  write_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   write_info.offset_ = 0;
 
   if (FAILEDx(blocksstable::ObBlockManager::async_write_block(write_info, handle_))) {

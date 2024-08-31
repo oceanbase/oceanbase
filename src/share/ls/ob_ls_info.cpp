@@ -276,7 +276,8 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
       && property_ == other.property_
       && unit_id_ == other.unit_id_
       && zone_ == other.zone_
-      && paxos_replica_number_ == other.paxos_replica_number_) {
+      && paxos_replica_number_ == other.paxos_replica_number_
+      && required_size_ == other.required_size_) {
     is_equal = true;
   }
 

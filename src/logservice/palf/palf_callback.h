@@ -46,6 +46,7 @@ class PalfRebuildCb
 public:
   // lsn 表示触发rebuild时源端的基线lsn位点
   virtual int on_rebuild(const int64_t id, const LSN &lsn) = 0;
+  virtual bool is_rebuilding(const int64_t id) const = 0;
 };
 
 class PalfLocationCacheCb
@@ -54,6 +55,8 @@ public:
   virtual int get_leader(const int64_t id, common::ObAddr &leader) = 0;
   virtual int nonblock_get_leader(const int64_t id, common::ObAddr &leader) = 0;
   virtual int nonblock_renew_leader(const int64_t id) = 0;
+  virtual int nonblock_get_leader(const uint64_t tenant_id, int64_t id, common::ObAddr &leader) = 0;
+  virtual int nonblock_renew_leader(const uint64_t tenant_id, int64_t id) = 0;
 };
 
 class PalfMonitorCb

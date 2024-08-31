@@ -339,6 +339,7 @@ public:
       share::schema::ObTableSchema &new_table_schema,
       obrpc::ObAlterTableArg &alter_table_arg,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_data_version,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
@@ -1511,6 +1512,7 @@ private:
   // offline ddl cannot appear at the same time with other ddl types
   // Offline ddl cannot appear at the same time as offline ddl
   int check_is_offline_ddl(obrpc::ObAlterTableArg &alter_table_arg,
+                           const uint64_t data_format_version,
                            share::ObDDLType &ddl_type,
                            bool &ddl_need_retry_at_executor);
   int check_is_oracle_mode_add_column_not_null_ddl(const obrpc::ObAlterTableArg &alter_table_arg,
@@ -1522,6 +1524,7 @@ private:
   int check_ddl_with_primary_key_operation(const obrpc::ObAlterTableArg &alter_table_arg,
                                            bool &with_primary_key_operation);
   int do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
+                              const uint64_t tenant_data_version,
                               obrpc::ObAlterTableRes &res);
   int add_not_null_column_to_table_schema(
       obrpc::ObAlterTableArg &alter_table_arg,
@@ -1660,6 +1663,7 @@ private:
                                const share::schema::ObTableSchema &orig_table_schema,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const bool is_oracle_mode,
+                               const uint64_t data_format_version,
                                share::ObDDLType &ddl_type,
                                bool &ddl_need_retry_at_executor);
   int check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,

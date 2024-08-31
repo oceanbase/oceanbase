@@ -239,6 +239,8 @@ public:
   int64_t get_serialize_size() const;
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
+private:
+  bool contain_storage_schema() const;
 public:
   static const int64_t MEDIUM_COMPAT_VERSION = 1;
   static const int64_t MEDIUM_COMPAT_VERSION_V2 = 2; // for add last_medium_snapshot_

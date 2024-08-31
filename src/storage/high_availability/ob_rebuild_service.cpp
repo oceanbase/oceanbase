@@ -19,7 +19,7 @@
 #include "observer/ob_server.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "ob_storage_ha_utils.h"
 
 using namespace oceanbase;
@@ -426,7 +426,7 @@ void ObRebuildService::run1()
   lib::set_thread_name("RebuildService");
 
   while (!has_set_stop()) {
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
     } else if (OB_FAIL(build_rebuild_ctx_map_())) {

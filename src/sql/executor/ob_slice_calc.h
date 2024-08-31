@@ -645,13 +645,15 @@ public:
       const ObPxTabletRange *range,
       const ObIArray<ObExpr*> *dist_exprs,
       const ObSortFuncs &sort_cmp_funs,
-      const ObSortCollations &sort_collations)
+      const ObSortCollations &sort_collations,
+      ObExpr *ddl_slice_id_expr)
       : ObSliceIdxCalc(alloc, ObNullDistributeMethod::NONE),
         task_cnt_(task_cnt),
         range_(range),
         dist_exprs_(dist_exprs),
         sort_cmp_funs_(sort_cmp_funs),
-        sort_collations_(sort_collations)
+        sort_collations_(sort_collations),
+        ddl_slice_id_expr_(ddl_slice_id_expr)
   {
     support_vectorized_calc_ = true;
   }
@@ -672,6 +674,7 @@ public:
   const ObIArray<ObExpr*> *dist_exprs_;
   const ObSortFuncs &sort_cmp_funs_;
   const ObSortCollations &sort_collations_;
+  ObExpr *ddl_slice_id_expr_;
 };
 
 class ObHashSliceIdCalc : public ObSliceIdxCalc
@@ -860,7 +863,8 @@ public:
       const ObIArray<ObExpr *> &sort_exprs,
       const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
       const ObIArray<ObSortFieldCollation> *sort_collations,
-      ObRepartitionType repart_type)
+      ObRepartitionType repart_type,
+      ObExpr *ddl_slice_id_expr)
       : ObSlaveMapRepartIdxCalcBase(exec_ctx,
                                     table_schema,
                                     calc_part_id_expr,
@@ -870,7 +874,8 @@ public:
                                     repart_type),
         is_inited_(false),
         sort_exprs_(sort_exprs),
-        sort_cmp_(sort_cmp_funs, sort_collations)
+        sort_cmp_(sort_cmp_funs, sort_collations),
+        ddl_slice_id_expr_(ddl_slice_id_expr)
   {}
   virtual ~ObSlaveMapPkeyRangeIdxCalc();
   virtual int init(uint64_t tenant_id = OB_SERVER_TENANT_ID) override;
@@ -910,6 +915,7 @@ private:
   int get_task_idx(
       const int64_t tablet_id,
       const ObPxTabletRange::DatumKey &sort_key,
+      ObEvalCtx &eval_ctx,
       int64_t &task_idx);
 private:
   static const int64_t DEFAULT_PARTITION_COUNT = 256;
@@ -919,6 +925,7 @@ private:
   ObPxTabletRange::DatumKey sort_key_;
   common::hash::ObHashMap<int64_t/*tablet_id*/, PartitionRangeChannelInfo *> part_range_map_;
   Compare sort_cmp_;
+  ObExpr *ddl_slice_id_expr_;
 };
 
 class ObSlaveMapPkeyHashIdxCalc : public ObSlaveMapRepartIdxCalcBase

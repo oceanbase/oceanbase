@@ -134,6 +134,11 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     dblink_snapshot_map_(),
     user_logging_ctx_(),
     is_online_stats_gathering_(false),
+    is_ddl_idempotent_auto_inc_(false),
+    table_all_slice_count_(0),
+    table_level_slice_idx_(0),
+    slice_row_idx_(0),
+    autoinc_range_interval_(0),
     lob_access_ctx_(nullptr)
 {
 }

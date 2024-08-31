@@ -34,8 +34,8 @@ class ObMemtableArray;
 
 class ObTableStoreIterator final
 {
-// TODO: currently, we will load all related tables into memory on initializetion of iterator,
-// maybe we should init with sstable address and prefetch sstable on iteratring for more smooth memory usage
+// TODO: currently, we will load all related tables into memory on initialization of iterator,
+// maybe we should init with sstable address and prefetch sstable on iterating for more smooth memory usage
 public:
   class TablePtr final
   {

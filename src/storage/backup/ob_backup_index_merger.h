@@ -179,7 +179,7 @@ public:
 protected:
   virtual int get_all_retries_(const int64_t task_id, const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type,
       const share::ObLSID &ls_id, common::ObISQLClient &sql_proxy, common::ObIArray<ObBackupRetryDesc> &retry_list);
-  int open_file_writer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info);
+  int open_file_writer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info, const int64_t dest_id);
   int prepare_file_write_ctx_(common::ObInOutBandwidthThrottle &bandwidth_throttle, ObBackupFileWriteCtx &write_ctx);
   template <class IndexType>
   int encode_index_to_buffer_(const common::ObIArray<IndexType> &index_list, blocksstable::ObBufferWriter &buffer_writer);

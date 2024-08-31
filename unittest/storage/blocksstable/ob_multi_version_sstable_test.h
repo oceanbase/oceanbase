@@ -40,6 +40,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/ob_storage_schema_util.h"
+#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 
@@ -165,7 +166,7 @@ public:
   ObITable::TableType get_merged_table_type() const;
   void prepare_table_schema(const char **micro_data, const int64_t schema_rowkey_cnt, const ObScnRange &scn_range, const int64_t snapshot_version);
   void init_tablet();
-  void reset_writer(const int64_t snapshot_version);
+  void reset_writer(const int64_t snapshot_version, const ObMergeType &merge_type = MINOR_MERGE);
   void prepare_one_macro(
       const char **micro_data,
       const int64_t micro_cnt,
@@ -202,6 +203,7 @@ public:
   ObITable::TableKey table_key_;
   ObWholeDataStoreDesc data_desc_;
   ObWholeDataStoreDesc index_desc_;
+  ObSSTablePrivateObjectCleaner cleaner_;
   ObMacroBlockWriter macro_writer_;
   ObMicroBlockWriter micro_writer_;
   ObRowStoreType row_store_type_;
@@ -234,7 +236,7 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   //OK(init_io_device("multi_version_test"));
 
   // create ls
@@ -403,7 +405,9 @@ void ObMultiVersionSSTableTest::init_tablet()
   tablet->build_read_info(allocator_);
 }
 
-void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
+void ObMultiVersionSSTableTest::reset_writer(
+  const int64_t snapshot_version,
+  const ObMergeType &merge_type)
 {
   ObMacroDataSeq start_seq(0);
   start_seq.set_data_block();
@@ -420,9 +424,10 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
   ObTabletID tablet_id(tablet_id_);
   SCN scn;
   scn.convert_for_tx(snapshot_version);
-  ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type_, snapshot_version, DATA_VERSION_4_1_0_0, scn));
+  ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type, snapshot_version, DATA_VERSION_4_1_0_0,
+                                        table_schema_.get_micro_index_clustered(), scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
-  root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder();
+  root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   ASSERT_NE(nullptr, root_index_builder_);
   data_desc_.get_desc().sstable_index_builder_ = root_index_builder_;
   data_desc_.get_desc().row_store_type_ = row_store_type_;
@@ -432,7 +437,11 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
   ASSERT_TRUE(index_desc_.is_valid());
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_.get_desc()));
 
-  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(data_desc_.get_desc(), start_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = start_seq.macro_data_seq_;
+  ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ASSERT_EQ(OB_SUCCESS, macro_writer_.open(data_desc_.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner_));
 }
 
 void ObMultiVersionSSTableTest::prepare_one_macro(
@@ -448,7 +457,6 @@ void ObMultiVersionSSTableTest::prepare_one_macro(
     macro_writer_.macro_blocks_[macro_writer_.current_index_].set_contain_uncommitted_row();
   }
   if (0 == data_iter_cursor_) {
-    macro_writer_.last_key_.set_min_rowkey();
     append_micro_block(data_iter_[0]);
     if (1 == micro_cnt) {
       OK(macro_writer_.build_micro_block());
@@ -532,6 +540,8 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
   param.ddl_scn_.set_min();
+  param.table_backup_flag_.reset();
+  param.table_shared_flag_.reset();
   if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }

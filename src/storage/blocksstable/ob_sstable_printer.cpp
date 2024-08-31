@@ -21,7 +21,7 @@ using namespace storage;
 using namespace common;
 namespace blocksstable
 {
-#define FPRINTF(args...) fprintf(stderr, ##args)
+#define FPRINTF(args...) fprintf(fd_, ##args)
 #define P_BAR() FPRINTF("|")
 #define P_DASH() FPRINTF("------------------------------")
 #define P_END_DASH() FPRINTF("--------------------------------------------------------------------------------")

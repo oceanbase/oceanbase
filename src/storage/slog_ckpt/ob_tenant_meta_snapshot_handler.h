@@ -107,7 +107,6 @@ private:
       const char *buf,
       const int64_t buf_len,
       ObIArray<ObUpdateTabletLog> &slog_array);
-  static int batch_report_slog(const ObIArray<ObStorageLogParam> &param_arr);
   static int do_write_slog(ObIArray<ObUpdateTabletLog> &slog_arr);
 };
 }

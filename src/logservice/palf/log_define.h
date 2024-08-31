@@ -78,6 +78,7 @@ constexpr offset_t MAX_LOG_BUFFER_SIZE = MAX_LOG_BODY_SIZE + MAX_LOG_HEADER_SIZE
 constexpr offset_t LOG_DIO_ALIGN_SIZE = 4 * 1024;
 constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE_REDO = MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE;
 constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE_META = MAX_META_ENTRY_SIZE + LOG_DIO_ALIGN_SIZE;
+const block_id_t LOG_INITIAL_BLOCK_ID = 0;
 constexpr block_id_t LOG_MAX_BLOCK_ID = UINT64_MAX/PALF_BLOCK_SIZE - 1;
 constexpr block_id_t LOG_INVALID_BLOCK_ID = LOG_MAX_BLOCK_ID + 1;
 typedef common::ObFixedArray<share::SCN, ObIAllocator> SCNArray;
@@ -354,6 +355,52 @@ int block_id_to_flashback_string(const block_id_t block_id,
 int convert_sys_errno();
 
 bool is_number(const char *);
+
+struct LSKey {
+  LSKey() : id_(-1) {}
+  explicit LSKey(const int64_t id) : id_(id) {}
+  ~LSKey() {id_ = -1;}
+  LSKey(const LSKey &key) { this->id_ = key.id_; }
+  LSKey &operator=(const LSKey &other)
+  {
+    this->id_ = other.id_;
+    return *this;
+  }
+
+  bool operator==(const LSKey &palf_id) const
+  {
+    return this->compare(palf_id) == 0;
+  }
+  bool operator!=(const LSKey &palf_id) const
+  {
+    return this->compare(palf_id) != 0;
+  }
+  uint64_t hash() const
+  {
+    uint64_t hash_val = 0;
+    hash_val = common::murmurhash(&hash_val, sizeof(id_), id_);
+    return hash_val;
+  }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+  int compare(const LSKey &palf_id) const
+  {
+    if (palf_id.id_ < id_) {
+      return 1;
+    } else if (palf_id.id_ == id_) {
+      return 0;
+    } else {
+      return -1;
+    }
+  }
+  void reset() {id_ = -1;}
+  bool is_valid() const {return -1 != id_;}
+  int64_t id_;
+  TO_STRING_KV(K_(id));
+};
 
 enum PurgeThrottlingType
 {

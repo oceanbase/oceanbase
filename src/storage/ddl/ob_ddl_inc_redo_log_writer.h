@@ -126,10 +126,12 @@ public:
       const uint64_t data_format_version,
       const storage::ObDirectLoadType direct_load_type,
       transaction::ObTxDesc *tx_desc,
-      const transaction::ObTransID &trans_id);
+      const transaction::ObTransID &trans_id,
+      const int64_t parallel_cnt,
+      const int64_t cg_cnt);
   void reset();
   int write(
-      blocksstable::ObMacroBlockHandle &macro_handle,
+      const blocksstable::ObStorageObjectHandle &macro_handle,
       const blocksstable::ObLogicMacroBlockId &logic_id,
       char *buf,
       const int64_t buf_len,
@@ -148,6 +150,8 @@ private:
   storage::ObDirectLoadType direct_load_type_;
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTransID trans_id_;
+  int64_t parallel_cnt_;
+  int64_t cg_cnt_;
 };
 
 }  // end namespace storage

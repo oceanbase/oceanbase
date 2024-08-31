@@ -28,6 +28,7 @@
 #include "test_backup.h"
 #include "test_backup_include.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/ob_device_manager.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 using namespace testing;
@@ -321,7 +322,10 @@ void TestBackupIndexMerger::SetUp()
 
   ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
   ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
+
+
+  EXPECT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
 
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
@@ -334,7 +338,7 @@ void TestBackupIndexMerger::SetUp()
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
-  tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+  tf_mgr->get_sn_file_manager().page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
 
@@ -454,6 +458,7 @@ void TestBackupIndexMerger::build_backup_index_store_param_(ObBackupIndexStorePa
   store_param.backup_data_type_ = backup_data_type_;
   store_param.turn_id_ = turn_id_;
   store_param.retry_id_ = retry_id_;
+  store_param.dest_id_ = dest_id_;
 }
 
 void TestBackupIndexMerger::iterate_meta_index_store_(

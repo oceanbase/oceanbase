@@ -29,6 +29,7 @@
 #include "rootserver/ob_tenant_info_loader.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -58,9 +59,14 @@ int ObTabletGCService::mtl_init(ObTabletGCService* &m)
 int ObTabletGCService::init()
 {
   int ret = OB_SUCCESS;
+  bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTabletGCService init twice.", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage && OB_FAIL(private_block_gc_thread_.init())) {
+    LOG_WARN("failed to init private_block_gc_thread", K_(private_block_gc_thread));
+#endif
   } else {
     is_inited_ = true;
   }
@@ -72,14 +78,31 @@ int ObTabletGCService::start()
   int ret = OB_SUCCESS;
   timer_for_tablet_change_.set_run_wrapper(MTL_CTX());
   timer_for_tablet_shell_.set_run_wrapper(MTL_CTX());
+  bool is_shared_storage = GCTX.is_shared_storage_mode();
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (is_shared_storage) {
+    timer_for_private_block_gc_.set_run_wrapper(MTL_CTX());
+  }
+#endif
   if (OB_FAIL(timer_for_tablet_change_.init())) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_shell_.init("TabletShellTimer", ObMemAttr(MTL_ID(), "TabShellTimer")))) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage && OB_FAIL(timer_for_private_block_gc_.init("PvtBlkGCTimer", ObMemAttr(MTL_ID(), "PvtBlkGCTimer")))) {
+    STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
+#endif
   } else if (OB_FAIL(timer_for_tablet_change_.schedule(tablet_change_task_, GC_CHECK_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_shell_.schedule(tablet_shell_task_, ObEmptyShellTask::GC_EMPTY_TABLET_SHELL_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage && FALSE_IT(private_block_gc_task_.clear_is_stopped())) {
+  } else if (is_shared_storage && OB_FAIL(timer_for_private_block_gc_.schedule(private_block_gc_task_, GC_CHECK_INTERVAL, true))) {
+    STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
+  } else if (is_shared_storage && OB_FAIL(private_block_gc_thread_.start())) {
+    STORAGE_LOG(ERROR, "fail to start private block gc thread", KR(ret), K_(private_block_gc_task));
+#endif
   }
   return ret;
 }
@@ -91,10 +114,21 @@ int ObTabletGCService::stop()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTabletGCService is not initialized", KR(ret));
   } else {
-    STORAGE_LOG(INFO, "ObTabletGCService stoped");
+    timer_for_tablet_change_.stop();
+    timer_for_tablet_shell_.stop();
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(private_block_gc_thread_.stop())) {
+        STORAGE_LOG(WARN, "failed to stop private block gc thread", K(ret), K_(private_block_gc_thread));
+      }
+      private_block_gc_task_.set_is_stopped();
+      timer_for_private_block_gc_.stop();
+    }
+#endif
   }
-  timer_for_tablet_change_.stop();
-  timer_for_tablet_shell_.stop();
+  if (OB_SUCC(ret)) {
+    STORAGE_LOG(INFO, "ObTabletGCService stoped", KR(ret));
+  }
   return ret;
 }
 
@@ -102,6 +136,12 @@ void ObTabletGCService::wait()
 {
   timer_for_tablet_change_.wait();
   timer_for_tablet_shell_.wait();
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    timer_for_private_block_gc_.wait();
+    private_block_gc_thread_.wait();
+  }
+#endif
 }
 
 void ObTabletGCService::destroy()
@@ -109,6 +149,12 @@ void ObTabletGCService::destroy()
   is_inited_ = false;
   timer_for_tablet_change_.destroy();
   timer_for_tablet_shell_.destroy();
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    timer_for_private_block_gc_.destroy();
+    private_block_gc_thread_.destroy();
+  }
+#endif
 }
 
 void ObTabletGCService::ObTabletChangeTask::runTimerTask()
@@ -202,20 +248,24 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
           } else if(OB_FAIL(tablet_gc_handler->wait_unpersist_tablet_ids_flushed(unpersist_tablet_ids, decided_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "fail to wait unpersist tablet ids flushed", KR(ret), KPC(tablet_gc_handler->ls_), K(unpersist_tablet_ids));
-
           }
-          // 6. update tablet_change_checkpoint in log meta
+          // 6. write ls active tablet array
+          else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.write_active_tablet_array(ls))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "fail to write active tablet array", KR(ret), KPC(ls));
+          }
+          // 7. update tablet_change_checkpoint in log meta
           else if (decided_scn > ls->get_tablet_change_checkpoint_scn()
                   && OB_FAIL(tablet_gc_handler->set_tablet_change_checkpoint_scn(decided_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set_tablet_change_checkpoint_scn", KPC(ls), KR(ret), K(decided_scn));
           }
-          // 7. set ls transfer scn
+          // 8. set ls transfer scn
           else if (!only_persist && OB_FAIL(tablet_gc_handler->set_ls_transfer_scn(deleted_tablets))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set ls transfer scn", KPC(ls), KR(ret), K(decided_scn));
           }
-          // 8. check and gc deleted_tablets
+          // 9. check and gc deleted_tablets
           else if (!only_persist && !deleted_tablets.empty()
                    && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablets))) {
             need_retry = true;

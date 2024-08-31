@@ -743,7 +743,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
         LOG_WARN("addr is invalid", K(ret), K(addr));
       } else if (OB_FAIL(addr.get_block_addr(macro_id, offset, size))) {
         LOG_WARN("fail to get macro id from addr", K(ret), K(addr));
-      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_id))) {
         LOG_ERROR("fail to increase ref cnt for sstable meta's macro block", K(ret), K(macro_id));
       } else {
         sstable_cnt++;
@@ -769,7 +769,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
           LOG_ERROR("addr is invalid", K(tmp_ret), K(addr));
         } else if (OB_TMP_FAIL(addr.get_block_addr(macro_id, offset, size))) {
           LOG_ERROR("fail to get macro id from addr", K(tmp_ret), K(addr));
-        } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(tmp_ret), K(macro_id));
         } else {
           LOG_DEBUG("decrease sstable meta's macro ref", K(tmp_ret), K(addr), K(macro_id), KPC(sstable));
@@ -857,7 +857,7 @@ void ObSSTableArray::dec_meta_ref_cnt() const
         LOG_ERROR("addr is invalid", K(ret), K(addr));
       } else if (OB_FAIL(addr.get_block_addr(macro_id, offset, size))) {
         LOG_ERROR("fail to get macro id from addr", K(ret), K(addr));
-      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
         LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(ret), K(macro_id));
       } else {
         sstable_cnt++;

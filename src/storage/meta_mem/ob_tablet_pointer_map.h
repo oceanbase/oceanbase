@@ -82,6 +82,20 @@ public:
   OB_INLINE int64_t max_count() const { return ATOMIC_LOAD(&max_count_); }
 
 private:
+  #ifdef OB_BUILD_SHARED_STORAGE
+  int check_and_get_latest_addr(
+      const ObTabletMapKey &key,
+      ObTabletPointer &meta_pointer,
+      ObMetaDiskAddr &disk_addr) const;
+  #endif
+  static int read_from_disk(
+      const bool is_full_load,
+      const int64_t ls_epoch,
+      const ObMetaDiskAddr &load_addr,
+      common::ObArenaAllocator &allocator,
+      char *&r_buf,
+      int64_t &r_len);
+  static bool addr_not_match(const ObMetaDiskAddr &orig_addr, const ObMetaDiskAddr &cur_addr);
   // used when tablet object and memory is hold by external allocator
   int load_meta_obj(
       const ObTabletMapKey &key,

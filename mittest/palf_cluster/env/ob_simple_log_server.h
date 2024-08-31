@@ -232,7 +232,7 @@ private:
   palfcluster::LogService log_service_;
   ObTenantMutilAllocator *allocator_;
   rpc::frame::ObReqTransport *transport_;
-  ObLSService ls_service_;
+  ObLSService *ls_service_;
   ObLocationService location_service_;
   logservice::ObServerLogBlockMgr log_block_pool_;
   common::ObMySQLProxy sql_proxy_;

@@ -15,9 +15,9 @@
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "share/scn.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
+#include "storage/blocksstable/ob_object_manager.h"
 #include "share/ob_force_print_log.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
@@ -32,6 +32,9 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv_multi_version_row_iterator.h"
 #include "storage/access/ob_sstable_multi_version_row_iterator.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
+#endif
 
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
@@ -289,7 +292,7 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     tree_value = new (buf) ObBlockMetaTreeValue(insert_meta, rowkey);
 
     tree_value->co_sstable_row_offset_ = co_sstable_row_offset;
-    tree_value->header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V1;
+    tree_value->header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
     tree_value->header_.row_store_type_ = static_cast<uint8_t>(insert_meta->val_.row_store_type_);
     tree_value->header_.compressor_type_ = static_cast<uint8_t>(insert_meta->val_.compressor_type_);
     tree_value->header_.is_data_index_ = true;
@@ -297,9 +300,9 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     tree_value->header_.is_leaf_block_ = true;
     tree_value->header_.is_macro_node_ = true;
     tree_value->header_.is_major_node_ = true;
+    tree_value->header_.has_logic_micro_id_ = true;
     tree_value->header_.is_deleted_ = insert_meta->val_.is_deleted_;
     tree_value->header_.contain_uncommitted_row_ = insert_meta->val_.contain_uncommitted_row_;
-    tree_value->header_.macro_id_ = insert_meta->val_.macro_id_;
     tree_value->header_.block_offset_ = insert_meta->val_.block_offset_;
     tree_value->header_.block_size_ = insert_meta->val_.block_size_;
     tree_value->header_.macro_block_count_ = 1;
@@ -309,7 +312,9 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     MEMCPY(tree_value->header_.encrypt_key_, insert_meta->val_.encrypt_key_, sizeof(tree_value->header_.encrypt_key_));
     tree_value->header_.schema_version_ = insert_meta->val_.schema_version_;
     tree_value->header_.row_count_ = insert_meta->val_.row_count_;
-    if (OB_UNLIKELY(!tree_value->header_.is_valid())) {
+    if (OB_FAIL(tree_value->header_.set_macro_id(insert_meta->val_.macro_id_))) {
+      LOG_WARN("fail to set macro id for row header", K(ret), K(tree_value->header_), KPC(insert_meta));
+    } else if (OB_UNLIKELY(!tree_value->header_.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Built an invalid index block row", K(ret), K(tree_value->header_), KPC(insert_meta));
     } else if (OB_FAIL(block_tree_.insert(ObDatumRowkeyWrapper(tree_value->rowkey_, datum_utils_), tree_value))) {
@@ -318,6 +323,23 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!macro_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(macro_handle));
+  } else if (OB_FAIL(macro_blocks_.push_back(macro_handle))) {
+    LOG_WARN("push back macro handle failed", K(ret), K(macro_handle));
+  }
+  return ret;
+}
+#endif
 
 int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
 {
@@ -366,6 +388,26 @@ int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
       if (meta_array.count() != macro_blocks_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("meta array count not euqal with macro_block count", K(ret), K(meta_array.count()), K(macro_blocks_.count()));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBlockMetaTree::get_macro_id_array(ObIArray<blocksstable::MacroBlockId> &macro_id_array) const
+{
+  int ret = OB_SUCCESS;
+  macro_id_array.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(macro_id_array.reserve(macro_blocks_.count()))) {
+    LOG_WARN("reserve meta array failed", K(ret), K(macro_blocks_.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < macro_blocks_.count(); ++i) {
+      const ObDDLMacroHandle &macro_handle = macro_blocks_.at(i);
+      if (OB_FAIL(macro_id_array.push_back(macro_handle.get_block_id()))) {
+        LOG_WARN("push back macro block id failed", K(ret), K(macro_handle));
       }
     }
   }
@@ -793,7 +835,7 @@ int64_t ObBlockMetaTree::get_memory_used() const
 /******************             ObDDLKV              **********************/
 
 ObDDLMemtable::ObDDLMemtable()
-  : is_inited_(false), block_meta_tree_()
+  : is_inited_(false),is_inc_direct_load_(false), block_meta_tree_()
 {
 
 }
@@ -808,7 +850,8 @@ int ObDDLMemtable::init(
     ObTablet &tablet,
     const ObITable::TableKey &table_key,
     const share::SCN &ddl_start_scn,
-    const uint64_t data_format_version)
+    const uint64_t data_format_version,
+    const bool is_inc_direct_load)
 {
 
   int ret = OB_SUCCESS;
@@ -833,6 +876,7 @@ int ObDDLMemtable::init(
     } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator))) {
       LOG_WARN("init sstable failed", K(ret));
     } else {
+      is_inc_direct_load_ = is_inc_direct_load;
       is_inited_ = true;
     }
     ObTabletObjLoadHelper::free(arena, storage_schema);
@@ -972,7 +1016,7 @@ int ObDDLKV::create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &tab
     LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObDDLMemtable)));
   } else {
     ddl_memtable = new (buf) ObDDLMemtable;
-    if (OB_FAIL(ddl_memtable->init(arena_allocator_, tablet, table_key, ddl_start_scn_, data_format_version_))) {
+    if (OB_FAIL(ddl_memtable->init(arena_allocator_, tablet, table_key, ddl_start_scn_, data_format_version_, is_inc_ddl_kv_))) {
       LOG_WARN("init ddl memtable failed", K(ret), K(table_key));
     } else if (OB_FAIL(ddl_memtables_.push_back(ddl_memtable))) {
       LOG_WARN("push back ddl memtable failed", K(ret));
@@ -1024,7 +1068,7 @@ int ObDDLKV::set_macro_block(
     const bool can_freeze)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_DDL_BLOCK_COUNT = 10 * 10L * 1024L * 1024L * 1024L / OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t MAX_DDL_BLOCK_COUNT = 10 * 10L * 1024L * 1024L * 1024L / OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   const int64_t MEMORY_LIMIT = 50 * 1024 * 1024; // 50M
   int64_t freeze_block_count = MAX_DDL_BLOCK_COUNT;
 #ifdef ERRSIM
@@ -1046,7 +1090,7 @@ int ObDDLKV::set_macro_block(
     if (OB_TMP_FAIL(GCTX.omt_->get_tenant_unit(tenant_id, unit))) {
       LOG_WARN("get tenant unit failed", K(tmp_ret), K(tenant_id));
     } else {
-      const int64_t log_allowed_block_count = unit.config_.log_disk_size() * 0.2 / OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      const int64_t log_allowed_block_count = unit.config_.log_disk_size() * 0.2 / OB_STORAGE_OBJECT_MGR.get_macro_block_size();
       if (log_allowed_block_count <= 0) {
         tmp_ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid macro block count by log disk size", K(tmp_ret), K(tenant_id), K(unit.config_));
@@ -1102,8 +1146,16 @@ int ObDDLKV::set_macro_block(
       LOG_WARN("unexpected error", K(ret), K(macro_block), K(snapshot_version), K(data_format_version), KPC(this));
     } else {
       ObDDLMemtable *ddl_memtable = nullptr;
+      ObITable::TableKey ddl_memtable_key = macro_block.table_key_;
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode() && !is_inc_ddl_kv_) {
+        // force major here, because block meta tree sort with macro block id
+        ddl_memtable_key.table_type_ = ObITable::MAJOR_SSTABLE;
+        ddl_memtable_key.column_group_idx_ = 0;
+      }
+#endif
       // 1. try find the ddl memtable
-      if (OB_FAIL(get_ddl_memtable(macro_block.table_key_.get_column_group_id(), ddl_memtable))) {
+      if (OB_FAIL(get_ddl_memtable(ddl_memtable_key.get_column_group_id(), ddl_memtable))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("get ddl memtable failed", K(ret));
         } else {
@@ -1112,8 +1164,8 @@ int ObDDLKV::set_macro_block(
       }
       // 2. if not found, create one
       if (OB_SUCC(ret) && OB_ISNULL(ddl_memtable)) {
-        if (OB_FAIL(create_ddl_memtable(tablet, macro_block.table_key_, ddl_memtable))) {
-          LOG_WARN("create ddl memtable failed", K(ret), K(macro_block.table_key_));
+        if (OB_FAIL(create_ddl_memtable(tablet, ddl_memtable_key, ddl_memtable))) {
+          LOG_WARN("create ddl memtable failed", K(ret), K(ddl_memtable_key));
         }
       }
 
@@ -1122,9 +1174,19 @@ int ObDDLKV::set_macro_block(
       } else if (OB_ISNULL(ddl_memtable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl memtable is null", K(ret));
-      } else if (OB_FAIL(ObIndexBlockRebuilder::get_macro_meta(
-              macro_block.buf_, macro_block.size_, macro_block.get_block_id(), arena_allocator_, data_macro_meta))) {
-        LOG_WARN("get macro meta failed", K(ret), K(macro_block));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode() && !is_inc_ddl_kv_) {
+        // macro meta not need, just warmup the index block
+        if (ObDDLMacroBlockType::DDL_MB_INDEX_TYPE == macro_block.block_type_
+            && OB_FAIL(warmup_index_block(macro_block))) {
+          LOG_WARN("warmup index block failed", K(ret), K(macro_block));
+        }
+#endif
+      } else if (OB_FAIL(macro_block.data_macro_meta_->deep_copy(data_macro_meta, arena_allocator_))) { /* must deep copy using kv allocator */
+        LOG_WARN("fail to deep copy value", K(ret));
+      } else if (OB_ISNULL(data_macro_meta)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data_macro_meta should not be null", K(ret));
       } else if (data_macro_meta->end_key_.get_datum_cnt() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid end key of data macro block meta", K(ret), K(data_macro_meta->end_key_));
@@ -1143,11 +1205,14 @@ int ObDDLKV::set_macro_block(
         min_scn_ = SCN::min(min_scn_, macro_block.scn_);
         max_scn_ = SCN::max(max_scn_, macro_block.scn_);
         ++macro_block_count_;
-        if (0 == data_schema_version_) {
-          data_schema_version_ = data_macro_meta->val_.schema_version_;
-        }
-        if (0 == column_count_) {
-          column_count_ = data_macro_meta->val_.column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+        // FIXME : @suzhi.yt support incremental direct load in ss mode
+        if (is_inc_ddl_kv_) {
+          if (0 == data_schema_version_) {
+            data_schema_version_ = data_macro_meta->val_.schema_version_;
+          }
+          if (0 == column_count_) {
+            column_count_ = data_macro_meta->val_.column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+          }
         }
         LOG_INFO("succeed to set macro block into ddl kv", K(macro_block), K(macro_block_count_), KPC(data_macro_meta));
       }
@@ -1156,10 +1221,70 @@ int ObDDLKV::set_macro_block(
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObDDLKV::warmup_index_block(const ObDDLMacroBlock &macro_block)
+{
+  int ret = OB_SUCCESS;
+  const ObMacroBlockCommonHeader *common_header = reinterpret_cast<const ObMacroBlockCommonHeader *>(macro_block.buf_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(common_header)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid macro_block_buf", K(ret), K(macro_block));
+  } else if (OB_UNLIKELY(!macro_block.is_valid()
+        || ObDDLMacroBlockType::DDL_MB_INDEX_TYPE != macro_block.block_type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(macro_block));
+  } else if (common_header->is_sstable_index_block()) { // only prewarm sstable index block, ignore macro meta block
+    ObMicroBlockBareIterator micro_bare_iter;
+    const bool need_check_data_integrity = false;
+    const bool need_deserialize = false; // s2 cache require keeping the original buffer of storage layer
+    if (OB_FAIL(micro_bare_iter.open(macro_block.buf_, macro_block.size_, need_check_data_integrity, need_deserialize))) {
+      LOG_WARN("open micro bare iterator failed", K(ret));
+    }
+    while (OB_SUCC(ret)) {
+      ObMicroBlockData micro_data;
+      int64_t offset = 0;
+      if (OB_FAIL(micro_bare_iter.get_next_micro_block_data_and_offset(micro_data, offset))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next micro data failed", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else {
+        ObSSMicroBlockCacheKey micro_key;
+        micro_key.mode_ = ObSSMicroBlockCacheKeyMode::PHYSICAL_KEY_MODE;
+        micro_key.micro_id_.macro_id_ = macro_block.get_block_id();
+        micro_key.micro_id_.offset_ = offset;
+        micro_key.micro_id_.size_ = micro_data.size_;
+        int tmp_ret = OB_SUCCESS;
+        ObSSMicroCache *micro_cache = nullptr;
+        if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("micro cache is null", KR(ret));
+        } else if (OB_TMP_FAIL(micro_cache->add_micro_block_cache(micro_key, micro_data.buf_,
+                               micro_data.size_, ObSSMicroCacheAccessType::DDL_PREWARM_TYPE))) {
+          LOG_WARN("fail to add micro block cache", KR(tmp_ret), K(micro_key));
+        }
+      }
+    }
+  }
+  return ret;
+}
+#endif
+
 int ObDDLMemtable::insert_block_meta_tree(const ObDDLMacroHandle &macro_handle, blocksstable::ObDataMacroBlockMeta *data_macro_meta, const int64_t co_sstable_row_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(block_meta_tree_.insert_macro_block(macro_handle, &data_macro_meta->end_key_, data_macro_meta, co_sstable_row_offset))) {
+  if (GCTX.is_shared_storage_mode() && !is_inc_direct_load_) {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_FAIL(block_meta_tree_.insert_macro_block(macro_handle))) {
+      LOG_WARN("insert macro block failed", K(ret), K(macro_handle));
+    }
+#endif
+  } else if (OB_FAIL(block_meta_tree_.insert_macro_block(macro_handle, &data_macro_meta->end_key_, data_macro_meta, co_sstable_row_offset))) {
     LOG_WARN("insert macro block failed", K(ret), K(macro_handle), KPC(data_macro_meta));
   } else {
     const ObDataBlockMetaVal &meta_val = data_macro_meta->get_meta_val();

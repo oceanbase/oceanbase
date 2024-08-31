@@ -273,7 +273,7 @@ int ObBackupSetTaskMgr::persist_ls_attr_info_(const share::ObBackupLSTaskAttr &s
   ObLSAttrOperator ls_attr_operator(set_task_attr_.tenant_id_, sql_proxy_);
   bool ls_attr_info_exist = false;
   if (OB_FAIL(store_.read_ls_attr_info(set_task_attr_.meta_turn_id_, ls_attr_desc))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       if (OB_FAIL(sync_wait_backup_user_ls_scn_(sys_ls_task, ls_attr_desc.backup_scn_))) {
         LOG_WARN("failed to calc backup user ls scn", K(ret));
       } else if (OB_FAIL(ls_attr_operator.load_all_ls_and_snapshot(ls_attr_desc.backup_scn_, ls_attr_desc.ls_attr_array_))) {
@@ -325,10 +325,13 @@ int ObBackupSetTaskMgr::sync_wait_backup_user_ls_scn_(const share::ObBackupLSTas
   backup::ObExternLSMetaMgr ls_meta_mgr;
   ObBackupLSMetaInfo ls_meta;
   int64_t sys_ls_turn_id = 1;
+  int64_t dest_id = 0;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_,
     job_attr_->backup_path_, backup_dest))) {
     LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
-  } else if (OB_FAIL(ls_meta_mgr.init(backup_dest, desc, sys_ls_task.ls_id_, sys_ls_task.turn_id_, sys_ls_task.retry_id_))) {
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
+    LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(ls_meta_mgr.init(backup_dest, desc, sys_ls_task.ls_id_, sys_ls_task.turn_id_, sys_ls_task.retry_id_, dest_id))) {
     LOG_WARN("failed to init ls meta mgr", K(ret), K(backup_dest), K(desc), K(sys_ls_task));
   } else if (OB_FAIL(ls_meta_mgr.read_ls_meta_info(ls_meta))) {
     LOG_WARN("failed to read ls meta info", K(ret));
@@ -719,16 +722,19 @@ int ObBackupSetTaskMgr::merge_ls_meta_infos_(
   desc.backup_set_id_ = job_attr_->backup_set_id_;
   desc.backup_type_ = job_attr_->backup_type_;
   storage::ObBackupLSMetaInfosDesc ls_meta_infos;
+  int64_t dest_id = 0;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, 
     job_attr_->backup_path_, backup_dest))) {
     LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
+    LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
   } else {
     ARRAY_FOREACH_X(ls_tasks, i, cnt, OB_SUCC(ret)) {
       const ObBackupLSTaskAttr &ls_task_attr = ls_tasks.at(i);
       backup::ObExternLSMetaMgr ls_meta_mgr;
       ObBackupLSMetaInfo ls_meta;
       if (OB_FAIL(ls_meta_mgr.init(backup_dest, desc, ls_task_attr.ls_id_, ls_task_attr.turn_id_, 
-          ls_task_attr.retry_id_))) {
+          ls_task_attr.retry_id_, dest_id))) {
         LOG_WARN("fail to init ls meta mgr", K(ret), K(ls_task_attr));
       } else if (OB_FAIL(ls_meta_mgr.read_ls_meta_info(ls_meta))) {
         LOG_WARN("fail to read ls meta info", K(ret));
@@ -826,7 +832,7 @@ int ObBackupSetTaskMgr::get_tablet_list_by_snapshot(
   type.set_user_data_backup();
   DEBUG_SYNC(BEFORE_BACKUP_CONSISTENT_SCN);
   if (OB_FAIL(store_.read_tablet_to_ls_info(first_turn_id, type, tablet_to_ls_info))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       share::SCN snapshot(SCN::min_scn());
       int64_t abs_timeout = ObTimeUtility::current_time() + 10 * 60 * 1000 * 1000;
@@ -967,9 +973,15 @@ int ObBackupSetTaskMgr::get_extern_tablet_info_(
     const share::ObLSID &ls_id, ObIArray<ObTabletID> &user_tablet_ids, SCN &backup_scn)
 {
   int ret = OB_SUCCESS;
+  int64_t dest_id = 0;
+  ObBackupDest backup_dest;
   storage::ObLSMetaPackage ls_meta_package;
-  if (OB_FAIL(store_.read_base_tablet_list(ls_id, user_tablet_ids))) {
-    LOG_WARN("failed to read base tablet lsit", K(ret), K(ls_id));
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr_.backup_path_, backup_dest))) {
+    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
+    LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(store_.read_base_tablet_list(ls_id, dest_id, user_tablet_ids))) {
+    LOG_WARN("failed to read base tablet lsit", K(ret), K(ls_id), K(dest_id));
   } else if (OB_FAIL(store_.read_ls_meta_infos(ls_id, ls_meta_package))) {
     LOG_WARN("failed to read ls meta infos", K(ret));
   } else if (!ls_meta_package.is_valid()) {
@@ -1396,7 +1408,7 @@ int ObBackupSetTaskMgr::write_or_update_tablet_to_ls_(ObIArray<storage::ObBackup
   // and tablet_to_ls_info can't be overwrote becuase of WORM,
   // so write the target turn tablet to ls info only once.
   if (FAILEDx(store_.read_tablet_to_ls_info(turn_id, data_type, tablet_to_ls_desc))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       if (OB_FAIL(tablet_to_ls_desc.tablet_to_ls_.assign(tablets_to_ls))) {
         LOG_WARN("failed to assign tablet to ls", K(tablets_to_ls));
       } else if (OB_FAIL(store_.write_tablet_to_ls_info(tablet_to_ls_desc, turn_id, data_type))) {

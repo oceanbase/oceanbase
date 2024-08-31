@@ -21,6 +21,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
+#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,7 @@ using namespace common;
 using namespace share::schema;
 using namespace share;
 using namespace blocksstable;
+using namespace compaction;
 namespace storage
 {
 
@@ -1689,7 +1691,7 @@ int ObPartitionMajorSSTableRangeSpliter::split_ranges(ObIArray<ObStoreRange> &re
       parallel_degree = 1;
     } else {
       const int64_t macro_block_count = major_sstable_->get_data_macro_block_count();
-      const int64_t occupy_size = macro_block_count * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      const int64_t occupy_size = macro_block_count * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
       parallel_degree = (occupy_size + tablet_size_ - 1) / tablet_size_;
       if (parallel_degree > MAX_MERGE_THREAD) {
         int64_t macro_cnts = (macro_block_count + MAX_MERGE_THREAD - 1) / MAX_MERGE_THREAD;
@@ -2182,7 +2184,7 @@ int ObPartitionIncrementalRangeSpliter::get_ranges_by_inc_data(ObDatumRangeArray
       int64_t num_rows_per_range = default_row_num_per_range_;
       // calculate num_rows_per_range by macro block
       const int64_t macro_block_count = major_sstable_->get_data_macro_block_count();
-      const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      const int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
       if (macro_block_count * macro_block_size > tablet_size_) {
         const int64_t row_count = major_sstable_->get_row_count();
         const int64_t num_rows_per_macro_block = row_count / macro_block_count;
@@ -2277,7 +2279,7 @@ int ObPartitionIncrementalRangeSpliter::get_ranges_by_base_sstable(ObDatumRangeA
     } else {
       const int64_t macro_block_cnt =
         major_sstable_->get_data_macro_block_count();
-      const int64_t total_size = macro_block_cnt * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      const int64_t total_size = macro_block_cnt * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
       const int64_t range_cnt = (total_size + tablet_size_ - 1) / tablet_size_;
       const int64_t macro_block_cnt_per_range = (macro_block_cnt + range_cnt - 1) / range_cnt;
 

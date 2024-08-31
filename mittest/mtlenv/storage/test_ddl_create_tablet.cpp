@@ -238,7 +238,7 @@ void TestDDLCreateTablet::SetUpTestCase()
 {
   STORAGE_LOG(INFO, "TestDDLCreateTablet::SetUpTestCase");
   ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  //ObServerStorageMetaService::get_instance().is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;

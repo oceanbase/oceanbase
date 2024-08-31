@@ -196,17 +196,17 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
     const share::ObLSID &ls_id, const SCN &compaction_scn, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObTabletReplicaChecksumItem> items;
+  ObReplicaCkmArray items;
   ObArray<ObTabletLSPair> pairs;
   ObTabletLSPair pair;
-  int64_t tablet_items_cnt = 0;
   if (OB_FAIL(pair.init(tablet_id, ls_id))) {
     LOG_WARN("failed to init pair", K(ret), K(tablet_id), K(ls_id));
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
+  } else if (OB_FAIL(items.init(tenant_id, 1/*expect_cnt*/))) {
+    LOG_WARN("failed to init ckm array", KR(ret), K(items));
   } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn,
-      sql_client, items, tablet_items_cnt, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/,
-      false/*with_order_by_field*/))) {
+      sql_client, items, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/))) {
     LOG_WARN("failed to batch get replica checksum item", K(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;
@@ -410,7 +410,7 @@ int ObStorageHAUtils::check_disk_space()
 {
   int ret = OB_SUCCESS;
   const int64_t required_size = 0;
-  if (OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
+  if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size))) {
     LOG_WARN("failed to check is disk full, cannot transfer in", K(ret));
   }
   return ret;
@@ -508,6 +508,45 @@ int ObStorageHAUtils::check_tenant_will_be_deleted(
   return ret;
 }
 
+int ObStorageHAUtils::make_macro_id_to_datum(
+    const common::ObIArray<MacroBlockId> &macro_block_id_array,
+    char *buf,
+    const int64_t buf_size,
+    ObDatumRowkey &end_key)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t saved_pos = 0;
+  int64_t length = 0;
+  if (macro_block_id_array.empty() || macro_block_id_array.count() > OB_MAX_ROWKEY_COLUMN_NUMBER
+      || OB_ISNULL(buf) || buf_size <= 0 || !end_key.is_valid() || end_key.datum_cnt_ < OB_MAX_ROWKEY_COLUMN_NUMBER) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("make macro id datum get invalid argument", K(ret), K(macro_block_id_array), KP(buf), K(buf_size), K(end_key));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < macro_block_id_array.count(); ++i) {
+      const MacroBlockId &macro_block_id = macro_block_id_array.at(i);
+      if (!macro_block_id.is_valid() || !macro_block_id.is_id_mode_share()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ddl sstable macro block id is unexpected", K(ret), K(macro_block_id));
+      } else if (OB_FAIL(macro_block_id.serialize(buf, buf_size, pos))) {
+        LOG_WARN("failed to serialize macro block id", K(ret), K(macro_block_id), K(macro_block_id));
+      } else if (FALSE_IT(length = pos - saved_pos)) {
+      } else if (length <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data length is unexpected", K(ret), K(length), K(i), K(pos), K(saved_pos));
+      } else {
+        end_key.datums_[i].set_string(buf + saved_pos, length);
+        saved_pos = pos;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      end_key.datum_cnt_ = macro_block_id_array.count();
+    }
+  }
+  return ret;
+}
+
 //TODO(yangyi.yyy) put this interface into tablet
 int ObStorageHAUtils::get_sstable_read_info(
     const ObTablet &tablet,
@@ -528,6 +567,36 @@ int ObStorageHAUtils::get_sstable_read_info(
       //do nothing
     } else if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
       LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret), K(table_type), K(tablet));
+    }
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::extract_macro_id_from_datum(
+    const ObDatumRowkey &end_key,
+    common::ObIArray<MacroBlockId> &macro_block_id_array)
+{
+  int ret = OB_SUCCESS;
+  MacroBlockId macro_block_id;
+  int64_t pos = 0;
+  macro_block_id_array.reset();
+
+  if (!end_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("extract macro id from datum get invalid argument", K(ret), K(end_key));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < end_key.get_datum_cnt(); ++i) {
+      macro_block_id.reset();
+      pos = 0;
+      const ObString &macro_block_id_str = end_key.get_datum_ptr()[i].get_string();
+      if (OB_FAIL(macro_block_id.deserialize(macro_block_id_str.ptr(), macro_block_id_str.length(), pos))) {
+        LOG_WARN("failed to deserialize macro block id", K(ret), K(macro_block_id_str));
+      } else if (!macro_block_id.is_valid() || !macro_block_id.is_id_mode_share()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("macro block id is invalid, unexpected", K(ret), K(macro_block_id));
+      } else if (OB_FAIL(macro_block_id_array.push_back(macro_block_id))) {
+        LOG_WARN("failed to push macro block id into array", K(ret), K(macro_block_id));
+      }
     }
   }
   return ret;

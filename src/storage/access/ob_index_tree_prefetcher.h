@@ -23,6 +23,9 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/access/ob_micro_block_handle_mgr.h"
 #include "storage/access/ob_rows_info.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_file_manager.h"
+#endif
 
 namespace oceanbase {
 using namespace blocksstable;
@@ -654,6 +657,21 @@ protected:
       OB_ASSERT(0 <= fetch_idx_);
       return index_block_read_handles_[fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH];
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    OB_INLINE int prefetch_macro_block(const MacroBlockId &macro_id)
+    {
+      int ret = OB_SUCCESS;
+      if (!GCTX.is_shared_storage_mode()) {
+        // do nothing
+      } else if (OB_UNLIKELY(!macro_id.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "get unexpected invalid macro id", K(ret), K(macro_id));
+      } else if (OB_FAIL(MTL(ObTenantFileManager*)->get_preread_cache_mgr().push_file_id_to_lru(macro_id))) {
+        STORAGE_LOG(WARN, "fail to push macro id into lru read cache", K(ret), K(macro_id));
+      }
+      return ret;
+    }
+#endif
     int prefetch(
         const int64_t level,
         ObIndexTreeMultiPassPrefetcher &prefetcher);

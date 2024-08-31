@@ -406,6 +406,9 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DELETE_ZONE, ObRpcDeleteZoneP, delete_zone(arg
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_START_ZONE, ObRpcStartZoneP, start_zone(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_STOP_ZONE, ObRpcStopZoneP, stop_zone(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ALTER_ZONE, ObRpcAlterZoneP, alter_zone(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADD_STORAGE, ObRpcAddStorageP, add_storage(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DROP_STORAGE, ObRpcDropStorageP, drop_storage(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ALTER_STORAGE, ObRpcAlterStorageP, alter_storage(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CHECK_DANGLING_REPLICA_FINISH, ObCheckDanglingReplicaFinishP, check_dangling_replica_finish(arg_));
 
 

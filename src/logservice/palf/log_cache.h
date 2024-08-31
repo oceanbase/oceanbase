@@ -58,22 +58,19 @@ private:
   bool is_inited_;
 };
 
-class FillCacheFsCb : public PalfFSCb
+class EnableFillCacheFunctor
 {
 public:
-  FillCacheFsCb();
-  ~FillCacheFsCb();
-  int init(IPalfEnvImpl *palf_env_impl, LogStateMgr *state_mgr, LogEngine *log_engine);
-  void destroy();
-  int update_end_lsn(int64_t id,
-                     const palf::LSN &end_lsn,
-                     const share::SCN &end_scn,
-                     const int64_t proposal_id) override final;
+  EnableFillCacheFunctor();
+  EnableFillCacheFunctor(IPalfEnvImpl *palf_env_impl, LogStateMgr *state_mgr);
+  ~EnableFillCacheFunctor();
+  EnableFillCacheFunctor& operator=(const EnableFillCacheFunctor &functor);
+  bool operator()() const;
+  bool is_valid() const;
+  TO_STRING_KV(KP_(palf_env_impl), KP_(state_mgr));
 private:
   IPalfEnvImpl *palf_env_impl_;
   LogStateMgr *state_mgr_;
-  LogEngine *log_engine_;
-  bool is_inited_;
 };
 
 class LogCacheUtils

@@ -20,6 +20,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/ob_local_device.h"
+#include "share/ob_device_manager.h"
 
 #define private public
 #define protected public
@@ -276,6 +277,8 @@ int prepare_read_io_info(const ObBackupDeviceMacroBlockId &macro_id,
 
 TEST_F(TestBackupMockAsyncIO, test_sync_io_mock_async_io)
 {
+  OK(ObDeviceManager::get_instance().init_devices_env());
+
   ObBackupDeviceMacroBlockId macro_id;
   char write_buf[length];
   memset(write_buf, 1, sizeof(write_buf));

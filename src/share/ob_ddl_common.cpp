@@ -31,6 +31,11 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/tx_storage/ob_ls_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#endif
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -1063,13 +1068,15 @@ int ObDDLUtil::generate_build_replica_sql(
             LOG_WARN("failed to generated ddl schema hint", K(ret));
           }
         }
+        const char *io_read_hint = GCTX.is_shared_storage_mode() ? " opt_param('io_read_batch_size', '2M') opt_param('io_read_redundant_limit_percentage', 0) " : " ";
         if (dest_table_schema->is_vec_vid_rowkey_type()) {
           src_table_schema_version_hint_sql_string.reset();
         }
         if (OB_FAIL(ret)) {
         } else if (oracle_mode) {
-          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO \"%.*s\".\"%.*s\" %.*s(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" %.*s as of scn %ld %.*s",
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') %.*s use_px */INTO \"%.*s\".\"%.*s\" %.*s(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" %.*s as of scn %ld %.*s",
               real_parallelism, execution_id, task_id,
+              static_cast<int>(strlen(io_read_hint)), io_read_hint,
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
               static_cast<int>(partition_names.length()), partition_names.ptr(),
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
@@ -1082,8 +1089,9 @@ int ObDDLUtil::generate_build_replica_sql(
             LOG_WARN("fail to assign sql string", K(ret));
           }
         } else {
-          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO `%.*s`.`%.*s` %.*s(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` %.*s as of snapshot %ld %.*s",
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') %.*s use_px */INTO `%.*s`.`%.*s` %.*s(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` %.*s as of snapshot %ld %.*s",
               real_parallelism, execution_id, task_id,
+              static_cast<int>(strlen(io_read_hint)), io_read_hint,
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
               static_cast<int>(partition_names.length()), partition_names.ptr(),
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
@@ -2808,10 +2816,135 @@ int ObDDLUtil::batch_check_tablet_checksum(
   return ret;
 }
 
-bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version, const share::ObDDLType task_type)
+bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version)
 {
-  return data_format_version >= DATA_VERSION_4_3_1_0 && task_type == DDL_MVIEW_COMPLETE_REFRESH;
+  return (GCTX.is_shared_storage_mode() && data_format_version >= DATA_VERSION_4_3_3_0);
 }
+
+bool ObDDLUtil::is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type)
+{
+  return (task_type == DDL_MVIEW_COMPLETE_REFRESH && data_format_version >= DATA_VERSION_4_3_1_0);
+}
+
+int ObDDLUtil::set_tablet_autoinc_seq(const ObLSID &ls_id, const ObTabletID &tablet_id, const int64_t seq_value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || seq_value < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(seq_value));
+  } else {
+    ObMigrateTabletAutoincSeqParam tablet_autoinc_param;
+    obrpc::ObBatchSetTabletAutoincSeqArg arg;
+    obrpc::ObBatchSetTabletAutoincSeqRes res;
+    arg.tenant_id_ = MTL_ID();
+    arg.ls_id_ = ls_id;
+    tablet_autoinc_param.src_tablet_id_ = tablet_id;
+    tablet_autoinc_param.dest_tablet_id_ = tablet_id;
+    tablet_autoinc_param.autoinc_seq_ = seq_value;
+    if (OB_FAIL(arg.autoinc_params_.push_back(tablet_autoinc_param))) {
+      LOG_WARN("push back tablet autoinc param failed", K(ret), K(tablet_autoinc_param));
+    } else if (OB_FAIL(GCTX.srv_rpc_proxy_->set_tablet_autoinc_seq(arg, res))) {
+      LOG_WARN("set tablet auto inc seq failed", K(ret));
+    } else if (1 != res.autoinc_params_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected sync tablet autoinc result", K(ret), K(res));
+    } else if (OB_FAIL(res.autoinc_params_.at(0).ret_code_)) {
+      LOG_WARN("sync tablet autoinc failed", K(ret), K(res.autoinc_params_.at(0)));
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::is_major_exist(const ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &is_major_exist)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  is_major_exist = false;
+  if (!ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be null", K(ret));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_FAIL(ddl_get_tablet(ls_handle, tablet_id, tablet_handle))) {
+    LOG_WARN("failed to get tablet id", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    is_major_exist = tablet_handle.get_obj()->get_major_table_count() > 0
+                  || tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable();
+  }
+  return ret;
+}
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObDDLUtil::upload_block_for_ss(const char *buf, const int64_t len, const blocksstable::MacroBlockId &macro_block_id)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == buf || 0 == len || !macro_block_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumen", K(ret), KP(buf), K(len), K(macro_block_id));
+  } else {
+    ObStorageObjectHandle object_handle;
+    ObStorageObjectWriteInfo object_info;
+    object_info.buffer_ = buf;
+    object_info.offset_ = 0;
+    object_info.size_ = len;
+    object_info.mtl_tenant_id_ = MTL_ID();
+    object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+    object_info.io_desc_.set_unsealed();
+    object_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
+    object_info.ls_epoch_id_ = 0;
+
+    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.async_write_object(macro_block_id, object_info, object_handle))) {
+      LOG_WARN("failed to write info", K(ret), K(macro_block_id), K(object_info), K(object_handle));
+    } else if (OB_FAIL(object_handle.wait())) {
+      LOG_WARN("failed to wai object handle finish", K(ret));
+    }
+  }
+  return ret;
+}
+
+/*
+ used for adding gc info when ddl update tablet
+ ddl may retry and generate same major which need to skip
+*/
+int ObDDLUtil::update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t pre_snapshot_version, const int64_t new_snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  ObGCTabletMetaInfoList tablet_meta_version_list;
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
+  bool is_exist = false;
+
+  if (!tablet_id.is_valid() || OB_INVALID_TIMESTAMP == new_snapshot_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(new_snapshot_version));
+  } else if (OB_ISNULL(meta_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("meta service should not be null", K(ret));
+  } else if (pre_snapshot_version == new_snapshot_version) {
+    /* skip */
+  } else if (OB_FAIL(ObTenantStorageMetaService::s2_is_meta_list_exist(tablet_id, is_exist))) {
+    LOG_WARN("fail to check existence", K(ret), K(tablet_id));
+  } else if (is_exist) {
+    /* skip */
+  } else {
+    ObGCTabletMetaInfo meta_info;
+    ObGCTabletMetaInfoList tablet_meta_version_list;
+    if (OB_FAIL(meta_info.scn_.convert_for_tx(new_snapshot_version))) {
+      LOG_WARN("fail to convert for tx", K(ret), K(new_snapshot_version));
+    } else if (OB_FAIL(tablet_meta_version_list.tablet_version_arr_.push_back(meta_info))) {
+      LOG_WARN("failed to push back gc info", K(ret));
+    } else if (OB_FAIL(meta_service->write_gc_tablet_scn_arr(tablet_id, ObStorageObjectType::SHARED_MAJOR_META_LIST, tablet_meta_version_list))) {
+      LOG_WARN("failed to write gc info arr", K(ret), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
+#endif
 
 int64_t ObDDLUtil::get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh)
 {
@@ -3560,7 +3693,7 @@ int ObCODDLUtil::get_column_checksums(
             K(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt()), K(column_group.get_column_count()));
       } else {
         for (int64_t j = 0; j < column_group.get_column_count() && OB_SUCC(ret); j++) {
-          const uint16_t column_idx = column_group.column_idxs_[j];
+          const uint16_t column_idx = column_group.get_column_idx(j);
           if (column_idx < 0 || column_idx >= column_checksums.count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid column index", K(ret), K(i), K(j), K(column_idx), K(column_checksums.count()));

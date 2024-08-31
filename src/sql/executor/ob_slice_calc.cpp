@@ -21,12 +21,14 @@
 #include "common/row/ob_row.h"
 #include "lib/ob_define.h"
 #include "share/schema/ob_part_mgr_util.h"
+#include "storage/ddl/ob_ddl_seq_generator.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
+using namespace oceanbase::storage;
 
 #define DEFINE_GET_SLICE_FUNCTION(type) \
 template int ObSliceIdxCalc::get_slice_indexes<ObSliceIdxCalc::type, true>(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array, ObBitVector *skip);  \
@@ -1487,6 +1489,7 @@ bool ObSlaveMapPkeyRangeIdxCalc::Compare::operator()(
 int ObSlaveMapPkeyRangeIdxCalc::get_task_idx(
     const int64_t tablet_id,
     const ObPxTabletRange::DatumKey &sort_key,
+    ObEvalCtx &eval_ctx,
     int64_t &task_idx)
 {
   int ret = OB_SUCCESS;
@@ -1513,6 +1516,10 @@ int ObSlaveMapPkeyRangeIdxCalc::get_task_idx(
       LOG_WARN("sort compare failed", K(ret));
     } else {
       const int64_t range_idx = found_it - range_cut.begin();
+      if (nullptr != ddl_slice_id_expr_) {
+        ObTabletSliceParam slice_param(range_cut.count() + 1, range_idx);
+        ddl_slice_id_expr_->locate_datum_for_write(eval_ctx).set_int(slice_param.slice_id_);
+      }
       int64_t ch_idx = -1;
       if (OB_FAIL(calc_ch_idx(range_cut.count() + 1, item->channels_.count(), range_idx, ch_idx))) {
         LOG_WARN("get channel idx failed", K(ret), K(*item), K(range_idx));
@@ -1564,7 +1571,7 @@ int ObSlaveMapPkeyRangeIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> 
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(get_task_idx(tablet_id, sort_key_, slice_idx_array.at(0)))) {
+      if (OB_FAIL(get_task_idx(tablet_id, sort_key_, eval_ctx, slice_idx_array.at(0)))) {
         LOG_WARN("get task idx failed", K(ret), K(tablet_id), K(sort_key_));
       }
     }
@@ -1712,6 +1719,10 @@ int ObRangeSliceIdCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs,
     LOG_WARN("unexpected dist exprs", K(ret));
   } else if (OB_ISNULL(range_) || range_->range_cut_.empty()) {
     slice_idx_array.at(0) = 0;
+    if (nullptr != ddl_slice_id_expr_) {
+      ObTabletSliceParam slice_param(1, 0);
+      ddl_slice_id_expr_->locate_datum_for_write(eval_ctx).set_int(slice_param.slice_id_);
+    }
   } else {
     ObPxTabletRange::DatumKey sort_key;
     ObDatum *datum = nullptr;
@@ -1732,6 +1743,10 @@ int ObRangeSliceIdCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs,
         range_cut.begin(), range_cut.end(), sort_key, sort_cmp);
       const int64_t range_idx = found_it - range_cut.begin();
       slice_idx_array.at(0) = range_idx % task_cnt_;
+      if (nullptr != ddl_slice_id_expr_) {
+        ObTabletSliceParam slice_param(range_->range_cut_.count() + 1, range_idx);
+        ddl_slice_id_expr_->locate_datum_for_write(eval_ctx).set_int(slice_param.slice_id_);
+      }
     }
   }
   return ret;
@@ -1755,6 +1770,13 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*>
       slice_indexes_[idx] = 0;
     }
     indexes = slice_indexes_;
+    if (nullptr != ddl_slice_id_expr_) {
+      ObDatum *ddl_slice_id_datums = ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size);
+      ObTabletSliceParam slice_param(1, 0);
+      for (int64_t idx = 0; idx < batch_size; ++idx) {
+        ddl_slice_id_datums[idx].set_int(slice_param.slice_id_);
+      }
+    }
   } else {
     Compare sort_cmp(&sort_cmp_funs_, &sort_collations_);
     ObPxTabletRange::DatumKey sort_key;
@@ -1766,6 +1788,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*>
       } else {
         batch_info_guard.set_batch_idx(idx);
         ObDatum *datum = nullptr;
+        ObDatum *ddl_slice_id_datum = nullptr;
+        if (nullptr != ddl_slice_id_expr_) {
+          ddl_slice_id_datum = &ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size)[idx];
+        }
         for (int64_t i = 0; i < dist_exprs_->count() && OB_SUCC(ret); ++i) {
           if (OB_ISNULL(dist_exprs_->at(i))) {
             ret = OB_ERR_UNEXPECTED;
@@ -1782,6 +1808,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*>
             range_cut.begin(), range_cut.end(), sort_key, sort_cmp);
           int64_t range_idx = found_it - range_cut.begin();
           slice_indexes_[idx] = range_idx % task_cnt_;
+          if (nullptr != ddl_slice_id_datum) {
+            ObTabletSliceParam slice_param(range_->range_cut_.count() + 1, range_idx);
+            ddl_slice_id_datum->set_int(slice_param.slice_id_);
+          }
         }
         sort_key.reuse();
       }
@@ -1809,6 +1839,13 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> 
       slice_indexes_[idx] = 0;
     }
     indexes = slice_indexes_;
+    if (nullptr != ddl_slice_id_expr_) {
+      ObDatum *ddl_slice_id_datums = ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size);
+      ObTabletSliceParam slice_param(1, 0);
+      for (int64_t idx = 0; idx < batch_size; ++idx) {
+        ddl_slice_id_datums[idx].set_int(slice_param.slice_id_);
+      }
+    }
   } else {
     Compare sort_cmp(&sort_cmp_funs_, &sort_collations_);
     ObPxTabletRange::DatumKey sort_key;
@@ -1826,6 +1863,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> 
       if (skip.at(idx)) {
         continue;
       } else {
+        ObDatum *ddl_slice_id_datum = nullptr;
+        if (nullptr != ddl_slice_id_expr_) {
+          ddl_slice_id_datum = &ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size)[idx];
+        }
         for (int64_t i = 0; i < dist_exprs_->count() && OB_SUCC(ret); ++i) {
           ObIVector *vec = dist_exprs_->at(i)->get_vector(eval_ctx);
           const char *payload = NULL;
@@ -1842,6 +1883,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> 
             range_cut.begin(), range_cut.end(), sort_key, sort_cmp);
           int64_t range_idx = found_it - range_cut.begin();
           slice_indexes_[idx] = range_idx % task_cnt_;
+          if (nullptr != ddl_slice_id_datum) {
+            ObTabletSliceParam slice_param(range_->range_cut_.count() + 1, range_idx);
+            ddl_slice_id_datum->set_int(slice_param.slice_id_);
+          }
         }
         sort_key.reuse();
       }

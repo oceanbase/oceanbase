@@ -150,6 +150,7 @@ ob_set_subtarget(ob_share common
   ob_server_blacklist.cpp
   ob_server_locality_cache.cpp
   ob_server_status.cpp
+  ob_server_struct.cpp
   ob_server_table_operator.cpp
   ob_service_epoch_proxy.cpp
   ob_share_util.cpp
@@ -293,6 +294,10 @@ ob_set_subtarget(ob_share common_mixed
   compaction/ob_table_ckm_items.cpp
   compaction/ob_compaction_time_guard.cpp
   compaction/ob_schedule_batch_size_mgr.cpp
+  compaction/ob_compaction_timer_task_mgr.cpp
+  compaction/ob_batch_exec_dag.cpp
+  compaction/ob_new_micro_info.cpp
+  storage/ob_i_pre_warmer.cpp
   partition_table/ob_partition_location.cpp
   longops_mgr/ob_ddl_longops.cpp
   longops_mgr/ob_i_longops.cpp
@@ -518,6 +523,8 @@ ob_set_subtarget(ob_share io
   io/ob_io_struct.cpp
   io/ob_io_calibration.cpp
   io/ob_io_manager.cpp
+  io/ob_storage_io_usage_proxy.cpp
+  io/ob_storage_io_usage_reporter.cpp
 )
 
 ob_set_subtarget(ob_share unit
@@ -560,6 +567,16 @@ ob_set_subtarget(ob_share wr
   wr/ob_wr_task.cpp
   wr/ob_wr_snapshot_rpc_processor.cpp
   wr/ob_wr_collector.cpp
+)
+
+ob_set_subtarget(ob_share object_storage
+  object_storage/ob_device_config_mgr.cpp
+  object_storage/ob_device_config_parser.cpp
+  object_storage/ob_device_connectivity.cpp
+  object_storage/ob_device_manifest.cpp
+  object_storage/ob_device_manifest_task.cpp
+  object_storage/ob_zone_storage_table_operation.cpp
+  object_storage/ob_object_storage_struct.cpp
 )
 
 ob_set_subtarget(ob_share vector

@@ -20,6 +20,7 @@
 #include "ob_macro_block_common_header.h"
 #include "ob_imicro_block_reader.h"
 #include "ob_micro_block_encryption.h"
+#include "storage/blocksstable/ob_sstable_printer.h"
 namespace oceanbase
 {
 namespace common
@@ -150,7 +151,7 @@ public:
   ObSSTableDataBlockReader();
   virtual ~ObSSTableDataBlockReader();
 
-  int init(const char *data, const int64_t size, const bool hex_print = false);
+  int init(const char *data, const int64_t size, const bool hex_print = false, FILE *fd = NULL);
   void reset();
   int dump(const uint64_t tablet_id, const int64_t scn);
 private:
@@ -178,6 +179,7 @@ private:
   int dump_sstable_micro_data(const ObMicroBlockData &micro_data, const bool is_index_block);
   int dump_column_info(const int64_t col_cnt, const int64_t type_array_col_cnt);
   bool check_need_print(const uint64_t tablet_id, const int64_t scn);
+  int check_macro_crc_(const char *data, const int64_t size) const;
 private:
   // raw data
   const char *data_;
@@ -199,6 +201,7 @@ private:
   bool is_trans_sstable_;
   bool is_inited_;
   int64_t column_type_array_cnt_;
+  ObSSTablePrinter printer_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableDataBlockReader);
 };

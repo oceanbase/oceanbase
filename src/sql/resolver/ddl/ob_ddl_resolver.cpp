@@ -1224,6 +1224,7 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
     } else {
       num = node->num_child_;
     }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
       if (OB_ISNULL(option_node = node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
@@ -2927,6 +2928,28 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition without auto refresh off");
             }
           }
+        }
+        break;
+      }
+      case T_MICRO_INDEX_CLUSTERED: {
+        uint64_t tenant_data_version = 0;;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.3, micro_index_clustered is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, micro_index_clustered is");
+        } else if (is_index_option) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("specified micro_index_clustered configuration for index table is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "specified micro_index_clustered configuration for index table is");
+        } else if (OB_ISNULL(option_node->children_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "(the children of option_node is null", K(option_node->children_), K(ret));
+        } else {
+          const bool is_micro_index_clustered = static_cast<bool>(option_node->children_[0]->value_);
+          ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+          arg.schema_.set_micro_index_clustered(is_micro_index_clustered);
         }
         break;
       }

@@ -35,17 +35,29 @@ public:
   ObTabletAttr()
     :v_(0),
      ha_status_(0),
-     occupy_bytes_(0),
-     required_bytes_(0),
-     tablet_meta_bytes_(0),
+     all_sstable_data_occupy_size_(0),
+     all_sstable_data_required_size_(0),
+     tablet_meta_size_(0),
+     ss_public_sstable_occupy_size_(0),
      backup_bytes_(0)
     {}
   ~ObTabletAttr() { reset(); }
-  void reset() { v_ = 0; ha_status_ = 0; occupy_bytes_ = 0; required_bytes_ = 0; tablet_meta_bytes_ = 0; backup_bytes_ = 0;}
+  void reset()
+  {
+    v_ = 0;
+    ha_status_ = 0;
+    all_sstable_data_occupy_size_ = 0;
+    all_sstable_data_required_size_ = 0;
+    tablet_meta_size_ = 0;
+    ss_public_sstable_occupy_size_ = 0;
+    backup_bytes_ = 0;
+  }
   bool is_valid() const { return valid_; }
   TO_STRING_KV(K_(valid), K_(is_empty_shell), K_(has_transfer_table),
       K_(has_next_tablet), K_(has_nested_table), K_(ha_status),
-      K_(occupy_bytes), K_(required_bytes), K_(tablet_meta_bytes), K_(backup_bytes));
+      K_(all_sstable_data_occupy_size), K_(all_sstable_data_required_size), K_(tablet_meta_size),
+      K_(ss_public_sstable_occupy_size), K_(backup_bytes)
+      );
 public:
   union {
     int64_t v_;
@@ -59,9 +71,17 @@ public:
   };
 
   int64_t ha_status_;
-  int64_t occupy_bytes_;
-  int64_t required_bytes_;
-  int64_t tablet_meta_bytes_;
+  // all sstable data occupy_size, include major sstable
+  // <data_block real_size> + <small_sstable_nest_size (in share_nothing)>
+  int64_t all_sstable_data_occupy_size_;
+  // all sstable data requred_size, data_block_count * 2MB, include major sstable
+  int64_t all_sstable_data_required_size_;
+  // meta_size in shared_nothing, meta_block_count * 2MB
+  int64_t tablet_meta_size_;
+  // major sstable data occupy_size
+  // which is same as major_sstable_required_size_;
+  // because the alignment size is 1B in object_storage.
+  int64_t ss_public_sstable_occupy_size_;
   int64_t backup_bytes_;
 };
 
@@ -78,7 +98,6 @@ public:
   ~ObTabletPointer();
   int get_in_memory_obj(ObMetaObjGuard<ObTablet> &guard);
   void get_obj(ObMetaObjGuard<ObTablet> &guard);
-
   void set_obj_pool(ObITenantMetaObjPool &obj_pool);
   void set_obj(const ObMetaObjGuard<ObTablet> &guard);
   void set_addr_without_reset_obj(const ObMetaDiskAddr &addr);
@@ -134,13 +153,14 @@ public:
   ObLS *get_ls() const;
   // the RW operations of tablet_attr are protected by lock guard of tablet_map_
   int set_tablet_attr(const ObTabletAttr &attr);
+  bool is_old_version_chain_empty() const { return OB_ISNULL(old_version_chain_); }
   bool is_attr_valid() const { return attr_.is_valid(); }
 private:
   int wash_obj();
   int add_tablet_to_old_version_chain(ObTablet *tablet);
   int remove_tablet_from_old_version_chain(ObTablet *tablet);
 private:
-  ObMetaDiskAddr phy_addr_; // 40B
+  ObMetaDiskAddr phy_addr_; // 48B
   ObMetaObj<ObTablet> obj_; // 40B
   ObLSHandle ls_handle_; // 24B
   ObDDLKvMgrHandle ddl_kv_mgr_handle_; // 48B
@@ -151,7 +171,7 @@ private:
   mds::ObMdsTableHandler mds_table_handler_;// 48B
   ObTablet *old_version_chain_; // 8B
   ObTabletAttr attr_; // 32B // protected by rw lock of tablet_map_
-  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 312B
+  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 320B
 };
 
 struct ObTabletResidentInfo final
@@ -168,9 +188,10 @@ public:
   bool is_empty_shell() const { return attr_.is_empty_shell_; }
   bool has_next_tablet() const { return attr_.has_next_tablet_; }
   bool has_nested_table() const { return attr_.has_nested_table_; }
-  int64_t get_required_size() const { return attr_.required_bytes_; }
-  int64_t get_occupy_size() const { return attr_.occupy_bytes_; }
-  int64_t get_meta_size() const { return attr_.tablet_meta_bytes_; }
+  int64_t get_required_size() const { return attr_.all_sstable_data_required_size_; }
+  int64_t get_occupy_size() const { return attr_.all_sstable_data_occupy_size_; }
+  uint64_t get_tablet_meta_size() const { return attr_.tablet_meta_size_; }
+  int64_t get_ss_public_sstable_occupy_size() const { return attr_.ss_public_sstable_occupy_size_; }
   int64_t get_backup_size() const { return attr_.backup_bytes_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(tablet_addr), K_(attr));
 public:

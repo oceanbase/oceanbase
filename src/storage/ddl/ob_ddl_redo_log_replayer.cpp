@@ -114,6 +114,24 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const SCN &sc
   }
   return ret;
 }
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObDDLRedoLogReplayer::replay_finish(const ObDDLFinishLog &log, const SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObDDLFinishReplayExecutor replay_executor;
+
+  DEBUG_SYNC(BEFORE_REPLAY_DDL_PREPRARE);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
+    LOG_WARN("init replay executor failed", K(ret));
+  } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), log.get_table_key().get_tablet_id()))) {
+    LOG_WARN("execute replay execute failed", K(ret));
+  }
+  return ret;
+}
+#endif
 
 int ObDDLRedoLogReplayer::replay_inc_start(const ObDDLIncStartLog &log, const share::SCN &scn)
 {

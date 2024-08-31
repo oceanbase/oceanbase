@@ -32,7 +32,6 @@ namespace observer
 {
 using oceanbase::table::ObTableConsistencyLevel;
 
-struct ObGlobalContext;
 class ObTableService;
 
 /// @see RPC_S(PR5 login, obrpc::OB_TABLE_API_LOGIN, (table::ObTableLoginRequest), table::ObTableLoginResult);

@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_WRITE_BUFFER_POOL_H_
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_WRITE_BUFFER_POOL_H_
 
-#include "lib/lock/ob_spin_rwlock.h"
+#include "lib/lock/ob_tc_rwlock.h"
 #include "lib/container/ob_array.h"
 #include "lib/queue/ob_link.h"
 #include "lib/queue/ob_link_queue.h"

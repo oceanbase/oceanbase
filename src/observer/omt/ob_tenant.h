@@ -381,6 +381,7 @@ public:
   enum { MAX_RESOURCE_GROUP = 8 };
 
   ObTenant(const int64_t id,
+           const int64_t epoch,
            const int64_t times_of_workers,
            share::ObCgroupCtrl &cgroup_ctrl);
   virtual ~ObTenant();
@@ -400,8 +401,8 @@ public:
 
   ObTenantMeta get_tenant_meta();
   bool is_hidden();
-  ObTenantCreateStatus get_create_status();
-  void set_create_status(const ObTenantCreateStatus status);
+  storage::ObTenantCreateStatus get_create_status();
+  void set_create_status(const storage::ObTenantCreateStatus status);
 
   int create_tenant_module();
 

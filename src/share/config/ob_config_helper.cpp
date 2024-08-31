@@ -34,6 +34,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_ddl_common.h"
 #include "share/backup/ob_archive_persist_helper.h"
+#include "lib/utility/utility.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "share/vector_index/ob_vector_index_util.h"
 
@@ -659,6 +660,16 @@ bool ObConfigTenantMemoryChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigTenantDataDiskChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
+  if (is_valid) {
+    is_valid = ((0 == value) || (value >= ObUnitResource::HIDDEN_SYS_TENANT_MIN_DATA_DISK_SIZE));
+  }
+  return is_valid;
+}
+
 bool ObConfigVectorMemoryChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
 {
   bool is_valid = false;
@@ -786,43 +797,7 @@ int64_t ObConfigCapacityParser::get(const char *str, bool &valid,
                                     bool check_unit /* = true */,
                                     bool use_byte /* = false*/)
 {
-  char *p_unit = NULL;
-  int64_t value = 0;
-
-  if (OB_ISNULL(str) || '\0' == str[0]) {
-    valid = false;
-  } else {
-    valid = true;
-    value = strtol(str, &p_unit, 0);
-
-    if (OB_ISNULL(p_unit)) {
-      valid = false;
-    } else if (value < 0) {
-      valid = false;
-    } else if ('\0' == *p_unit) {
-      if (check_unit) {
-        valid = false;
-      } else if (!use_byte) {
-        value <<= CAP_MB;
-      }
-    } else if (0 == STRCASECMP("b", p_unit) || 0 == STRCASECMP("byte", p_unit)) {
-      // do nothing
-    } else if (0 == STRCASECMP("kb", p_unit) || 0 == STRCASECMP("k", p_unit)) {
-      value <<= CAP_KB;
-    } else if (0 == STRCASECMP("mb", p_unit) || 0 == STRCASECMP("m", p_unit)) {
-      value <<= CAP_MB;
-    } else if (0 == STRCASECMP("gb", p_unit) || 0 == STRCASECMP("g", p_unit)) {
-      value <<= CAP_GB;
-    } else if (0 == STRCASECMP("tb", p_unit) || 0 == STRCASECMP("t", p_unit)) {
-      value <<= CAP_TB;
-    } else if (0 == STRCASECMP("pb", p_unit) || 0 == STRCASECMP("p", p_unit)) {
-      value <<= CAP_PB;
-    } else {
-      valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get capacity error", K(str), K(p_unit));
-    }
-  }
-  return value;
+  return parse_config_capacity(str, valid, check_unit, use_byte);
 }
 
 int64_t ObConfigReadableIntParser::get(const char *str, bool &valid)

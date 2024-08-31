@@ -266,6 +266,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, passwd_array);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, concurrency);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, recover_table);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, using_complement_log);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_compatible);
 
      // source_cluster_version
@@ -553,6 +554,17 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
           LOG_WARN("fail to retrive int value", K(ret), "column_name", "recover_table");
         } else {
           job.set_recover_table(recover_table != 0);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (name == "using_complement_log") {
+        int64_t using_complement_log = 0;
+        if (OB_FAIL(retrieve_int_value(result, using_complement_log))) {
+          LOG_WARN("fail to retrive int value", K(ret), "column_name", "using_complement_log");
+        } else {
+          job.set_using_complement_log(using_complement_log != 0);
         }
       }
     }

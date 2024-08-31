@@ -25,7 +25,7 @@
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -51,7 +51,7 @@ ObTabletPointer::ObTabletPointer()
     attr_()
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 328, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 344, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -133,25 +133,20 @@ int ObTabletPointer::read_from_disk(
   int ret = OB_SUCCESS;
   const int64_t buf_len = phy_addr_.size();
   const ObMemAttr mem_attr(MTL_ID(), "MetaPointer");
-  ObTenantCheckpointSlogHandler *ckpt_slog_hanlder = MTL(ObTenantCheckpointSlogHandler*);
-  if (OB_ISNULL(ckpt_slog_hanlder)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "slog handler is nullptr", K(ret), KP(ckpt_slog_hanlder));
-  } else {
-    ObMetaDiskAddr real_load_addr = phy_addr_;
-    if (!is_full_load && addr.is_raw_block()) {
-      if (phy_addr_.size() > ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE) {
-        real_load_addr.set_size(ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE);
-      }
-    }
-    if (OB_FAIL(ckpt_slog_hanlder->read_from_disk(phy_addr_, allocator, r_buf, r_len))) {
-      if (OB_SEARCH_NOT_FOUND != ret) {
-        STORAGE_LOG(WARN, "fail to read from addr", K(ret), K(phy_addr_));
-      }
-    } else {
-      addr = phy_addr_;
+  ObMetaDiskAddr real_load_addr = phy_addr_;
+  if (!is_full_load && addr.is_raw_block()) {
+    if (phy_addr_.size() > ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE) {
+      real_load_addr.set_size(ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE);
     }
   }
+  if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(phy_addr_, ls_handle_.get_ls()->get_ls_epoch(), allocator, r_buf, r_len))) {
+    if (OB_SEARCH_NOT_FOUND != ret) {
+      STORAGE_LOG(WARN, "fail to read from addr", K(ret), K(phy_addr_), K(ls_handle_.get_ls()->get_ls_epoch()));
+    }
+  } else {
+    addr = phy_addr_;
+  }
+
   return ret;
 }
 
@@ -329,6 +324,7 @@ int ObTabletPointer::dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_
     const ObTabletID tablet_id = obj_.ptr_->tablet_meta_.tablet_id_;
     const int64_t wash_score = obj_.ptr_->get_wash_score();
     guard.get_obj(meta_obj);
+    const ObTabletPersisterParam param(ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id);
     ObTablet *tmp_obj = obj_.ptr_;
     if (OB_NOT_NULL(meta_obj.ptr_) && obj_.ptr_->get_try_cache_size() <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       char *buf = reinterpret_cast<char*>(meta_obj.ptr_);
@@ -340,7 +336,7 @@ int ObTabletPointer::dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_
         LOG_WARN("invalid tablet buffer length", K(ret), K(cur_buf_len), K(buf_len), KP(tmp_obj), KP(meta_obj.ptr_));
       } else if (OB_FAIL(get_attr_for_obj(meta_obj.ptr_))) {
         LOG_WARN("fail to set attr for object", K(ret), K(meta_obj));
-      } else if (OB_FAIL(ObTabletPersister::transform_tablet_memory_footprint(*obj_.ptr_, buf, buf_len))) {
+      } else if (OB_FAIL(ObTabletPersister::transform_tablet_memory_footprint(param, *obj_.ptr_, buf, buf_len))) {
         LOG_WARN("fail to degrade tablet memory", K(ret), KPC(obj_.ptr_), KP(buf), K(buf_len));
       } else {
         meta_obj.ptr_->inc_ref();

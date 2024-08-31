@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/blockstore/ob_shared_object_reader_writer.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 
 using namespace oceanbase::blocksstable;
@@ -176,6 +177,7 @@ int ObTabletLogicMacroIdReader::get_next_batch(common::ObIArray<ObBackupMacroBlo
         macro_id.macro_block_id_ = data_macro_block_meta.get_macro_id();
         macro_id.nested_offset_ = data_macro_block_meta.nested_offset_;
         macro_id.nested_size_ = data_macro_block_meta.nested_size_;
+        macro_id.is_ss_ddl_other_block_ = false;
         cur_total_row_count_ += data_macro_block_meta.val_.row_count_;
         macro_id.absolute_row_offset_ = cur_total_row_count_ - 1;
         if (OB_FAIL(id_array.push_back(macro_id))) {
@@ -200,8 +202,8 @@ ObIMacroBlockBackupReader::~ObIMacroBlockBackupReader()
 /* ObMacroBlockBackupReader */
 
 ObMacroBlockBackupReader::ObMacroBlockBackupReader()
-    : ObIMacroBlockBackupReader(), is_data_ready_(false),
-      result_code_(), macro_handle_(), buffer_reader_()
+    : ObIMacroBlockBackupReader(), is_data_ready_(false), result_code_(),
+      macro_id_(), macro_handle_(), buffer_reader_()
 {}
 
 ObMacroBlockBackupReader::~ObMacroBlockBackupReader()
@@ -222,13 +224,15 @@ int ObMacroBlockBackupReader::init(const ObBackupMacroBlockId &macro_id)
     block_info_.macro_id_ = macro_id.macro_block_id_;
     block_info_.nested_offset_ = macro_id.nested_offset_;
     block_info_.nested_size_ = macro_id.nested_size_;
+    macro_id_ = macro_id;
     is_inited_ = true;
   }
   return ret;
 }
 
 int ObMacroBlockBackupReader::get_macro_block_data(
-    blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
+    blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id,
+    blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -244,6 +248,7 @@ int ObMacroBlockBackupReader::get_macro_block_data(
   } else {
     buffer_reader = buffer_reader_;
     logic_id = logic_id_;
+    macro_id = block_info_.macro_id_;
   }
   return ret;
 }
@@ -260,11 +265,10 @@ void ObMacroBlockBackupReader::reset()
 int ObMacroBlockBackupReader::process_(ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
-  blocksstable::ObMacroBlockReadInfo read_info;
-  read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+  blocksstable::ObStorageObjectReadInfo read_info;
   if (is_data_ready_) {
     LOG_INFO("macro data is ready, no need fetch", K(ret));
-  } else if (OB_FAIL(get_macro_read_info_(logic_id_, read_info))) {
+  } else if (OB_FAIL(get_macro_read_info_(read_info))) {
     LOG_WARN("failed to get macro block read info", K(ret), K(logic_id_));
   } else if (OB_ISNULL(io_allocator)) {
     ret = OB_ERR_UNEXPECTED;
@@ -274,7 +278,7 @@ int ObMacroBlockBackupReader::process_(ObIAllocator *io_allocator)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
   } else {
-    if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle_))) {
+    if (OB_FAIL(ObObjectManager::read_object(read_info, macro_handle_))) {
       LOG_WARN("failed to read block", K(ret), K(read_info));
     } else if (!macro_handle_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
@@ -302,24 +306,54 @@ int ObMacroBlockBackupReader::process_(ObIAllocator *io_allocator)
 }
 
 int ObMacroBlockBackupReader::get_macro_read_info_(
-    const blocksstable::ObLogicMacroBlockId &logic_id, blocksstable::ObMacroBlockReadInfo &read_info)
+    blocksstable::ObStorageObjectReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!logic_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(logic_id));
+  read_info.macro_block_id_ = block_info_.macro_id_;
+  read_info.offset_ = block_info_.nested_offset_;
+  read_info.size_ = block_info_.nested_size_;
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_READ);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::BACKUP_READER_IO);
+  read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+  read_info.mtl_tenant_id_ = MTL_ID();
+  return ret;
+}
+
+int ObMacroBlockBackupReader::try_peek_magic_(const blocksstable::ObBufferReader &buffer, uint16_t &magic)
+{
+  int ret = OB_SUCCESS;
+  if (buffer.capacity() < sizeof(magic)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("buffer not enough", K(ret));
   } else {
-    read_info.macro_block_id_ = block_info_.macro_id_;
-    read_info.offset_ = block_info_.nested_offset_;
-    read_info.size_ = block_info_.nested_size_;
-    read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
-    read_info.io_desc_.set_sys_module_id(ObIOModule::BACKUP_READER_IO);
+    MEMCPY(&magic, buffer.data(), sizeof(magic));
   }
   return ret;
 }
 
 int ObMacroBlockBackupReader::get_macro_block_size_(const blocksstable::ObBufferReader &buffer, int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  uint16_t magic = 0;
+  if (OB_FAIL(try_peek_magic_(buffer, magic))) {
+    LOG_WARN("failed to try peek magic", K(ret));
+  } else {
+    const bool is_shared_object_header = ObSharedObjectHeader::OB_SHARED_BLOCK_HEADER_MAGIC == magic;
+    if (!is_shared_object_header) {
+      if (OB_FAIL(get_normal_macro_block_size_(buffer, size))) {
+        LOG_WARN("failed to get normal block size", K(ret), K_(macro_id));
+      }
+    } else {
+      if (OB_FAIL(get_other_macro_block_size_(buffer, size))) {
+        LOG_WARN("failed to get other block size", K(ret), K_(macro_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMacroBlockBackupReader::get_normal_macro_block_size_(const blocksstable::ObBufferReader &buffer, int64_t &size)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -344,6 +378,25 @@ int ObMacroBlockBackupReader::get_macro_block_size_(const blocksstable::ObBuffer
     const int64_t header_size = common_header.get_serialize_size();
     const int64_t payload_size = common_header.get_payload_size();
     size = header_size + payload_size;
+  }
+  return ret;
+}
+
+int ObMacroBlockBackupReader::get_other_macro_block_size_(const blocksstable::ObBufferReader &buffer, int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  ObSharedObjectHeader header;
+  if (buffer.capacity() < header.get_serialize_size()) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("data buf not enough for header", K(ret), K(buffer), "header_size", header.get_serialize_size());
+  } else if (OB_FAIL(header.deserialize(buffer.data(), buffer.capacity(), pos))) {
+    LOG_ERROR("deserialize header fail", K(ret), K(buffer), K(pos), K(header));
+  } else {
+    const int64_t header_size = header.header_size_;
+    const int64_t data_size = header.data_size_;
+    size = header_size + data_size;
+    LOG_INFO("get other macro block size", K(size));
   }
   return ret;
 }
@@ -392,7 +445,8 @@ int ObMultiMacroBlockBackupReader::init(const uint64_t tenant_id,
 }
 
 int ObMultiMacroBlockBackupReader::get_next_macro_block(
-    blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
+    blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id,
+    blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -401,7 +455,7 @@ int ObMultiMacroBlockBackupReader::get_next_macro_block(
   } else if (reader_idx_ >= readers_.count()) {
     ret = OB_ITER_END;
     LOG_DEBUG("multi macro block backup reader get end", K(ret));
-  } else if (OB_FAIL(fetch_macro_block_with_retry_(data, table_key, logic_id, io_allocator))) {
+  } else if (OB_FAIL(fetch_macro_block_with_retry_(data, table_key, logic_id, macro_id, io_allocator))) {
     LOG_WARN("failed to fetch macro block with retry", K(ret));
   } else {
     ++reader_idx_;
@@ -462,7 +516,8 @@ int ObMultiMacroBlockBackupReader::prepare_macro_block_reader_(const int64_t idx
 }
 
 int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
-    blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
+    blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id,
+    blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t retry_times = 0;
@@ -470,7 +525,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
     if (retry_times >= 1) {
       LOG_WARN("retry get macro block", K(retry_times));
     }
-    if (OB_FAIL(fetch_macro_block_(data, table_key, logic_id, io_allocator))) {
+    if (OB_FAIL(fetch_macro_block_(data, table_key, logic_id, macro_id, io_allocator))) {
       LOG_WARN("failed to fetch macro block", K(ret), K(retry_times));
     }
 #ifdef ERRSIM
@@ -495,7 +550,8 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
 }
 
 int ObMultiMacroBlockBackupReader::fetch_macro_block_(
-    blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
+    blocksstable::ObBufferReader &data, storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id,
+    blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   const int64_t idx = reader_idx_;
@@ -505,7 +561,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_(
     LOG_WARN("get invalid args", K(ret), K(idx));
   } else if (OB_FAIL(prepare_macro_block_reader_(idx))) {
     LOG_WARN("failed to prepare macro block reader", K(ret));
-  } else if (OB_FAIL(readers_.at(idx)->get_macro_block_data(data, logic_id, io_allocator))) {
+  } else if (OB_FAIL(readers_.at(idx)->get_macro_block_data(data, logic_id, macro_id, io_allocator))) {
     LOG_WARN("failed to get macro block data", K(ret), K(idx), K(readers_.count()));
   } else {
     table_key = macro_list_.at(idx).table_key_;
@@ -533,7 +589,7 @@ ObTabletMetaBackupReader::~ObTabletMetaBackupReader()
 
 int ObTabletMetaBackupReader::init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
     storage::ObTabletHandle &tablet_handle, ObBackupTabletIndexBlockBuilderMgr &index_block_builder_mgr,
-    ObLSBackupCtx &ls_backup_ctx, ObIODevice *device_handle)
+    ObLSBackupCtx &ls_backup_ctx, ObIODevice *device_handle, ObBackupLinkedBlockItemWriter *linked_writer)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -588,7 +644,8 @@ int ObTabletMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffer
 /* ObSSTableMetaBackupReader */
 
 ObSSTableMetaBackupReader::ObSSTableMetaBackupReader()
-  : ObITabletMetaBackupReader(), cond_(), sstable_array_(), buffer_writer_("BackupReader"), table_store_wrapper_()
+  : ObITabletMetaBackupReader(), cond_(), sstable_array_(), buffer_writer_("BackupReader"), table_store_wrapper_(),
+    linked_writer_(NULL)
 {}
 
 ObSSTableMetaBackupReader::~ObSSTableMetaBackupReader()
@@ -597,7 +654,7 @@ ObSSTableMetaBackupReader::~ObSSTableMetaBackupReader()
 int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
     const share::ObBackupDataType &backup_data_type, storage::ObTabletHandle &tablet_handle,
     ObBackupTabletIndexBlockBuilderMgr &index_block_builder_mgr, ObLSBackupCtx &ls_backup_ctx,
-    ObIODevice *device_handle)
+    ObIODevice *device_handle, ObBackupLinkedBlockItemWriter *linked_writer)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -611,6 +668,7 @@ int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
   } else {
     tablet_id_ = tablet_id;
     tablet_handle_ = &tablet_handle;
+    linked_writer_ = linked_writer;
     ObTablet &tablet = *tablet_handle_->get_obj();
     if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper_))) {
       LOG_WARN("failed to fetch table store from tablet", K(ret));
@@ -659,7 +717,9 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
           LOG_WARN("failed to get sstable merge results", K(ret), K_(tablet_id), K(table_key));
         } else if (OB_FAIL(tablet->build_migration_sstable_param(table_key, *merge_res, backup_sstable_meta.sstable_meta_))) {
           LOG_WARN("failed to build migration sstable param", K(ret), K(table_key));
-        } else if (!backup_sstable_meta.sstable_meta_.is_valid()) {
+        } else if (OB_FAIL(deal_with_ddl_sstable_(table_key, linked_writer_, backup_sstable_meta))) {
+          LOG_WARN("failed to deal with ddl sstable", K(ret), K(table_key));
+	} else if (!backup_sstable_meta.sstable_meta_.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("backup sstable meta is not valid", K(backup_sstable_meta), KPC(tablet), KPC(sstable_ptr), K(table_key));
         } else if (OB_FAIL(buffer_writer_.write_serialize(backup_sstable_meta))) {
@@ -713,6 +773,29 @@ int ObSSTableMetaBackupReader::check_all_sstable_macro_block_ready_()
       ret = OB_TIMEOUT;
       LOG_WARN("wait sstable index builder ready timeout", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObSSTableMetaBackupReader::deal_with_ddl_sstable_(
+    const storage::ObITable::TableKey &table_key,
+    ObBackupLinkedBlockItemWriter *linked_writer,
+    ObBackupSSTableMeta &backup_sstable_meta)
+{
+  int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+    // do nothing
+  } else if (!table_key.is_ddl_dump_sstable()) {
+    // do nothing
+  } else if (OB_ISNULL(linked_writer)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("linked writer should not be null", K(ret), K(table_key));
+  } else if (OB_FAIL(linked_writer->get_root_block_id(
+      backup_sstable_meta.entry_block_addr_for_other_block_,
+      backup_sstable_meta.total_other_block_count_))) {
+    LOG_WARN("failed to get root block id", K(ret));
+  } else {
+    LOG_INFO("get root block id", K(table_key), K(backup_sstable_meta));
   }
   return ret;
 }

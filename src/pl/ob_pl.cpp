@@ -1668,7 +1668,7 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
                                                                 NULL,
                                                                 fix_param_store,
                                                                 false,
-                                                                INVALID_MODE,
+                                                                SQL_EXECUTION_MODE::INVALID_MODE,
                                                                 NULL,
                                                                 true))) {
       LOG_WARN("fail to exec transform_syntax_tree", K(ret));

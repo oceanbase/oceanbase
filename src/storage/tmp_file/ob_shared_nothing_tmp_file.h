@@ -27,7 +27,6 @@ namespace oceanbase
 namespace tmp_file
 {
 class ObTmpFileIOCtx;
-class ObTenantTmpFileManager;
 class ObTmpWriteBufferPool;
 class ObTmpFileBlockPageBitmap;
 class ObTmpFileBlockManager;
@@ -201,7 +200,8 @@ public:
   bool is_deleting();
   int delete_file();
 
-// XXX Currently, K(tmp_file) is used to print the ObSharedNothingTmpFile structure without holding
+// ATTENTION!!!
+// Currently, K(tmp_file) is used to print the ObSharedNothingTmpFile structure without holding
 // the file lock. Before adding the print field, make sure it is thread-safe.
   TO_STRING_KV(K(is_inited_), K(is_deleting_),
                K(tenant_id_), K(dir_id_), K(fd_),

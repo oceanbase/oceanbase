@@ -192,6 +192,7 @@ int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flus
   param.generate_ts_ = ObClockGenerator::getClock();
   param.merge_type_ = compaction::ObMergeType::MDS_MINI_MERGE;
   param.merge_version_ = 0;
+  param.exec_mode_ = compaction::EXEC_MODE_LOCAL;
   if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_mds_table_merge_dag(param))) {
     if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
       MDS_LOG(WARN, "failed to schedule mds table merge dag", K(ret), K(param));

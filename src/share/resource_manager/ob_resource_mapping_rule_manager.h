@@ -63,7 +63,7 @@ public:
   }
 
   inline int get_group_id_by_function_type(const uint64_t tenant_id,
-                                           const int64_t function_type,
+                                           const uint8_t function_type,
                                            uint64_t &group_id)
   {
     int ret = common::OB_SUCCESS;
@@ -132,10 +132,12 @@ private:
       ObResourceManagerProxy &proxy,
       const uint64_t tenant_id,
       const ObString &plan);
+  int clear_resource_function_mapping_rule(const uint64_t tenant_id, const ObResourceMappingRuleSet &rules);
   int refresh_resource_user_mapping_rule(
       ObResourceManagerProxy &proxy,
       const uint64_t tenant_id,
       const ObString &plan);
+  int clear_resource_user_mapping_rule(const uint64_t tenant_id, const ObResourceUserMappingRuleSet &rules);
 private:
   /* variables */
   // 将用户 id 映射到 group id，用于用户登录时快速确定登录用户所属 cgroup

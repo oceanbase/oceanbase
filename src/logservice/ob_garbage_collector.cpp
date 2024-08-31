@@ -34,7 +34,7 @@
 #include "rootserver/ob_ls_recovery_reportor.h"      // ObLSRecoveryReportor
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ob_occam_time_guard.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
 #include "lib/wait_event/ob_wait_event.h"
 
@@ -1461,7 +1461,7 @@ void ObGarbageCollector::run1()
 
   const int64_t gc_interval = GC_INTERVAL;
   while (!has_set_stop()) {
-    if (ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (SERVER_STORAGE_META_SERVICE.is_started()) {
       if (!stop_create_new_gc_task_) {
         CLOG_LOG(INFO, "Garbage Collector is running", K(seq_), K(gc_interval));
         ObGCCandidateArray gc_candidates;

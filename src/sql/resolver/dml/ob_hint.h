@@ -160,6 +160,8 @@ struct ObOptParamHint
     DEF(SPILL_COMPRESSION_CODEC,)                   \
     DEF(INLIST_REWRITE_THRESHOLD,)                  \
     DEF(PUSHDOWN_STORAGE_LEVEL,)                    \
+    DEF(IO_READ_BATCH_SIZE,)                        \
+    DEF(IO_READ_REDUNDANT_LIMIT_PERCENTAGE,)        \
     DEF(HASH_JOIN_ENABLED,)                         \
     DEF(OPTIMIZER_SORTMERGE_JOIN_ENABLED,)          \
     DEF(NESTED_LOOP_JOIN_ENABLED,)                  \

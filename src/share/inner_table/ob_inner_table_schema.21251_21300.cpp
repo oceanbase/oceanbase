@@ -60,7 +60,7 @@ int ObInnerTableSchema::cdb_ob_backup_storage_info_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP     FROM oceanbase.__all_virtual_backup_storage_info )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,     MAX_IOPS,     MAX_BANDWIDTH,     CASE       WHEN MAX_BANDWIDTH = 0         THEN "UNLIMITED"       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')       WHEN MAX_BANDWIDTH >= 1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')       WHEN MAX_BANDWIDTH >= 1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')       ELSE         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')     END AS MAX_BANDWIDTH_DISPLAY     FROM oceanbase.__all_virtual_backup_storage_info )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1284,7 +1284,7 @@ int ObInnerTableSchema::cdb_ob_backup_storage_info_history_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP     FROM oceanbase.__all_virtual_backup_storage_info_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     PATH,     ENDPOINT,     DEST_ID,     DEST_TYPE,     AUTHORIZATION,     EXTENSION,     CHECK_FILE_NAME,     USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,     MAX_IOPS,     MAX_BANDWIDTH,     CASE       WHEN MAX_BANDWIDTH = 0         THEN "UNLIMITED"       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')       WHEN MAX_BANDWIDTH >= 1024*1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')       WHEN MAX_BANDWIDTH >= 1024*1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')       WHEN MAX_BANDWIDTH >= 1024         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')       ELSE         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')     END AS MAX_BANDWIDTH_DISPLAY     FROM oceanbase.__all_virtual_backup_storage_info_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

@@ -394,7 +394,8 @@ int ObTabletMdsData::init_for_evict_medium_info(
     } else if (is_major_merge_type(merge_type)) {
       extra_medium_info_.last_compaction_type_ = is_major_merge(merge_type) ? compaction::ObMediumCompactionInfo::MAJOR_COMPACTION : compaction::ObMediumCompactionInfo::MEDIUM_COMPACTION;
       extra_medium_info_.last_medium_scn_ = finish_medium_scn;
-      extra_medium_info_.wait_check_flag_ = true;
+      extra_medium_info_.wait_check_flag_ = !GCTX.is_shared_storage_mode();
+      // no need check in shared storage
     } else {
       extra_medium_info_ = other.extra_medium_info_;
     }
@@ -684,7 +685,7 @@ int ObTabletMdsData::init_single_complex_addr_and_extra_info(
     if (0 == src_data_extra_info.last_medium_scn_) {
       dst_extra_info.wait_check_flag_ = false;
     } else {
-      dst_extra_info.wait_check_flag_ = true;
+      dst_extra_info.wait_check_flag_ = !GCTX.is_shared_storage_mode();
     }
   } else {
     dst_extra_info = src_addr_extra_info;
@@ -750,7 +751,8 @@ int ObTabletMdsData::init_for_merge_with_full_mds_data(
 
 int ObTabletMdsData::init_with_update_medium_info(
     common::ObIAllocator &allocator,
-    const ObTabletMdsData &other)
+    const ObTabletMdsData &other,
+    const bool clear_wait_check_flag)
 {
   int ret = OB_SUCCESS;
 
@@ -777,7 +779,7 @@ int ObTabletMdsData::init_with_update_medium_info(
       } else {
         extra_medium_info_.last_compaction_type_ = other.extra_medium_info_.last_compaction_type_;
         extra_medium_info_.last_medium_scn_ = other.extra_medium_info_.last_medium_scn_;
-        extra_medium_info_.wait_check_flag_ = false;
+        extra_medium_info_.wait_check_flag_ = clear_wait_check_flag ? false : other.extra_medium_info_.wait_check_flag_;
       }
     }
 
@@ -1138,7 +1140,7 @@ int ObTabletMdsData::read_medium_info(
     common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> &array)
 {
   int ret = OB_SUCCESS;
-  ObSharedBlockLinkIter iter;
+  ObSharedObjectLinkIter iter;
   compaction::ObMediumCompactionInfo *info = nullptr;
   char *buf = nullptr;
   int64_t len = 0;

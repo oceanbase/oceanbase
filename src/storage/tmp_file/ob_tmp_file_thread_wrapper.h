@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace tmp_file
 {
-
+class ObSNTenantTmpFileManager;
 class ObTmpFileFlushManager;
 
 // When originally designed, ObTmpFileFlushTG was an independent thread. in order to reduce the
@@ -109,7 +109,7 @@ public:
   ObTmpFileSwapTG(ObTmpWriteBufferPool &wbp,
                   ObTmpFileEvictionManager &elimination_mgr,
                   ObTmpFileFlushTG &flush_tg);
-  int init(ObTenantTmpFileManager &file_mgr);
+  int init(ObSNTenantTmpFileManager &file_mgr);
   int start();
   void stop();
   void wait();
@@ -154,7 +154,7 @@ private:
 
   ObTmpWriteBufferPool &wbp_;
   ObTmpFileEvictionManager &evict_mgr_;
-  ObTenantTmpFileManager *file_mgr_;
+  ObSNTenantTmpFileManager *file_mgr_;
 };
 
 }  // end namespace tmp_file

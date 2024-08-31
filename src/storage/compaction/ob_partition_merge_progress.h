@@ -20,7 +20,7 @@ namespace oceanbase
 namespace storage
 {
 class ObTabletHandle;
-struct ObSSTableMergeInfo;
+class ObITable;
 }
 
 namespace compaction
@@ -30,6 +30,7 @@ struct ObCompactionProgress;
 struct ObDiagnoseTabletCompProgress;
 struct ObBasicTabletMergeCtx;
 class ObCompactionTimeGuard;
+struct ObSSTableMergeHistory;
 class ObPartitionMergeProgress
 {
 public:
@@ -41,15 +42,7 @@ public:
     const int64_t start_cg_idx = 0, const int64_t end_cg_idx = 0);
   virtual int update_merge_progress(const int64_t idx, const int64_t scanned_row_count);
   virtual int finish_merge_progress() { return OB_SUCCESS; }
-  virtual int update_tenant_merge_progress(
-      const int64_t total_data_size_delta,
-      const int64_t scan_data_size_delta)
-  {
-    UNUSED(total_data_size_delta);
-    UNUSED(scan_data_size_delta);
-    return OB_SUCCESS;
-  }
-  int update_merge_info(storage::ObSSTableMergeInfo &merge_info);
+  int update_merge_info(compaction::ObSSTableMergeHistory &merge_history);
   int get_progress_info(ObCompactionProgress &input_progress);
   int diagnose_progress(ObDiagnoseTabletCompProgress &input_progress);
   int64_t get_estimated_finish_time() const { return estimated_finish_time_; }
@@ -64,10 +57,12 @@ public:
   static const int64_t MAX_ESTIMATE_SPEND_TIME = 24 * 60 * 60 * 1000 * 1000l; // 24 hours
   static const int64_t PRINT_ESTIMATE_WARN_INTERVAL = 5 * 60 * 1000 * 1000; // 1 min
 protected:
-  int estimate();
-  void update_estimated_finish_time_();
+  virtual int inner_update_progress_mgr(const int64_t total_scanned_row_cnt) { return OB_SUCCESS; }
 private:
-  int estimate_mini_merge(const ObIArray<storage::ObITable*> &tables, const storage::ObTabletHandle &tablet_handle);
+  int inner_init_estimated_vals();
+  void update_estimated_finish_time(const int64_t cur_scanned_row_cnt);
+  int estimate_memtables(const ObIArray<storage::ObITable*> &tables);
+  int estimate_sstables(const ObIArray<storage::ObITable*> &tables);
 
 protected:
   common::ObIAllocator &allocator_;
@@ -75,9 +70,8 @@ protected:
   compaction::ObTabletMergeDag *merge_dag_;
   int64_t *scanned_row_cnt_arr_;
   int64_t concurrent_cnt_;
-  int64_t estimate_row_cnt_;
-  int64_t estimate_occupy_size_;
-  int64_t estimate_occupy_size_delta_;
+  int64_t estimated_total_row_cnt_;
+  int64_t estimated_total_size_;
   float avg_row_length_;
   int64_t latest_update_ts_;
   int64_t estimated_finish_time_;
@@ -85,6 +79,7 @@ protected:
   int64_t start_cg_idx_;
   int64_t end_cg_idx_;
   bool is_updating_; // atomic lock
+  bool is_empty_merge_;
   bool is_inited_;
 };
 
@@ -96,14 +91,13 @@ public:
   {
   }
   ~ObPartitionMajorMergeProgress() {}
-  virtual int update_tenant_merge_progress(
-      const int64_t total_data_size_delta,
-      const int64_t scan_data_size_delta) override;
   virtual int finish_merge_progress() override;
   int finish_progress(
     const int64_t merge_version,
     ObCompactionTimeGuard *time_guard,
     const bool is_co_merge);
+protected:
+  virtual int inner_update_progress_mgr(const int64_t total_scanned_row_cnt) override;
 };
 
 class ObCOMajorMergeProgress : public ObPartitionMajorMergeProgress

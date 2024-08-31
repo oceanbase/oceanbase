@@ -430,7 +430,7 @@ int ObPxDistTransmitOp::do_range_dist()
     ObPxSqcHandler *handler = ctx_.get_sqc_handler();
     range = handler->get_partition_ranges().empty() ? NULL : &handler->get_partition_ranges().at(0);
     ObRangeSliceIdCalc slice_id_calc(ctx_.get_allocator(), task_channels_.count(),
-      range, &MY_SPEC.dist_exprs_, MY_SPEC.sort_cmp_funs_, MY_SPEC.sort_collations_);
+      range, &MY_SPEC.dist_exprs_, MY_SPEC.sort_cmp_funs_, MY_SPEC.sort_collations_, MY_SPEC.ddl_slice_id_expr_);
     if (ObPxSampleType::OBJECT_SAMPLE == MY_SPEC.sample_type_) {
       if (OB_FAIL(child_->rescan())) {
         LOG_WARN("fail to rescan child", K(ret));

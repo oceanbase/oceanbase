@@ -80,6 +80,7 @@ protected:
                                 const int64_t row_inserted);
   int repending(const share::ObDDLTaskStatus next_task_status);
   virtual bool task_can_retry() const override { return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_ddl_retryable_ : true; }
+  virtual bool is_ddl_retryable() const override { return is_ddl_retryable_; }
 private:
   inline bool get_is_copy_indexes() const {return is_copy_indexes_;}
   inline bool get_is_copy_triggers() const {return is_copy_triggers_;}

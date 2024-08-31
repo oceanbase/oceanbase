@@ -12,7 +12,7 @@
 
 #include "ob_storage_schema.h"
 #include "blocksstable/ob_block_sstable_struct.h"
-#include "ob_sstable_struct.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "share/ob_encryption_util.h"
 #include "share/schema/ob_column_schema.h"
 #include "share/schema/ob_schema_struct.h"

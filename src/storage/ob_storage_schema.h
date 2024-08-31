@@ -144,13 +144,16 @@ public:
   int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
   int deep_copy(const ObStorageColumnGroupSchema &other, common::ObIAllocator &allocator);
-  OB_INLINE bool is_all_column_group () const { return type_ == share::schema::ALL_COLUMN_GROUP; }
+  OB_INLINE bool is_all_column_group() const { return type_ == share::schema::ALL_COLUMN_GROUP; }
   OB_INLINE bool is_default_column_group () const { return type_ == share::schema::DEFAULT_COLUMN_GROUP; }
   OB_INLINE bool is_rowkey_column_group() const { return type_ == share::schema::ROWKEY_COLUMN_GROUP; }
   OB_INLINE bool is_single_column_group() const { return type_ == share::schema::SINGLE_COLUMN_GROUP; }
   OB_INLINE bool has_multi_version_column() const { return is_all_column_group() || is_rowkey_column_group(); }
   OB_INLINE bool is_inited() const { return row_store_type_ != MAX_ROW_STORE; };
-
+  OB_INLINE uint16_t get_column_idx(const uint16_t col_idx) const
+  { // column_idxs_ is null for all cg
+    return (nullptr == column_idxs_) ? col_idx : column_idxs_[col_idx];
+  }
   TO_STRING_KV(K_(version), K_(type), K_(compressor_type), K_(row_store_type), K_(block_size), K_(schema_column_cnt), K_(rowkey_column_cnt),
       K_(schema_rowkey_column_cnt), K_(column_cnt), "column_idxs", ObArrayWrap<uint16_t>(column_idxs_, column_cnt_));
 public:

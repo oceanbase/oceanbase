@@ -37,6 +37,12 @@ DEF_TO_STRING(ObUnitPlacementStrategy::ObServerResource)
   (void)databuff_printf(buf, buf_len, pos,
       "log_disk_capacity:\"%.9gGB\", log_disk_assigned:\"%.9gGB\"",
       capacity_[RES_LOG_DISK]/1024/1024/1024, assigned_[RES_LOG_DISK]/1024/1024/1024);
+
+  // DATA_DISK
+  (void)databuff_printf(buf, buf_len, pos,
+      "data_disk_capacity:\"%.9gGB\", data_disk_assigned:\"%.9gGB\"",
+      capacity_[RES_DATA_DISK]/1024/1024/1024, assigned_[RES_DATA_DISK] >= 0
+        ? assigned_[RES_DATA_DISK]/1024/1024/1024 : assigned_[RES_DATA_DISK]);
   J_OBJ_END();
   return pos;
 }
@@ -98,6 +104,7 @@ int ObUnitPlacementDPStrategy::choose_server(ObArray<ObUnitPlacementDPStrategy::
         case RES_CPU: { demand = demand_resource.min_cpu(); break; }
         case RES_MEM: { demand = static_cast<double>(demand_resource.memory_size()); break; }
         case RES_LOG_DISK: { demand = static_cast<double>(demand_resource.log_disk_size()); break; }
+        case RES_DATA_DISK: { demand = static_cast<double>(demand_resource.data_disk_size()); break; }
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unknown resource type", KR(ret), K(j));

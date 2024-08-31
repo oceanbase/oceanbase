@@ -59,7 +59,7 @@ int ObTmpFileFlushManager::alloc_flush_task(ObTmpFileFlushTask *&flush_task)
   int ret = OB_SUCCESS;
   flush_task = nullptr;
 
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   void *task_buf = nullptr;
   if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileFlushTask)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -428,7 +428,7 @@ int ObTmpFileFlushManager::inner_fill_block_buf_(
     const bool flush_tail)
 {
   int ret = OB_SUCCESS;
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   bool fail_too_many = false;
 
   ObArray<ObTmpFileBatchFlushContext::ObTmpFileFlushFailRecord> &flush_failed_array = flush_ctx_.get_flush_failed_array();

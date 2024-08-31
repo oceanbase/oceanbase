@@ -28,11 +28,12 @@
 #include "dump_enum_value/ob_admin_dump_enum_value_executor.h"
 #include "log_tool/ob_admin_log_tool_executor.h"
 #include "slog_tool/ob_admin_slog_executor.h"
-#include "dump_ckpt/ob_admin_dump_ckpt_executor.h"
 #include "io_bench/ob_admin_io_adapter_bench.h"
 #include "io_device/ob_admin_test_io_device_executor.h"
 #include "lib/utility/ob_print_utils.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "tools/ob_admin/shared_storage_tool/ob_admin_shared_storage_tool_executor.h"
+#endif
 using namespace oceanbase::common;
 using namespace oceanbase::tools;
 
@@ -40,11 +41,14 @@ void print_usage()
 {
   fprintf(stderr, "\nUsage: ob_admin io_bench\n"
          "       ob_admin slog_tool\n"
-         "       ob_admin dump_ckpt ## dump slog checkpoint, only support for 4.x\n"
          "       ob_admin dumpsst\n"
          "       ob_admin dump_enum_value\n"
 #ifdef OB_BUILD_TDE_SECURITY
          "       ob_admin dump_key\n"
+#endif
+#ifdef OB_BUILD_SHARED_STORAGE
+         "       ob_admin dump_obj_storage\n"
+         "       ob_admin ss_tool\n"
 #endif
          "       ob_admin log_tool ## './ob_admin log_tool' for more detail\n"
          "       ob_admin -h127.0.0.1 -p2883 xxx\n"
@@ -137,14 +141,16 @@ int main(int argc, char *argv[])
       executor = new ObAdminDumpEnumValueExecutor();
     } else if (0 == strcmp("dumpsst", argv[1])) {
       executor = new ObAdminDumpsstExecutor();
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (0 == strcmp("ss_tool", argv[1])) {
+      executor = new ObAdminSSToolExecutor();
+#endif
     } else if (0 == strcmp("log_tool", argv[1])) {
       executor = new ObAdminLogExecutor();
     } else if (0 == strcmp("dump_backup", argv[1])) {
       executor = new ObAdminDumpBackupDataExecutor();
     } else if (0 == strcmp("slog_tool", argv[1])) {
       executor = new ObAdminSlogExecutor();
-    } else if (0 == strcmp("dump_ckpt", argv[1])) {
-      executor = new ObAdminDumpCkptExecutor();
     } else if (0 == strcmp("io_adapter_benchmark", argv[1])) {
       executor = new ObAdminIOAdapterBenchmarkExecutor();
     } else if (0 == strcmp("test_io_device", argv[1])) {

@@ -880,6 +880,20 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       }
       break;
     }
+    case IO_READ_BATCH_SIZE: {
+      // ref tenant parameter _io_read_batch_size, range: [0K, 16M]
+      if (!val.is_varchar()) {
+        is_valid = false;
+      } else {
+        IGNORE_RETURN ObConfigCapacityParser::get(val.get_varchar().ptr(), is_valid);
+      }
+      break;
+    }
+    case IO_READ_REDUNDANT_LIMIT_PERCENTAGE: {
+      // ref tenant parameter _io_read_redundant_limit_percentage, range: [0, 99]
+      is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() < 100);
+      break;
+    }
     case PUSHDOWN_STORAGE_LEVEL: {
       is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 4);
       break;

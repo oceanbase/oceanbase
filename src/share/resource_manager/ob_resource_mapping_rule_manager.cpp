@@ -156,6 +156,7 @@ int ObResourceMappingRuleManager::refresh_resource_user_mapping_rule(
         LOG_WARN("fail set user mapping rule to rule_map", K(rule), K(ret));
       }
     }
+    (void)clear_resource_user_mapping_rule(tenant_id, user_rules);
     LOG_INFO("refresh resource user mapping rule", K(tenant_id), K(plan), K(user_rules));
   }
   return ret;
@@ -193,8 +194,59 @@ int ObResourceMappingRuleManager::refresh_resource_function_mapping_rule(
         LOG_WARN("fail set user mapping rule to rule_map", K(rule), K(ret));
       }
     }
-    LOG_INFO("refresh_resource_function_mapping_rule", K(tenant_id), K(plan), K(rules));
+    (void)clear_resource_function_mapping_rule(tenant_id, rules);
+    LOG_INFO("refresh resource mapping rule", K(tenant_id), K(plan), K(rules));
   }
+  return ret;
+}
 
+
+int ObResourceMappingRuleManager::clear_resource_function_mapping_rule(const uint64_t tenant_id,
+    const ObResourceMappingRuleSet &rules)
+{
+  int ret = OB_SUCCESS;
+  for (common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t>::const_iterator func_iter = function_rule_map_.begin();
+      OB_SUCC(ret) && func_iter != function_rule_map_.end(); ++func_iter) {
+    if (func_iter->first.tenant_id_ == tenant_id && func_iter->second > 0) {
+      bool hit = false;
+      for (int64_t i = 0; !hit && i < rules.count(); ++i) {
+        const ObResourceMappingRule &rule = rules.at(i);
+        if (share::ObTenantFunctionKey(rule.tenant_id_, rule.value_) == func_iter->first) {
+          hit = true;
+        }
+      }
+      if (!hit) {
+        LOG_INFO("tenant function need to be cleared", "function", func_iter->first, "group_id", func_iter->second);
+        if (OB_FAIL(function_rule_map_.set_refactored(func_iter->first, 0, 1/*overwrite*/))) {
+          LOG_WARN("failed to reset user map", K(ret), K(func_iter->first));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResourceMappingRuleManager::clear_resource_user_mapping_rule(const uint64_t tenant_id,
+    const ObResourceUserMappingRuleSet &rules)
+{
+  int ret = OB_SUCCESS;
+  for (common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t>::const_iterator iter = user_rule_map_.begin();
+      OB_SUCC(ret) && iter != user_rule_map_.end(); ++iter) {
+    if (iter->first.tenant_id_ == tenant_id && iter->second > 0) {
+      bool hit = false;
+      for (int64_t i = 0; !hit && i < rules.count(); ++i) {
+        const ObResourceUserMappingRule &rule = rules.at(i);
+        if (sql::ObTenantUserKey(rule.tenant_id_, rule.user_id_) == iter->first) {
+          hit = true;
+        }
+      }
+      if (!hit) {
+        LOG_INFO("tenant user group need to be cleared", "user", iter->first, "group_id", iter->second);
+        if (OB_FAIL(user_rule_map_.set_refactored(iter->first, 0, 1/*overwrite*/))) {
+          LOG_WARN("failed to reset user map", K(ret), K(iter->first));
+        }
+      }
+    }
+  }
   return ret;
 }

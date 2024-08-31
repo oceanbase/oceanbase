@@ -15,14 +15,57 @@
 #define private public
 #include "sql/audit/ob_audit_log_utils.h"
 #include "sql/audit/ob_audit_logger.h"
+#include "share/rc/ob_tenant_base.h"
+#include "share/io/ob_io_manager.h"
+#include "share/ob_device_manager.h"
 #undef private
 
 namespace oceanbase
 {
 namespace sql
 {
+using namespace oceanbase::common;
+using namespace oceanbase::share;
 
-TEST(TestAuditLogUtils, parse_filter_definition)
+class TestAuditLogUtils : public ::testing::Test
+{
+public:
+  TestAuditLogUtils() {}
+  virtual ~TestAuditLogUtils() = default;
+  static void SetUpTestCase();
+  static void TearDownTestCase();
+  virtual void SetUp() {}
+  virtual void TearDown() {}
+};
+
+void TestAuditLogUtils::SetUpTestCase()
+{
+  const int64_t test_memory = 6 * 1024 * 1024;
+  ObTenantBase *tenant_base = new ObTenantBase(OB_SYS_TENANT_ID);
+  auto malloc = ObMallocAllocator::get_instance();
+  if (NULL == malloc->get_tenant_ctx_allocator(OB_SYS_TENANT_ID, 0)) {
+    malloc->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);
+  }
+  tenant_base->init();
+  ObTenantEnv::set_tenant(tenant_base);
+  ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
+  ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().init(test_memory));
+  ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().start());
+  ObTenantIOManager *io_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
+  EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+  EXPECT_EQ(OB_SUCCESS, io_service->start());
+  tenant_base->set(io_service);
+  ObTenantEnv::set_tenant(tenant_base);
+}
+
+void TestAuditLogUtils::TearDownTestCase()
+{
+  ObIOManager::get_instance().stop();
+  ObIOManager::get_instance().destroy();
+}
+
+TEST_F(TestAuditLogUtils, parse_filter_definition)
 {
   const char *valid_definitions[] = {
     "{}",
@@ -68,7 +111,7 @@ TEST(TestAuditLogUtils, parse_filter_definition)
   }
 }
 
-TEST(TestAuditLogUtils, compress_and_upload_log)
+TEST_F(TestAuditLogUtils, compress_and_upload_log)
 {
   sql::ObAuditLogger logger;
   logger.log_cfg_.audit_log_path_ = "file://audit/1234/567";
@@ -80,7 +123,7 @@ TEST(TestAuditLogUtils, compress_and_upload_log)
   EXPECT_EQ(OB_SUCCESS, logger.compress_and_upload_log("./test_audit_log_utils", "456", true));
 }
 
-TEST(TestAuditLogUtils, prune_log)
+TEST_F(TestAuditLogUtils, prune_log)
 {
   sql::ObAuditLogger logger;
   system("rm -rf audit");

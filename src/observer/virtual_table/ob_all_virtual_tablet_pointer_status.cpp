@@ -174,7 +174,7 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(tablet_id.id());
           break;
         case ADDRESS:
-          tablet_pointer->get_addr().to_string(address_, STR_LEN);
+          tablet_pointer->get_addr().to_string(address_, ADDR_STR_LEN);
           cur_row_.cells_[i].set_varchar(address_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;

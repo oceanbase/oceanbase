@@ -23,6 +23,12 @@
 #include "share/ob_all_server_tracer.h"
 #include "share/ob_errno.h"
 #include "rootserver/ob_server_manager.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/object_storage/ob_zone_storage_table_operation.h"
+#endif
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {
@@ -81,12 +87,237 @@ int ObServerZoneOpService::init(
   }
   return ret;
 }
-int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const ObZone &zone, bool is_bootstrap)
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObServerZoneOpService::get_and_check_storage_infos_by_zone_(const ObZone& zone,
+    ObIArray<share::ObZoneStorageTableInfo> &result)
 {
   int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is NULL", KR(ret), KP(GCTX.root_service_));
+  } else {
+    if (OB_FAIL(ObStorageInfoOperator::get_ordered_zone_storage_infos_with_sub_op_id(*sql_proxy_,
+            zone, result))) {
+      LOG_WARN("failed to get all storage infos", KR(ret), K(zone));
+    } else if (result.empty()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("zone storage infos is empty", KR(ret), K(zone));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Zone storage info not exists. ADD SERVER");
+    }
+  }
+  return ret;
+}
+int ObServerZoneOpService::check_storage_infos_not_changed_(common::ObISQLClient &proxy,
+    const ObZone &zone, const ObIArray<share::ObZoneStorageTableInfo> &storage_infos)
+{
+  int ret = OB_SUCCESS;
+  ObArray<share::ObZoneStorageTableInfo> zone_storage_infos;
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if (OB_FAIL(ObStorageInfoOperator::get_ordered_zone_storage_infos_with_sub_op_id(proxy,
+          zone, zone_storage_infos))) {
+    LOG_WARN("failed to get get zone storage infos", KR(ret), K(zone));
+  } else if (storage_infos.count() != zone_storage_infos.count()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("zone storage infos changed when adding server", KR(ret), K(zone),
+        K(storage_infos), K(zone_storage_infos));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Zone storage changed. ADD SERVER");
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < storage_infos.count(); i++) {
+      const ObZoneStorageTableInfo &target = storage_infos.at(i);
+      const ObZoneStorageTableInfo &current = zone_storage_infos.at(i);
+      if (!target.is_equal(current)) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("zone storage infos changed when adding server", KR(ret), K(zone),
+            K(storage_infos), K(zone_storage_infos));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Zone storage changed. ADD SERVER");
+      }
+    }
+  }
+  return ret;
+}
+#endif
+
+#define PRINT_NON_EMPTY_SERVER_ERR_MSG(addr) \
+  do {\
+      int tmp_ret = OB_SUCCESS; \
+      const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 100; \
+      char non_empty_server_err_msg[ERR_MSG_BUF_LEN] = ""; \
+      if (OB_TMP_FAIL(databuff_printf(non_empty_server_err_msg, ERR_MSG_BUF_LEN, \
+          "add non-empty server %s", to_cstring(addr)))) { \
+        LOG_WARN("fail to execute databuff_printf", KR(tmp_ret), K(addr)); \
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add non-empty server"); \
+      } else { \
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, non_empty_server_err_msg); \
+      } \
+  } while (0)
+
+int ObServerZoneOpService::precheck_server_empty_and_get_zone_(const ObAddr &server,
+    const ObTimeoutCtx &ctx,
+    const bool is_bootstrap,
+    ObZone &picked_zone)
+{
+  int ret = OB_SUCCESS;
+  uint64_t sys_data_version = 0;
+  ObCheckServerEmptyArg rpc_arg;
+  Bool is_empty;
+  uint64_t min_observer_version = GET_MIN_CLUSTER_VERSION();
+  int64_t timeout = ctx.get_timeout();
+  if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid addr", KR(ret), K(server));
+  } else if (is_bootstrap) {
+    // when in bootstrap mode, server is check empty and set server_id in prepare_bootstrap
+    // no need to check server empty
+    // the zone must be provided in SQL, the parser ensures this
+    if (picked_zone.is_empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("in bootstrap mode, zone must be provided", KR(ret), K(picked_zone));
+    }
+  } else if (OB_ISNULL(rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy_ is null", KR(ret), KP(rpc_proxy_));
+  } else if (OB_UNLIKELY(timeout <= 0)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("ctx time out", KR(ret), K(timeout));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("failed to get sys tenant data version", KR(ret));
+  } else if (OB_FAIL(rpc_arg.init(obrpc::ObCheckServerEmptyArg::ADD_SERVER, sys_data_version,
+          OB_INVALID_ID /* server_id */))) {
+    LOG_WARN("failed to init ObCheckServerEmptyArg", KR(ret),
+        "mode", obrpc::ObCheckServerEmptyArg::ADD_SERVER,
+        K(sys_data_version), "server_id", OB_INVALID_ID);
+  } else {
+    if (min_observer_version >= CLUSTER_VERSION_4_3_3_0) {
+      ObCheckServerEmptyResult rpc_result;
+      if (OB_FAIL(rpc_proxy_->to(server)
+            .timeout(timeout)
+            .check_server_empty_with_result(rpc_arg, rpc_result))) {
+        // do not rewrite errcode, make rs retry if failed to send rpc
+        LOG_WARN("failed to check server empty", KR(ret), K(server), K(timeout), K(rpc_arg));
+      } else if (OB_FAIL(zone_checking_for_adding_server_(rpc_result.get_zone(), picked_zone))) {
+        LOG_WARN("failed to get picked_zone from rpc result", KR(ret));
+      } else {
+        is_empty = rpc_result.get_server_empty();
+      }
+    } else {
+      if (OB_FAIL(rpc_proxy_->to(server)
+            .timeout(timeout)
+            .check_server_empty(rpc_arg, is_empty))) {
+        // do not rewrite errcode, make rs retry if failed to send rpc
+        LOG_WARN("failed to check server empty", KR(ret), K(server), K(timeout), K(rpc_arg));
+      } else {}
+    }
+    if (OB_SUCC(ret) && !is_empty) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("adding non-empty server is not allowed", KR(ret), K(is_bootstrap), K(is_empty));
+        PRINT_NON_EMPTY_SERVER_ERR_MSG(server);
+    }
+  }
+  return ret;
+}
+ERRSIM_POINT_DEF(EN_ADD_SERVER_RPC_FAIL);
+int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &server,
+      const ObTimeoutCtx &ctx,
+      const bool &is_bootstrap,
+      ObZone &picked_zone,
+      ObPrepareServerForAddingServerArg &rpc_arg,
+      ObPrepareServerForAddingServerResult &rpc_result)
+{
+  int ret = OB_SUCCESS;
+  uint64_t server_id = OB_INVALID_ID;
+  ObSArray<share::ObZoneStorageTableInfo> zone_storage_infos;
+  ObPrepareServerForAddingServerArg::Mode mode = is_bootstrap ?
+      ObPrepareServerForAddingServerArg::BOOTSTRAP : ObPrepareServerForAddingServerArg::ADD_SERVER;
   uint64_t sys_tenant_data_version = 0;
-  ObCheckServerForAddingServerArg rpc_arg;
-  ObCheckServerForAddingServerResult rpc_result;
+#ifdef OB_BUILD_TDE_SECURITY
+  // In SS mode, root-key of SYS tenant is sent to server when adding server for encryption of ak/sk.
+  ObString root_key_str;
+  RootKeyType root_key_type = RootKeyType::INVALID;
+#endif
+  int64_t timeout = ctx.get_timeout();
+  if (!server.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server is invalid", KR(ret), K(server));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode() && picked_zone.is_empty()) {
+    // in shared storage mode, zone is set in check_server_empty_and_get_zone_
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("zone is empty in shared storage mode", KR(ret), K(picked_zone), K(GCTX.is_shared_storage_mode()));
+#endif
+  } else if (OB_ISNULL(rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy_ is NULL", KR(ret), KP(rpc_proxy_));
+  } else if (timeout <= 0) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("ctx time out", KR(ret), K(timeout));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
+    LOG_WARN("fail to get sys tenant's min data version", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    ObRootKey root_key;
+    if (OB_FAIL(get_and_check_storage_infos_by_zone_(picked_zone, zone_storage_infos))) {
+      LOG_WARN("failed to get storage infos", KR(ret), K(picked_zone));
+    }
+#ifdef OB_BUILD_TDE_SECURITY
+    if (FAILEDx(ObMasterKeyGetter::instance().get_root_key(OB_SYS_TENANT_ID, root_key))) {
+      LOG_WARN("failed to get sys root key", KR(ret));
+    } else {
+      root_key_str = root_key.key_;
+      root_key_type = root_key.key_type_;
+    }
+#endif
+#endif
+  }
+  if (FAILEDx(fetch_new_server_id_(server_id))) {
+    // fetch a new server id and insert the server into __all_server table
+    LOG_WARN("fail to fetch new server id", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_server_id(server_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("server id is invalid", KR(ret), K(server_id));
+  } else if (OB_FAIL(rpc_arg.init(mode,
+          sys_tenant_data_version,
+          server_id,
+          zone_storage_infos
+#ifdef OB_BUILD_TDE_SECURITY
+          , root_key_type, root_key_str
+#endif
+          ))) {
+    LOG_WARN("fail to init rpc arg", KR(ret), K(sys_tenant_data_version), K(server_id),
+        K(zone_storage_infos)
+#ifdef OB_BUILD_TDE_SECURITY
+        , K(root_key_type), K(root_key_str)
+#endif
+        );
+  } else if (OB_FAIL(rpc_proxy_->to(server)
+      .timeout(timeout)
+      .prepare_server_for_adding_server(rpc_arg, rpc_result))
+      || OB_FAIL(OB_E(EN_ADD_SERVER_RPC_FAIL) OB_SUCCESS)) {
+    // change errcode to avoid retry in add server RPC
+    // the retry may increase max_used_server_id which is meaningless
+    ret = OB_SERVER_CONNECTION_ERROR;
+    LOG_WARN("fail to connect to server and set server_id", KR(ret), K(server));
+    LOG_USER_ERROR(OB_SERVER_CONNECTION_ERROR, to_cstring(server));
+    // in bootstrap mode, server_id is set in prepare_bootstrap, the server is not empty here
+  } else if (!is_bootstrap && !rpc_result.get_is_server_empty()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("adding non-empty server is not allowed", KR(ret), K(server), K(rpc_result), K(is_bootstrap));
+    PRINT_NON_EMPTY_SERVER_ERR_MSG(server);
+  } else if (OB_FAIL(check_startup_mode_match_(rpc_result.get_startup_mode()))) {
+    LOG_WARN("failed to check_startup_mode_match", KR(ret), K(rpc_result.get_startup_mode()));
+  } else if (OB_FAIL(zone_checking_for_adding_server_(rpc_result.get_zone(), picked_zone))) {
+    LOG_WARN("failed to get picked_zone from rpc result", KR(ret));
+  }
+  return ret;
+}
+#undef PRINT_NON_EMPTY_SERVER_ERR_MSG
+int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers,
+    const ObZone &zone,
+    const bool is_bootstrap)
+{
+  int ret = OB_SUCCESS;
+  ObPrepareServerForAddingServerArg rpc_arg;
+  ObPrepareServerForAddingServerResult rpc_result;
   ObZone picked_zone;
   ObTimeoutCtx ctx;
 #ifdef OB_BUILD_TDE_SECURITY
@@ -96,11 +327,6 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
-    LOG_WARN("fail to get sys tenant's min data version", KR(ret));
-  } else if (OB_ISNULL(rpc_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rpc_proxy_ is null", KR(ret), KP(rpc_proxy_));
 #ifdef OB_BUILD_TDE_SECURITY
   } else if (OB_ISNULL(master_key_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -110,6 +336,8 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
 #endif
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
     LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+  }
+  if (OB_FAIL(ret)) {
   } else {
 #ifdef OB_BUILD_TDE_SECURITY
     SpinRLockGuard sync_guard(master_key_mgr_->sync());
@@ -117,53 +345,29 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
     for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
       const ObAddr &addr = servers.at(i);
       int64_t timeout = ctx.get_timeout();
-      uint64_t server_id = OB_INVALID_ID;
-      const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 100;
-      char non_empty_server_err_msg[ERR_MSG_BUF_LEN] = "";
-      int64_t pos = 0;
-      rpc_arg.reset();
-      if (OB_UNLIKELY(timeout <= 0)) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("ctx time out", KR(ret), K(timeout));
-      } else if (OB_FAIL(databuff_printf(
-          non_empty_server_err_msg,
-          ERR_MSG_BUF_LEN,
-          pos,
-          "add non-empty server %s",
-          to_cstring(addr)))) {
-        LOG_WARN("fail to execute databuff_printf", KR(ret), K(addr));
-      } else if (OB_FAIL(fetch_new_server_id_(server_id))) {
-        // fetch a new server id and insert the server into __all_server table
-        LOG_WARN("fail to fetch new server id", KR(ret));
-      } else if (OB_UNLIKELY(!is_valid_server_id(server_id))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("server id is invalid", KR(ret), K(server_id));
-      } else if (OB_FAIL(rpc_arg.init(
-          ObCheckServerForAddingServerArg::ADD_SERVER,
-          sys_tenant_data_version,
-          server_id))) {
-        LOG_WARN("fail to init rpc arg", KR(ret), K(sys_tenant_data_version), K(server_id));
-      } else if (OB_FAIL(rpc_proxy_->to(addr)
-          .timeout(timeout)
-          .check_server_for_adding_server(rpc_arg, rpc_result))) {
-        LOG_WARN("fail to check whether the server is empty", KR(ret), K(addr));
-      } else if (!rpc_result.get_is_server_empty()) {
-        ret = OB_OP_NOT_ALLOW;
-        LOG_WARN("adding non-empty server is not allowed", KR(ret));
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, non_empty_server_err_msg);
-      } else if (OB_FAIL(zone_checking_for_adding_server_(zone, rpc_result.get_zone(), picked_zone))) {
-        LOG_WARN("zone checking for adding server is failed", KR(ret), K(zone), K(rpc_result.get_zone()));
+      // zone is empty means user did not set zone in add server command
+      // zone is not empty means user set zone in add server command
+      if (OB_FAIL(picked_zone.assign(zone))) {
+        LOG_WARN("failed to init picked_zone", KR(ret));
+        // check server empty before get a new server_id
+        // avoid server_id increasing when adding non-empty server
+      } else if (OB_FAIL(precheck_server_empty_and_get_zone_(addr, ctx, is_bootstrap, picked_zone))) {
+        LOG_WARN("failed to check server empty and get zone", KR(ret), K(addr), K(timeout),
+            K(zone), K(is_bootstrap));
+      } else if (OB_FAIL(prepare_server_for_adding_server_(addr, ctx, is_bootstrap, picked_zone, rpc_arg, rpc_result))) {
+        LOG_WARN("failed to set server id", KR(ret), K(addr), K(timeout), K(zone), K(is_bootstrap), K(rpc_arg));
 #ifdef OB_BUILD_TDE_SECURITY
       } else if (!is_bootstrap && OB_FAIL(master_key_checking_for_adding_server(addr, picked_zone, wms_in_sync_arg))) {
         LOG_WARN("master key checking for adding server is failed", KR(ret), K(addr), K(picked_zone));
 #endif
       } else if (OB_FAIL(add_server_(
           addr,
-          server_id,
+          rpc_arg.get_server_id(),
           picked_zone,
           rpc_result.get_sql_port(),
-          rpc_result.get_build_version()))) {
-        LOG_WARN("add_server failed", KR(ret), K(addr),  K(server_id), K(picked_zone), "sql_port",
+          rpc_result.get_build_version(),
+          rpc_arg.get_zone_storage_infos()))) {
+        LOG_WARN("add_server failed", KR(ret), K(addr), "server_id", rpc_arg.get_server_id(), K(picked_zone), "sql_port",
             rpc_result.get_sql_port(), "build_version", rpc_result.get_build_version());
       } else {}
     }
@@ -408,6 +612,7 @@ int ObServerZoneOpService::master_key_checking_for_adding_server(
   return ret;
 }
 #endif
+
 int ObServerZoneOpService::stop_server_precheck(
     const ObIArray<ObAddr> &servers,
     const obrpc::ObAdminServerArg::AdminServerOp &op)
@@ -468,15 +673,40 @@ int ObServerZoneOpService::stop_server_precheck(
   }
   return ret;
 }
+
+int ObServerZoneOpService::check_startup_mode_match_(const share::ObServerMode startup_mode)
+{
+  int ret = OB_SUCCESS;
+  bool match = false;
+  if (share::ObServerMode::INVALID_MODE == startup_mode) {
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("invalid startup_mode, server's build_version lower than 4.3", KR(ret), K(startup_mode));
+    } else {
+      // during upgrading, server to add is lower version than 4.4, it must be NORMAL_MODE
+      match = !GCTX.is_shared_storage_mode();
+    }
+  } else {
+    match = startup_mode == GCTX.startup_mode_;
+  }
+  if (OB_SUCC(ret) && !match) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("added server startup mode mot match not allowed", KR(ret),
+              "current_mode", GCTX.startup_mode_, "added_server_mode", startup_mode);
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "startup mode not match, add server");
+    // TODO(cangming.zl): add case
+  }
+  return ret;
+}
+
 int ObServerZoneOpService::zone_checking_for_adding_server_(
-    const ObZone &command_zone,
     const ObZone &rpc_zone,
     ObZone &picked_zone)
 {
   int ret = OB_SUCCESS;
-  // command_zone: the zone specified in the system command ADD SERVER
   // rpc_zone: the zone specified in the server's local config and send to rs via rpc
   // picked_zone: the zone we will use in add_server
+  // picked_zone is initialized in add_servers by command_zone
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
@@ -484,12 +714,16 @@ int ObServerZoneOpService::zone_checking_for_adding_server_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rpc_zone cannot be empty. It implies that server's local config zone is empty.",
     KR(ret), K(rpc_zone));
-  } else if (!command_zone.is_empty() && command_zone != rpc_zone) {
+    // when picked_zone is empty, user did not specify zone in command
+    // we use zone specified in observer command line
+  } else if (picked_zone.is_empty()) {
+    if (OB_FAIL(picked_zone.assign(rpc_zone))) {
+      LOG_WARN("fail to assign picked_zone", KR(ret), K(rpc_zone));
+    }
+  } else if (picked_zone != rpc_zone) {
     ret = OB_SERVER_ZONE_NOT_MATCH;
     LOG_WARN("the zone specified in the server's local config is not the same as"
-        " the zone specified in the command", KR(ret), K(command_zone), K(rpc_zone));
-  } else if (OB_FAIL(picked_zone.assign(rpc_zone))) {
-    LOG_WARN("fail to assign picked_zone", KR(ret), K(rpc_zone));
+        " the zone specified in the command", KR(ret), K(picked_zone), K(rpc_zone));
   } else {}
   return ret;
 }
@@ -498,13 +732,15 @@ int ObServerZoneOpService::add_server_(
     const uint64_t server_id,
     const ObZone &zone,
     const int64_t sql_port,
-    const ObServerInfoInTable::ObBuildVersion &build_version)
+    const ObServerInfoInTable::ObBuildVersion &build_version,
+    const ObIArray<ObZoneStorageTableInfo> &storage_infos)
 {
   int ret = OB_SUCCESS;
   bool is_active = false;
   const int64_t now = ObTimeUtility::current_time();
   ObServerInfoInTable server_info_in_table;
   ObMySQLTransaction trans;
+  DEBUG_SYNC(BEFORE_ADD_SERVER_TRANS);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
@@ -521,7 +757,7 @@ int ObServerZoneOpService::add_server_(
         KP(sql_proxy_), KP(server_change_callback_));
   } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("fail to start trans", KR(ret));
-  } else if (OB_FAIL(check_and_update_service_epoch_(trans))) {
+  } else if (OB_FAIL(ObServiceEpochProxy::check_and_update_server_zone_op_service_epoch(trans))) {
     LOG_WARN("fail to check and update service epoch", KR(ret));
   } else if (OB_FAIL(ObZoneTableOperation::check_zone_active(trans, zone, is_active))){
     // we do not need to lock the zone info in __all_zone table
@@ -530,6 +766,11 @@ int ObServerZoneOpService::add_server_(
   } else if (OB_UNLIKELY(!is_active)) {
     ret = OB_ZONE_NOT_ACTIVE;
     LOG_WARN("the zone is not active", KR(ret), K(zone), K(is_active));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode() &&
+    OB_FAIL(check_storage_infos_not_changed_(trans, zone, storage_infos))) {
+    LOG_WARN("check zone storage not changed failed", KR(ret), K(zone));
+#endif
   } else if (OB_FAIL(ObServerTableOperator::get(trans, server, server_info_in_table))) {
     if (OB_SERVER_NOT_IN_WHITE_LIST == ret) {
       ret = OB_SUCCESS;
@@ -581,7 +822,7 @@ int ObServerZoneOpService::delete_server_(
         KP(sql_proxy_), KP(server_change_callback_));
   } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("fail to start trans", KR(ret));
-  } else if (OB_FAIL(check_and_update_service_epoch_(trans))) {
+  } else if (OB_FAIL(ObServiceEpochProxy::check_and_update_server_zone_op_service_epoch(trans))) {
     LOG_WARN("fail to check and update service epoch", KR(ret));
   } else if (OB_FAIL(ObServerTableOperator::get(trans, server, server_info_in_table))) {
     LOG_WARN("fail to get server_info in table", KR(ret), K(server));
@@ -624,7 +865,7 @@ int ObServerZoneOpService::check_and_end_delete_server_(
   } else if (OB_UNLIKELY(!server.is_valid() || !server.ip_to_string(ip, sizeof(ip)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(server));
-  } else if (OB_FAIL(check_and_update_service_epoch_(trans))) {
+  } else if (OB_FAIL(ObServiceEpochProxy::check_and_update_server_zone_op_service_epoch(trans))) {
     LOG_WARN("fail to check and update service epoch", KR(ret));
   } else if (OB_FAIL(ObServerTableOperator::get(trans, server, server_info))) {
     LOG_WARN("fail to get server_info in table", KR(ret), K(server));
@@ -674,7 +915,7 @@ int ObServerZoneOpService::start_or_stop_server_(
     LOG_WARN("sql_proxy_ is null", KR(ret), KP(sql_proxy_));
   } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("fail to start trans", KR(ret));
-  } else if (OB_FAIL(check_and_update_service_epoch_(trans))) {
+  } else if (OB_FAIL(ObServiceEpochProxy::check_and_update_server_zone_op_service_epoch(trans))) {
     LOG_WARN("fail to check and update service epoch", KR(ret));
   } else if (OB_FAIL(ObServerTableOperator::get(trans, server, server_info))) {
     LOG_WARN("fail to get server_info", KR(ret), K(server));
@@ -739,32 +980,6 @@ int ObServerZoneOpService::construct_rs_list_arg(ObRsListArg &rs_list_arg)
       }
     }
   }
-  return ret;
-}
-int ObServerZoneOpService::check_and_update_service_epoch_(ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  int64_t service_epoch_in_table = palf::INVALID_PROPOSAL_ID;
-  int64_t proposal_id = palf::INVALID_PROPOSAL_ID;
-  ObRole role;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K(is_inited_));
-  } else if (OB_FAIL(ObRootUtils::get_proposal_id_from_sys_ls(proposal_id, role))) {
-    LOG_WARN("fail to get proposal id from sys ls", KR(ret));
-  } else if (ObRole::LEADER != role) {
-    ret = OB_NOT_MASTER;
-    LOG_WARN("not leader ls", KR(ret), K(proposal_id), K(service_epoch_in_table), K(role));
-  } else if (palf::INVALID_PROPOSAL_ID == proposal_id) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid proposal id", KR(ret), K(proposal_id));
-  } else if (OB_FAIL(ObServiceEpochProxy::check_and_update_service_epoch(
-      trans,
-      OB_SYS_TENANT_ID,
-      ObServiceEpochProxy::SERVER_ZONE_OP_SERVICE_EPOCH,
-      proposal_id))) {
-    LOG_WARN("fail to check and update server zone op service epoch", KR(ret), K(proposal_id));
-  } else {}
   return ret;
 }
 int ObServerZoneOpService::fetch_new_server_id_(uint64_t &server_id)

@@ -188,6 +188,7 @@ public:
   Property_declare_ObString(passwd_array)
   Property_declare_int(int64_t, concurrency)
   Property_declare_int(bool, recover_table)
+  Property_declare_int(bool, using_complement_log)
   Property_declare_int(int64_t, backup_compatible)
 
 private:

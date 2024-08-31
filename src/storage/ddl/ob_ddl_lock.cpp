@@ -312,7 +312,10 @@ int ObDDLLock::lock_for_drop_partition_in_trans(
   return ret;
 }
 
-int ObDDLLock::lock_for_common_ddl_in_trans(const ObTableSchema &table_schema, ObMySQLTransaction &trans)
+int ObDDLLock::lock_for_common_ddl_in_trans(
+    const ObTableSchema &table_schema,
+    const bool require_strict_binary_format,
+    ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -325,7 +328,7 @@ int ObDDLLock::lock_for_common_ddl_in_trans(const ObTableSchema &table_schema, O
     LOG_WARN("failed to get tablet ids", K(ret));
   } else if (OB_FAIL(lock_table_lock_in_trans(tenant_id, table_id, tablet_ids, ROW_EXCLUSIVE, timeout_us, trans))) {
     LOG_WARN("failed to lock table", K(ret));
-  } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, table_id, ROW_SHARE, timeout_us, trans))) {
+  } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, table_id, require_strict_binary_format ? SHARE : ROW_SHARE, timeout_us, trans))) {
     LOG_WARN("failed to lock ddl table", K(ret));
   }
   return ret;

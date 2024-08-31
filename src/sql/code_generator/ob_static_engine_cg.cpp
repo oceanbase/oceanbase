@@ -4070,6 +4070,11 @@ int ObStaticEngineCG::generate_basic_transmit_spec(
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (NULL != op.get_ddl_slice_id_expr()) {
+      OZ(generate_rt_expr(*op.get_ddl_slice_id_expr(), spec.ddl_slice_id_expr_));
+    }
+  }
   if (NULL != op.get_random_expr()) {
     OZ(generate_rt_expr(*op.get_random_expr(), spec.random_expr_));
   }
@@ -5374,16 +5379,46 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
     LOG_WARN("invalid argument", K(ret), K(log_plan));
   } else if (OB_ISNULL(session_info = log_plan->get_optimizer_context().get_session_info())) {
   } else {
+    bool has_io_batch_size_hint = false;
+    bool has_io_gap_percentage_hint = false;
+    int64_t hint_io_read_batch_size = 0;
+    int64_t hint_io_gap_percentage = 0;
+    const ObOptParamHint *opt_params = &log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
     uint64_t tenant_id = session_info->get_effective_tenant_id();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     int64_t pd_level = 0;
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to init tenant config", K(tenant_id));
+    } else if (OB_ISNULL(opt_params)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid opt params", K(ret), KP(opt_params));
     } else if (OB_FAIL(get_pushdown_storage_level(log_plan->get_optimizer_context(), tenant_config->_pushdown_storage_level, pd_level))) {
       LOG_WARN("failed to get hint pushdown storage level", K(ret));
-    } else {
-      const int64_t io_read_batch_size = tenant_config->_io_read_batch_size;
-      const int64_t io_read_gap_size = io_read_batch_size * tenant_config->_io_read_redundant_limit_percentage / 100;
+    } else if (OB_FAIL(opt_params->has_opt_param(ObOptParamHint::IO_READ_BATCH_SIZE, has_io_batch_size_hint))) {
+      LOG_WARN("check has hint of io read batch size failed", K(ret), KPC(opt_params));
+    } else if (OB_FAIL(opt_params->has_opt_param(ObOptParamHint::IO_READ_REDUNDANT_LIMIT_PERCENTAGE, has_io_gap_percentage_hint))) {
+      LOG_WARN("check has hint of io read redundant limit percentage failed", K(ret), KPC(opt_params));
+    }
+    if (OB_SUCC(ret) && has_io_batch_size_hint) {
+      ObObj io_read_batch_size_obj;
+      bool is_valid = false;
+      if (OB_FAIL(opt_params->get_opt_param(ObOptParamHint::IO_READ_BATCH_SIZE, io_read_batch_size_obj))) {
+        LOG_WARN("get hint of io read batch size failed", K(ret));
+      } else if (FALSE_IT(hint_io_read_batch_size = ObConfigCapacityParser::get(io_read_batch_size_obj.get_varchar().ptr(), is_valid))) {
+      } else if (!is_valid) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid io read batch size", K(ret), K(io_read_batch_size_obj));
+      }
+    }
+    if (OB_SUCC(ret) && has_io_gap_percentage_hint) {
+      if (OB_FAIL(opt_params->get_integer_opt_param(ObOptParamHint::IO_READ_REDUNDANT_LIMIT_PERCENTAGE, hint_io_gap_percentage))) {
+        LOG_WARN("get hint of io read redundant limit percentage failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t io_read_batch_size = has_io_batch_size_hint ? hint_io_read_batch_size : tenant_config->_io_read_batch_size;
+      const int64_t io_read_gap_size = io_read_batch_size * (has_io_gap_percentage_hint ? hint_io_gap_percentage : tenant_config->_io_read_redundant_limit_percentage) / 100;
       pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
       pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
       enable_skip_index = tenant_config->_enable_skip_index;

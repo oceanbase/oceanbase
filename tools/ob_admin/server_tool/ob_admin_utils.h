@@ -24,7 +24,7 @@ using std::vector;
 using std::string;
 using std::stringstream;
 
-#define NONE "\033[m"
+#define NONE_COLOR "\033[m"
 #define RED "\033[0;32;31m"
 #define LIGHT_RED "\033[1;31m"
 #define GREEN "\033[0;32;32m"

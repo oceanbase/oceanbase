@@ -463,6 +463,15 @@ public:
   bool check(const ObConfigItem &t) const;
 };
 
+class ObConfigTenantDataDiskChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigTenantDataDiskChecker() {}
+  virtual ~ObConfigTenantDataDiskChecker() {};
+  bool check(const ObConfigItem &t) const;
+};
+
 class ObConfigUpgradeStageChecker : public ObConfigChecker
 {
 public:
@@ -712,16 +721,6 @@ public:
   virtual ~ObConfigCapacityParser() {}
   static int64_t get(const char *str, bool &valid, bool check_unit = true, bool use_byte = false);
 private:
-  enum CAP_UNIT
-  {
-    // shift bits between unit of byte and that
-    CAP_B = 0,
-    CAP_KB = 10,
-    CAP_MB = 20,
-    CAP_GB = 30,
-    CAP_TB = 40,
-    CAP_PB = 50,
-  };
   DISALLOW_COPY_AND_ASSIGN(ObConfigCapacityParser);
 };
 

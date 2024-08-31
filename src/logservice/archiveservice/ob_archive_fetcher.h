@@ -20,9 +20,9 @@
 #include "share/ob_ls_id.h"                 // ObLSID
 #include "share/backup/ob_archive_piece.h"  // ObArchivePiece
 #include "logservice/palf/lsn.h"            // LSN
-#include "share/scn.h"            // SCN
-#include "logservice/palf/palf_iterator.h"  // PalfGroupBufferIterator
+#include "share/scn.h"                      // SCN
 #include "ob_archive_define.h"
+#include "logservice/palf/palf_iterator.h"  // PalfGroupBufferIterator
 
 namespace oceanbase
 {
@@ -56,7 +56,6 @@ using oceanbase::logservice::ObLogService;
 using oceanbase::share::ObLSID;
 using oceanbase::share::ObArchivePiece;
 using oceanbase::palf::LSN;
-using oceanbase::palf::PalfGroupBufferIterator;
 using oceanbase::palf::LogGroupEntry;
 
 struct ObArchiveLogFetchTask;
@@ -150,11 +149,11 @@ private:
   int init_helper_(ObArchiveLogFetchTask &task, const LSN &commit_lsn, TmpMemoryHelper &helper);
 
   // 1.3 初始化日志迭代器
-  int init_iterator_(const ObLSID &id, const TmpMemoryHelper &helper,
-      palf::PalfHandleGuard &palf_handle_guard, PalfGroupBufferIterator &iter);
+  int init_iterator_(const ObLSID &id, const TmpMemoryHelper &helper, palf::PalfGroupBufferIterator &iter);
 
   // 1.4 产生归档数据
-  int generate_send_buffer_(PalfGroupBufferIterator &iter,  TmpMemoryHelper &helper);
+  int generate_send_buffer_(palf::PalfGroupBufferIterator &iter,
+                            TmpMemoryHelper &helper);
 
   // 1.4.1 获取受控归档位点
   int get_max_archive_point_(share::SCN &max_scn);

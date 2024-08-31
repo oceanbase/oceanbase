@@ -77,25 +77,37 @@ static const char *CPU_STAT_FILE = "cpu.stat";
 static const char *CGROUP_PROCS_FILE = "cgroup.procs";
 
 //集成IO参数
-int OBGroupIOInfo::init(int64_t min_percent, int64_t max_percent, int64_t weight_percent)
+int ObGroupIOInfo::init(const char *name, const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent,
+                        const int64_t max_net_bandwidth_percent, const int64_t net_bandwidth_weight_percent)
 {
   int ret = OB_SUCCESS;
   if (min_percent < 0 || min_percent > 100 ||
       max_percent < 0 || max_percent > 100 ||
       weight_percent < 0 || weight_percent > 100 ||
-      min_percent > max_percent) {
+      min_percent > max_percent ||
+      max_net_bandwidth_percent < 0 || max_net_bandwidth_percent > 100 ||
+      net_bandwidth_weight_percent < 0 || net_bandwidth_weight_percent > 100) {
     ret = OB_INVALID_CONFIG;
-    LOG_WARN("invalid io config", K(ret), K(min_percent), K(max_percent), K(weight_percent));
+    LOG_WARN("invalid io config", K(ret), K(min_percent), K(max_percent), K(weight_percent),
+                                 K(max_net_bandwidth_percent), K(net_bandwidth_weight_percent));
   } else {
+    group_name_ = name;
     min_percent_ = min_percent;
     max_percent_ = max_percent;
     weight_percent_ = weight_percent;
+    max_net_bandwidth_percent_ = max_net_bandwidth_percent;
+    net_bandwidth_weight_percent_ = net_bandwidth_weight_percent;
   }
   return ret;
 }
-bool OBGroupIOInfo::is_valid() const
+bool ObGroupIOInfo::is_valid() const
 {
-  return min_percent_ >= 0 && max_percent_ >= min_percent_ && max_percent_ <= 100 && weight_percent_ >= 0 && weight_percent_ <= 100;
+  return min_percent_ >= 0 && min_percent_ <= 100 &&
+         max_percent_ >= min_percent_ &&
+         max_percent_ >= 0 && max_percent_ <= 100 &&
+         weight_percent_ >= 0 && weight_percent_ <= 100 &&
+         max_net_bandwidth_percent_ >= 0 && max_net_bandwidth_percent_ <= 100 &&
+         net_bandwidth_weight_percent_ >= 0 && net_bandwidth_weight_percent_ <= 100;
 }
 
 bool ObCgroupCtrl::is_valid_group_name(ObString &group_name)
@@ -773,8 +785,8 @@ int ObCgroupCtrl::get_throttled_time(const uint64_t tenant_id, int64_t &throttle
 }
 
 int ObCgroupCtrl::set_group_iops(const uint64_t tenant_id,
-                                 const uint64_t group_id,
-                                 const OBGroupIOInfo &group_io)
+                                 const int64_t group_id,
+                                 const ObGroupIOInfo &group_io)
 {
   int ret = OB_SUCCESS;
 
@@ -785,9 +797,12 @@ int ObCgroupCtrl::set_group_iops(const uint64_t tenant_id,
   } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
     LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_holder.get_ptr()->modify_io_config(group_id,
+                                                               group_io.group_name_,
                                                                group_io.min_percent_,
                                                                group_io.max_percent_,
-                                                               group_io.weight_percent_))) {
+                                                               group_io.weight_percent_,
+                                                               group_io.max_net_bandwidth_percent_,
+                                                               group_io.net_bandwidth_weight_percent_))) {
     LOG_WARN("modify consumer group iops failed", K(ret), K(group_id), K(tenant_id), K(group_id));
   }
   return ret;

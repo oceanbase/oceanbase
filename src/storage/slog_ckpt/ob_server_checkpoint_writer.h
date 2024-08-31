@@ -26,15 +26,17 @@ class ObLogCursor;
 namespace storage
 {
 
+class ObStorageLogger;
+
 class ObServerCheckpointWriter final
 {
 public:
-  ObServerCheckpointWriter() : is_inited_(false) {}
+  ObServerCheckpointWriter() : is_inited_(false), server_slogger_(nullptr) {}
   ~ObServerCheckpointWriter() = default;
   ObServerCheckpointWriter(const ObServerCheckpointWriter &) = delete;
   ObServerCheckpointWriter &operator=(const ObServerCheckpointWriter &) = delete;
 
-  int init();
+  int init(ObStorageLogger *server_slogger);
   int write_checkpoint(const common::ObLogCursor &log_cursor);
   common::ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
 
@@ -43,6 +45,7 @@ private:
 
 private:
   bool is_inited_;
+  ObStorageLogger *server_slogger_;
   common::ObConcurrentFIFOAllocator allocator_;
   ObLinkedMacroBlockItemWriter tenant_meta_item_writer_;
 };

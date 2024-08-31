@@ -204,6 +204,7 @@ public:
   virtual int update_replayable_point(const SCN &replayable_scn) = 0;
   virtual int get_throttling_options(PalfThrottleOptions &option) = 0;
   virtual void period_calc_disk_usage() = 0;
+  virtual LogSharedQueueTh *get_log_shared_queue_thread() = 0;
   virtual int get_options(PalfOptions &options) = 0;
   VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
 
@@ -276,6 +277,7 @@ public:
   int update_replayable_point(const SCN &replayable_scn) override final;
   int get_throttling_options(PalfThrottleOptions &option);
   void period_calc_disk_usage() override final;
+  LogSharedQueueTh *get_log_shared_queue_thread() override final;
   INHERIT_TO_STRING_KV("IPalfEnvImpl", IPalfEnvImpl, K_(self), K_(log_dir), K_(disk_options_wrapper),
       KPC(log_alloc_mgr_));
   // =================== disk space management ==================

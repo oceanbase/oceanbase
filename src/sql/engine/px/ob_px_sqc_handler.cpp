@@ -335,7 +335,7 @@ int ObPxSqcHandler::destroy_sqc(int &report_ret)
 
   // clean up ddl context if needed
   int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = sub_coord_->end_ddl(all_task_success()))) {
+  if (OB_SUCCESS != (tmp_ret = sub_coord_->end_ddl(false))) { //for ddl px, don't call close() again in close_direct_load()
     LOG_WARN("end ddl failed", K(tmp_ret));
     end_ret = OB_SUCCESS == end_ret ? tmp_ret : end_ret;
   }

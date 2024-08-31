@@ -30,7 +30,9 @@ const static char *ObCompactionEventStr[] = {
     "COMPACTION_FINISH_CHECK",
     "COMPACTION_REPORT",
     "RS_REPAPRE_UNFINISH_TABLE_IDS",
-    "RS_FINISH_CUR_LOOP"
+    "RS_FINISH_CUR_LOOP",
+    "LS_STATE_CHANGED",
+    "CHOOSE_NEW_EXEC_SVR"
 };
 
 const char *ObServerCompactionEvent::get_comp_event_str(enum ObCompactionEvent event)
@@ -47,7 +49,9 @@ const char *ObServerCompactionEvent::get_comp_event_str(enum ObCompactionEvent e
 
 const static char *ObCompactionRoleStr[] = {
     "TENANT_RS",
-    "STORAGE"
+    "STORAGE",
+    "LS_LEADER",
+    "LS_SVR"
 };
 
 const char *ObServerCompactionEvent::get_comp_role_str(enum ObCompactionRole role)

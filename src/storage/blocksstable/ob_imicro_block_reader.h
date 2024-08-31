@@ -51,6 +51,7 @@ class ObIMvccCtx;
 namespace blocksstable
 {
 struct ObMicroIndexInfo;
+struct ObRowHeader;
 
 #define FREE_PTR_FROM_CONTEXT(ctx, ptr, T)                                  \
   do {                                                                      \

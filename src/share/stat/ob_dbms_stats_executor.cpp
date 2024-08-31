@@ -1743,11 +1743,14 @@ int ObDbmsStatsExecutor::gather_system_stats(ObExecContext &ctx, int64_t tenant_
   int64_t disk_seq_read_speed = 0;
   int64_t disk_rnd_read_speed = 0;
   OptSystemIoBenchmark &io_benchmark = OptSystemIoBenchmark::get_instance();
-  if (io_benchmark.is_init()) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id invalid", KR(ret), K(tenant_id));
+  } else if (io_benchmark.is_init()) {
     disk_seq_read_speed = io_benchmark.get_disk_seq_read_speed();
     disk_rnd_read_speed = io_benchmark.get_disk_rnd_read_speed();
-  } else if (OB_FAIL(io_benchmark.run_benchmark(ctx.get_allocator()))) {
-    LOG_WARN("failed to run io benchmark", K(ret));
+  } else if (OB_FAIL(io_benchmark.run_benchmark(ctx.get_allocator(), tenant_id))) {
+    LOG_WARN("failed to run io benchmark", KR(ret), K(tenant_id));
   } else {
     disk_seq_read_speed = io_benchmark.get_disk_seq_read_speed();
     disk_rnd_read_speed = io_benchmark.get_disk_rnd_read_speed();

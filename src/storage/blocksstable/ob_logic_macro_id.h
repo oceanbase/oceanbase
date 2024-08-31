@@ -36,6 +36,7 @@ struct ObMacroDataSeq
   static const int64_t BIT_SIGN = 1;
   static const int64_t MAX_PARALLEL_IDX = (0x1UL << BIT_PARALLEL_IDX) - 1;
   static const int64_t MAX_SSTABLE_SEQ = (0x1UL << BIT_SSTABLE_SEQ) - 1;
+  static const int64_t MAX_MACRO_SEQ = (0x1UL << BIT_DATA_SEQ) - 1;
   enum BlockType {
     DATA_BLOCK = 0,
     INDEX_BLOCK = 1,
@@ -49,7 +50,7 @@ struct ObMacroDataSeq
 
   ObMacroDataSeq() : macro_data_seq_(0) {}
   ObMacroDataSeq(const int64_t data_seq) : macro_data_seq_(data_seq) {}
-  virtual ~ObMacroDataSeq() = default;
+  ~ObMacroDataSeq() = default;
   ObMacroDataSeq &operator=(const ObMacroDataSeq &other)
   {
     if (this != &other) {
@@ -160,6 +161,47 @@ public:
     };
   };
   OB_UNIS_VERSION(LOGIC_BLOCK_ID_VERSION);
+};
+
+struct ObLogicMicroBlockId
+{
+  static const int64_t LOGIC_MICRO_ID_VERSION_V1 = 1;
+
+  ObLogicMicroBlockId() : info_(0), logic_macro_id_() {}
+  OB_INLINE void init(const int64_t offset, const ObLogicMacroBlockId &logic_macro_id)
+  {
+    version_ = LOGIC_MICRO_ID_VERSION_V1;
+    offset_ = offset;
+    logic_macro_id_ = logic_macro_id;
+  }
+  OB_INLINE void reset()
+  {
+    logic_macro_id_.reset();
+    info_ = 0;
+  }
+  OB_INLINE bool operator ==(const ObLogicMicroBlockId &other) const
+  {
+    return version_ == other.version_ && offset_ == other.offset_ && logic_macro_id_ == other.logic_macro_id_;
+  }
+  OB_INLINE bool is_valid() const
+  {
+    return LOGIC_MICRO_ID_VERSION_V1 == version_ && offset_ >= 0 && logic_macro_id_.is_valid();
+  }
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+  TO_STRING_KV(K_(version), K_(offset), K_(logic_macro_id));
+  union {
+    int64_t info_;
+    struct {
+      int64_t version_  : 4;
+      int64_t offset_   : 32;
+      int64_t reserved_ : 28;
+    };
+  };
+  ObLogicMacroBlockId logic_macro_id_;
+
+public:
+  OB_UNIS_VERSION(LOGIC_MICRO_ID_VERSION_V1);
 };
 
 } // blocksstable

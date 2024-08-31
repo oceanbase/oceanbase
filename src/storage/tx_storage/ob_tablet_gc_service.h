@@ -21,6 +21,9 @@
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tx_storage/ob_empty_shell_task.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/shared_storage/ob_private_block_gc_task.h"
+#endif
 
 namespace oceanbase
 {
@@ -135,6 +138,12 @@ public:
     : is_inited_(false),
       timer_for_tablet_change_(),
       tablet_change_task_(*this),
+#ifdef OB_BUILD_SHARED_STORAGE
+      timer_for_private_block_gc_(),
+      private_block_gc_task_(*this),
+      private_tablet_gc_safe_time_(ObLSPrivateBlockGCHandler::DEFAULT_PRIVATE_TABLET_GC_SAFE_TIME),
+      private_block_gc_thread_(),
+#endif
       timer_for_tablet_shell_(),
       tablet_shell_task_(*this)
   {}
@@ -145,6 +154,18 @@ public:
   int stop();
   void wait();
   void destroy();
+#ifdef OB_BUILD_SHARED_STORAGE
+  int64_t get_private_tablet_gc_safe_time()
+  { return private_tablet_gc_safe_time_; }
+
+  int report_failed_macro_ids(
+    ObIArray<blocksstable::MacroBlockId> &block_ids)
+  {
+    return private_block_gc_task_.report_failed_macro_ids(block_ids);
+  }
+  ObPrivateBlockGCThread* get_private_block_gc_thread()
+  { return &private_block_gc_thread_; }
+#endif
 
 private:
   bool is_inited_;
@@ -168,6 +189,13 @@ private:
 
   common::ObTimer timer_for_tablet_change_;
   ObTabletChangeTask tablet_change_task_;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  common::ObTimer timer_for_private_block_gc_;
+  ObPrivateBlockGCTask private_block_gc_task_;
+  int64_t private_tablet_gc_safe_time_;
+  ObPrivateBlockGCThread private_block_gc_thread_;
+#endif
 
   common::ObTimer timer_for_tablet_shell_;
   ObEmptyShellTask tablet_shell_task_;

@@ -23,11 +23,14 @@
 #include "share/ob_ddl_common.h"
 #include "share/longops_mgr/ob_ddl_longops.h"
 #include "rootserver/ddl_task/ob_ddl_single_replica_executor.h"
+#include "sql/engine/px/ob_px_dtl_msg.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
+static constexpr int64_t DEFAULT_EXECUTION_ID = 1;
+
 class ObRootService;
 
 struct ObDDLTaskRecord;
@@ -112,6 +115,24 @@ public:
   share::ObLSID ls_id_;
   common::ObAddr ls_leader_addr_;
   ObArray<ObTabletID> partition_ids_;
+};
+
+struct ObDDLSliceInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLSliceInfo() : autoinc_range_interval_(AUTOINC_RANGE_INTERVAL) {}
+  ~ObDDLSliceInfo() {}
+  TO_STRING_KV(K_(part_ranges), K_(autoinc_range_interval));
+  bool is_valid() const { return part_ranges_.count() > 0; }
+  int assign(const ObDDLSliceInfo &other);
+  int deep_copy(const ObDDLSliceInfo &other, ObIAllocator &allocator);
+  void reset();
+
+public:
+  static const int64_t AUTOINC_RANGE_INTERVAL = 10000;
+  common::Ob2DArray<sql::ObPxTabletRange> part_ranges_;
+  int64_t autoinc_range_interval_;
 };
 
 struct ObFTSDDLChildTaskInfo final
@@ -293,6 +314,45 @@ public:
       const int64_t task_id,
       const int ret_code,
       ObString &message);
+
+  static int get_schedule_info_for_update(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      ObIAllocator &allocator,
+      ObDDLSliceInfo &ddl_slice_info,
+      bool &is_idempotence_mode);
+
+  static int update_schedule_info(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const ObDDLSliceInfo &ddl_slice_info);
+
+  static int get_or_insert_schedule_info(
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      ObIAllocator &allocator,
+      ObDDLSliceInfo &ddl_slice_info,
+      bool &is_idempotence_mode);
+
+  static int transform_tablet_ranges(
+      const common::ObTabletID &tablet_id,
+      const common::ObIArray<blocksstable::ObDatumRange> &store_ranges,
+      ObIAllocator &allocator,
+      sql::ObPxTabletRange &tablet_range);
+
+  static int transform_store_ranges(
+      const sql::ObPxTabletRange &tablet_range,
+      ObIAllocator &allocator,
+      common::ObIArray<blocksstable::ObDatumRange> &store_ranges);
+
+  static int get_or_insert_tablet_schedule_info(
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const common::ObTabletID &tablet_id,
+      ObIAllocator &allocator,
+      common::ObIArray<blocksstable::ObDatumRange> &store_ranges);
 
   static int delete_record(
       common::ObMySQLProxy &proxy,
@@ -587,8 +647,8 @@ public:
     ObDDLTask(share::DDL_INVALID)
   {}
   virtual ~ObDDLTask() {}
-  virtual int process() { return OB_NOT_SUPPORTED; }
   virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) { return common::OB_NOT_SUPPORTED; }
+  virtual int process() { return OB_NOT_SUPPORTED; }
   virtual bool is_valid() const { return is_inited_; }
   typedef common::ObCurTraceId::TraceId TraceId;
   virtual const TraceId &get_trace_id() const { return trace_id_; }
@@ -668,7 +728,7 @@ public:
   static int push_execution_id(
       const uint64_t tenant_id,
       const int64_t task_id,
-      const share::ObDDLType task_type,
+      const share::ObDDLType ddl_type,
       const bool ddl_can_retry,
       const int64_t data_format_version,
       int64_t &new_execution_id);
@@ -725,6 +785,7 @@ protected:
   }
   int init_ddl_task_monitor_info(const uint64_t target_table_id);
   virtual bool task_can_retry() const { return true; }
+  virtual bool is_ddl_retryable() const { return true; }
 private:
   void clear_old_status_context();
 protected:

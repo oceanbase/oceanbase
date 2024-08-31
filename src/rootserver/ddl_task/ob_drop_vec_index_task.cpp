@@ -67,6 +67,7 @@ int ObDropVecIndexTask::init(
 {
   int ret = OB_SUCCESS;
 
+  uint64_t tenant_data_format_version = tenant_data_version;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
                || task_id <= 0
                || OB_INVALID_ID == data_table_id
@@ -90,6 +91,8 @@ int ObDropVecIndexTask::init(
     LOG_WARN("fail to deep copy from other", K(ret), K(vec_delta_buffer));
   } else if (OB_FAIL(vec_index_snapshot_data_.deep_copy_from_other(vec_index_snapshot_data, allocator_))) {
     LOG_WARN("fail to deep copy from other", K(ret), K(vec_index_snapshot_data));
+  } else if (tenant_data_format_version <= 0 && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_format_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
     task_type_ = DDL_DROP_VEC_INDEX;
     set_gmt_create(ObTimeUtility::current_time());
@@ -104,7 +107,7 @@ int ObDropVecIndexTask::init(
     dst_tenant_id_ = tenant_id;
     dst_schema_version_ = schema_version;
     is_inited_ = true;
-    data_format_version_ = tenant_data_version;
+    data_format_version_ = tenant_data_format_version;
     execution_id_ = 1L;
   }
   return ret;

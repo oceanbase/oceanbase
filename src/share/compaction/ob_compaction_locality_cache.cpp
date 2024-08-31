@@ -475,6 +475,9 @@ int ObCompactionLocalityCache::get_ls_info(const share::ObLSID &ls_id, share::Ob
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObStorageLocalityCache is not inited", KR(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(ls_id));
   } else if (OB_FAIL(ls_infos_map_.get_refactored(ls_id, ls_info))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("fail to get ls_info from ls_info_map", KR(ret), K(ls_id));
@@ -483,20 +486,20 @@ int ObCompactionLocalityCache::get_ls_info(const share::ObLSID &ls_id, share::Ob
   return ret;
 }
 
-struct ObMemberListInfo
-{
-  ObMemberListInfo(const uint64_t tenant_id)
-    : member_list_array_()
-  {
-    member_list_array_.set_attr(ObMemAttr(tenant_id, "MemListInfo"));
-  }
-  ~ObMemberListInfo() {}
-  int build(const ObLSReplica &tmp_replica);
-  bool check_exist(const common::ObAddr &addr);
-  bool empty() { return member_list_array_.empty(); }
-  TO_STRING_KV("member_list_cnt", member_list_array_.count(), K(member_list_array_));
-  ObSEArray<common::ObAddr, 6> member_list_array_; // including member_list & learner_list
-};
+//struct ObMemberListInfo
+//{
+//  ObMemberListInfo(const uint64_t tenant_id)
+//    : member_list_array_()
+//  {
+//    member_list_array_.set_attr(ObMemAttr(tenant_id, "MemListInfo"));
+//  }
+//  ~ObMemberListInfo() {}
+//  int build(const ObLSReplica &tmp_replica);
+//  bool check_exist(const common::ObAddr &addr);
+//  bool empty() { return member_list_array_.empty(); }
+//  TO_STRING_KV("member_list_cnt", member_list_array_.count(), K(member_list_array_));
+//  ObSEArray<common::ObAddr, 6> member_list_array_; // including member_list & learner_list
+//};
 
 int ObMemberListInfo::build(const ObLSReplica &tmp_replica)
 {

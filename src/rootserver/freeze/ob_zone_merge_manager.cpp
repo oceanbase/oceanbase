@@ -28,6 +28,12 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/freeze/ob_major_freeze_util.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction/ob_compaction_util.h"
+#include "share/ls/ob_ls_table_operator.h"
+#include "storage/compaction/ob_ls_compaction_status.h"
+#include "share/ob_tablet_replica_checksum_operator.h"
+#endif
 
 namespace oceanbase
 {
@@ -455,7 +461,9 @@ int ObZoneMergeManagerBase::resume_merge(const int64_t expected_epoch)
   return ret;
 }
 
-int ObZoneMergeManagerBase::set_merge_error(const int64_t error_type, const int64_t expected_epoch)
+int ObZoneMergeManagerBase::set_merge_status(
+    const int64_t error_type,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
 
@@ -503,7 +511,7 @@ int ObZoneMergeManagerBase::set_merge_error(const int64_t error_type, const int6
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("succ to set_merge_error", K_(tenant_id), K(error_type), K(global_merge_info_.is_merge_error_));
+      LOG_INFO("succ to set merge status", K_(tenant_id), K(error_type), K(global_merge_info_.is_merge_error_));
       ROOTSERVICE_EVENT_ADD("daily_merge", "set_merge_error", K_(tenant_id), K(is_merge_error), K(error_type));
     }
 
@@ -890,18 +898,25 @@ int ObZoneMergeManagerBase::adjust_global_merge_info(const int64_t expected_epoc
   // 1. get min{compaction_scn} of all tablets in __all_tablet_meta_table
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::get_min_compaction_scn(tenant_id_, min_compaction_scn))) {
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+          && OB_FAIL(ObTabletReplicaChecksumOperator::get_min_compaction_scn(tenant_id_, min_compaction_scn))) {
     LOG_WARN("fail to get min_compaction_scn", KR(ret), K_(tenant_id));
-  } else if (min_compaction_scn < SCN::base_scn()) {
+#endif
+  } else if (!GCTX.is_shared_storage_mode()
+          && OB_FAIL(ObTabletMetaTableCompactionOperator::get_min_compaction_scn(tenant_id_, min_compaction_scn))) {
+    LOG_WARN("fail to get min_compaction_scn", KR(ret), K_(tenant_id));
+  } else if (OB_UNLIKELY(min_compaction_scn < SCN::base_scn())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected min_compaction_scn", KR(ret), K_(tenant_id), K(min_compaction_scn));
   } else if (min_compaction_scn == SCN::base_scn()) {
     // do nothing. no need to adjust global_merge_info
   } else if (min_compaction_scn > SCN::base_scn()) {
-    // 2. if min{compaction_scn} > 1, get max{frozen_scn} <= min{compaction_scn} from __all_freeze_info
-    // case 1: if min{compaction_scn} is medium_compaction_scn, return the max frozen_scn which is
-    //         smaller than this medium_compaction_scn from __all_freeze_info
-    // case 2: if min{compaction_scn} is major_compaction_scn, return this major_compaction_scn
+    /*  case 1 : min{compaction_scn} is a medium scn
+     *  return max{frozen_scn} which is smaller than or equal to curr medium scn from __all_freeze_info
+     *  case 2 : min{compaction_scn} is a tenant major scn
+     *  max{frozen_scn} must be equal to min{compaction_scn}, return max{frozen_scn}
+     */
     if (OB_FAIL(freeze_info_proxy.get_max_frozen_scn_smaller_or_equal_than(*proxy_,
                 min_compaction_scn, max_frozen_scn))) {
       LOG_WARN("fail to get max frozen_scn smaller than or equal to min_compaction_scn", KR(ret),
@@ -918,7 +933,7 @@ int ObZoneMergeManagerBase::adjust_global_merge_info(const int64_t expected_epoc
       }
     }
   }
-  FLOG_INFO("finish to adjust global merge info", K_(tenant_id), K(max_frozen_scn), K_(global_merge_info));
+  FLOG_INFO("finish to adjust global merge info", K_(tenant_id), K(min_compaction_scn), K(max_frozen_scn), K_(global_merge_info));
   return ret;
 }
 

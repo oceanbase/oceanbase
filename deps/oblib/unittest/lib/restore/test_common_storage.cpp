@@ -477,7 +477,7 @@ int TestCommonStorage::check_basic_writer()
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(create_fs_dir(uri_buf, true))) {
     OB_LOG(WARN, "fail to create fs dir", K(ret), K(uri_buf));
-  } else if (OB_FAIL(build_uri(uri_buf, OB_MAX_URI_LENGTH, "append_file1.bak/@APD_PART@FORMAT_META"))) {
+  } else if (OB_FAIL(build_uri(uri_buf, OB_MAX_URI_LENGTH, "append_file1.bak/@APD_PART@FORMAT_META.bak"))) {
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(write_single_file(uri_buf, default_size))) {
     OB_LOG(WARN, "fail to write single file", K(ret), K(uri_buf));
@@ -575,7 +575,7 @@ int TestCommonStorage::check_basic_reader()
   }
 
   // read "/parent_path/append_file1.bak/@APD_PART@FORMAT_META"
-  if (FAILEDx(build_uri(uri_buf, OB_MAX_URI_LENGTH, "append_file1.bak/@APD_PART@FORMAT_META"))) {
+  if (FAILEDx(build_uri(uri_buf, OB_MAX_URI_LENGTH, "append_file1.bak/@APD_PART@FORMAT_META.bak"))) {
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(read_single_file(uri_buf, 0, default_size))) {
     OB_LOG(WARN, "fail to read single file", K(ret), K(uri_buf));
@@ -727,9 +727,9 @@ int TestCommonStorage::check_basic_util()
   // list_files:     ---tmp_dir_3
   //                       ---file1
   //                       ---append_file2.bak
-  //                             ---@APD_PART@FORMAT_META
-  //                             ---@APD_PART@0-100
-  //                             ---@APD_PART@100-400
+  //                             ---@APD_PART@FORMAT_META.bak
+  //                             ---@APD_PART@0-100.bak
+  //                             ---@APD_PART@100-400.bak
   list_op.reset();
   ObStorageObjectMeta storage_meta;
   if (FAILEDx(build_uri(uri_buf, buf_len, "tmp_dir_3/"))) {
@@ -744,7 +744,7 @@ int TestCommonStorage::check_basic_util()
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(create_fs_dir(uri_buf, true/*drop_if_exist*/))) {
     OB_LOG(WARN, "fail to create fs dir", K(ret), K(uri_buf));
-  } else if (OB_FAIL(build_uri(uri_buf, buf_len, "tmp_dir_3/append_file2.bak/@APD_PART@FORMAT_META"))) {
+  } else if (OB_FAIL(build_uri(uri_buf, buf_len, "tmp_dir_3/append_file2.bak/@APD_PART@FORMAT_META.bak"))) {
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(write_single_file(uri_buf, default_size))) {
     OB_LOG(WARN, "fail to write single file", K(ret), K(uri_buf));
@@ -807,7 +807,7 @@ int TestCommonStorage::abnormal_prepare()
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(create_fs_dir(uri_buf, true/*drop_if_exist*/))) {
     OB_LOG(WARN, "fail to create fs dir", K(ret), K(uri_buf));
-  } else if (OB_FAIL(build_uri(uri_buf, buf_len, "ab_tmp_append_file_nc.bak/@APD_PART@FORMAT_META"))) {
+  } else if (OB_FAIL(build_uri(uri_buf, buf_len, "ab_tmp_append_file_nc.bak/@APD_PART@FORMAT_META.bak"))) {
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(write_single_file(uri_buf, 100))) {
     OB_LOG(WARN, "fail to write single file", K(ret), K(uri_buf));
@@ -931,11 +931,11 @@ int TestCommonStorage::check_abnormal_reader()
   }
 
   // 2. use adaptive_reader to read a appendable file which doesn't have FORMAT_META
-  // [Expect]: return OB_BACKUP_FILE_NOT_EXIST
+  // [Expect]: return OB_OBJECT_NOT_EXIST
   if (FAILEDx(build_uri(uri_buf, OB_MAX_URI_LENGTH, "ab_tmp_append_file.bak"))) {
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(adaptive_read_file(uri_buf, 0/*offset*/, 100/*length*/))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
       OB_LOG(WARN, "fail to adaptive read file", K(ret), K(uri_buf));
@@ -990,12 +990,12 @@ int TestCommonStorage::check_abnormal_util()
   }
 
   // 3. get file length of appendable file which doesn't have FORMAT_META
-  // [Expect]: return OB_BACKUP_FILE_NOT_EXIST
+  // [Expect]: return OB_OBJECT_NOT_EXIST
   int64_t file_len = 0;
   if (FAILEDx(build_uri(uri_buf, buf_len, "ab_tmp_append_file.bak"))) {
     OB_LOG(WARN, "fail to build uri", K(ret));
   } else if (OB_FAIL(get_file_length(uri_buf, true/*is_adaptive*/, file_len))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
       OB_LOG(WARN, "fail to get file length", K(ret));

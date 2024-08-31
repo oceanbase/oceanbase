@@ -106,11 +106,15 @@ int ObTableLoadStoreCtx::init(
       table_data_desc_.column_count_ =
         (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.store_column_count_
                                        : ctx_->schema_.store_column_count_ - 1);
-      table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::DEFAULT_DATA_BLOCK_SIZE;
-      table_data_desc_.sstable_index_block_size_ =
-        ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;
-      table_data_desc_.sstable_data_block_size_ =
-        ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
+
+      table_data_desc_.sstable_index_block_size_ = ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;
+      table_data_desc_.sstable_data_block_size_ = ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
+      if (!GCTX.is_shared_storage_mode()) {
+        table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SN_DEFAULT_DATA_BLOCK_SIZE;
+      } else {
+        table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SS_DEFAULT_DATA_BLOCK_SIZE;
+      }
+
       table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
       table_data_desc_.compressor_type_ = ctx_->param_.compressor_type_;
       table_data_desc_.is_heap_table_ = ctx_->schema_.is_heap_table_;

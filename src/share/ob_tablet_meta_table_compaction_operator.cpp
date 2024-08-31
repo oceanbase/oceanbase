@@ -16,85 +16,52 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "share/tablet/ob_tablet_filter.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "share/scn.h"
 #include "observer/ob_server_struct.h"
 #include "share/tablet/ob_tablet_table_operator.h"
-
 namespace oceanbase
 {
+using namespace common;
+using namespace common::sqlclient;
+using namespace compaction;
 namespace share
 {
-using namespace oceanbase::common;
-using namespace oceanbase::common::sqlclient;
 
 int ObTabletMetaTableCompactionOperator::batch_set_info_status(
     const uint64_t tenant_id,
-    const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
+    const ObIArray<ObCkmErrorTabletLSInfo> &error_pairs,
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
-  int64_t pairs_count = tablet_ls_pairs.count();
-  int64_t start_idx = 0;
-  int64_t end_idx = min(MAX_BATCH_COUNT, pairs_count);
-  while (OB_SUCC(ret) && (start_idx < end_idx)) {
-    if (OB_FAIL(inner_batch_set_info_status_(
-        tenant_id,
-        tablet_ls_pairs,
-        start_idx,
-        end_idx,
-        affected_rows))) {
-      LOG_WARN("fail to inner batch set by sql",
-          KR(ret), K(tenant_id), K(tablet_ls_pairs), K(start_idx), K(end_idx));
-    } else {
-      start_idx = end_idx;
-      end_idx = min(start_idx + MAX_BATCH_COUNT, pairs_count);
-    }
-  }
-  return ret;
-}
-
-int ObTabletMetaTableCompactionOperator::inner_batch_set_info_status_(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
-    const int64_t start_idx,
-    const int64_t end_idx,
-    int64_t &affected_rows)
-{
-  int ret = OB_SUCCESS;
+  ObSqlString basic_sql;
   ObSqlString sql;
+  int64_t tmp_affected_rows = 0;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (OB_FAIL(sql.append_fmt(
-      "UPDATE %s SET status = '%ld' WHERE tenant_id = %ld AND (tablet_id,ls_id) IN ((",
-      OB_ALL_TABLET_META_TABLE_TNAME,
-      (int64_t)ObTabletReplica::ScnStatus::SCN_STATUS_ERROR,
+  if (OB_FAIL(basic_sql.append_fmt(
+      "UPDATE %s SET status = '%ld' WHERE tenant_id = %ld",
+      OB_ALL_TABLET_META_TABLE_TNAME, (int64_t)ObTabletReplica::ScnStatus::SCN_STATUS_ERROR,
       tenant_id))) {
     LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
   } else {
-    for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
-      const ObTabletID &tablet_id = tablet_ls_pairs.at(idx).get_tablet_id();
-      const ObLSID &ls_id = tablet_ls_pairs.at(idx).get_ls_id();
-      if (OB_UNLIKELY(!tablet_id.is_valid_with_tenant(tenant_id)
-          || !ls_id.is_valid_with_tenant(tenant_id))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid tablet_id with tenant", KR(ret), K(tenant_id), K(tablet_id), K(ls_id));
-      } else if (OB_FAIL(sql.append_fmt(
-          "'%lu', %ld%s",
-          tablet_id.id(),
-          ls_id.id(),
-          ((idx == end_idx - 1) ? "))" : "), (")))) {
+    for (int64_t idx = 0; OB_SUCC(ret) && (idx < error_pairs.count()); ++idx) {
+      const ObTabletLSPair &pair = error_pairs.at(idx).tablet_info_;
+      const ObTabletID &tablet_id = pair.get_tablet_id();
+      const ObLSID &ls_id = pair.get_ls_id();
+      sql.reset();
+      if (OB_FAIL(sql.append_fmt(
+          "%s AND tablet_id = %ld AND ls_id = %ld AND compaction_scn = %ld",
+          basic_sql.ptr(), tablet_id.id(), ls_id.id(), error_pairs.at(idx).compaction_scn_))) {
         LOG_WARN("fail to assign sql", KR(ret), K(tablet_id));
+      } else if (OB_FAIL(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), tmp_affected_rows))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+      } else if (tmp_affected_rows > 0) {
+        affected_rows += tmp_affected_rows;
+        LOG_INFO("success to update checksum error status", K(ret), K(sql), K(tenant_id),
+          "error_pair", error_pairs.at(idx), K(tmp_affected_rows));
       }
-    }
-  }
-  int64_t tmp_affected_rows = 0;
-  if (FAILEDx(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), tmp_affected_rows))) {
-    LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
-  } else if (tmp_affected_rows > 0) {
-    affected_rows += tmp_affected_rows;
-    LOG_INFO("success to update checksum error status", K(ret), K(sql), K(tenant_id), K(tablet_ls_pairs), K(tmp_affected_rows));
+    } // end of for
   }
   return ret;
 }
@@ -154,7 +121,7 @@ int ObTabletMetaTableCompactionOperator::execute_select_sql(
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-    ObMySQLResult *result = nullptr;
+    ObMySQLResult *result = NULL;
     if (OB_FAIL(sql_client.read(res, meta_tenant_id, sql.ptr()))) {
       LOG_WARN("fail to do read", KR(ret), K(meta_tenant_id), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
@@ -262,7 +229,7 @@ int ObTabletMetaTableCompactionOperator::get_min_compaction_scn(
     } else {
       ObSqlString sql;
       SMART_VAR(ObISQLClient::ReadResult, res) {
-        ObMySQLResult *result = nullptr;
+        ObMySQLResult *result = NULL;
         if (OB_FAIL(sql.assign_fmt("SELECT MIN(compaction_scn) as value FROM %s WHERE tenant_id ="
                                    " '%ld' ", OB_ALL_TABLET_META_TABLE_TNAME, tenant_id))) {
           LOG_WARN("failed to append fmt", K(ret), K(tenant_id));
@@ -290,7 +257,7 @@ int ObTabletMetaTableCompactionOperator::get_min_compaction_scn(
 
 int ObTabletMetaTableCompactionOperator::construct_tablet_id_array(
     sqlclient::ObMySQLResult &result,
-    common::ObIArray<ObTabletID> &tablet_id_array)
+    ObIArray<ObTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
   int64_t tablet_id = 0;
@@ -525,7 +492,7 @@ int ObTabletMetaTableCompactionOperator::batch_get_tablet_ids(
     tablet_ids.reuse();
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     SMART_VAR(ObISQLClient::ReadResult, res) {
-      ObMySQLResult *result = nullptr;
+      ObMySQLResult *result = NULL;
       if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, sql.ptr()))) {
         LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -617,7 +584,7 @@ int ObTabletMetaTableCompactionOperator::get_tablet_replica_cnt(
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, res) {
-      ObMySQLResult *result = nullptr;
+      ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.append_fmt("SELECT COUNT(*) as cnt from %s WHERE tenant_id = '%lu' ",
                                  OB_ALL_TABLET_META_TABLE_TNAME,
                                  tenant_id))) {
@@ -647,7 +614,6 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   uint64_t compat_version = 0;
-  ObDMLSqlSplicer dml;
   const int64_t all_pair_cnt = tablet_pairs.count();
   if (OB_UNLIKELY((all_pair_cnt < 1)
       || !is_valid_tenant_id(tenant_id))) {
@@ -839,7 +805,7 @@ int ObTabletMetaTableCompactionOperator::inner_get_max_tablet_id_in_range(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  sqlclient::ObMySQLResult *result_ptr = nullptr;
+  sqlclient::ObMySQLResult *result_ptr = NULL;
   const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
   int64_t tablet_id = 0;
   SMART_VAR(ObISQLClient::ReadResult, result) {

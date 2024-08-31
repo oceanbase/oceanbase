@@ -16,7 +16,6 @@
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_storage_clog_recorder.h"
 #include "lib/container/ob_array_array.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/compaction/ob_medium_compaction_info.h"
 #include "storage/compaction/ob_extra_medium_info.h"
@@ -26,6 +25,7 @@ namespace oceanbase
 namespace storage
 {
 class ObTablet;
+class ObTabletHandle;
 namespace mds
 {
 class MdsCtx;
@@ -110,7 +110,6 @@ public:
       const ObExtraMediumInfo &extra_medium_info,
       const common::ObIArray<ObMediumCompactionInfo*> &medium_info_array);
   void reset();
-  OB_INLINE bool is_empty() const { return 0 == medium_info_list_.get_size(); }
   OB_INLINE int64_t size() const { return medium_info_list_.get_size(); }
 
   OB_INLINE bool is_valid() const
@@ -125,7 +124,8 @@ public:
   {
     bool exist = false;
     DLIST_FOREACH_NORET(info, get_list()) {
-      if (info->medium_snapshot_ > last_major_snapshot) {
+      if (info->medium_snapshot_ > last_major_snapshot &&
+          ObAdaptiveMergePolicy::AdaptiveMergeReason::DURING_DDL != info->medium_merge_reason_) {
         exist = true;
         break;
       }
@@ -145,6 +145,9 @@ public:
     return extra_info_;
   }
   int get_max_sync_medium_scn(int64_t &max_received_medium_scn) const;
+  int get_specific_medium_reason(
+      const int64_t medium_scn,
+      ObAdaptiveMergePolicy::AdaptiveMergeReason &medium_merge_reason) const;
 
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;

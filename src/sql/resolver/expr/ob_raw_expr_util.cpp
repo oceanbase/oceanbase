@@ -8119,6 +8119,27 @@ int ObRawExprUtils::build_pseudo_rollup_id(ObRawExprFactory &factory,
   return ret;
 }
 
+int ObRawExprUtils::build_pseudo_ddl_slice_id(ObRawExprFactory &factory,
+                                                const ObSQLSessionInfo &session_info,
+                                                ObRawExpr *&out)
+{
+  int ret = OB_SUCCESS;
+  out = nullptr;
+  ObOpPseudoColumnRawExpr *expr = NULL;
+  ObExprResType res_type;
+  res_type.set_int();
+  res_type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+  res_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_DDL_SLICE_ID, "DDL_SLICE_ID", res_type, expr));
+  OZ(expr->formalize(&session_info));
+  OZ(expr->add_flag(IS_INNER_ADDED_EXPR));
+  if (OB_SUCC(ret)) {
+    out = expr;
+    LOG_DEBUG("debug build ddl slice id inner expr", K(ret), K(lbt()), K(expr));
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_pseudo_random(ObRawExprFactory &factory,
                                         const ObSQLSessionInfo &session_info,
                                         ObRawExpr *&out)

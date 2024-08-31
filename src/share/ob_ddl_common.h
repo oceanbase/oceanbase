@@ -39,6 +39,10 @@ namespace sql
 class ObPhysicalPlan;
 class ObOpSpec;
 }
+namespace blocksstable
+{
+  class MacroBlockId;
+}
 namespace storage
 {
 class ObTabletHandle;
@@ -430,6 +434,12 @@ static inline bool is_replica_build_ddl_task_status(const ObDDLTaskStatus &task_
   return ObDDLTaskStatus::REPENDING == task_status || ObDDLTaskStatus::REDEFINITION == task_status;
 }
 
+static inline ObDDLType get_create_index_type(const int64_t data_format_version, const share::schema::ObTableSchema &index_schema)
+{
+  return ((DATA_VERSION_4_2_2_0 <= data_format_version && data_format_version < DATA_VERSION_4_3_0_0) || data_format_version >= DATA_VERSION_4_3_2_0)
+    && index_schema.is_storage_local_index_table() && index_schema.is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX;
+}
+
 enum ObCheckExistedDDLMode
 {
   INVALID_DDL_MODE          = 0,
@@ -766,6 +776,12 @@ public:
       const uint64_t tenant_id,
       const int64_t target_schema_version);
   static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
+  static int is_major_exist(const ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &is_exist);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int upload_block_for_ss(const char* buf, const int64_t len, const blocksstable::MacroBlockId &macro_block_id);
+  static int update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t pre_snapshot_version, const int64_t new_snapshot_version);
+#endif
+  static int set_tablet_autoinc_seq(const ObLSID &ls_id, const ObTabletID &tablet_id, const int64_t seq_value);
   static int check_table_compaction_checksum_error(
       const uint64_t tenant_id,
       const uint64_t table_id);
@@ -810,7 +826,8 @@ public:
     }
     return res;
   }
-  static bool use_idempotent_mode(const int64_t data_format_version, const share::ObDDLType task_type);
+  static bool use_idempotent_mode(const int64_t data_format_version);
+  static bool is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type);
   static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);
   static int obtain_snapshot(
       const share::ObDDLTaskStatus next_task_status,

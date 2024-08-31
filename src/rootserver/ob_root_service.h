@@ -16,6 +16,7 @@
 #include "lib/net/ob_addr.h"
 #include "lib/thread/ob_work_queue.h"
 
+#include "share/object_storage/ob_object_storage_struct.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_tenant_id_schema_version.h"
 #include "share/ob_inner_config_root_addr.h"
@@ -32,6 +33,7 @@
 #include "rootserver/ob_all_server_checker.h"
 #include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_zone_manager.h"
+#include "rootserver/ob_zone_storage_manager.h"
 #include "rootserver/ob_root_minor_freeze.h"
 #include "rootserver/ob_unit_manager.h"
 #include "rootserver/ob_vtable_location_getter.h"
@@ -278,6 +280,18 @@ public:
   public:
     explicit ObRefreshIOCalibrationTask(ObRootService &root_service);
     virtual ~ObRefreshIOCalibrationTask() = default;
+    virtual int process() override;
+    virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
+    virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
+  private:
+    ObRootService &root_service_;
+  };
+
+  class ObZoneStorageOperationTask : public common::ObAsyncTimerTask
+  {
+  public:
+    explicit ObZoneStorageOperationTask(ObRootService &root_service);
+    virtual ~ObZoneStorageOperationTask() = default;
     virtual int process() override;
     virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
     virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
@@ -736,6 +750,11 @@ public:
       const bool skip_log_sync_check,
       const char *print_str);
 
+  // storage related
+  int add_storage(const obrpc::ObAdminStorageArg &arg);
+  int drop_storage(const obrpc::ObAdminStorageArg &arg);
+  int alter_storage(const obrpc::ObAdminStorageArg &arg);
+
   // system admin command (alter system ...)
   int admin_switch_replica_role(const obrpc::ObAdminSwitchReplicaRoleArg &arg);
   int admin_switch_rs_role(const obrpc::ObAdminSwitchRSRoleArg &arg);
@@ -828,6 +847,7 @@ public:
 
   int schedule_load_ddl_task();
   int schedule_refresh_io_calibration_task();
+  int schedule_check_storage_operation_status();
   int schedule_alter_log_external_table_task();
   // ob_admin command, must be called in ddl thread
   int force_create_sys_table(const obrpc::ObForceCreateSysTableArg &arg);
@@ -840,6 +860,7 @@ public:
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg);
   ObDDLService &get_ddl_service() { return ddl_service_; }
   ObDDLScheduler &get_ddl_scheduler() { return ddl_scheduler_; }
+  ObZoneStorageManager &get_zone_storage_manager() { return zone_storage_manager_; }
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
       obrpc::ObGetRecycleSchemaVersionsResult &result);
@@ -1003,6 +1024,8 @@ private:
 
   ObZoneManager zone_manager_;
 
+  ObZoneStorageManager zone_storage_manager_;
+
   // ddl related
   ObDDLService ddl_service_;
   ObUnitManager unit_manager_;
@@ -1050,6 +1073,7 @@ private:
   ObSelfCheckTask self_check_task_;  //repeat to succeed & no retry
   ObLoadDDLTask load_ddl_task_; // repeat to succeed & no retry
   ObRefreshIOCalibrationTask refresh_io_calibration_task_; // retry to succeed & no repeat
+  ObZoneStorageOperationTask zone_storage_operation_task_;  // repeat & no retry
   share::ObEventTableClearTask event_table_clear_task_;  // repeat & no retry
 
   ObInspector inspector_task_;     // repeat & no retry

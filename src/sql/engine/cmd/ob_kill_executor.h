@@ -15,10 +15,6 @@
 #include "share/ob_srv_rpc_proxy.h"
 namespace oceanbase
 {
-namespace observer
-{
-struct ObGlobalContext;
-}
 namespace common
 {
 class ObSqlString;

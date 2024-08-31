@@ -739,7 +739,11 @@ const int64_t OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_PTAH_LIST_LENGTH = 8 * 1024;
 const int64_t OB_MAX_EXECUTOR_TENANT_LENGTH = 64 * 1024;
 
+// object storage service
+const int64_t OB_MAX_STORAGE_OPERATION_INFO_LENGTH = 8 * 1024;
+
 const char *const OB_LOCAL_PREFIX = "local://";
+const char *const OB_LOCAL_CACHE_PREFIX = "localcache://";
 const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
@@ -748,6 +752,7 @@ const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
 const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
+const int64_t OB_STORAGE_DEL_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
 const char *const OB_RESOURCE_POOL_DEFINITION = "resource_pool_definition";
 const char *const OB_CREATE_TENANT_DEFINITION = "create_tenant_definition";
@@ -1491,6 +1496,9 @@ const int64_t OB_COMPACTION_INFO_LENGTH = 128;
 const int64_t OB_MERGE_LEVEL_STR_LENGTH = 64;
 const int64_t OB_MERGE_ROLE_STR_LENGTH = 64;
 const int64_t OB_MERGE_COMMENT_INNER_STR_LENGTH = 800;
+const int64_t OB_CKM_ERROR_INFO_STR_LENGTH = 1024;
+const int64_t OB_COMPACTION_STATUS_STR_LENGTH = 256;
+const int64_t OB_STORAGE_PATH_STR_LENGTH = 256;
 
 // for erasure code
 const int64_t OB_MAX_EC_STRIPE_COUNT = 32;

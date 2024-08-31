@@ -459,7 +459,7 @@ int ObIndexBuilder::submit_build_index_task(
   int ret = OB_SUCCESS;
   ObTableLockOwnerID owner_id;
   ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
-                             ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
+                             get_create_index_type(tenant_data_version, *index_schema),
                              data_schema,
                              index_schema,
                              0/*object_id*/,
@@ -689,7 +689,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   if (OB_UNLIKELY(index_schemas.count() != NORMAL_INDEX_COUNT &&
                   index_schemas.count() != FTS_INDEX_COUNT &&
                   index_schemas.count() != FTS_OR_MULTIVALUE_INDEX_COUNT &&
-                  index_schemas.count() != VEC_INDEX_COUNT)) {
+                  !arg.is_vec_inner_drop_ && index_schemas.count() != VEC_INDEX_COUNT)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index schema count", K(ret), K(index_schemas));
   } else if (index_schemas.at(0).is_fts_index() && OB_FAIL(recognize_fts_index_schemas(index_schemas, index_ith, aux_doc_word_ith,
@@ -1314,6 +1314,10 @@ int ObIndexBuilder::generate_schema(
       LOG_WARN("fail to create cg for index", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
+  }
+
   return ret;
 }
 

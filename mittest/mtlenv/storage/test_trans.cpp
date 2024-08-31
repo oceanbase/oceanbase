@@ -105,7 +105,7 @@ public:
     ObClusterVersion::get_instance().tenant_config_mgr_ = &omt::ObTenantConfigMgr::get_instance();
 
     ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-    ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
   }
   static void TearDownTestCase()
   {

@@ -2226,6 +2226,7 @@ const char *oceanbase::rootserver::resource_type_to_str(const ObResourceType &t)
   if (RES_CPU == t) { str = "CPU"; }
   else if (RES_MEM == t) { str = "MEMORY"; }
   else if (RES_LOG_DISK == t) { str = "LOG_DISK"; }
+  else if (RES_DATA_DISK == t) { str = "DATA_DISK"; }
   else { str = "NONE"; }
   return str;
 }

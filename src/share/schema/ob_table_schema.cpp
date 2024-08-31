@@ -6964,6 +6964,18 @@ bool ObTableSchema::has_lob_column() const
   return bool_ret;
 }
 
+int64_t ObTableSchema::get_lob_columns_count() const
+{
+  int64_t lob_cols_cnt = 0;
+  for (int64_t i = 0; i < column_cnt_; ++i) {
+    ObColumnSchemaV2& col = *column_array_[i];
+    if (is_lob_storage(col.get_data_type())) {
+      lob_cols_cnt++;
+    }
+  }
+  return lob_cols_cnt;
+}
+
 OB_DEF_DESERIALIZE(ObTableSchema)
 {
   int ret = OB_SUCCESS;

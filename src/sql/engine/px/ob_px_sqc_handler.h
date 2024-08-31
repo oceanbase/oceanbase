@@ -100,7 +100,7 @@ public:
   ObPxSubCoord &get_sub_coord() { return *sub_coord_; }
   ObPxSQCProxy &get_sqc_proxy() { return sub_coord_->get_sqc_proxy(); }
   ObSqcCtx &get_sqc_ctx() { return sub_coord_->get_sqc_ctx(); }
-  int64_t get_ddl_context_id() const { return sub_coord_->get_ddl_context_id(); }
+  const ObDDLCtrl &get_ddl_control() { return sub_coord_->get_ddl_control(); }
   trace::FltTransCtx &get_flt_ctx() { return flt_ctx_; }
   ObPxWorkNotifier &get_notifier() { return *notifier_; }
   int worker_end_hook();

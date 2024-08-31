@@ -55,7 +55,7 @@ public:
   TO_STRING_KV(K_(macro_id_array), K_(mirco_block_iter), K_(iter_idx));
 private:
   int prefetch();
-  inline blocksstable::ObMacroBlockHandle &get_curr_macro_handle()
+  inline blocksstable::ObStorageObjectHandle &get_curr_macro_handle()
   {
     return macro_io_handle_[iter_idx_ % PREFETCH_DEPTH];
   }
@@ -66,13 +66,13 @@ private:
   const ObIArray<blocksstable::MacroBlockId> &macro_id_array_;
   const ObITableReadInfo &index_read_info_;
   blocksstable::ObMicroBlockBareIterator mirco_block_iter_;
-  blocksstable::ObMacroBlockHandle macro_io_handle_[PREFETCH_DEPTH];
+  blocksstable::ObStorageObjectHandle macro_io_handle_[PREFETCH_DEPTH];
   int64_t iter_idx_;
   int64_t prefetch_idx_;
   char *io_buf_[PREFETCH_DEPTH];
 };
 
-
+class ObSSTableRebuilder;
 class ObSSTableBuilder final
 {
 public:
@@ -81,7 +81,12 @@ public:
   void reset();
   int set_index_read_info(const ObITableReadInfo *read_info);
   int prepare_index_builder();
-  int build_sstable_merge_res(const ObStaticMergeParam &merge_param, ObSSTableMergeInfo &sstable_merge_info_, blocksstable::ObSSTableMergeRes &res);
+  int build_sstable_merge_res(
+      const ObStaticMergeParam &merge_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      int64_t &macro_start_seq,
+      ObMergeBlockInfo &block_info,
+      blocksstable::ObSSTableMergeRes &res);
   int build_reused_small_sst_merge_res(
       const int64_t macro_read_size,
       const int64_t macro_offset,
@@ -91,10 +96,35 @@ public:
   }
   blocksstable::ObSSTableIndexBuilder *get_index_builder() { return &index_builder_; }
   blocksstable::ObWholeDataStoreDesc& get_data_desc() { return data_store_desc_; }
-  TO_STRING_KV(K_(data_store_desc), K_(macro_writer), K_(index_builder));
+  TO_STRING_KV(K_(data_store_desc), K_(index_builder), KP_(index_read_info), KPC_(rebuilder_ptr));
+protected:
+  ObArenaAllocator allocator_;
+  blocksstable::ObSSTableIndexBuilder index_builder_;
+  blocksstable::ObWholeDataStoreDesc data_store_desc_;
+  const ObITableReadInfo *index_read_info_;
+  ObSSTableRebuilder *rebuilder_ptr_;
+};
+
+class ObSSTableRebuilder final
+{
+public:
+  ObSSTableRebuilder(
+    blocksstable::ObWholeDataStoreDesc &desc,
+    const ObITableReadInfo *index_read_info);
+  ~ObSSTableRebuilder();
+  void reset();
+  int build_res_with_rewrite_macros(
+      const ObStaticMergeParam &merge_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      const int64_t macro_start_seq,
+      blocksstable::ObSSTableIndexBuilder &index_builder,
+      ObMergeBlockInfo &block_info,
+      blocksstable::ObSSTableMergeRes &res);
+
+  TO_STRING_KV(K_(macro_writer));
   using MetaIter = blocksstable::ObSSTableIndexBuilder::ObMacroMetaIter;
 private:
-  int open_macro_writer();
+  int open_macro_writer(const share::ObPreWarmerParam &pre_warm_param);
   int rebuild_macro_block(const ObIArray<blocksstable::MacroBlockId> &macro_id_array, MetaIter &iter);
   int check_cur_macro_need_merge(
       const int64_t last_macro_blocks_sum,
@@ -113,9 +143,8 @@ private:
         && data_store_desc_.get_desc().get_progressive_merge_round() == macro_meta.val_.progressive_merge_round_;
   }
 private:
-  blocksstable::ObSSTableIndexBuilder index_builder_;
+  blocksstable::ObWholeDataStoreDesc &data_store_desc_;
   blocksstable::ObSSTableIndexBuilder rebuild_index_builder_;
-  blocksstable::ObWholeDataStoreDesc data_store_desc_;
   blocksstable::ObMacroBlockWriter macro_writer_;
   const ObITableReadInfo *index_read_info_;
   static const int64_t REBUILD_MACRO_BLOCK_THRESOLD = 20;

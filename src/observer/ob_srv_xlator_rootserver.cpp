@@ -209,6 +209,11 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcStopZoneP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterZoneP, *gctx_.root_service_);
 
+    // storage related
+    RPC_PROCESSOR(rootserver::ObRpcAddStorageP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcDropStorageP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAlterStorageP, *gctx_.root_service_);
+
     // system admin commnad
     RPC_PROCESSOR(rootserver::ObRpcAdminSwitchReplicaRoleP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminSwitchRSRoleP, *gctx_.root_service_);

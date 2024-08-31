@@ -905,6 +905,27 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
   return ret;
 }
 
+int ObStorageHATaskUtils::check_need_copy_macro_blocks(
+    const ObMigrationSSTableParam &param,
+    const bool is_leader_restore,
+    bool &need_copy)
+{
+  int ret = OB_SUCCESS;
+  need_copy = true;
+  if (param.is_empty_sstable()) {
+    need_copy = false;
+  } else if (!is_leader_restore) {
+    if (param.is_shared_macro_blocks_sstable()) {
+      need_copy = false;
+    } else {
+      need_copy = true;
+    }
+  } else {
+    need_copy = true;
+  }
+  return ret;
+}
+
 int ObStorageHACancelDagNetUtils::cancel_task(const share::ObLSID &ls_id, const share::ObTaskId &task_id)
 {
   int ret = OB_SUCCESS;

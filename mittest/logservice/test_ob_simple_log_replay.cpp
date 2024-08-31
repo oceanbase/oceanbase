@@ -110,6 +110,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
 TEST_F(TestObSimpleLogReplayFunc, basic_replay)
@@ -236,7 +237,7 @@ TEST_F(TestObSimpleLogReplayFunc, test_flashback_to_padding)
   get_cluster()[0]->get_tenant_base()->update_thread_cnt(10);
   LSN iterator_end_lsn(0);
   LSN *iterator_end_lsn_ptr = &iterator_end_lsn;
-  auto get_file_end_lsn =[iterator_end_lsn_ptr]() {
+  GetFileEndLSN get_file_end_lsn = [iterator_end_lsn_ptr]() {
     CLOG_LOG(INFO, "get_file_end_lsn", K(*iterator_end_lsn_ptr));
     return *iterator_end_lsn_ptr;
   };
@@ -266,22 +267,10 @@ TEST_F(TestObSimpleLogReplayFunc, test_flashback_to_padding)
   int64_t mode_version;
   switch_append_to_flashback(leader, mode_version);
 
-  // Test1: flashback到padding头部, replay先回放到padding再执行flashback
   {
     int ret = OB_SUCCESS;
-    CLOG_LOG(WARN, "flashback to padding header case1");
-    int64_t abs_timeout_us = 4*1000*1000;
-    SCN flashback_scn = padding_header_scn;
-    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->flashback(mode_version, flashback_scn, abs_timeout_us));
-    // iterator看到的终点是padding日志尾
-    iterator_end_lsn = LSN(PALF_BLOCK_SIZE);
-    // replay看到的committed位点是padding尾
-    rp_st->unblock_submit();
-    EXPECT_EQ(OB_SUCCESS, rp_st->update_end_offset(LSN(PALF_BLOCK_SIZE)));
-    // 开启拉日志
     bool is_done = false;
     while (!is_done) {
-      // 由于padding日志被受控回放，replay此时的回放位点最多为padding_header
       rp_sv.is_replay_done(ls_id, padding_header, is_done);
       usleep(10*1000);
       CLOG_LOG(WARN, "not replay done", KPC(rp_st), K(padding_header));
@@ -400,7 +389,7 @@ TEST_F(TestObSimpleLogReplayFunc, test_wait_replay_done)
   get_cluster()[0]->get_tenant_base()->update_thread_cnt(10);
   LSN iterator_end_lsn(0);
   LSN *iterator_end_lsn_ptr = &iterator_end_lsn;
-  auto get_file_end_lsn =[iterator_end_lsn_ptr]() {
+  GetFileEndLSN get_file_end_lsn =[iterator_end_lsn_ptr]() {
     CLOG_LOG(INFO, "get_file_end_lsn", K(*iterator_end_lsn_ptr));
     return *iterator_end_lsn_ptr;
   };

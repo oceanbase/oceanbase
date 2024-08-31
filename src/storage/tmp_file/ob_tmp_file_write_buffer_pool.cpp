@@ -590,7 +590,7 @@ int64_t ObTmpWriteBufferPool::get_swap_size()
   int64_t low_watermark_bytes = (double)LOW_WATERMARK_PECENTAGE / 100 * memory_limit;
   int64_t used_bytes = used_page_num * ObTmpFileGlobal::PAGE_SIZE;
 
-  const int64_t MACRO_BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t MACRO_BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
 
   int64_t swap_size = 0;
   if (used_bytes > high_watermark_bytes) {

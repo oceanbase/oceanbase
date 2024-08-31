@@ -362,8 +362,7 @@ int ObArchiveFetcher::handle_log_fetch_task_(ObArchiveLogFetchTask &task)
   bool need_delay = false;
   bool submit_log = false;
   const ObLSID id = task.get_ls_id();
-  PalfGroupBufferIterator iter(id.id(), palf::LogIOUser::ARCHIVE);
-  PalfHandleGuard palf_handle_guard;
+  PalfGroupBufferIterator iter;
   TmpMemoryHelper helper(unit_size_, allocator_);
   ObArchiveSendTask *send_task = NULL;
   const ArchiveWorkStation &station = task.get_station();
@@ -389,7 +388,7 @@ int ObArchiveFetcher::handle_log_fetch_task_(ObArchiveLogFetchTask &task)
       ARCHIVE_LOG(TRACE, "need delay", K(task), K(need_delay));
   } else if (OB_FAIL(init_helper_(task, commit_lsn, helper))) {
     ARCHIVE_LOG(WARN, "init helper failed", K(ret), K(task));
-  } else if (OB_FAIL(init_iterator_(task.get_ls_id(), helper, palf_handle_guard, iter))) {
+  } else if (OB_FAIL(init_iterator_(task.get_ls_id(), helper, iter))) {
     ARCHIVE_LOG(WARN, "init iterator failed", K(ret), K(task));
   } else if (OB_FAIL(generate_send_buffer_(iter, helper))) {
     ARCHIVE_LOG(WARN, "generate send buffer failed", K(ret), K(task));
@@ -595,19 +594,19 @@ int ObArchiveFetcher::init_helper_(ObArchiveLogFetchTask &task, const LSN &commi
 
 int ObArchiveFetcher::init_iterator_(const ObLSID &id,
     const TmpMemoryHelper &helper,
-    PalfHandleGuard &palf_handle_guard,
     PalfGroupBufferIterator &iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(log_service_->open_palf(id, palf_handle_guard))) {
+  bool exists = false;
+  if (OB_FAIL(seek_log_iterator(id, helper.get_start_offset(), iter))) {
     if (OB_LS_NOT_EXIST == ret) {
       ARCHIVE_LOG(WARN, "ls not exist", K(ret), K(id), "tenant_id", MTL_ID());
       ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
     } else {
-      ARCHIVE_LOG(WARN, "open ls failed", K(ret), K(id), K(helper));
+      ARCHIVE_LOG(WARN, "iterator seek failed", K(ret), K(id), K(helper));
     }
-  } else if (OB_FAIL(palf_handle_guard.seek(helper.get_start_offset(), iter))) {
-    ARCHIVE_LOG(WARN, "iterator seek failed", K(ret), K(id), K(helper));
+  } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id.id(), palf::LogIOUser::ARCHIVE)))) {
+    ARCHIVE_LOG(WARN, "iterator set_io_context failed", K(ret), K(id), K(helper));
   } else {
     ARCHIVE_LOG(TRACE, "init iterator succ", K(id), K(helper));
   }

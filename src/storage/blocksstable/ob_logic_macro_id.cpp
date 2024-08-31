@@ -151,5 +151,15 @@ OB_SERIALIZE_MEMBER(ObLogicMacroBlockId,
                     logic_version_,
                     tablet_id_,
                     info_);
+
+uint64_t ObLogicMicroBlockId::hash() const
+{
+  uint64_t hash_val = logic_macro_id_.hash();
+  hash_val = common::murmurhash(&info_, sizeof(info_), hash_val);
+  return hash_val;
+}
+
+OB_SERIALIZE_MEMBER(ObLogicMicroBlockId, info_, logic_macro_id_);
+
 } // blocksstable
 } // oceanbase

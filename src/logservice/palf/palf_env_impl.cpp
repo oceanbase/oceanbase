@@ -1443,5 +1443,10 @@ int PalfEnvImpl::remove_directory_while_exist_(const char *log_dir)
   return ret;
 }
 
+LogSharedQueueTh *PalfEnvImpl::get_log_shared_queue_thread()
+{
+  return &log_shared_queue_th_;
+}
+
 } // end namespace palf
 } // end namespace oceanbase

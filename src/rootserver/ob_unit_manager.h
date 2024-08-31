@@ -316,6 +316,7 @@ private:
     MAX_CPU,
     MEMORY,
     LOG_DISK,
+    DATA_DISK,
     ALT_ERR
   };
 
@@ -1138,6 +1139,7 @@ private:
       case MAX_CPU: { str = "MAX_CPU"; break; }
       case MEMORY: { str = "MEMORY_SIZE"; break; }
       case LOG_DISK: { str = "LOG_DISK_SIZE"; break; }
+      case DATA_DISK: { str = "DATA_DISK_SIZE"; break; }
       default: { str = "UNKNOWN"; break; }
     }
     return str;

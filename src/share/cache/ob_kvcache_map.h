@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+class ObMicroBlockCacheKey;
+}
 namespace common
 {
 class ObKVCacheIterator;
@@ -56,6 +60,8 @@ public:
     const ObIKVCacheValue *&pvalue,
     ObKVMemBlockHandle *&out_handle);
   int erase(const int64_t cache_id, const ObIKVCacheKey &key);
+  int get_batch_data_block_cache_key(const int bucket_count, ObIArray<blocksstable::ObMicroBlockCacheKey> &keys);
+  OB_INLINE int64_t get_bucket_num() const { return bucket_num_; }
   void print_hazard_version_info();
 private:
   friend class ObKVCacheIterator;
@@ -109,6 +115,7 @@ private:
 
   bool is_inited_;
   ObMalloc bucket_allocator_;
+  int64_t bucket_start_pos_;
   int64_t bucket_num_;
   int64_t bucket_size_;
   Bucket *buckets_;

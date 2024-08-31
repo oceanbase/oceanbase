@@ -252,6 +252,9 @@ public:
   RPC_S(PR5 start_zone, obrpc::OB_START_ZONE, (ObAdminZoneArg));
   RPC_S(PR5 stop_zone, obrpc::OB_STOP_ZONE, (ObAdminZoneArg));
   RPC_S(PR5 alter_zone, obrpc::OB_ALTER_ZONE, (ObAdminZoneArg));
+  RPC_S(PR5 add_storage, obrpc::OB_ADD_STORAGE, (ObAdminStorageArg));
+  RPC_S(PR5 drop_storage, obrpc::OB_DROP_STORAGE, (ObAdminStorageArg));
+  RPC_S(PR5 alter_storage, obrpc::OB_ALTER_STORAGE, (ObAdminStorageArg));
   RPC_S(PR5 admin_set_tracepoint, obrpc::OB_RS_SET_TP, (ObAdminSetTPArg));
   RPC_S(PR5 refresh_time_zone_info, obrpc::OB_REFRESH_TIME_ZONE_INFO, (ObRefreshTimezoneArg));
   RPC_S(PR5 request_time_zone_info, obrpc::OB_REQUEST_TIME_ZONE_INFO, (common::ObRequestTZInfoArg), common::ObRequestTZInfoResult);

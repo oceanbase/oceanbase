@@ -22,6 +22,7 @@
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "share/redolog/ob_log_file_handler.h"
 #include "storage/blocksstable/ob_log_file_spec.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -48,6 +49,8 @@ int ObAdminSlogExecutor::execute(int argc, char *argv[])
   ObStorageLogReplayer replayer;
 
   char tenant_slog_dir[OB_MAX_FILE_NAME_LENGTH];
+  ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
+
 
   if (OB_FAIL(parse_args(argc - 1, argv + 1))) {
     LOG_WARN("fail to parse dir path", K(ret));
@@ -62,8 +65,6 @@ int ObAdminSlogExecutor::execute(int argc, char *argv[])
      // do nothing
   } else if (OB_FAIL(prepare_io())) {
     LOG_WARN("fail to prepare io", K(ret));
-  } else if (OB_FAIL(init_slogger_mgr())) {
-    LOG_WARN("fail to init_slogger_mgr", K(ret));
   } else if (period_scan_) {
     if (OB_FAIL(scan_periodically())) {
       LOG_WARN("fail to scan slog file and check integrity", K(ret));
@@ -71,7 +72,7 @@ int ObAdminSlogExecutor::execute(int argc, char *argv[])
   } else if (OB_UNLIKELY(tenant_id_ == OB_INVALID_TENANT_ID || log_file_id_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(log_file_id_));
-  } else if (OB_FAIL(SLOGGERMGR.get_tenant_slog_dir(tenant_id_, tenant_slog_dir))) {
+  } else if (OB_FAIL(slogger_mgr.get_tenant_slog_dir(tenant_id_, tenant_slog_dir))) {
     LOG_WARN("fail to get_tenant_slog_dir", K(ret));
   } else if (OB_FAIL(parse_log(tenant_slog_dir, log_file_id_))) {
     LOG_WARN("fail to parse slog file", K(ret));
@@ -85,12 +86,13 @@ int ObAdminSlogExecutor::scan_periodically()
   int ret = OB_SUCCESS;
   int64_t min_file_id = 0;
   int64_t max_file_id = 0;
+  ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
 
   while (true) {
-    THE_IO_DEVICE->scan_dir(SLOGGERMGR.get_root_dir(), dir_op_);
+    LOCAL_DEVICE_INSTANCE.scan_dir(slogger_mgr.get_root_dir(), dir_op_);
     ObLogFileHandler handler;
     for (int64_t i = 0; OB_SUCC(ret) && i < dir_op_.size_; i++) {
-      if (OB_FAIL(concat_dir(SLOGGERMGR.get_root_dir(), dir_op_.d_names_[i]))) {
+      if (OB_FAIL(concat_dir(slogger_mgr.get_root_dir(), dir_op_.d_names_[i]))) {
         LOG_WARN("fail to construct tenant slog path", K(ret));
       } else if (OB_FAIL(handler.init(slog_dir_, FILE_MAX_SIZE))) {
         LOG_WARN("fail to init log file handler", K(ret));

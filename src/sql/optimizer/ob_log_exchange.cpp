@@ -650,6 +650,8 @@ int ObLogExchange::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (NULL != partition_id_expr_ && OB_FAIL(all_exprs.push_back(partition_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+  } else if (NULL != ddl_slice_id_expr_ && OB_FAIL(all_exprs.push_back(ddl_slice_id_expr_))) {
+    LOG_WARN("failed to push back exprs", K(ret));
   } else if (NULL != random_expr_ && OB_FAIL(all_exprs.push_back(random_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else {
@@ -1043,6 +1045,7 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   int ret = OB_SUCCESS;
   is_fixed = expr == calc_part_id_expr_ ||
              expr == partition_id_expr_ ||
+             expr == ddl_slice_id_expr_ ||
              expr == random_expr_;
   return OB_SUCCESS;
 }

@@ -90,7 +90,12 @@ ObTenantMediumChecker::~ObTenantMediumChecker()
 int ObTenantMediumChecker::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls_locality_cache_.init(MTL_ID()))) {
+  if (GCTX.is_shared_storage_mode()) {
+    FLOG_INFO("cluster is shared storage mode, not init ObTenantMediumChecker", KR(ret));
+  } else if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTenantMediumChecker is inited before", KR(ret), KPC(this));
+  } else if (OB_FAIL(ls_locality_cache_.init(MTL_ID()))) {
     LOG_WARN("failed to init ls locality cache", K(ret));
   } else if (OB_FAIL(tablet_ls_set_.create(DEFAULT_MAP_BUCKET, "MedCheckSet", "CheckSetNode", MTL_ID()))) {
     LOG_WARN("failed to create set", K(ret));
@@ -278,7 +283,7 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
       }
       cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
       ADD_COMPACTION_EVENT(
-        MTL(ObTenantTabletScheduler*)->get_frozen_version(),
+        MERGE_SCHEDULER_PTR->get_frozen_version(),
         ObServerCompactionEvent::COMPACTION_FINISH_CHECK,
         ObTimeUtility::fast_current_time(),
         K(cost_ts), "batch_check_stat", stat);

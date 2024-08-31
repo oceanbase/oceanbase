@@ -21,11 +21,6 @@
 namespace oceanbase
 {
 
-namespace observer
-{
-class ObGlobalContext;
-}
-
 namespace sql
 {
 class ObMaintainObjDepInfoTask : public share::ObAsyncTask

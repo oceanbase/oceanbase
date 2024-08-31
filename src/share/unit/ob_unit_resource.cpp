@@ -15,8 +15,13 @@
 #include "lib/worker.h"           // LOG_USER_ERROR
 #include "lib/oblog/ob_log.h"     // LOG_USER_ERROR
 #include "share/ob_errno.h"
+#include "observer/omt/ob_multi_tenant.h"
 #include "share/config/ob_server_config.h"    // GCONF
-
+#include "share/ob_server_struct.h"
+#include "share/ob_cluster_version.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
 #include "share/unit/ob_unit_resource.h"
 
 namespace oceanbase
@@ -34,6 +39,9 @@ namespace share
     result.max_iops_ = l.max_iops_ op r.max_iops_; \
     result.min_iops_ = l.min_iops_ op r.min_iops_; \
     result.iops_weight_ = l.iops_weight_ op r.iops_weight_; \
+    result.data_disk_size_ = l.data_disk_size_ op r.data_disk_size_; \
+    result.max_net_bandwidth_ = l.max_net_bandwidth_ op r.max_net_bandwidth_; \
+    result.net_bandwidth_weight_ = l.net_bandwidth_weight_ op r.net_bandwidth_weight_; \
   } while (false)
 
 #define CALCULATE_CONFIG_WITH_CONSTANT(l, op, c, result) \
@@ -45,16 +53,25 @@ namespace share
     result.max_iops_ = l.max_iops_ op (c); \
     result.min_iops_ = l.min_iops_ op (c); \
     result.iops_weight_ = l.iops_weight_ op (c); \
+    result.data_disk_size_ = l.data_disk_size_ op (c); \
+    result.max_net_bandwidth_ = l.max_net_bandwidth_ op (c); \
+    result.net_bandwidth_weight_ = l.net_bandwidth_weight_ op (c); \
   } while (false)
+
+#define UNIT_MIN_LOG_DISK_SIZE (GCTX.is_shared_storage_mode() ? \
+        ObUnitResource::UNIT_MIN_LOG_DISK_SIZE_SS : ObUnitResource::UNIT_MIN_LOG_DISK_SIZE_SN)
 
 ObUnitResource::ObUnitResource(
     const double max_cpu,
     const double min_cpu,
     const int64_t memory_size,
     const int64_t log_disk_size,
+    const int64_t data_disk_size,
     const int64_t max_iops,
     const int64_t min_iops,
-    const int64_t iops_weight) :
+    const int64_t iops_weight,
+    const int64_t max_net_bandwidth,
+    const int64_t net_bandwidth_weight) :
     max_cpu_(max_cpu),
     min_cpu_(min_cpu),
     memory_size_(memory_size),
@@ -62,13 +79,22 @@ ObUnitResource::ObUnitResource(
     max_iops_(max_iops),
     min_iops_(min_iops),
     iops_weight_(iops_weight),
-    data_disk_size_(DEFAULT_DATA_DISK_SIZE),
-    max_net_bandwidth_(DEFAULT_NET_BANDWIDTH),
-    net_bandwidth_weight_(DEFAULT_NET_BANDWIDTH_WEIGHT)
+    data_disk_size_(data_disk_size),
+    max_net_bandwidth_(max_net_bandwidth),
+    net_bandwidth_weight_(net_bandwidth_weight)
 {
 }
 
 void ObUnitResource::reset()
+{
+  reset_all_invalid();
+  // following members are reset as DEFAULT values
+  data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+  max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
+  net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+}
+
+void ObUnitResource::reset_all_invalid()
 {
   max_cpu_ = 0;
   min_cpu_ = 0;
@@ -77,9 +103,9 @@ void ObUnitResource::reset()
   max_iops_ = 0;
   min_iops_ = 0;
   iops_weight_ = INVALID_IOPS_WEIGHT;
-  data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
-  max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
-  net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+  data_disk_size_ = INVALID_DATA_DISK_SIZE;
+  max_net_bandwidth_ = INVALID_NET_BANDWIDTH;
+  net_bandwidth_weight_ = INVALID_NET_BANDWIDTH_WEIGHT;
 }
 
 void ObUnitResource::set(
@@ -87,9 +113,12 @@ void ObUnitResource::set(
     const double min_cpu,
     const int64_t memory_size,
     const int64_t log_disk_size,
+    const int64_t data_disk_size,
     const int64_t max_iops,
     const int64_t min_iops,
-    const int64_t iops_weight)
+    const int64_t iops_weight,
+    const int64_t max_net_bandwidth,
+    const int64_t net_bandwidth_weight)
 {
   max_cpu_ = max_cpu;
   min_cpu_ = min_cpu;
@@ -98,9 +127,114 @@ void ObUnitResource::set(
   max_iops_ = max_iops;
   min_iops_ = min_iops;
   iops_weight_ = iops_weight;
-  data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
-  max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
-  net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+  data_disk_size_ = data_disk_size;
+  max_net_bandwidth_ = max_net_bandwidth;
+  net_bandwidth_weight_ = net_bandwidth_weight;
+}
+
+bool ObUnitResource::is_valid() const
+{
+  return is_max_cpu_valid()
+      && is_min_cpu_valid()
+      && max_cpu_ >= min_cpu_
+      && is_memory_size_valid()
+      && is_log_disk_size_valid()
+      // Default value of data_disk_size was -1 in version 4.3.0.1.
+      // So SKIP checking validity of data_disk_size in SN mode to avoid compatibility problem.
+      && (!GCTX.is_shared_storage_mode() || is_data_disk_size_valid())
+      && is_max_iops_valid()
+      && is_min_iops_valid()
+      && max_iops_ >= min_iops_
+      && is_iops_weight_valid()
+      && is_max_net_bandwidth_valid()
+      && is_net_bandwidth_weight_valid();
+}
+
+bool ObUnitResource::is_valid_for_unit() const
+{
+  return is_max_cpu_valid_for_unit()
+      && is_min_cpu_valid_for_unit()
+      && max_cpu_ >= min_cpu_
+      && is_memory_size_valid_for_unit()
+      && is_log_disk_size_valid_for_unit()
+      // Default value of data_disk_size was -1 in version 4.3.0.1.
+      // So SKIP checking validity of data_disk_size in SN mode to avoid compatibility problem.
+      && (!GCTX.is_shared_storage_mode() || is_data_disk_size_valid_for_unit())
+      && is_max_iops_valid_for_unit()
+      && is_min_iops_valid_for_unit()
+      && max_iops_ >= min_iops_
+      && is_iops_weight_valid_for_unit()
+      && is_max_net_bandwidth_valid_for_unit()
+      && is_net_bandwidth_weight_valid_for_unit();
+}
+
+int ObUnitResource::check_data_disk_size_supported() const
+{
+  int ret = OB_SUCCESS;
+  uint64_t sys_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("failed to get data_version", KR(ret));
+  } else if (sys_data_version < DATA_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sys tenant's data version is below 4.3.3, DATA_DISK_SIZE");
+    LOG_WARN("sys tenant's data version is below 4.3.3.0, DATA_DISK_SIZE not supported",
+              KR(ret), K(sys_data_version));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("user specifying data_disk_size in shared-nothing mode is not supported", KR(ret),
+        K(GCTX.is_shared_storage_mode()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "DATA_DISK_SIZE in shared-nothing mode");
+  }
+  return ret;
+}
+
+bool ObUnitResource::is_data_disk_size_valid_for_unit() const
+{
+  bool b_ret = false;
+  if (GCTX.is_shared_storage_mode()) {
+    // data_disk_size can be 0 only for hidden_sys unit
+    b_ret = 0 == data_disk_size_ || data_disk_size_ >= UNIT_MIN_DATA_DISK_SIZE;
+  } else {
+    b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
+  }
+  return b_ret;
+}
+
+bool ObUnitResource::is_data_disk_size_valid_for_meta_tenant() const
+{
+  bool b_ret = false;
+  if (GCTX.is_shared_storage_mode()) {
+    // data_disk_size can be 0 only for hidden_sys unit
+    b_ret = data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE
+            && data_disk_size_ <= META_TENANT_MAX_DATA_DISK_SIZE;
+  } else {
+    b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
+  }
+  return b_ret;
+}
+
+bool ObUnitResource::is_data_disk_size_valid_for_user_tenant() const
+{
+  bool b_ret = false;
+  if (GCTX.is_shared_storage_mode()) {
+    // data_disk_size can be 0 only for hidden_sys unit
+    b_ret = data_disk_size_ >= USER_TENANT_MIN_DATA_DISK_SIZE;
+  } else {
+    b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
+  }
+  return b_ret;
+}
+
+int64_t ObUnitResource::get_default_log_disk_size(const int64_t memory_size)
+{
+  int64_t mem_to_log_disk_factor = GCTX.is_shared_storage_mode() ?
+                                   MEMORY_TO_LOG_DISK_FACTOR_SS : MEMORY_TO_LOG_DISK_FACTOR_SN;
+  return max(memory_size * mem_to_log_disk_factor, UNIT_MIN_LOG_DISK_SIZE);
+}
+
+bool ObUnitResource::is_log_disk_size_valid_for_unit() const
+{
+  return 0 == log_disk_size_ || log_disk_size_ >= UNIT_MIN_LOG_DISK_SIZE;
 }
 
 int ObUnitResource::init_and_check_cpu_(const ObUnitResource &user_spec)
@@ -198,6 +332,48 @@ int ObUnitResource::init_and_check_log_disk_(const ObUnitResource &user_spec)
   return ret;
 }
 
+int ObUnitResource::init_and_check_data_disk_(const ObUnitResource &user_spec)
+{
+  int ret = OB_SUCCESS;
+  if (0 == user_spec.data_disk_size_) {
+    if (! GCTX.is_shared_storage_mode()) {
+      // for upgrade compatability in shared-nothing mode
+      data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user specified data_disk_size should not be 0", KR(ret));
+    }
+  } else if (user_spec.is_data_disk_size_valid()) {
+    // user specify data_disk_size
+    if (OB_FAIL(check_data_disk_size_supported())) {
+      LOG_WARN("failed to check data_disk_size supported", KR(ret), K(user_spec));
+    } else {
+      const int64_t unit_min_data_disk_size = UNIT_MIN_DATA_DISK_SIZE;
+      if (user_spec.data_disk_size() < unit_min_data_disk_size) {
+        ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
+        LOG_WARN("data_disk_size is below limit", KR(ret), K(user_spec),
+            K(unit_min_data_disk_size));
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "DATA_DISK_SIZE",
+            to_cstring(unit_min_data_disk_size));
+      } else {
+        data_disk_size_ = user_spec.data_disk_size();
+      }
+    }
+  } else {
+    // user not specify data_disk_size
+    // use the default value
+    if (GCTX.is_shared_storage_mode()) {
+      data_disk_size_ = get_default_data_disk_size(memory_size_);
+    } else {
+      data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+    }
+  }
+
+  LOG_INFO("ObUnitResource init_and_check: DATA_DISK", KR(ret), K(data_disk_size_), K(user_spec),
+      KPC(this));
+  return ret;
+}
+
 int ObUnitResource::init_and_check_iops_(const ObUnitResource &user_spec)
 {
   int ret = OB_SUCCESS;
@@ -265,6 +441,108 @@ int ObUnitResource::init_and_check_iops_(const ObUnitResource &user_spec)
   return ret;
 }
 
+// This function only checks data_version
+int ObUnitResource::check_net_bandwidth_supported() const
+{
+  int ret = OB_SUCCESS;
+  bool is_during_upgrade = false;
+  if (OB_FAIL(check_net_bandwidth_supported(*this, false/*need_check_user_spec*/,
+                                            is_during_upgrade))) {
+    LOG_WARN("failed to check_net_bandwidth supported", KR(ret), KPC(this));
+  }
+  return ret;
+}
+
+// This function checks data_version, and also whether user specified
+//  net_bandwidth if need_check_user_spec is true.
+int ObUnitResource::check_net_bandwidth_supported(
+    const ObUnitResource &user_spec,
+    const bool &need_check_user_spec,
+    bool &is_during_upgrade) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t sys_data_version = 0;
+  is_during_upgrade = false;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("failed to get data_version", KR(ret));
+  } else if (sys_data_version < DATA_VERSION_4_3_3_0) {
+    is_during_upgrade = true;
+    bool is_user_specified = false;
+    if (! need_check_user_spec) {
+      // Assume user specified, no need to check
+      is_user_specified = true;
+    } else {
+      // Check max_net_bw and net_bw_weight both INVALID, or both DEFAULT value.
+      if (!user_spec.is_max_net_bandwidth_valid() && !user_spec.is_net_bandwidth_weight_valid()) {
+        // both INVALID value, good
+      } else if (DEFAULT_NET_BANDWIDTH == user_spec.max_net_bandwidth_
+                && DEFAULT_NET_BANDWIDTH_WEIGHT == user_spec.net_bandwidth_weight_) {
+        // both DEFAULT value, good
+      } else {
+        is_user_specified = true;
+      }
+    }
+    if (OB_SUCC(ret) && is_user_specified) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "sys tenant's data version is below 4.3.3, "
+                     "MAX_NET_BANDWIDTH and NET_BANDWIDTH_WEIGHT");
+      LOG_WARN("sys tenant's data version is below 4.3.3.0, net_bandwidth not supported",
+                KR(ret), K(sys_data_version), K(user_spec));
+    }
+  }
+  return ret;
+}
+
+int ObUnitResource::init_and_check_net_bandwidth_(const ObUnitResource &user_spec)
+{
+  int ret = OB_SUCCESS;
+  bool is_during_upgrade = false;
+  if (OB_FAIL(check_net_bandwidth_supported(user_spec, true/*need_check_user_spec*/,
+                                            is_during_upgrade))) {
+    LOG_WARN("failed to check_net_bandwidth_supported", KR(ret), K(user_spec));
+  } else if (is_during_upgrade) {
+    // during upgrade, set DEFAULT value
+    max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
+    net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+  } else {
+    const int64_t unit_min_net_bandwidth = UNIT_MIN_NET_BANDWIDTH;
+    if (! user_spec.is_max_net_bandwidth_valid()) {
+      // max_net_bandwidth not specified, set by DEFAULT value INT64_MAX
+      max_net_bandwidth_ = get_default_net_bandwidth();
+
+      // if net_bandwidth_weight is not specified, auto configure net_bandwidth_weight by min_cpu
+      if (! user_spec.is_net_bandwidth_weight_valid()) {
+        net_bandwidth_weight_ = get_default_net_bandwidth_weight(min_cpu_);
+      } else {
+        // user speicified
+        net_bandwidth_weight_ = user_spec.net_bandwidth_weight();
+      }
+    } else {
+      // max_net_bandwidth is specified, use user specified value
+      if (user_spec.max_net_bandwidth_ < unit_min_net_bandwidth) {
+        ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
+        LOG_WARN("max_net_bandwidth is below limit", KR(ret), K(user_spec), K(unit_min_net_bandwidth));
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_NET_BANDWIDTH", to_cstring(unit_min_net_bandwidth));
+      } else {
+        max_net_bandwidth_ = user_spec.max_net_bandwidth();
+
+        // if net_bandwidth_weight is not specified, set as DEFAULT value
+        if (! user_spec.is_net_bandwidth_weight_valid()) {
+          // not specified, init to DEFAULT value
+          net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+        } else {
+          // user specified
+          net_bandwidth_weight_ = user_spec.net_bandwidth_weight();
+        }
+      }
+    }
+  }
+
+  LOG_INFO("ObUnitResource init_and_check: NET_BANDWIDTH", KR(ret), K(max_net_bandwidth_),
+      K(net_bandwidth_weight_), K(user_spec), KPC(this));
+  return ret;
+}
+
 int ObUnitResource::init_and_check_valid_for_unit(const ObUnitResource &user_spec)
 {
   int ret = OB_SUCCESS;
@@ -285,9 +563,19 @@ int ObUnitResource::init_and_check_valid_for_unit(const ObUnitResource &user_spe
     ret = init_and_check_log_disk_(user_spec);
   }
 
+  // check DATADISK
+  if (OB_SUCCESS == ret) {
+    ret = init_and_check_data_disk_(user_spec);
+  }
+
   // check IOPS
   if (OB_SUCCESS == ret) {
     ret = init_and_check_iops_(user_spec);
+  }
+
+ // check NET_BANDWIDTH
+  if (OB_SUCCESS == ret) {
+    ret = init_and_check_net_bandwidth_(user_spec);
   }
 
   LOG_INFO("init unit resource by user spec and check valid", KR(ret), K(user_spec), KPC(this));
@@ -405,6 +693,39 @@ int ObUnitResource::update_and_check_log_disk_(const ObUnitResource &user_spec)
   return ret;
 }
 
+int ObUnitResource::update_and_check_data_disk_(const ObUnitResource &user_spec)
+{
+  int ret = OB_SUCCESS;
+  if (0 == user_spec.data_disk_size_) {
+    if (! GCTX.is_shared_storage_mode()) {
+      // for upgrade compatability in shared-nothing mode
+      data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user specified data_disk_size should not be 0", KR(ret));
+    }
+  } else if (! user_spec.is_data_disk_size_valid()) {
+    // not specified, do not need to update
+  } else {
+    const int64_t unit_min_data_disk_size = UNIT_MIN_DATA_DISK_SIZE;
+    if (OB_FAIL(check_data_disk_size_supported())) {
+      LOG_WARN("failed to check data_disk_size supported", KR(ret), K(user_spec));
+    } else if (user_spec.data_disk_size() < unit_min_data_disk_size) {
+      ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
+      LOG_WARN("data_disk_size is below limit", KR(ret), K(user_spec),
+          K(unit_min_data_disk_size));
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "DATA_DISK_SIZE",
+          to_cstring(unit_min_data_disk_size));
+    } else {
+      data_disk_size_ = user_spec.data_disk_size();
+    }
+
+    LOG_INFO("ObUnitResource update_and_check: DATA_DISK", KR(ret), K(data_disk_size_), K(user_spec),
+        KPC(this));
+  }
+  return ret;
+}
+
 int ObUnitResource::update_and_check_iops_(const ObUnitResource &user_spec)
 {
   int ret = OB_SUCCESS;
@@ -466,6 +787,40 @@ int ObUnitResource::update_and_check_iops_(const ObUnitResource &user_spec)
   return ret;
 }
 
+int ObUnitResource::update_and_check_net_bandwidth_(const ObUnitResource &user_spec)
+{
+  int ret = OB_SUCCESS;
+  bool is_during_upgrade = false;
+  if (OB_FAIL(check_net_bandwidth_supported(user_spec, true/*need_check_user_spec*/,
+                                            is_during_upgrade))) {
+    LOG_WARN("failed to check_net_bandwidth_supported", KR(ret), K(user_spec));
+  } else if (is_during_upgrade) {
+    // during upgrade, max_net_bandwidth_ & net_bandiwidth_weigth_ keep unchanged
+  } else {
+    const int64_t unit_min_net_bandwidth = UNIT_MIN_NET_BANDWIDTH;
+    if (user_spec.is_max_net_bandwidth_valid()) {
+      if (user_spec.max_net_bandwidth_ < unit_min_net_bandwidth) {
+        ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
+        LOG_WARN("max_net_bandwidth is below limit", KR(ret), K(user_spec), K(unit_min_net_bandwidth));
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_NET_BANDWIDTH", to_cstring(unit_min_net_bandwidth));
+      } else {
+        // user specified
+        max_net_bandwidth_ = user_spec.max_net_bandwidth();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (user_spec.is_net_bandwidth_weight_valid()) {
+        // user specified
+        net_bandwidth_weight_ = user_spec.net_bandwidth_weight();
+      }
+    }
+  }
+
+  LOG_INFO("ObUnitResource update_and_check: NET_BANDWIDTH", KR(ret), K(max_net_bandwidth_),
+      K(net_bandwidth_weight_), K(user_spec), KPC(this));
+  return ret;
+}
+
 int ObUnitResource::update_and_check_valid_for_unit(const ObUnitResource &user_spec)
 {
   int ret = OB_SUCCESS;
@@ -493,9 +848,19 @@ int ObUnitResource::update_and_check_valid_for_unit(const ObUnitResource &user_s
     ret = update_and_check_log_disk_(user_spec);
   }
 
+  // check DATA_DISK_SIZE
+  if (OB_SUCCESS == ret) {
+    ret = update_and_check_data_disk_(user_spec);
+  }
+
   // check IOPS
   if (OB_SUCCESS == ret) {
     ret = update_and_check_iops_(user_spec);
+  }
+
+  // check NET_BANDWIDTH
+  if (OB_SUCCESS == ret) {
+    ret = update_and_check_net_bandwidth_(user_spec);
   }
 
   LOG_INFO("update unit resource by user spec and check valid for unit", KR(ret), K(user_spec), KPC(this));
@@ -517,9 +882,9 @@ ObUnitResource &ObUnitResource::operator=(const ObUnitResource &other)
     max_iops_ = other.max_iops_;
     min_iops_ = other.min_iops_;
     iops_weight_ = other.iops_weight_;
-    data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
-    max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
-    net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+    data_disk_size_ = other.data_disk_size_;
+    max_net_bandwidth_ = other.max_net_bandwidth_;
+    net_bandwidth_weight_ = other.net_bandwidth_weight_;
   }
   return *this;
 }
@@ -564,7 +929,10 @@ ObUnitResource ObUnitResource::operator*(const int64_t count) const
         && ((left).log_disk_size_ op (right).log_disk_size_) \
         && ((left).max_iops_ op (right).max_iops_) \
         && ((left).min_iops_ op (right).min_iops_) \
-        && ((left).iops_weight_ op (right).iops_weight_)
+        && ((left).iops_weight_ op (right).iops_weight_) \
+        && ((left).data_disk_size_ op (right).data_disk_size_) \
+        && ((left).max_net_bandwidth_ op (right).max_net_bandwidth_) \
+        && ((left).net_bandwidth_weight_ op (right).net_bandwidth_weight_)
 
 bool ObUnitResource::operator==(const ObUnitResource &config) const
 {
@@ -581,12 +949,30 @@ DEF_TO_STRING(ObUnitResource)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  (void)databuff_printf(buf, buf_len, pos,
-      "min_cpu:%.6g, max_cpu:%.6g, memory_size:\"%.9gGB\", "
-      "log_disk_size:\"%.9gGB\", min_iops:%ld, max_iops:%ld, iops_weight:%ld",
-      min_cpu_, max_cpu_, (double)memory_size_/1024/1024/1024,
-      is_log_disk_size_valid() ? (double)log_disk_size_/1024/1024/1024 : log_disk_size_,
-      min_iops_, max_iops_, iops_weight_);
+  // cpu, mem
+  (void)databuff_printf(buf, buf_len, pos, "min_cpu:%.6g, max_cpu:%.6g, memory_size:\"%.9gGB\", ",
+      min_cpu_, max_cpu_, (double)memory_size_/1024/1024/1024);
+  // log_disk
+  if (log_disk_size_ > 0) {
+    (void)databuff_printf(buf, buf_len, pos, "log_disk_size:\"%.9gGB\", ", (double)log_disk_size_/1024/1024/1024);
+  } else {
+    (void)databuff_printf(buf, buf_len, pos, "log_disk_size:%ld, ", log_disk_size_);
+  }
+  // data_disk
+  if (data_disk_size_ > 0) {
+    (void)databuff_printf(buf, buf_len, pos, "data_disk_size:\"%.9gGB\", ", (double)data_disk_size_/1024/1024/1024);
+  } else {
+    (void)databuff_printf(buf, buf_len, pos, "data_disk_size:%ld, ", data_disk_size_);
+  }
+  // iops
+  (void)databuff_printf(buf, buf_len, pos, "min_iops:%ld, max_iops:%ld, iops_weight:%ld, ", min_iops_, max_iops_, iops_weight_);
+  // net bandwidth
+  if (INT64_MAX == max_net_bandwidth_) {
+    (void)databuff_printf(buf, buf_len, pos, "max_net_bandwidth:INT64_MAX, ");
+  } else {
+    (void)databuff_printf(buf, buf_len, pos, "max_net_bandwidth:\"%.9gGB\", ", (double)max_net_bandwidth_/1024/1024/1024);
+  }
+  (void)databuff_printf(buf, buf_len, pos, "net_bandwidth_weight:%ld, ", net_bandwidth_weight_);
   J_OBJ_END();
   return pos;
 }
@@ -606,12 +992,13 @@ OB_SERIALIZE_MEMBER(ObUnitResource,
 
 bool ObUnitResource::has_expanded_resource_than(const ObUnitResource &other) const
 {
-  // check if any of max_cpu, min_cpu, memory_size, log_disk_size is greater than other
+  // check if any of max_cpu, min_cpu, memory_size, log_disk_size, data_disk_size is greater than other
   bool b_ret = false;
   if ((is_max_cpu_valid() && other.is_max_cpu_valid() && max_cpu_ > other.max_cpu())
       || (is_min_cpu_valid() && other.is_min_cpu_valid() && min_cpu_ > other.min_cpu())
       || (is_memory_size_valid() && other.is_memory_size_valid() && memory_size_ > other.memory_size())
-      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ > other.log_disk_size()))
+      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ > other.log_disk_size())
+      || (is_data_disk_size_valid() && other.is_data_disk_size_valid() && data_disk_size_ > other.data_disk_size()))
   {
     b_ret = true;
   } else {
@@ -622,12 +1009,13 @@ bool ObUnitResource::has_expanded_resource_than(const ObUnitResource &other) con
 
 bool ObUnitResource::has_shrunk_resource_than(const ObUnitResource &other) const
 {
-  // check if any of max_cpu, min_cpu, memory_size, log_disk_size is smaller than other
+  // check if any of max_cpu, min_cpu, memory_size, log_disk_size, data_disk_size is smaller than other
   bool b_ret = false;
   if ((is_max_cpu_valid() && other.is_max_cpu_valid() && max_cpu_ < other.max_cpu())
       || (is_min_cpu_valid() && other.is_min_cpu_valid() && min_cpu_ < other.min_cpu())
       || (is_memory_size_valid() && other.is_memory_size_valid() && memory_size_ < other.memory_size())
-      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ < other.log_disk_size()))
+      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ < other.log_disk_size())
+      || (is_data_disk_size_valid() && other.is_data_disk_size_valid() && data_disk_size_ < other.data_disk_size()))
   {
     b_ret = true;
   } else {
@@ -662,6 +1050,12 @@ int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource)
     const int64_t m_log_disk_size = gen_meta_tenant_log_disk_size(log_disk_size_);
     const int64_t u_log_disk_size = log_disk_size_ - m_log_disk_size;
 
+    ///////////////////// DATA_DISK ///////////////////
+    const int64_t m_data_disk_size = !GCTX.is_shared_storage_mode() ? DEFAULT_DATA_DISK_SIZE :
+                                      gen_meta_tenant_data_disk_size(data_disk_size_);
+    const int64_t u_data_disk_size = !GCTX.is_shared_storage_mode() ? DEFAULT_DATA_DISK_SIZE :
+                                      (data_disk_size_ - m_data_disk_size);
+
     ///////////////////// IOPS ///////////////////
     // IOPS is shared by USER and META
     // USER resource is equal to UNIT, META resource is extra allocated
@@ -672,24 +1066,36 @@ int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource)
     const int64_t u_max_iops = max_iops_;
     const int64_t u_iops_weight = iops_weight_;
 
+    ///////////////////// NET BANDWIDTH ///////////////////
+    const int64_t m_max_net_bandwidth = gen_meta_tenant_net_bandwidth(max_net_bandwidth_);
+    const int64_t m_net_bandwidth_weight = gen_meta_tenant_net_bandwidth_weight(net_bandwidth_weight_);
+    const int64_t u_max_net_bandwidth = max_net_bandwidth_;
+    const int64_t u_net_bandwidth_weight = net_bandwidth_weight_;
+
     //////////////////// check valid //////////////
     const ObUnitResource meta_ur(
         m_max_cpu,
         m_min_cpu,
         m_memory_size,
         m_log_disk_size,
+        m_data_disk_size,
         m_max_iops,
         m_min_iops,
-        m_iops_weight);
+        m_iops_weight,
+        m_max_net_bandwidth,
+        m_net_bandwidth_weight);
 
     const ObUnitResource user_ur(
         u_max_cpu,
         u_min_cpu,
         u_memory_size,
         u_log_disk_size,
+        u_data_disk_size,
         u_max_iops,
         u_min_iops,
-        u_iops_weight);
+        u_iops_weight,
+        u_max_net_bandwidth,
+        u_net_bandwidth_weight);
 
     if (! meta_ur.is_valid_for_meta_tenant() ||
         ! user_ur.is_valid_for_user_tenant()) {
@@ -716,15 +1122,33 @@ int ObUnitResource::gen_sys_tenant_default_unit_resource(const bool is_hidden_sy
                                  max(UNIT_MIN_MEMORY, GCONF.__min_full_resource_pool_memory);
   max_cpu_ = GCONF.get_sys_tenant_default_max_cpu();
   min_cpu_ = GCONF.get_sys_tenant_default_min_cpu();
-  // for hidden SYS tenant, log_disk_size is 0
-  // for real SYS tenant, log_disk_size is determined by real_memory_size (including extra_memory)
+  // for hidden SYS tenant, log_disk_size is 0, data_disk_size is determined by hidden_sys_memory or _ss_hidden_sys_tenant_data_disk_size
+  // for real SYS tenant, log_disk_size and data_disk_size are determined
+  // by real_memory_size (including extra_memory)
   int64_t real_memory_size = memory_size_ + GMEMCONF.get_extra_memory();
   log_disk_size_ = is_hidden_sys ? 0 : max(real_memory_size, UNIT_MIN_LOG_DISK_SIZE);
   max_iops_ = get_default_iops();
   min_iops_ = max_iops_;
   iops_weight_ = get_default_iops_weight(min_cpu_);
-
-  if (OB_UNLIKELY(! is_valid_for_unit())) {
+  max_net_bandwidth_ = get_default_net_bandwidth();
+  net_bandwidth_weight_ = get_default_net_bandwidth_weight(min_cpu_);
+  int64_t hidden_sys_data_disk_size = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.gen_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
+      LOG_WARN("fail to generate hidden sys data_disk_size", KR(ret), K(hidden_sys_data_disk_size));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
+  } else {
+    data_disk_size_ = !GCTX.is_shared_storage_mode() ? DEFAULT_DATA_DISK_SIZE :
+                        (is_hidden_sys ? hidden_sys_data_disk_size :
+                        max(get_default_data_disk_size(memory_size_), UNIT_MIN_DATA_DISK_SIZE));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(! is_valid_for_unit())) {
     ret = OB_RESOURCE_UNIT_VALUE_INVALID;
     LOG_ERROR("sys tenant default unit resource is not valid for unit", KR(ret), K(is_hidden_sys), KPC(this));
   }

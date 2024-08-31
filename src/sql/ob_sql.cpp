@@ -2510,7 +2510,6 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
   //trim the sql first, let 'select c1 from t' and '  select c1 from t' and hit the same plan_cache
   const ObString &trimed_stmt = remote_sql_info.remote_sql_;
   FLTSpanGuard(remote_compile);
-  FLT_SET_TAG(sql_text, trimed_stmt);
 
   ObIAllocator &allocator = THIS_WORKER.get_sql_arena_allocator();
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
@@ -2642,6 +2641,11 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     }
   }
 
+  if ((NULL != pc_ctx) && !(pc_ctx->sql_ctx_.is_sensitive_)) {
+    // if sql context contains sensitive data, can not flush sql info to trace.log
+    FLT_SET_TAG(sql_text, trimed_stmt);
+  }
+
 
   // set auto-increment related param into physical plan ctx
   // if get plan from plan cache, reset its auto-increment variable here
@@ -2710,7 +2714,6 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   //trim the sql first, let 'select c1 from t' and '  select c1 from t' and hit the same plan_cache
   ObString trimed_stmt = const_cast<ObString &>(stmt).trim();
   context.is_prepare_protocol_ = false;
-  FLT_SET_TAG(sql_text, trimed_stmt);
   char buf[4096];
   STATIC_ASSERT(sizeof(ObPlanCacheCtx) < sizeof(buf), "ObPlanCacheCtx is too large");
   if (OB_FAIL(init_result_set(context, result))) {
@@ -2810,6 +2813,10 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
     }
   }
 
+  if ((NULL != pc_ctx) && !(pc_ctx->sql_ctx_.is_sensitive_)) {
+    // if sql context contains sensitive data, can not flush sql info to trace.log
+    FLT_SET_TAG(sql_text, trimed_stmt);
+  }
 
   // set auto-increment related param into physical plan ctx
   // if get plan from plan cache, reset its auto-increment variable here

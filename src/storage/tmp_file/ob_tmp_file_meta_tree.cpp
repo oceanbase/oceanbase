@@ -2139,8 +2139,9 @@ int ObSharedNothingTmpFileMetaTree::release_tmp_file_page_(
 {
   int ret = OB_SUCCESS;
 
+  // TODO
   // XXX 最终需要消除对 MTL 的依赖；
-  ObTmpFileBlockManager &block_manager = MTL(ObTenantTmpFileManager*)->get_tmp_file_block_manager();
+  ObTmpFileBlockManager &block_manager = MTL(ObTenantTmpFileManager*)->get_sn_file_manager().get_tmp_file_block_manager();
   if (OB_FAIL(block_manager.release_tmp_file_page(block_index, begin_page_id, page_num))) {
     STORAGE_LOG(WARN, "fail to release tmp file page",
         KR(ret), K(fd_), K(block_index), K(begin_page_id), K(page_num));

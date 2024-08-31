@@ -39,18 +39,20 @@ public:
   {
   public:
     ServerResource() : max_cpu_(0), min_cpu_(0), memory_size_(0),
-                       log_disk_size_(0) {}
+                       log_disk_size_(0), data_disk_size_(0) {}
     ~ServerResource() {}
     void reset() {
       max_cpu_ = 0;
       min_cpu_ = 0;
       memory_size_ = 0;
       log_disk_size_ = 0;
+      data_disk_size_ = 0;
     }
     double max_cpu_;
     double min_cpu_;
     int64_t memory_size_;
     int64_t log_disk_size_;
+    int64_t data_disk_size_;
   };
 
 public:

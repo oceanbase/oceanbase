@@ -16,7 +16,7 @@
 #include "share/ob_thread_mgr.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
-#include "storage/tmp_file/ob_tmp_file_manager.h"
+#include "storage/tmp_file/ob_sn_tmp_file_manager.h"
 
 namespace oceanbase
 {
@@ -256,7 +256,7 @@ int ObTmpFileFlushTG::do_work_()
 void ObTmpFileFlushTG::flush_fast_()
 {
   int ret = OB_SUCCESS;
-  int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   int64_t flush_size = min(get_fast_flush_size_(), get_flushing_block_num_threshold_() * BLOCK_SIZE);
   if (OB_FAIL(check_flush_task_io_finished_())) {
     STORAGE_LOG(WARN, "fail to check flush task io finished", KR(ret));
@@ -276,7 +276,7 @@ void ObTmpFileFlushTG::flush_fast_()
 void ObTmpFileFlushTG::flush_normal_()
 {
   int ret = OB_SUCCESS;
-  int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   int64_t normal_flush_size = max(0, (MAX_FLUSHING_BLOCK_NUM - ATOMIC_LOAD(&flushing_block_num_)) * BLOCK_SIZE);
   if (OB_FAIL(check_flush_task_io_finished_())) {
     STORAGE_LOG(WARN, "fail to check flush task io finished", KR(ret));
@@ -425,7 +425,7 @@ int ObTmpFileFlushTG::special_flush_meta_tree_page_()
   int ret = OB_SUCCESS;
   ObSpLinkQueue flushing_list;
   int64_t flushing_task_cnt = 0;
-  int64_t expect_flush_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t expect_flush_size = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   if (OB_FAIL(flush_mgr_.flush(flushing_list, flush_monitor_, expect_flush_size, true/*is_flush_meta_tree*/))) {
     STORAGE_LOG(ERROR, "flush mgr fail to do fast flush meta tree page", KR(ret), KPC(this));
   } else if (OB_FAIL(handle_generated_flush_tasks_(flushing_list, flushing_task_cnt))) {
@@ -600,7 +600,7 @@ int ObTmpFileFlushTG::pop_finished_list_(ObTmpFileFlushTask *&flush_task)
 int ObTmpFileFlushTG::get_fast_flush_size_()
 {
   // TODO: move to page cache controller
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   int64_t wbp_mem_limit = wbp_.get_memory_limit();
   int64_t flush_size = max(BLOCK_SIZE, min(MAX_FLUSHING_BLOCK_NUM * BLOCK_SIZE, upper_align(0.05 * wbp_mem_limit, BLOCK_SIZE)));
   return flush_size;
@@ -609,7 +609,7 @@ int ObTmpFileFlushTG::get_fast_flush_size_()
 // flushing threshold is MIN(20MB, (20% * tmp_file_memory))
 int ObTmpFileFlushTG::get_flushing_block_num_threshold_()
 {
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   int64_t wbp_mem_limit = wbp_.get_memory_limit();
   int64_t flush_threshold = max(BLOCK_SIZE, min(MAX_FLUSHING_BLOCK_NUM, static_cast<int64_t>(0.2 * wbp_mem_limit / BLOCK_SIZE)));
   return flush_threshold;
@@ -637,7 +637,7 @@ ObTmpFileSwapTG::ObTmpFileSwapTG(ObTmpWriteBufferPool &wbp,
 {
 }
 
-int ObTmpFileSwapTG::init(ObTenantTmpFileManager &file_mgr)
+int ObTmpFileSwapTG::init(ObSNTenantTmpFileManager &file_mgr)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {

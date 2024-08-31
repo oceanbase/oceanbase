@@ -283,6 +283,8 @@ int ObTxTable::get_ctx_table_schema_(const uint64_t tenant_id, share::schema::Ob
     LOG_WARN("failed to add column", K(ret), K(meta_column));
   } else if (OB_FAIL(schema.add_column(value_column))) {
     LOG_WARN("failed to add column", K(ret), K(value_column));
+  } else {
+    schema.set_micro_index_clustered(false);
   }
   return ret;
 }
@@ -409,6 +411,8 @@ int ObTxTable::get_data_table_schema_(const uint64_t tenant_id, share::schema::O
     LOG_WARN("failed to add column", K(ret), K(end_ts_column));
   } else if (OB_FAIL(schema.add_column(value_column))) {
     LOG_WARN("failed to add column", K(ret), K(value_column));
+  } else {
+    schema.set_micro_index_clustered(false);
   }
   return ret;
 }

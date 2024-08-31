@@ -72,7 +72,10 @@ public:
       const ObIArray<ObTabletID> &del_tablet_ids,
       ObMySQLTransaction &trans);
 
-  static int lock_for_common_ddl_in_trans(const share::schema::ObTableSchema &table_schema, ObMySQLTransaction &trans);
+  static int lock_for_common_ddl_in_trans(
+      const share::schema::ObTableSchema &table_schema,
+      const bool require_strict_binary_format,
+      ObMySQLTransaction &trans);
   static int lock_for_common_ddl(
       const share::schema::ObTableSchema &table_schema,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
