@@ -3030,7 +3030,10 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
-      OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
+      OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
+      OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
+      OB_ISNULL(OPT_CTX.get_exec_ctx()->get_sql_ctx()) ||
+      OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(get_plan()), K(stmt), K(schema_guard), K(ret));
   } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id))) {
@@ -3057,7 +3060,26 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
              && OB_FAIL(get_vector_inv_index_tid(schema_guard, vector_expr, table_id, ref_table_id, has_aggr, vector_index_match, valid_index_ids))) {
     LOG_WARN("failed to get matched vector index table id", K(ret));
   } else if (vector_index_match) {
-    // do nothing
+    // defence weak read
+    bool is_weak_read = false;
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+      is_weak_read = true;
+    } else {
+      ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
+      if (OB_UNLIKELY(INVALID_CONSISTENCY
+              != OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_)) {
+        consistency_level = OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_;
+      } else {
+        consistency_level = session_info->get_consistency_level();
+      }
+      if (WEAK == consistency_level || FROZEN == consistency_level) {
+        is_weak_read = true;
+      }
+    }
+    if (is_weak_read) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using vector index, weak read is");
+    }
   } else if (table_item->is_index_table_) {
     if (OB_FAIL(valid_index_ids.push_back(table_item->ref_id_))) {
       LOG_WARN("failed to push back array", K(ret));
