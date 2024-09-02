@@ -7752,6 +7752,10 @@ int ObDDLResolver::resolve_vec_index_constraint(
           column_schema.get_column_name_str().length(),
           column_schema.get_column_name_str().ptr());
       LOG_WARN("vector index can only be built on vector column", K(ret), K(column_schema));
+    } else if (column_schema.is_generated_column()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("vector index column is generate column is not supported", K(ret), K(column_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using generate column as vector index column is");
     } else if (OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(column_schema.get_extended_type_info(), dim))) {
       LOG_WARN("fail to get vector dim", K(ret), K(column_schema));
     } else if (dim > MAX_DIM_LIMITED) {

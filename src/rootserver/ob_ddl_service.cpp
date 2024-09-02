@@ -7016,7 +7016,8 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
             } else if (drop_index_arg->is_add_to_scheduler_) {
               ObDDLRes ddl_res;
               ObDDLTaskRecord task_record;
-              const bool is_inner_and_domain_index = drop_index_arg->is_inner_ && index_table_schema->is_fts_or_multivalue_index();
+              const bool is_fts_or_multivalue_or_vec_index = (index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index());
+              const bool is_inner_and_domain_index = drop_index_arg->is_inner_ && is_fts_or_multivalue_or_vec_index;
               bool has_index_task = false;
               typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
               SMART_VAR(TableSchemaArray, new_index_schemas) {
@@ -7036,13 +7037,16 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                                         trans,
                                                         new_index_schemas))) {
                   LOG_WARN("submit drop index arg failed", K(ret));
-                } else if (OB_UNLIKELY(!index_table_schema->is_fts_or_multivalue_index() && new_index_schemas.count() != 1)
+                } else if (OB_UNLIKELY(!is_fts_or_multivalue_or_vec_index && new_index_schemas.count() != 1)
+                        || OB_UNLIKELY(!drop_index_arg->is_inner_ && index_table_schema->is_vec_delta_buffer_type() && new_index_schemas.count() != 5)
                         || OB_UNLIKELY(index_table_schema->is_fts_index_aux() && new_index_schemas.count() != 4)
                         || OB_UNLIKELY(index_table_schema->is_multivalue_index_aux() && new_index_schemas.count() != 3)) {
                   ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected error, invalid new index schema count", K(ret), "count",
-                      new_index_schemas.count(), "is fts index", index_table_schema->is_fts_index_aux(),
+                  LOG_WARN("unexpected error, invalid new index schema count", K(ret),
+                      "count", new_index_schemas.count(),
+                      "is fts index", index_table_schema->is_fts_index_aux(),
                       "is multivalue index", index_table_schema->is_multivalue_index_aux(),
+                      "is vector index", index_table_schema->is_vec_delta_buffer_type(),
                       K(new_index_schemas));
                 } else {
                   const ObTableSchema &new_index_schema = new_index_schemas.at(new_index_schemas.count() - 1);

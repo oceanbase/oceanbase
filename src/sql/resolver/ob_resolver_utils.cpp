@@ -3620,7 +3620,7 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
 {
   int bret = false;
   if (is_key_part(part_type)) {
-    if (!ob_is_text_tc(type) && !ob_is_json_tc(type)) {
+    if (!ob_is_text_tc(type) && !ob_is_json_tc(type) && !ob_is_collection_sql_type(type)) {
       bret = true;
     }
   } else if (PARTITION_FUNC_TYPE_HASH == part_type ||
