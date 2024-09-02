@@ -1363,7 +1363,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
     index_snapshot_data_task_submitted_ = index_snapshot_data_task_submitted;
     drop_index_task_submitted_ = drop_index_submitted;
     is_rebuild_index_ = is_rebuild_index;
-    if (rowkey_vid_task_id_ != 0) {
+    if (rowkey_vid_task_id_ > 0) {
       share::ObDomainDependTaskStatus rowkey_vid_status;
       rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
       if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_vid_aux_table_id_,
@@ -1372,7 +1372,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
             K(rowkey_vid_status));
       }
     }
-    if (OB_SUCC(ret) && vid_rowkey_task_id_ != 0) {
+    if (OB_SUCC(ret) && vid_rowkey_task_id_ > 0) {
       share::ObDomainDependTaskStatus vid_rowkey_status;
       vid_rowkey_status.task_id_ = vid_rowkey_task_id_;
       if (OB_FAIL(dependent_task_result_map_.set_refactored(vid_rowkey_aux_table_id_,
@@ -1381,7 +1381,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
             K(vid_rowkey_status));
       }
     }
-    if (OB_SUCC(ret) && delta_buffer_task_id_ != 0) {
+    if (OB_SUCC(ret) && delta_buffer_task_id_ > 0) {
       share::ObDomainDependTaskStatus delta_buf_aux_status;
       delta_buf_aux_status.task_id_ = delta_buffer_task_id_;
       if (OB_FAIL(dependent_task_result_map_.set_refactored(delta_buffer_table_id_,
@@ -1390,7 +1390,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
             K(delta_buf_aux_status));
       }
     }
-    if (OB_SUCC(ret) && index_id_task_id_ != 0) {
+    if (OB_SUCC(ret) && index_id_task_id_ > 0) {
       share::ObDomainDependTaskStatus index_id_aux_status;
       index_id_aux_status.task_id_ = index_id_task_id_;
       if (OB_FAIL(dependent_task_result_map_.set_refactored(index_id_table_id_,
@@ -1399,7 +1399,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
             K(index_id_aux_status));
       }
     }
-    if (OB_SUCC(ret) && index_snapshot_task_id_ != 0) {
+    if (OB_SUCC(ret) && index_snapshot_task_id_ > 0) {
       share::ObDomainDependTaskStatus index_snapshot_aux_status;
       index_snapshot_aux_status.task_id_ = index_snapshot_task_id_;
       if (OB_FAIL(dependent_task_result_map_.set_refactored(index_snapshot_data_table_id_,
