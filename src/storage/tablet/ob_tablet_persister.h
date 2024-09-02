@@ -333,6 +333,7 @@ private:
     ObArenaAllocator &allocator,
     const ObITable *table,
     const bool check_has_padding_meta_cache,
+    ObIArray<ObSharedObjectWriteInfo> &write_info_arr,
     ObSSTablePersistCtx &sstable_persist_ctx);
   static int convert_arg_to_tablet(
       const ObTabletTransformArg &arg,

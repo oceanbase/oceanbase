@@ -1337,6 +1337,7 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
         } else if (OB_FAIL(fill_sstable_write_info_and_record(allocator,
                                                    cg_sstables[idx],
                                                    false, /*check_has_padding_meta_cache*/
+                                                   cg_write_infos,
                                                    sstable_persist_ctx))) {
           LOG_WARN("fail to fill sstable write_info", KR(ret), KPC(cg_sstables[idx]), K(idx), K(sstable_persist_ctx));
         } else {
@@ -1361,6 +1362,7 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
       } else if (OB_FAIL(fill_sstable_write_info_and_record(allocator,
                                                  tmp_co_sstable,
                                                  false, /*check_has_padding_meta_cache*/
+                                                 sstable_persist_ctx.write_infos_,
                                                  sstable_persist_ctx))) {
         LOG_WARN("fail to fill sstable write_info", KR(ret), KPC(tmp_co_sstable), K(sstable_persist_ctx));
       } else if (FALSE_IT(sstable_persist_ctx.large_co_sstable_cnt_++)) {
@@ -1422,6 +1424,7 @@ int ObTabletPersister::fill_sstable_write_info_and_record(
     ObArenaAllocator &allocator,
     const ObITable *table,
     const bool check_has_padding_meta_cache,
+    ObIArray<ObSharedObjectWriteInfo> &write_info_arr,
     ObSSTablePersistCtx &sstable_persist_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1430,7 +1433,7 @@ int ObTabletPersister::fill_sstable_write_info_and_record(
   if (OB_ISNULL(table) || !sstable_persist_ctx.is_inited()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguemnt", K(ret), KPC(table), K(sstable_persist_ctx));
-  } else if (OB_FAIL(fill_write_info(allocator, &wrapper, sstable_persist_ctx.write_infos_))) {
+  } else if (OB_FAIL(fill_write_info(allocator, &wrapper, write_info_arr))) {
     LOG_WARN("failed to fill sstable write info", K(ret));
   } else if (OB_FAIL(copy_sstable_macro_info(*sstable, sstable_persist_ctx.shared_macro_map_, sstable_persist_ctx.block_info_set_))) {
     LOG_WARN("fail to call sstable macro info", K(ret));
@@ -1521,6 +1524,7 @@ int ObTabletPersister::fetch_and_persist_normal_co_and_normal_sstable(
     if (OB_FAIL(record_cg_sstables_macro(table, sstable_persist_ctx))) {
       LOG_WARN("fail to record macro_info of small co sstable");
     } else if (OB_FAIL(fill_sstable_write_info_and_record(allocator, table, true, /*check_has_padding_meta_cache*/
+                                                          sstable_persist_ctx.write_infos_,
                                                           sstable_persist_ctx))) {
       LOG_WARN("fail to fill sstable write_info", KR(ret), KPC(table), K(sstable_persist_ctx));
     } else if (FALSE_IT(sstable_persist_ctx.small_co_sstable_cnt_++)) {
@@ -1530,6 +1534,7 @@ int ObTabletPersister::fetch_and_persist_normal_co_and_normal_sstable(
   } else if (!table->is_co_sstable()) {
     // normal sstable
     if (OB_FAIL(fill_sstable_write_info_and_record(allocator, table, true, /*check_has_padding_meta_cache*/
+                                                   sstable_persist_ctx.write_infos_,
                                                    sstable_persist_ctx))) {
       LOG_WARN("fail to fill sstable write_info", KR(ret), KPC(table), K(sstable_persist_ctx));
     } else if (FALSE_IT(sstable_persist_ctx.normal_sstable_cnt_++)) {
