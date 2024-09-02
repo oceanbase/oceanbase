@@ -53,8 +53,6 @@ public:
       int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) override { return OB_SUCCESS; }
-  int64_t get_build_replica_request_time();
-  int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   int update_drop_lob_meta_row_job_status(const common::ObTabletID &tablet_id,
                                         const int64_t snapshot_version,
                                         const int64_t execution_id,
@@ -72,6 +70,7 @@ private:
   int prepare(const share::ObDDLTaskStatus &status);
   int check_and_wait_finish(const share::ObDDLTaskStatus &status);
   int release_snapshot(const int64_t snapshot_version);
+  int wait_trans_end(const ObDDLTaskStatus next_task_status);
   int obtain_snapshot(const share::ObDDLTaskStatus next_task_status);
   int drop_aux_index_table(const share::ObDDLTaskStatus &status);
   int drop_lob_meta_row(const share::ObDDLTaskStatus next_task_status);

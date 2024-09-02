@@ -329,7 +329,7 @@ int ObVecIndexBuildTask::check_health()
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
-  } else if (status == ObDDLTaskStatus::FAIL && drop_index_task_submitted_) {
+  } else if (status == ObDDLTaskStatus::FAIL) {
     /*already failed, and have submitted drop index task, do nothing*/
   } else {
     ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
@@ -367,7 +367,8 @@ int ObVecIndexBuildTask::check_health()
         ret = check_errsim_error();
       }
     #endif
-    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)
+      && static_cast<ObDDLTaskStatus>(task_status_) != ObDDLTaskStatus::FAIL) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
       (void)switch_status(new_status, false, ret);
@@ -483,7 +484,7 @@ int ObVecIndexBuildTask::check_aux_table_schemas_exist(bool &is_all_exist)
                 K(index_id_exist), K(index_snapshot_data_exist), K(status),
                 K(rowkey_vid_aux_table_id_), K(vid_rowkey_aux_table_id_),
                 K(delta_buffer_table_id_), K(index_id_table_id_),
-                K(index_snapshot_data_table_id_));
+                K(index_snapshot_data_table_id_), K(drop_index_task_submitted_));
     }
   }
   return ret;
@@ -553,7 +554,14 @@ int ObVecIndexBuildTask::prepare()
   } else {
     state_finished = true;
   }
-
+  #ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] build vec index fail to prepare", K(ret));
+    }
+  }
+  #endif
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -562,6 +570,10 @@ int ObVecIndexBuildTask::prepare()
       (void)switch_status(next_status, true, ret);
       LOG_INFO("prepare finished", K(ret), K(parent_task_id_), K(task_id_), K(*this));
     }
+  } else if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    (void)switch_status(ObDDLTaskStatus::FAIL, false, ret);  // allow clean up
+    LOG_INFO("prepare failed", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -618,6 +630,14 @@ int ObVecIndexBuildTask::prepare_rowkey_vid_table()
   if (OB_SUCC(ret) && (rowkey_vid_task_submitted_ || is_rebuild_index_)) {
     state_finished = true;
   }
+  #ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_ROWKEY_VID_TBL_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] build vec index fail to prepare_rowkey_vid_table", K(ret));
+    }
+  }
+  #endif
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -627,6 +647,10 @@ int ObVecIndexBuildTask::prepare_rowkey_vid_table()
       LOG_INFO("generate schema finished", K(ret), K(parent_task_id_), K(task_id_),
           K(*this));
     }
+  } else if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    (void)switch_status(ObDDLTaskStatus::FAIL, false, ret);  // allow clean up
+    LOG_INFO("prepare failed", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -659,6 +683,14 @@ int ObVecIndexBuildTask::prepare_aux_index_tables()
   if (OB_SUCC(ret) && delta_buffer_task_submitted_ && index_id_task_submitted_) {
     state_finished = true;
   }
+  #ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_DELTA_OR_INDEX_ID_TBL_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] build vec index fail to prepare_delta_or_index_id_table", K(ret));
+    }
+  }
+  #endif
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -668,6 +700,10 @@ int ObVecIndexBuildTask::prepare_aux_index_tables()
       LOG_INFO("generate schema finished", K(ret), K(parent_task_id_), K(task_id_),
           K(*this));
     }
+  } else if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    (void)switch_status(ObDDLTaskStatus::FAIL, false, ret);  // allow clean up
+    LOG_INFO("prepare failed", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -734,6 +770,14 @@ int ObVecIndexBuildTask::prepare_vid_rowkey_table()
     (vid_rowkey_task_submitted_ || is_rebuild_index_) && index_snapshot_data_task_submitted_) {
     state_finished = true;
   }
+  #ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_VID_ROWKEY_OR_SNAP_TBL_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] build vec index fail to prepare_vid_rowkey_or_snapshot_table", K(ret));
+    }
+  }
+  #endif
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -743,6 +787,10 @@ int ObVecIndexBuildTask::prepare_vid_rowkey_table()
       LOG_INFO("generate schema finished", K(ret), K(parent_task_id_), K(task_id_),
           K(*this));
     }
+  } else if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    (void)switch_status(ObDDLTaskStatus::FAIL, false, ret);  // allow clean up
+    LOG_INFO("prepare failed", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -941,9 +989,17 @@ int ObVecIndexBuildTask::wait_aux_table_complement()
       state_finished = true;
     }
   }
-  if (state_finished) {
+  #ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_WAIT_AUX_TBL_COMPLEMENT_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] build vec index fail to complement aux table data", K(ret));
+    }
+  }
+  #endif
+  if (state_finished || OB_FAIL(ret)) {
     ObDDLTaskStatus next_status;
-    if (child_task_failed) {
+    if (child_task_failed || OB_FAIL(ret)) {
       if (!ObIDDLTask::in_ddl_retry_white_list(ret)) {
         const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
         const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
@@ -1708,7 +1764,7 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     LOG_WARN("check table exist failed", K(ret), K_(tenant_id), K(index_table_id));
   } else if (!is_index_exist) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("vec index aux schema is nullptr, fail to roll back", K(ret));
+    LOG_WARN("vec index aux schema is nullptr, fail to roll back", K(ret), K(index_table_id), K(delta_buffer_table_id_), K(index_table_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_table_id, index_table_schema))) {
     LOG_WARN("get index schema failed", K(ret), K(tenant_id_), K(index_table_id));
   } else if (OB_ISNULL(index_table_schema)) {
@@ -1824,6 +1880,14 @@ int ObVecIndexBuildTask::validate_checksum()
       state_finished = true;
     }
   }
+  #ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_CHECKSUM_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] build vec index fail to checksum", K(ret));
+    }
+  }
+  #endif
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -1833,6 +1897,10 @@ int ObVecIndexBuildTask::validate_checksum()
       LOG_INFO("validate checksum finished", K(ret), K(parent_task_id_),
           K(task_id_), K(*this));
     }
+  } else if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    (void)switch_status(ObDDLTaskStatus::FAIL, false, ret);  // allow clean up
+    LOG_INFO("prepare failed", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    ret = OB_SUCCESS;
   }
   return ret;
 }

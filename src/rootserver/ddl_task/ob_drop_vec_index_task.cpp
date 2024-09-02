@@ -157,25 +157,48 @@ int ObDropVecIndexTask::init(const ObDDLTaskRecord &task_record)
 int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
-
+  bool state_finished = false;
+  ObDDLTaskStatus old_status = task_status_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if ((snapshot_version_ > 0 && snapshot_held_) || !vec_index_snapshot_data_.is_valid()) {
-    // do nothing, already hold snapshot or do not need snapshot(when snapshot table is not built)
+  }  else if (!vec_index_snapshot_data_.is_valid()) {
+    // do not need snapshot and delete lob meta row(when snapshot table is not built)
+    state_finished = true;
+    if (OB_FAIL(switch_status(ObDDLTaskStatus::DROP_AUX_INDEX_TABLE, true, ret))) {
+      LOG_WARN("fail to switch task status to ObDDLTaskStatus::DROP_AUX_INDEX_TABLE", K(ret));
+    }
+  } else if (snapshot_version_ > 0 && snapshot_held_) {
+    // already hold snapshot, switch to next status
+    state_finished = true;
+    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+      LOG_WARN("fail to switch task status", K(ret), K(next_task_status));
+    }
   } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(next_task_status, vec_index_snapshot_data_.table_id_,
                                                 vec_index_snapshot_data_.table_id_, snapshot_version_,
                                                 snapshot_held_, this))) {
     LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_), K(snapshot_held_));
+  } else {
+    state_finished = true;
   }
-
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_OBTAIN_SNAPSHOT_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] fail to obtain snapshot", K(ret));
+    }
+  }
+#endif
+  if (state_finished && OB_SUCC(ret)) {
+    LOG_INFO("success to obtain_snapshot", K(ret));
+  } else if (next_task_status == task_status_) {  // resume old task status and retry
+    if (OB_FAIL(switch_status(old_status, true, ret))) {
+      LOG_WARN("fail to switch status", K(ret), K(old_status), K(task_status_));
+    } else {
+      LOG_INFO("resume obtain_snapshot success", K(ret), K(old_status), K(task_status_), K(task_id_));
+    }
+  }
   return ret;
-}
-
-int64_t ObDropVecIndexTask::get_build_replica_request_time()
-{
-  TCRLockGuard guard(lock_);
-  return  delte_lob_meta_request_time_;
 }
 
 int ObDropVecIndexTask::drop_lob_meta_row(const ObDDLTaskStatus next_task_status)
@@ -201,12 +224,58 @@ int ObDropVecIndexTask::drop_lob_meta_row(const ObDDLTaskStatus next_task_status
   }
   if (is_build_replica_end) {
     ret = OB_SUCC(ret) ? delte_lob_meta_job_ret_code_ : ret;
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_DROP_LOB_META_ROW_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] fail to drop lob meta row", K(ret));
+    }
+  }
+#endif
     if (OB_FAIL(ret)) {
       LOG_WARN("fail in delete lob meta row", K(ret));
     } else if (OB_FAIL(finish())) {
       LOG_WARN("fail in release snapshot", K(ret));
     } else if (OB_FAIL(switch_status(next_task_status, true/*enable_flt*/, ret))) {
-      LOG_WARN("fail to swith task status", K(ret));
+      LOG_WARN("fail to switch task status", K(ret), K(next_task_status));
+    } else {
+      LOG_INFO("drop_lob_meta_row success", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDropVecIndexTask::wait_trans_end(ObDDLTaskStatus next_task_status)
+{
+  int ret = OB_SUCCESS;
+  bool state_finished = false;
+  ObDDLTaskStatus old_status = task_status_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObDDLTaskStatus::WAIT_TRANS_END != task_status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status not match", K(ret), K(task_status_));
+  } else if (OB_FAIL(ObDDLTask::wait_trans_end(wait_trans_ctx_, next_task_status))) {
+    LOG_WARN("fail to wait trans end", K(ret));
+  } else {
+    state_finished = true;
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_WAIT_TRANS_END_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] fail to wait trans end", K(ret));
+    }
+  }
+#endif
+  if (state_finished && OB_SUCC(ret)) {
+    LOG_INFO("success to wait trans end", K(ret));
+  } else if (next_task_status == task_status_) {  // resume old task status and retry
+    if (OB_FAIL(switch_status(old_status, true, ret))) {
+      LOG_WARN("fail to switch status", K(ret), K(old_status), K(task_status_));
+    } else {
+      LOG_INFO("resume wait_trans_end old status success", K(ret), K(old_status), K(task_status_), K(task_id_));
     }
   }
   return ret;
@@ -232,7 +301,7 @@ int ObDropVecIndexTask::process()
         }
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END:
-        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, ObDDLTaskStatus::OBTAIN_SNAPSHOT))) {
+        if (OB_FAIL(wait_trans_end(ObDDLTaskStatus::OBTAIN_SNAPSHOT))) {
           LOG_WARN("fail to wait trans end", K(ret));
         }
         break;
@@ -468,13 +537,22 @@ int ObDropVecIndexTask::check_switch_succ()
 int ObDropVecIndexTask::prepare(const share::ObDDLTaskStatus &new_status)
 {
   int ret = OB_SUCCESS;
+  bool state_finished = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
+    LOG_WARN("not init", K(ret));
+  } else if (ObDDLTaskStatus::PREPARE != task_status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status not match", K(ret), K(task_status_));
+  } else {
+    state_finished = true;
   }
-  if (OB_FAIL(switch_status(new_status, true/*enable_flt*/, ret))) {
-    // overwrite ret
-    LOG_WARN("fail to switch status", K(ret));
+  if (state_finished) {
+    if (OB_FAIL(switch_status(new_status, true, ret))) {
+      LOG_WARN("switch status failed", K(ret), K(new_status), K(task_status_));
+    } else {
+      LOG_INFO("prepare success", K(ret), K(parent_task_id_), K(task_id_), K(*this));
+    }
   }
   return ret;
 }
@@ -506,12 +584,22 @@ int ObDropVecIndexTask::drop_aux_index_table(const share::ObDDLTaskStatus &new_s
   } else if (OB_FAIL(wait_none_share_index_child_task_finish(has_finished))) {
     LOG_WARN("fail to wait vec none share child task finish", K(ret));
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_DROP_AUX_TABLE_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      has_finished = false;
+      LOG_WARN("[ERRSIM] fail to drop aux index table", K(ret));
+    }
+  }
+#endif
   if (has_finished) {
     // overwrite return code
     if (OB_FAIL(switch_status(new_status, true/*enable_flt*/, ret))) {
       LOG_WARN("fail to switch status", K(ret), K(new_status));
     } else {
       vec_index_snapshot_data_.table_id_ = OB_INVALID_ID;
+      LOG_INFO("drop_aux_index_table success", K(ret));
     }
   }
   return ret;
@@ -530,10 +618,21 @@ int ObDropVecIndexTask::check_and_wait_finish(const share::ObDDLTaskStatus &new_
   } else if (OB_FAIL(wait_share_index_child_task_finish(has_finished))) {
     LOG_WARN("fail to wait share index child task finish", K(ret));
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_DROP_SHARE_TABLE_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      has_finished = false;
+      LOG_WARN("[ERRSIM] fail to drop share index table", K(ret));
+    }
+  }
+#endif
   if (has_finished) {
     // overwrite return code
     if (OB_FAIL(switch_status(new_status, true/*enable_flt*/, ret))) {
       LOG_WARN("fail to switch status", K(ret), K(new_status));
+    } else {
+      LOG_INFO("check_and_wait_finish success", K(ret));
     }
   }
   return ret;
@@ -843,7 +942,7 @@ int ObDropVecIndexTask::send_build_single_replica_request()
     } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id_, vec_index_snapshot_data_.table_id_, param.dest_tablet_ids_))) {
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(target_object_id_));
     } else if (OB_FAIL(replica_builder_.build(param))) {
-      LOG_WARN("fail to send build single replica", K(ret));
+      LOG_WARN("fail to send build single replica", K(ret), K(param));
     } else {
       del_lob_meta_row_task_submitted_ = true;
       delte_lob_meta_request_time_ = ObTimeUtility::current_time();
