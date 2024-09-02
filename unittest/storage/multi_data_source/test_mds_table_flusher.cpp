@@ -169,6 +169,7 @@ TEST_F(TestMdsTableFlush, flusher_for_all_order_with_enough_memory) {
     ASSERT_EQ(OB_SUCCESS, mds_table.init<UnitTestMdsTable>(MdsAllocator::get_instance(),
                                                             v_key[i].tablet_id_,
                                                             share::ObLSID(1),
+                                                            share::SCN::min_scn(),
                                                             (ObTabletPointer*)0x111,
                                                             &mgr));
     MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;
@@ -203,6 +204,7 @@ TEST_F(TestMdsTableFlush, flusher_for_all_order_with_limitted_memory_reserve_fai
     ASSERT_EQ(OB_SUCCESS, mds_table.init<UnitTestMdsTable>(MdsAllocator::get_instance(),
                                                             v_key[i].tablet_id_,
                                                             share::ObLSID(1),
+                                                            share::SCN::min_scn(),
                                                             (ObTabletPointer*)0x111,
                                                             &mgr));
     MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;
@@ -248,6 +250,7 @@ TEST_F(TestMdsTableFlush, flusher_for_one) {
 //     ASSERT_EQ(OB_SUCCESS, mds_table.init<UnitTestMdsTable>(MdsAllocator::get_instance(),
 //                                                            v_key[i].tablet_id_,
 //                                                            share::ObLSID(1),
+//                                                            share::SCN::min_scn(),
 //                                                            (ObTabletPointer*)0x111,
 //                                                            &mgr));
 //     MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;
@@ -275,6 +278,7 @@ TEST_F(TestMdsTableFlush, flusher_for_one) {
 //       ASSERT_EQ(OB_SUCCESS, mds_table.init<UnitTestMdsTable>(MdsAllocator::get_instance(),
 //                                                              v_key[i].tablet_id_,
 //                                                              share::ObLSID(1),
+//                                                              share::SCN::min_scn(),
 //                                                              (ObTabletPointer*)0x111,
 //                                                              &mgr));
 //       MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;

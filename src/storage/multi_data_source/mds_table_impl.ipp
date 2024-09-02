@@ -932,10 +932,16 @@ int MdsTableImpl<MdsTableType>::calculate_flush_scn_and_need_dumped_nodes_cnt_(s
   #define PRINT_WRAPPER KR(ret), K(*this), K(do_flush_scn), K(need_dumped_nodes_cnt)
   MDS_TG(100_ms);
   int ret = OB_SUCCESS;
+  share::SCN last_calculated_do_flush_scn = do_flush_scn;
   RecalculateFlushScnCauseOnlySuppportDumpCommittedNodeOP op1(do_flush_scn);// recalculate flush scn
+  do {
+    last_calculated_do_flush_scn = do_flush_scn;
+    if (MDS_FAIL(for_each_scan_row(FowEachRowAction::CALCUALTE_FLUSH_SCN, op1))) {
+      MDS_LOG_FLUSH(WARN, "for each to calculate flush scn failed");
+    }
+  } while (OB_SUCC(ret) && last_calculated_do_flush_scn != do_flush_scn);// flush scn must not cross any node's [redo_scn, end_scn)
   CountUnDumpdedNodesBelowDoFlushScn op2(need_dumped_nodes_cnt, do_flush_scn);// count nodes need dump
-  if (MDS_FAIL(for_each_scan_row(FowEachRowAction::CALCUALTE_FLUSH_SCN, op1))) {
-    MDS_LOG_FLUSH(WARN, "for each to calculate flush scn failed");
+  if (MDS_FAIL(ret)) {
   } else if (MDS_FAIL(for_each_scan_row(FowEachRowAction::COUNT_NODES_BEFLOW_FLUSH_SCN, op2))) {
     MDS_LOG_FLUSH(WARN, "for each to count undumped nodes failed");
   }
@@ -1063,6 +1069,27 @@ void MdsTableImpl<MdsTableType>::on_flush(const share::SCN &flush_scn, const int
   on_flush_(flush_scn, flush_ret);
 }
 template <typename MdsTableType>
+void MdsTableImpl<MdsTableType>::calculate_rec_scn_and_advance_to_it_(share::SCN on_flush_scn)
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(on_flush_scn)
+  int ret = OB_SUCCESS;
+  MDS_TG(10_ms);
+  bool need_retry = false;
+  do {
+    need_retry = false;
+    CalculateRecScnOp op(on_flush_scn);
+    if (MDS_FAIL(for_each_scan_row(FowEachRowAction::CALCULATE_REC_SCN, op))) {// lock all rows failed, retry until lock all rows success
+      need_retry = true;
+      MDS_LOG_FLUSH(WARN, "fail to do on flush");// record row lock guard may failed, cause lock guard array may meet extended failed cause memory not enough, but retry will make it success
+    } else {
+      share::SCN new_rec_scn = op.rec_scn_;
+      try_advance_rec_scn(new_rec_scn);
+      report_on_flush_event_("ON_FLUSH", on_flush_scn);
+    }
+  } while (need_retry && !FALSE_IT(PAUSE()));// here will release all rows lock
+  #undef PRINT_WRAPPER
+}
+template <typename MdsTableType>
 void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const int flush_ret)
 {
   #define PRINT_WRAPPER KR(ret), K(*this), K(flush_scn)
@@ -1080,19 +1107,7 @@ void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const in
     }
   } else {
     flushing_scn_.reset();
-    bool need_retry = false;
-    do {
-      need_retry = false;
-      CalculateRecScnOp op(flush_scn);
-      if (MDS_FAIL(for_each_scan_row(FowEachRowAction::CALCULATE_REC_SCN, op))) {// lock all rows failed, retry until lock all rows success
-        need_retry = true;
-        MDS_LOG_FLUSH(WARN, "fail to do on flush");// record row lock guard may failed, cause lock guard array may meet extended failed cause memory not enough, but retry will make it success
-      } else {
-        share::SCN new_rec_scn = op.rec_scn_;
-        try_advance_rec_scn(new_rec_scn);
-        report_on_flush_event_("ON_FLUSH", flush_scn);
-      }
-    } while (need_retry && !FALSE_IT(PAUSE()));// here will release all rows lock
+    (void) calculate_rec_scn_and_advance_to_it_(flush_scn);
   }
   #undef PRINT_WRAPPER
 }
@@ -1433,9 +1448,11 @@ int MdsTableImpl<MdsTableType>::try_recycle(const share::SCN recycle_scn)
   #undef PRINT_WRAPPER
 }
 
-struct ForcelyReleaseAllNodeOp
+struct ForcelyReleaseNodesRedoScnBelowOp
 {
-  ForcelyReleaseAllNodeOp(const char *reason) : reason_(reason) {}
+  ForcelyReleaseNodesRedoScnBelowOp(const char *reason, share::SCN redo_below_scn)
+  : reason_(reason),
+  redo_below_scn_(redo_below_scn) {}
   template <typename K, typename V>
   int operator()(const MdsRow<K, V> &row) {
     #define PRINT_WRAPPER K(cast_node), K_(reason)
@@ -1447,11 +1464,18 @@ struct ForcelyReleaseAllNodeOp
     row.sorted_list_.for_each_node_from_tail_to_head_until_true(
       [this, &row](const UserMdsNode<K, V> &mds_node) {
         UserMdsNode<K, V> &cast_node = const_cast<UserMdsNode<K, V> &>(mds_node);
-        if (!cast_node.is_committed_()) {
-          MDS_LOG_GC(INFO, "release uncommitted node");
+        if (mds_node.redo_scn_ <= redo_below_scn_) {
+          // below_scn_ comes from mds sstable mds_ckpt_scn, it must not cross any node's [redo, end) scn range
+          // before support dump uncommitted nodes, all nodes be scanned must satisfy this rule
+          MDS_ASSERT(mds_node.end_scn_ <= redo_below_scn_);
+          if (!cast_node.is_committed_()) {
+            MDS_LOG_GC(INFO, "release uncommitted node");
+          }
+          const_cast<MdsRow<K, V> &>(row).sorted_list_.del((ListNodeBase*)(ListNode<UserMdsNode<K, V>>*)(&cast_node));
+          MdsFactory::destroy(&cast_node);
+        } else if (redo_below_scn_.is_max()) {// just for defence
+          ob_abort();
         }
-        const_cast<MdsRow<K, V> &>(row).sorted_list_.del((ListNodeBase*)(ListNode<UserMdsNode<K, V>>*)(&cast_node));
-        MdsFactory::destroy(&cast_node);
         return false;
       }
     );
@@ -1459,24 +1483,28 @@ struct ForcelyReleaseAllNodeOp
     #undef PRINT_WRAPPER
   }
   const char *reason_;
+  share::SCN redo_below_scn_;
 };
 template <typename MdsTableType>
-int MdsTableImpl<MdsTableType>::forcely_reset_mds_table(const char *reason)
+int MdsTableImpl<MdsTableType>::forcely_remove_nodes(const char *reason, share::SCN redo_scn_limit)
 {
-  #define PRINT_WRAPPER KR(ret), K(*this), K(reason)
+  #define PRINT_WRAPPER KR(ret), K(*this), K(reason), K(redo_scn_limit)
   int ret = OB_SUCCESS;
   MDS_TG(100_ms);
   MdsWLockGuard lg(lock_);
-  ForcelyReleaseAllNodeOp op(reason);
-  if (OB_FAIL(for_each_scan_row(FowEachRowAction::RESET, op))) {
-    MDS_LOG_GC(ERROR, "fail to do reset");
+  ForcelyReleaseNodesRedoScnBelowOp op(reason, redo_scn_limit);
+  if (OB_FAIL(for_each_scan_row(FowEachRowAction::REMOVE, op))) {
+    MDS_LOG_GC(ERROR, "fail to do remove");
   } else {
-    debug_info_.last_reset_ts_ = ObClockGenerator::getClock();
+    debug_info_.last_remove_ts_ = ObClockGenerator::getClock();
     flushing_scn_.reset();
-    last_inner_recycled_scn_ = share::SCN::min_scn();
-    rec_scn_ = share::SCN::max_scn();
-    ATOMIC_STORE(&total_node_cnt_, 0);
-    MDS_LOG_GC(INFO, "forcely release all mds nodes");
+    calculate_rec_scn_and_advance_to_it_(redo_scn_limit);
+    if (redo_scn_limit.is_max()) {// reset operation
+      last_inner_recycled_scn_ = share::SCN::min_scn();
+    } else {// remove operation
+      last_inner_recycled_scn_ = std::max(last_inner_recycled_scn_, redo_scn_limit);
+    }
+    MDS_LOG_GC(INFO, "forcely release mds nodes below");
   }
   return ret;
   #undef PRINT_WRAPPER

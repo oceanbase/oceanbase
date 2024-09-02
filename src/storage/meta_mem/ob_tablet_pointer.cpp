@@ -46,12 +46,13 @@ ObTabletPointer::ObTabletPointer()
     ddl_info_(),
     initial_state_(true),
     ddl_kv_mgr_lock_(),
+    mds_lock_(),
     mds_table_handler_(),
     old_version_chain_(nullptr),
     attr_()
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 344, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 352, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -486,7 +487,17 @@ int ObTabletPointer::get_mds_table(const ObTabletID &tablet_id,
     bool not_exist_create)
 {
   int ret = OB_SUCCESS;
-  if (!ls_handle_.is_valid()) {
+  ObLSID ls_id = ls_handle_.get_ls()->get_ls_id();
+  share::SCN mds_ckpt_scn = share::SCN::min_scn();
+  if (not_exist_create) {
+    ScanAllVersionTabletsOp::GetMaxMdsCkptScnOp op(mds_ckpt_scn);
+    if (OB_UNLIKELY(phy_addr_.is_none())) {// first time create, without phy addr, use min scn to init mds table
+    } else if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->scan_all_version_tablets({ls_id, tablet_id}, op))) {
+      LOG_WARN("failed to get mds_ckpt_scn", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!ls_handle_.is_valid()) {
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid ls_handle_, maybe not init yet", K(ret));
   } else if (!tablet_id.is_valid()) {
@@ -495,6 +506,7 @@ int ObTabletPointer::get_mds_table(const ObTabletID &tablet_id,
   } else if (OB_FAIL(mds_table_handler_.get_mds_table_handle(handle,
                                                              tablet_id,
                                                              ls_handle_.get_ls()->get_ls_id(),
+                                                             mds_ckpt_scn,
                                                              not_exist_create,
                                                              this))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
@@ -549,7 +561,24 @@ int ObTabletPointer::release_memtable_and_mds_table_for_ls_offline(const ObTable
     } else {
       LOG_WARN("failed to get mds table", K(ret));
     }
-  } else if (OB_FAIL(mds_table.forcely_reset_mds_table("OFFLINE"))) {
+  } else if (OB_FAIL(mds_table.forcely_remove_nodes("OFFLINE", share::SCN::max_scn()))) {
+    LOG_WARN("fail to release mds nodes in mds table", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTabletPointer::release_mds_nodes_redo_scn_below(const ObTabletID &tablet_id, const share::SCN &mds_ckpt_scn)
+{
+  int ret = OB_SUCCESS;
+  mds::MdsTableHandle mds_table;
+  if (OB_FAIL(get_mds_table(tablet_id, mds_table, false/*not_exist_create*/))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get mds table", K(ret));
+    }
+  } else if (OB_FAIL(mds_table.forcely_remove_nodes("REMOVE", mds_ckpt_scn))) {
     LOG_WARN("fail to release mds nodes in mds table", K(ret));
   }
 
@@ -609,15 +638,20 @@ int ObTabletPointer::remove_tablet_from_old_version_chain(ObTablet *tablet)
   return ret;
 }
 
-int ObTabletPointer::get_min_mds_ckpt_scn(share::SCN &scn)
+int ObTabletPointer::scan_all_tablets_on_chain(const ObFunction<int(ObTablet &)> &op)
 {
   int ret = OB_SUCCESS;
-  scn.set_max();
   ObTablet *cur = old_version_chain_;
-  while (OB_SUCC(ret) && OB_NOT_NULL(cur)) {
-    scn = MIN(scn, cur->get_tablet_meta().mds_checkpoint_scn_);
-    cur = cur->get_next_tablet();
-
+  if (!op.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "receive an invalid operator", K(ret), K(obj_));
+  } else {
+    while (OB_SUCC(ret) && OB_NOT_NULL(cur)) {
+      if (OB_FAIL(op(*cur))) {
+        STORAGE_LOG(WARN, "failed to apply op on old version tablet", K(ret), K(obj_));
+      }
+      cur = cur->get_next_tablet();
+    }
   }
   return ret;
 }
@@ -708,7 +742,31 @@ int ObITabletFilterOp::operator()(const ObTabletResidentInfo &info, bool &is_ski
   return ret;
 }
 
+ScanAllVersionTabletsOp::GetMinMdsCkptScnOp::GetMinMdsCkptScnOp(share::SCN &min_mds_ckpt_scn)
+:min_mds_ckpt_scn_(min_mds_ckpt_scn)
+{
+  min_mds_ckpt_scn_.set_max();
+}
 
+int ScanAllVersionTabletsOp::GetMinMdsCkptScnOp::operator()(ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  min_mds_ckpt_scn_ = MIN(min_mds_ckpt_scn_, tablet.get_mds_checkpoint_scn());
+  return ret;
+}
+
+ScanAllVersionTabletsOp::GetMaxMdsCkptScnOp::GetMaxMdsCkptScnOp(share::SCN &max_mds_ckpt_scn)
+:max_mds_ckpt_scn_(max_mds_ckpt_scn)
+{
+  max_mds_ckpt_scn_.set_min();
+}
+
+int ScanAllVersionTabletsOp::GetMaxMdsCkptScnOp::operator()(ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  max_mds_ckpt_scn_ = MAX(max_mds_ckpt_scn_, tablet.get_mds_checkpoint_scn());
+  return ret;
+}
 
 } // namespace storage
 } // namespace oceanbase

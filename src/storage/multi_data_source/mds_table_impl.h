@@ -141,8 +141,9 @@ public:
                                      const ScanRowOrder scan_row_order,
                                      const ScanNodeOrder scan_node_order) const override;
   virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) override;
-  int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN &flush_scn, int64_t &need_dumped_nodes_cnt);
   virtual int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn) override;
+  int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN &flush_scn, int64_t &need_dumped_nodes_cnt);
+  void calculate_rec_scn_and_advance_to_it_(share::SCN on_flush_scn);
   void on_flush_(const share::SCN &flush_scn, const int flush_ret);
   virtual void on_flush(const share::SCN &flush_scn, const int flush_ret) override;
   virtual int try_recycle(const share::SCN recycle_scn) override;
@@ -150,7 +151,7 @@ public:
     ForEachUnitFillVirtualInfoHelper helper(mds_node_info_array);
     return unit_tuple_.for_each(helper);
   }
-  virtual int forcely_reset_mds_table(const char *reason) override;
+  virtual int forcely_remove_nodes(const char *reason, share::SCN redo_scn_limit) override;
   /*****************************Single Key Unit Access Interface***********************************/
   template <typename T>
   int set(T &&data,

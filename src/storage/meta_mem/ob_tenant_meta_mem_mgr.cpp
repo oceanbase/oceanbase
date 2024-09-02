@@ -998,18 +998,20 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
   return ret;
 }
 
-int ObTenantMetaMemMgr::get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::SCN &scn)
+int ObTenantMetaMemMgr::scan_all_version_tablets(const ObTabletMapKey &key, const ObFunction<int(ObTablet &)> &op)
 {
   int ret = OB_SUCCESS;
-  SCN min_scn_from_old_tablets = SCN::max_scn();
-  SCN min_scn_from_cur_tablet = SCN::max_scn();
-  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetMinMdsScn"));
+  ObTablet *cur_tablet = nullptr;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "ScanTablets"));
   ObTabletPointerHandle ptr_handle(tablet_map_);
   ObTabletHandle handle;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (!op.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("operator is invalid", K(ret));
   } else if (OB_FAIL(get_tablet_with_allocator(WashTabletPriority::WTP_LOW, key, allocator, handle))) {
     LOG_WARN("fail to get latest tablet", K(ret), K(key));
   } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
@@ -1019,18 +1021,16 @@ int ObTenantMetaMemMgr::get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::S
     LOG_WARN("unexpected invalid handle", K(ret), K(handle), K(ptr_handle));
   } else {
     // since cur_tablet may be added into old_chain, we must get it at first
-    min_scn_from_cur_tablet = handle.get_obj()->get_tablet_meta().mds_checkpoint_scn_;
+    cur_tablet = handle.get_obj();
     ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(ptr_handle.get_resource_ptr());
     ObBucketHashRLockGuard lock_guard(bucket_lock_, key.hash()); // lock old_version_chain
     if (OB_ISNULL(tablet_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
-    } else if (OB_FAIL(tablet_ptr->get_min_mds_ckpt_scn(min_scn_from_old_tablets))) {
-      LOG_WARN("fail to get min mds ckpt scn from old tablets", K(ret), K(key));
-    } else {
-      scn = MIN(min_scn_from_cur_tablet, min_scn_from_old_tablets);
-      LOG_TRACE("get min mds ckpt scn", K(ret), K(key),
-                K(scn), K(min_scn_from_cur_tablet), K(min_scn_from_old_tablets));
+    } else if (OB_FAIL(tablet_ptr->scan_all_tablets_on_chain(op))) {
+      LOG_WARN("fail to apply op on old chain tablets", K(ret), K(key));
+    } else if (OB_FAIL(op(*cur_tablet))) {
+      LOG_WARN("fail to apply op on current tablet", K(ret), K(key));
     }
   }
   return ret;

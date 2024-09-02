@@ -15,6 +15,7 @@
 
 #include "lib/lock/ob_mutex.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
+#include "storage/multi_data_source/runtime_utility/mds_lock.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/multi_data_source/mds_table_handler.h"
@@ -85,12 +86,45 @@ public:
   int64_t backup_bytes_;
 };
 
+enum class LockMode { SHARE, EXCLUSIVE };
+template <LockMode mode>
+struct TabletMdsLockGuard
+{
+  TabletMdsLockGuard() : lock_(nullptr) {}
+  TabletMdsLockGuard(mds::MdsLock &lock) : lock_(&lock) {
+    if (mode == LockMode::SHARE) {
+      lock_->rdlock();
+    } else if (mode == LockMode::EXCLUSIVE) {
+      lock_->wrlock();
+    }
+  }
+  ~TabletMdsLockGuard() {
+    if (lock_) {
+      if (mode == LockMode::SHARE) {
+        lock_->rdunlock();
+      } else if (mode == LockMode::EXCLUSIVE) {
+        lock_->wrunlock();
+      }
+    }
+  }
+  mds::MdsLock *lock_;
+};
+
 class ObTabletPointer final
 {
   friend class ObTablet;
   friend class ObLSTabletService;
   friend class ObTenantMetaMemMgr;
   friend class ObTabletResidentInfo;
+public:
+  template <LockMode MODE>
+  void get_mds_truncate_lock_guard(TabletMdsLockGuard<MODE> &lock_guard) const {
+    if (OB_ISNULL(lock_guard.lock_)) {
+      new (&lock_guard) TabletMdsLockGuard<MODE>(mds_lock_);
+    } else {
+      ob_abort();// just for defence
+    }
+  }
 public:
   ObTabletPointer();
   ObTabletPointer(const ObLSHandle &ls_handle,
@@ -149,13 +183,19 @@ public:
   int try_release_mds_nodes_below(const share::SCN &scn);
   int try_gc_mds_table();
   int release_memtable_and_mds_table_for_ls_offline(const ObTabletID &tablet_id);
-  int get_min_mds_ckpt_scn(share::SCN &scn);
+  // NOTICE1: input arg mds_ckpt_scn must be very carefully picked,
+  // this scn should be calculated by mds table when flush,
+  // and dumped to mds sstable, recorded on tablet
+  // ohterwise mds data will lost
+  // NOTICE2: this call must be protected by TabletMdsLockGuard<LockMode::EXCLUSIVE>
+  int release_mds_nodes_redo_scn_below(const ObTabletID &tablet_id, const share::SCN &mds_ckpt_scn);
   ObLS *get_ls() const;
   // the RW operations of tablet_attr are protected by lock guard of tablet_map_
   int set_tablet_attr(const ObTabletAttr &attr);
   bool is_old_version_chain_empty() const { return OB_ISNULL(old_version_chain_); }
   bool is_attr_valid() const { return attr_.is_valid(); }
 private:
+  int scan_all_tablets_on_chain(const ObFunction<int(ObTablet &)> &op);// must be called under t3m bucket lock's protection
   int wash_obj();
   int add_tablet_to_old_version_chain(ObTablet *tablet);
   int remove_tablet_from_old_version_chain(ObTablet *tablet);
@@ -168,10 +208,11 @@ private:
   ObTabletDDLInfo ddl_info_; // 32B
   bool initial_state_; // 1B
   ObByteLock ddl_kv_mgr_lock_; // 1B
+  mutable mds::MdsLock mds_lock_;// 12B
   mds::ObMdsTableHandler mds_table_handler_;// 48B
   ObTablet *old_version_chain_; // 8B
   ObTabletAttr attr_; // 32B // protected by rw lock of tablet_map_
-  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 320B
+  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 352B
 };
 
 struct ObTabletResidentInfo final
@@ -222,6 +263,22 @@ private:
   static int64_t not_in_mem_tablet_cnt_;
   static int64_t invalid_attr_tablet_cnt_;
   DISALLOW_COPY_AND_ASSIGN(ObITabletFilterOp);
+};
+
+struct ScanAllVersionTabletsOp
+{
+  struct GetMinMdsCkptScnOp
+  {
+    explicit GetMinMdsCkptScnOp(share::SCN &min_mds_ckpt_scn);
+    int operator()(ObTablet &);
+    share::SCN &min_mds_ckpt_scn_;
+  };
+  struct GetMaxMdsCkptScnOp
+  {
+    explicit GetMaxMdsCkptScnOp(share::SCN &max_mds_ckpt_scn);
+    int operator()(ObTablet &);
+    share::SCN &max_mds_ckpt_scn_;
+  };
 };
 
 } // namespace storage
