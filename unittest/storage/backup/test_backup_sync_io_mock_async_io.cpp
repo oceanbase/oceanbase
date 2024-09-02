@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include <gtest/gtest.h>
+#define private public
+#define protected public
+#include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
@@ -22,8 +25,6 @@
 #include "share/ob_local_device.h"
 #include "share/ob_device_manager.h"
 
-#define private public
-#define protected public
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -96,15 +97,12 @@ public:
     system("mkdir -p " TEST_DATA_DIR);
     system("mkdir -p " TEST_SSTABLE_DIR);
 
-    // init io device
-    static oceanbase::share::ObLocalDevice local_device;
-    OK(init_device(0, local_device));
-    THE_IO_DEVICE = &local_device;
+    EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
   }
 
   static void TearDownTestCase()
   {
-    THE_IO_DEVICE->destroy();
+    MockTenantModuleEnv::get_instance().destroy();
   }
 
   virtual void SetUp()

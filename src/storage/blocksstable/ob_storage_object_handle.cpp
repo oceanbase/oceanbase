@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_storage_object_rw_info.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
+#include "share/ob_io_device_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
 #endif
@@ -227,7 +228,7 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
     io_info.fd_.first_id_ = read_info.macro_block_id_.first_id();
     io_info.fd_.second_id_ = read_info.macro_block_id_.second_id();
     io_info.fd_.third_id_ = read_info.macro_block_id_.third_id();
-    io_info.fd_.device_handle_ = THE_IO_DEVICE;
+    io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
     io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
     const int64_t real_timeout_ms = min(read_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
@@ -286,7 +287,7 @@ int ObStorageObjectHandle::sn_async_write(const ObStorageObjectWriteInfo &write_
     io_info.fd_.first_id_ = macro_id_.first_id();
     io_info.fd_.second_id_ = macro_id_.second_id();
     io_info.fd_.third_id_ = macro_id_.third_id();
-    io_info.fd_.device_handle_ = (nullptr == write_info.device_handle_) ? THE_IO_DEVICE : write_info.device_handle_;
+    io_info.fd_.device_handle_ = (nullptr == write_info.device_handle_) ? &LOCAL_DEVICE_INSTANCE : write_info.device_handle_;
     if (OB_FAIL(write_info.fill_io_info_for_backup(macro_id_, io_info))) {
       LOG_WARN("failed to fill io info for backup", K(ret), K_(macro_id));
     }

@@ -21,6 +21,7 @@
 #include "share/errsim_module/ob_errsim_module_interface_imp.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "observer/ob_server.h"
+#include "share/ob_io_device_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/io/ob_ss_io_request.h"
 #endif
@@ -784,7 +785,7 @@ int ObIOManager::get_device_channel(const ObIORequest &req, ObDeviceChannel *&de
 {
   // for now, different device_handle use same channel
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = req.fd_.is_backup_block_file() ? THE_IO_DEVICE : req.fd_.device_handle_;
+  ObIODevice *device_handle = req.fd_.is_backup_block_file() ? &LOCAL_DEVICE_INSTANCE : req.fd_.device_handle_;
   device_channel = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
