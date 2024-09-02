@@ -2252,6 +2252,7 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
   int ret = OB_SUCCESS;
   bool last_group = false;
   bool insert_group_ht = false;
+  bool has_by_pass_agg_row = false;
   LOG_TRACE("by pass prepare one batch", K(batch_size));
   if (ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_
       && by_pass_nth_group_ <= MY_SPEC.dist_col_group_idxs_.count()
@@ -2352,11 +2353,12 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
         LOG_WARN("fail to process row", K(ret));
       } else {
         brs_.set_skip(i);
+        has_by_pass_agg_row = true; // need to set all_rows_active = false
       }
     }
   }
   if (OB_FAIL(ret) || no_non_distinct_aggr_) {
-    if (last_group && no_non_distinct_aggr_) {
+    if ((last_group && no_non_distinct_aggr_) || has_by_pass_agg_row) {
       // in bypass && last_group && no_non_distinct_aggr_, brs_.skip_ will be set_all (all skip)
       brs_.all_rows_active_ = false;
     } else {
