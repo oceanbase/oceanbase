@@ -3007,9 +3007,16 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
     } else if (OB_ISNULL(column_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null column item", K(ret), K(column_item));
-    } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(column_item->base_cid_))) {
-      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(schema_checker_->get_column_schema(
+                         session_info_->get_effective_tenant_id(),
+                         table_info.ref_table_id_,
+                         OB_INVALID_ID == column_item->base_cid_ ? column_item->column_id_ : column_item->base_cid_,
+                         col_schema,
+                         true/*get_hidden*/))) {
       LOG_WARN("fail to get column schema", K(ret), KPC(tbl_col), KPC(column_item));
+    } else if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is nullptr", K(ret), KPC(tbl_col), KPC(column_item));
     } else if (col_schema->is_vec_vid_column()) {
       if (OB_FAIL(build_vec_vid_function_expr(table_info, *col_schema, *tbl_col, function_expr))) {
           LOG_WARN("fail to build doc id function expr", K(ret), K(table_info), KPC(tbl_col), KPC(col_schema));
