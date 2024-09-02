@@ -1218,7 +1218,7 @@ int ObSqlTransControl::xa_rollback_all_changes(ObExecContext &exec_ctx)
   return ret;
 }
 
-int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
+int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, const bool will_retry)
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
@@ -1296,8 +1296,13 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
       if (need_rollback) {
         const int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
         const share::ObLSArray &touched_ls = tx_result.get_touched_ls();
-        OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls, exec_errcode),
-            savepoint, stmt_expire_ts, touched_ls);
+        const ObTxCleanPolicy policy = decide_stmt_rollback_tx_clean_policy_(exec_errcode, will_retry);
+        OZ (txs->rollback_to_implicit_savepoint(*tx_desc,
+                                                savepoint,
+                                                stmt_expire_ts,
+                                                &touched_ls,
+                                                policy),
+            savepoint, stmt_expire_ts, touched_ls, policy);
         // prioritize returning session error code
         if (session->is_terminate(ret)) {
           LOG_INFO("trans has terminated when end stmt", K(ret), K(tx_id_before_rollback));
@@ -1777,6 +1782,26 @@ int ObSqlTransControl::reset_trans_for_autocommit_lock_conflict(ObExecContext &e
   CK (OB_NOT_NULL(tx_desc = session->get_tx_desc()));
   OZ (tx_desc->clear_state_for_autocommit_retry());
   return ret;
+}
+
+transaction::ObTxCleanPolicy
+ObSqlTransControl::decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry)
+{
+  transaction::ObTxCleanPolicy policy = transaction::ObTxCleanPolicy::FAST_ROLLBACK;
+  switch (error_code) {
+  case OB_TRANSACTION_SET_VIOLATION:
+  case OB_TRY_LOCK_ROW_CONFLICT:
+    // do not rollback transaction
+    policy = transaction::ObTxCleanPolicy::KEEP;
+    break;
+  default:
+    if (will_retry) {
+      // rolblack transaction, also rollback write-set
+      policy = transaction::ObTxCleanPolicy::ROLLBACK;
+    }
+    break;
+  }
+  return policy;
 }
 
 }/* ns sql*/

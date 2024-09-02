@@ -1076,7 +1076,7 @@ int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
                                                    const ObTxSEQ savepoint,
                                                    const int64_t expire_ts,
                                                    const share::ObLSArray *extra_touched_ls,
-                                                   const int exec_errcode)
+                                                   const ObTxCleanPolicy clean_policy)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
@@ -1110,7 +1110,7 @@ int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
       ret = rollback_to_global_implicit_savepoint_(tx,
                                                    savepoint,
                                                    expire_ts,
-                                                   exec_errcode);
+                                                   clean_policy);
     }
   }
   return ret;
@@ -1194,10 +1194,20 @@ int ObTransService::rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
   return ret;
 }
 
+static bool need_rollback_(const ObTxCleanPolicy p)
+{
+  return p == FAST_ROLLBACK || p == ROLLBACK;
+}
+
+static bool need_clean_writeset_(const ObTxCleanPolicy p)
+{
+  return p == KEEP || p == ROLLBACK;
+}
+
 int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                                            const ObTxSEQ savepoint,
                                                            const int64_t expire_ts,
-                                                           const int exec_errcode)
+                                                           const ObTxCleanPolicy clean_policy)
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
@@ -1219,15 +1229,9 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
           && !tx.has_implicit_savepoint() // to first savepoint
           && tx.active_scn_ >= savepoint  // rollback all dirty state
           && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
-        /*
-         * if sql execute error code don't need reset(abort) tx but need retry
-         * e.g. "lock conflict error"
-         * to ensure next retry can still recognize it is the first stmt in transaction
-         * we should reset tx's acitve_scn
-         */
-        reset_tx = tx_need_reset_(exec_errcode);
+        reset_tx = need_rollback_(clean_policy);
         reset_active_scn = !reset_tx;
-        normal_rollback = !reset_tx;
+        normal_rollback = need_clean_writeset_(clean_policy);
       } else {
         normal_rollback = true;
       }
@@ -2196,24 +2200,6 @@ int ObTransService::sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx)
   return ret;
 }
 
-// error code whether need reset tx when rollback fisrt stmt
-// error codes do not need reset tx
-// 1. lock conflict error code
-bool ObTransService::tx_need_reset_(const int error_code) const
-{
-  bool ret = true;
-  switch (error_code) {
-    case OB_TRANSACTION_SET_VIOLATION:
-    case OB_TRY_LOCK_ROW_CONFLICT:
-      ret = false;
-      break;
-    default:
-      ret = true;
-      break;
-  }
-  return ret;
-}
-
 int ObTransService::refresh_read_snapshot_tx_state(ObTxReadSnapshot &snapshot, const ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
@@ -2251,6 +2237,7 @@ int ObTransService::refresh_read_snapshot_tx_state(ObTxReadSnapshot &snapshot, c
   }
   return ret;
 }
+
 } // transaction
 } // namespace
 #undef TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE
