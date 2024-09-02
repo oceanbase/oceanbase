@@ -81,13 +81,19 @@ int ObTmpFileBatchFlushContext::prepare_flush_ctx(
   } else if (OB_ISNULL(prio_mgr) || OB_ISNULL(flush_monitor)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(prio_mgr), KP(flush_monitor));
-  } else if (OB_FAIL(iter_.init(prio_mgr))) {
-    LOG_WARN("failed to init iterator", KR(ret), K(*this));
   } else if (OB_FAIL(flush_failed_array_.reserve(MAX_COPY_FAIL_COUNT))) {
     LOG_WARN("fail to reserve flush filed array", KR(ret), K(*this));
+  } else if (OB_FAIL(iter_.init(prio_mgr))) {
+    LOG_WARN("failed to init iterator", KR(ret), K(*this));
   } else {
     expect_flush_size_ = expect_flush_size;
     flush_monitor_ptr_ = flush_monitor;
+  }
+
+  if (OB_FAIL(ret)) {
+    flush_failed_array_.reset();
+    iter_.reset();
+    LOG_INFO("failed to prepare flush ctx, rollback ctx", KR(ret), KPC(this));
   }
   return ret;
 }
