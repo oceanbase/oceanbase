@@ -6437,6 +6437,7 @@ int ObDDLService::create_aux_index_task_(
     ObArenaAllocator &allocator,
     const int64_t parent_task_id,
     const uint64_t tenant_data_version,
+    ObDDLSQLTransaction &trans,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
@@ -6467,7 +6468,7 @@ int ObDDLService::create_aux_index_task_(
                                parent_task_id);
     param.tenant_data_version_ = tenant_data_version;
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
-        create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
+        create_ddl_task(param, trans, task_record))) {
       if (OB_ENTRY_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -6570,6 +6571,7 @@ int ObDDLService::create_aux_index(
                                            allocator,
                                            arg.task_id_/*parent fts*/,
                                            tenant_data_version,
+                                           trans,
                                            task_record))) {
           LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
         } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
@@ -6595,6 +6597,7 @@ int ObDDLService::create_aux_index(
                                                 allocator,
                                                 arg.task_id_/*parent fts*/,
                                                 tenant_data_version,
+                                                trans,
                                                 task_record))) {
         LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
       } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {

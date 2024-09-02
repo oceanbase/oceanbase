@@ -2240,6 +2240,7 @@ private:
       ObArenaAllocator &allocator,
       const int64_t parent_task_id,
       const uint64_t tenant_data_version,
+      ObDDLSQLTransaction &trans,
       ObDDLTaskRecord &task_record);
   int adjust_cg_for_offline(ObTableSchema &new_table_schema);
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
