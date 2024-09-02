@@ -7580,7 +7580,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
             LOG_WARN("failed to alloca memory for xml null value", K(ret));
           } else {
             new (opaque) ObPLOpaque();
-            tmp_obj.set_ext(reinterpret_cast<int64_t>(opaque));
+            tmp_obj.set_extend(reinterpret_cast<int64_t>(opaque), pl::PL_OPAQUE_TYPE);
           }
 #endif
         }

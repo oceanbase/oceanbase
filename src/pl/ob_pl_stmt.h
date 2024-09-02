@@ -1581,6 +1581,7 @@ public:
        body_(NULL),
        obj_access_exprs_(allocator),
        exprs_(allocator),
+       continue_handler_desc_bodys_(allocator),
        simple_calc_bitset_(),
        sql_stmts_(allocator),
        expr_factory_(allocator),
@@ -1625,6 +1626,7 @@ public:
   int add_exprs(common::ObIArray<sql::ObRawExpr*> &exprs);
   inline void set_expr(sql::ObRawExpr* expr, int64_t i) { exprs_.at(i) = expr; }
   inline int64_t get_expr_count() const { return exprs_.count(); }
+  inline common::ObIArray<ObPLStmtBlock*> &get_continue_handler_desc_bodys() { return continue_handler_desc_bodys_; }
   inline int add_simple_calc(int64_t i) { return simple_calc_bitset_.add_member(i); }
   inline int add_simple_calcs(const ObBitSet<> &simple_calc) { return simple_calc_bitset_.add_members(simple_calc); }
   inline const ObBitSet<> & get_simple_calcs() const { return simple_calc_bitset_; }
@@ -1718,6 +1720,7 @@ protected:
   ObPLStmtBlock *body_;
   ObPLSEArray<sql::ObRawExpr*> obj_access_exprs_; //使用的ObjAccessRawExpr
   ObPLSEArray<sql::ObRawExpr*> exprs_; //使用的表达式，在AST里是ObRawExpr，在ObPLFunction里是ObISqlExpression
+  ObPLSEArray<ObPLStmtBlock*> continue_handler_desc_bodys_;
   ObBitSet<> simple_calc_bitset_; //可以使用LLVM进行计算的表达式下标
   ObPLSEArray<ObPLSqlStmt*> sql_stmts_;
   sql::ObRawExprFactory expr_factory_;
@@ -2842,7 +2845,12 @@ public:
     public:
       HandlerDesc(common::ObIAllocator &allocator)
         : action_(INVALID), conditions_(allocator), body_(NULL) {}
-      virtual ~HandlerDesc() {}
+      virtual ~HandlerDesc()
+      {
+        if(OB_NOT_NULL(body_)) {
+          body_->~ObPLStmtBlock();
+        }
+      }
 
       inline Action get_action() const { return action_; }
       inline void set_action(Action action) { action_ = action; }
@@ -2851,6 +2859,7 @@ public:
       inline const ObPLConditionValue &get_condition(int64_t i) const { return conditions_.at(i); }
       inline int add_condition(ObPLConditionValue &value) { return conditions_.push_back(value); }
       inline const ObPLStmtBlock *get_body() const { return body_; }
+      inline ObPLStmtBlock *get_body() { return body_; }
       inline void set_body(ObPLStmtBlock *body) { body_ = body; }
       inline bool is_exit() const { return EXIT == action_; }
       inline bool is_continue() const { return CONTINUE == action_; }
@@ -2883,14 +2892,12 @@ public:
 
 public:
   ObPLDeclareHandlerStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_HANDLER), handlers_(allocator) {}
-  virtual ~ObPLDeclareHandlerStmt()
-  {
-    for (int64_t i = 0; i < get_child_size(); ++i) {
-      if (NULL != get_child_stmt(i)) {
-        (const_cast<ObPLStmt *>(get_child_stmt(i)))->~ObPLStmt();
+  virtual ~ObPLDeclareHandlerStmt() {
+    for (int64_t i = 0; i < handlers_.count(); ++i) {
+      if (NULL != handlers_.at(i).get_desc() && !handlers_.at(i).get_desc()->is_continue()) {
+        handlers_.at(i).get_desc()->~HandlerDesc();
       }
     }
-    handlers_.reset();
   }
 
   int accept(ObPLStmtVisitor &visitor) const;

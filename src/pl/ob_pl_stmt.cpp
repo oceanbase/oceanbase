@@ -4246,6 +4246,11 @@ ObPLCompileUnitAST::~ObPLCompileUnitAST()
   if (NULL != body_) {
     body_->~ObPLStmtBlock();
   }
+  for (int64_t i = 0; i < continue_handler_desc_bodys_.count(); ++i) {
+    if (NULL != continue_handler_desc_bodys_.at(i)) {
+      continue_handler_desc_bodys_.at(i)->~ObPLStmtBlock();
+    }
+  }
 }
 
 void ObPLCompileUnitAST::process_default_compile_flag()
