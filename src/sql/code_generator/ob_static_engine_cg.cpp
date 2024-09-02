@@ -9004,13 +9004,14 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       case MERGE_AGGREGATE: {
         int tmp_ret = OB_SUCCESS;
         tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_SCALAR_GROUP_BY) OB_SUCCESS;
-        bool enable_vec_merge_gby =
-          (OB_SUCCESS == OB_E(EventTable::EN_DISABLE_VEC_MERGE_GBY) OB_SUCCESS);
+        bool use_vec2_merge_gby =
+          ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0)
+           && (OB_SUCCESS == OB_E(EventTable::EN_DISABLE_VEC_MERGE_GBY) OB_SUCCESS));
         if (op.is_pushdown_scalar_aggr() && OB_SUCC(tmp_ret) && use_rich_format
             && aggregate::Processor::all_supported_aggregate_functions(
                  static_cast<ObLogGroupBy *>(&log_op)->get_aggr_funcs())) {
           type = PHY_VEC_SCALAR_AGGREGATE;
-        } else if (use_rich_format && enable_vec_merge_gby
+        } else if (use_rich_format && use_vec2_merge_gby
                    && aggregate::Processor::all_supported_aggregate_functions(
                         static_cast<ObLogGroupBy *>(&log_op)->get_aggr_funcs())) {
           type = PHY_VEC_MERGE_GROUP_BY;
@@ -9097,11 +9098,13 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
         case MERGE_JOIN: {
           int tmp_ret = OB_SUCCESS;
           tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_MERGE_JOIN) OB_SUCCESS;
+          bool use_vec2_merge_join = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0);
           bool anti_semi_join_with_other_cond =
               op.get_other_join_conditions().count() != 0 &&
               op.get_join_type() >= LEFT_SEMI_JOIN &&
               op.get_join_type() <= RIGHT_ANTI_JOIN;
-          if (OB_SUCCESS == tmp_ret && use_rich_format && !anti_semi_join_with_other_cond) {
+          if (OB_SUCCESS == tmp_ret && use_vec2_merge_join && use_rich_format
+              && !anti_semi_join_with_other_cond) {
             type = PHY_VEC_MERGE_JOIN;
           } else {
             type = PHY_MERGE_JOIN;
