@@ -261,6 +261,7 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           str_iter->~ObTextStringIter();
           alloactor->free(str_iter);
           str_iter = nullptr;
+          alloactor->reuse();
         } else {
           ret = (str_iter->get_inner_ret() != OB_SUCCESS) ?
                 str_iter->get_inner_ret() : OB_INVALID_DATA;
@@ -269,6 +270,7 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           str_iter->~ObTextStringIter();
           alloactor->free(str_iter);
           str_iter = nullptr;
+          alloactor->reuse();
         }
       }
       if (OB_SUCC(ret) && OB_ISNULL(str_iter)) {

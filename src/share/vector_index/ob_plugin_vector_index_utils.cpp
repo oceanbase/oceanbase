@@ -465,14 +465,15 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
   } else if (OB_FAIL(adapter->try_init_mem_data(VIRT_SNAP))) {
     LOG_WARN("try init snap mem data failed.", K(ret));
   } else {
+    ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObHNSWDeserializeCallback::CbParam param;
     param.iter_ = snapshot_idx_iter;
-    param.allocator_ = &allocator;
+    param.allocator_ = &tmp_allocator;
 
     ObHNSWDeserializeCallback callback;
     ObIStreamBuf::Callback cb = callback;
     // ToDo: concurrency with weakread
-    ObVectorIndexSerializer index_seri(allocator);
+    ObVectorIndexSerializer index_seri(tmp_allocator);
     ObVectorIndexMemData *snap_memdata = adapter->get_snap_data_();
     if (OB_FAIL(adapter->try_init_mem_data(VIRT_SNAP))) {
       LOG_WARN("failed to init snapshot index.", K(ret));
