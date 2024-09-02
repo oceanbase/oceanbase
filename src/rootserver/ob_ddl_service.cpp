@@ -35330,13 +35330,11 @@ int ObDDLService::init_system_variables(
     ObSysVariableSchema &sys_variable_schema)
 {
   int ret = OB_SUCCESS;
-  //MAX_SYS_PARAM_NUM is 500. When param num needed greater than 500,
-  //you need to change OB_MAX_SYS_PARAM_NUM in "ob_define.h".
-  const int64_t params_capacity = OB_MAX_SYS_PARAM_NUM;
+  const int64_t params_capacity = ObSysVarFactory::ALL_SYS_VARS_COUNT;
   int64_t var_amount = ObSysVariables::get_amount();
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
-  ObPtrGuard<ObSysParam, OB_MAX_SYS_PARAM_NUM> sys_params_guard(alloc);
+  ObPtrGuard<ObSysParam, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_params_guard(alloc);
   sys_variable_schema.reset();
   sys_variable_schema.set_tenant_id(tenant_id);
   ObSysParam *sys_params = NULL;

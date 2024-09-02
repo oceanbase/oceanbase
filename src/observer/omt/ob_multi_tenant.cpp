@@ -1790,14 +1790,27 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
     LOG_ERROR("unexpected condition", K(ret));
   } else {
     LOG_INFO("removed_tenant begin to stop", K(tenant_id));
+    bool need_force_kill_session = false;
+    bool is_prepare_unit_gc = false;
+    int64_t prepare_unit_gc_ts = false;
     {
       SpinWLockGuard guard(lock_); //add a lock when set tenant stop, omt will check tenant has stop before calling timeup()
       removed_tenant->stop();
+      is_prepare_unit_gc = removed_tenant->is_prepare_unit_gc();
+      prepare_unit_gc_ts = removed_tenant->get_prepare_unit_gc_ts();
+      const int64_t unit_gc_wait_time = GCONF.unit_gc_wait_time;
+      if (GCONF._enable_unit_gc_wait && is_prepare_unit_gc) {
+        need_force_kill_session = (prepare_unit_gc_ts > 0 &&
+            ObTimeUtility::current_time() - prepare_unit_gc_ts > unit_gc_wait_time);
+      } else {
+        need_force_kill_session = true;
+      }
     }
     if (!is_virtual_tenant_id(tenant_id)) {
-      LOG_INFO("removed_tenant begin to kill tenant session", K(tenant_id));
-      if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
-        LOG_WARN("fail to kill tenant session", K(ret), K(tenant_id));
+      LOG_INFO("removed_tenant begin to kill tenant session",
+          K(tenant_id), K(prepare_unit_gc_ts), K(need_force_kill_session), K(GCONF._enable_unit_gc_wait));
+      if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id, need_force_kill_session))) {
+        LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
         {
           SpinWLockGuard guard(lock_);
           removed_tenant->start();

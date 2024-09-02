@@ -974,6 +974,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.is_external_table_ = table_schema.is_external_table();
   loc_meta.is_external_files_on_disk_ =
       ObSQLUtils::is_external_files_on_local_disk(table_schema.get_external_file_location());
+  int64_t route_policy = 0;
   bool is_weak_read = false;
   if (OB_ISNULL(cg_.opt_ctx_) || OB_ISNULL(cg_.opt_ctx_->get_exec_ctx())) {
     ret = OB_INVALID_ARGUMENT;
@@ -981,6 +982,8 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   } else if (stmt.get_query_ctx()->has_dml_write_stmt_) {
     loc_meta.select_leader_ = 1;
     loc_meta.is_weak_read_ = 0;
+  } else if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("get route policy failed", K(ret));
   } else if (OB_FAIL(ObTableLocation::get_is_weak_read(stmt, &session,
                                                        cg_.opt_ctx_->get_exec_ctx()->get_sql_ctx(),
                                                        is_weak_read))) {
@@ -996,6 +999,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
     loc_meta.select_leader_ = 1;
     loc_meta.is_weak_read_ = 0;
   }
+  loc_meta.route_policy_ = route_policy;
   if (OB_SUCC(ret) && !table_schema.is_global_index_table()) {
     TableLocRelInfo *rel_info = nullptr;
     ObTableID data_table_id = table_schema.is_index_table() ?

@@ -874,7 +874,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             // Text protocol convert extend type field to varchar
             field.type_.set_varchar(type_name);
           }
-        } else if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
+        } else if (!expr->get_result_type().is_ext()
+                   && OB_FAIL(expr->get_length_for_meta_in_bytes(
+                        field.length_, static_cast<ObCollationType>(field.charsetnr_)))) {
           LOG_WARN("get length failed", K(ret), KPC(expr));
         }
       }

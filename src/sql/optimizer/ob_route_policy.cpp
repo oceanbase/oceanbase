@@ -82,6 +82,8 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
     } else {
       LOG_TRACE("check ls readable", K(ctx), K(ls_id), K(cur_replica.get_server()), K(can_read));
       if ((policy_type == ONLY_READONLY_ZONE && cur_replica.attr_.zone_type_ == ZONE_TYPE_READWRITE)
+          // FORCE_READONLY_ZONE: filter non-read-only replica
+          || (policy_type == FORCE_READONLY_ZONE && cur_replica.get_replica_type() != REPLICA_TYPE_READONLY)
           || cur_replica.attr_.zone_status_ == ObZoneStatus::INACTIVE
           || cur_replica.attr_.server_status_ != ObServerStatus::OB_SERVER_ACTIVE
           || cur_replica.attr_.start_service_time_ == 0
@@ -100,6 +102,18 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
         cur_replica.is_filter_ = false;
         need_break = true;
       }
+    }
+  }
+  if (OB_SUCC(ret) && policy_type == FORCE_READONLY_ZONE) {
+    for (int64_t i = candi_replicas.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      CandidateReplica &cur_replica = candi_replicas.at(i);
+      if (cur_replica.is_filter_ && OB_FAIL(candi_replicas.remove(i))) {
+        LOG_WARN("failed to remove filtered replica", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && candi_replicas.count() == 0) {
+      ret = OB_NO_READABLE_REPLICA;
+      LOG_WARN("all replicas are filted", K(ret), K(policy_type));
     }
   }
   return ret;

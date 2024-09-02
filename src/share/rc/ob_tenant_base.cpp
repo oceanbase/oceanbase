@@ -57,7 +57,8 @@ ObTenantBase::ObTenantBase(const uint64_t id, bool enable_tenant_ctx_check)
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
     thread_count_(0),
-    mini_mode_(false)
+    mini_mode_(false),
+    marked_prepare_gc_ts_(0)
 {
 }
 #undef CONSTRUCT_MEMBER

@@ -113,7 +113,7 @@ protected:
                                sql::ObSQLSessionInfo *session = NULL);
   bool need_flush_buffer() const;
   int update_transmission_checksum_flag(const sql::ObSQLSessionInfo &session);
-  int update_proxy_sys_vars(sql::ObSQLSessionInfo &session);
+  int update_proxy_and_client_sys_vars(sql::ObSQLSessionInfo &session);
   int update_charset_sys_vars(ObSMConnection &conn, sql::ObSQLSessionInfo &sess_info);
 
   int build_encode_param_(obmysql::ObProtoEncodeParam &param,

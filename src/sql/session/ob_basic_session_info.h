@@ -1152,6 +1152,7 @@ public:
 
   inline void set_capability(const obmysql::ObMySQLCapabilityFlags cap) { capability_ = cap; }
   inline void set_client_attrbuite_capability(const uint64_t cap) { client_attribute_capability_.capability_ = cap; }
+  inline uint64_t get_client_attrbuite_capability() { return client_attribute_capability_.capability_; }
   inline obmysql::ObMySQLCapabilityFlags get_capability() const { return capability_; }
   inline bool is_track_session_info() const { return capability_.cap_flags_.OB_CLIENT_SESSION_TRACK; }
 
@@ -1173,6 +1174,11 @@ public:
   inline bool is_client_support_lob_locatorv2() const
   {
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2;
+  }
+
+  inline bool is_support_new_result_meta_data() const
+  {
+    return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA;
   }
 
   void set_proxy_cap_flags(const obmysql::ObProxyCapabilityFlags &proxy_capability)
@@ -1203,6 +1209,7 @@ public:
   int set_partition_hit(const bool is_hit);
   int set_proxy_user_privilege(const int64_t user_priv_set);
   int set_proxy_capability(const uint64_t proxy_cap);
+  int set_client_capability();
   int set_trans_specified(const bool is_spec);
   int set_init_connect(const common::ObString &init_sql);
   int save_trans_status();

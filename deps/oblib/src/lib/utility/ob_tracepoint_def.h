@@ -490,6 +490,7 @@ GLOBAL_ERRSIM_POINT_DEF(2301, EN_CLOSE_ASH, "");
 GLOBAL_ERRSIM_POINT_DEF(2302, EN_DISABLE_HASH_BASE_DISTINCT, "");
 
 GLOBAL_ERRSIM_POINT_DEF(2304, EN_TRACEPOINT_TEST, "For testing new versions of tracepoint");
+GLOBAL_ERRSIM_POINT_DEF(2453, EN_ENABLE_NEW_RESULT_META_DATA, "For testing enable new result meta data, off by default");
 
 GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
 

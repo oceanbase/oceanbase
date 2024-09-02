@@ -1026,12 +1026,16 @@ int ObTableLocCgService::generate_table_loc_meta(const ObTableCtx &ctx,
                                                  ObDASTableLocMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
+  int64_t route_policy = 0;
   const ObTableSchema *table_schema = nullptr;
   if (!index_info.is_primary_index_ && OB_ISNULL(table_schema = index_info.index_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index schema is NULL", K(ret));
+  } else if (OB_FAIL(ctx.get_session_info().get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("fail to get route policy from session", K(ret));
   } else {
     loc_meta.reset();
+    loc_meta.route_policy_ = route_policy;
     loc_meta.ref_table_id_ = index_info.index_table_id_;
     loc_meta.table_loc_id_ = index_info.data_table_id_ ;
     if (!index_info.is_primary_index_) {

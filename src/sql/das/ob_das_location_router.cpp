@@ -762,7 +762,8 @@ ObDASLocationRouter::~ObDASLocationRouter()
 
 int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
                                                        const ObTabletID &tablet_id,
-                                                       ObDASTabletLoc &tablet_loc)
+                                                       ObDASTabletLoc &tablet_loc,
+                                                       const ObRoutePolicyType route_policy)
 {
   int ret = OB_SUCCESS;
   ObLSLocation ls_loc;
@@ -806,7 +807,10 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
     } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
       LOG_WARN("check in black list failed", K(ret));
     } else if (!in_black_list) {
-      if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
+      if (route_policy == FORCE_READONLY_ZONE && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_READONLY) {
+        // skip the tmp_replica_loc
+        LOG_DEBUG("skip the replica due to the FORCE_READONLY_ZONE policy.", K(ret), K(tmp_replica_loc));
+      } else if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
         //prefer choose the local replica
         local_replica = &tmp_replica_loc;
       } else if (OB_FAIL(remote_replicas.push_back(&tmp_replica_loc))) {
@@ -821,7 +825,7 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
       tablet_loc.server_ = local_replica->get_server();
     } else if (remote_replicas.empty()) {
       ret = OB_NO_READABLE_REPLICA;
-      LOG_WARN("there has no readable replica", K(ret), K(tablet_id), K(ls_loc));
+      LOG_WARN("there has no readable replica", K(ret), K(tablet_id), K(ls_loc), K(route_policy));
     } else {
       //no local copy, randomly select a readable replica
       int64_t select_idx = rand() % remote_replicas.count();
@@ -942,7 +946,7 @@ int ObDASLocationRouter::get_tablet_loc(const ObDASTableLocMeta &loc_meta,
       //if this statement is retried because of OB_NOT_MASTER, we will choose the leader directly
       ret = nonblock_get_leader(tenant_id, tablet_id, tablet_loc);
     } else {
-      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc);
+      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc, static_cast<ObRoutePolicyType>(loc_meta.route_policy_));
     }
   }
   return ret;

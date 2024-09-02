@@ -992,6 +992,7 @@ void ObTenant::mark_tenant_is_removed()
       "unit_id", tenant_meta_.unit_.unit_id_,
       K_(tenant_meta));
   tenant_meta_.unit_.is_removed_ = true;
+  set_prepare_unit_gc();
 }
 
 // 初始化租户各子模块，保证初始化同步执行，因为依赖线程局部变量和栈上变量

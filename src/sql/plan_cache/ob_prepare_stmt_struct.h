@@ -371,6 +371,7 @@ public:
   //{ param_types_.set_label(common::ObModIds::OB_PS_SESSION_INFO_ARRAY); }
   virtual ~ObPsSessionInfo() {}
 
+  int fill_param_types_with_null_type();
   void set_stmt_id(const ObPsStmtId stmt_id) { stmt_id_ = stmt_id; }
   ObPsStmtId get_stmt_id() const { return stmt_id_; }
 
