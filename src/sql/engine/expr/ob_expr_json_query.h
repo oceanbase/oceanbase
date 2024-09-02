@@ -172,7 +172,7 @@ struct ObJsonObjectCompare {
     } else {
       left.compare(right, result);
     }
-    return result < 0 ? 0 : 1;
+    return result <= 0 ? 0 : 1;
   }
 };
 
