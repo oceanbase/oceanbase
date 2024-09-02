@@ -195,13 +195,17 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   ASSERT_EQ(5500, arc_info.max_p_);
   ASSERT_EQ(2000, arc_info.min_p_);
   ASSERT_EQ(true, arc_info.is_valid());
-  arc_info.update_arc_limit_for_prewarm();
+  arc_info.mem_limit_ = 0;
+  ASSERT_EQ(false, arc_info.is_valid());
+  arc_info.mem_limit_ = INT64_MAX;
+  ASSERT_EQ(true, arc_info.is_valid());
+  arc_info.dec_arc_work_limit_for_prewarm();
   ASSERT_EQ(10000, arc_info.limit_);
   ASSERT_EQ(9000, arc_info.work_limit_);
   ASSERT_EQ(4500, arc_info.p_);
   ASSERT_EQ(4950, arc_info.max_p_);
   ASSERT_EQ(1800, arc_info.min_p_);
-  arc_info.revert_arc_limit_for_prewarm();
+  arc_info.inc_arc_work_limit_for_prewarm();
   ASSERT_EQ(10000, arc_info.limit_);
   ASSERT_EQ(10000, arc_info.work_limit_);
   ASSERT_EQ(5000, arc_info.p_);
@@ -359,6 +363,44 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   ASSERT_EQ(600, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
   ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T2));
   arc_iter_info.reuse(ARC_T2);
+
+  // 8. test trigger eviction by memory size
+  arc_info.p_ = 5000;
+  arc_info.seg_info_arr_[ARC_T1].cnt_ = 200;
+  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 200;
+  arc_info.seg_info_arr_[ARC_T2].cnt_ = 200;
+  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 200;
+  arc_info.seg_info_arr_[ARC_B1].cnt_ = 100;
+  arc_info.seg_info_arr_[ARC_B1].size_ = micro_size * 100;
+  arc_info.seg_info_arr_[ARC_B2].cnt_ = 100;
+  arc_info.seg_info_arr_[ARC_B2].size_ = micro_size * 100;
+  ASSERT_EQ(false, arc_info.trigger_eviction());
+  arc_info.mem_limit_ = 667 * (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  ASSERT_EQ(false, arc_info.trigger_eviction());
+  arc_info.mem_limit_ = 500 * (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  ASSERT_EQ(true, arc_info.trigger_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
+  arc_iter_info.reuse(ARC_B1);
+  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B2);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
+  arc_iter_info.reuse(ARC_B2);
+  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(ARC_T1);
+  arc_info.mem_limit_ = 300 * (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
+  arc_iter_info.reuse(ARC_T2);
+  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
+  ASSERT_EQ(130, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
+  arc_iter_info.reuse(ARC_B1);
+  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B2);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
+  arc_iter_info.reuse(ARC_B2);
 
   // test copy assignment
   ObSSARCInfo arc_info2;
