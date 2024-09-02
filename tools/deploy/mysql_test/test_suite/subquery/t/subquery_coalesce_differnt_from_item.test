@@ -1,0 +1,390 @@
+# owner: xiaoyen.xy
+# owner group: sql
+# tags: optimizer
+# description: 测试子查询合并在 FROM item 项不同的情景
+
+# 创建表
+--disable_warnings
+create database if not exists test;
+use test;
+DROP TABLE IF EXISTS t1, t2, t3, t4, t5;
+--enable_warnings
+CREATE TABLE t1 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t2 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t3 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t4 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t5 (c0 INT, c1 INT,c2 INT,c3 INT);
+
+# 插入样例数据
+INSERT INTO t1 (c0, c1, c2, c3) VALUES
+(1, 10, 5, 50),
+(2, 20, 15, 150),
+(3, 30, 25, 250),
+(4, 40, 35, 350);
+
+INSERT INTO t2 (c0, c1, c2, c3) VALUES
+(1, 10, 5, 5),
+(2, 20, 15, 15),
+(3, 30, 25, 25),
+(4, 40, 35, 35);
+
+INSERT INTO t3 (c0, c1, c2, c3) VALUES
+(1, 11, 5, 60),
+(2, 21, 15, 160),
+(3, 31, 25, 260),
+(4, 41, 35, 360);
+
+INSERT INTO t4 (c0, c1, c2, c3) VALUES
+(1, 12, 5, 70),
+(2, 22, 15, 170),
+(3, 32, 25, 270),
+(4, 42, 35, 370);
+
+INSERT INTO t5 (c0, c1, c2, c3) VALUES
+(1, 13, 5, 80),
+(2, 23, 15, 180),
+(3, 33, 25, 280),
+(4, 43, 35, 380),
+(5, 53, 45, 480);
+
+# test case
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+); 
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3 
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3 
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3 
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+); 
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+  AND t3.c2 < 7
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+  AND t3.c2 < 7
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+  AND t3.c2 < 7
+); 
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+  AND t3.c2 > 1
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+  AND t3.c2 > 1
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+  AND t3.c2 > 1
+); 
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2, 
+  t3 left join t4 on t3.c1=t4.c1 right join t5 on t4.c3=t5.c3
+  WHERE t2.c3 > 1
+  AND t4.c2 < 9
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2, 
+  t3 left join t4 on t3.c1=t4.c1 right join t5 on t4.c3=t5.c3
+  WHERE t2.c3 > 1
+  AND t4.c2 < 9
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2, 
+  t3 left join t4 on t3.c1=t4.c1 right join t5 on t4.c3=t5.c3
+  WHERE t2.c3 > 1
+  AND t4.c2 < 9
+); 
+
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2, t4
+  WHERE t2.c3 > 1
+  AND t4.c2 < 9
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2, t4
+  WHERE t2.c3 > 1
+  AND t4.c2 < 9
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2, t4
+  WHERE t2.c3 > 1
+  AND t4.c2 < 9
+); 
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1 
+WHERE c1 in (
+  SELECT /*+NO_UNNEST*/ c1 FROM t2
+) 
+AND c1 in (
+    SELECT /*+NO_UNNEST NO_SEMI_TO_INNER */ c1 FROM t2 
+    WHERE exists(
+      SELECT /*+UNNEST*/ 1 FROM t3 WHERE t2.c2 = t3.c2
+  )      
+);
+EXPLAIN SELECT  * FROM t1 
+WHERE c1 in (
+  SELECT /*+NO_UNNEST*/ c1 FROM t2
+) 
+AND c1 in (
+    SELECT /*+NO_UNNEST NO_SEMI_TO_INNER*/ c1 FROM t2 
+    WHERE exists(
+      SELECT /*+UNNEST*/ 1 FROM t3 WHERE t2.c2 = t3.c2
+  )      
+);
+SELECT * FROM t1 
+WHERE c1 in (
+  SELECT  c1 FROM t2
+) 
+AND c1 in (
+    SELECT c1 FROM t2 
+    WHERE exists(
+      SELECT 1 FROM t3 WHERE t2.c2 = t3.c2
+  )      
+);
+
+
+# unsupport type
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 
+  inner join t3 on t2.c1=t3.c1
+  WHERE t2.c2 = t1.c2 
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 
+  inner join t3 on t2.c1=t3.c1
+  WHERE t2.c2 = t1.c2 
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT c1 FROM t2 
+  WHERE t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2 
+  inner join t3 on t2.c1=t3.c1
+  WHERE t2.c2 = t1.c2 
+); 
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+) 
+AND c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 1
+); 
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+) 
+AND c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 1
+); 
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2,t3
+  WHERE t2.c2 = t3.c2 
+  AND t2.c3 > 1
+) 
+AND c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 1
+); 
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 10
+);
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 10
+);
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 1
+)
+AND c1 in (
+  SELECT t2.c1 FROM t2,t4
+  WHERE t2.c2 = t4.c2 
+  AND t2.c3 > 10
+);
+
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 
+  left join t3 on t2.c2=t3.c2 
+  right join t4 on t2.c2=t4.c2)
+AND c1 in (
+  SELECT t2.c1 FROM t2 
+  left join (t3 left join t4 on t3.c2=t4.c2) on t2.c2=t3.c2);
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 
+  left join t3 on t2.c2=t3.c2 
+  right join t4 on t2.c2=t4.c2)
+AND c1 in (
+  SELECT t2.c1 FROM t2 
+  left join (t3 left join t4 on t3.c2=t4.c2) on t2.c2=t3.c2);
+SELECT * FROM t1
+WHERE c1 in (
+  SELECT t2.c1 FROM t2 
+  left join t3 on t2.c2=t3.c2 
+  right join t4 on t2.c2=t4.c2)
+AND c1 in (
+  SELECT t2.c1 FROM t2 
+  left join (t3 left join t4 on t3.c2=t4.c2) on t2.c2=t3.c2);

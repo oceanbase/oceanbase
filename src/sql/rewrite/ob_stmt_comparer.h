@@ -242,6 +242,11 @@ public:
                                   const ObDMLStmt *second,
                                   ObStmtMapInfo &map_info);
 
+  static int check_select_stmt_ndv_containment(const ObDMLStmt *first,
+                                               const ObDMLStmt *second,
+                                               ObStmtMapInfo &map_info,
+                                               QueryRelation &relation);
+
   /* is_strict_select_list = true, it requerys same order select list between two stmts. */
   static int check_stmt_containment(const ObDMLStmt *first,
                                     const ObDMLStmt *second,

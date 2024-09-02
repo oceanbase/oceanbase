@@ -1,0 +1,1313 @@
+create database if not exists test;
+use test;
+DROP TABLE IF EXISTS t1, t2, t3, t4, t5;
+CREATE TABLE t1 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t2 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t3 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t4 (c0 INT, c1 INT,c2 INT,c3 INT);
+CREATE TABLE t5 (c0 INT, c1 INT,c2 INT,c3 INT);
+INSERT INTO t1 (c0, c1, c2, c3) VALUES
+(1, 10, 5, 50),
+(2, 20, 15, 150),
+(3, 30, 25, 250),
+(4, 40, 35, 350);
+INSERT INTO t2 (c0, c1, c2, c3) VALUES
+(1, 10, 5, 5),
+(2, 20, 15, 15),
+(3, 30, 25, 25),
+(4, 40, 35, 35);
+INSERT INTO t3 (c0, c1, c2, c3) VALUES
+(1, 11, 5, 60),
+(2, 21, 15, 160),
+(3, 31, 25, 260),
+(4, 41, 35, 360);
+INSERT INTO t4 (c0, c1, c2, c3) VALUES
+(1, 12, 5, 70),
+(2, 22, 15, 170),
+(3, 32, 25, 270),
+(4, 42, 35, 370);
+INSERT INTO t5 (c0, c1, c2, c3) VALUES
+(1, 13, 5, 80),
+(2, 23, 15, 180),
+(3, 33, 25, 280),
+(4, 43, 35, 380),
+(5, 53, 45, 480);
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN   |     |4       |13          |
+|1 |├─SUBPLAN SCAN         |VIEW2|4       |6           |
+|2 |│ └─HASH JOIN          |     |4       |6           |
+|3 |│   ├─TABLE FULL SCAN  |t3   |4       |3           |
+|4 |│   └─TABLE FULL SCAN  |t2   |4       |3           |
+|5 |└─HASH RIGHT SEMI JOIN |     |4       |6           |
+|6 |  ├─TABLE FULL SCAN    |t2   |4       |3           |
+|7 |  └─TABLE FULL SCAN    |t1   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW2.c1]), other_conds(nil)
+  1 - output([VIEW2.c1]), filter(nil), rowset=16
+      access([VIEW2.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  6 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+);
+Query Plan
+======================================================
+|ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |     |4       |10          |
+|1 |├─SUBPLAN SCAN       |VIEW1|4       |6           |
+|2 |│ └─HASH JOIN        |     |4       |6           |
+|3 |│   ├─TABLE FULL SCAN|t3   |4       |3           |
+|4 |│   └─TABLE FULL SCAN|t2   |4       |3           |
+|5 |└─TABLE FULL SCAN    |t1   |4       |3           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  1 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+);
+c0	c1	c2	c3
+1	10	5	50
+2	20	15	150
+3	30	25	250
+4	40	35	350
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3 
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN   |     |4       |13          |
+|1 |├─SUBPLAN SCAN         |VIEW2|4       |6           |
+|2 |│ └─HASH JOIN          |     |4       |6           |
+|3 |│   ├─TABLE FULL SCAN  |t3   |4       |3           |
+|4 |│   └─TABLE FULL SCAN  |t2   |4       |3           |
+|5 |└─HASH RIGHT SEMI JOIN |     |4       |6           |
+|6 |  ├─TABLE FULL SCAN    |t2   |4       |3           |
+|7 |  └─TABLE FULL SCAN    |t1   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW2.c1]), other_conds(nil)
+  1 - output([VIEW2.c1]), filter(nil), rowset=16
+      access([VIEW2.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  6 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3 
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+);
+Query Plan
+======================================================
+|ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |     |4       |10          |
+|1 |├─SUBPLAN SCAN       |VIEW1|4       |6           |
+|2 |│ └─HASH JOIN        |     |4       |6           |
+|3 |│   ├─TABLE FULL SCAN|t3   |4       |3           |
+|4 |│   └─TABLE FULL SCAN|t2   |4       |3           |
+|5 |└─TABLE FULL SCAN    |t1   |4       |3           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  1 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3 
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+);
+c0	c1	c2	c3
+1	10	5	50
+2	20	15	150
+3	30	25	250
+4	40	35	350
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+AND t3.c2 < 7
+);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN   |     |1       |11          |
+|1 |├─SUBPLAN SCAN         |VIEW2|1       |5           |
+|2 |│ └─HASH JOIN          |     |1       |5           |
+|3 |│   ├─TABLE FULL SCAN  |t3   |1       |3           |
+|4 |│   └─TABLE FULL SCAN  |t2   |1       |3           |
+|5 |└─HASH RIGHT SEMI JOIN |     |1       |6           |
+|6 |  ├─SUBPLAN SCAN       |VIEW1|1       |3           |
+|7 |  │ └─TABLE FULL SCAN  |t2   |1       |3           |
+|8 |  └─TABLE FULL SCAN    |t1   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW2.c1]), other_conds(nil)
+  1 - output([VIEW2.c1]), filter(nil), rowset=16
+      access([VIEW2.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter([t3.c2 < 7]), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1], [t2.c2 < 7]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  6 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  7 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+AND t3.c2 < 7
+);
+Query Plan
+======================================================
+|ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |     |1       |9           |
+|1 |├─SUBPLAN SCAN       |VIEW1|1       |5           |
+|2 |│ └─HASH JOIN        |     |1       |5           |
+|3 |│   ├─TABLE FULL SCAN|t3   |1       |3           |
+|4 |│   └─TABLE FULL SCAN|t2   |1       |3           |
+|5 |└─TABLE FULL SCAN    |t1   |4       |3           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  1 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter([t3.c2 < 7]), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1], [t2.c2 < 7]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+AND t3.c2 < 7
+);
+c0	c1	c2	c3
+1	10	5	50
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+AND t3.c2 > 1
+);
+Query Plan
+==================================================================
+|ID|OPERATOR                  |NAME        |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |TEMP TABLE TRANSFORMATION |            |1       |10          |
+|1 |├─TEMP TABLE INSERT       |TEMP1       |0       |7           |
+|2 |│ └─HASH RIGHT OUTER JOIN |            |4       |6           |
+|3 |│   ├─TABLE FULL SCAN     |t3          |4       |3           |
+|4 |│   └─TABLE FULL SCAN     |t2          |4       |3           |
+|5 |└─HASH SEMI JOIN          |            |1       |4           |
+|6 |  ├─HASH RIGHT SEMI JOIN  |            |1       |3           |
+|7 |  │ ├─SUBPLAN SCAN        |VIEW4       |1       |1           |
+|8 |  │ │ └─TEMP TABLE ACCESS |VIEW2(TEMP1)|1       |1           |
+|9 |  │ └─TABLE FULL SCAN     |t1          |4       |3           |
+|10|  └─TEMP TABLE ACCESS     |VIEW1(TEMP1)|4       |1           |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+  2 - output([t2.c1], [t3.c2]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.t2.c1]), other_conds(nil)
+  6 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW4.c1]), other_conds(nil)
+  7 - output([VIEW4.c1]), filter(nil), rowset=16
+      access([VIEW4.c1])
+  8 - output([VIEW2.t2.c1]), filter([VIEW2.t3.c2 > 1]), rowset=16
+      access([VIEW2.t3.c2], [VIEW2.t2.c1])
+  9 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([VIEW1.t2.c1]), filter(nil), rowset=16
+      access([VIEW1.t2.c1])
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+AND t3.c2 > 1
+);
+Query Plan
+======================================================
+|ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |     |4       |10          |
+|1 |├─SUBPLAN SCAN       |VIEW3|4       |7           |
+|2 |│ └─HASH JOIN        |     |4       |7           |
+|3 |│   ├─TABLE FULL SCAN|t3   |4       |3           |
+|4 |│   └─TABLE FULL SCAN|t2   |4       |3           |
+|5 |└─TABLE FULL SCAN    |t1   |4       |3           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW3.c1]), other_conds(nil)
+  1 - output([VIEW3.c1]), filter(nil), rowset=16
+      access([VIEW3.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter([t3.c2 > 1]), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1], [t2.c2 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+AND t3.c2 > 1
+);
+c0	c1	c2	c3
+1	10	5	50
+2	20	15	150
+3	30	25	250
+4	40	35	350
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2, 
+t3 left join t4 on t3.c1=t4.c1 right join t5 on t4.c3=t5.c3
+WHERE t2.c3 > 1
+AND t4.c2 < 9
+);
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN         |     |1       |8           |
+|1 |├─SUBPLAN SCAN               |VIEW2|1       |3           |
+|2 |│ └─TABLE FULL SCAN          |t2   |1       |3           |
+|3 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|4 |  ├─HASH RIGHT SEMI JOIN     |     |1       |6           |
+|5 |  │ ├─SUBPLAN SCAN           |VIEW1|1       |3           |
+|6 |  │ │ └─TABLE FULL SCAN      |t2   |1       |3           |
+|7 |  │ └─TABLE FULL SCAN        |t1   |4       |3           |
+|8 |  └─MATERIAL                 |     |1       |8           |
+|9 |    └─SUBPLAN SCAN           |VIEW3|1       |8           |
+|10|      └─LIMIT                |     |1       |8           |
+|11|        └─HASH JOIN          |     |1       |8           |
+|12|          ├─HASH JOIN        |     |1       |6           |
+|13|          │ ├─TABLE FULL SCAN|t4   |1       |3           |
+|14|          │ └─TABLE FULL SCAN|t5   |5       |3           |
+|15|          └─TABLE FULL SCAN  |t3   |4       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW2.t2.c1]), other_conds(nil)
+  1 - output([VIEW2.t2.c1]), filter(nil), rowset=16
+      access([VIEW2.t2.c1])
+  2 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  4 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  5 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  6 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  8 - output(nil), filter(nil), rowset=16
+  9 - output(nil), filter(nil), rowset=16
+      access(nil)
+ 10 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+ 11 - output(nil), filter(nil), rowset=16
+      equal_conds([t3.c1 = t4.c1]), other_conds(nil)
+ 12 - output([t4.c1]), filter(nil), rowset=16
+      equal_conds([t4.c3 = t5.c3]), other_conds(nil)
+ 13 - output([t4.c1], [t4.c3]), filter([t4.c2 < 9]), rowset=16
+      access([t4.c1], [t4.c3], [t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+ 14 - output([t5.c3]), filter(nil), rowset=16
+      access([t5.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
+ 15 - output([t3.c1]), filter(nil), rowset=16
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2, 
+t3 left join t4 on t3.c1=t4.c1 right join t5 on t4.c3=t5.c3
+WHERE t2.c3 > 1
+AND t4.c2 < 9
+);
+Query Plan
+============================================================
+|ID|OPERATOR                   |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|1 |├─HASH RIGHT SEMI JOIN     |     |1       |6           |
+|2 |│ ├─SUBPLAN SCAN           |VIEW1|1       |3           |
+|3 |│ │ └─TABLE FULL SCAN      |t2   |1       |3           |
+|4 |│ └─TABLE FULL SCAN        |t1   |4       |3           |
+|5 |└─MATERIAL                 |     |1       |8           |
+|6 |  └─SUBPLAN SCAN           |VIEW2|1       |8           |
+|7 |    └─LIMIT                |     |1       |8           |
+|8 |      └─HASH JOIN          |     |1       |8           |
+|9 |        ├─HASH JOIN        |     |1       |6           |
+|10|        │ ├─TABLE FULL SCAN|t4   |1       |3           |
+|11|        │ └─TABLE FULL SCAN|t5   |5       |3           |
+|12|        └─TABLE FULL SCAN  |t3   |4       |3           |
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.t2.c1]), other_conds(nil)
+  2 - output([VIEW1.t2.c1]), filter(nil), rowset=16
+      access([VIEW1.t2.c1])
+  3 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output(nil), filter(nil), rowset=16
+  6 - output(nil), filter(nil), rowset=16
+      access(nil)
+  7 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  8 - output(nil), filter(nil), rowset=16
+      equal_conds([t3.c1 = t4.c1]), other_conds(nil)
+  9 - output([t4.c1]), filter(nil), rowset=16
+      equal_conds([t4.c3 = t5.c3]), other_conds(nil)
+ 10 - output([t4.c1], [t4.c3]), filter([t4.c2 < 9]), rowset=16
+      access([t4.c1], [t4.c3], [t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+ 11 - output([t5.c3]), filter(nil), rowset=16
+      access([t5.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
+ 12 - output([t3.c1]), filter(nil), rowset=16
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2, 
+t3 left join t4 on t3.c1=t4.c1 right join t5 on t4.c3=t5.c3
+WHERE t2.c3 > 1
+AND t4.c2 < 9
+);
+c0	c1	c2	c3
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2, t4
+WHERE t2.c3 > 1
+AND t4.c2 < 9
+);
+Query Plan
+================================================================
+|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN           |     |1       |8           |
+|1 |├─SUBPLAN SCAN                 |VIEW2|1       |3           |
+|2 |│ └─TABLE FULL SCAN            |t2   |1       |3           |
+|3 |└─HASH RIGHT SEMI JOIN         |     |1       |6           |
+|4 |  ├─SUBPLAN SCAN               |VIEW1|1       |3           |
+|5 |  │ └─TABLE FULL SCAN          |t2   |1       |3           |
+|6 |  └─NESTED-LOOP JOIN CARTESIAN |     |2       |3           |
+|7 |    ├─TABLE FULL SCAN          |t1   |4       |3           |
+|8 |    └─MATERIAL                 |     |1       |3           |
+|9 |      └─SUBPLAN SCAN           |VIEW3|1       |3           |
+|10|        └─TABLE FULL SCAN      |t4   |1       |3           |
+================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW2.t2.c1]), other_conds(nil)
+  1 - output([VIEW2.t2.c1]), filter(nil), rowset=16
+      access([VIEW2.t2.c1])
+  2 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  4 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  5 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  7 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  8 - output(nil), filter(nil), rowset=16
+  9 - output(nil), filter(nil), rowset=16
+      access(nil)
+ 10 - output([1]), filter([t4.c2 < 9]), rowset=16
+      access([t4.c2]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2, t4
+WHERE t2.c3 > 1
+AND t4.c2 < 9
+);
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN         |     |1       |6           |
+|1 |├─SUBPLAN SCAN               |VIEW1|1       |3           |
+|2 |│ └─TABLE FULL SCAN          |t2   |1       |3           |
+|3 |└─NESTED-LOOP JOIN CARTESIAN |     |2       |3           |
+|4 |  ├─TABLE FULL SCAN          |t1   |4       |3           |
+|5 |  └─MATERIAL                 |     |1       |3           |
+|6 |    └─SUBPLAN SCAN           |VIEW2|1       |3           |
+|7 |      └─TABLE FULL SCAN      |t4   |1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.t2.c1]), other_conds(nil)
+  1 - output([VIEW1.t2.c1]), filter(nil), rowset=16
+      access([VIEW1.t2.c1])
+  2 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  4 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output(nil), filter(nil), rowset=16
+  6 - output(nil), filter(nil), rowset=16
+      access(nil)
+  7 - output([1]), filter([t4.c2 < 9]), rowset=16
+      access([t4.c2]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 left join t3 on t2.c2=t3.c2, t4
+WHERE t2.c3 > 1
+AND t4.c2 < 9
+);
+c0	c1	c2	c3
+1	10	5	50
+2	20	15	150
+3	30	25	250
+4	40	35	350
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1 
+WHERE c1 in (
+SELECT /*+NO_UNNEST*/ c1 FROM t2
+) 
+AND c1 in (
+SELECT /*+NO_UNNEST NO_SEMI_TO_INNER */ c1 FROM t2 
+WHERE exists(
+SELECT /*+UNNEST*/ 1 FROM t3 WHERE t2.c2 = t3.c2
+)      
+);
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |2       |11          |
+|1 |├─TABLE FULL SCAN      |t1  |4       |3           |
+|2 |├─TABLE FULL SCAN      |t2  |4       |3           |
+|3 |└─HASH RIGHT SEMI JOIN |    |4       |6           |
+|4 |  ├─TABLE FULL SCAN    |t3  |4       |3           |
+|5 |  └─TABLE FULL SCAN    |t2  |4       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))]), rowset=16
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1], [2]), use_batch=false
+  1 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  4 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT  * FROM t1 
+WHERE c1 in (
+SELECT /*+NO_UNNEST*/ c1 FROM t2
+) 
+AND c1 in (
+SELECT /*+NO_UNNEST NO_SEMI_TO_INNER*/ c1 FROM t2 
+WHERE exists(
+SELECT /*+UNNEST*/ 1 FROM t3 WHERE t2.c2 = t3.c2
+)      
+);
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |2       |9           |
+|1 |├─TABLE FULL SCAN      |t1  |4       |3           |
+|2 |└─HASH RIGHT SEMI JOIN |    |4       |6           |
+|3 |  ├─TABLE FULL SCAN    |t3  |4       |3           |
+|4 |  └─TABLE FULL SCAN    |t2  |4       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = ANY(subquery(1))]), rowset=16
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), use_batch=false
+  1 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  3 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1 
+WHERE c1 in (
+SELECT  c1 FROM t2
+) 
+AND c1 in (
+SELECT c1 FROM t2 
+WHERE exists(
+SELECT 1 FROM t3 WHERE t2.c2 = t3.c2
+)      
+);
+c0	c1	c2	c3
+1	10	5	50
+2	20	15	150
+3	30	25	250
+4	40	35	350
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 
+inner join t3 on t2.c1=t3.c1
+WHERE t2.c2 = t1.c2 
+);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH SEMI JOIN         |     |1       |12          |
+|1 |├─HASH RIGHT SEMI JOIN |     |1       |6           |
+|2 |│ ├─SUBPLAN SCAN       |VIEW1|1       |3           |
+|3 |│ │ └─TABLE FULL SCAN  |t2   |1       |3           |
+|4 |│ └─TABLE FULL SCAN    |t1   |4       |3           |
+|5 |└─SUBPLAN SCAN         |VIEW2|4       |6           |
+|6 |  └─HASH JOIN          |     |4       |6           |
+|7 |    ├─TABLE FULL SCAN  |t3   |4       |3           |
+|8 |    └─TABLE FULL SCAN  |t2   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([VIEW2.t2.c2 = t1.c2], [t1.c1 = VIEW2.t2.c1]), other_conds(nil)
+  1 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  2 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  3 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t1.c1], [t1.c2], [t1.c0], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c0], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([VIEW2.t2.c2], [VIEW2.t2.c1]), filter(nil), rowset=16
+      access([VIEW2.t2.c2], [VIEW2.t2.c1])
+  6 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t3.c1]), other_conds(nil)
+  7 - output([t3.c1]), filter(nil), rowset=16
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 
+inner join t3 on t2.c1=t3.c1
+WHERE t2.c2 = t1.c2 
+);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH SEMI JOIN         |     |1       |12          |
+|1 |├─HASH RIGHT SEMI JOIN |     |1       |6           |
+|2 |│ ├─SUBPLAN SCAN       |VIEW1|1       |3           |
+|3 |│ │ └─TABLE FULL SCAN  |t2   |1       |3           |
+|4 |│ └─TABLE FULL SCAN    |t1   |4       |3           |
+|5 |└─SUBPLAN SCAN         |VIEW2|4       |6           |
+|6 |  └─HASH JOIN          |     |4       |6           |
+|7 |    ├─TABLE FULL SCAN  |t3   |4       |3           |
+|8 |    └─TABLE FULL SCAN  |t2   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([VIEW2.t2.c2 = t1.c2], [t1.c1 = VIEW2.t2.c1]), other_conds(nil)
+  1 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  2 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  3 - output([t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t1.c1], [t1.c2], [t1.c0], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c0], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([VIEW2.t2.c2], [VIEW2.t2.c1]), filter(nil), rowset=16
+      access([VIEW2.t2.c2], [VIEW2.t2.c1])
+  6 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t3.c1]), other_conds(nil)
+  7 - output([t3.c1]), filter(nil), rowset=16
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT c1 FROM t2 
+WHERE t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2 
+inner join t3 on t2.c1=t3.c1
+WHERE t2.c2 = t1.c2 
+);
+c0	c1	c2	c3
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+) 
+AND c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 1
+);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN   |     |4       |17          |
+|1 |├─SUBPLAN SCAN         |VIEW2|4       |6           |
+|2 |│ └─HASH JOIN          |     |4       |6           |
+|3 |│   ├─TABLE FULL SCAN  |t4   |4       |3           |
+|4 |│   └─TABLE FULL SCAN  |t2   |4       |3           |
+|5 |└─HASH RIGHT SEMI JOIN |     |4       |10          |
+|6 |  ├─SUBPLAN SCAN       |VIEW1|4       |6           |
+|7 |  │ └─HASH JOIN        |     |4       |6           |
+|8 |  │   ├─TABLE FULL SCAN|t3   |4       |3           |
+|9 |  │   └─TABLE FULL SCAN|t2   |4       |3           |
+|10|  └─TABLE FULL SCAN    |t1   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW2.c1]), other_conds(nil)
+  1 - output([VIEW2.c1]), filter(nil), rowset=16
+      access([VIEW2.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t4.c2]), other_conds(nil)
+  3 - output([t4.c2]), filter(nil), rowset=16
+      access([t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  6 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  7 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  8 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  9 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+) 
+AND c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 1
+);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN   |     |4       |17          |
+|1 |├─SUBPLAN SCAN         |VIEW2|4       |6           |
+|2 |│ └─HASH JOIN          |     |4       |6           |
+|3 |│   ├─TABLE FULL SCAN  |t4   |4       |3           |
+|4 |│   └─TABLE FULL SCAN  |t2   |4       |3           |
+|5 |└─HASH RIGHT SEMI JOIN |     |4       |10          |
+|6 |  ├─SUBPLAN SCAN       |VIEW1|4       |6           |
+|7 |  │ └─HASH JOIN        |     |4       |6           |
+|8 |  │   ├─TABLE FULL SCAN|t3   |4       |3           |
+|9 |  │   └─TABLE FULL SCAN|t2   |4       |3           |
+|10|  └─TABLE FULL SCAN    |t1   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW2.c1]), other_conds(nil)
+  1 - output([VIEW2.c1]), filter(nil), rowset=16
+      access([VIEW2.c1])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t4.c2]), other_conds(nil)
+  3 - output([t4.c2]), filter(nil), rowset=16
+      access([t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  6 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  7 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c2]), other_conds(nil)
+  8 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  9 - output([t2.c2], [t2.c1]), filter([t2.c3 > 1]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2,t3
+WHERE t2.c2 = t3.c2 
+AND t2.c3 > 1
+) 
+AND c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 1
+);
+c0	c1	c2	c3
+1	10	5	50
+2	20	15	150
+3	30	25	250
+4	40	35	350
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 10
+);
+Query Plan
+=================================================================
+|ID|OPERATOR                 |NAME        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TEMP TABLE TRANSFORMATION|            |1       |10          |
+|1 |├─TEMP TABLE INSERT      |TEMP1       |0       |7           |
+|2 |│ └─HASH JOIN            |            |4       |6           |
+|3 |│   ├─TABLE FULL SCAN    |t4          |4       |3           |
+|4 |│   └─TABLE FULL SCAN    |t2          |4       |3           |
+|5 |└─HASH RIGHT SEMI JOIN   |            |1       |4           |
+|6 |  ├─SUBPLAN SCAN         |VIEW4       |1       |1           |
+|7 |  │ └─TEMP TABLE ACCESS  |VIEW2(TEMP1)|1       |1           |
+|8 |  └─HASH RIGHT SEMI JOIN |            |1       |3           |
+|9 |    ├─SUBPLAN SCAN       |VIEW3       |1       |1           |
+|10|    │ └─TEMP TABLE ACCESS|VIEW1(TEMP1)|1       |1           |
+|11|    └─TABLE FULL SCAN    |t1          |4       |3           |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+  2 - output([t2.c3], [t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t4.c2]), other_conds(nil)
+  3 - output([t4.c2]), filter(nil), rowset=16
+      access([t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c3], [t2.c1]), filter([t2.c3 > 1 OR t2.c3 > 10]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW4.c1]), other_conds(nil)
+  6 - output([VIEW4.c1]), filter(nil), rowset=16
+      access([VIEW4.c1])
+  7 - output([VIEW2.t2.c1]), filter([VIEW2.t2.c3 > 10]), rowset=16
+      access([VIEW2.t2.c3], [VIEW2.t2.c1])
+  8 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW3.c1]), other_conds(nil)
+  9 - output([VIEW3.c1]), filter(nil), rowset=16
+      access([VIEW3.c1])
+ 10 - output([VIEW1.t2.c1]), filter([VIEW1.t2.c3 > 1]), rowset=16
+      access([VIEW1.t2.c3], [VIEW1.t2.c1])
+ 11 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 10
+);
+Query Plan
+=================================================================
+|ID|OPERATOR                 |NAME        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TEMP TABLE TRANSFORMATION|            |1       |10          |
+|1 |├─TEMP TABLE INSERT      |TEMP1       |0       |7           |
+|2 |│ └─HASH JOIN            |            |4       |6           |
+|3 |│   ├─TABLE FULL SCAN    |t4          |4       |3           |
+|4 |│   └─TABLE FULL SCAN    |t2          |4       |3           |
+|5 |└─HASH RIGHT SEMI JOIN   |            |1       |4           |
+|6 |  ├─SUBPLAN SCAN         |VIEW4       |1       |1           |
+|7 |  │ └─TEMP TABLE ACCESS  |VIEW2(TEMP1)|1       |1           |
+|8 |  └─HASH RIGHT SEMI JOIN |            |1       |3           |
+|9 |    ├─SUBPLAN SCAN       |VIEW3       |1       |1           |
+|10|    │ └─TEMP TABLE ACCESS|VIEW1(TEMP1)|1       |1           |
+|11|    └─TABLE FULL SCAN    |t1          |4       |3           |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+  2 - output([t2.c3], [t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t4.c2]), other_conds(nil)
+  3 - output([t4.c2]), filter(nil), rowset=16
+      access([t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c2], [t2.c3], [t2.c1]), filter([t2.c3 > 1 OR t2.c3 > 10]), rowset=16
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW4.c1]), other_conds(nil)
+  6 - output([VIEW4.c1]), filter(nil), rowset=16
+      access([VIEW4.c1])
+  7 - output([VIEW2.t2.c1]), filter([VIEW2.t2.c3 > 10]), rowset=16
+      access([VIEW2.t2.c3], [VIEW2.t2.c1])
+  8 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW3.c1]), other_conds(nil)
+  9 - output([VIEW3.c1]), filter(nil), rowset=16
+      access([VIEW3.c1])
+ 10 - output([VIEW1.t2.c1]), filter([VIEW1.t2.c3 > 1]), rowset=16
+      access([VIEW1.t2.c3], [VIEW1.t2.c1])
+ 11 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 1
+)
+AND c1 in (
+SELECT t2.c1 FROM t2,t4
+WHERE t2.c2 = t4.c2 
+AND t2.c3 > 10
+);
+c0	c1	c2	c3
+2	20	15	150
+3	30	25	250
+4	40	35	350
+EXPLAIN SELECT /*+NO_COALESCE_SQ*/ * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 
+left join t3 on t2.c2=t3.c2 
+right join t4 on t2.c2=t4.c2)
+AND c1 in (
+SELECT t2.c1 FROM t2 
+left join (t3 left join t4 on t3.c2=t4.c2) on t2.c2=t3.c2);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN   |     |4       |13          |
+|1 |├─TABLE FULL SCAN      |t2   |4       |3           |
+|2 |└─HASH RIGHT SEMI JOIN |     |4       |10          |
+|3 |  ├─SUBPLAN SCAN       |VIEW1|4       |6           |
+|4 |  │ └─HASH JOIN        |     |4       |6           |
+|5 |  │   ├─TABLE FULL SCAN|t4   |4       |3           |
+|6 |  │   └─TABLE FULL SCAN|t2   |4       |3           |
+|7 |  └─TABLE FULL SCAN    |t1   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  3 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  4 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t4.c2]), other_conds(nil)
+  5 - output([t4.c2]), filter(nil), rowset=16
+      access([t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 
+left join t3 on t2.c2=t3.c2 
+right join t4 on t2.c2=t4.c2)
+AND c1 in (
+SELECT t2.c1 FROM t2 
+left join (t3 left join t4 on t3.c2=t4.c2) on t2.c2=t3.c2);
+Query Plan
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN   |     |4       |13          |
+|1 |├─TABLE FULL SCAN      |t2   |4       |3           |
+|2 |└─HASH RIGHT SEMI JOIN |     |4       |10          |
+|3 |  ├─SUBPLAN SCAN       |VIEW1|4       |6           |
+|4 |  │ └─HASH JOIN        |     |4       |6           |
+|5 |  │   ├─TABLE FULL SCAN|t4   |4       |3           |
+|6 |  │   └─TABLE FULL SCAN|t2   |4       |3           |
+|7 |  └─TABLE FULL SCAN    |t1   |4       |3           |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c0], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
+  3 - output([VIEW1.c1]), filter(nil), rowset=16
+      access([VIEW1.c1])
+  4 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t4.c2]), other_conds(nil)
+  5 - output([t4.c2]), filter(nil), rowset=16
+      access([t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t1.c1], [t1.c0], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c0], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM t1
+WHERE c1 in (
+SELECT t2.c1 FROM t2 
+left join t3 on t2.c2=t3.c2 
+right join t4 on t2.c2=t4.c2)
+AND c1 in (
+SELECT t2.c1 FROM t2 
+left join (t3 left join t4 on t3.c2=t4.c2) on t2.c2=t3.c2);
+c0	c1	c2	c3
+1	10	5	50
+2	20	15	150
+3	30	25	250
+4	40	35	350

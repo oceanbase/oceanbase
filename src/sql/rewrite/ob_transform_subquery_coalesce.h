@@ -110,7 +110,7 @@ private:
                                 bool &hint_force_trans);
 
   int check_query_ref_validity(ObRawExpr *expr, bool &is_valid);
-
+  
   int compare_any_all_subqueries(ObDMLStmt *stmt,
                                  TransformParam &param, 
                                  ObIArray<TransformParam> &trans_params,
