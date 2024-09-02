@@ -1725,7 +1725,7 @@ int ObSqlParameterization::formalize_sql_filter_hint(ObIAllocator &allocator,
     } else if (param_num != raw_params.count()) {
       LOG_WARN("invalid param_num", K(param_num), K(raw_params.count()));
     } else if (OB_ISNULL(p_list)) {
-      LOG_WARN("invaldid plist");
+      dest_sql.assign_ptr(format_sql_ptr, format_sql_len);
     } else {
       dest_sql.assign_ptr(format_sql_ptr, format_sql_len);
       if (OB_SUCC(ret)) {
