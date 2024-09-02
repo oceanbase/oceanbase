@@ -67,6 +67,8 @@ public:
   ~ObTmpFileFlushManager() {}
   int init();
   void destroy();
+  TO_STRING_KV(K(is_inited_), K(flush_ctx_));
+
 public:
   int free_tmp_file_block(ObTmpFileFlushTask &flush_task);
   int alloc_flush_task(ObTmpFileFlushTask *&flush_task);
@@ -79,6 +81,7 @@ public:
   int retry(ObTmpFileFlushTask &flush_task);
   int io_finished(ObTmpFileFlushTask &flush_task);
   int update_file_meta_after_flush(ObTmpFileFlushTask &flush_task);
+  void try_remove_unused_file_flush_ctx();
 private:
   int fill_block_buf_(ObTmpFileFlushTask &flush_task);
   int fast_fill_block_buf_with_meta_(ObTmpFileFlushTask &flush_task);

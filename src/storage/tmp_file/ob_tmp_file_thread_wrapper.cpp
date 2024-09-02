@@ -239,6 +239,8 @@ int ObTmpFileFlushTG::do_work_()
     }
   }
 
+  flush_mgr_.try_remove_unused_file_flush_ctx();
+
   if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
     tmp_file_block_mgr_.print_block_usage();
     flush_monitor_.print_statistics();
@@ -361,7 +363,7 @@ int ObTmpFileFlushTG::wash_(const int64_t expect_flush_size, const RUNNING_MODE 
   }
 
   bool idle_loop = flushing_task_cnt == 0;
-  if (idle_loop && wbp_.get_dirty_page_percentage() < ObTmpFileFlushManager::FLUSH_WATERMARK_F5) {
+  if (idle_loop && wbp_.get_cannot_be_evicted_page_percentage() < ObTmpFileFlushManager::FLUSH_WATERMARK_F3) {
     signal_io_finish(OB_SUCCESS);
   }
 
@@ -963,7 +965,7 @@ int ObTmpFileSwapTG::wakeup_satisfied_jobs_(int64_t& wakeup_job_cnt)
 {
   int ret = OB_SUCCESS;
   wakeup_job_cnt = 0;
-  int64_t wbp_free_page_cnt = wbp_.get_max_data_page_num() - wbp_.get_data_page_num();
+  int64_t wbp_free_page_cnt = wbp_.get_free_data_page_num();
   while (OB_SUCC(ret) && wbp_free_page_cnt > 0 && !working_list_.is_empty()) {
     ObTmpFileSwapJob *swap_job = nullptr;
     if (OB_FAIL(pop_working_job_(swap_job))) {

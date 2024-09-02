@@ -55,9 +55,11 @@ public:
   int64_t get_flush_io_finished_round();
   int64_t cal_idle_time();
   void clean_up_lists();
-  TO_STRING_KV(K(is_inited_), K(flushing_block_num_), K(is_fast_flush_meta_), K(fast_flush_meta_task_cnt_), K(mode_),
+  TO_STRING_KV(K(is_inited_), K(mode_), K(last_flush_timestamp_), K(flush_io_finished_ret_), K(flush_io_finished_round_),
+               K(flushing_block_num_), K(is_fast_flush_meta_), K(fast_flush_meta_task_cnt_),
                K(wait_list_size_), K(retry_list_size_), K(finished_list_size_),
-               K(normal_loop_cnt_), K(normal_idle_loop_cnt_), K(fast_loop_cnt_), K(fast_idle_loop_cnt_));
+               K(normal_loop_cnt_), K(normal_idle_loop_cnt_), K(fast_loop_cnt_), K(fast_idle_loop_cnt_),
+               K(flush_mgr_));
 private:
   int do_work_();
   int handle_generated_flush_tasks_(ObSpLinkQueue &flushing_list, int64_t &task_num);

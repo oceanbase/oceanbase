@@ -241,11 +241,14 @@ public:
   int64_t get_max_page_num();
   int64_t get_data_page_num();
   int64_t get_dirty_page_num();
+  int64_t get_write_back_page_num();
   int64_t get_dirty_meta_page_num();
   int64_t get_dirty_data_page_num();
   int64_t get_dirty_page_percentage();
+  int64_t get_cannot_be_evicted_page_percentage();
   int64_t get_max_data_page_num();
   int64_t get_meta_page_num();
+  int64_t get_free_data_page_num();
   void print_statistics();
 private:
   static double MAX_DATA_PAGE_USAGE_RATIO; // control data pages ratio, can be preempted by meta pages
