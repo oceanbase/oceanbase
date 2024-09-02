@@ -806,7 +806,7 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
     // if agg_val less than base, no need to update min
     // if agg_val larger than RANGE_MAX_VALUE, no need to update max
   } else {
-    uint64_t result = 0;
+    uint64_t result = agg_cell.is_min_agg() ? UINT64_MAX : 0;
     bool result_is_null = false;
     if (use_null_replace_val) {
       const uint64_t null_replaced_val_base_diff = ctx.null_replaced_value_ - base_value;
