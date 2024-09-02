@@ -1313,7 +1313,7 @@ bool_pri IS NULLX %prec IS
 }
 | bool_pri COMP_EQ sub_query_flag any_expr %prec COMP_EQ
 {
-  if ($4->type_ == T_EXPR_LIST && $4->reserved_ == 1) {
+  if ($3->type_ == T_ANY && $4->type_ == T_EXPR_LIST && $4->reserved_ == 1) {
     /* rewrite any operation to array_contains expr*/
     malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_CONTAINS, 2, $1, $4);
   } else {
@@ -1948,7 +1948,11 @@ select_with_parens %prec NEG
 | '(' expr_list ')'
 {
   $$ = $2;
-  $$->reserved_ = 1; /* means it's param of array_contains func_expr */
+  if ($2->num_child_ == 1) {
+    $$->reserved_ = 1; /* means it's param of array_contains func_expr */
+  } else {
+    YYERROR;
+  }
 }
 ;
 
