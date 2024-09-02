@@ -2133,6 +2133,7 @@ int ObFetchLSMemberAndLearnerListP::process()
     logservice::ObLogService *log_service = nullptr;
     ObRole role;
     int64_t proposal_id = 0;
+    int64_t validating_proposal_id = 0;
     common::GlobalLearnerList learner_list;
     if (tenant_id != MTL_ID()) {
       ret = OB_ERR_UNEXPECTED;
@@ -2162,8 +2163,15 @@ int ObFetchLSMemberAndLearnerListP::process()
       LOG_WARN("failed to assign member list", K(ret), K(member_list));
     } else if (OB_FAIL(result_.learner_list_.deep_copy(learner_list))) {
       LOG_WARN("failed to assign learner list", K(ret), K(learner_list));
+    } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, validating_proposal_id))) {
+      LOG_WARN("failed to get palf role", K(ret), "arg", arg_);
+    } else if (!is_strong_leader(role)) {
+      ret = OB_PARTITION_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_));
+    } else if (proposal_id != validating_proposal_id) {
+      ret = OB_PARTITION_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_), K(proposal_id), K(validating_proposal_id));
     }
-
   }
 
   return ret;
@@ -4471,7 +4479,6 @@ int ObStorageRpc::fetch_ls_member_and_learner_list(
       .fetch_ls_member_and_learner_list(arg, member_info))) {
     LOG_WARN("fail to check ls is valid member", K(ret), K(tenant_id), K(ls_id));
   }
-
   return ret;
 }
 

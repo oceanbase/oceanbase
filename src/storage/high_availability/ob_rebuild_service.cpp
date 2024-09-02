@@ -1079,6 +1079,7 @@ int ObLSRebuildMgr::generate_rebuild_task_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
   } else {
+    ObReplicaType replica_type;
   #ifdef ERRSIM
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
@@ -1088,14 +1089,15 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       }
   #endif
     if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(replica_type = ls->is_cs_replica() ? REPLICA_TYPE_COLUMNSTORE : REPLICA_TYPE_FULL)) {
     } else {
       DEBUG_SYNC(BEFOR_EXEC_REBUILD_TASK);
       ObTaskId task_id;
       task_id.init(GCONF.self_addr_);
       ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp,
-                                         REPLICA_TYPE_FULL/*dummy_replica_type*/);
+                                         replica_type);
       ObReplicaMember src_replica_member(GCONF.self_addr_, timestamp,
-                                         REPLICA_TYPE_FULL/*dummy_replica_type*/);
+                                         replica_type);
       ObMigrationOpArg arg;
       arg.cluster_id_ = GCONF.cluster_id;
       arg.data_src_ = src_replica_member;

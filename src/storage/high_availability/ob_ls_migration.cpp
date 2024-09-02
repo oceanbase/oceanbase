@@ -1177,6 +1177,7 @@ int ObStartMigrationTask::choose_src_()
     ObStorageHASrcInfo src_info;
     obrpc::ObCopyLSInfo ls_info;
     SCN local_clog_checkpoint_scn = SCN::min_scn();
+    ObMigrationChooseSrcHelperInitParam param;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     ObLS* ls = nullptr;
     ObLSHandle ls_handle;
@@ -1187,16 +1188,22 @@ int ObStartMigrationTask::choose_src_()
       LOG_WARN("tenant config is invalid", K(ret));
     } else if (FALSE_IT(str = tenant_config->choose_migration_source_policy.str())) {
     } else if (FALSE_IT(enable_choose_source_policy = tenant_config->_enable_choose_migration_source_policy)) {
-    } else if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(ctx_->arg_, tenant_id,
-        enable_choose_source_policy, str, policy))) {
-      LOG_WARN("failed to get policy type", K(ret), K(ctx_->arg_), K(tenant_id),
-          K(enable_choose_source_policy), K(str));
+    } else if (FALSE_IT(param.tenant_id_ = tenant_id)) {
+    } else if (FALSE_IT(param.ls_id_ = ls_id)) {
+    } else if (FALSE_IT(param.local_clog_checkpoint_scn_ = local_clog_checkpoint_scn)) {
+    } else if (FALSE_IT(param.arg_ = ctx_->arg_)) {
     } else if (OB_FAIL(member_helper.init(storage_rpc_))) {
       LOG_WARN("failed to init member helper", K(ret), KP(storage_rpc_));
-    } else if (OB_FAIL(choose_src_helper.init(tenant_id, ls_id, local_clog_checkpoint_scn, ctx_->arg_, policy,
+    } else if (OB_FAIL(member_helper.get_member_list_by_replica_type(tenant_id, ctx_->arg_.ls_id_,
+        ctx_->arg_.dst_, param.info_))) {
+      LOG_WARN("failed to get member list.", K(ret), K(tenant_id), "ls_id", ctx_->arg_.ls_id_, "dst", ctx_->arg_.dst_);
+    } else if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(ctx_->arg_, tenant_id,
+        enable_choose_source_policy, str, param.info_.learner_list_, policy))) {
+      LOG_WARN("failed to get policy type", K(ret), K(ctx_->arg_), K(tenant_id),
+          K(enable_choose_source_policy), K(str));
+    } else if (OB_FAIL(choose_src_helper.init(param, policy,
         storage_rpc_, &member_helper))) {
-      LOG_WARN("failed to init src provider.", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn),
-          K(ctx_->arg_), K(policy), KP(storage_rpc_));
+      LOG_WARN("failed to init src provider.", K(ret), K(param), K(policy), KP(storage_rpc_));
     } else if (OB_FAIL(choose_src_helper.get_available_src(ctx_->arg_, src_info))) {
       LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn), K(ctx_->arg_));
     } else if (OB_FAIL(fetch_ls_info_(tenant_id, ls_id, src_info.src_addr_, ls_info))) {
@@ -1746,7 +1753,7 @@ int ObStartMigrationTask::join_learner_list_()
   const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("data tablets migration task do not init", K(ret));
+    LOG_WARN("start migration task do not init", K(ret));
   } else if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is nullptr", K(ret), KP(ctx_));
