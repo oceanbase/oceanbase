@@ -103,6 +103,7 @@ struct ObS3Account
   char endpoint_[MAX_S3_ENDPOINT_LENGTH];
   char access_id_[MAX_S3_ACCESS_ID_LENGTH];     // ak
   char secret_key_[MAX_S3_SECRET_KEY_LENGTH];   // sk
+  int64_t addressing_model_;
 };
 
 class ObS3MemoryManager : public Aws::Utils::Memory::MemorySystemInterface

@@ -233,6 +233,8 @@ public:
     NONE = 0,
     DELETE = 1,
     TAGGING = 2,
+    VIRTUAL_HOSTED_STYLE = 3,
+    PATH_STYLE = 4,
     MAX
   };
   virtual int open(common::ObObjectStorageInfo *storage_info) = 0;
