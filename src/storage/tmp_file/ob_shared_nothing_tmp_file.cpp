@@ -808,6 +808,12 @@ int ObSharedNothingTmpFile::collect_pages_in_block_(const int64_t block_index,
     if (OB_SUCC(ObTmpPageCache::get_instance().get_page(key, p_handle))) {
       if (OB_FAIL(page_value_handles.push_back(p_handle))) {
         LOG_WARN("fail to push back", KR(ret), K(fd_), K(key));
+
+        // if fail to push back, we will treat this page as uncached page.
+        ret = OB_SUCCESS;
+        if (OB_FAIL(bitmap.set_bitmap(page_idx_in_block, false))) {
+          LOG_WARN("fail to set bitmap", KR(ret), K(fd_), K(key));
+        }
       } else if (OB_FAIL(bitmap.set_bitmap(page_idx_in_block, true))) {
         LOG_WARN("fail to set bitmap", KR(ret), K(fd_), K(key));
       }
@@ -1096,6 +1102,7 @@ int ObSharedNothingTmpFile::load_disk_tail_page_and_rewrite_(ObTmpFileIOCtx &io_
   uint32_t new_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
   ObSharedNothingTmpFileDataItem data_item;
   bool block_meta_tree_flushing = false;
+  bool has_update_file_meta = false;
 
   if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID == begin_page_virtual_id)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1184,6 +1191,7 @@ int ObSharedNothingTmpFile::load_disk_tail_page_and_rewrite_(ObTmpFileIOCtx &io_
       begin_page_id_ = new_page_id;
       begin_page_virtual_id_ = begin_page_virtual_id;
       end_page_id_ = new_page_id;
+      has_update_file_meta = true;
     }
 
     if (FAILEDx(insert_or_update_data_flush_node_())) {
@@ -1195,10 +1203,26 @@ int ObSharedNothingTmpFile::load_disk_tail_page_and_rewrite_(ObTmpFileIOCtx &io_
     LOG_DEBUG("load_disk_tail_page_and_rewrite_ end", KR(ret), K(fd_), K(end_page_id_), KPC(this));
   }
 
-  if (OB_FAIL(ret) && block_meta_tree_flushing) {
+  if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(meta_tree_.finish_write_tail(data_item, false /*release_tail_in_disk*/))) {
-      LOG_WARN("fail to modify items after tail load", KR(tmp_ret), K(fd_));
+    if (block_meta_tree_flushing) {
+      if (OB_TMP_FAIL(meta_tree_.finish_write_tail(data_item, false /*release_tail_in_disk*/))) {
+        LOG_WARN("fail to modify items after tail load", KR(tmp_ret), K(fd_));
+      }
+    }
+
+    uint32_t unused_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
+    if (new_page_id != ObTmpFileGlobal::INVALID_PAGE_ID) {
+      if (OB_TMP_FAIL(wbp_->free_page(fd_, new_page_id, ObTmpFilePageUniqKey(begin_page_virtual_id), unused_page_id))) {
+        LOG_WARN("fail to free page", KR(tmp_ret), K(fd_), K(new_page_id));
+      } else if (has_update_file_meta) {
+        cached_page_nums_ = 0;
+        file_size_ -= need_write_size;
+        begin_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+        begin_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
+        end_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+        page_idx_cache_.reset();
+      }
     }
   }
   return ret;
@@ -1314,6 +1338,7 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
   bool is_alloc_failed = false;
   int64_t write_size = 0;
   ObArray<uint32_t> page_entry_idxs;
+  bool has_update_file_meta = false;
 
   // write pages
   if (OB_UNLIKELY(!io_ctx.is_valid())) {
@@ -1347,6 +1372,9 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
     const int64_t end_page_virtual_id = cached_page_nums_ == 0 ?
                                         ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID :
                                         get_page_virtual_id_from_offset_(file_size_, true /*is_open_interval*/);
+    const int64_t old_begin_page_id = begin_page_id_;
+    const int64_t old_begin_page_virtual_id_ = begin_page_virtual_id_;
+    const int64_t old_end_page_id = end_page_id_;
     if (OB_UNLIKELY(is_deleting_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("file is deleting", KR(ret), K(fd_));
@@ -1369,21 +1397,17 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
           OB_FAIL(wbp_->link_page(fd_, page_entry_idxs.at(0), end_page_id_, ObTmpFilePageUniqKey(end_page_virtual_id)))) {
         LOG_WARN("fail to link page", KR(ret), K(fd_), K(page_entry_idxs.at(0)),
                  K(end_page_id_), K(end_page_virtual_id));
-      } else if (FALSE_IT(end_page_id_ = page_entry_idxs.at(page_entry_idxs.count() - 1))) {
       } else {
         if (ObTmpFileGlobal::INVALID_PAGE_ID == begin_page_id_) {
           begin_page_id_ = page_entry_idxs.at(0);
           begin_page_virtual_id_ = get_page_virtual_id_from_offset_(file_size_, false /*is_open_interval*/);
         }
+        end_page_id_ = page_entry_idxs.at(page_entry_idxs.count() - 1);
         file_size_ += write_size;
         cached_page_nums_ += page_entry_idxs.count();
+        has_update_file_meta = true;
       }
 
-      for (int64_t i = 0; i < page_entry_idxs.count() && OB_SUCC(ret); i++) {
-        if (OB_FAIL(page_idx_cache_.push(page_entry_idxs[i]))) {
-          LOG_WARN("fail to push page idx array", KR(ret), K(fd_));
-        }
-      } // TODO: we can ignore page_idx_cache_ allocate memory fail to continue writing in the future.
       if (FAILEDx(insert_or_update_data_flush_node_())) {
         LOG_WARN("fail to insert or update data flush list", KR(ret), K(fd_), KPC(this));
       }
@@ -1398,6 +1422,20 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
           LOG_WARN("fail to free page", KR(tmp_ret), K(fd_), K(i), K(free_page_virtual_id), K(page_entry_idxs[i]));
         } else {
           free_page_virtual_id += 1;
+        }
+      }
+      if (has_update_file_meta) {
+        begin_page_id_ = old_begin_page_id;
+        begin_page_virtual_id_ = old_begin_page_virtual_id_;
+        end_page_id_ = old_end_page_id;
+        cached_page_nums_ -= page_entry_idxs.count();
+        file_size_ -= write_size;
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      for (int64_t i = 0; i < page_entry_idxs.count() && OB_LIKELY(tmp_ret == OB_SUCCESS); i++) {
+        if (OB_TMP_FAIL(page_idx_cache_.push(page_entry_idxs[i]))) {
+          LOG_WARN("fail to push page idx array", KR(tmp_ret), K(fd_));
         }
       }
     }
