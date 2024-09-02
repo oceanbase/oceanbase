@@ -1244,10 +1244,10 @@ int ObTTLUtil::check_task_status_from_sys_table(uint64_t tenant_id, common::ObIS
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObTTLTaskStatus status = ObTTLTaskStatus::OB_TTL_TASK_INVALID;
-  if (OB_FAIL(sql.assign_fmt("(SELECT STATUS FROM %s WHERE table_id = %ld"
+  if (OB_FAIL(sql.assign_fmt("(SELECT STATUS FROM %s WHERE tenant_id = %ld AND table_id = %ld"
     " AND tablet_id = %ld AND task_id = %ld limit 1) UNION (SELECT STATUS FROM %s WHERE"
     " table_id = %ld AND tablet_id = %ld AND task_id = %ld limit 1)",
-      share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME, table_id, tablet_id.id(), task_id,
+      share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME, tenant_id, table_id, tablet_id.id(), task_id,
       share::OB_ALL_KV_TTL_TASK_TNAME, table_id, tablet_id.id(), task_id))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   } else {
