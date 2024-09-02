@@ -627,6 +627,18 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("JSON column cannot be used in key specification.", "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
+          } else if (ob_is_collection_sql_type(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be collection type", "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
+          } else if (ob_is_geometry_tc(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be geometry type", "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
           } else if (OB_FAIL(add_column(data_column, is_index_column, is_rowkey,
               order_in_rowkey, row_desc, index_schema, false /* is_hidden */, is_specified_storing_col))) {
             LOG_WARN("add_column failed", "data_column", *data_column, K(is_index_column),
@@ -677,6 +689,22 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, arg.hidden_store_columns_.at(i).length(),
                                                     arg.hidden_store_columns_.at(i).ptr());
             LOG_WARN("JSON column '%.*s' cannot be used in key specification.",
+                "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
+          } else if (ob_is_collection_sql_type(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
+                                                    arg.hidden_store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be collection type",
+                "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
+          } else if (ob_is_geometry_tc(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
+                                                    arg.hidden_store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be geometry type",
                 "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
