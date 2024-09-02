@@ -8726,7 +8726,9 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
     ObString col_def;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
     ObRawExprFactory expr_factory(allocator);
-    SMART_VAR(ObSQLSessionInfo, default_session) {
+    SMART_VARS_3((ObSQLSessionInfo, default_session), (ObExecContext, exec_ctx, allocator),
+                 (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+      LinkExecCtxGuard link_guard(default_session, exec_ctx);
       uint64_t tenant_id = table_schema.get_tenant_id();
       const ObTenantSchema *tenant_schema = NULL;
       ObSchemaGetterGuard schema_guard;
@@ -8747,6 +8749,8 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
       } else if (NULL != local_session_var
                  && OB_FAIL(local_session_var->update_session_vars_with_local(default_session))) {
         LOG_WARN("fail to update session vars", K(ret));
+      } else if (FALSE_IT(exec_ctx.set_physical_plan_ctx(&phy_plan_ctx))) {
+      } else if (FALSE_IT(exec_ctx.set_my_session(&default_session))) {
       } else if (OB_FAIL(generated_column.get_cur_default_value().get_string(col_def))) {
         LOG_WARN("get cur default value failed", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(NULL,
@@ -8802,6 +8806,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
           LOG_WARN("extract sysvar from expr failed", K(ret));
         }
       }
+      exec_ctx.set_physical_plan_ctx(NULL);
     }
   }
   return ret;

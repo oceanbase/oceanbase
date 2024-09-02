@@ -2034,7 +2034,7 @@ bool ObStaticEngineExprCG::is_vectorized_expr(const ObRawExpr *raw_expr) const
 {
   bool bret = false;
   ObItemType type = raw_expr->get_expr_type();
-  if (T_QUESTIONMARK == type || IS_CONST_LITERAL(type)) {
+  if (T_QUESTIONMARK == type || IS_CONST_LITERAL(type) || raw_expr->has_flag(IS_ATTR_EXPR)) {
   } else {
     bret = raw_expr->is_vectorize_result();
   }

@@ -188,7 +188,7 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
                   1 != iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (iter_param.use_new_format()) {
+  } else if (access_ctx.block_row_store_->is_vec2()) {
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;
     if (OB_FAIL(agg_store_vec->get_agg_group(nullptr, agg_group_vec))){
@@ -308,7 +308,7 @@ int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
                   0 == iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (iter_param.use_new_format()) {
+  } else if (access_ctx.block_row_store_->is_vec2()) {
     const sql::ObExpr *output_expr = nullptr;
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;
@@ -333,9 +333,9 @@ int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc mermory", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < iter_param.output_exprs_->count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < iter_param.aggregate_exprs_->count(); ++i) {
         ObAggCell *cell = nullptr;
-        if (OB_FAIL(agg_store->get_agg_cell(iter_param.output_exprs_->at(i), cell))) {
+        if (OB_FAIL(agg_store->get_agg_cell(iter_param.aggregate_exprs_->at(i), cell))) {
           LOG_WARN("Fail to get agg cell", K(ret));
         } else if (OB_FAIL(agg_cells->add_agg_cell(cell))) {
           LOG_WARN("Fail to push back", K(ret));

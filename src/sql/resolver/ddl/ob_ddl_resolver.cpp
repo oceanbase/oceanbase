@@ -6646,7 +6646,9 @@ int ObDDLResolver::reformat_generated_column_expr(ObObj &default_value,
   ObString expr_str;
   ObRawExpr *expr = NULL;
   ObRawExprFactory expr_factory(allocator);
-  SMART_VAR(ObSQLSessionInfo, empty_session) {
+  SMART_VARS_3((ObSQLSessionInfo, empty_session), (ObExecContext, exec_ctx, allocator),
+               (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
+    LinkExecCtxGuard link_guard(empty_session, exec_ctx);
     if (OB_FAIL(init_empty_session(tz_info_wrap,
                                    nls_formats,
                                    &local_session_var,
@@ -6656,12 +6658,15 @@ int ObDDLResolver::reformat_generated_column_expr(ObObj &default_value,
                                    schema_checker,
                                    empty_session))) {
       LOG_WARN("failed to init empty session", K(ret));
+    } else if (FALSE_IT(exec_ctx.set_physical_plan_ctx(&phy_plan_ctx))) {
+    } else if (FALSE_IT(exec_ctx.set_my_session(&empty_session))) {
     } else if (OB_FAIL(default_value.get_string(expr_str))) {
       LOG_WARN("failed to get expr str", K(ret));
     } else if (OB_FAIL(resolve_generated_column_expr(expr_str, allocator, table_schema, dummy_array, column,
                                           &empty_session, schema_checker, expr, expr_factory))) {
       LOG_WARN("check default value failed", K(ret));
     }
+    exec_ctx.set_physical_plan_ctx(NULL);
   }
   return ret;
 }
