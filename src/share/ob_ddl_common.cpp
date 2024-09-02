@@ -1523,25 +1523,35 @@ int ObDDLUtil::release_snapshot(
       LOG_WARN("get table schema failed", K(ret), K(table_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, target_table_id, dest_table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(target_table_id));
-    } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(dest_table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("table not exist", K(ret), K(table_id), K(target_table_id), KP(data_table_schema), KP(dest_table_schema));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(data_table_schema)) {
+      LOG_INFO("table not exist", K(ret), K(table_id), K(target_table_id), KP(data_table_schema));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, table_id, tablet_ids))) {
       LOG_WARN("failed to get data table snapshot", K(ret));
-    } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, target_table_id, tablet_ids))) {
-      LOG_WARN("failed to get dest table snapshot", K(ret));
     } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
               OB_FAIL(ObDDLUtil::get_tablets(tenant_id, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
       LOG_WARN("failed to get data lob meta table snapshot", K(ret));
     } else if (data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
               OB_FAIL(ObDDLUtil::get_tablets(tenant_id, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(dest_table_schema)) {
+      LOG_INFO("table not exist", K(ret), K(table_id), K(target_table_id), KP(dest_table_schema));
+    } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, target_table_id, tablet_ids))) {
+      LOG_WARN("failed to get dest table snapshot", K(ret));
     } else if (dest_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
               OB_FAIL(ObDDLUtil::get_tablets(tenant_id, dest_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
       LOG_WARN("failed to get dest lob meta table snapshot", K(ret));
     } else if (dest_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
               OB_FAIL(ObDDLUtil::get_tablets(tenant_id, dest_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       LOG_WARN("failed to get dest lob piece table snapshot", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(task->batch_release_snapshot(snapshot_version, tablet_ids))) {
       LOG_WARN("failed to release snapshot", K(ret));
     }
