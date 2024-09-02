@@ -155,7 +155,8 @@ void TestFlushListIterator::create_files(const FlushCtxState state, const int64_
                    &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().callback_allocator_,
                    &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().wbp_index_cache_allocator_,
                    &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().wbp_index_cache_bucket_allocator_,
-                   &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_);
+                   &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_,
+                   nullptr);
     ASSERT_EQ(OB_SUCCESS, ret);
     tmp_file->flush_prio_mgr_ = &flush_prio_mgr;
 
@@ -206,7 +207,8 @@ void TestFlushListIterator::create_files_with_dir(
                    &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().callback_allocator_,
                    &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().wbp_index_cache_allocator_,
                    &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().wbp_index_cache_bucket_allocator_,
-                   &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_);
+                   &MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_,
+                   nullptr);
     ASSERT_EQ(OB_SUCCESS, ret);
     tmp_file->flush_prio_mgr_ = &flush_prio_mgr;
 

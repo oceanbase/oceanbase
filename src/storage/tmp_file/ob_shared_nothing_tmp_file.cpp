@@ -48,7 +48,9 @@ int ObSNTmpFileInfo::init(
     const int64_t total_read_size,
     const int64_t last_access_ts,
     const int64_t last_modify_ts,
-    const int64_t birth_ts)
+    const int64_t birth_ts,
+    const void* const tmp_file_ptr,
+    const char* const label)
 {
   int ret = OB_SUCCESS;
   trace_id_ = trace_id;
@@ -58,7 +60,7 @@ int ObSNTmpFileInfo::init(
   file_size_ = file_size;
   truncated_offset_ = truncated_offset;
   is_deleting_ = is_deleting;
-  cached_page_num_ = cached_page_num;
+  cached_data_page_num_ = cached_page_num;
   write_back_data_page_num_ = write_back_data_page_num;
   flushed_data_page_num_ = flushed_data_page_num;
   ref_cnt_ = ref_cnt;
@@ -70,6 +72,10 @@ int ObSNTmpFileInfo::init(
   last_access_ts_ = last_access_ts;
   last_modify_ts_ = last_modify_ts;
   birth_ts_ = birth_ts;
+  tmp_file_ptr_ = tmp_file_ptr;
+  if (NULL != label) {
+    label_.assign_strive(label);
+  }
   return ret;
 }
 
@@ -82,7 +88,7 @@ void ObSNTmpFileInfo::reset()
   file_size_ = 0;
   truncated_offset_ = 0;
   is_deleting_ = false;
-  cached_page_num_ = 0;
+  cached_data_page_num_ = 0;
   write_back_data_page_num_ = 0;
   flushed_data_page_num_ = 0;
   ref_cnt_ = 0;
@@ -94,6 +100,14 @@ void ObSNTmpFileInfo::reset()
   last_access_ts_ = -1;
   last_modify_ts_ = -1;
   birth_ts_ = -1;
+  tmp_file_ptr_ = nullptr;
+  label_.reset();
+  meta_tree_epoch_ = 0;
+  meta_tree_level_cnt_ = 0;
+  meta_size_ = 0;
+  cached_meta_page_num_ = 0;
+  write_back_meta_page_num_ = 0;
+  all_type_page_flush_cnt_ = 0;
 }
 
 ObTmpFileHandle::ObTmpFileHandle(ObSharedNothingTmpFile *tmp_file)
@@ -265,7 +279,8 @@ ObSharedNothingTmpFile::ObSharedNothingTmpFile()
       total_read_size_(0),
       last_access_ts_(-1),
       last_modify_ts_(-1),
-      birth_ts_(-1)
+      birth_ts_(-1),
+      label_()
 {
 }
 
@@ -279,7 +294,8 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
                                  ObIAllocator *callback_allocator,
                                  ObIAllocator *wbp_index_cache_allocator,
                                  ObIAllocator *wbp_index_cache_bkt_allocator,
-                                 ObTmpFilePageCacheController *pc_ctrl)
+                                 ObTmpFilePageCacheController *pc_ctrl,
+                                 const char* label)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -319,6 +335,9 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
     last_access_ts_ = ObTimeUtility::current_time();
     last_modify_ts_ = ObTimeUtility::current_time();
     birth_ts_ = ObTimeUtility::current_time();
+    if (NULL != label) {
+      label_.assign_strive(label);
+    }
   }
 
   LOG_INFO("tmp file init over", KR(ret), K(fd), K(dir_id));
@@ -415,6 +434,7 @@ void ObSharedNothingTmpFile::reset()
   last_access_ts_ = -1;
   last_modify_ts_ = -1;
   birth_ts_ = -1;
+  label_.reset();
   /******for virtual table end******/
 }
 
@@ -1999,8 +2019,11 @@ int ObSharedNothingTmpFile::copy_info_for_virtual_table(ObSNTmpFileInfo &tmp_fil
                                         write_req_cnt_, unaligned_write_req_cnt_,
                                         read_req_cnt_, unaligned_read_req_cnt_,
                                         total_read_size_, last_access_ts_,
-                                        last_modify_ts_, birth_ts_))) {
+                                        last_modify_ts_, birth_ts_,
+                                        this, label_.ptr()))) {
     LOG_WARN("fail to init tmp_file_info", KR(ret), KPC(this));
+  } else if (OB_FAIL(meta_tree_.copy_info(tmp_file_info))) {
+    LOG_WARN("fail to copy tree info", KR(ret), KPC(this));
   }
   return ret;
 };

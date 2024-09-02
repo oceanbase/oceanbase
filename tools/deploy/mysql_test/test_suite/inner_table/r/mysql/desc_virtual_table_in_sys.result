@@ -9955,14 +9955,14 @@ tenant_id	bigint(20)	NO		NULL
 svr_ip	varchar(46)	NO		NULL	
 svr_port	bigint(20)	NO		NULL	
 file_id	bigint(20)	NO		NULL	
-trace_id	varchar(64)	NO		NULL	
+trace_id	varchar(64)	YES			
 dir_id	bigint(20)	NO		NULL	
-bytes	bigint(20)	NO		NULL	
+data_bytes	bigint(20)	NO		NULL	
 start_offset	bigint(20)	NO		NULL	
 is_deleting	tinyint(4)	NO		NULL	
-cached_page_num	bigint(20)	NO		NULL	
-write_back_page_num	bigint(20)	NO		NULL	
-flushed_page_num	bigint(20)	NO		NULL	
+cached_data_page_num	bigint(20)	NO		NULL	
+write_back_data_page_num	bigint(20)	NO		NULL	
+flushed_data_page_num	bigint(20)	NO		NULL	
 ref_cnt	bigint(20)	NO		NULL	
 total_writes	bigint(20)	NO		NULL	
 unaligned_writes	bigint(20)	NO		NULL	
@@ -9972,6 +9972,14 @@ total_read_bytes	bigint(20)	NO		NULL
 last_access_time	timestamp(6)	NO		NULL	
 last_modify_time	timestamp(6)	NO		NULL	
 birth_time	timestamp(6)	NO		NULL	
+file_ptr	varchar(20)	NO		NULL	
+file_label	varchar(16)	YES			
+meta_tree_epoch	bigint(20)	NO		NULL	
+meta_tree_levels	bigint(20)	NO		NULL	
+meta_bytes	bigint(20)	NO		NULL	
+cached_meta_page_num	bigint(20)	NO		NULL	
+write_back_meta_page_num	bigint(20)	NO		NULL	
+page_flush_cnt	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_temp_file;
 IF(count(*) >= 0, 1, 0)
 1

@@ -56,7 +56,7 @@ public:
   void destroy();
 
   int alloc_dir(int64_t &dir_id);
-  int open(int64_t &fd, const int64_t &dir_id);
+  int open(int64_t &fd, const int64_t &dir_id, const char* const label = nullptr);
   int remove(const int64_t fd);
 
   void refresh_meta_memory_limit();

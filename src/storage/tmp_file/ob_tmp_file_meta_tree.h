@@ -23,6 +23,7 @@ namespace tmp_file
 {
 
 class ObTmpPageValueHandle;
+class ObSNTmpFileInfo;
 
 struct ObSharedNothingTmpFileMetaItem
 {
@@ -362,6 +363,8 @@ public:
   void print_meta_tree_overview_info();
   //NOTE: need control print frequency.
   void print_meta_tree_total_info();
+  //for virtual table to show
+  int copy_info(ObSNTmpFileInfo &tmp_file_info);
 
 private:
   int modify_meta_items_at_parent_level_(const ObTmpFileTreeIOInfo &meta_io,

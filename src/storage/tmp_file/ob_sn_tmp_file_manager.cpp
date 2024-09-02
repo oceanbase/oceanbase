@@ -143,7 +143,7 @@ int ObSNTenantTmpFileManager::alloc_dir(int64_t &dir_id)
   return ret;
 }
 
-int ObSNTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id)
+int ObSNTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id, const char* const label)
 {
   int ret = OB_SUCCESS;
   fd = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
@@ -163,7 +163,7 @@ int ObSNTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id)
   } else if (OB_FAIL(tmp_file->init(tenant_id_, fd, dir_id,
                                     &tmp_file_block_manager_, &callback_allocator_,
                                     &wbp_index_cache_allocator_, &wbp_index_cache_bucket_allocator_,
-                                    &page_cache_controller_))) {
+                                    &page_cache_controller_, label))) {
     LOG_WARN("fail to init tmp file", KR(ret), K(fd), K(dir_id));
   } else if (OB_FAIL(files_.insert(ObTmpFileKey(fd), tmp_file))) {
     LOG_WARN("fail to set refactored to tmp file map", KR(ret), K(fd), KP(tmp_file));

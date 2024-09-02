@@ -60,7 +60,7 @@ int ObInnerTableSchema::dba_ob_temp_files_ora_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     SVR_IP,     SVR_PORT,     FILE_ID,     TRACE_ID,     DIR_ID,     BYTES,     START_OFFSET,     TOTAL_WRITES,     UNALIGNED_WRITES,     TOTAL_READS,     UNALIGNED_READS,     TOTAL_READ_BYTES,     LAST_ACCESS_TIME,     LAST_MODIFY_TIME,     BIRTH_TIME   FROM SYS.ALL_VIRTUAL_TEMP_FILE   WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     SVR_IP,     SVR_PORT,     FILE_ID,     TRACE_ID,     DIR_ID,     DATA_BYTES,     START_OFFSET,     TOTAL_WRITES,     UNALIGNED_WRITES,     TOTAL_READS,     UNALIGNED_READS,     TOTAL_READ_BYTES,     LAST_ACCESS_TIME,     LAST_MODIFY_TIME,     BIRTH_TIME   FROM SYS.ALL_VIRTUAL_TEMP_FILE   WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

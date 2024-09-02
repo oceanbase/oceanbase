@@ -3218,5 +3218,28 @@ void ObSharedNothingTmpFileMetaTree::read_page_simple_content_(
   }
 }
 
+int ObSharedNothingTmpFileMetaTree::copy_info(ObSNTmpFileInfo &tmp_file_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_.rdlock(100 * 1000L))) {
+    STORAGE_LOG(WARN, "fail to rdlock", KR(ret), K(fd_));
+  } else {
+    int64_t cached_page_num = 0;
+    int64_t total_page_num = 0;
+    for (int16_t i = 0; i < level_page_range_array_.count(); i++) {
+      cached_page_num += level_page_range_array_.at(i).cached_page_num_;
+      total_page_num += level_page_range_array_.at(i).cached_page_num_ + level_page_range_array_.at(i).evicted_page_num_;
+    }
+    tmp_file_info.meta_tree_epoch_ = tree_epoch_;
+    tmp_file_info.meta_tree_level_cnt_ = level_page_range_array_.count();
+    tmp_file_info.meta_size_ = total_page_num * ObTmpFileGlobal::PAGE_SIZE;
+    tmp_file_info.cached_meta_page_num_ = cached_page_num;
+    tmp_file_info.write_back_meta_page_num_ = stat_info_.meta_page_flushing_cnt_;
+    tmp_file_info.all_type_page_flush_cnt_ = stat_info_.all_type_page_flush_cnt_;
+    lock_.rdunlock();
+  }
+  return ret;
+}
+
 }
 }

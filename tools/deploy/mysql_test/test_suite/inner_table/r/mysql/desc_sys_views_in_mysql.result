@@ -6973,9 +6973,9 @@ Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	
 SVR_PORT	bigint(20)	NO		NULL	
 FILE_ID	bigint(20)	NO		NULL	
-TRACE_ID	varchar(64)	NO		NULL	
+TRACE_ID	varchar(64)	YES			
 DIR_ID	bigint(20)	NO		NULL	
-BYTES	bigint(20)	NO		NULL	
+DATA_BYTES	bigint(20)	NO		NULL	
 START_OFFSET	bigint(20)	NO		NULL	
 TOTAL_WRITES	bigint(20)	NO		NULL	
 UNALIGNED_WRITES	bigint(20)	NO		NULL	
