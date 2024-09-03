@@ -6240,17 +6240,47 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     } else {
       //do nothing, check result type of expr on rootserver later
     }
-  } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_name))) {
-    if (index_keyname_value != static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY)) {
-      // do nothing
-    } else {
-      ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-      LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+  } else {
+    // if create idx by alter table, resolved_cols is not null
+    // if current col in resolved_cols, means it has been altered, use col schema in alter table schema
+    if (OB_NOT_NULL(resolved_cols) && resolved_cols->count() > 0) {
+      bool found = false;
+      ObColumnSchemaHashWrapper cmp_col_name(column_name);
+      for (int i = 0; i < resolved_cols->count() && !found && OB_SUCC(ret); ++i) {
+        ObColumnSchemaV2* tmp_col_schema = resolved_cols->at(i);
+        if (OB_ISNULL(tmp_col_schema)) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("should not be null.", K(i), K(resolved_cols->count()), K(ret));
+        } else {
+          ObColumnSchemaHashWrapper tmp_col_name(tmp_col_schema->get_column_name_str());
+          if (cmp_col_name == tmp_col_name) {
+            found = true;
+            column_schema = tmp_col_schema;
+          }
+        }
+      }
     }
-
-  } else if (OB_FAIL(resolve_spatial_index_constraint(*column_schema, column_num,
-      index_keyname_value, is_oracle_mode, is_explicit_order))) {
-    LOG_WARN("resolve spatial index constraint fail", K(ret), K(column_num), K(index_keyname_value));
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(column_schema) && OB_FALSE_IT(column_schema = table_schema.get_column_schema(column_name))) {
+    } else if (is_oracle_mode) {
+      if (OB_NOT_NULL(column_schema) && ob_is_geometry_tc(column_schema->get_data_type())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("oracle spatial index not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "oracle spatial index");
+      } else {
+        // do nothing
+      }
+    } else if (OB_ISNULL(column_schema)) {
+      if (index_keyname_value != static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY)) {
+        // do nothing
+      } else {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+      }
+    } else if (OB_FAIL(resolve_spatial_index_constraint(*column_schema, column_num,
+        index_keyname_value, is_oracle_mode, is_explicit_order))) {
+      LOG_WARN("resolve spatial index constraint fail", K(ret), K(column_num), K(index_keyname_value));
+    }
   }
 
   return ret;
