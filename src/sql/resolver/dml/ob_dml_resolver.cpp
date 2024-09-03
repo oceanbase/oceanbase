@@ -11014,6 +11014,8 @@ int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
           get_outline_data = true;
           in_outline_data = false;
         }
+      } else if (T_DIRECT == hint_node->type_) {
+        // DIRECT() hint is processed only in load data resolver
       } else if (OB_FAIL(resolve_global_hint(*hint_node,
                                              in_outline_data ? global_hint : embeded_global_hint,
                                              resolved_hint))) {
