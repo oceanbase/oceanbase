@@ -1273,6 +1273,8 @@ int ObIDag::alloc_task(T *&task)
       if (!task_list_.add_last(ntask)) {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Failed to add task", K(task), K_(id));
+        ntask->~T();
+        allocator_->free(ntask);
       }
     }
     if (OB_SUCC(ret)) {

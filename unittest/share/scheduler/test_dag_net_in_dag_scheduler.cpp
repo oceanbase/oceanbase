@@ -1705,7 +1705,8 @@ TEST_F(TestDagScheduler, test_destroy_when_running) //TODO(renju.rj): fix it
 //  }
 //  #endif
 }
-
+/*
+do not add compaction dag in unittest, some module is not inited like LSService
 TEST_F(TestDagScheduler, test_add_multi_co_merge_dag_net)
 {
   int ret = OB_SUCCESS;
@@ -1758,7 +1759,7 @@ TEST_F(TestDagScheduler, test_add_multi_co_merge_dag_net)
     COMMON_LOG(INFO, "Success to create and add co medium dag net", K(ret));
   }
 }
-
+*/
 
 }
 }

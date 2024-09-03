@@ -730,6 +730,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   if (OB_NOT_NULL(snapshot_info) && snapshot_info->is_valid()) {
     static_info.kept_snapshot_info_ = *snapshot_info;
   }
+
 #define ADD_COMMENT(...) \
   ADD_COMPACTION_INFO_PARAM(running_info.comment_, sizeof(running_info.comment_), __VA_ARGS__)
   if (get_is_full_merge()) {
