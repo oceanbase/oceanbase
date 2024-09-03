@@ -1618,8 +1618,14 @@ int ObTablet::inner_init_compat_normal_tablet(
   } else if (old_tablet.is_ls_inner_tablet()) {
     tablet_meta_.last_persisted_committed_tablet_status_.tablet_status_ = ObTabletStatus::NORMAL;
     tablet_meta_.last_persisted_committed_tablet_status_.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
-  } else if (!old_tablet.is_ls_inner_tablet() && CLICK_FAIL(update_tablet_status_from_sstable(true/*expect_persist_status*/))) {
-    LOG_WARN("fail to update tablet status from sstable", K(ret));
+  } else if (!old_tablet.is_ls_inner_tablet()) {
+    if (mds_mini_sstable.is_valid()) {
+      if (CLICK_FAIL(update_tablet_status_from_sstable(true/*expect_persist_status*/))) {
+        LOG_WARN("fail to update tablet status from sstable", K(ret));
+      }
+    } else {  // !mds_mini_sstable.is_valid(), (mds_data of old_version_tablet had not been persisted).
+      tablet_meta_.last_persisted_committed_tablet_status_.on_init();
+    }
   }
 
   if (OB_SUCC(ret)) {
