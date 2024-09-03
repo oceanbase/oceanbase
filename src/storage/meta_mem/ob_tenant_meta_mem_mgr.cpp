@@ -1862,9 +1862,9 @@ int ObTenantMetaMemMgr::get_tablet_pointer_initial_state(const ObTabletMapKey &k
   return ret;
 }
 
-int ObTenantMetaMemMgr::get_tablet_migration_required_size(
+int ObTenantMetaMemMgr::get_tablet_resident_info(
     const ObTabletMapKey &key,
-    int64_t &required_size)
+    ObTabletResidentInfo &info)
 {
   int ret = OB_SUCCESS;
   ObTabletPointerHandle ptr_handle(tablet_map_);
@@ -1890,10 +1890,7 @@ int ObTenantMetaMemMgr::get_tablet_migration_required_size(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet_pointer is invalied", K(ret), KPC(tablet_ptr));
     } else {
-      ObTabletResidentInfo tablet_info(key, *tablet_ptr);
-      required_size = tablet_info.get_tablet_meta_size() +  // meta_size
-                      tablet_info.get_required_size() -     // data_size
-                      tablet_info.get_ss_public_sstable_occupy_size(); // shared_data size
+      info = tablet_ptr->get_tablet_resident_info(key);
     }
   }
   return ret;

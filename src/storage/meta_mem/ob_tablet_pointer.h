@@ -28,6 +28,7 @@ namespace storage
 {
 class ObTablet;
 class ObTabletDDLKvMgr;
+struct ObTabletResidentInfo;
 typedef ObMetaObjGuard<ObTabletDDLKvMgr> ObDDLKvMgrHandle;
 
 struct ObTabletAttr final
@@ -169,6 +170,7 @@ public:
       K_(protected_memtable_mgr_handle), K_(ddl_info), K_(initial_state), KP_(old_version_chain));
 public:
   bool get_initial_state() const;
+  ObTabletResidentInfo get_tablet_resident_info(const ObTabletMapKey &key) const;
   void set_initial_state(const bool initial_state);
   int create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   void get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle);
@@ -218,12 +220,15 @@ private:
 struct ObTabletResidentInfo final
 {
 public:
-  ObTabletResidentInfo(ObTabletAttr &attr, ObTabletID &tablet_id, share::ObLSID &ls_id)
-  : attr_(attr), tablet_addr_(), tablet_id_(tablet_id), ls_id_(ls_id)
+  ObTabletResidentInfo() { reset(); }
+  ObTabletResidentInfo(
+    const ObTabletAttr &attr,
+    const ObMetaDiskAddr &tablet_addr,
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id)
+  : attr_(attr), tablet_addr_(tablet_addr), ls_id_(ls_id), tablet_id_(tablet_id)
     {}
-
-  ObTabletResidentInfo(const ObTabletMapKey &key, const ObTabletPointer &tablet_ptr);
-  ~ObTabletResidentInfo() = default;
+  ~ObTabletResidentInfo() { reset(); };
   bool is_valid() const { return attr_.valid_ && tablet_id_.is_valid() && tablet_addr_.is_valid(); }
   bool has_transfer_table() const { return attr_.has_transfer_table_; }
   bool is_empty_shell() const { return attr_.is_empty_shell_; }
@@ -234,12 +239,19 @@ public:
   uint64_t get_tablet_meta_size() const { return attr_.tablet_meta_size_; }
   int64_t get_ss_public_sstable_occupy_size() const { return attr_.ss_public_sstable_occupy_size_; }
   int64_t get_backup_size() const { return attr_.backup_bytes_; }
+  void reset()
+  {
+    attr_.reset();
+    tablet_addr_.set_none_addr();
+    tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+    ls_id_ = ObLSID::INVALID_LS_ID;
+  }
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(tablet_addr), K_(attr));
 public:
-  const ObTabletAttr &attr_;
+  ObTabletAttr attr_;
   ObMetaDiskAddr tablet_addr_; // used to identify one tablet
-  ObTabletID tablet_id_;
   share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
 };
 
 class ObITabletFilterOp
