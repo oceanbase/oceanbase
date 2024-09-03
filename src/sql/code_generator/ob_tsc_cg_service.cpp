@@ -44,6 +44,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     query_flag.scan_order_ = ObQueryFlag::Forward;
   }
   tsc_ctdef.scan_flags_ = query_flag;
+  ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
+  const share::schema::ObColumnSchemaV2 *col_schema = NULL;
 
   if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {
     const ObTableSchema *table_schema = nullptr;
@@ -195,6 +197,19 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 
   LOG_DEBUG("generate tsc ctdef finish", K(ret), K(op), K(tsc_ctdef),
                                                     K(tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_));
+  if(scan_ctdef.is_external_table_) {
+    if (OB_FAIL(scan_ctdef.external_table_column_names_.init(scan_ctdef.access_column_ids_.count()))) {
+      LOG_WARN("init external_table_column_names failed", K(ret));
+    } else {
+      for ( int64_t i = 0 ; OB_SUCC(ret) && i < scan_ctdef.access_column_ids_.count(); ++i) {
+        schema_guard->get_column_schema(op.get_ref_table_id(), scan_ctdef.access_column_ids_.at(i), col_schema, false);
+        if(!OB_ISNULL(col_schema)) {
+          scan_ctdef.external_table_column_names_.push_back(col_schema->get_column_name());
+        }
+      }
+    }
+    
+  }
   return ret;
 }
 

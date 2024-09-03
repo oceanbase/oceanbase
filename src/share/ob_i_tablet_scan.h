@@ -353,6 +353,7 @@ ObVTableScanParam() :
   sql::ObExternalFileFormat external_file_format_;
   ObString external_file_location_;
   ObString external_file_access_info_;
+  const common::ObFixedArray<common::ObString, common::ObIAllocator> *external_column_names;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()

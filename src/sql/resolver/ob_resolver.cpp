@@ -705,6 +705,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_PRIVILEGES:
       case T_SHOW_CHARSET:
       case T_SHOW_COLLATION:
+      case T_SHOW_EXTERNAL_TABLE_ERROR:
       case T_SHOW_GRANTS:
       case T_SHOW_TABLEGROUPS:
       case T_SHOW_TENANT:

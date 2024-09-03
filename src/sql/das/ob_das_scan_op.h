@@ -46,6 +46,7 @@ public:
       external_file_access_info_(alloc),
       external_file_location_(alloc),
       external_files_(alloc),
+      external_table_column_names_(alloc),
       external_file_format_str_(alloc),
       trans_info_expr_(nullptr),
       ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
@@ -106,6 +107,7 @@ public:
   ObExternalFileFormat::StringData external_file_access_info_;
   ObExternalFileFormat::StringData external_file_location_;
   ExternalFileNameArray external_files_; //for external table scan TODO jim.wjh remove
+  ExternalColumnNameArray external_table_column_names_;
   ObExternalFileFormat::StringData external_file_format_str_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type

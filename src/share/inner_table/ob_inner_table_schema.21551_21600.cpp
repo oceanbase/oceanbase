@@ -110,7 +110,7 @@ int ObInnerTableSchema::v_ob_tenant_resource_limit_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP, SVR_PORT, TENANT_ID, ZONE, RESOURCE_NAME, CURRENT_UTILIZATION, MAX_UTILIZATION,     RESERVED_VALUE, LIMIT_VALUE, EFFECTIVE_LIMIT_TYPE  FROM     oceanbase.GV$OB_TENANT_RESOURCE_LIMIT WHERE     SVR_IP=HOST_IP() AND     SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP, SVR_PORT, TENANT_ID, ZONE, RESOURCE_NAME, CURRENT_UTILIZATION, MAX_UTILIZATION,     RESERVED_VALUE, LIMIT_VALUE, EFFECTIVE_LIMIT_TYPE FROM     oceanbase.GV$OB_TENANT_RESOURCE_LIMIT WHERE     SVR_IP=HOST_IP() AND     SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -210,7 +210,7 @@ int ObInnerTableSchema::v_ob_tenant_resource_limit_detail_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP, SVR_PORT, TENANT_ID, RESOURCE_NAME, LIMIT_TYPE, LIMIT_VALUE  FROM     oceanbase.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL WHERE     SVR_IP=HOST_IP() AND     SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP, SVR_PORT, TENANT_ID, RESOURCE_NAME, LIMIT_TYPE, LIMIT_VALUE FROM     oceanbase.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL WHERE     SVR_IP=HOST_IP() AND     SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

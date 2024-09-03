@@ -404,6 +404,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_tenant_virtual_charset.cpp
   virtual_table/ob_tenant_virtual_privilege.cpp
   virtual_table/ob_tenant_virtual_collation.cpp
+  virtual_table/ob_tenant_virtual_external_table_error.cpp
   virtual_table/ob_tenant_virtual_concurrent_limit_sql.cpp
   virtual_table/ob_tenant_virtual_current_tenant.cpp
   virtual_table/ob_tenant_virtual_event_name.cpp

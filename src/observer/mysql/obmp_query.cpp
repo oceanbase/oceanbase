@@ -1207,6 +1207,7 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_SHOW_PROCESSLIST:
     case stmt::T_SHOW_CHARSET:
     case stmt::T_SHOW_COLLATION:
+    case stmt::T_SHOW_EXTERNAL_TABLE_ERROR:
     case stmt::T_SHOW_TABLEGROUPS:
     case stmt::T_SHOW_STATUS:
     case stmt::T_SHOW_TENANT:

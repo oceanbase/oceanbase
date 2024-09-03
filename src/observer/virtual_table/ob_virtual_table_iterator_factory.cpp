@@ -232,6 +232,7 @@
 #include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
+#include "observer/virtual_table/ob_tenant_virtual_external_table_error.h"
 
 namespace oceanbase
 {
@@ -2031,6 +2032,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "fail to create virtual table", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(collation);
+            }
+            break;
+          }
+          case OB_TENANT_VIRTUAL_EXTERNAL_TABLE_ERROR_TID: {
+            ObTenantVirtualExternalTableError *ext_err = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObTenantVirtualExternalTableError, ext_err, session))) {
+              SERVER_LOG(WARN, "fail to create virtual table", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ext_err);
             }
             break;
           }

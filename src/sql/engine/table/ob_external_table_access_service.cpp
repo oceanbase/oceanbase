@@ -1034,15 +1034,41 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); i++) {
     file_column_exprs.at(i)->set_evaluated_flag(eval_ctx);
   }
-
+  ObSQLSessionInfo* session = eval_ctx.exec_ctx_.get_my_session();
   for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
     ObExpr *column_expr = column_exprs_.at(i);
     ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+    session->reset_err_row_idx();
     OZ (column_convert_expr->eval_batch(eval_ctx, *bit_vector_cache_, returned_row_cnt));
     if (OB_SUCC(ret)) {
       MEMCPY(column_expr->locate_batch_datums(eval_ctx),
             column_convert_expr->locate_batch_datums(eval_ctx), sizeof(ObDatum) * returned_row_cnt);
       column_expr->set_evaluated_flag(eval_ctx);
+    } else {
+      if (!OB_ISNULL(session)) {
+        int err_row_idx = session->get_err_row_idx();
+        if (err_row_idx!=-1) {
+          LOG_INFO("err_row_idx",K(err_row_idx));
+        }
+        session->get_external_error_buffer().set_err_code(ret);
+        session->get_external_error_buffer().set_err_row(err_row_idx);
+        session->get_external_error_buffer().set_err_col(i);
+        session->get_external_error_buffer().set_err_file_name(state_.cur_file_name_);
+        session->get_external_error_buffer().set_err_column_name(scan_param_->external_column_names->at(i));
+        // ObExternalErrorBuffer::set_ext_wrapper(ObExternalErrorBuffer::ExternalErrorWrapper{ObString("type conversion failed in external table"), state_.cur_file_name_,session->get_external_error_buffer().get_err_data(), err_row_idx + 1, scan_param_->external_column_names->at(i)});
+        ObExternalErrorBuffer::ExternalErrorWrapper tmp;
+        // ObExternalErrorBuffer::get_ext_wrapper(tmp);
+
+        // LOG_INFO("external static checks",K(tmp.error_description),K(tmp.error_file_name),K(tmp.error_row_number),K(tmp.error_column_name));
+        ObString s1 = scan_param_->external_column_names->at(i);
+        ObExternalErrorBuffer::set_ext_wrapper_colname(ObString(s1.length(), s1.ptr()));
+        ObString s2 = state_.cur_file_name_;
+        ObExternalErrorBuffer::set_ext_wrapper_filename(ObString(s2.length(), s2.ptr()));
+        ObExternalErrorBuffer::set_ext_wrapper_row(err_row_idx + state_.cur_line_number_ - returned_row_cnt);
+        ObString s3 = session->get_external_error_buffer().get_err_data();
+        ObExternalErrorBuffer::set_ext_wrapper_data(ObString(s3.length(), s3.ptr()));
+        ObExternalErrorBuffer::set_ext_wrapper_desc(ObString("type conversion failed"));
+      }
     }
   }
 

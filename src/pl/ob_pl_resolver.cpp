@@ -5699,6 +5699,7 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_GRANTS:
     case stmt::T_SHOW_CHARSET:
     case stmt::T_SHOW_COLLATION:
+    case stmt::T_SHOW_EXTERNAL_TABLE_ERROR:
     case stmt::T_SHOW_PARAMETERS:
     case stmt::T_SHOW_INDEXES:
     case stmt::T_SHOW_PROCESSLIST:

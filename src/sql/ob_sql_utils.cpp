@@ -1629,6 +1629,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_GRANTS == type
                || T_SHOW_CHARSET == type
                || T_SHOW_COLLATION == type
+               || T_SHOW_EXTERNAL_TABLE_ERROR == type
                || T_SHOW_PARAMETERS == type
                || T_SHOW_INDEXES == type
                || T_SHOW_PROCESSLIST == type

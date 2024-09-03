@@ -33,7 +33,7 @@ bool ObAllVirtualCheckpointDiagnoseInfo::is_need_process(uint64_t tenant_id)
   return false;
 }
 
-int GenerateTraceRow::operator()(const ObTraceInfo &trace_info) const
+int GenerateTraceRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info) const
 {
   int ret = OB_SUCCESS;
   char ip_buf[common::OB_IP_STR_BUFF];

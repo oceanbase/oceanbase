@@ -10417,6 +10417,24 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+def_table_schema(
+    owner = 'jim.wjh',
+    table_name    = '__tenant_virtual_external_table_error',
+    table_id      = '12040',
+    table_type = 'VIRTUAL_TABLE',
+    in_tenant_space = True,
+    gm_columns = [],
+    rowkey_columns = [
+    ],
+    normal_columns = [
+        ('error_file_name','varchar:100','false',''),
+        ('error_column_name', 'varchar:100', 'false', ''),
+        ('error_row_number', 'int', 'false', '0'),
+        ('error_data', 'varchar:100', 'false', ''),
+        ('error_description', 'varchar:100', 'false', ''),     
+  ],
+)
+
 # 12042: __all_virtual_weak_read_stat # abandoned in 4.0
 
 # 12054: __all_virtual_partition_audit # abandoned in 4.0

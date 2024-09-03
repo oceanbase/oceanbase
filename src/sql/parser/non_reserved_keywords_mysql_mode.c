@@ -289,6 +289,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"extended_noaddr", EXTENDED_NOADDR},
   {"extent_size", EXTENT_SIZE},
   {"external", EXTERNAL},
+  {"external_table_error",EXTERNAL_TABLE_ERROR},
   {"extract", EXTRACT},
   {"failover", FAILOVER},
   {"fast", FAST},

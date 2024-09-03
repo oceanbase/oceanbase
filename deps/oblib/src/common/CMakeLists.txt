@@ -25,6 +25,7 @@ ob_set_subtarget(oblib_common common
   ob_zone_type.cpp
   ob_version_def.cpp
   ob_tenant_data_version_mgr.cpp
+  ob_external_error_buffer.cpp
 )
 
 ob_set_subtarget(oblib_common common_mixed

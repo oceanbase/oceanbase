@@ -3436,7 +3436,11 @@ CAST_FUNC_NAME(string, int)
   {
     ObString in_str(child_res->len_, child_res->ptr_);
     const bool is_str_int_cast = true;
+    ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
     OZ(common_string_int(expr, expr.extra_, in_str, is_str_int_cast, res_datum));
+    if (!OB_SUCC(ret)) {
+      session->get_external_error_buffer().set_err_data(in_str);
+    }
   }
   return ret;
 }

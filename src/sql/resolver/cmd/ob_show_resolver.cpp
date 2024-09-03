@@ -796,6 +796,20 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         }();
         break;
       }
+      case T_SHOW_EXTERNAL_TABLE_ERROR: {
+        [&] {
+          if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+          } else {
+            show_resv_ctx.condition_node_ = parse_tree.children_[0];
+            show_resv_ctx.stmt_type_ = stmt::T_SHOW_EXTERNAL_TABLE_ERROR;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_EXTERNAL_TABLE_ERROR);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_EXTERNAL_TABLE_ERROR, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_EXTERNAL_TABLE_ERROR_TNAME, OB_TENANT_VIRTUAL_EXTERNAL_TABLE_ERROR_TNAME));
+          }
+        }();
+        break;
+      }
       case T_SHOW_TRACE: {
         [&] {
           if (OB_UNLIKELY(parse_tree.num_child_ != 2 || NULL == parse_tree.children_)) {
@@ -2297,6 +2311,7 @@ int ObShowResolver::resolve_like_or_where_clause(ObShowResolverContext &ctx)
                  && parse_tree->type_ != T_SHOW_VARIABLES
                  && parse_tree->type_ != T_SHOW_CHARSET
                  && parse_tree->type_ != T_SHOW_COLLATION
+                 && parse_tree->type_ != T_SHOW_EXTERNAL_TABLE_ERROR
                  && parse_tree->type_ != T_SHOW_TRACE
                  && parse_tree->type_ != T_SHOW_COLUMNS
                  && parse_tree->type_ != T_SHOW_TABLE_STATUS
@@ -3069,6 +3084,11 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_COLLATION,
                        "SELECT collation AS `Collation`, charset AS `Charset`, id AS `Id`, is_default AS `Default`, is_compiled AS `Compiled`, sortlen AS `Sortlen` FROM %s.%s ",
                        R"(SELECT "COLLATION" AS "COLLATION", "CHARSET" AS "CHARSET", "ID" AS "ID", "IS_DEFAULT" AS "DEFAULT", "IS_COMPILED" AS "COMPILED", "SORTLEN" AS "SORTLEN" FROM %s.%s )",
                        "Collation");
+DEFINE_SHOW_CLAUSE_SET(SHOW_EXTERNAL_TABLE_ERROR,
+                       NULL,
+                       "SELECT * From %s.%s",
+                       R"(SELECT * FROM %s.%s )",
+                       "External_table_error");
 DEFINE_SHOW_CLAUSE_SET(SHOW_GRANTS,
                        "SELECT grants AS `Grants for %.*s@%.*s` ",
                        "SELECT grants FROM %s.%s WHERE user_id = %ld",

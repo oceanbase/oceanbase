@@ -82,7 +82,7 @@ int ObAllVirtualCheckpointDiagnoseMemtableInfo::get_primary_key_()
   return ret;
 }
 
-int GenerateMemtableRow::operator()(const ObTraceInfo &trace_info,
+int GenerateMemtableRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info,
     const ObCheckpointDiagnoseKey &key,
     const ObMemtableDiagnoseInfo &memtable_diagnose_info) const
 {

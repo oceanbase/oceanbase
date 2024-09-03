@@ -123,6 +123,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       is_inited_(false),
       warnings_buf_(),
       show_warnings_buf_(),
+      err_row_idx_(-1),
+      external_error_buf_(get_session_allocator()),
       end_trans_cb_(),
       user_priv_set_(),
       db_priv_set_(),

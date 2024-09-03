@@ -16,6 +16,7 @@
 #include "io/easy_io_struct.h"
 #include "common/sql_mode/ob_sql_mode.h"
 #include "common/ob_range.h"
+#include "common/ob_external_error_buffer.h"
 #include "lib/net/ob_addr.h"
 #include "share/ob_define.h"
 #include "share/ob_ddl_common.h"
@@ -781,8 +782,13 @@ public:
   void set_plan_cache(ObPlanCache *cache) { plan_cache_ = cache; }
   void set_ps_cache(ObPsCache *cache) { ps_cache_ = cache; }
   const common::ObWarningBuffer &get_show_warnings_buffer() const { return show_warnings_buf_; }
+
   const common::ObWarningBuffer &get_warnings_buffer() const { return warnings_buf_; }
   common::ObWarningBuffer &get_warnings_buffer() { return warnings_buf_; }
+  common::ObExternalErrorBuffer &get_external_error_buffer() { return external_error_buf_; }
+  int get_err_row_idx() const { return err_row_idx_; }
+  void set_err_row_idx(int error_row) { err_row_idx_ = error_row; }
+  
 
   // self-verification add.
   bool is_has_query_executed() {return has_query_executed_; }
@@ -797,6 +803,7 @@ public:
     warnings_buf_.reset();
     pl_exact_err_msg_.reset();
   }
+
   void restore_auto_commit()
   {
     if (restore_auto_commit_) {
@@ -807,6 +814,8 @@ public:
   void set_restore_auto_commit() { restore_auto_commit_ = true; }
   bool need_restore_auto_commit() const { return restore_auto_commit_; }
   void reset_show_warnings_buf() { show_warnings_buf_.reset(); }
+  void reset_err_row_idx() { err_row_idx_ = -1; }
+  void reset_external_err_buf() { external_error_buf_.reset();}
   ObPrivSet get_user_priv_set() const { return user_priv_set_; }
   ObPrivSet get_db_priv_set() const { return db_priv_set_; }
   ObPlanCache *get_plan_cache();
@@ -817,7 +826,9 @@ public:
   void set_user_priv_set(const ObPrivSet priv_set) { user_priv_set_ = priv_set; }
   void set_db_priv_set(const ObPrivSet priv_set) { db_priv_set_ = priv_set; }
   void set_show_warnings_buf(int error_code);
+  void set_ext_show_warnings_buf(int error_code);
   void update_show_warnings_buf();
+  void update_show_ext_warnings_buf();
   void set_global_sessid(const int64_t global_sessid)
   {
     global_sessid_ = global_sessid;
@@ -1396,6 +1407,8 @@ private:
   // store the warning message from the most recent statement in the current session
   common::ObWarningBuffer warnings_buf_;
   common::ObWarningBuffer show_warnings_buf_;
+  int err_row_idx_; // 在外表中当前出错的行
+  ObExternalErrorBuffer external_error_buf_;
   sql::ObEndTransAsyncCallback end_trans_cb_;
   ObAuditRecordData audit_record_;
 
@@ -1436,6 +1449,7 @@ private:
   typedef common::hash::ObHashMap<ObPsStmtId, ObPsSessionInfo *,
                                   common::hash::NoPthreadDefendMode> PsSessionInfoMap;
   PsSessionInfoMap ps_session_info_map_;
+
   inline int try_create_ps_session_info_map()
   {
     int ret = OB_SUCCESS;

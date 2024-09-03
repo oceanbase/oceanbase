@@ -464,6 +464,7 @@
 # 12036: __all_freeze_info  # BASE_TABLE_NAME
 # 12038: __all_virtual_bad_block_table
 # 12039: __all_virtual_px_worker_stat
+# 12040: __tenant_virtual_external_table_error
 # 12055: __all_virtual_auto_increment
 # 12055: __all_auto_increment  # BASE_TABLE_NAME
 # 12056: __all_virtual_sequence_value

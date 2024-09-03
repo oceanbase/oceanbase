@@ -333,6 +333,7 @@ typedef common::ObFixedArray<int64_t, common::ObIAllocator> IntFixedArray;
 typedef common::ObFixedArray<ObObjectID, common::ObIAllocator> ObjectIDFixedArray;
 typedef common::ObFixedArray<ObDASTableLoc*, common::ObIAllocator> DASTableLocFixedArray;
 typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ExternalFileNameArray;
+typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ExternalColumnNameArray;
 
 //DAS: data access service
 //CtDef: Compile time Definition

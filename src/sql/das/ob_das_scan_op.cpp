@@ -59,6 +59,7 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_location_,
                     external_file_access_info_,
                     external_files_,
+                    external_table_column_names_,
                     external_file_format_str_,
                     trans_info_expr_,
                     group_by_column_ids_,
@@ -301,6 +302,7 @@ int ObDASScanOp::init_scan_param()
   if (OB_SUCC(ret) && scan_ctdef_->is_external_table_) {
     scan_param_.external_file_access_info_ = scan_ctdef_->external_file_access_info_.str_;
     scan_param_.external_file_location_ = scan_ctdef_->external_file_location_.str_;
+    scan_param_.external_column_names = &scan_ctdef_->external_table_column_names_;
     if (OB_FAIL(scan_param_.external_file_format_.load_from_string(scan_ctdef_->external_file_format_str_.str_, *scan_param_.allocator_))) {
       LOG_WARN("fail to load from string", K(ret));
     } else {

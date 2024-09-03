@@ -1213,7 +1213,6 @@ int expr_default_eval_batch_func(const ObExpr &expr,
                                  const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
-
   char *frame = ctx.frames_[expr.frame_idx_];
   ObBitVector *evaluated_flags = to_bit_vector(frame + expr.eval_flags_off_);
   ObDatum *datum = reinterpret_cast<ObDatum *>(frame + expr.datum_off_);
@@ -1225,6 +1224,9 @@ int expr_default_eval_batch_func(const ObExpr &expr,
       // set current evaluate index
       batch_info_guard.set_batch_idx(i);
       ret = expr.eval_func_(expr, ctx, datum[i]);
+      if (OB_SUCCESS!=ret) {
+        ctx.exec_ctx_.get_my_session()->set_err_row_idx(i);
+      }
       CHECK_STRING_LENGTH(expr, datum[i]);
       evaluated_flags->set(i);
       if (datum[i].is_null()) {
