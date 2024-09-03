@@ -141,7 +141,7 @@ void ObTabletMdsData::reset(common::ObIAllocator &allocator)
 
 bool ObTabletMdsData::is_valid() const
 {
-  // TODO(@bowen.gbw): add more check rules
+  // TODO(@gaishun.gs): add more check rules
   return is_inited_;
 }
 

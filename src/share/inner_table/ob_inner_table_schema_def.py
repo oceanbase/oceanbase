@@ -3141,7 +3141,7 @@ def_table_schema(
 )
 
 all_tenant_directory_def = dict(
-    owner = 'bowen.gbw',
+    owner = 'jiahua.cjh',
     table_name     = '__all_tenant_directory',
     table_id       = '326',
     table_type     = 'SYSTEM_TABLE',
@@ -58989,7 +58989,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'bowen.gbw',
+  owner = 'jiahua.cjh',
   table_name      = 'ALL_DIRECTORIES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '28099',
@@ -59011,7 +59011,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'bowen.gbw',
+  owner = 'jiahua.cjh',
   table_name      = 'DBA_DIRECTORIES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '28100',

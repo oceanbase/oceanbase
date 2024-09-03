@@ -215,7 +215,7 @@ int ObLSTabletService::replay(
     LOG_WARN("failed to init replayer", K(ret), KP(log_buf), K(nbytes), K(pos), K(lsn), K(scn));
   } else if (OB_FAIL(replayer_executor.execute(scn, ls_->get_ls_id(), tablet_id))) {
     if (OB_TABLET_NOT_EXIST == ret) {
-      ret = OB_SUCCESS; // TODO (bowen.gbw): unify multi data replay logic
+      ret = OB_SUCCESS; // TODO (gaishun.gs): unify multi data replay logic
       LOG_INFO("tablet does not exist, skip", K(ret), K(replayer_executor));
     } else if (OB_TIMEOUT == ret) {
       LOG_INFO("replace timeout errno", KR(ret), K(replayer_executor));

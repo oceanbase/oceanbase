@@ -33,7 +33,7 @@ public:
   int init(common::ObArenaAllocator &allocator);
   void reset();
 
-  // TODO(@bowen.gbw): filter uncommitted node
+  // TODO(@gaishun.gs): filter uncommitted node
   int get_next_medium_info(
       common::ObIAllocator &allocator,
       compaction::ObMediumCompactionInfoKey &key,

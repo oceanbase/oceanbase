@@ -876,7 +876,7 @@ TEST_F(TestTabletStatusCache, read_all_committed)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-// TODO(@bowen.gbw): refactor test cases to cover all scene
+// TODO(@gaishun.gs): refactor test cases to cover all scene
 /*
 TEST_F(TestTabletStatusCache, transfer_src_ls_read_all_committed)
 {
