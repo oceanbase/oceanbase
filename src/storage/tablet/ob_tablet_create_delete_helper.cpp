@@ -365,7 +365,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out(
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
   } else if (read_snapshot >= transfer_scn) {
-    // TODO(@bowen.gbw): TEMP SOLUTION,
+    // TODO(@gaishun.gs): TEMP SOLUTION,
     // return OB_TABLET_NOT_EXIST if read snapshot is no smaller than transfer scn,
     // no matter start transfer out transaction is committed or not.
     ret = OB_TABLET_NOT_EXIST;

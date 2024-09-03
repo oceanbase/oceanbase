@@ -301,7 +301,7 @@ public:
   int get_ddl_memtables(common::ObIArray<ObITable *> &ddl_memtables) const;
 
   // memtable operation
-  ObIMemtableMgr *get_memtable_mgr() const { return memtable_mgr_; } // TODO(bowen.gbw): get memtable mgr from tablet pointer handle
+  ObIMemtableMgr *get_memtable_mgr() const { return memtable_mgr_; } // TODO(gaishun.gs): get memtable mgr from tablet pointer handle
 
   // get the active memtable for write or replay.
   int get_active_memtable(ObTableHandleV2 &handle) const;
@@ -535,7 +535,7 @@ private:
       const int64_t schema_version);
   int check_transfer_seq_equal(const ObTablet &old_tablet, const int64_t transfer_seq);
 
-  logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle
+  logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(gaishun.gs): get log handler from tablet pointer handle
 
   int init_shared_params(
       const share::ObLSID &ls_id,

@@ -1872,7 +1872,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
 
   if (OB_FAIL(ret)) {
   } else {
-    // TODO(@bowen.gbw): Currently, the order is:
+    // TODO(@gaishun.gs): Currently, the order is:
     // 1. CAS operation, let the newest tablet be visible
     // 2. check and set initial state on tablet pointer
     // But upper layer may get tablet between step 1 and 2, which will cause that upper layer cannot
