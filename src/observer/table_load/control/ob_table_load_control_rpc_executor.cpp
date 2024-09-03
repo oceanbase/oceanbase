@@ -16,6 +16,7 @@
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
+#include "sql/engine/ob_des_exec_context.h"
 
 namespace oceanbase
 {
@@ -99,7 +100,7 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
   if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-  } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_))) {
+  } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_, arg_.des_exec_ctx_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
                                                 arg_.target_partition_id_array_))) {
