@@ -91,8 +91,13 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
   int ret = OB_SUCCESS;
   file_size = -1;
   CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
-  if (OB_FAIL(ObBackupIoAdapter::get_file_length(url, &access_info_, file_size))) {
-    LOG_WARN("fail to get file length", KR(ret), K(url), K_(access_info));
+  ObString url_cstring;
+  ObArenaAllocator allocator;
+
+  if (OB_FAIL(ob_write_string(allocator, url, url_cstring, true/*c_style*/))) {
+    LOG_WARN("fail to copy string", KR(ret), K(url));
+  } else if (OB_FAIL(ObBackupIoAdapter::get_file_length(url_cstring, &access_info_, file_size))) {
+    LOG_WARN("fail to get file length", KR(ret), K(url_cstring), K_(access_info));
   }
 
   if (OB_OBJECT_NOT_EXIST == ret || OB_IO_ERROR == ret) {
@@ -230,7 +235,7 @@ public:
         if (target.empty()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("empty dir or name", K(full_path), K(origin_path_));
-        } else if (OB_FAIL(ob_write_string(allocator_, target, tmp_file))) {
+        } else if (OB_FAIL(ob_write_string(allocator_, target, tmp_file, true/*c_style*/))) {
           OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
         } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
           OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
@@ -262,6 +267,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
   const int64_t MAX_VISIT_COUNT = 100000;
   ObExprRegexContext regexp_ctx;
   ObExternalPathFilter filter(regexp_ctx, allocator);
+  ObString path_cstring;
   CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
 
   if (OB_UNLIKELY(!access_info_.is_valid())) {
@@ -269,24 +275,26 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     LOG_WARN("ObExternalDataAccessDriver not init", KR(ret), K_(access_info));
   } else if (!pattern.empty() && OB_FAIL(filter.init(pattern, regexp_vars))) {
     LOG_WARN("fail to init filter", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, path, path_cstring, true/*c_style*/))) {
+    LOG_WARN("fail to copy string", KR(ret), K(path));
   } else if (get_storage_type() == OB_STORAGE_FILE) {
     ObSEArray<ObString, 4> file_dirs;
     bool is_dir = false;
     ObString path_without_prifix;
-    path_without_prifix = path;
+    path_without_prifix = path_cstring;
     path_without_prifix += strlen(OB_FILE_PREFIX);
 
-    OZ (FileDirectoryUtils::is_directory(to_cstring(path_without_prifix), is_dir));
+    OZ (FileDirectoryUtils::is_directory(path_without_prifix.ptr(), is_dir));
     if (!is_dir) {
       LOG_WARN("external location is not a directory", K(path_without_prifix));
     } else {
-      OZ (file_dirs.push_back(path));
+      OZ (file_dirs.push_back(path_cstring));
     }
     ObArray<int64_t> useless_size;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
-      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path, NULL, allocator);
-      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path,
+      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path_cstring, NULL, allocator);
+      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path_cstring,
                                                pattern.empty() ? NULL : &filter, allocator);
       dir_op.set_dir_flag();
       if (OB_FAIL(ObBackupIoAdapter::list_files(file_dir, &access_info_, file_op))) {
@@ -300,8 +308,8 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     }
   } else {
     ObExternalFileListArrayOpWithFilter file_op(file_urls, file_sizes, pattern.empty() ? NULL : &filter, allocator);
-    if (OB_FAIL(ObBackupIoAdapter::list_files(path, &access_info_, file_op))) {
-      LOG_WARN("fail to list files", KR(ret), K(path), K_(access_info));
+    if (OB_FAIL(ObBackupIoAdapter::list_files(path_cstring, &access_info_, file_op))) {
+      LOG_WARN("fail to list files", KR(ret), K(path_cstring), K_(access_info));
     }
   }
   return ret;
