@@ -25,6 +25,9 @@
 #include "pl/ob_pl_package.h"
 #include "lib/alloc/malloc_hook.h"
 #include "pl/ob_pl_persistent.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_package_type.h"
+#endif
 
 namespace oceanbase {
 using namespace common;
@@ -129,6 +132,9 @@ int ObPLCompiler::init_anonymous_ast(
         OX (new(nested_type)ObNestedTableType());
         OX (element_type.reset());
         OX (element_type.set_data_type(coll->get_element_type()));
+        if (OB_SUCC(ret) && element_type.is_obj_type()) {
+          OZ (ObPLResolver::adjust_routine_param_type(element_type));
+        }
         OX (nested_type->set_element_type(element_type));
         OX (nested_type->set_user_type_id(
           func_ast.get_user_type_table().generate_user_type_id(OB_INVALID_ID)));
@@ -843,8 +849,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
         allocator_, session_info_.get_dtc_params(), source));
   OZ (analyze_package(source, parent_ns,
                       package_ast, package_info.is_for_trigger()));
-
-
+#ifdef OB_BUILD_ORACLE_PL
+  if (OB_SUCC(ret) && package_info.is_package()) {
+    OZ (ObPLPackageType::update_package_type_info(package_info, package_ast));
+  }
+#endif
   if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
     HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {

@@ -6994,6 +6994,106 @@ def_table_schema(
   ],
 )
 
+all_pkg_type_def = dict(
+  owner = 'webber.wb',
+  table_name = '__all_pkg_type',
+  table_id   = '522',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int', 'false'),
+    ('package_id', 'int', 'false'),
+    ('type_id', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('database_id', 'int'),
+    ('schema_version', 'int'),
+    ('typecode', 'int'),
+    ('properties', 'int'),
+    ('attributes', 'int'),
+    ('methods', 'int'),
+    ('hiddenmethods', 'int'),
+    ('supertypes', 'int'),
+    ('subtypes', 'int'),
+    ('externtype', 'int'),
+    ('externname', 'varchar:OB_MAX_TABLE_TYPE_LENGTH', 'true', ''),
+    ('helperclassname', 'varchar:OB_MAX_TABLE_TYPE_LENGTH', 'true', ''),
+    ('local_attrs', 'int'),
+    ('local_methods', 'int'),
+    ('supertypeid', 'int'),
+    ('type_name', 'varchar:OB_MAX_TABLE_TYPE_LENGTH'),
+  ],
+)
+def_table_schema(**all_pkg_type_def)
+
+all_pkg_type_attr_def = dict (
+  owner = 'webber.wb',
+  table_name = '__all_pkg_type_attr',
+  table_id = '523',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int', 'false'),
+    ('type_id', 'int', 'false'),
+    ('attribute', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('schema_version', 'int'),
+    ('attr_package_id', 'int'),
+    ('type_attr_id', 'int'),
+    ('name', 'varchar:OB_MAX_TABLE_TYPE_LENGTH'),
+    ('properties', 'int', 'false'),
+    ('charset_id', 'int'),
+    ('charset_form', 'int'),
+    ('length', 'int'),
+    ('number_precision', 'int'),
+    ('scale', 'int'),
+    ('zero_fill', 'int'),
+    ('coll_type', 'int'),
+    ('externname', 'varchar:OB_MAX_TABLE_TYPE_LENGTH', 'true', ''),
+    ('xflags', 'int'),
+    ('setter', 'int'),
+    ('getter', 'int'),
+  ],
+)
+def_table_schema(**all_pkg_type_attr_def)
+
+all_coll_type_def = dict(
+  owner = 'webber.wb',
+  table_name = '__all_pkg_coll_type',
+  table_id = '524',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int', 'false'),
+    ('coll_type_id', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('schema_version', 'int'),
+    ('elem_package_id', 'int'),
+    ('elem_type_id', 'int'),
+    ('elem_schema_version', 'int'),
+    ('properties', 'int'),
+    ('charset_id', 'int'),
+    ('charset_form', 'int'),
+    ('length', 'int'),
+    ('number_precision', 'int'),
+    ('scale', 'int'),
+    ('zero_fill', 'int'),
+    ('coll_type', 'int'),
+    ('upper_bound', 'int'),
+    ('package_id', 'int'),
+    ('coll_name', 'varchar:OB_MAX_TABLE_TYPE_LENGTH'),
+  ],
+)
+def_table_schema(**all_coll_type_def)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -14229,6 +14329,21 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12497',
+  table_name = '__all_virtual_pkg_type',
+  keywords = all_def_keywords['__all_pkg_type']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12498',
+  table_name = '__all_virtual_pkg_type_attr',
+  keywords = all_def_keywords['__all_pkg_type_attr']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12499',
+  table_name = '__all_virtual_pkg_coll_type',
+  keywords = all_def_keywords['__all_pkg_coll_type']))
+
 def_table_schema(
   owner      = 'wuguangxin.wgx',
   table_name = '__all_virtual_kv_client_info',
@@ -14714,6 +14829,13 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451', all_def_keywords['__all_virtual_tenant_resource_limit_detail'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15457', all_def_keywords['__all_virtual_query_response_time'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_keywords['__all_scheduler_job_run_detail_v2']))
+
+def_table_schema(**gen_sys_agent_virtual_table_def('15468', all_def_keywords['__all_pkg_type']))
+def_table_schema(**gen_sys_agent_virtual_table_def('15469', all_def_keywords['__all_pkg_type_attr']))
+def_table_schema(**gen_sys_agent_virtual_table_def('15470', all_def_keywords['__all_pkg_coll_type']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15471', all_def_keywords['__all_pkg_type']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15472', all_def_keywords['__all_pkg_type_attr']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15473', all_def_keywords['__all_pkg_coll_type']))
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -63041,6 +63163,2113 @@ def_table_schema(
     ],
 )
 
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='ALL_PLSQL_TYPES',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28244',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition= """
+    select
+      d.database_name as owner,
+      cast(t.type_name as varchar2(136))as type_name,
+      p.package_name as package_name,
+      cast(utl_raw.cast_from_number(t.type_id) as raw(16)) as type_oid,
+      cast(decode(t.typecode, 1, 'COLLECTION',
+                        6, 'PL/SQL RECORD',
+                        7, 'COLLECTION',
+                        8, 'SUBTYPE',
+                        'UNKNOWN TYPECODE:' || T.typecode) as varchar2(58)) as typecode,
+      t.attributes as attributes,
+      cast(decode(bitand(t.properties, 4611686018427387904), 4611686018427387904, 'YES', 0, 'NO') as varchar2(3)) as CONTAINS_PLSQL
+    from
+      sys.all_virtual_pkg_type_real_agent T
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT D
+        on d.database_id = t.database_id
+        and (T.DATABASE_ID = USERENV('SCHEMAID')
+            OR USER_CAN_ACCESS_OBJ(3, T.PACKAGE_ID, T.DATABASE_ID) = 1)
+        and t.typecode in (1, 6, 7, 8)
+      join sys.all_virtual_package_real_agent P
+        on t.package_id = p.package_id
+    UNION all
+    select
+      'SYS' as owner,
+      cast(ts.type_name as varchar2(136)) as type_name,
+      ps.package_name as package_name,
+      cast(utl_raw.cast_from_number(ts.type_id) as raw(16)) as type_oid,
+      cast(decode(ts.typecode, 1, 'COLLECTION',
+                          6, 'PL/SQL RECORD',
+                          7, 'COLLECTION',
+                          8, 'SUBTYPE',
+                        'UNKNOWN TYPECODE:' || Ts.typecode) as varchar2(58)) as typecode,
+      ts.attributes as attributes,
+      cast(decode(bitand(ts.properties, 4611686018427387904), 4611686018427387904, 'YES', 0, 'NO') as varchar2(3)) as CONTAINS_PLSQL
+    from sys.all_virtual_pkg_type_sys_agent ts
+      join sys.all_virtual_package_sys_agent ps
+      on ts.typecode in (1, 6, 7)
+        and ts.package_id = ps.package_id
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='DBA_PLSQL_TYPES',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28245',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition= """
+    select
+      d.database_name as owner,
+      cast(t.type_name as varchar2(136))as type_name,
+      p.package_name as package_name,
+      cast(null as raw(16)) as type_oid,
+      cast(decode(t.typecode, 1, 'COLLECTION',
+                        6, 'PL/SQL RECORD',
+                        7, 'COLLECTION',
+                        8, 'SUBTYPE',
+                        'UNKNOWN TYPECODE:' || T.typecode) as varchar2(58)) as typecode,
+      t.attributes as attributes,
+      cast(decode(bitand(t.properties, 4611686018427387904), 4611686018427387904, 'YES', 0, 'NO') as varchar2(3)) as CONTAINS_PLSQL
+    from
+      sys.all_virtual_pkg_type_real_agent T
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT D
+        on d.database_id = t.database_id
+        and t.typecode in (1, 6, 7, 8)
+      join sys.all_virtual_package_real_agent P
+        on t.package_id = p.package_id
+    UNION all
+    select
+      'SYS' as owner,
+      cast(ts.type_name as varchar2(136)) as type_name,
+      ps.package_name as package_name,
+      cast(NULL as raw(16)) as type_oid,
+      cast(decode(ts.typecode, 1, 'COLLECTION',
+                          6, 'PL/SQL RECORD',
+                          7, 'COLLECTION',
+                          8, 'SUBTYPE',
+                        'UNKNOWN TYPECODE:' || Ts.typecode) as varchar2(58)) as typecode,
+      ts.attributes as attributes,
+      cast(decode(bitand(ts.properties, 4611686018427387904), 4611686018427387904, 'YES', 0, 'NO') as varchar2(3)) as CONTAINS_PLSQL
+    from sys.all_virtual_pkg_type_sys_agent ts
+      join sys.all_virtual_package_sys_agent ps
+      on ts.typecode in (1, 6, 7)
+        and ts.package_id = ps.package_id
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='USER_PLSQL_TYPES',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28246',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition= """
+    select
+      cast(t.type_name as varchar2(136))as type_name,
+      p.package_name as package_name,
+      cast(null as raw(16)) as type_oid,
+      cast(decode(t.typecode, 1, 'COLLECTION',
+                        6, 'PL/SQL RECORD',
+                        7, 'COLLECTION',
+                        8, 'SUBTYPE',
+                        'UNKNOWN TYPECODE:' || T.typecode) as varchar2(58)) as typecode,
+      t.attributes as attributes,
+      cast(decode(bitand(t.properties, 4611686018427387904), 4611686018427387904, 'YES', 0, 'NO') as varchar2(3)) as CONTAINS_PLSQL
+    from
+      sys.all_virtual_pkg_type_real_agent T
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT D
+        on d.database_id = t.database_id
+        and t.typecode in (1, 6, 7, 8)
+      join sys.all_virtual_package_real_agent P
+        on t.package_id = p.package_id
+      where t.database_id = USERENV('SCHEMAID')
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='ALL_PLSQL_COLL_TYPES',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28247',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition="""
+    select
+      d.database_name as owner,
+      cast(pt.type_name as varchar2(128)) as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(null as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(
+            CASE BITAND(C.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (C.ELEM_TYPE_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(C.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(C.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(C.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
+                46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.number_precision, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and bitand(c.properties, 15) = 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+    UNION ALL
+    select
+      d.database_name as owner,
+      cast(pt.type_name as varchar2(128)) as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(d1.database_name as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(t.TYPE_NAME AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.number_precision, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+           and bitand(c.properties, 15) != 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_type_real_agent t
+        on t.type_id = c.elem_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on t.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      d1.database_name as ELEM_TYPE_OWNER,
+      cast(pt1.type_name as varchar2(136)) as ELEM_TYPE_NAME,
+      p1.package_name as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+            or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent p1
+        on c.elem_package_id = p1.package_id
+      join sys.all_virtual_pkg_type_real_agent pt1
+        on c.elem_package_id = pt1.package_id
+        and pt1.type_id = c.elem_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on p1.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      'SYS' as ELEM_TYPE_OWNER,
+      cast(t.TYPE_NAME AS VARCHAR2(136)) as elem_type_name,
+      NULL as elem_type_package,
+      NULL as length,
+      NULL as PRECISION,
+      NULL as scale,
+      NULL as CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_type_sys_agent T
+        on t.type_id = c.elem_type_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      'SYS' as ELEM_TYPE_OWNER,
+      cast(pts.type_name as varchar2(136)) as ELEM_TYPE_NAME,
+      ps.package_name as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+      join sys.all_virtual_package_sys_agent ps
+        on c.elem_package_id = ps.package_id
+      join sys.all_virtual_pkg_type_sys_agent pts
+        on c.elem_package_id = pts.package_id
+        and pts.type_id = c.elem_type_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      d.database_name as ELEM_TYPE_OWNER,
+      cast(case bitand(c.properties, 15)
+          when 9 then tbl.table_name || '%ROWTYPE'
+          else 'NOT SUPPORT' end as varchar2(136)) as ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and (bitand(c.properties, 15) = 9
+            or bitand(c.properties, 15) = 10)
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+            or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.ALL_VIRTUAL_TABLE_REAL_AGENT tbl
+        on c.elem_type_id = tbl.table_id
+    UNION ALL
+    select
+      'SYS' as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(NULL as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(
+            CASE BITAND(C.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (C.ELEM_TYPE_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(C.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(C.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(C.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
+                46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.number_precision, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_sys_agent pt
+      join sys.all_virtual_package_sys_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_sys_agent c
+        on pt.type_id = c.coll_type_id
+           and bitand(c.properties, 15) = 3
+    UNION ALL
+    select
+      'SYS' as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast('SYS' as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(t.TYPE_NAME AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.number_precision, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_sys_agent pt
+      join sys.all_virtual_package_sys_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_sys_agent c
+        on pt.type_id = c.coll_type_id
+           and bitand(c.properties, 15) != 3
+      join sys.all_virtual_type_sys_agent t
+        on t.type_id = c.elem_type_id
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='DBA_PLSQL_COLL_TYPES',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28248',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition="""
+    select
+      d.database_name as owner,
+      cast(pt.type_name as varchar2(128)) as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(null as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(
+            CASE BITAND(C.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (C.ELEM_TYPE_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(C.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(C.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(C.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
+                46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.length, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and bitand(c.properties, 15) = 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      cast(pt.type_name as varchar2(128)) as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(d1.database_name as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(t.TYPE_NAME AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.length, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+           and bitand(c.properties, 15) != 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+      join sys.all_virtual_type_real_agent t
+        on t.type_id = c.elem_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on t.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      d1.database_name as ELEM_TYPE_OWNER,
+      cast(pt1.type_name as varchar2(136)) as ELEM_TYPE_NAME,
+      p1.package_name as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+      join sys.all_virtual_package_real_agent p1
+        on c.elem_package_id = p1.package_id
+      join sys.all_virtual_pkg_type_real_agent pt1
+        on c.elem_package_id = pt1.package_id
+        and pt1.type_id = c.elem_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on p1.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      'SYS' as ELEM_TYPE_OWNER,
+      cast(t.TYPE_NAME AS VARCHAR2(136)) as elem_type_name,
+      NULL as elem_type_package,
+      NULL as length,
+      NULL as PRECISION,
+      NULL as scale,
+      NULL as CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+      join sys.all_virtual_type_sys_agent T
+        on t.type_id = c.elem_type_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      'SYS' as ELEM_TYPE_OWNER,
+      cast(pts.type_name as varchar2(136)) as ELEM_TYPE_NAME,
+      ps.package_name as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+      join sys.all_virtual_package_sys_agent ps
+        on c.elem_package_id = ps.package_id
+      join sys.all_virtual_pkg_type_sys_agent pts
+        on c.elem_package_id = pts.package_id
+        and pts.type_id = c.elem_type_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      d.database_name as ELEM_TYPE_OWNER,
+      cast(case bitand(c.properties, 15)
+          when 9 then tbl.table_name || '%ROWTYPE'
+          else 'NOT SUPPORT' end as varchar2(136)) as ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and (bitand(c.properties, 15) = 9
+            or bitand(c.properties, 15) = 10)
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+            or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.ALL_VIRTUAL_TABLE_REAL_AGENT tbl
+        on c.elem_type_id = tbl.table_id
+    UNION ALL
+    select
+      'SYS' as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(NULL as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(
+            CASE BITAND(C.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (C.ELEM_TYPE_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(C.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(C.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(C.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
+                46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.length, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_sys_agent pt
+      join sys.all_virtual_package_sys_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_sys_agent c
+        on pt.type_id = c.coll_type_id
+           and bitand(c.properties, 15) = 3
+    UNION ALL
+    select
+      'SYS' as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast('SYS' as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(t.TYPE_NAME AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.length, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_sys_agent pt
+      join sys.all_virtual_package_sys_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_sys_agent c
+        on pt.type_id = c.coll_type_id
+           and bitand(c.properties, 15) != 3
+      join sys.all_virtual_type_sys_agent t
+        on t.type_id = c.elem_type_id
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='USER_PLSQL_COLL_TYPES',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28249',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition="""
+    select
+      cast(pt.type_name as varchar2(128)) as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(null as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(
+            CASE BITAND(C.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (C.ELEM_TYPE_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(C.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(C.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(C.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(C.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
+                46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.length, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and bitand(c.properties, 15) = 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+    UNION ALL
+    select
+      cast(pt.type_name as varchar2(128)) as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      cast(d1.database_name as varchar2(128)) as ELEM_TYPE_OWNER,
+      CAST(t.TYPE_NAME AS VARCHAR2(136)) AS ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      c.length as length,
+      c.number_precision as PRECISION,
+      c.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      CAST(DECODE(c.length, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                  NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+           and bitand(c.properties, 15) != 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_type_real_agent t
+        on t.type_id = c.elem_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on t.database_id = d1.database_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      d1.database_name as ELEM_TYPE_OWNER,
+      cast(pt1.type_name as varchar2(136)) as ELEM_TYPE_NAME,
+      p1.package_name as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_package_real_agent p1
+        on c.elem_package_id = p1.package_id
+      join sys.all_virtual_pkg_type_real_agent pt1
+        on c.elem_package_id = pt1.package_id
+        and pt1.type_id = c.elem_type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on p1.database_id = d1.database_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      'SYS' as ELEM_TYPE_OWNER,
+      cast(t.TYPE_NAME AS VARCHAR2(136)) as elem_type_name,
+      NULL as elem_type_package,
+      NULL as length,
+      NULL as PRECISION,
+      NULL as scale,
+      NULL as CHARACTER_SET_NAME,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_type_sys_agent T
+        on t.type_id = c.elem_type_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      'SYS' as ELEM_TYPE_OWNER,
+      cast(pts.type_name as varchar2(136)) as ELEM_TYPE_NAME,
+      ps.package_name as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+      join sys.all_virtual_package_sys_agent ps
+        on c.elem_package_id = ps.package_id
+      join sys.all_virtual_pkg_type_sys_agent pts
+        on c.elem_package_id = pts.package_id
+        and pts.type_id = c.elem_type_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      cast(decode(pt.typecode, 1, decode(c.upper_bound, -1, 'TABLE', 'VARYING ARRAY'),
+                              7, 'PL/SQL INDEX TABLE',
+                              'UNKNOWN')
+          AS varchar2(18)) as coll_type,
+      cast(decode(c.upper_bound, -1, NULL, c.upper_bound) as int) AS UPPER_BOUND,
+      d.database_name as ELEM_TYPE_OWNER,
+      cast(case bitand(c.properties, 15)
+          when 9 then tbl.table_name || '%ROWTYPE'
+          else 'NOT SUPPORT' end as varchar2(136)) as ELEM_TYPE_NAME,
+      NULL as elem_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      null as ELEM_STORAGE,
+      cast('YES' as varchar2(3)) as NULLS_STORED,
+      'B' as CHAR_USED,
+      CAST(DECODE(pt.TYPECODE, 7, DECODE(C.UPPER_BOUND, -1, 'BINARY_INTEGER', 'VARCHAR2'),
+                                NULL) AS VARCHAR2(14)) AS INDEX_BY,
+      CAST(NULL AS VARCHAR2(7)) AS ELEM_TYPE_MOD
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_coll_type_real_agent C
+        on pt.type_id = c.coll_type_id
+        and (bitand(c.properties, 15) = 9
+            or bitand(c.properties, 15) = 10)
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.ALL_VIRTUAL_TABLE_REAL_AGENT tbl
+        on c.elem_type_id = tbl.table_id
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='ALL_PLSQL_TYPE_ATTRS',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28250',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition= """
+    select
+      d.database_name as owner,
+      cast(pt.type_name as varchar2(136)) as type_name,
+      p.package_name as package_name,
+      cast(a.name as varchar2(128)) as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      cast(null as varchar2(128)) as attr_type_owner,
+      CAST(
+            CASE BITAND(A.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (A.TYPE_ATTR_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(A.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(A.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(A.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(A.LENGTH, ')')),
+                46, DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS attr_type_name,
+      NULL as attr_type_package,
+      a.length as length,
+      a.number_precision as PRECISION,
+      a.scale as scale,
+      cast('CHAR_CS' as varchar2(44)) as character_set_name,
+      a.attribute as attr_no,
+      cast(decode(a.number_precision, 1, 'C', 'B') AS varchar2(1)) as char_used
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+           and bitand(a.properties, 15) = 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+    UNION ALL
+    select
+          d.database_name as owner,
+          cast(pt.type_name as varchar2(136)) as type_name,
+          p.package_name as package_name,
+          cast(a.name as varchar2(128)) as attr_name,
+          cast(null as varchar2(7)) as attr_type_mod,
+          cast(d1.database_name as varchar2(128)) as attr_type_owner,
+          CAST(t.TYPE_NAME AS VARCHAR2(136)) AS attr_type_name,
+          NULL as attr_type_package,
+          a.length as length,
+          a.number_precision as PRECISION,
+          a.scale as scale,
+          cast('CHAR_CS' as varchar2(44)) as character_set_name,
+          a.attribute as attr_no,
+          cast(decode(a.number_precision, 1, 'C', 'B') AS varchar2(1)) as char_used
+        from sys.all_virtual_pkg_type_real_agent pt
+          join sys.all_virtual_package_real_agent p
+            on pt.package_id = p.package_id
+          join sys.all_virtual_pkg_type_attr_real_agent A
+            on pt.type_id = a.type_id
+              and bitand(a.properties, 15) != 3
+          join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+            on pt.database_id = d.database_id
+            and (pt.database_id = USERENV('SCHEMAID')
+                  or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+          join sys.all_virtual_type_real_agent t
+            on t.type_id = a.type_attr_id
+          join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+            on t.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      d1.database_name as attr_type_owner,
+      cast(pt1.type_name as varchar2(136)) as attr_type_name,
+      p1.package_name as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+            or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent p1
+        on A.attr_package_id = p1.package_id
+      join sys.all_virtual_pkg_type_real_agent pt1
+        on A.attr_package_id = pt1.package_id
+        and pt1.type_id = a.type_attr_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on p1.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      'SYS' as attr_type_owner,
+      cast(t.TYPE_NAME AS VARCHAR2(136)) as attr_type_name,
+      NULL as attr_type_package,
+      NULL as length,
+      NULL as PRECISION,
+      NULL as scale,
+      NULL as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+            or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = A.type_id
+        and (pt.database_id = USERENV('SCHEMAID')
+              or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_type_sys_agent T
+        on t.type_id = a.type_attr_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      'SYS' as attr_type_owner,
+      cast(pts.type_name as varchar2(136)) as attr_type_name,
+      ps.package_name as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+            or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+      join sys.all_virtual_package_sys_agent ps
+        on a.attr_package_id = ps.package_id
+      join sys.all_virtual_pkg_type_sys_agent pts
+        on a.attr_package_id = pts.package_id
+        and pts.type_id = a.type_attr_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      d1.database_name as attr_type_owner,
+      cast(case bitand(a.properties, 15)
+          when 9 then tbl.table_name || '%ROWTYPE'
+          else 'NOT SUPPORT' end as varchar2(136)) as attr_type_name,
+      NULL as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = A.type_id
+        and (bitand(a.properties, 15) = 9
+            or bitand(a.properties, 15) = 10)
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and (pt.database_id = USERENV('SCHEMAID')
+            or USER_CAN_ACCESS_OBJ(3, PT.package_id, PT.DATABASE_ID) = 1)
+      join sys.ALL_VIRTUAL_TABLE_REAL_AGENT tbl
+        on a.type_attr_id = tbl.table_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on tbl.database_id = d1.database_id
+    UNION ALL
+    select
+      'SYS' as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      cast(NULL as varchar2(128)) as attr_type_owner,
+      CAST(
+            CASE BITAND(a.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (a.TYPE_attr_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(a.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(a.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(a.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(a.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(a.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(a.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(a.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(a.LENGTH, ')')),
+                46, DECODE(a.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS attr_TYPE_NAME,
+      NULL as attr_type_package,
+      a.length as length,
+      a.number_precision as PRECISION,
+      a.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      CAST(DECODE(a.number_precision, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED
+    from sys.all_virtual_pkg_type_sys_agent pt
+      join sys.all_virtual_package_sys_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_sys_agent a
+        on pt.type_id = a.type_id
+           and bitand(a.properties, 15) = 3
+    UNION ALL
+    select
+          'SYS' as owner,
+          pt.type_name as type_name,
+          p.package_name as package_name,
+          a.name as attr_name,
+          cast(null as varchar2(7)) as attr_type_mod,
+          cast('SYS' as varchar2(128)) as attr_type_owner,
+          CAST(t.TYPE_NAME AS VARCHAR2(136)) AS attr_TYPE_NAME,
+          NULL as attr_type_package,
+          a.length as length,
+          a.number_precision as PRECISION,
+          a.scale as scale,
+          CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+          a.attribute as attr_no,
+          CAST(DECODE(a.length, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED
+        from sys.all_virtual_pkg_type_sys_agent pt
+          join sys.all_virtual_package_sys_agent P
+            on pt.package_id = p.package_id
+          join sys.all_virtual_pkg_type_attr_sys_agent a
+            on pt.type_id = a.type_id
+              and bitand(a.properties, 15) != 3
+          join sys.all_virtual_type_sys_agent t
+            on t.type_id = a.type_attr_id
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='DBA_PLSQL_TYPE_ATTRS',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28251',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition= """
+    select
+      d.database_name as owner,
+      cast(pt.type_name as varchar2(136)) as type_name,
+      p.package_name as package_name,
+      cast(a.name as varchar2(128)) as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      cast(null as varchar2(128)) as attr_type_owner,
+      CAST(
+            CASE BITAND(A.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (A.TYPE_ATTR_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(A.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(A.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(A.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(A.LENGTH, ')')),
+                46, DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS attr_type_name,
+      NULL as attr_type_package,
+      a.length as length,
+      a.number_precision as PRECISION,
+      a.scale as scale,
+      cast('CHAR_CS' as varchar2(44)) as character_set_name,
+      a.attribute as attr_no,
+      cast(decode(a.number_precision, 1, 'C', 'B') AS varchar2(1)) as char_used
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+           and bitand(a.properties, 15) = 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+    UNION ALL
+    select
+          d.database_name as owner,
+          cast(pt.type_name as varchar2(136)) as type_name,
+          p.package_name as package_name,
+          cast(a.name as varchar2(128)) as attr_name,
+          cast(null as varchar2(7)) as attr_type_mod,
+          cast(d1.database_name as varchar2(128)) as attr_type_owner,
+          CAST(t.TYPE_NAME AS VARCHAR2(136)) AS attr_type_name,
+          NULL as attr_type_package,
+          a.length as length,
+          a.number_precision as PRECISION,
+          a.scale as scale,
+          cast('CHAR_CS' as varchar2(44)) as character_set_name,
+          a.attribute as attr_no,
+          cast(decode(a.number_precision, 1, 'C', 'B') AS varchar2(1)) as char_used
+        from sys.all_virtual_pkg_type_real_agent pt
+          join sys.all_virtual_package_real_agent p
+            on pt.package_id = p.package_id
+          join sys.all_virtual_pkg_type_attr_real_agent A
+            on pt.type_id = a.type_id
+              and bitand(a.properties, 15) != 3
+          join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+            on pt.database_id = d.database_id
+          join sys.all_virtual_type_real_agent t
+            on t.type_id = a.type_attr_id
+          join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+            on t.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      d1.database_name as attr_type_owner,
+      cast(pt1.type_name as varchar2(136)) as attr_type_name,
+      p1.package_name as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+      join sys.all_virtual_package_real_agent p1
+        on A.attr_package_id = p1.package_id
+      join sys.all_virtual_pkg_type_real_agent pt1
+        on A.attr_package_id = pt1.package_id
+        and pt1.type_id = a.type_attr_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on p1.database_id = d1.database_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      'SYS' as attr_type_owner,
+      cast(t.TYPE_NAME AS VARCHAR2(136)) as attr_type_name,
+      NULL as attr_type_package,
+      NULL as length,
+      NULL as PRECISION,
+      NULL as scale,
+      NULL as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = A.type_id
+      join sys.all_virtual_type_sys_agent T
+        on t.type_id = a.type_attr_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      'SYS' as attr_type_owner,
+      cast(pts.type_name as varchar2(136)) as attr_type_name,
+      ps.package_name as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+      join sys.all_virtual_package_sys_agent ps
+        on a.attr_package_id = ps.package_id
+      join sys.all_virtual_pkg_type_sys_agent pts
+        on a.attr_package_id = pts.package_id
+        and pts.type_id = a.type_attr_id
+    UNION ALL
+    select
+      d.database_name as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      d1.database_name as attr_type_owner,
+      cast(case bitand(a.properties, 15)
+          when 9 then tbl.table_name || '%ROWTYPE'
+          else 'NOT SUPPORT' end as varchar2(136)) as attr_type_name,
+      NULL as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = A.type_id
+        and (bitand(a.properties, 15) = 9
+            or bitand(a.properties, 15) = 10)
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+      join sys.ALL_VIRTUAL_TABLE_REAL_AGENT tbl
+        on a.type_attr_id = tbl.table_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on tbl.database_id = d1.database_id
+    UNION ALL
+    select
+      'SYS' as owner,
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      cast(NULL as varchar2(128)) as attr_type_owner,
+      CAST(
+            CASE BITAND(a.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (a.TYPE_attr_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(a.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(a.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(a.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(a.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(a.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(a.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(a.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(a.LENGTH, ')')),
+                46, DECODE(a.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS attr_TYPE_NAME,
+      NULL as attr_type_package,
+      a.length as length,
+      a.number_precision as PRECISION,
+      a.scale as scale,
+      CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      CAST(DECODE(a.number_precision, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED
+    from sys.all_virtual_pkg_type_sys_agent pt
+      join sys.all_virtual_package_sys_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_sys_agent a
+        on pt.type_id = a.type_id
+           and bitand(a.properties, 15) = 3
+    UNION ALL
+    select
+          'SYS' as owner,
+          pt.type_name as type_name,
+          p.package_name as package_name,
+          a.name as attr_name,
+          cast(null as varchar2(7)) as attr_type_mod,
+          cast('SYS' as varchar2(128)) as attr_type_owner,
+          CAST(t.TYPE_NAME AS VARCHAR2(136)) AS attr_TYPE_NAME,
+          NULL as attr_type_package,
+          a.length as length,
+          a.number_precision as PRECISION,
+          a.scale as scale,
+          CAST('CHAR_CS' AS VARCHAR2(44)) AS CHARACTER_SET_NAME,
+          a.attribute as attr_no,
+          CAST(DECODE(a.number_precision, 1, 'C', 'B') AS VARCHAR2(1)) AS CHAR_USED
+        from sys.all_virtual_pkg_type_sys_agent pt
+          join sys.all_virtual_package_sys_agent P
+            on pt.package_id = p.package_id
+          join sys.all_virtual_pkg_type_attr_sys_agent a
+            on pt.type_id = a.type_id
+              and bitand(a.properties, 15) != 3
+          join sys.all_virtual_type_sys_agent t
+            on t.type_id = a.type_attr_id
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='USER_PLSQL_TYPE_ATTRS',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28252',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition= """
+    select
+      cast(pt.type_name as varchar2(136)) as type_name,
+      p.package_name as package_name,
+      cast(a.name as varchar2(128)) as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      cast(null as varchar2(128)) as attr_type_owner,
+      CAST(
+            CASE BITAND(A.PROPERTIES, 15)
+            WHEN 3
+              THEN DECODE (A.TYPE_ATTR_ID,
+                0,  'NULL',
+                1,  'NUMBER',
+                2,  'NUMBER',
+                3,  'NUMBER',
+                4,  'NUMBER',
+                5,  'NUMBER',
+                6,  'NUMBER',
+                7,  'NUMBER',
+                8,  'NUMBER',
+                9,  'NUMBER',
+                10, 'NUMBER',
+                11, 'BINARY_FLOAT',
+                12, 'BINARY_DOUBLE',
+                13, 'NUMBER',
+                14, 'NUMBER',
+                15, 'NUMBER',
+                16, 'NUMBER',
+                17, 'DATE',
+                18, 'TIMESTAMP',
+                19, 'DATE',
+                20, 'TIME',
+                21, 'YEAR',
+                22, 'VARCHAR2',
+                23, 'CHAR',
+                24, 'HEX_STRING',
+                25, 'EXT',
+                26, 'UNKNOWN',
+                27, 'TINYTEXT',
+                28, 'TEXT',
+                29, 'MEDIUMTEXT',
+                30,  DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                31, 'BIT',
+                32, 'ENUM',
+                33, 'SET',
+                34, 'ENUM_INNER',
+                35, 'SET_INNER',
+                36, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ') WITH TIME ZONE')),
+                37, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ') WITH LOCAL TIME ZONE')),
+                38, CONCAT('TIMESTAMP(', CONCAT(A.SCALE, ')')),
+                39, 'RAW',
+                40, CONCAT('INTERVAL YEAR(', CONCAT(A.SCALE, ') TO MONTH')),
+                41, CONCAT('INTERVAL DAY(', CONCAT(TRUNC(A.SCALE / 10), CONCAT(') TO SECOND(', CONCAT(MOD(A.SCALE, 10), ')')))),
+                42, 'FLOAT',
+                43, 'NVARCHAR2',
+                44, 'NCHAR',
+                45, CONCAT('UROWID(', CONCAT(A.LENGTH, ')')),
+                46, DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+                47, 'JSON',
+                'NOT_SUPPORT')
+            ELSE 'NOT_SUPPORT' END AS VARCHAR2(136)) AS attr_type_name,
+      NULL as attr_type_package,
+      a.length as length,
+      a.number_precision as PRECISION,
+      a.scale as scale,
+      cast('CHAR_CS' as varchar2(44)) as character_set_name,
+      a.attribute as attr_no,
+      cast(decode(a.number_precision, 1, 'C', 'B') AS varchar2(1)) as char_used
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+           and bitand(a.properties, 15) = 3
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+    UNION ALL
+    select
+          cast(pt.type_name as varchar2(136)) as type_name,
+          p.package_name as package_name,
+          cast(a.name as varchar2(128)) as attr_name,
+          cast(null as varchar2(7)) as attr_type_mod,
+          cast(d1.database_name as varchar2(128)) as attr_type_owner,
+          CAST(t.TYPE_NAME AS VARCHAR2(136)) AS attr_type_name,
+          NULL as attr_type_package,
+          a.length as length,
+          a.number_precision as PRECISION,
+          a.scale as scale,
+          cast('CHAR_CS' as varchar2(44)) as character_set_name,
+          a.attribute as attr_no,
+          cast(decode(a.number_precision, 1, 'C', 'B') AS varchar2(1)) as char_used
+        from sys.all_virtual_pkg_type_real_agent pt
+          join sys.all_virtual_package_real_agent p
+            on pt.package_id = p.package_id
+          join sys.all_virtual_pkg_type_attr_real_agent A
+            on pt.type_id = a.type_id
+              and bitand(a.properties, 15) != 3
+          join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+            on pt.database_id = d.database_id
+            and pt.database_id = USERENV('SCHEMAID')
+          join sys.all_virtual_type_real_agent t
+            on t.type_id = a.type_attr_id
+          join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+            on t.database_id = d1.database_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      d1.database_name as attr_type_owner,
+      cast(pt1.type_name as varchar2(136)) as attr_type_name,
+      p1.package_name as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_package_real_agent p1
+        on A.attr_package_id = p1.package_id
+      join sys.all_virtual_pkg_type_real_agent pt1
+        on A.attr_package_id = pt1.package_id
+        and pt1.type_id = a.type_attr_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on p1.database_id = d1.database_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      'SYS' as attr_type_owner,
+      cast(t.TYPE_NAME AS VARCHAR2(136)) as attr_type_name,
+      NULL as attr_type_package,
+      NULL as length,
+      NULL as PRECISION,
+      NULL as scale,
+      NULL as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_package_real_agent p
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = A.type_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_type_sys_agent T
+        on t.type_id = a.type_attr_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      'SYS' as attr_type_owner,
+      cast(pts.type_name as varchar2(136)) as attr_type_name,
+      ps.package_name as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = a.type_id
+      join sys.all_virtual_package_sys_agent ps
+        on a.attr_package_id = ps.package_id
+      join sys.all_virtual_pkg_type_sys_agent pts
+        on a.attr_package_id = pts.package_id
+        and pts.type_id = a.type_attr_id
+    UNION ALL
+    select
+      pt.type_name as type_name,
+      p.package_name as package_name,
+      a.name as attr_name,
+      cast(null as varchar2(7)) as attr_type_mod,
+      d1.database_name as attr_type_owner,
+      cast(case bitand(a.properties, 15)
+          when 9 then tbl.table_name || '%ROWTYPE'
+          else 'NOT SUPPORT' end as varchar2(136)) as attr_type_name,
+      NULL as attr_type_package,
+      null as length,
+      null as PRECISION,
+      null as scale,
+      null as CHARACTER_SET_NAME,
+      a.attribute as attr_no,
+      'B' as CHAR_USED
+    from sys.all_virtual_pkg_type_real_agent pt
+      join sys.all_virtual_package_real_agent P
+        on pt.package_id = p.package_id
+      join sys.all_virtual_pkg_type_attr_real_agent A
+        on pt.type_id = A.type_id
+        and (bitand(a.properties, 15) = 9
+            or bitand(a.properties, 15) = 10)
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d
+        on pt.database_id = d.database_id
+        and pt.database_id = USERENV('SCHEMAID')
+      join sys.ALL_VIRTUAL_TABLE_REAL_AGENT tbl
+        on a.type_attr_id = tbl.table_id
+      join sys.ALL_VIRTUAL_DATABASE_REAL_AGENT d1
+        on tbl.database_id = d1.database_id
+""".replace("\n", " "),
+)
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -63933,6 +66162,54 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
 
+def_sys_index_table(
+  index_name = 'idx_pkg_db_type_name',
+  index_table_id = 101107,
+  index_columns = ['database_id', 'type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_pkg_type'])
+
+def_sys_index_table(
+  index_name = 'idx_pkg_type_name',
+  index_table_id = 101108,
+  index_columns = ['type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_pkg_type'])
+
+def_sys_index_table(
+  index_name = 'idx_pkg_type_attr_name',
+  index_table_id = 101109,
+  index_columns = ['name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_pkg_type_attr'])
+
+def_sys_index_table(
+  index_name = 'idx_pkg_type_attr_id',
+  index_table_id = 101110,
+  index_columns = ['attr_package_id', 'type_attr_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_pkg_type_attr'])
+
+def_sys_index_table(
+  index_name = 'idx_pkg_coll_name_type',
+  index_table_id = 101111,
+  index_columns = ['coll_name', 'coll_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_pkg_coll_type'])
+
+def_sys_index_table(
+  index_name = 'idx_pkg_coll_name_id',
+  index_table_id = 101112,
+  index_columns = ['elem_package_id', 'elem_type_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_pkg_coll_type'])
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################
@@ -64729,6 +67006,66 @@ def_agent_index_table(
   real_table_name = '__all_scheduler_job_run_detail_v2' ,
   real_index_name = 'idx_scheduler_job_run_detail_v2_job_class_time',
   keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_db_type_name_real_agent',
+  index_table_id = 15474,
+  index_columns = ['database_id', 'type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_pkg_type' ,
+  real_index_name = 'idx_pkg_db_type_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PKG_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_type_name_real_agent',
+  index_table_id = 15475,
+  index_columns = ['type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_pkg_type' ,
+  real_index_name = 'idx_pkg_type_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PKG_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_type_attr_name_real_agent',
+  index_table_id = 15476,
+  index_columns = ['name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_pkg_type_attr' ,
+  real_index_name = 'idx_pkg_type_attr_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PKG_TYPE_ATTR_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_type_attr_id_real_agent',
+  index_table_id = 15477,
+  index_columns = ['attr_package_id', 'type_attr_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_pkg_type_attr' ,
+  real_index_name = 'idx_pkg_type_attr_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_PKG_TYPE_ATTR_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_coll_name_type_real_agent',
+  index_table_id = 15478,
+  index_columns = ['coll_name', 'coll_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_pkg_coll_type' ,
+  real_index_name = 'idx_pkg_coll_name_type',
+  keywords = all_def_keywords['ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_coll_name_id_real_agent',
+  index_table_id = 15479,
+  index_columns = ['elem_package_id', 'elem_type_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_pkg_coll_type' ,
+  real_index_name = 'idx_pkg_coll_name_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index
 ################################################################################

@@ -1275,7 +1275,13 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
         const ObUserDefinedSubType *sub_type = NULL;
         OZ (resolve_ctx.get_user_type(
           dst_pl_type.get_user_type_id(), user_type, &(resolve_ctx.allocator_)));
-        CK (OB_NOT_NULL(sub_type = static_cast<const ObUserDefinedSubType *>(sub_type)));
+        CK (OB_NOT_NULL(sub_type = static_cast<const ObUserDefinedSubType *>(user_type)));
+        if (OB_SUCC(ret) && common::is_dblink_type_id(sub_type->get_user_type_id())) {
+          if (!user_type->is_collection_type() && !user_type->is_record_type()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "composite types other than collection type and record type are");
+          }
+        }
         OX (dst_pl_type = *(sub_type->get_base_type()));
       }
 #endif

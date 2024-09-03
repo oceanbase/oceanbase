@@ -607,7 +607,8 @@ public:
                                                  const ObString &routine_name,
                                                  const common::ObIArray<sql::ObRawExpr *> &expr_params,
                                                  const ObIRoutineInfo *&routine_info);
-  int resolve_dblink_type_with_synonym(const uint64_t pkg_syn_id,
+  int resolve_dblink_type_with_synonym(const ObString &cur_db_name,
+                                       const uint64_t pkg_syn_id,
                                        const ObString &type_name,
                                        ObPLCompileUnitAST &func,
                                        ObPLDataType &pl_type);

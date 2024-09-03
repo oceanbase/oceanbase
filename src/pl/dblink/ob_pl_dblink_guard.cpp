@@ -184,11 +184,11 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
   common::ObDbLinkProxy *dblink_proxy = NULL;
   common::sqlclient::ObISQLConnection *dblink_conn = NULL;
   common::sqlclient::DblinkDriverProto link_type = DBLINK_UNKNOWN;
+  ObString full_name;
   OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type, false));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
   if (OB_SUCC(ret)) {
-    ObString full_name;
     ObString schema_name;
     ObString object_name;
     ObString sub_object_name;
@@ -227,6 +227,19 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
       ret = tmp_ret;
     }
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(udt)) {
+    if (ObPLTypeFrom::PL_TYPE_DBLINK == udt->get_type_from_origin()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("type is not supported", K(ret), KPC(udt));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, full_name.ptr());
+    }
+    if (OB_SUCC(ret)) {
+      if (!udt->is_collection_type() && !udt->is_record_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "composite types other than collection type and record type are");
+      }
+    }
+  }
 #endif
   return ret;
 }
@@ -262,8 +275,13 @@ int ObPLDbLinkGuard::get_dblink_routine_infos(common::ObDbLinkProxy *dblink_prox
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
-      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo();
-      new_dblink_info->set_dblink_id(dblink_id);
+      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo(dblink_id,
+                                                            next_link_object_id_,
+                                                            alloc_,
+                                                            session_info,
+                                                            schema_guard,
+                                                            dblink_proxy,
+                                                            dblink_conn);
       dblink_info = new_dblink_info;
       OZ (dblink_infos_.push_back(dblink_info));
     }
@@ -453,8 +471,13 @@ int ObPLDbLinkGuard::get_dblink_type_by_name(common::ObDbLinkProxy *dblink_proxy
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
-      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo();
-      new_dblink_info->set_dblink_id(dblink_id);
+      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo(dblink_id,
+                                                            next_link_object_id_,
+                                                            alloc_,
+                                                            session_info,
+                                                            schema_guard,
+                                                            dblink_proxy,
+                                                            dblink_conn);
       dblink_info = new_dblink_info;
       OZ (dblink_infos_.push_back(dblink_info));
     }
@@ -622,7 +645,23 @@ int ObPLDbLinkGuard::check_remote_version(common::ObDbLinkProxy &dblink_proxy,
     OZ (dblink_proxy.dblink_bind_basic_type_by_pos(&dblink_conn, 3, &part3, size, ObObjType::ObInt32Type, ind, true));
     OZ (dblink_proxy.dblink_execute_proc(&dblink_conn));
     if (OB_SUCC(ret)) {
-      if (part1 < 4 || part2 < 2 || part3 < 4) {
+      bool not_support = false;
+      if (part1 < 4) {
+        not_support = true;
+      } else if (part1 == 4) {
+        if (part2 < 2) {
+          not_support = true;
+        } else if (part2 == 2) {
+          if (part3 < 4) {
+            not_support = true;
+          }
+        } else if (part2 == 3) {
+          if (part3 < 3) {
+            not_support = true;
+          }
+        }
+      }
+      if (not_support) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support dblink", K(ret), K(part1), K(part2), K(part3));
         LOG_USER_ERROR(OB_NOT_SUPPORTED,

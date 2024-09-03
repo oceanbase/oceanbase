@@ -284,6 +284,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 515	__all_user_proxy_role_info_history	0	201001	1
 516	__all_service	0	201001	1
 519	__all_scheduler_job_run_detail_v2	0	201001	1
+522	__all_pkg_type	0	201001	1
+523	__all_pkg_type_attr	0	201001	1
+524	__all_pkg_coll_type	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -724,6 +727,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12488	__all_virtual_scheduler_job_run_detail_v2	2	201001	1
 12489	__all_virtual_deadlock_detector_stat	2	201001	1
 12493	__all_virtual_kv_group_commit_status	2	201001	1
+12497	__all_virtual_pkg_type	2	201001	1
+12498	__all_virtual_pkg_type_attr	2	201001	1
+12499	__all_virtual_pkg_coll_type	2	201001	1
 12500	__all_virtual_kv_client_info	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1

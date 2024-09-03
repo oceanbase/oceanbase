@@ -8885,12 +8885,14 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
   DbLinkType link_type = DBLINK_UNKNOWN;
   int64_t affected_rows;
   transaction::ObTransID tx_id;
+  bool is_native_oracle = false;
   CK (OB_NOT_NULL(session = exec_ctx.get_my_session()));
   CK (OB_NOT_NULL(routine_info));
   CK (OB_NOT_NULL(dblink_proxy = GCTX.dblink_proxy_));
   OX (tenant_id = session->get_effective_tenant_id());
   OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, routine_info->get_dblink_id(), *session, link_type, true));
   CK (OB_NOT_NULL(dblink_conn));
+  OX (is_native_oracle = (DblinkDriverProto::DBLINK_DRV_OCI == dblink_conn->get_dblink_driver_proto()));
   if (OB_SUCC(ret)) {
     const int64_t out_param_cnt = routine_info->get_out_param_count();
     int64_t out_param_idx[out_param_cnt];
@@ -8923,7 +8925,8 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
     }
     OZ (ObPLDblinkUtil::print_dblink_ps_call_stmt(allocator, dblink_info,
                                                   call_stmt, params, routine_info,
-                                                  udts, out_param_idx, out_param_cnt, is_print_sql));
+                                                  udts, out_param_idx, out_param_cnt,
+                                                  is_print_sql, is_native_oracle));
     OZ (ObTMService::tm_rm_start(exec_ctx, link_type, dblink_conn, tx_id));
     OZ (dblink_proxy->dblink_execute_proc(OB_INVALID_TENANT_ID, dblink_conn, allocator,
                                           exec_params, call_stmt, *routine_info, udts,
