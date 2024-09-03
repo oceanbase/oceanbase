@@ -55,6 +55,7 @@ public:
               ParamStore *params,
               bool is_prepare_protocol); //匿名块接口
 
+
   int compile(const uint64_t id, ObPLFunction &func); //Procedure/Function接口
 
   int analyze_package(const ObString &source, const ObPLBlockNS *parent_ns,
@@ -112,6 +113,7 @@ private:
                                 const uint64_t package_id,
                                 ObString &database_name,
                                 ObString &package_name);
+  int compile(const share::schema::ObRoutineInfo &routine, ObPLFunctionAST &func_ast, ObPLFunction &func);
 private:
   common::ObIAllocator &allocator_;
   sql::ObSQLSessionInfo &session_info_;
@@ -126,7 +128,8 @@ public:
   ObPLCompilerEnvGuard(const ObPackageInfo &info,
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
-                       int &ret);
+                       int &ret,
+                       const ObPLBlockNS *prarent_ns = nullptr);
 
   ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                        ObSQLSessionInfo &session_info,
@@ -137,7 +140,11 @@ public:
 
 private:
   template<class Info>
-  void init(const Info &info, ObSQLSessionInfo &sessionInfo, share::schema::ObSchemaGetterGuard &schema_guard, int &ret);
+  void init(const Info &info,
+            ObSQLSessionInfo &sessionInfo,
+            share::schema::ObSchemaGetterGuard &schema_guard,
+            int &ret,
+            const ObPLBlockNS *parent_ns = nullptr);
 
 private:
   int &ret_;
@@ -147,7 +154,7 @@ private:
   uint64_t old_db_id_;
   bool need_reset_exec_env_;
   bool need_reset_default_database_;
-  ObArenaAllocator alloc_;
+  ObArenaAllocator allocator_;
 };
 
 }
