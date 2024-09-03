@@ -174,6 +174,7 @@ int RowHolderBucketHead::find_or_create_hash_list_(const uint64_t hash,
       found_list->hash_val_ = hash;
       found_list->next_list_ = list_;
       list_ = found_list;
+      link_found_list_ptr = &list_;
       DETECT_LOG(DEBUG, "create new list success", PRINT_WRAPPER);
     }
   }
