@@ -98,8 +98,8 @@ private:
   sql::ObLoadDupActionType dup_action_;
   int64_t timeout_us_;
   int64_t heartbeat_timeout_us_;
-  ObString load_method_; // placeholder
-  common::ObArray<ObString> column_names_; // placeholder
+  ObString load_method_;
+  common::ObArray<ObString> column_names_;
 };
 
 class ObTableLoadClientTask

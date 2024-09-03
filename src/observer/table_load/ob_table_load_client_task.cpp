@@ -177,7 +177,8 @@ public:
     }
     // check support
     else if (OB_FAIL(ObTableLoadService::check_support_direct_load(schema_guard,
-                                                                   load_param.table_id_))) {
+                                                                   load_param.table_id_,
+                                                                   column_ids))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     }
     // begin
@@ -243,6 +244,10 @@ public:
     // resolve column_names_
     else if (OB_FAIL(resolve_columns(table_schema, task_param.get_column_names(), column_ids))) {
       LOG_WARN("fail to resolve columns", KR(ret), K(task_param.get_column_names()));
+    }
+    // resolve load_method_
+    else if (OB_FAIL(resolve_load_method(task_param.get_load_method()))) {
+      LOG_WARN("fail to resolve load method", KR(ret), K(task_param.get_load_method()));
     }
     // compress type
     else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
@@ -322,6 +327,23 @@ public:
           }
         }
       }
+    }
+    return ret;
+  }
+
+  static int resolve_load_method(const ObString &load_method_str)
+  {
+    int ret = OB_SUCCESS;
+    if (load_method_str.empty()) {
+      // default full
+    } else if (0 == load_method_str.case_compare("full")) {
+    } else if (0 == load_method_str.case_compare("inc") ||
+               0 == load_method_str.case_compare("inc_replace")) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load with inc load method is not supported", KR(ret), K(load_method_str));
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid load method", KR(ret), K(load_method_str));
     }
     return ret;
   }

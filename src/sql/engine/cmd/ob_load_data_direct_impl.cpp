@@ -2192,7 +2192,8 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     if (OB_FAIL(init_execute_param())) {
       LOG_WARN("fail to init execute param", KR(ret), K(ctx), K(load_stmt));
     } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
-                                                                     execute_param_.table_id_))) {
+                                                                     execute_param_.table_id_,
+                                                                     execute_param_.column_ids_))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     } else if (OB_FAIL(init_execute_context())) {
       LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
@@ -2403,7 +2404,6 @@ int ObLoadDataDirectImpl::init_execute_param()
       }
     } else { // 指定列导入
       const static uint64_t INVALID_COLUMN_ID = UINT64_MAX;
-      const ObTableSchema *table_schema = nullptr;
       ObArray<uint64_t> user_column_ids;
       if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, user_column_ids))) {
         LOG_WARN("fail to get user column ids", KR(ret));

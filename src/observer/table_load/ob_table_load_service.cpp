@@ -393,7 +393,9 @@ int ObTableLoadService::check_tenant()
   return ret;
 }
 
-int ObTableLoadService::check_support_direct_load(uint64_t table_id)
+int ObTableLoadService::check_support_direct_load(
+    const uint64_t table_id,
+    const ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -407,14 +409,15 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema);
+      ret = check_support_direct_load(schema_guard, table_schema, column_ids);
     }
   }
   return ret;
 }
 
 int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
-                                                  uint64_t table_id)
+                                                  uint64_t table_id,
+                                                  const ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -429,19 +432,20 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", KR(ret));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema);
+      ret = check_support_direct_load(schema_guard, table_schema, column_ids);
     }
   }
   return ret;
 }
 
 int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
-                                                  const ObTableSchema *table_schema)
+                                                  const ObTableSchema *table_schema,
+                                                  const ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == table_schema)) {
+  if (OB_UNLIKELY(nullptr == table_schema || column_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(column_ids));
   } else {
     bool trigger_enabled = false;
     bool has_udt_column = false;
@@ -489,6 +493,56 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (has_unused_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has unused column", KR(ret));
+    }
+    // check default column
+    if (OB_SUCC(ret)) {
+      ObArray<ObColDesc> column_descs;
+      if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+        STORAGE_LOG(WARN, "fail to get column descs", KR(ret), KPC(table_schema));
+      } else if (column_ids.count() == (table_schema->is_heap_table() ? column_descs.count() - 1
+                                                                      : column_descs.count())) {
+        // non default column
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
+          const ObColDesc &col_desc = column_descs.at(i);
+          bool found_column = ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_);
+          for (int64_t j = 0; !found_column && j < column_ids.count(); ++j) {
+            if (col_desc.col_id_ == column_ids.at(j)) {
+              found_column = true;
+            }
+          }
+          if (!found_column) {
+            const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
+            if (OB_ISNULL(column_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null column schema", KR(ret), K(col_desc));
+            }
+            // 自增列
+            else if (column_schema->is_autoincrement() || column_schema->is_identity_column()) {
+            }
+            // 默认值是表达式
+            else if (OB_UNLIKELY(lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext())) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("direct-load does not support column default value is ext", KR(ret),
+                       KPC(column_schema), K(column_schema->get_cur_default_value()));
+              FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is ext");
+            } else if (OB_UNLIKELY(lib::is_oracle_mode() && column_schema->is_default_expr_v2_column())) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("direct-load does not support column default value is expr", KR(ret),
+                       KPC(column_schema), K(column_schema->get_cur_default_value()));
+              FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is expr");
+            }
+            // 没有默认值, 且为NOT NULL
+            // 例外:枚举类型默认为第一个
+            else if (OB_UNLIKELY(column_schema->is_not_null_for_write() &&
+                                   column_schema->get_cur_default_value().is_null() &&
+                                   !column_schema->get_meta_type().is_enum())) {
+              ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+              LOG_WARN("column doesn't have a default value", KR(ret), KPC(column_schema));
+            }
+          }
+        }
+      }
     }
   }
   return ret;

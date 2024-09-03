@@ -181,11 +181,15 @@ int ObTableLoadPartitionCalc::cast_part_key(common::ObNewRow &part_key, common::
     ObObj obj;
     for (int64_t i = 0; OB_SUCC(ret) && i < part_key_obj_index_.count(); ++i) {
       const IndexAndType &index_and_type = part_key_obj_index_.at(i);
-      if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, index_and_type.column_schema_,
-                                                    part_key.cells_[i], obj))) {
+      const ObColumnSchemaV2 *column_schema = index_and_type.column_schema_;
+      ObObj &part_obj = part_key.cells_[i];
+      if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx,
+                                                 column_schema,
+                                                 part_obj,
+                                                 obj))) {
         LOG_WARN("fail to cast obj", KR(ret));
       } else {
-        part_key.cells_[i] = obj;
+        part_obj = obj;
       }
     }
   }

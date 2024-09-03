@@ -99,8 +99,9 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadCoordinatorCtx init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(column_ids.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
-                         !exec_ctx->is_valid())) {
+  } else if (OB_UNLIKELY(
+               column_ids.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
+               !exec_ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(column_ids), KPC(exec_ctx));
   } else {
@@ -364,8 +365,12 @@ int ObTableLoadCoordinatorCtx::init_column_idxs(const ObIArray<uint64_t> &column
       }
     }
     if (OB_SUCC(ret) && !found_column) {
-      ret = OB_SCHEMA_NOT_UPTODATE;
-      LOG_WARN("column not found", KR(ret), K(idx_array_), K(column_descs), K(column_ids));
+      if (OB_UNLIKELY(ctx_->param_.px_mode_)) {
+        ret = OB_SCHEMA_NOT_UPTODATE;
+        LOG_WARN("column not found", KR(ret), K(idx_array_), K(column_descs), K(column_ids));
+      } else if (OB_FAIL(idx_array_.push_back(-1))) {
+        LOG_WARN("fail to push back column idx", KR(ret), K(idx_array_), K(i), K(col_desc));
+      }
     }
   }
   return ret;

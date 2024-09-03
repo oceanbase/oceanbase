@@ -157,7 +157,9 @@ int ObTableLoadRow<T>::project(const ObIArray<int64_t> &idx_projector, ObTableLo
   } else {
     for (int64_t i = 0; i < idx_projector.count(); ++i) {
       const int64_t idx = idx_projector.at(i);
-      if (OB_UNLIKELY(idx >= count_)) {
+      if (idx < 0) {
+        projected_row.cells_[i].set_nop_value();
+      } else if (OB_UNLIKELY(idx >= count_)) {
         ret = OB_ERR_UNEXPECTED;
         OB_LOG(WARN, "unexpected idx", KR(ret), K(i), K(idx), K(idx_projector), K(count_));
       } else {

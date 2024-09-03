@@ -63,7 +63,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadInstance init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!param.is_valid() || column_ids.empty() || !execute_ctx->is_valid())) {
+  } else if (OB_UNLIKELY(!param.is_valid() || column_ids.empty() ||
+                         column_ids.count() != param.column_count_ || !execute_ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), K(column_ids), KPC(execute_ctx));
   } else {
@@ -82,8 +83,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
       LOG_WARN("fail to start stmt", KR(ret), K(param));
     }
     // double check support for concurrency of direct load and ddl
-    else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_))) {
-      LOG_WARN("fail to check support direct load", KR(ret), K(param.table_id_));
+    else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_, column_ids))) {
+      LOG_WARN("fail to check support direct load", KR(ret), K(param));
     }
     // start direct load
     else if (OB_FAIL(start_direct_load(param, column_ids))) {

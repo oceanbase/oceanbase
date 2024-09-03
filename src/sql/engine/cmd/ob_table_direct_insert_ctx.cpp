@@ -79,7 +79,9 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         LOG_WARN("fail to get tmp store compressor type", KR(ret));
       } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
-      } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard, table_schema))) {
+      } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
+                                                                       table_schema,
+                                                                       column_ids))) {
         LOG_WARN("fail to check support direct load", KR(ret));
       } else {
         ObTableLoadParam param;
