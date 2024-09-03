@@ -1296,6 +1296,8 @@ int ObSSTable::deserialize(common::ObArenaAllocator &allocator,
       } else if (OB_UNLIKELY(!meta_->is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable meta is not valid", K(ret), K_(meta));
+      } else if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(key_, meta_->get_basic_meta().filled_tx_scn_))) {
+        LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K_(meta));
       } else if (OB_FAIL(meta_->transform_root_block_extra_buf(allocator))) {
         LOG_WARN("fail to transform root block data", K(ret));
       } else if (OB_FAIL(check_valid_for_reading())) {
@@ -1412,6 +1414,9 @@ int ObSSTable::deserialize_fixed_struct(const char *buf, const int64_t data_len,
 
     if (OB_SUCC(ret)) {
       valid_for_reading_ = key_.is_valid();
+      if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(key_, meta_cache_.filled_tx_scn_))) {
+        LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K_(meta));
+      }
     }
   }
   return ret;
