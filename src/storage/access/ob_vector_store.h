@@ -95,6 +95,7 @@ protected:
       common::hash::ObHashSet<int32_t> *agg_col_mask,
       bool &is_agg_mask) const;
   int alloc_group_by_cell(const ObTableAccessParam &param);
+  int check_need_group_by(const ObTableAccessParam &param);
 
   int64_t count_;
   // exprs needed fill in
@@ -107,6 +108,7 @@ protected:
   ObGroupByCellBase *group_by_cell_;
   const ObTableIterParam *iter_param_;
   sql::ObBitVector *skip_bit_;
+  bool need_check_group_by_;
 };
 
 }
