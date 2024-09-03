@@ -2602,9 +2602,9 @@ int64_t ObPrintTableStore::to_string(char *buf, const int64_t buf_len) const
       J_NEWLINE();
       // table_type|max_merge_version
       //      |upper_trans_version|start_scn|end_scn|ref|buffer_minor
-      BUF_PRINTF("[%ld] [ ", GETTID());
+      BUF_PRINTF("[%ld][%s][T%ld] [", GETTID(), GETTNAME(), GET_TENANT_ID());
       BUF_PRINTO(PC(trace_id));
-      BUF_PRINTF(" ] ");
+      BUF_PRINTF("] ");
       BUF_PRINTF(" %-10s %-10s %-19s %-19s %-19s %-19s %-4s %-16s \n",
           "table_arr", "table_type", "upper_trans_ver", "max_merge_ver",
           "start_scn", "end_scn", "ref", "uncommit_row");
@@ -2698,9 +2698,9 @@ void ObPrintTableStore::table_to_string(
 {
   if (nullptr != table) {
     ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
-    BUF_PRINTF("[%ld] [ ", GETTID());
+    BUF_PRINTF("[%ld][%s][T%ld] [", GETTID(), GETTNAME(), GET_TENANT_ID());
     BUF_PRINTO(PC(trace_id));
-    BUF_PRINTF(" ] ");
+    BUF_PRINTF("] ");
     const char* table_name = table->is_sstable()
       ? ObITable::get_table_type_name(table->get_key().table_type_)
       : (table->is_active_memtable() ? "ACTIVE" : "FROZEN");
