@@ -646,7 +646,7 @@ int ObIODeviceLocalFileOp::pread_impl(
       if (EINTR == errno) {
         SHARE_LOG(INFO, "pread is interrupted before any data is read, just retry", K(errno), KERRMSG);
       } else {
-        ret = OB_IO_ERROR;
+        ret = ObIODeviceLocalFileOp::convert_sys_errno();
         SHARE_LOG(WARN, "failed to pread", K(ret), K(fd), K(read_sz), K(read_offset), K(errno), KERRMSG);
       }
     } else if (0 == sz) {
@@ -684,7 +684,7 @@ int ObIODeviceLocalFileOp::pwrite_impl(
       if (EINTR == errno) {
         SHARE_LOG(INFO, "pwrite is interrupted before any data is written, just retry", K(errno), KERRMSG);
       } else {
-        ret = OB_IO_ERROR;
+        ret = ObIODeviceLocalFileOp::convert_sys_errno();
         SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(write_sz), K(write_offset), K(errno), KERRMSG);
       }
     } else {
@@ -699,9 +699,15 @@ int ObIODeviceLocalFileOp::pwrite_impl(
 
 int ObIODeviceLocalFileOp::convert_sys_errno()
 {
+  return ObIODeviceLocalFileOp::convert_sys_errno(errno);
+}
+
+// Notes: error_no is a positive value
+int ObIODeviceLocalFileOp::convert_sys_errno(const int error_no)
+{
   int ret = OB_IO_ERROR;
   bool use_warn_log = false;
-  switch (errno) {
+  switch (error_no) {
     case EACCES:
       ret = OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
       break;
@@ -721,14 +727,17 @@ int ObIODeviceLocalFileOp::convert_sys_errno()
     case ENOSPC:
       ret = OB_SERVER_OUTOF_DISK_SPACE;
       break;
+    case EMFILE:
+      ret = OB_TOO_MANY_OPEN_FILES;
+      break;
     default:
       use_warn_log = true;
       break;
   }
   if (use_warn_log) {
-    SHARE_LOG(WARN, "convert sys errno", K(ret), K(errno), KERRMSG);
+    SHARE_LOG(WARN, "convert sys errno", K(ret), K(error_no), KERRMSG);
   } else {
-    SHARE_LOG(INFO, "convert sys errno", K(ret), K(errno), KERRMSG);
+    SHARE_LOG(INFO, "convert sys errno", K(ret), K(error_no), KERRMSG);
   }
   return ret;
 }
