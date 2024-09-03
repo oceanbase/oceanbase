@@ -189,7 +189,7 @@ int ObMdsRowIterator::convert(
   int ret = OB_SUCCESS;
   mds::MdsDumpKVStorageAdapter adapter;
 
-  // TODO(@bowen.gbw): avoid memory copy
+  // TODO(@gaishun.gs): avoid memory copy
   if (OB_FAIL(adapter.convert_from_mds_row(row))) {
     LOG_WARN("fail to convert from mds row", K(ret), K(row));
   } else if (OB_FAIL(kv.convert_from_adapter(allocator, adapter))) {

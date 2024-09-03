@@ -372,7 +372,7 @@ int64_t MdsDumpKV::to_string(char *buf, const int64_t buf_len) const
 
 bool MdsDumpKV::is_valid() const
 {
-  return k_.is_valid() && v_.is_valid(); // TODO(@bowen.gbw): add more rules
+  return k_.is_valid() && v_.is_valid(); // TODO(@gaishun.gs): add more rules
 }
 
 int MdsDumpKV::assign(const MdsDumpKV &rhs, ObIAllocator &alloc)

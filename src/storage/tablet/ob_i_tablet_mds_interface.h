@@ -33,7 +33,7 @@ class ObMdsRowIterator;
 class ObITabletMdsInterface
 {
   friend class ObTabletCreateDeleteHelper;
-  friend class ObTenantDirectLoadMgr; // TODO(@bowen.gbw): refactor later
+  friend class ObTenantDirectLoadMgr; // TODO(@gaishun.gs): refactor later
 public:
   // new mds
   // Currently, we only support read LATEST multi source data, so please pass MAX_SCN as snapshot.
@@ -77,7 +77,7 @@ public:
   // CAUTIONS: this interface is only for transfer! anyone else shouldn't call this!
   int check_transfer_in_redo_written(bool &written);
 protected:// implemented by ObTablet
-  // TODO(@bowen.gbw): remove these virtual functions later
+  // TODO(@gaishun.gs): remove these virtual functions later
   virtual bool check_is_inited_() const = 0;
   virtual const ObTabletMeta &get_tablet_meta_() const = 0;
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,

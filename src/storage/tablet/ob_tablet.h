@@ -218,7 +218,7 @@ public:
       const ObTablet &old_tablet,
       const bool clear_wait_check_flag);
 
-  // TODO(@bowen.gbw && @fengjingkun.fjk) tmp interface for force_freeze on column store, should removed later.
+  // TODO(@gaishun.gs && @fengjingkun.fjk) tmp interface for force_freeze on column store, should removed later.
   int init_with_new_snapshot_version(
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
@@ -657,7 +657,7 @@ private:
   int64_t get_self_serialize_size() const;
   static int check_schema_version(const ObDDLInfoCache& ddl_info_cache, const int64_t schema_version);
   static int check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version, const int64_t schema_version);
-  logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle
+  logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(gaishun.gs): get log handler from tablet pointer handle
 
   int init_shared_params(
       const share::ObLSID &ls_id,
