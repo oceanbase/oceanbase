@@ -354,7 +354,7 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
       ObSelEstimator *estimator = NULL;
       if (OB_FAIL(factory.create_estimator(*sel_ctx, filter, estimator))) {
         LOG_WARN("failed to create estimator", KPC(filter));
-      } else if (estimator->tend_to_use_ds()) {
+      } else if (estimator->is_complex_filter_qual()) {
         is_complex_scene = true;
         // path which contains complex filters is complex
         LOG_PRINT_EXPR(TRACE, "Try to use dynamic sampling because of complex filter:", filter);
@@ -1962,6 +1962,7 @@ int ObAccessPathEstimation::update_table_stat_info_by_dynamic_sampling(AccessPat
           LOG_WARN("failed to fill ds col stat", K(ret));
         } else {
           table_meta->set_rows(row_count);
+          table_meta->set_base_rows(row_count);
           table_meta->set_use_ds_stat();
         }
       }
@@ -1981,6 +1982,7 @@ int ObAccessPathEstimation::update_table_stat_info_by_default(AccessPath *path)
     OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(path->table_id_);
     if (OB_NOT_NULL(table_meta)) {
       table_meta->set_rows(path->output_row_count_);
+      table_meta->set_base_rows(path->output_row_count_);
       for (int64_t i = 0; i < table_meta->get_column_metas().count(); ++i) {
         table_meta->get_column_metas().at(i).set_default_meta(path->output_row_count_);
       }
@@ -2116,6 +2118,7 @@ int ObAccessPathEstimation::update_column_metas_by_ds_col_stat(const int64_t row
     if (!found_it) {
       col_metas.at(i).set_ndv(rowcount);
     }
+    col_metas.at(i).set_base_ndv(col_metas.at(i).get_ndv());
   }
   LOG_TRACE("update column metas by ds col stat", K(ds_col_stats), K(col_metas), K(rowcount));
   return ret;

@@ -2675,8 +2675,8 @@ Query Plan
 ==========================================================
 |ID|OPERATOR                 |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY          |     |1       |40          |
-|1 |└─HASH RIGHT SEMI JOIN   |     |45      |39          |
+|0 |SCALAR GROUP BY          |     |1       |41          |
+|1 |└─HASH RIGHT SEMI JOIN   |     |51      |39          |
 |2 |  ├─TABLE FULL SCAN      |xy_t3|12      |5           |
 |3 |  └─HASH RIGHT SEMI JOIN |     |51      |28          |
 |4 |    ├─TABLE FULL SCAN    |xy_t2|8       |5           |
@@ -2713,8 +2713,8 @@ Query Plan
 ==========================================================
 |ID|OPERATOR                 |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY          |     |1       |40          |
-|1 |└─HASH RIGHT SEMI JOIN   |     |45      |39          |
+|0 |SCALAR GROUP BY          |     |1       |41          |
+|1 |└─HASH RIGHT SEMI JOIN   |     |51      |39          |
 |2 |  ├─TABLE FULL SCAN      |xy_t3|12      |5           |
 |3 |  └─HASH RIGHT SEMI JOIN |     |51      |28          |
 |4 |    ├─TABLE FULL SCAN    |xy_t2|8       |5           |
@@ -3747,8 +3747,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SORT               |     |1       |11          |
-|1 |└─HASH JOIN        |     |1       |11          |
+|0 |SORT               |     |5       |11          |
+|1 |└─HASH JOIN        |     |5       |11          |
 |2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN|xy_t1|8       |5           |
 ====================================================
@@ -3776,7 +3776,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |MERGE JOIN       |     |1       |9           |
+|0 |MERGE JOIN       |     |5       |9           |
 |1 |├─TABLE FULL SCAN|xy_t2|5       |5           |
 |2 |└─TABLE FULL SCAN|xy_t1|8       |5           |
 ==================================================
@@ -4385,8 +4385,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SORT                   |     |4       |10          |
-|1 |└─HASH RIGHT ANTI JOIN |     |4       |9           |
+|0 |SORT                   |     |5       |10          |
+|1 |└─HASH RIGHT ANTI JOIN |     |5       |9           |
 |2 |  ├─SUBPLAN SCAN       |VIEW1|1       |5           |
 |3 |  │ └─TABLE FULL SCAN  |xy_t1|1       |5           |
 |4 |  └─TABLE FULL SCAN    |xy_t2|5       |5           |
@@ -4422,8 +4422,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |4       |10          |
-|1 |└─HASH ANTI JOIN     |     |4       |10          |
+|0 |SORT                 |     |5       |10          |
+|1 |└─HASH ANTI JOIN     |     |5       |10          |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |5           |
 |3 |  └─SUBPLAN SCAN     |VIEW1|1       |5           |
 |4 |    └─TABLE FULL SCAN|xy_t1|1       |5           |
@@ -4459,8 +4459,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |4       |10          |
-|1 |└─HASH ANTI JOIN     |     |4       |10          |
+|0 |SORT                 |     |5       |10          |
+|1 |└─HASH ANTI JOIN     |     |5       |10          |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |5           |
 |3 |  └─SUBPLAN SCAN     |VIEW1|1       |5           |
 |4 |    └─TABLE FULL SCAN|xy_t1|1       |5           |

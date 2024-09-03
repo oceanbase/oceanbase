@@ -4053,6 +4053,8 @@ int ObJoinOrder::estimate_size_and_width_for_join(const ObJoinOrder* left_tree,
     LOG_WARN("get unexpected null", K(left_tree), K(right_tree), K(ret));
   } else if (OB_FAIL(est_join_width())) {
     LOG_WARN("failed to estimate join width", K(ret));
+  } else if (OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_4) {
+    // do nothing
   } else if (OB_FAIL(append(equal_sets, left_tree->get_output_equal_sets())) ||
              OB_FAIL(append(equal_sets, right_tree->get_output_equal_sets()))) {
     LOG_WARN("failed to append equal sets", K(ret));
@@ -4066,9 +4068,6 @@ int ObJoinOrder::estimate_size_and_width_for_join(const ObJoinOrder* left_tree,
     LOG_WARN("failed to calc join output rows", K(ret));
   } else {
     set_output_rows(new_rows);
-    if (IS_SEMI_ANTI_JOIN(join_type)) {
-      anti_or_semi_match_sel_ = sel;
-    }
     LOG_TRACE("estimate rows for join path", K(output_rows_), K(get_plan()->get_update_table_metas()));
   }
   return ret;
@@ -5955,6 +5954,7 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
   is_naaj_ = other.is_naaj_;
   is_sna_ = other.is_sna_;
   inherit_sharding_index_ = other.inherit_sharding_index_;
+  join_output_rows_ = other.join_output_rows_;
 
   if (OB_FAIL(Path::assign(other, allocator))) {
     LOG_WARN("failed to deep copy path", K(ret));
@@ -6993,6 +6993,11 @@ int JoinPath::re_estimate_rows(ObIArray<JoinFilterInfo> &pushdown_join_filter_in
           row_count /= join_filter_infos_.at(i).join_filter_selectivity_;
         }
       }
+      // refine the rowcnt based on the first estimated difference between ObJoinOrder and JoinPath
+      if (join_output_rows_ > OB_DOUBLE_EPSINON) {
+        row_count *= get_path_output_rows() / join_output_rows_;
+      }
+      row_count = std::min(row_count, get_path_output_rows());
     }
   }
   return ret;
@@ -7066,7 +7071,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
                                    left_join_order->get_tables(),
                                    right_join_order->get_tables(),
                                    join_type_,
-                                   parent_->get_anti_or_semi_match_sel(),
+                                   other_cond_sel_,
                                    with_nl_param,
                                    need_mat_,
                                    is_right_need_exchange() ||
@@ -7093,9 +7098,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
                                    false,
                                    right_sort_keys_,
                                    server_cnt_);
-    if (OB_FAIL(ObOptEstCost::cost_nestloop(est_join_info, op_cost, other_cond_sel_,
-                                            plan->get_predicate_selectivities(),
-                                            opt_ctx))) {
+    if (OB_FAIL(ObOptEstCost::cost_nestloop(est_join_info, op_cost, opt_ctx))) {
       LOG_WARN("failed to estimate nest loop join cost", K(est_join_info), K(ret));
     } else if (!re_est_for_op && is_left_need_exchange() &&
                OB_FAIL(ObOptEstCost::cost_exchange(left_exch_info, left_ex_cost,
@@ -7411,6 +7414,7 @@ void JoinPath::reuse()
   is_naaj_ = false;
   is_sna_ = false;
   inherit_sharding_index_ = -1;
+  join_output_rows_ = -1.0;
 }
 
 int JoinPath::compute_pipeline_info()
@@ -10411,6 +10415,7 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
     join_path->is_naaj_ = naaj_info.is_naaj_;
     join_path->is_sna_ = naaj_info.is_sna_;
     join_path->is_slave_mapping_ &= (!naaj_info.is_naaj_);
+    join_path->join_output_rows_ = current_join_output_rows_;
     OPT_TRACE("create new Hash Join path:", join_path);
     if (OB_FAIL(append(join_path->equal_join_conditions_, equal_join_conditions))) {
       LOG_WARN("failed to append join conditions", K(ret));
@@ -11233,6 +11238,7 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
     join_path->right_prefix_pos_ = right_prefix_pos;
     join_path->equal_cond_sel_ = equal_cond_sel;
     join_path->other_cond_sel_ = other_cond_sel;
+    join_path->join_output_rows_ = current_join_output_rows_;
     OPT_TRACE("create new Merge Join path:", join_path);
     if (OB_FAIL(append(join_path->equal_join_conditions_, equal_join_conditions))) {
       LOG_WARN("failed to append join conditions", K(ret));
@@ -12588,7 +12594,8 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
   ObSEArray<ObRawExpr*, 4> normal_filters;
   ObSEArray<ObRawExpr*, 4> subquery_filters;
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) ||
-      OB_ISNULL(get_plan()) || OB_ISNULL(left_path->get_sharding())) {
+      OB_ISNULL(get_plan()) || OB_ISNULL(left_path->get_sharding()) ||
+      OB_ISNULL(left_path->parent_) || OB_ISNULL(right_path->parent_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(left_path), K(right_path), K(get_plan()), K(ret));
   } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type) &&
@@ -12613,6 +12620,7 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                          need_mat);
     join_path->contain_normal_nl_ = is_normal_nl;
     join_path->has_none_equal_join_ = !has_equal_cond;
+    join_path->join_output_rows_ = current_join_output_rows_;
     OPT_TRACE("create new NL Join path:", join_path);
     if (OB_FAIL(set_nl_filters(join_path,
                                right_path,
@@ -12620,6 +12628,28 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                on_conditions,
                                normal_filters))) {
       LOG_WARN("failed to remove filters", K(ret));
+    } else if (IS_SEMI_ANTI_JOIN(join_type)) {
+      // nested loop join must be left semi/anti join
+      double left_rows = left_path->get_path_output_rows();
+      join_path->other_cond_sel_ = left_rows > OB_DOUBLE_EPSINON ?
+                                   current_join_output_rows_ / left_rows :
+                                   1.0;
+    } else {
+      get_plan()->get_selectivity_ctx().init_join_ctx(join_type,
+                                                      &left_path->parent_->get_tables(),
+                                                      &right_path->parent_->get_tables(),
+                                                      left_path->get_path_output_rows(),
+                                                      right_path->get_path_output_rows());
+      if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(
+          get_plan()->get_update_table_metas(),
+          get_plan()->get_selectivity_ctx(),
+          join_path->other_join_conditions_,
+          join_path->other_cond_sel_,
+          get_plan()->get_predicate_selectivities()))) {
+        LOG_WARN("failed to calculate selectivity", K(ret), K(join_path->other_join_conditions_));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (CONNECT_BY_JOIN == join_type &&
                OB_FAIL(push_down_order_siblings(join_path, right_path))) {
       LOG_WARN("push down order siblings by condition failed", K(ret));
@@ -13157,6 +13187,9 @@ int ObJoinOrder::revise_cardinality(const ObJoinOrder *left_tree,
   double sel = 1.0;
   EqualSets equal_sets;
   ObSEArray<double, 8> cur_join_ambient_card;
+  current_join_output_rows_ = 0.0;
+  double new_rows = 0.0;
+  double selectivity = 0.0;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) ||
       OB_ISNULL(get_plan()) || OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -13168,10 +13201,18 @@ int ObJoinOrder::revise_cardinality(const ObJoinOrder *left_tree,
     LOG_WARN("failed to append equal sets", K(ret));
   } else if (OB_FAIL(merge_ambient_card(left_tree->get_ambient_card(), right_tree->get_ambient_card(), cur_join_ambient_card))) {
     LOG_WARN("failed to merge rowcnts", K(ret));
+  } else if (OB_FAIL(calc_join_output_rows(get_plan(),
+                                           left_tree->get_tables(),
+                                           right_tree->get_tables(),
+                                           left_tree->get_output_rows(),
+                                           right_tree->get_output_rows(),
+                                           join_info, current_join_output_rows_,
+                                           selectivity, equal_sets))) {
+    LOG_WARN("failed to calc join output rows", K(ret));
   } else if (OB_FAIL(calc_join_ambient_card(get_plan(),
                                             *left_tree,
                                             *right_tree,
-                                            output_rows_,
+                                            current_join_output_rows_,
                                             join_info, equal_sets,
                                             cur_join_ambient_card))) {
     LOG_WARN("failed to scale base table rowcnts", K(ret));
@@ -13181,13 +13222,18 @@ int ObJoinOrder::revise_cardinality(const ObJoinOrder *left_tree,
       K(right_tree->get_ambient_card()), K(cur_join_ambient_card), K(ambient_card_));
   } else {
     get_plan()->get_selectivity_ctx().clear();
+
+    // choose the minimal ambient cardinality and maximum output rowcnt
     for (int64_t i = 0; i < ambient_card_.count(); i ++) {
       ambient_card_.at(i) = std::min(ambient_card_.at(i), cur_join_ambient_card.at(i));
     }
+    new_rows = std::max(current_join_output_rows_, get_output_rows());
+    set_output_rows(new_rows);
     OPT_TRACE("left output rows :", left_tree->get_output_rows(), " ambient cardinality :", left_tree->get_ambient_card());
     OPT_TRACE("right output rows :", right_tree->get_output_rows(), " ambient cardinality :", right_tree->get_ambient_card());
-    OPT_TRACE("output rows of", left_tree, "join", right_tree, ":", get_output_rows(), " ambient cardinality :", cur_join_ambient_card);
+    OPT_TRACE("output rows of", left_tree, "join", right_tree, ":", current_join_output_rows_, " ambient cardinality :", cur_join_ambient_card);
     OPT_TRACE("Revised ambient cardinality :", ambient_card_);
+    OPT_TRACE("Revised output rows :", new_rows);
     LOG_DEBUG("estimate join ambient card", K(table_set_), K(left_tree->get_tables()), K(right_tree->get_tables()), K(cur_join_ambient_card));
   }
   return ret;
@@ -13351,7 +13397,8 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
                 plan->get_update_table_metas(),
                 plan->get_selectivity_ctx(),
                 join_info.where_conditions_, where_sel_for_oj,
-                plan->get_predicate_selectivities()))) {
+                plan->get_predicate_selectivities(),
+                true/*is_outerjoin_filter*/))) {
       LOG_WARN("failed to calc filter selectivities", K(join_info.where_conditions_), K(ret));
     }
   }

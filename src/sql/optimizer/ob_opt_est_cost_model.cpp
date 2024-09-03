@@ -134,9 +134,7 @@ double ObIndexMetaInfo::get_micro_block_numbers() const
  *                         + qual_cost
  */
 int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
-                                    double &cost,
-                                    double &filter_selectivity,
-                                    ObIArray<ObExprSelPair> &all_predicate_sel)
+                                     double &cost)
 {
   int ret = OB_SUCCESS;
   cost = 0.0;
@@ -148,60 +146,47 @@ int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
     double right_rows = est_cost_info.right_rows_;
     double cart_tuples = left_rows * right_rows; // tuples of Cartesian product
     double out_tuples = 0.0;
-    filter_selectivity = 0.0;
     double material_cost = 0.0;
-    //selectivity for equal conds
-    if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                        *est_cost_info.sel_ctx_,
-                                                        est_cost_info.other_join_conditions_,
-                                                        filter_selectivity,
-                                                        all_predicate_sel))) {
-      LOG_WARN("Failed to calculate filter selectivity", K(ret));
+    double join_sel = est_cost_info.other_cond_sel_;
+    if (IS_SEMI_ANTI_JOIN(est_cost_info.join_type_)) {
+      // nested loop join must be left semi/anti join
+      out_tuples = left_rows * join_sel;
     } else {
-      out_tuples = cart_tuples * filter_selectivity;
-
-      // 再次扫描右表全表的代价。如果不使用物化，就是读取一次右表和本层get_next_row的代价；
-      // 如果物化，则为读取物化后的行的代价。
-      double once_rescan_cost = 0.0;
-      if (est_cost_info.need_mat_) {
-        once_rescan_cost = cost_read_materialized(right_rows);
-      } else {
-        double rescan_cost = 0.0;
-        if (est_cost_info.right_has_px_rescan_) {
-          if (est_cost_info.parallel_ > 1) {
-            rescan_cost = cost_params_.get_px_rescan_per_row_cost(sys_stat_);
-          } else {
-            rescan_cost = cost_params_.get_px_batch_rescan_per_row_cost(sys_stat_);
-          }
-        } else {
-          rescan_cost = cost_params_.get_rescan_cost(sys_stat_);
-        }
-        once_rescan_cost = est_cost_info.right_cost_ + rescan_cost
-                           + right_rows * cost_params_.get_cpu_tuple_cost(sys_stat_);
-      }
-      // total rescan cost
-      if (LEFT_SEMI_JOIN == est_cost_info.join_type_
-          || LEFT_ANTI_JOIN == est_cost_info.join_type_) {
-        double match_sel = (est_cost_info.anti_or_semi_match_sel_ < OB_DOUBLE_EPSINON) ?
-                            OB_DOUBLE_EPSINON : est_cost_info.anti_or_semi_match_sel_;
-        out_tuples = left_rows * match_sel;
-      }
-      cost += left_rows * once_rescan_cost;
-      //qual cost
-      double qual_cost = cost_quals(left_rows * right_rows, est_cost_info.equal_join_conditions_) +
-                         cost_quals(left_rows * right_rows, est_cost_info.other_join_conditions_);
-
-      cost += qual_cost;
-
-      double join_cost = cost_params_.get_join_per_row_cost(sys_stat_) * out_tuples;
-      cost += join_cost;
-
-      LOG_TRACE("OPT: [COST NESTLOOP JOIN]",
-                K(cost), K(qual_cost), K(join_cost),K(once_rescan_cost),
-                K(est_cost_info.left_cost_), K(est_cost_info.right_cost_),
-                K(left_rows), K(right_rows), K(est_cost_info.right_width_),
-                K(filter_selectivity), K(cart_tuples), K(material_cost));
+      out_tuples = left_rows * right_rows * join_sel;
     }
+
+
+    // 再次扫描右表全表的代价。如果不使用物化，就是读取一次右表和本层get_next_row的代价；
+    // 如果物化，则为读取物化后的行的代价。
+    double once_rescan_cost = 0.0;
+    if (est_cost_info.need_mat_) {
+      once_rescan_cost = cost_read_materialized(right_rows);
+    } else {
+      double rescan_cost = 0.0;
+      if (est_cost_info.right_has_px_rescan_) {
+        if (est_cost_info.parallel_ > 1) {
+          rescan_cost = cost_params_.get_px_rescan_per_row_cost(sys_stat_);
+        } else {
+          rescan_cost = cost_params_.get_px_batch_rescan_per_row_cost(sys_stat_);
+        }
+      } else {
+        rescan_cost = cost_params_.get_rescan_cost(sys_stat_);
+      }
+      once_rescan_cost = est_cost_info.right_cost_ + rescan_cost
+                         + right_rows * cost_params_.get_cpu_tuple_cost(sys_stat_);
+    }
+    cost += left_rows * once_rescan_cost;
+    //qual cost
+    double qual_cost = cost_quals(left_rows * right_rows, est_cost_info.equal_join_conditions_) +
+                       cost_quals(left_rows * right_rows, est_cost_info.other_join_conditions_);
+    cost += qual_cost;
+    double join_cost = cost_params_.get_join_per_row_cost(sys_stat_) * out_tuples;
+    cost += join_cost;
+    LOG_TRACE("OPT: [COST NESTLOOP JOIN]", K(out_tuples),
+              K(cost), K(qual_cost), K(join_cost),K(once_rescan_cost),
+              K(est_cost_info.left_cost_), K(est_cost_info.right_cost_),
+              K(left_rows), K(right_rows), K(est_cost_info.right_width_),
+              K(join_sel), K(cart_tuples), K(material_cost));
   }
   return ret;
 }

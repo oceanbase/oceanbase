@@ -299,7 +299,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo
   ObCostNLJoinInfo(double left_rows, double left_cost, double left_width,
                    double right_rows, double right_cost, double right_width,
                    ObRelIds left_ids, ObRelIds right_ids, ObJoinType join_type,
-                   double anti_or_semi_match_sel,
+                   double other_cond_sel,
                    bool with_nl_param,
                    bool need_mat,
                    bool right_has_px_rescan,
@@ -318,7 +318,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo
                         sel_ctx),
       left_cost_(left_cost),
       right_cost_(right_cost),
-      anti_or_semi_match_sel_(anti_or_semi_match_sel),
+      other_cond_sel_(other_cond_sel),
       parallel_(parallel),
       with_nl_param_(with_nl_param),
       need_mat_(need_mat),
@@ -332,7 +332,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo
                K_(equal_join_conditions), K_(other_join_conditions), K_(filters));
   double left_cost_;
   double right_cost_;
-  double anti_or_semi_match_sel_;
+  double other_cond_sel_;
   int64_t parallel_;
   bool with_nl_param_;
   bool need_mat_;
@@ -608,9 +608,7 @@ public:
   virtual ~ObOptEstCostModel()=default;
 
   int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
-										double &cost,
-                    double &filter_selectivity,
-										common::ObIArray<ObExprSelPair> &all_predicate_sel);
+										double &cost);
 
   int cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
                     double &cost);

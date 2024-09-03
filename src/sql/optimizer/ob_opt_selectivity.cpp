@@ -144,6 +144,7 @@ int OptColumnMeta::assign(const OptColumnMeta &other)
   min_val_ = other.min_val_;
   max_val_ = other.max_val_;
   min_max_inited_ = other.min_max_inited_;
+  base_ndv_ = other.base_ndv_;
   return ret;
 }
 
@@ -156,6 +157,7 @@ void OptColumnMeta::init(const uint64_t column_id,
   ndv_ = ndv;
   num_null_ = num_null;
   avg_len_ = avg_len;
+  base_ndv_ = ndv;
 }
 
 int OptTableMeta::assign(const OptTableMeta &other)
@@ -172,6 +174,7 @@ int OptTableMeta::assign(const OptTableMeta &other)
   table_partition_info_ = other.table_partition_info_;
   base_meta_info_ = other.base_meta_info_;
   real_rows_ = other.real_rows_;
+  base_rows_ = other.base_rows_;
 
   if (OB_FAIL(all_used_parts_.assign(other.all_used_parts_))) {
     LOG_WARN("failed to assign all used parts", K(ret));
@@ -214,6 +217,7 @@ int OptTableMeta::init(const uint64_t table_id,
   table_partition_info_ = table_partition_info;
   base_meta_info_ = base_meta_info;
   real_rows_ = -1.0;
+  base_rows_ = rows;
   if (OB_FAIL(all_used_parts_.assign(all_used_part_id))) {
     LOG_WARN("failed to assign all used partition ids", K(ret));
   } else if (OB_FAIL(all_used_tablets_.assign(all_used_tablets))) {
@@ -297,6 +301,7 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
     }
     col_meta.set_column_id(column_id);
     col_meta.set_avg_len(stat.avglen_val_);
+    col_meta.set_base_ndv(col_meta.get_ndv());
   }
   return ret;
 }
@@ -448,6 +453,7 @@ int OptTableMetas::add_set_child_stmt_meta_info(const ObSelectStmt *parent_stmt,
     table_meta->set_table_id(table_id);
     table_meta->set_ref_table_id(OB_INVALID_ID);
     table_meta->set_rows(table_rows);
+    table_meta->set_base_rows(table_rows);
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt->get_select_item_size(); ++i) {
       exprs.reset();
       double ndv = 1;
@@ -523,7 +529,7 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
   ObSEArray<ColumnItem, 8> column_items;
   ObSEArray<ObRawExpr*, 1> exprs;
   ObRawExpr *select_expr = NULL;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt) || OB_ISNULL(child_ctx.get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null stmt", K(ret), K(parent_stmt), K(child_stmt));
   } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
@@ -533,9 +539,20 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
     LOG_WARN("failed to get column items", K(ret));
   } else {
     const double table_rows = child_rows < 1.0 ? 1.0 : child_rows;
+    double base_table_rows = table_rows;
+    bool is_child_single_spj = child_stmt->is_spj() && 1 == child_stmt->get_table_size();
     table_meta->set_table_id(table_id);
     table_meta->set_ref_table_id(OB_INVALID_ID);
     table_meta->set_rows(table_rows);
+    if (is_child_single_spj) {
+      const TableItem *table = child_stmt->get_table_item(0);
+      if (OB_NOT_NULL(table)) {
+        base_table_rows = child_table_metas.get_base_rows(table->table_id_);
+        table_meta->set_base_rows(base_table_rows);
+      }
+    } else {
+      table_meta->set_base_rows(table_rows);
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
       const ColumnItem &column_item = column_items.at(i);
       exprs.reset();
@@ -590,6 +607,23 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
             column_meta->set_max_value(maxobj);
             column_meta->set_avg_len(avg_len);
           }
+          if (OB_SUCC(ret) && is_child_single_spj) {
+            double base_ndv = ndv;
+            double nns = 1.0;
+            if (OB_FAIL(ObOptSelectivity::calc_expr_basic_info(child_table_metas,
+                                                               child_ctx,
+                                                               select_expr,
+                                                               NULL,
+                                                               &nns,
+                                                               &base_ndv))) {
+              LOG_WARN("failed to calculate distinct", K(ret));
+            } else {
+              nns = ObOptSelectivity::revise_between_0_1(nns);
+              base_ndv = revise_ndv(base_ndv);
+              column_meta->set_num_null(table_rows * (1 - nns));
+              column_meta->set_base_ndv(base_ndv);
+            }
+          }
         }
       }
     }
@@ -621,6 +655,7 @@ int OptTableMetas::add_values_table_meta_info(const ObDMLStmt *stmt,
     table_meta->set_table_id(table_id);
     table_meta->set_ref_table_id(OB_INVALID_ID);
     table_meta->set_rows(table_def->row_cnt_);
+    table_meta->set_base_rows(table_def->row_cnt_);
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
       const ColumnItem &column_item = column_items.at(i);
       int64_t idx = column_item.column_id_ - OB_APP_MIN_COLUMN_ID;
@@ -771,6 +806,16 @@ double OptTableMetas::get_rows(const uint64_t table_id) const
   return rows;
 }
 
+double OptTableMetas::get_base_rows(const uint64_t table_id) const
+{
+  const OptTableMeta *table_meta = get_table_meta_by_table_id(table_id);
+  double rows = 1.0;
+  if (OB_NOT_NULL(table_meta)) {
+    rows = table_meta->get_base_rows();
+  }
+  return rows;
+}
+
 int ObOptSelectivity::calculate_conditional_selectivity(const OptTableMetas &table_metas,
                                                         const OptSelectivityCtx &ctx,
                                                         common::ObIArray<ObRawExpr *> &total_filters,
@@ -906,12 +951,19 @@ int ObOptSelectivity::calculate_join_selectivity(const OptTableMetas &table_meta
                                                  const OptSelectivityCtx &ctx,
                                                  const ObIArray<ObRawExpr*> &predicates,
                                                  double &selectivity,
-                                                 ObIArray<ObExprSelPair> &all_predicate_sel)
+                                                 ObIArray<ObExprSelPair> &all_predicate_sel,
+                                                 bool is_outerjoin_filter)
 {
   int ret = OB_SUCCESS;
   selectivity = 1.0;
   ObSEArray<ObSelEstimator *, 4> sel_estimators;
   ObSelEstimatorFactory factory;
+  double reliable_sel_upper_bound = 1.0;
+  double default_complex_sel = 1.0;
+  bool is_complex_join = !is_outerjoin_filter &&
+                        (INNER_JOIN == ctx.get_assumption_type() ||
+                         IS_OUTER_JOIN(ctx.get_assumption_type()));
+  bool cnt_complex_qual = false;
   if (OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -949,9 +1001,48 @@ int ObOptSelectivity::calculate_join_selectivity(const OptTableMetas &table_meta
     } else if (OB_FAIL(estimator->get_sel(table_metas, ctx, tmp_selectivity, all_predicate_sel))) {
       LOG_WARN("failed to get sel", K(ret), KPC(estimator));
     } else {
-      selectivity *= revise_between_0_1(tmp_selectivity);
+      tmp_selectivity = revise_between_0_1(tmp_selectivity);
+      selectivity *= tmp_selectivity;
+      if (estimator->is_complex_join_qual()) {
+        cnt_complex_qual = true;
+      } else {
+        reliable_sel_upper_bound = std::min(reliable_sel_upper_bound, tmp_selectivity);
+      }
     }
   }
+
+  /**
+   * For complex inner/outer join (which has at least two kinds of quals or one complex join qual),
+   * we assume that each row of the small table matches at least one row of the large table.
+  */
+  if (OB_SUCC(ret) && ctx.get_compat_version() >= COMPAT_VERSION_4_2_5) {
+    is_complex_join &= sel_estimators.count() > 1 || cnt_complex_qual;
+    if (is_complex_join) {
+      if (LEFT_SEMI_JOIN == ctx.get_join_type()) {
+        default_complex_sel = ctx.get_left_row_count() > 1.0 ?
+                              std::min(1.0, ctx.get_right_row_count() / ctx.get_left_row_count()) :
+                              1.0;
+      } else if (RIGHT_SEMI_JOIN == ctx.get_join_type()) {
+        default_complex_sel = ctx.get_right_row_count() > 1.0 ?
+                              std::min(1.0, ctx.get_left_row_count() / ctx.get_right_row_count()) :
+                              1.0;
+      } else {
+        double max_rowcnt = MAX(ctx.get_left_row_count(), ctx.get_right_row_count());
+        default_complex_sel = max_rowcnt > 1.0 ? 1.0 / max_rowcnt : 1.0;
+      }
+      /**
+       * If the join has some normal quals, the selectivity could not be greater than the minimal one
+       * e.g. For join condition `A = B and M = N and X like Y`,
+       *      join_selectivity should be less than `A = B` and 'M = N',
+       *      but could be greater than `X like Y`.
+       *      Because we assume that the selectivity of single equal quals is reliable.
+      */
+      default_complex_sel = std::min(default_complex_sel, reliable_sel_upper_bound);
+      selectivity = std::max(selectivity, default_complex_sel);
+    }
+  }
+  LOG_TRACE("succeed to calculate join selectivity",
+      K(selectivity), K(is_complex_join), K(default_complex_sel), K(reliable_sel_upper_bound), K(ctx));
   return ret;
 }
 
@@ -2149,7 +2240,8 @@ int ObOptSelectivity::get_column_basic_info(const OptTableMetas &table_metas,
                                             double *ndv_ptr,
                                             double *num_null_ptr,
                                             double *avg_len_ptr,
-                                            double *row_count_ptr)
+                                            double *row_count_ptr,
+                                            DistinctEstType est_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!expr.is_column_ref_expr())) {
@@ -2163,6 +2255,7 @@ int ObOptSelectivity::get_column_basic_info(const OptTableMetas &table_metas,
     double avg_len = 0;
     double row_count = 0;
     double cur_rowcnt = ctx.get_current_rows();
+    double base_ndv = 0;
 
     if (OB_FAIL(get_column_basic_from_meta(table_metas,
                                            column_expr,
@@ -2170,35 +2263,47 @@ int ObOptSelectivity::get_column_basic_info(const OptTableMetas &table_metas,
                                            row_count,
                                            ndv,
                                            num_null,
-                                           avg_len))) {
+                                           avg_len,
+                                           base_ndv))) {
       LOG_WARN("failed to get column basic from meta", K(ret));
-    } else if (need_default && OB_FAIL(get_var_basic_default(row_count, ndv, num_null, avg_len))) {
+    } else if (need_default &&
+               OB_FAIL(get_var_basic_default(row_count, ndv, num_null, avg_len, base_ndv))) {
       LOG_WARN("failed to get var default info", K(ret));
     } else {
       if (num_null > row_count - ndv) {
         num_null = row_count - ndv > 0 ? row_count - ndv : 0;
       }
-      if (NULL != ctx.get_ambient_card() &&
-          !ctx.get_ambient_card()->empty() &&
-          ctx.get_compat_version() >= COMPAT_VERSION_4_2_4) {
-        ObSEArray<int64_t, 1> table_idx;
-        if (OB_FAIL(expr.get_relation_ids().to_array(table_idx))) {
-          LOG_WARN("failed to get table idx", K(ret), K(expr));
-        } else if (OB_UNLIKELY(table_idx.count() != 1) ||
-                   OB_UNLIKELY(table_idx.at(0) < 1) ||
-                   OB_UNLIKELY(table_idx.at(0) >= ctx.get_ambient_card()->count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected expr relation ids", K(expr), K(table_idx), K(ctx));
-        } else {
-          cur_rowcnt = ctx.get_ambient_card()->at(table_idx.at(0));
+      switch (est_type) {
+        case DistinctEstType::BASE:
+          ndv = base_ndv;
+          cur_rowcnt = -1.0;
+          break;
+        case DistinctEstType::CURRENT: {
+          cur_rowcnt = ctx.get_current_rows();
+          if (NULL != ctx.get_ambient_card() &&
+              !ctx.get_ambient_card()->empty() &&
+              ctx.get_compat_version() >= COMPAT_VERSION_4_2_4) {
+            ObSEArray<int64_t, 1> table_idx;
+            if (OB_FAIL(expr.get_relation_ids().to_array(table_idx))) {
+              LOG_WARN("failed to get table idx", K(ret), K(expr));
+            } else if (OB_UNLIKELY(table_idx.count() != 1) ||
+                      OB_UNLIKELY(table_idx.at(0) < 1) ||
+                      OB_UNLIKELY(table_idx.at(0) >= ctx.get_ambient_card()->count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected expr relation ids", K(expr), K(table_idx), K(ctx));
+            } else {
+              cur_rowcnt = ctx.get_ambient_card()->at(table_idx.at(0));
+            }
+          }
+          break;
         }
       }
-
       if (OB_SUCC(ret) && cur_rowcnt > 0.0 && cur_rowcnt < row_count) {
         ndv = scale_distinct(cur_rowcnt, row_count, ndv);
       }
 
-      LOG_TRACE("show column basic info", K(row_count), K(cur_rowcnt), K(num_null), K(avg_len), K(ndv));
+      LOG_TRACE("show column basic info",
+          K(row_count), K(cur_rowcnt), K(num_null), K(avg_len), K(ndv), K(est_type));
 
       // set return
       if (OB_SUCC(ret)) {
@@ -2218,7 +2323,8 @@ int ObOptSelectivity::get_column_basic_from_meta(const OptTableMetas &table_meta
                                                  double &row_count,
                                                  double &ndv,
                                                  double &num_null,
-                                                 double &avg_len)
+                                                 double &avg_len,
+                                                 double &base_ndv)
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = column_expr.get_table_id();
@@ -2234,6 +2340,7 @@ int ObOptSelectivity::get_column_basic_from_meta(const OptTableMetas &table_meta
       ndv = column_meta->get_ndv();
       num_null = column_meta->get_num_null();
       avg_len = column_meta->get_avg_len();
+      base_ndv = column_meta->get_base_ndv();
     }
   } else {
     use_default = true;
@@ -2244,13 +2351,15 @@ int ObOptSelectivity::get_column_basic_from_meta(const OptTableMetas &table_meta
 int ObOptSelectivity::get_var_basic_default(double &row_count,
                                             double &ndv,
                                             double &null_num,
-                                            double &avg_len)
+                                            double &avg_len,
+                                            double &base_ndv)
 {
   int ret = OB_SUCCESS;
   row_count = 1.0;
   ndv = 1.0;
   null_num = static_cast<double>(row_count * EST_DEF_COL_NULL_RATIO);
   avg_len = DEFAULT_COLUMN_SIZE;
+  base_ndv = 1.0;
   return ret;
 }
 
@@ -2709,11 +2818,13 @@ int ObOptSelectivity::calculate_table_ambient_cardinality(const OptTableMetas &t
                                                           const OptSelectivityCtx &ctx,
                                                           const ObRelIds &rel_ids,
                                                           const double cur_rows,
-                                                          double &table_ambient_card)
+                                                          double &table_ambient_card,
+                                                          DistinctEstType est_type)
 {
   int ret = OB_SUCCESS;
   if (NULL != ctx.get_ambient_card() &&
-      !ctx.get_ambient_card()->empty()) {
+      !ctx.get_ambient_card()->empty() &&
+      DistinctEstType::CURRENT == est_type) {
     table_ambient_card = 1.0;
     for (int64_t i = 0; i < ctx.get_ambient_card()->count(); i ++) {
       if (rel_ids.has_member(i)) {
@@ -2731,7 +2842,10 @@ int ObOptSelectivity::calculate_table_ambient_cardinality(const OptTableMetas &t
       LOG_WARN("faile to get table ids", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i ++) {
-      table_ambient_card *= std::max(1.0, table_metas.get_rows(table_ids.at(i)));
+      table_ambient_card *= std::max(1.0,
+        DistinctEstType::BASE == est_type ?
+        table_metas.get_base_rows(table_ids.at(i)) :
+        table_metas.get_rows(table_ids.at(i)));
     }
   }
   if (cur_rows > 0) {
@@ -2745,6 +2859,7 @@ int ObOptSelectivity::calculate_distinct_in_single_table(const OptTableMetas &ta
                                                          const ObRelIds &rel_id,
                                                          const common::ObIArray<ObRawExpr*>& exprs,
                                                          const double cur_rows,
+                                                         DistinctEstType est_type,
                                                          double &rows)
 {
   int ret = OB_SUCCESS;
@@ -2757,11 +2872,11 @@ int ObOptSelectivity::calculate_distinct_in_single_table(const OptTableMetas &ta
   if (OB_UNLIKELY(rel_id.num_members() != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected relation id", K(ret));
-  } else if (OB_FAIL(calculate_table_ambient_cardinality(table_metas, ctx, rel_id, cur_rows, ambient_card))) {
+  } else if (OB_FAIL(calculate_table_ambient_cardinality(table_metas, ctx, rel_id, cur_rows, ambient_card, est_type))) {
     LOG_WARN("failed to calculate ambient card", K(ret));
-  } else if (OB_FAIL(filter_column_by_equal_set(table_metas, ctx, exprs, filtered_exprs))) {
+  } else if (OB_FAIL(filter_column_by_equal_set(table_metas, ctx, est_type, exprs, filtered_exprs))) {
     LOG_WARN("failed filter column by equal set", K(ret));
-  } else if (OB_FAIL(calculate_expr_ndv(filtered_exprs, expr_ndv, table_metas, ctx, ambient_card))) {
+  } else if (OB_FAIL(calculate_expr_ndv(filtered_exprs, expr_ndv, table_metas, ctx, ambient_card, est_type))) {
     LOG_WARN("fail to calculate expr ndv", K(ret));
   } else if (ctx.get_compat_version() < COMPAT_VERSION_4_2_4) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr_ndv.count(); ++i) {
@@ -2845,7 +2960,8 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
                                          const ObIArray<ObRawExpr*>& exprs,
                                          const double origin_rows,
                                          double &rows,
-                                         const bool need_refine)
+                                         const bool need_refine,
+                                         DistinctEstType est_type)
 {
   int ret = OB_SUCCESS;
   rows = 1;
@@ -2860,7 +2976,7 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
     LOG_WARN("failed to classify_exprs", K(ret));
   } else if (OB_FAIL(remove_dummy_distinct_exprs(helpers, special_exprs))) {
     LOG_WARN("failed to remove dummy exprs", K(ret));
-  } else if (OB_FAIL(calculate_expr_ndv(special_exprs, single_ndvs, table_metas, ctx, origin_rows))) {
+  } else if (OB_FAIL(calculate_expr_ndv(special_exprs, single_ndvs, table_metas, ctx, origin_rows, est_type))) {
     LOG_WARN("fail to calculate expr ndv", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < helpers.count(); i ++) {
@@ -2869,7 +2985,7 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
     if (OB_FAIL(remove_dummy_distinct_exprs(helpers, helper.exprs_))) {
       LOG_WARN("failed to remove dummy exprs", K(ret));
     } else if (OB_FAIL(calculate_distinct_in_single_table(
-        table_metas, ctx, helper.rel_id_, helper.exprs_, need_refine ? origin_rows : -1, single_table_ndv))) {
+        table_metas, ctx, helper.rel_id_, helper.exprs_, need_refine ? origin_rows : -1, est_type, single_table_ndv))) {
       LOG_WARN("failed to calculate distinct in single table", K(helper.exprs_));
     } else if (OB_FAIL(single_ndvs.push_back(single_table_ndv))) {
       LOG_WARN("failed to push back", K(ret));
@@ -2899,13 +3015,14 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
                                          const ObRawExpr& expr,
                                          const double origin_rows,
                                          double &rows,
-                                         const bool need_refine)
+                                         const bool need_refine,
+                                         DistinctEstType est_type)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 1> expr_array;
   if (OB_FAIL(expr_array.push_back(const_cast<ObRawExpr*>(&expr)))) {
     LOG_WARN("failed to push back expr", K(ret));
-  } else if (OB_FAIL(calculate_distinct(table_metas, ctx, expr_array, origin_rows, rows, need_refine))) {
+  } else if (OB_FAIL(calculate_distinct(table_metas, ctx, expr_array, origin_rows, rows, need_refine, est_type))) {
     LOG_WARN("failed to calculate distinct", K(expr));
   }
   return ret;
@@ -3028,7 +3145,8 @@ int ObOptSelectivity::calculate_expr_ndv(const ObIArray<ObRawExpr*>& exprs,
                                          ObIArray<double>& expr_ndv,
                                          const OptTableMetas &table_metas,
                                          const OptSelectivityCtx &ctx,
-                                         const double origin_rows)
+                                         const double origin_rows,
+                                         DistinctEstType est_type)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
@@ -3040,12 +3158,12 @@ int ObOptSelectivity::calculate_expr_ndv(const ObIArray<ObRawExpr*>& exprs,
     } else if (expr->is_column_ref_expr()) {
       if (OB_FAIL(check_column_in_current_level_stmt(ctx.get_stmt(), *expr))) {
         LOG_WARN("failed to check column in current level stmt", K(ret));
-      } else if (OB_FAIL(get_column_basic_info(table_metas, ctx, *expr, &ndv, NULL, NULL, NULL))) {
+      } else if (OB_FAIL(get_column_basic_info(table_metas, ctx, *expr, &ndv, NULL, NULL, NULL, est_type))) {
         LOG_WARN("failed to get column basic info", K(ret), K(*expr));
       } else if (OB_FAIL(expr_ndv.push_back(ndv))) {
         LOG_WARN("failed to push back expr", K(ret), K(ndv));
       }
-    } else if (OB_FAIL(calculate_special_ndv(table_metas, expr, ctx, ndv, origin_rows))) {
+    } else if (OB_FAIL(calculate_special_ndv(table_metas, expr, ctx, ndv, origin_rows, est_type))) {
       LOG_WARN("failed to calculate special expr ndv", K(ret), K(ndv));
     } else if (OB_FAIL(expr_ndv.push_back(ndv))) {
       LOG_WARN("failed to push back", K(ret), K(ndv));
@@ -3107,7 +3225,8 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                             const ObRawExpr* expr,
                                             const OptSelectivityCtx &ctx,
                                             double &special_ndv,
-                                            const double origin_rows)
+                                            const double origin_rows,
+                                            DistinctEstType est_type)
 {
   int ret = OB_SUCCESS;
   const ObRawExpr *param_expr = NULL;
@@ -3145,7 +3264,8 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                               substr_len - ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH,
                                               origin_rows,
                                               special_ndv,
-                                              dummy))) {
+                                              dummy,
+                                              est_type))) {
       LOG_WARN("failed to calculate substr ndv", K(ret));
     }
   } else if (is_dense_time_expr_type(expr->get_expr_type()) ||
@@ -3212,7 +3332,9 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                               ctx,
                                               *param_expr,
                                               origin_rows,
-                                              ndv_upper_bound)))) {
+                                              ndv_upper_bound,
+                                              true,
+                                              est_type)))) {
       LOG_WARN("failed to calculate distinct", K(ret), KPC(param_expr));
     } else {
       special_ndv = std::min(special_ndv, ndv_upper_bound);
@@ -3360,12 +3482,13 @@ int ObOptSelectivity::calculate_winfunc_ndv(const OptTableMetas &table_metas,
 // 再把不在 equal set 中的列加入到 filtered_exprs 中,
 int ObOptSelectivity::filter_column_by_equal_set(const OptTableMetas &table_metas,
                                                  const OptSelectivityCtx &ctx,
+                                                 DistinctEstType est_type,
                                                  const ObIArray<ObRawExpr*> &column_exprs,
                                                  ObIArray<ObRawExpr*> &filtered_exprs)
 {
   int ret = OB_SUCCESS;
   const EqualSets *equal_sets = ctx.get_equal_sets();
-  if (NULL == equal_sets) {
+  if (NULL == equal_sets || DistinctEstType::CURRENT != est_type) {
     if (OB_FAIL(append(filtered_exprs, column_exprs))) {
       LOG_WARN("failed to append filtered exprs", K(ret));
     }
@@ -3466,12 +3589,13 @@ int ObOptSelectivity::get_min_ndv_by_equal_set(const OptTableMetas &table_metas,
           } else if (!is_in) {
             //do nothing
           } else if (OB_FAIL(get_column_basic_info(table_metas,
-                                                      ctx,
-                                                      *equal_set->at(k),
-                                                      &tmp_ndv,
-                                                      NULL,
-                                                      NULL,
-                                                      NULL))) {
+                                                   ctx,
+                                                   *equal_set->at(k),
+                                                   &tmp_ndv,
+                                                   NULL,
+                                                   NULL,
+                                                   NULL,
+                                                   DistinctEstType::CURRENT))) {
             LOG_WARN("failed to get var basic sel", K(ret));
           } else if (OB_INVALID_INDEX_INT64 == min_idx || tmp_ndv < min_ndv) {
             min_idx = k;
@@ -3888,7 +4012,7 @@ double ObOptSelectivity::scale_distinct(double selected_rows,
   */
 int ObOptSelectivity::get_join_pred_rows(const ObHistogram &left_hist,
                                          const ObHistogram &right_hist,
-                                         const bool is_semi,
+                                         const ObJoinType join_type,
                                          double &rows)
 {
   int ret = OB_SUCCESS;
@@ -3902,8 +4026,10 @@ int ObOptSelectivity::get_join_pred_rows(const ObHistogram &left_hist,
       LOG_WARN("failed to compare histogram endpoint value", K(ret),
               K(left_hist.get(lidx).endpoint_value_), K(right_hist.get(ridx).endpoint_value_));
     } else if (0 == eq_cmp) {
-      if (is_semi) {
+      if (IS_LEFT_SEMI_ANTI_JOIN(join_type)) {
         rows += left_hist.get(lidx).endpoint_repeat_count_;
+      } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_type)) {
+        rows += right_hist.get(lidx).endpoint_repeat_count_;
       } else {
         rows += left_hist.get(lidx).endpoint_repeat_count_ * right_hist.get(ridx).endpoint_repeat_count_;
       }
@@ -4254,7 +4380,8 @@ int ObOptSelectivity::calculate_substrb_info(const OptTableMetas &table_metas,
                                              const double substrb_len,
                                              const double cur_rows,
                                              double &substr_ndv,
-                                             double &nns)
+                                             double &nns,
+                                             DistinctEstType est_type)
 {
   int ret = OB_SUCCESS;
   double expr_len = 0.0;
@@ -4275,7 +4402,9 @@ int ObOptSelectivity::calculate_substrb_info(const OptTableMetas &table_metas,
                                         ctx,
                                         *str_expr,
                                         cur_rows,
-                                        expr_ndv))) {
+                                        expr_ndv,
+                                        true,
+                                        est_type))) {
     LOG_WARN("failed to calculate distinct", K(ret));
   } else if (OB_FAIL(calculate_expr_nns(table_metas, ctx, str_expr, nns))) {
     LOG_WARN("failed to calculate nns", KPC(str_expr));
@@ -4583,6 +4712,171 @@ int ObOptSelectivity::convert_obj_to_expr_type(const OptSelectivityCtx &ctx,
       LOG_WARN("failed to cast value", K(ret));
     } else {
       obj = tmp;
+    }
+  }
+  return ret;
+}
+
+double ObOptSelectivity::calc_equal_filter_sel(const OptSelectivityCtx &ctx,
+                                               bool is_same_expr,
+                                               ObItemType op_type,
+                                               double left_ndv,
+                                               double right_ndv,
+                                               double left_nns,
+                                               double right_nns)
+{
+  double selectivity = 0.0;
+  if (is_same_expr) {
+    // same table same column
+    if (T_OP_NSEQ == op_type) {
+      selectivity = 1.0;
+    } else if (T_OP_EQ == op_type) {
+      selectivity = left_nns;
+    } else if (T_OP_NE == op_type) {
+      selectivity = 0.0;
+    }
+  } else if (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4) {
+    double combine_ndv = combine_two_ndvs(ctx.get_current_rows(), left_ndv, right_ndv);
+    combine_ndv = std::max(1.0, combine_ndv);
+    selectivity = std::min(left_ndv, right_ndv) / combine_ndv;
+    if (T_OP_NSEQ == op_type) {
+      selectivity = selectivity * left_nns * right_nns + (1 - left_nns) * (1 - right_nns);
+    } else if (T_OP_EQ == op_type) {
+      selectivity = selectivity * left_nns * right_nns;
+    } else if (T_OP_NE == op_type) {
+      selectivity = std::max(1 - selectivity, 1 / combine_ndv / 2.0) * left_nns * right_nns ;
+    }
+  } else {
+    // deprecated
+    if (T_OP_NSEQ == op_type) {
+      selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv)
+          + (1 - left_nns) * (1 - right_nns);
+    } else if (T_OP_EQ == op_type) {
+      selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv);
+    } else if (T_OP_NE == op_type) {
+      selectivity = left_nns * right_nns * (1 - 1/std::max(left_ndv, right_ndv));
+    }
+  }
+
+  return selectivity;
+}
+
+double ObOptSelectivity::calc_equal_join_sel(const OptSelectivityCtx &ctx,
+                                             ObItemType op_type,
+                                             double left_ndv,
+                                             double right_ndv,
+                                             double left_nns,
+                                             double right_nns,
+                                             double left_base_ndv,
+                                             double right_base_ndv)
+
+{
+  double selectivity = 0.0;
+  ObJoinType join_type = ctx.get_join_type();
+  left_base_ndv = MAX(left_ndv, left_base_ndv);
+  right_base_ndv = MAX(right_ndv, right_base_ndv);
+  if (IS_RIGHT_STYLE_JOIN(join_type)) {
+    std::swap(left_ndv, right_ndv);
+    std::swap(left_nns, right_nns);
+    std::swap(left_base_ndv, right_base_ndv);
+  }
+  if (T_OP_NE == op_type && IS_SEMI_ANTI_JOIN(join_type)) {
+    if (right_ndv > 1.0) {
+      // if right ndv > 1.0, then there must exist one value not equal to left value
+      selectivity = left_nns;
+    } else {
+      selectivity = left_nns * std::max(1 - 1 / left_ndv, 1 / left_ndv);
+    }
+  } else if (IS_ANTI_JOIN(ctx.get_join_type()) && ctx.get_compat_version() >= COMPAT_VERSION_4_2_5) {
+    // use base containment assumption only for anti join
+    selectivity = (std::min(left_base_ndv, right_base_ndv) / left_base_ndv) * (right_ndv / right_base_ndv) * left_nns;
+    if (T_OP_NSEQ == op_type && 1 - right_nns > 0) {
+      selectivity += (1 - left_nns);
+    }
+  } else if (IS_SEMI_ANTI_JOIN(join_type)) {
+    selectivity = (std::min(left_ndv, right_ndv) / left_ndv) * left_nns;
+    if (T_OP_NSEQ == op_type && 1 - right_nns > 0) {
+      selectivity += (1 - left_nns);
+    }
+  } else {
+    // inner/outer join
+    double max_ndv = std::max(left_ndv, right_ndv);
+    if (T_OP_NSEQ == op_type) {
+      selectivity = left_nns * right_nns / max_ndv + (1 - left_nns) * (1 - right_nns);
+    } else if (T_OP_EQ == op_type) {
+      selectivity = left_nns * right_nns / max_ndv;
+    } else if (T_OP_NE == op_type) {
+      selectivity = left_nns * right_nns * std::max(1 - 1 / max_ndv, 1 / max_ndv);
+    }
+  }
+  if (IS_ANTI_JOIN(ctx.get_join_type())) {
+    selectivity = std::min(selectivity, 1 - DEFAULT_ANTI_JOIN_SEL);
+  }
+  return selectivity;
+}
+
+int ObOptSelectivity::calc_expr_basic_info(const OptTableMetas &table_metas,
+                                           const OptSelectivityCtx &ctx,
+                                           const ObRawExpr *expr,
+                                           double *ndv,
+                                           double *nns,
+                                           double *base_ndv)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (OB_FAIL(remove_ignorable_func_for_est_sel(expr))) {
+    LOG_WARN("failed to remove ignorable function", K(ret));
+  } else if (expr->is_column_ref_expr()) {
+    double num_null = 0;
+    double min_ndv = 0;
+    if (OB_FAIL(get_column_ndv_and_nns(table_metas, ctx, *expr, ndv, nns))) {
+      LOG_WARN("failed to get ndv and nns", K(ret));
+    } else if ((OB_NOT_NULL(ndv) || OB_NOT_NULL(nns)) && OB_NOT_NULL(ctx.get_equal_sets())) {
+      bool find = false;
+      ObRawExpr *dummy = NULL;
+      if (OB_FAIL(get_min_ndv_by_equal_set(table_metas,
+                                           ctx,
+                                           expr,
+                                           find,
+                                           dummy,
+                                           min_ndv))) {
+        LOG_WARN("failed to find the expr with min ndv", K(ret));
+      } else if (find) {
+        assign_value(min_ndv, ndv);
+        assign_value(1.0, nns);
+      }
+    }
+    if (OB_NOT_NULL(base_ndv)) {
+      if (OB_FAIL(get_column_basic_info(
+              table_metas, ctx, *expr, base_ndv, NULL, NULL, NULL, DistinctEstType::BASE))) {
+        LOG_WARN("failed to get base ndv", K(ret), KPC(expr));
+      }
+    }
+  } else {
+    if (OB_NOT_NULL(ndv) &&
+        OB_FAIL(calculate_distinct(table_metas,
+                                   ctx,
+                                   *expr,
+                                   -1.0,
+                                   *ndv))) {
+      LOG_WARN("Failed to calculate distinct", K(ret));
+    } else if (OB_NOT_NULL(nns) &&
+               OB_FAIL(calculate_expr_nns(table_metas,
+                                          ctx,
+                                          expr,
+                                          *nns))) {
+      LOG_WARN("failed to calculate nns", K(ret));
+    } else if (OB_NOT_NULL(base_ndv) &&
+               OB_FAIL(calculate_distinct(table_metas,
+                                          ctx,
+                                          *expr,
+                                          -1.0,
+                                          *base_ndv,
+                                          true,
+                                          DistinctEstType::BASE))) {
+      LOG_WARN("Failed to calculate distinct", K(ret));
     }
   }
   return ret;

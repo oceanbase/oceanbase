@@ -938,290 +938,158 @@ int ObEqualSelEstimator::get_cntcol_op_cntcol_sel(const OptTableMetas &table_met
   selectivity = DEFAULT_EQ_SEL;
   const ObRawExpr* left_expr = &input_left_expr;
   const ObRawExpr* right_expr = &input_right_expr;
+  double left_base_ndv = -1.0;
+  double right_base_ndv = -1.0;
   if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(left_expr)) ||
       OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(right_expr))) {
     LOG_WARN("failed to remove ignorable function", K(ret));
-  } else if (OB_ISNULL(left_expr) || OB_ISNULL(right_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(left_expr), K(right_expr));
-  } else if (left_expr->get_relation_ids().equal(right_expr->get_relation_ids())
-             && ctx.get_compat_version() >= COMPAT_VERSION_4_2_4) {
-    double combine_ndv = 1;
-    if (left_expr->is_column_ref_expr() && right_expr->is_column_ref_expr()) {
-      const ObColumnRefRawExpr* left_col = static_cast<const ObColumnRefRawExpr*>(left_expr);
-      const ObColumnRefRawExpr* right_col = static_cast<const ObColumnRefRawExpr*>(right_expr);
-      if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *left_expr, &left_ndv, &left_nns))) {
-        LOG_WARN("failed to get column basic sel", K(ret));
-      } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *right_expr, &right_ndv, &right_nns))) {
-        LOG_WARN("failed to get column basic sel", K(ret));
-      } else if (left_col->get_column_id() == right_col->get_column_id()) {
-        // same table same column
-        if (T_OP_NSEQ == op_type) {
-          selectivity = 1.0;
-        } else if (T_OP_EQ == op_type) {
-          selectivity = left_nns;
-        } else if (T_OP_NE == op_type) {
-          selectivity = 0.0;
-        }
-      } else {
-        combine_ndv = ObOptSelectivity::combine_two_ndvs(ctx.get_current_rows(), left_ndv, right_ndv);
-        combine_ndv = std::max(1.0, combine_ndv);
-        selectivity = std::min(left_ndv, right_ndv) / combine_ndv;
-        if (T_OP_NSEQ == op_type) {
-          selectivity += (1 - left_nns) * (1 - right_nns);
-        } else if (T_OP_EQ == op_type) {
-          // do nothing
-        } else if (T_OP_NE == op_type) {
-          selectivity = std::max(1 - selectivity, 1 / combine_ndv / 2.0);
-        }
-      }
-    } else {
-      if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, *left_expr, ctx.get_current_rows(), left_ndv))) {
-        LOG_WARN("Failed to calculate distinct", K(ret));
-      } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, *right_expr, ctx.get_current_rows(), right_ndv))) {
-        LOG_WARN("Failed to calculate distinct", K(ret));
-      } else {
-        combine_ndv = ObOptSelectivity::combine_two_ndvs(ctx.get_current_rows(), left_ndv, right_ndv);
-        combine_ndv = std::max(1.0, combine_ndv);
-        selectivity = std::min(left_ndv, right_ndv) / combine_ndv;
-        if (T_OP_NE == op_type) {
-          selectivity = std::max(1 - selectivity, 1 / combine_ndv / 2.0);
-        }
-      }
-    }
-  } else if (left_expr->is_column_ref_expr() && right_expr->is_column_ref_expr()) {
-    const ObColumnRefRawExpr* left_col = NULL;
-    const ObColumnRefRawExpr* right_col = NULL;
-    if (OB_FAIL(ObOptSelectivity::filter_one_column_by_equal_set(table_metas, ctx, left_expr, left_expr))) {
-      LOG_WARN("failed filter column by equal set", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::filter_one_column_by_equal_set(table_metas, ctx, right_expr, right_expr))) {
-      LOG_WARN("failed filter column by equal set", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *left_expr, &left_ndv, &left_nns))) {
-      LOG_WARN("failed to get column basic sel", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *right_expr,
-                                                                &right_ndv, &right_nns))) {
-      LOG_WARN("failed to get column basic sel", K(ret));
-    } else if (FALSE_IT(left_col = static_cast<const ObColumnRefRawExpr*>(left_expr)) ||
-               FALSE_IT(right_col = static_cast<const ObColumnRefRawExpr*>(right_expr))) {
-      // never reach
-    } else if (left_expr->get_relation_ids() == right_expr->get_relation_ids()) {
-      if (left_col->get_column_id() == right_col->get_column_id()) {
-        // same table same column
-        if (T_OP_NSEQ == op_type) {
-          selectivity = 1.0;
-        } else if (T_OP_EQ == op_type) {
-          selectivity = left_nns;
-        } else if (T_OP_NE == op_type) {
-          selectivity = 0.0;
-        }
-      } else {
-        //same table different column
-        if (T_OP_NSEQ == op_type) {
-          selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv)
-              + (1 - left_nns) * (1 - right_nns);
-        } else if (T_OP_EQ == op_type) {
-          selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv);
-        } else if (T_OP_NE == op_type) {
-          selectivity = left_nns * right_nns * (1 - 1/std::max(left_ndv, right_ndv));
-        }
-      }
-    } else {
-      // different table
-      ObOptColumnStatHandle left_handler;
-      ObOptColumnStatHandle right_handler;
-      obj_cmp_func cmp_func = NULL;
-      bool calc_with_hist = false;
-      if (!ObObjCmpFuncs::can_cmp_without_cast(left_col->get_result_type(),
-                                               right_col->get_result_type(),
-                                               CO_EQ, cmp_func))  {
-        // do nothing
-      } else if (OB_FAIL(ObOptSelectivity::get_histogram_by_column(table_metas, ctx, left_col->get_table_id(),
-                                                                   left_col->get_column_id(), left_handler))) {
-        LOG_WARN("failed to get histogram by column", K(ret));
-      } else if (OB_FAIL(ObOptSelectivity::get_histogram_by_column(table_metas, ctx, right_col->get_table_id(),
-                                                                   right_col->get_column_id(), right_handler))) {
-        LOG_WARN("failed to get histogram by column", K(ret));
-      } else if (left_handler.stat_ != NULL && right_handler.stat_ != NULL &&
-                 left_handler.stat_->get_histogram().is_frequency() &&
-                 right_handler.stat_->get_histogram().is_frequency()) {
-        calc_with_hist = true;
-      }
-      if (OB_FAIL(ret)) {
-      } else if (IS_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-        if (OB_ISNULL(ctx.get_left_rel_ids()) || OB_ISNULL(ctx.get_right_rel_ids())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ctx.get_left_rel_ids()), K(ctx.get_right_rel_ids()));
-        } else if (left_expr->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
-                   right_expr->get_relation_ids().overlap(*ctx.get_left_rel_ids())) {
-          std::swap(left_ndv, right_ndv);
-          std::swap(left_nns, right_nns);
-        }
-        if (OB_SUCC(ret)) {
-          if (calc_with_hist) {
-            double total_rows = 0;
-            double left_rows = 0;
-            double left_null = 0;
-            double right_rows = 0;
-            double right_null = 0;
-            if (OB_FAIL(ObOptSelectivity::get_join_pred_rows(left_handler.stat_->get_histogram(),
-                                                             right_handler.stat_->get_histogram(),
-                                                             true, total_rows))) {
-              LOG_WARN("failed to get join pred rows", K(ret));
-            } else if (OB_FAIL(ObOptSelectivity::get_column_basic_info(ctx.get_plan()->get_basic_table_metas(), ctx,
-                                                                       *left_expr, NULL, &left_null, NULL, &left_rows))) {
-              LOG_WARN("failed to get column basic info", K(ret));
-            } else if (OB_FAIL(ObOptSelectivity::get_column_basic_info(ctx.get_plan()->get_basic_table_metas(), ctx,
-                                                                       *right_expr, NULL, &right_null, NULL, &right_rows))) {
-              LOG_WARN("failed to get column basic info", K(ret));
-            } else if (T_OP_NSEQ == op_type) {
-              total_rows += right_null > 0 ? left_null : 0;
-              selectivity = total_rows / left_rows;
-            } else if (T_OP_EQ == op_type) {
-              selectivity = total_rows / left_rows;
-            } else if (T_OP_NE == op_type) {
-              selectivity = ((left_rows - left_null) * (right_rows - right_null) - total_rows)
-                  / left_rows / right_rows;
-            }
-          } else {
-            /**
-             * ## non NULL safe
-             *  a) semi: `(min(ndv1, ndv2) / ndv1) * (1.0 - nullfrac1)`
-             * ## NULL safe
-             *  a) semi: `(min(ndv1, ndv2) / ndv1) * (1.0 - nullfrac1) + nullfrac2 > 0 && nullsafe ? nullfrac1: 0`
-             */
-            if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-              if (T_OP_NSEQ == op_type) {
-                selectivity = (std::min(left_ndv, right_ndv) / left_ndv) * left_nns;
-                if (1 - right_nns > 0) {
-                  selectivity += (1 - left_nns);
-                }
-              } else if (T_OP_EQ == op_type) {
-                selectivity = (std::min(left_ndv, right_ndv) / left_ndv) * left_nns;
-              } else if (T_OP_NE == op_type) {
-                if (right_ndv > 1.0) {
-                  // if right ndv > 1.0, then there must exist one value not equal to left value
-                  selectivity = left_nns;
-                } else {
-                  selectivity = (1 - 1 / left_ndv) * left_nns;
-                }
-              }
-            } else {
-              if (T_OP_NSEQ == op_type) {
-                selectivity = (std::min(left_ndv, right_ndv) / right_ndv) * right_nns;
-                if (1 - left_nns > 0) {
-                  selectivity += (1 - right_nns);
-                }
-              } else if (T_OP_EQ == op_type) {
-                selectivity = (std::min(left_ndv, right_ndv) / right_ndv) * right_nns;
-              } else if (T_OP_NE == op_type) {
-                if (left_ndv > 1.0) {
-                  // if left ndv > 1.0, then there must exist one value not equal to right value
-                  selectivity = right_nns;
-                } else {
-                  selectivity = (1 - 1 / right_ndv) * right_nns;
-                }
-              }
-            }
-          }
-        }
-        if (OB_SUCC(ret) && selectivity >= 1.0 && IS_ANTI_JOIN(ctx.get_join_type())) {
-          selectivity = 1 - DEFAULT_ANTI_JOIN_SEL;
-        }
-      } else {
-        // inner join, outer join
-        if (calc_with_hist) {
-          // use frequency histogram calculate selectivity
-          double total_rows = 0;
-          double left_rows = 0;
-          double left_null = 0;
-          double right_rows = 0;
-          double right_null = 0;
-          if (OB_FAIL(ObOptSelectivity::get_join_pred_rows(left_handler.stat_->get_histogram(),
-                                                           right_handler.stat_->get_histogram(),
-                                                           false, total_rows))) {
-            LOG_WARN("failed to get join pred rows", K(ret));
-          } else if (OB_FAIL(ObOptSelectivity::get_column_basic_info(ctx.get_plan()->get_basic_table_metas(), ctx,
-                                                                     *left_expr, NULL, &left_null, NULL, &left_rows))) {
-            LOG_WARN("failed to get column basic info", K(ret));
-          } else if (OB_FAIL(ObOptSelectivity::get_column_basic_info(ctx.get_plan()->get_basic_table_metas(), ctx,
-                                                                     *right_expr, NULL, &right_null, NULL, &right_rows))) {
-            LOG_WARN("failed to get column basic info", K(ret));
-          } else if (T_OP_NSEQ == op_type) {
-            selectivity = (total_rows + left_null * right_null) / left_rows / right_rows;
-          } else if (T_OP_EQ == op_type) {
-            selectivity = total_rows / left_rows / right_rows;
-          } else if (T_OP_NE == op_type) {
-            selectivity = ((left_rows - left_null) * (right_rows - right_null) - total_rows)
-                / left_rows / right_rows;
-          }
-        } else {
-          /**
-           * ## non NULL safe
-           * (1.0 - nullfrac1) * (1.0 - nullfrac2) / MAX(nd1, nd2)
-           * ## NULL safe
-           * (1.0 - nullfrac1) * (1.0 - nullfrac2) / MAX(nd1, nd2) + nullfraf1 * nullfrac2
-           * 目前不会特殊考虑 outer join 的选择率, 而是在外层对行数进行 revise.
-           */
-          if (T_OP_NSEQ == op_type) {
-            selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv)
-                + (1 - left_nns) * (1 - right_nns);
-          } else if (T_OP_EQ == op_type) {
-            selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv);
-          } else if (T_OP_NE == op_type) {
-            selectivity = left_nns * right_nns * (1 - 1/std::max(left_ndv, right_ndv));
-          }
-        }
-      }
-    }
   } else {
-    // func(col) = func(col) or col = func(col)
-    double left_sel = 0.0;
-    double right_sel = 0.0;
-    if (OB_FAIL(get_simple_equal_sel(table_metas, ctx, *left_expr, NULL,
-                                     T_OP_NSEQ == op_type, left_sel))) {
-      LOG_WARN("Failed to get simple predicate sel", K(ret));
-    } else if (OB_FAIL(get_simple_equal_sel(table_metas, ctx, *right_expr, NULL,
-                                            T_OP_NSEQ == op_type, right_sel))) {
-      LOG_WARN("Failed to get simple predicate sel", K(ret));
-    } else if (IS_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-      if (OB_ISNULL(ctx.get_left_rel_ids()) || OB_ISNULL(ctx.get_right_rel_ids())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ctx.get_left_rel_ids()), K(ctx.get_right_rel_ids()));
-      } else if (left_expr->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
-                 right_expr->get_relation_ids().overlap(*ctx.get_left_rel_ids())) {
-        std::swap(left_sel, right_sel);
+    bool calc_with_hist = false;
+    if (OB_FAIL(try_calc_equal_sel_with_hist(table_metas,
+                                             ctx,
+                                             left_expr,
+                                             right_expr,
+                                             op_type,
+                                             selectivity,
+                                             calc_with_hist))) {
+      LOG_WARN("failed to calc equal sel with hist", K(ret));
+    } else if (calc_with_hist) {
+      // do nothing
+    } else if (OB_FAIL(ObOptSelectivity::calc_expr_basic_info(table_metas,
+                                                              ctx,
+                                                              left_expr,
+                                                              &left_ndv,
+                                                              &left_nns,
+                                                              IS_ANTI_JOIN(ctx.get_join_type()) ?
+                                                              &left_base_ndv :
+                                                              NULL))) {
+      LOG_WARN("Failed to calculate distinct", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::calc_expr_basic_info(table_metas,
+                                                              ctx,
+                                                              right_expr,
+                                                              &right_ndv,
+                                                              &right_nns,
+                                                              IS_ANTI_JOIN(ctx.get_join_type()) ?
+                                                              &right_base_ndv :
+                                                              NULL))) {
+      LOG_WARN("Failed to calculate distinct", K(ret));
+    } else if (left_expr->get_relation_ids() == right_expr->get_relation_ids()) {
+      selectivity = ObOptSelectivity::calc_equal_filter_sel(ctx, left_expr->same_as(*right_expr), op_type,
+                                                            left_ndv, right_ndv,
+                                                            left_nns, right_nns);
+    } else {
+      if (OB_NOT_NULL(ctx.get_left_rel_ids()) && OB_NOT_NULL(ctx.get_right_rel_ids()) &&
+          (left_expr->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
+           right_expr->get_relation_ids().overlap(*ctx.get_left_rel_ids()))) {
+        std::swap(left_ndv, right_ndv);
+        std::swap(left_base_ndv, right_base_ndv);
+        std::swap(left_nns, right_nns);
       }
-      if (OB_SUCC(ret)) {
-        if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-          if (T_OP_NE == op_type) {
-            selectivity = 1 - left_sel;
-          } else if (right_sel < OB_DOUBLE_EPSINON) {
-            selectivity = 1.0;
-          } else {
-            selectivity = std::min(left_sel / right_sel, 1.0);
-          }
-          if (selectivity >= 1.0 && IS_ANTI_JOIN(ctx.get_join_type())) {
-            selectivity = 1 - left_sel;
-          }
+      selectivity = ObOptSelectivity::calc_equal_join_sel(ctx, op_type,
+                                                          left_ndv, right_ndv,
+                                                          left_nns, right_nns,
+                                                          left_base_ndv, right_base_ndv);
+    }
+  }
+  return ret;
+}
+
+int ObEqualSelEstimator::try_calc_equal_sel_with_hist(const OptTableMetas &table_metas,
+                                                      const OptSelectivityCtx &ctx,
+                                                      const ObRawExpr *left_expr,
+                                                      const ObRawExpr *right_expr,
+                                                      ObItemType op_type,
+                                                      double &selectivity,
+                                                      bool &calc_with_hist)
+{
+  int ret = OB_SUCCESS;
+  ObOptColumnStatHandle left_handler;
+  ObOptColumnStatHandle right_handler;
+  const ObOptColumnStat *left_col_stat = NULL;
+  const ObOptColumnStat *right_col_stat = NULL;
+  obj_cmp_func cmp_func = NULL;
+  calc_with_hist = false;
+  const ObColumnRefRawExpr *left_col = static_cast<const ObColumnRefRawExpr *>(left_expr);
+  const ObColumnRefRawExpr *right_col = static_cast<const ObColumnRefRawExpr *>(right_expr);
+  if (OB_ISNULL(left_expr) || OB_ISNULL(right_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expr", KPC(left_expr), KPC(right_expr));
+  } else if (!left_expr->is_column_ref_expr() || !right_expr->is_column_ref_expr()) {
+    // do nothing
+  } else if (left_expr->get_relation_ids() == right_expr->get_relation_ids()) {
+    // do nothing
+  } else if (!ObObjCmpFuncs::can_cmp_without_cast(left_col->get_result_type(),
+                                                  right_col->get_result_type(),
+                                                  CO_EQ, cmp_func))  {
+    // do nothing
+  } else if (OB_FAIL(ObOptSelectivity::get_histogram_by_column(table_metas, ctx, left_col->get_table_id(),
+                                                               left_col->get_column_id(), left_handler))) {
+    LOG_WARN("failed to get histogram by column", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::get_histogram_by_column(table_metas, ctx, right_col->get_table_id(),
+                                                               right_col->get_column_id(), right_handler))) {
+    LOG_WARN("failed to get histogram by column", K(ret));
+  } else if (left_handler.stat_ != NULL && right_handler.stat_ != NULL &&
+             left_handler.stat_->get_histogram().is_frequency() &&
+             right_handler.stat_->get_histogram().is_frequency()) {
+    calc_with_hist = true;
+    left_col_stat = left_handler.stat_;
+    right_col_stat = right_handler.stat_;
+    if (OB_NOT_NULL(ctx.get_left_rel_ids()) && OB_NOT_NULL(ctx.get_right_rel_ids()) &&
+        (left_expr->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
+         right_expr->get_relation_ids().overlap(*ctx.get_left_rel_ids()))) {
+      std::swap(left_col_stat, right_col_stat);
+      std::swap(left_expr, right_expr);
+    }
+  }
+  if (OB_SUCC(ret) && calc_with_hist) {
+    double total_rows = 0;
+    double left_rows = left_col_stat->get_histogram().get_sample_size();
+    double right_rows = right_col_stat->get_histogram().get_sample_size();
+    double left_null_sel = 0;
+    double right_null_sel = 0;
+    if (OB_FAIL(ObOptSelectivity::get_join_pred_rows(left_col_stat->get_histogram(),
+                                                     right_col_stat->get_histogram(),
+                                                     ctx.get_join_type(), total_rows))) {
+      LOG_WARN("failed to get join pred rows", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::get_column_basic_sel(table_metas, ctx, *left_expr, NULL, &left_null_sel))) {
+      LOG_WARN("Failed to calc basic equal sel", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::get_column_basic_sel(table_metas, ctx, *right_expr, NULL, &right_null_sel))) {
+      LOG_WARN("Failed to calc basic equal sel", K(ret));
+    } else if (IS_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+      if (IS_RIGHT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+        std::swap(left_rows, right_rows);
+        std::swap(left_null_sel, right_null_sel);
+        std::swap(left_col_stat, right_col_stat);
+      }
+      double left_nns = 1 - left_null_sel;
+      double right_nns = 1 - right_null_sel;
+      if (T_OP_NSEQ == op_type) {
+        selectivity = left_nns * total_rows / left_rows +
+                     (right_null_sel > OB_DOUBLE_EPSINON ? left_null_sel : 0);
+      } else if (T_OP_EQ == op_type) {
+        selectivity = left_nns * total_rows / left_rows;
+      } else if (T_OP_NE == op_type) {
+        if (right_col_stat->get_histogram().get_bucket_size() > 1) {
+          selectivity = left_nns;
         } else {
-          if (T_OP_NE == op_type) {
-            selectivity = 1 - right_sel;
-          } else if (left_sel < OB_DOUBLE_EPSINON) {
-            selectivity = 1.0;
-          } else {
-            selectivity = std::min(right_sel / left_sel, 1.0);
-          }
-          if (selectivity >= 1.0 && IS_ANTI_JOIN(ctx.get_join_type())) {
-            selectivity = 1 - right_sel;
-          }
+          selectivity = left_nns * (1 - total_rows / left_rows);
         }
       }
+      if (IS_ANTI_JOIN(ctx.get_join_type())) {
+        selectivity = std::min(selectivity, 1 - DEFAULT_ANTI_JOIN_SEL);
+      }
     } else {
-      selectivity = std::min(left_sel, right_sel);
-      if (T_OP_NE == op_type) {
-        selectivity = 1 - selectivity;
+      double left_nns = 1 - left_null_sel;
+      double right_nns = 1 - right_null_sel;
+      if (T_OP_NSEQ == op_type) {
+        selectivity = left_nns * right_nns * total_rows / left_rows / right_rows + left_null_sel * right_null_sel;
+      } else if (T_OP_EQ == op_type) {
+        selectivity = left_nns * right_nns * total_rows / left_rows / right_rows;
+      } else if (T_OP_NE == op_type) {
+        selectivity = left_nns * right_nns * (1 - total_rows / left_rows / right_rows);
       }
     }
+    selectivity = ObOptSelectivity::revise_between_0_1(selectivity);
   }
   return ret;
 }
@@ -1892,9 +1760,9 @@ int ObLikeSelEstimator::calculate_like_sel_by_substr(const OptTableMetas &table_
     LOG_WARN("failed to calcualte distinct", KPC_(pattern));
   } else {
     if (NULL == ctx.get_left_rel_ids() || NULL == ctx.get_right_rel_ids()) {
-      double combine_ndv = ObOptSelectivity::combine_two_ndvs(ctx.get_current_rows(), substr_ndv, pattern_ndv);
-      selectivity = std::min(substr_ndv, pattern_ndv) / std::max(1.0, combine_ndv);
-      selectivity *= substr_nns * pattern_nns;
+      selectivity = ObOptSelectivity::calc_equal_filter_sel(ctx, false, T_OP_EQ,
+                                                            substr_ndv, pattern_ndv,
+                                                            substr_nns, pattern_nns);
     } else {
       double left_ndv = substr_ndv;
       double right_ndv = pattern_ndv;
@@ -1905,18 +1773,9 @@ int ObLikeSelEstimator::calculate_like_sel_by_substr(const OptTableMetas &table_
         std::swap(left_ndv, right_ndv);
         std::swap(left_nns, right_nns);
       }
-      if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-        selectivity = (std::min(left_ndv, right_ndv) / left_ndv) * left_nns;
-      } else if (IS_RIGHT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-        selectivity = (std::min(left_ndv, right_ndv) / right_ndv) * right_nns;
-      } else {
-        selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv);
-      }
-      if (OB_SUCC(ret) && selectivity >= 1.0 && IS_ANTI_JOIN(ctx.get_join_type())) {
-        selectivity = 1 - DEFAULT_ANTI_JOIN_SEL;
-      }
+      selectivity = ObOptSelectivity::calc_equal_join_sel(ctx, T_OP_EQ, left_ndv, right_ndv, left_nns, right_nns);
     }
-    LOG_WARN("succeed to calculate like selectivity by substr",
+    LOG_TRACE("succeed to calculate like selectivity by substr",
         K(selectivity), K(substr_ndv), K(substr_nns), K(pattern_ndv), K(pattern_nns), K(wildcard_length));
   }
   return ret;
@@ -1965,12 +1824,25 @@ int ObBoolOpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
   return ret;
 }
 
-bool ObBoolOpSelEstimator::tend_to_use_ds()
+bool ObBoolOpSelEstimator::is_complex_filter_qual()
 {
   bool bret = false;
   for (int64_t i = 0; !bret && i < child_estimators_.count(); ++i) {
     ObSelEstimator *estimator = child_estimators_.at(i);
-    bret |= OB_NOT_NULL(estimator) ? estimator->tend_to_use_ds() : false;
+    bret |= OB_NOT_NULL(estimator) ? estimator->is_complex_filter_qual() : false;
+  }
+  return bret;
+}
+
+bool ObBoolOpSelEstimator::is_complex_join_qual()
+{
+  bool bret = false;
+  if (OB_NOT_NULL(expr_) && T_OP_AND == expr_->get_expr_type()) {
+    bret = child_estimators_.count() > 1;
+  }
+  for (int64_t i = 0; !bret && i < child_estimators_.count(); ++i) {
+    ObSelEstimator *estimator = child_estimators_.at(i);
+    bret |= OB_NOT_NULL(estimator) ? estimator->is_complex_join_qual() : false;
   }
   return bret;
 }
@@ -2382,6 +2254,8 @@ int ObSimpleJoinSelEstimator::get_cntcols_eq_cntcols_sel(const OptTableMetas &ta
   bool is_union_pk = false;
   bool refine_right_ndv = false;
   bool refine_left_ndv = false;
+  double left_base_ndv = -1.0;
+  double right_base_ndv = -1.0;
 
   if (OB_ISNULL(ctx.get_plan())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2435,107 +2309,65 @@ int ObSimpleJoinSelEstimator::get_cntcols_eq_cntcols_sel(const OptTableMetas &ta
     }
   }
 
+  if (OB_SUCC(ret)) {
+    left_nns = 1.0;
+    right_nns = 1.0;
+    for (int64_t i = 0; i < left_not_null_sels.count(); ++i) {
+      left_nns *= left_not_null_sels.at(i);
+    }
+    for (int64_t i = 0; i < right_not_null_sels.count(); ++i) {
+      right_nns *= right_not_null_sels.at(i);
+    }
+  }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, left_exprs, left_rows, left_ndv))) {
     LOG_WARN("Failed to calculate distinct", K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, right_exprs, right_rows, right_ndv))) {
     LOG_WARN("Failed to calculate distinct", K(ret));
-  } else if (IS_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-    /**
-     * 对于 semi anti join, 选择率描述的是外表行数为基础的选择率
-     * # FORMULA
-     * ## non NULL safe
-     *  a) semi:  `(min(left_ndv, right_ndv) / left_ndv) * left_not_null_sel(i)`
-     * ## NULL safe
-     *  a) semi:  non NULL safe selectivity + `nullsafe(i) && left_not_null_sel(i) < 1.0 ? null_sel(i) * selectivity(j) [where j != i]: 0`
-     */
-    if (IS_SEMI_ANTI_JOIN(ctx.get_assumption_type())) {
-      // do nothing
-    } else if (left_contain_pk == right_contain_pk) {
-      // 两侧都不是主键或都是主键, 不做修正
-    } else if (refine_right_ndv) {
-      // 一侧有主键时, 认为是主外键连接, 外键上最大的ndv为即为主键的原始ndv
-      right_ndv = std::min(right_ndv, left_origin_rows);
-    } else if (refine_left_ndv) {
-      left_ndv = std::min(left_ndv, right_origin_rows);
-    } else {
-      // do nothing
+  } else if (IS_SEMI_ANTI_JOIN(ctx.get_assumption_type())) {
+    // do nothing
+  } else if (left_contain_pk == right_contain_pk) {
+    // 两侧都不是主键或都是主键, 不做修正
+  } else if (refine_right_ndv) {
+    // 一侧有主键时, 认为是主外键连接, 外键上最大的ndv为即为主键的原始ndv
+    right_ndv = std::min(right_ndv, left_origin_rows);
+  } else if (refine_left_ndv) {
+    left_ndv = std::min(left_ndv, right_origin_rows);
+  }
+  if (OB_SUCC(ret) && IS_ANTI_JOIN(ctx.get_join_type())) {
+    if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, left_exprs, -1.0, left_base_ndv, false, DistinctEstType::BASE))) {
+      LOG_WARN("Failed to calculate distinct", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, right_exprs, -1.0, right_base_ndv, false, DistinctEstType::BASE))) {
+      LOG_WARN("Failed to calculate distinct", K(ret));
     }
-    if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
-      selectivity = std::min(left_ndv, right_ndv) / left_ndv;
-      for (int64_t i = 0; i < left_not_null_sels.count(); ++i) {
-        selectivity *= left_not_null_sels.at(i);
-      }
-      // 处理 null safe，这里假设多列上同时为null即小概率事件，只考虑特定列上为null的情况
-      for (int64_t i = 0; i < null_safes.count(); ++i) {
-        if (OB_UNLIKELY(null_safes.at(i) && right_not_null_sels.at(i) < 1.0)) {
-          double factor = 1.0;
-          for (int64_t j = 0; j < null_safes.count(); ++j) {
-            if (i == j) {
-              factor *= (1 - left_not_null_sels.at(j));
-            } else {
-              factor *= left_not_null_sels.at(j) * std::min(left_ndvs.at(j), right_ndvs.at(j)) / left_ndvs.at(j);
-            }
-          }
-          selectivity += factor;
-        }
-      }
-    } else {
-      selectivity = std::min(left_ndv, right_ndv) / right_ndv;
-      for (int64_t i = 0; i < right_not_null_sels.count(); ++i) {
-        selectivity *= right_not_null_sels.at(i);
-      }
-      // 处理 null safe，这里假设多列上同时为null即小概率事件，只考虑特定列上为null的情况
-      for (int64_t i = 0; i < null_safes.count(); ++i) {
-        if (OB_UNLIKELY(null_safes.at(i) && right_not_null_sels.at(i) < 1.0)) {
-          double factor = 1.0;
-          for (int64_t j = 0; j < null_safes.count(); ++j) {
-            if (i == j) {
-              factor *= (1 - right_not_null_sels.at(j));
-            } else {
-              factor *= right_not_null_sels.at(j) * std::min(left_ndvs.at(j), right_ndvs.at(j)) / right_ndvs.at(j);
-            }
-          }
-          selectivity += factor;
-        }
-      }
-    }
-  } else {
-    /**
-     * # FORMULA
-     * ## non NULL safe
-     * 1 / MAX(ndv1, ndv2) * not_null_frac1_col1 * not_null_frac2_col1 * not_null_frac1_col2 * not_null_frac2_col2 * ...
-     * ## NULL safe
-     * non NULL safe selectivity + `nullsafe(i) ? (1 - not_null_frac1_col(i)) * (1 - not_null_frac2_col(i)) * selectivity(col(j)) [where j != i]: 0`
-     * 目前不会特殊考虑 outer join 的选择率, 而是在外层对行数进行 revise.
-     */
-    if (left_contain_pk == right_contain_pk) {
-      // 两侧都不是主键或都是主键, 不做修正
-    } else if (refine_right_ndv) {
-      // 一侧有主键时, 认为是主外键连接, 外键上最大的ndv为即为主键的原始ndv
-      right_ndv = std::min(right_ndv, left_origin_rows);
-    } else if (refine_left_ndv) {
-      left_ndv = std::min(left_ndv, right_origin_rows);
-    } else {
-      // do nothing
-    }
-    selectivity = 1.0 / std::max(left_ndv, right_ndv);
-    for (int64_t i = 0; i < left_not_null_sels.count(); ++i) {
-      selectivity *= left_not_null_sels.at(i) * right_not_null_sels.at(i);
-    }
-    // 处理null safe, 这里假设多列上同时为null即小概率事件，只考虑特定列上为null的情况
+  }
+  if (OB_SUCC(ret)) {
+    selectivity = ObOptSelectivity::calc_equal_join_sel(ctx, T_OP_EQ, left_ndv, right_ndv, left_nns, right_nns, left_base_ndv, right_base_ndv);
+    // 处理 null safe，这里假设多列上同时为null即小概率事件，只考虑特定列上为null的情况
     for (int64_t i = 0; i < null_safes.count(); ++i) {
       if (null_safes.at(i)) {
         double factor = 1.0;
         for (int64_t j = 0; j < null_safes.count(); ++j) {
           if (i == j) {
-            factor *= (1 - left_not_null_sels.at(j)) * (1 - right_not_null_sels.at(j));
+            if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+              factor *= (1 - left_not_null_sels.at(j));
+            } else if (IS_RIGHT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+              factor *= (1 - right_not_null_sels.at(j));
+            } else {
+              factor *= (1 - left_not_null_sels.at(j)) * (1 - right_not_null_sels.at(j));
+            }
           } else {
-            factor *= left_not_null_sels.at(j) * right_not_null_sels.at(j) / std::max(left_ndvs.at(j), right_ndvs.at(j));
+            if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+              factor *= left_not_null_sels.at(j) * std::min(left_ndvs.at(j), right_ndvs.at(j)) / left_ndvs.at(j);
+            } else if (IS_RIGHT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+              factor *= right_not_null_sels.at(j) * std::min(left_ndvs.at(j), right_ndvs.at(j)) / right_ndvs.at(j);
+            } else {
+              factor *= left_not_null_sels.at(j) * right_not_null_sels.at(j) / std::max(left_ndvs.at(j), right_ndvs.at(j));
+            }
           }
         }
         selectivity += factor;
-      } else {/* do nothing */}
+      }
     }
   }
   LOG_TRACE("selectivity of `col_ref1 =|<=> col_ref1 and col_ref2 =|<=> col_ref2`", K(selectivity));
@@ -2869,12 +2701,14 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     } else {
       // TODO : c1 + c1 < 1
       selectivity = DEFAULT_INEQ_JOIN_SEL;
+      use_default_ = true;
     }
   } else if (OB_FAIL(ObOptSelectivity::get_column_min_max(table_metas, ctx, *term_.col1_, obj_min, obj_max))) {
     LOG_WARN("failed to get column min max", K(ret), KPC(term_.col1_));
   } else if (obj_min.is_min_value() || obj_min.is_max_value() ||
              obj_max.is_max_value() || obj_max.is_min_value()) {
     selectivity = DEFAULT_INEQ_JOIN_SEL;
+    use_default_ = true;
   } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_scalar_obj(&obj_min, &tmp_obj))) {
     LOG_WARN("failed to convert obj", K(obj_min));
   } else if (FALSE_IT(min1 = tmp_obj.get_double() * term_.coefficient1_)) {
@@ -2886,6 +2720,7 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
   } else if (obj_min.is_min_value() || obj_min.is_max_value() ||
              obj_max.is_max_value() || obj_max.is_min_value()) {
     selectivity = DEFAULT_INEQ_JOIN_SEL;
+    use_default_ = true;
   } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_scalar_obj(&obj_min, &tmp_obj))) {
     LOG_WARN("failed to convert obj", K(obj_min));
   } else if (FALSE_IT(min2 = tmp_obj.get_double() * term_.coefficient2_)) {

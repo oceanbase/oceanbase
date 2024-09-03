@@ -794,7 +794,8 @@ struct EstimateCostInfo {
       has_none_equal_join_(false),
       can_use_batch_nlj_(false),
       is_naaj_(false),
-      is_sna_(false)
+      is_sna_(false),
+      join_output_rows_(-1.0)
     {
     }
 
@@ -831,7 +832,8 @@ struct EstimateCostInfo {
         can_use_batch_nlj_(false),
         is_naaj_(false),
         is_sna_(false),
-        inherit_sharding_index_(-1)
+        inherit_sharding_index_(-1),
+        join_output_rows_(-1.0)
       {
       }
     virtual ~JoinPath() {}
@@ -1039,7 +1041,8 @@ struct EstimateCostInfo {
                  K_(can_use_batch_nlj),
                  K_(is_naaj),
                  K_(is_sna),
-                 K_(inherit_sharding_index));
+                 K_(inherit_sharding_index),
+                 K_(join_output_rows));
   public:
     const Path *left_path_;
     const Path *right_path_;
@@ -1071,6 +1074,11 @@ struct EstimateCostInfo {
     bool is_sna_; // is single null aware anti join
     //Used to indicate which child node the current sharding inherits from
     int64_t inherit_sharding_index_;
+    /**
+     * estimated rowcount under the current left and right join order trees,
+     * might be different with the rowcount of parent_ join order
+    */
+    double join_output_rows_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JoinPath);
   };
@@ -1369,7 +1377,6 @@ struct NullAwareAntiJoinInfo {
       output_table_set_(),
       output_rows_(-1.0),
       output_row_size_(-1.0),
-      anti_or_semi_match_sel_(1.0),
       table_partition_info_(NULL),
       sharding_info_(NULL),
       table_meta_info_(common::OB_INVALID_ID),
@@ -2212,8 +2219,6 @@ struct NullAwareAntiJoinInfo {
 
     int64_t get_diverse_path_count() const { return diverse_path_count_; }
 
-    inline double get_anti_or_semi_match_sel() const { return anti_or_semi_match_sel_; }
-
     const ObFdItemSet &get_fd_item_set() const { return fd_item_set_; }
 
     ObFdItemSet &get_fd_item_set() { return fd_item_set_; }
@@ -2696,7 +2701,6 @@ struct NullAwareAntiJoinInfo {
     ObRelIds output_table_set_; //需要输出的table item下表, 经过semi join时只输出左枝
     double output_rows_;
     double output_row_size_;
-    double anti_or_semi_match_sel_; //for anti/semi join
     ObTablePartitionInfo *table_partition_info_; // only for base table
     ObShardingInfo *sharding_info_; // only for base table and local index
     ObTableMetaInfo table_meta_info_; // only for base table
@@ -2719,6 +2723,7 @@ struct NullAwareAntiJoinInfo {
     bool cnt_rownum_;
     uint64_t total_path_num_;
     common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
+    double current_join_output_rows_; // 记录对当前连接树估计的输出行数
   private:
     DISALLOW_COPY_AND_ASSIGN(ObJoinOrder);
   };
