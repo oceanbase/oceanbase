@@ -37,10 +37,15 @@ class ObRowKeysInfo;
 namespace blocksstable
 {
 
+class ObIndexBlockRowParser;
+
 struct ObIndexBlockRowDesc
 {
   ObIndexBlockRowDesc();
   ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc);
+  int init(const ObDataStoreDesc &data_store_desc, ObIndexBlockRowParser &idx_row_parser, ObDatumRow &index_row);
+  OB_INLINE const ObDataStoreDesc * get_data_store_desc() const { return data_store_desc_; }
+  OB_INLINE void set_data_store_desc(const ObDataStoreDesc *data_store_desc) { data_store_desc_ = data_store_desc; }
   OB_INLINE void set_for_clustered_index() { is_clustered_index_ = true; }
   OB_INLINE bool is_valid() const
   {
@@ -54,7 +59,11 @@ struct ObIndexBlockRowDesc
     return ret;
   }
 
-  const ObDataStoreDesc *data_store_desc_;
+private:
+  // TODO(baichangmin): set RowDesc to class.
+  const ObDataStoreDesc *data_store_desc_; // TODO(baichangmin): do not use pointer or reference here.
+
+public:
   union {
     const ObDatumRow *aggregated_row_;
     const char *serialized_agg_row_buf_;
@@ -84,13 +93,13 @@ struct ObIndexBlockRowDesc
   bool is_clustered_index_;
 
   TO_STRING_KV(KP_(data_store_desc), KP_(aggregated_row), K_(row_key), K_(macro_id),
-      K_(logic_micro_id), K_(data_checksum),
+      K_(logic_micro_id), K_(shared_data_macro_id), K_(data_checksum),
       K_(block_offset), K_(row_count), K_(row_count_delta),
       K_(max_merged_trans_version), K_(block_size),
       K_(macro_block_count), K_(micro_block_count), K_(row_offset),
       K_(is_deleted), K_(contain_uncommitted_row), K_(is_data_block),
       K_(is_secondary_meta), K_(is_macro_node), K_(has_string_out_row), K_(has_lob_out_row),
-      K_(is_last_row_last_flag), K_(is_serialized_agg_row), K_(is_clustered_index), K_(shared_data_macro_id));
+      K_(is_last_row_last_flag), K_(is_serialized_agg_row), K_(is_clustered_index));
 };
 
 struct ObIndexBlockRowHeader
