@@ -971,7 +971,7 @@ int ObDbmsStatsExecutor::do_set_table_stats(const ObSetTableStatParam &param,
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Invalid or inconsistent input values");
   } else {
     //1.set numrows_
-    if (param.numrows_ > 0) {
+    if (param.numrows_ >= 0) {
       table_stat->set_row_count(param.numrows_);
     }
     //2.set numblks_
@@ -979,13 +979,13 @@ int ObDbmsStatsExecutor::do_set_table_stats(const ObSetTableStatParam &param,
     //   table_stat->set_macro_block_num(param.numrows_);
     // }
     //3.avgrlen_
-    if (param.avgrlen_ > 0) {
+    if (param.avgrlen_ >= 0) {
       table_stat->set_avg_row_size(param.avgrlen_);
     }
-    if (param.nummacroblks_ > 0) {
+    if (param.nummacroblks_ >= 0) {
       table_stat->set_macro_block_num(param.nummacroblks_);
     }
-    if (param.nummicroblks_ > 0) {
+    if (param.nummicroblks_ >= 0) {
       table_stat->set_micro_block_num(param.nummicroblks_);
     }
     //other options support later.
@@ -1012,19 +1012,19 @@ int ObDbmsStatsExecutor::do_set_column_stats(ObIAllocator &allocator,
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Invalid or inconsistent input values");
   } else {
     //1.set distcnt_
-    if (param.distcnt_ > 0) {
+    if (param.distcnt_ >= 0) {
       column_stat->set_num_distinct(param.distcnt_);
     }
     //2.set density_
-    if (param.density_ > 0) {
+    if (param.density_ >= 0) {
       column_stat->get_histogram().set_density(param.density_);
     }
     //3.nullcnt_
-    if (param.nullcnt_ > 0) {
+    if (param.nullcnt_ >= 0) {
       column_stat->set_num_null(param.nullcnt_);
     }
     //4.avgclen_
-    if (param.avgclen_ > 0) {
+    if (param.avgclen_ >= 0) {
       column_stat->set_avg_len(param.avgclen_);
     }
     //5.set max/val value

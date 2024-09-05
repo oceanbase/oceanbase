@@ -1216,7 +1216,7 @@ int ObDbmsStats::create_stat_table(ObExecContext &ctx, ParamStore &params, ObObj
       LOG_WARN("dbms_stats with temp table not support", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
     } else if (param.db_name_.empty()) {
-      param.db_name_ = session->get_user_name();
+      param.db_name_ = session->get_database_name();
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDbmsStatsExportImport::create_stat_table(ctx, param))) {
@@ -1271,7 +1271,7 @@ int ObDbmsStats::drop_stat_table(ObExecContext &ctx, ParamStore &params, ObObj &
       LOG_WARN("Statistics table must be specified", K(ret));
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Statistics table must be specified");
     } else if (param.db_name_.empty()) {
-      param.db_name_ = session->get_user_name();
+      param.db_name_ = session->get_database_name();
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDbmsStatsExportImport::drop_stat_table(ctx, param))) {
@@ -5375,7 +5375,7 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
   } else {
     stat_param.tenant_id_ = session->get_effective_tenant_id();
     if (owner.is_null()) {
-      stat_param.db_name_ = session->get_user_name();
+      stat_param.db_name_ = session->get_database_name();
     } else if (OB_FAIL(owner.get_string(stat_param.db_name_))) {
       LOG_WARN("failed to get db name", K(ret));
     } else if (OB_FAIL(convert_vaild_ident_name(*stat_param.allocator_,
