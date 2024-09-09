@@ -1053,6 +1053,8 @@ int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
     LOG_WARN("fail to deep copy index name", K(ret), K_(index_name));
   } else if (OB_FAIL(htable_filter_.deep_copy(allocator, dst.htable_filter_))) {
     LOG_WARN("fail to deep copy htable filter", K(ret), K_(htable_filter));
+  } else if (OB_FAIL(ob_params_.deep_copy(allocator, dst.ob_params_))){
+    LOG_WARN("fail to deep copy htable filter", K(ret), K_(ob_params));
   } else {
     dst.deserialize_allocator_ = deserialize_allocator_;
     dst.limit_ = limit_;
@@ -1076,7 +1078,8 @@ OB_UNIS_DEF_SERIALIZE(ObTableQuery,
                       max_result_size_,
                       htable_filter_,
                       scan_range_columns_,
-                      aggregations_);
+                      aggregations_,
+                      ob_params_);
 
 OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            key_ranges_,
@@ -1090,7 +1093,8 @@ OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            max_result_size_,
                            htable_filter_,
                            scan_range_columns_,
-                           aggregations_);
+                           aggregations_,
+                           ob_params_);
 
 OB_DEF_DESERIALIZE(ObTableQuery,)
 {
@@ -1118,6 +1122,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
           LOG_WARN("fail to deep copy range", K(ret));
         } else if (OB_FAIL(key_ranges_.push_back(key_range))) {
           LOG_WARN("fail to add key range to array", K(ret));
+        } else {
+          ob_params_.set_allocator(deserialize_allocator_);
         }
       }
     }
@@ -1134,7 +1140,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
                 max_result_size_,
                 htable_filter_,
                 scan_range_columns_,
-                aggregations_
+                aggregations_,
+                ob_params_
                 );
   }
   return ret;
@@ -1774,3 +1781,123 @@ OB_SERIALIZE_MEMBER(ObTableMoveReplicaInfo,
 OB_SERIALIZE_MEMBER(ObTableMoveResult,
                     replica_info_,
                     reserved_);
+
+OB_SERIALIZE_MEMBER_INHERIT(ObHBaseParams, 
+                            EmptyParent,
+                            caching_,
+                            call_timeout_,
+                            flag_);
+
+int ObHBaseParams::deep_copy(ObKVParamsBase *hbase_params) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(hbase_params) || hbase_params->get_param_type() != ParamType::HBase) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hbase adress", K(ret), KPC(hbase_params));
+  } else {
+    ObHBaseParams *param = static_cast<ObHBaseParams*>(hbase_params);
+    param->caching_ = caching_;
+    param->call_timeout_ = call_timeout_;
+    param->is_cache_block_ = is_cache_block_;
+    param->allow_partial_results_ = allow_partial_results_;
+    param->check_existence_only_ = check_existence_only_;
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObKVParams)
+{
+  int ret = OB_SUCCESS;
+  int8_t param_type = -1;
+  LST_DO_CODE(OB_UNIS_DECODE, param_type);
+  if (OB_SUCC(ret)) {
+    if (param_type == static_cast<int8_t>(ParamType::HBase)) {
+      if (OB_FAIL(alloc_ob_params(ParamType::HBase, ob_params_))) {
+        RPC_WARN("alloc ob_params_ memory failed", K(ret));
+      }
+    } else if (param_type == static_cast<int8_t>(ParamType::Redis)) {
+      if (OB_FAIL(alloc_ob_params(ParamType::Redis, ob_params_))) {
+        RPC_WARN("alloc ob_params_ memory failed", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ob_params_->deserialize(buf, data_len, pos))) {
+      RPC_WARN("ob_params deserialize fail");
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObKVParams)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ob_params_)) {
+    ret = OB_BAD_NULL_ERROR;
+    RPC_WARN("unexpected ob_params_ nullptr", K(ret));
+  } else if (OB_FAIL(ob_params_->serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize obkv prarms", K(ret), K(buf), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObKVParams)
+{
+  int64_t len = 0;
+  if (OB_NOT_NULL(ob_params_)) {
+    len = ob_params_->get_serialize_size();
+  }
+  return len;
+}
+
+int ObKVParams::init_ob_params_for_hfilter(ObHBaseParams*& params) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ob_params_) || ob_params_->get_param_type() != ParamType::HBase) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ob_params_ adress");
+  } else {
+    params = static_cast<ObHBaseParams*>(ob_params_);
+    if (OB_ISNULL(params)) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("unexpected nullptr after static_cast");
+    }
+  }
+  return ret;
+}
+
+int ObKVParams::deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const
+{
+  int ret = OB_SUCCESS;
+  ob_params.set_allocator(&allocator);
+  if (OB_ISNULL(ob_params_)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("unexpected ob_params nullptr", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ob_params.alloc_ob_params(ob_params_->get_param_type(), ob_params.ob_params_))) {
+      LOG_WARN("alloc ob params error", K(ob_params_->get_param_type()), K(ret));
+    } else if (OB_FAIL(ob_params_->deep_copy(ob_params.ob_params_))) {
+      LOG_WARN("ob_params_ deep_copy error", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObKVParams::alloc_ob_params(ParamType param_type, ObKVParamsBase* &params)
+{
+  int ret = OB_SUCCESS;
+    if (param_type == ParamType::HBase) {
+      params = OB_NEWx(ObHBaseParams, allocator_);
+      if (OB_ISNULL(params)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        RPC_WARN("alloc params memory failed", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      RPC_WARN("not supported param_type", K(ret));
+    }
+    return ret;
+}

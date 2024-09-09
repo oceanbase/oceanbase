@@ -716,6 +716,92 @@ private:
   common::ObString column_; // e.g. age
 };
 
+enum class ParamType : int8_t {
+    HBase = 0,
+    Redis = 1
+};
+
+class ObKVParamsBase
+{
+public:
+  ObKVParamsBase(): param_type_(ParamType::HBase) {}
+  virtual ~ObKVParamsBase() = default;
+  OB_INLINE ParamType get_param_type() { return param_type_; }
+  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
+  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) = 0;
+  virtual int64_t get_serialize_size() const = 0;
+  virtual int deep_copy(ObKVParamsBase *ob_params) const = 0;
+  virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
+protected:
+  ParamType param_type_;
+};
+
+class ObHBaseParams : public ObKVParamsBase
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObHBaseParams()
+      : caching_(0),
+        call_timeout_(0),
+        allow_partial_results_(false),
+        is_cache_block_(true),
+        check_existence_only_(false)
+  {
+    param_type_ = ParamType::HBase;
+  }
+  ~ObHBaseParams() {};
+
+  OB_INLINE ParamType get_param_type() { return param_type_; }
+  OB_INLINE void set_caching(const int32_t caching ) { caching_ = caching; }
+  OB_INLINE void set_call_timeout_(const int32_t call_timeout) { call_timeout_ = call_timeout; }
+  OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
+  OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }
+  OB_INLINE void set_check_existence_only(const bool check_existence_only) {check_existence_only_ = check_existence_only; }
+  OB_INLINE int32_t get_caching() const { return caching_; }
+  OB_INLINE int32_t get_call_timeout() const { return call_timeout_; }
+  OB_INLINE bool allow_partial_results() const { return allow_partial_results_; }
+  OB_INLINE bool cache_block() const { return is_cache_block_; }
+  OB_INLINE bool check_existence_only() const { return check_existence_only_; }
+  int deep_copy(ObKVParamsBase *ob_params) const;
+  TO_STRING_KV( K_(param_type),
+              K_(caching),
+              K_(call_timeout),
+              K_(allow_partial_results),
+              K_(is_cache_block),
+              K_(check_existence_only));
+private:
+  int32_t caching_;
+  int32_t call_timeout_;
+  union
+  {
+    int8_t flag_;
+    struct {
+      bool allow_partial_results_ : 1;
+      bool is_cache_block_ : 1;
+      bool check_existence_only_ : 1;
+    };
+  };
+};
+
+class ObKVParams
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKVParams(): allocator_(NULL), ob_params_(NULL){}
+  ~ObKVParams() {};
+  OB_INLINE void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
+  OB_INLINE void set_ob_params(ObKVParamsBase *params) { ob_params_ = params; }
+  OB_INLINE ObKVParamsBase* get_ob_params() const { return ob_params_; }
+  int init_ob_params_for_hfilter(ObHBaseParams*& params) const;
+  int deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const;
+  int alloc_ob_params(ParamType param_type, ObKVParamsBase* &params);
+  TO_STRING_KV(K_(ob_params));
+
+private:
+  common::ObIAllocator *allocator_;
+  ObKVParamsBase* ob_params_;
+};
+
 /// A table query
 /// 1. support multi range scan
 /// 2. support reverse scan
@@ -737,7 +823,8 @@ public:
       max_result_size_(-1),
       htable_filter_(),
       scan_range_columns_(),
-      aggregations_()
+      aggregations_(),
+      ob_params_()
   {}
   ~ObTableQuery() = default;
   void reset();
@@ -767,6 +854,8 @@ public:
   /// The default is -1; this means that no specific maximum result size will be set for this query.
   /// @param max_result_size - The maximum result size in bytes.
   int set_max_result_size(int64_t max_result_size);
+  /// @brief set ob_params for hbase or redis
+  int set_ob_params(ObKVParams ob_params);
 
   const ObIArray<ObString> &get_select_columns() const { return select_columns_; }
   const ObIArray<common::ObNewRange> &get_scan_ranges() const { return key_ranges_; }
@@ -777,6 +866,7 @@ public:
   const ObHTableFilter& get_htable_filter() const { return htable_filter_; }
   int32_t get_batch() const { return batch_size_; }
   int64_t get_max_result_size() const { return max_result_size_; }
+  const ObKVParams& get_ob_params() const {return ob_params_;}
   int64_t get_range_count() const { return key_ranges_.count(); }
   uint64_t get_checksum() const;
   const ObString &get_filter_string() const { return filter_string_; }
@@ -796,7 +886,8 @@ public:
                K_(max_result_size),
                K_(htable_filter),
                K_(scan_range_columns),
-               K_(aggregations));
+               K_(aggregations),
+               K_(ob_params));
 public:
   static ObString generate_filter_condition(const ObString &column, const ObString &op, const ObObj &value);
   static ObString combile_filters(const ObString &filter1, const ObString &op, const ObString &filter2);
@@ -815,6 +906,7 @@ private:
   ObHTableFilter htable_filter_;
   ObSEArray<ObString, 8> scan_range_columns_;
   ObSEArray<ObTableAggregation, 8> aggregations_;
+  ObKVParams ob_params_;
 };
 
 /// result for ObTableQuery
@@ -903,6 +995,7 @@ public:
   int add_row(const common::ObIArray<ObObj> &row);
   int add_all_property(const ObTableQueryResult &other);
   int add_all_row(const ObTableQueryResult &other);
+  void save_row_count_only(const int row_count) { reset(); row_count_ += row_count; }
   int64_t get_row_count() const { return row_count_; }
   int64_t get_property_count() const { return properties_names_.count(); }
   int64_t get_result_size();
@@ -1079,7 +1172,6 @@ private:
   ObTableMoveReplicaInfo replica_info_;
   uint64_t reserved_;
 };
-
 
 } // end namespace table
 } // end namespace oceanbase
