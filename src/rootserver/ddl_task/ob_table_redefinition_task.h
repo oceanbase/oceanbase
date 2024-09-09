@@ -65,8 +65,6 @@ public:
   int assign(const ObTableRedefinitionTask *table_redef_task);
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual bool support_longops_monitoring() const override { return true; }
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
   static bool check_task_status_is_pending(const share::ObDDLTaskStatus task_status);
   INHERIT_TO_STRING_KV("ObDDLRedefinitionTask", ObDDLRedefinitionTask,
       K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_),
@@ -82,6 +80,7 @@ protected:
                                 const int64_t row_inserted);
   int repending(const share::ObDDLTaskStatus next_task_status);
   virtual bool task_can_retry() const override { return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_ddl_retryable_ : true; }
+  virtual bool is_ddl_retryable() const override { return is_ddl_retryable_; }
 private:
   inline bool get_is_copy_indexes() const {return is_copy_indexes_;}
   inline bool get_is_copy_triggers() const {return is_copy_triggers_;}

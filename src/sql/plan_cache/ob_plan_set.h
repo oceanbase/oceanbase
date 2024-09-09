@@ -164,8 +164,7 @@ public:
         pre_cal_expr_handler_(NULL),
         can_skip_params_match_(false),
         can_delay_init_datum_store_(false),
-        res_map_rule_id_(common::OB_INVALID_ID),
-        res_map_rule_param_idx_(common::OB_INVALID_INDEX),
+        resource_map_rule_(),
         is_cli_return_rowid_(false)
   {}
   virtual ~ObPlanSet();
@@ -299,9 +298,8 @@ protected:
   bool can_delay_init_datum_store_;
 
 public:
-  //variables for resource map rule
-  uint64_t res_map_rule_id_;
-  int64_t res_map_rule_param_idx_;
+  //variable for resource map rule
+  ObPCResourceMapRule resource_map_rule_;
   bool is_cli_return_rowid_;
 };
 

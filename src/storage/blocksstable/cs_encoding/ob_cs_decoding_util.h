@@ -78,7 +78,8 @@ typedef int (*cs_integer_in_tranverse) (
             const int64_t row_count,
             const uint64_t base_val,
             const sql::ObPushdownFilterExecutor *parent,
-            ObBitmap &result_bitmap);
+            ObBitmap &result_bitmap,
+            const sql::ObWhiteFilterExecutor *filter);
 
 typedef int (*cs_integer_in_tranverse_with_null) (
             const char *buf,
@@ -90,7 +91,8 @@ typedef int (*cs_integer_in_tranverse_with_null) (
             const int64_t row_count,
             const uint64_t base_val,
             const sql::ObPushdownFilterExecutor *parent,
-            ObBitmap &result_bitmap);
+            ObBitmap &result_bitmap,
+            const sql::ObWhiteFilterExecutor *filter);
 
 typedef void (*cs_dict_val_compare_tranverse) (
             const char *dict_val_buf,
@@ -358,7 +360,7 @@ public:
 
   static int in_op_tranverse(const char *buf, const bool *filter_vals_valid, const uint64_t *filter_vals,
     const int64_t filter_val_cnt, const int64_t row_start, const int64_t row_count,
-    const uint64_t base_val, const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap)
+    const uint64_t base_val, const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap, const sql::ObWhiteFilterExecutor *filter)
   {
     int ret = common::OB_SUCCESS;
     const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(buf);
@@ -366,37 +368,75 @@ public:
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
-      common::hash::ObHashSet<ValDataType, common::hash::NoPthreadDefendMode> datums_val;
-      if (OB_FAIL(datums_val.create(filter_val_cnt))) {
-        STORAGE_LOG(WARN, "fail to create hashset", KR(ret), K(filter_val_cnt));
-      }
-
-      for (int64_t i = 0; OB_SUCC(ret) && (i < filter_val_cnt); ++i) {
-        if (filter_vals_valid[i]) {
-          const uint64_t datum_val = filter_vals[i] - base_val;
-          const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
-          if (OB_FAIL(datums_val.set_refactored(cast_datum_val))) {
-            STORAGE_LOG(WARN, "fail to set refactored", KR(ret), K(cast_datum_val), K(filter_val_cnt));
-          }
+      if (filter->is_filter_dynamic_node()) {
+        sql::ObWhiteFilterSmallHashSet datums_val;
+        if (OB_FAIL(datums_val.create(filter_val_cnt, static_cast<const sql::ObDynamicFilterExecutor *>(filter)->hash_func_))) {
+          STORAGE_LOG(WARN, "fail to create small hash set", KR(ret), K(filter_val_cnt));
         }
-      }
 
-      for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-        if (ExistParent && parent->can_skip_filter(i)) {
-          // skip
-        } else if (ExistNullBitmap && result_bitmap.test(i)) {
-          if (OB_FAIL(result_bitmap.set(i, false))) {
-            STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
-          }
-        } else {
-          ValDataType cur_val = *start_pos;
-          if (datums_val.exist_refactored(cur_val) == OB_HASH_EXIST) {
-            if (OB_FAIL(result_bitmap.set(i))) {
-              STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
+        ObStorageDatum cast_datum_val;
+        for (int64_t i = 0; OB_SUCC(ret) && (i < filter_val_cnt); ++i) {
+          if (filter_vals_valid[i]) {
+            const uint64_t datum_val = filter_vals[i] - base_val;
+            cast_datum_val.set_uint(datum_val);
+            if (OB_FAIL(datums_val.insert_datum(cast_datum_val))) {
+              STORAGE_LOG(WARN, "fail to insert datum", KR(ret), K(cast_datum_val), K(filter_val_cnt));
             }
           }
         }
-        ++start_pos;
+        ObStorageDatum cast_cur_val;
+        for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
+          if (ExistParent && parent->can_skip_filter(i)) {
+            // skip
+          } else if (ExistNullBitmap && result_bitmap.test(i)) {
+            if (OB_FAIL(result_bitmap.set(i, false))) {
+              STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
+            }
+          } else {
+            ValDataType cur_val = *start_pos;
+            cast_cur_val.set_uint(cur_val);
+            bool is_exist;
+            if (OB_FAIL(datums_val.exist_datum(cast_cur_val, is_exist))) {
+              STORAGE_LOG(WARN, "fail to search datum in small set", KR(ret), K(i), K(cast_cur_val));
+            } else if (is_exist && OB_FAIL(result_bitmap.set(i))) {
+              STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
+            }
+          }
+          ++start_pos;
+        }
+      } else {
+        common::hash::ObHashSet<ValDataType, common::hash::NoPthreadDefendMode> datums_val;
+        if (OB_FAIL(datums_val.create(filter_val_cnt))) {
+          STORAGE_LOG(WARN, "fail to create hashset", KR(ret), K(filter_val_cnt));
+        }
+
+        for (int64_t i = 0; OB_SUCC(ret) && (i < filter_val_cnt); ++i) {
+          if (filter_vals_valid[i]) {
+            const uint64_t datum_val = filter_vals[i] - base_val;
+            const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
+            if (OB_FAIL(datums_val.set_refactored(cast_datum_val))) {
+              STORAGE_LOG(WARN, "fail to set refactored", KR(ret), K(cast_datum_val), K(filter_val_cnt));
+            }
+          }
+        }
+
+        for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
+          if (ExistParent && parent->can_skip_filter(i)) {
+            // skip
+          } else if (ExistNullBitmap && result_bitmap.test(i)) {
+            if (OB_FAIL(result_bitmap.set(i, false))) {
+              STORAGE_LOG(WARN, "fail to set", KR(ret), K(i), K(row_start));
+            }
+          } else {
+            ValDataType cur_val = *start_pos;
+            if (datums_val.exist_refactored(cur_val) == OB_HASH_EXIST) {
+              if (OB_FAIL(result_bitmap.set(i))) {
+                STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
+              }
+            }
+          }
+          ++start_pos;
+        }
       }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
@@ -430,7 +470,7 @@ public:
   static int in_op_tranverse_with_null(const char *buf, const uint64_t null_replaced_val,
     const bool *filter_vals_valid, const uint64_t *filter_vals, const int64_t filter_val_cnt,
     const int64_t row_start, const int64_t row_count, const uint64_t base_val,
-    const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap)
+    const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap, const sql::ObWhiteFilterExecutor *filter)
   {
     UNUSED(ExistNullBitmap);
     int ret = common::OB_SUCCESS;
@@ -440,33 +480,69 @@ public:
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
-      common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> datums_val;
-      if (OB_FAIL(datums_val.create(filter_val_cnt))) {
-        STORAGE_LOG(WARN, "fail to create hash set", KR(ret), K(filter_val_cnt));
-      }
+      if (filter->is_filter_dynamic_node()) {
+        sql::ObWhiteFilterSmallHashSet datums_val;
+        if (OB_FAIL(datums_val.create(filter_val_cnt, static_cast<const sql::ObDynamicFilterExecutor *>(filter)->hash_func_))) {
+          STORAGE_LOG(WARN, "fail to create small hash set", KR(ret), K(filter_val_cnt));
+        }
 
-      for (int64_t i = 0; OB_SUCC(ret) && (i < filter_val_cnt); ++i) {
-        if (filter_vals_valid[i]) {
-          const uint64_t datum_val = filter_vals[i] - base_val;
-          const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
-          if (OB_FAIL(datums_val.set_refactored(cast_datum_val))) {
-            STORAGE_LOG(WARN, "fail to set refactored", KR(ret), K(cast_datum_val), K(filter_val_cnt));
+        ObStorageDatum cast_datum_val;
+        for (int64_t i = 0; OB_SUCC(ret) && (i < filter_val_cnt); ++i) {
+          if (filter_vals_valid[i]) {
+            const uint64_t datum_val = filter_vals[i] - base_val;
+            cast_datum_val.set_uint(datum_val);
+            if (OB_FAIL(datums_val.insert_datum(cast_datum_val))) {
+              STORAGE_LOG(WARN, "fail to insert datum", KR(ret), K(cast_datum_val), K(filter_val_cnt));
+            }
           }
         }
-      }
+        ObStorageDatum cast_cur_val;
+        ValDataType cur_val = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
+          if (ExistParent && parent->can_skip_filter(i)) {
+            // skip
+          } else if ((cur_val = *start_pos) == cast_null_val) {
+            // skip null
+          } else {
+            cast_cur_val.set_uint(cur_val);
+            bool is_exist;
+            if (OB_FAIL(datums_val.exist_datum(cast_cur_val, is_exist))) {
+              STORAGE_LOG(WARN, "fail to search datum in small set", KR(ret), K(i), K(cast_cur_val));
+            } else if (is_exist && OB_FAIL(result_bitmap.set(i))) {
+              STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
+            }
+          }
+          ++start_pos;
+        }
+      } else {
+        common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> datums_val;
+        if (OB_FAIL(datums_val.create(filter_val_cnt))) {
+          STORAGE_LOG(WARN, "fail to create hash set", KR(ret), K(filter_val_cnt));
+        }
 
-      ValDataType cur_val = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-        if (ExistParent && parent->can_skip_filter(i)) {
-          // skip
-        } else if ((cur_val = *start_pos) == cast_null_val) {
-          // skip null
-        } else if (datums_val.exist_refactored(cur_val) == OB_HASH_EXIST) {
-          if (OB_FAIL(result_bitmap.set(i))) {
-            STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
+        for (int64_t i = 0; OB_SUCC(ret) && (i < filter_val_cnt); ++i) {
+          if (filter_vals_valid[i]) {
+            const uint64_t datum_val = filter_vals[i] - base_val;
+            const ValDataType cast_datum_val = *reinterpret_cast<const ValDataType *>(&datum_val);
+            if (OB_FAIL(datums_val.set_refactored(cast_datum_val))) {
+              STORAGE_LOG(WARN, "fail to set refactored", KR(ret), K(cast_datum_val), K(filter_val_cnt));
+            }
           }
         }
-        ++start_pos;
+
+        ValDataType cur_val = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
+          if (ExistParent && parent->can_skip_filter(i)) {
+            // skip
+          } else if ((cur_val = *start_pos) == cast_null_val) {
+            // skip null
+          } else if (datums_val.exist_refactored(cur_val) == OB_HASH_EXIST) {
+            if (OB_FAIL(result_bitmap.set(i))) {
+              STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
+            }
+          }
+          ++start_pos;
+        }
       }
     } else {
       ValDataType cur_val = 0;
@@ -786,25 +862,25 @@ public:
   OB_INLINE int integer_in_tranverse(const char *buf, const uint32_t val_width_size,
     const bool *filter_vals_valid, const uint64_t *filter_vals, const int64_t filter_val_cnt,
     const int64_t row_start, const int64_t row_count, const uint64_t base_val, const bool exist_null_bitmap,
-    const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap)
+    const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap, const sql::ObWhiteFilterExecutor *filter)
   {
     int32_t val_width_tag = get_value_len_tag_map()[val_width_size];
     const bool exist_parent = (nullptr != parent);
     cs_integer_in_tranverse func = integer_in_funcs_[exist_null_bitmap][exist_parent][val_width_tag];
     return func(buf, filter_vals_valid, filter_vals, filter_val_cnt,
-        row_start, row_count, base_val, parent, result_bitmap);
+        row_start, row_count, base_val, parent, result_bitmap, filter);
   }
 
   OB_INLINE int integer_in_tranverse_with_null(const char *buf, const uint32_t val_width_size,
     const uint64_t null_replaced_val, const bool *filter_vals_valid, const uint64_t *filter_vals,
     const int64_t filter_val_cnt, const int64_t row_start, const int64_t row_count, const uint64_t base_val,
-    const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap)
+    const sql::ObPushdownFilterExecutor *parent, ObBitmap &result_bitmap, const sql::ObWhiteFilterExecutor *filter)
   {
     int32_t val_width_tag = get_value_len_tag_map()[val_width_size];
     const bool exist_parent = (nullptr != parent);
     cs_integer_in_tranverse_with_null func = integer_in_null_funcs_[exist_parent][val_width_tag];
     return func(buf, null_replaced_val, filter_vals_valid, filter_vals, filter_val_cnt,
-        row_start, row_count, base_val, parent, result_bitmap);
+        row_start, row_count, base_val, parent, result_bitmap, filter);
   }
 
   OB_INLINE void dict_val_compare_tranverse(const char *dict_val_buf, const uint32_t val_width_size,

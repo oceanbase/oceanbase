@@ -23,18 +23,22 @@ devdeps-mxml-2.12.0-12022090616.el8.x86_64.rpm
 devdeps-apr-1.6.5-32022090616.el8.x86_64.rpm
 devdeps-xz-5.2.2-42022090615.el8.x86_64.rpm
 devdeps-lua-5.4.6-22023082916.el8.x86_64.rpm
-devdeps-oss-c-sdk-3.9.2-182022100412.el8.x86_64.rpm
+devdeps-oss-c-sdk-3.11.1-72024080916.el8.x86_64.rpm
 devdeps-zlib-static-1.2.13-32023061421.el8.x86_64.rpm
 devdeps-ncurses-static-6.2-72022100815.el8.x86_64.rpm
 devdeps-boost-1.74.0-22022110914.el8.x86_64.rpm
 devdeps-s2geometry-0.9.0-12023092021.el8.x86_64.rpm
 devdeps-icu-69.1-72022112416.el8.x86_64.rpm
-devdeps-cos-c-sdk-5.0.16-52023070517.el8.x86_64.rpm
-devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
+devdeps-cos-c-sdk-5.0.21-202024080916.el8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.x86_64.rpm
 devdeps-protobuf-c-1.4.1-100000062023102016.el8.x86_64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.x86_64.rpm
 devdeps-apache-arrow-9.0.0-172024052218.el8.x86_64.rpm
+devdeps-hyperscan-5.4.2-152024071714.el8.x86_64.rpm
+devdeps-apache-orc-1.8.3-202024072510.el8.x86_64.rpm
+devdeps-odps-cpp-sdk-1.0.0-482024080517.el8.x86_64.rpm
+# devdeps-apache-orc-1.8.3-202024072510.el8.x86_64.rpm
+devdeps-vsag-1.0.0-102024082710.el8.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.x86_64.rpm

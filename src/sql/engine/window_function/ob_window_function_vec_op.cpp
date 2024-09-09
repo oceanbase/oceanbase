@@ -3734,33 +3734,20 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
     }
     prev = cur;
   } // end for
-
-  // second: generate patch info for each window function
-  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
-  // indexes:
-  // 0: first_row's patch
-  // 1: last_row's patch
-  // 2: first_row's ranking after patching
-  // 3: last_row's ranking after patching
-  guard.set_batch_size(4);
-  const char *payload = nullptr;
-  int32_t len = 0;
-  bool null_payload;
   using patch_pair = std::pair<ObCompactRow *, ObCompactRow *>;
 
   ObSEArray<patch_pair, 128> patch_pairs;
   LastCompactRow first_row_patch(msg_ctx.arena_alloc_);
   LastCompactRow last_row_patch(msg_ctx.arena_alloc_);
-  __PartialResult<T_INVALID> part_res(eval_ctx, msg_ctx.arena_alloc_);
+  LastCompactRow prev_rank_res(msg_ctx.arena_alloc_); // record ranking of prev part info's last row
   // use uniform/uniform_const format as data format
   // PX Coordinator may not supported vectorization 2.0,
   // in this case, if vector headers are initilized as default formats (discrete/fixed_length formats)
   // but expr data are filled with datums, unexpected errors will happen.
   for (int i = 0; OB_SUCC(ret) && i < rd_coord_exprs_.count(); i++) {
     VectorFormat default_fmt = rd_coord_exprs_.at(i)->get_default_res_format();
-    // TODO: @zongmei.zzm support batch_size < 4 for range distribution
     if (OB_FAIL(rd_coord_exprs_.at(i)->init_vector_for_write(
-          eval_ctx, rd_coord_exprs_.at(i)->is_const_expr() ? VEC_UNIFORM_CONST : VEC_UNIFORM, 4))) {
+          eval_ctx, rd_coord_exprs_.at(i)->is_const_expr() ? VEC_UNIFORM_CONST : VEC_UNIFORM, 1))) {
       LOG_WARN("init vector failed", K(ret));
     }
   }
@@ -3769,6 +3756,8 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
       LOG_WARN("init row meta failed", K(ret));
     } else if (OB_FAIL(last_row_patch.init_row_meta(rd_coord_exprs_, sizeof(int64_t), false))) {
       LOG_WARN("init row meta failed", K(ret));
+    } else if (OB_FAIL(prev_rank_res.init_row_meta(rd_coord_exprs_, sizeof(int64_t), false))) {
+      LOG_WARN("init row meta failed", K(ret));
     }
   }
   for (int idx = 0; OB_SUCC(ret) && idx < msg_ctx.infos_.count(); idx++) {
@@ -3776,17 +3765,10 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
     if (cur->first_row_ == nullptr) {
       break;
     }
-    guard.set_batch_idx(0);
     if (OB_FAIL(first_row_patch.save_store_row(*cur->first_row_))) {
-      LOG_WARN("save first row failed", K(ret));
-    } else if (OB_FAIL(first_row_patch.to_expr(rd_coord_exprs_, eval_ctx))) {
-      LOG_WARN("to expr failed", K(ret));
+      LOG_WARN("save store row failed", K(ret));
     } else if (OB_FAIL(last_row_patch.save_store_row(*cur->last_row_))) {
-      LOG_WARN("save last row failed", K(ret));
-    } else if (FALSE_IT(guard.set_batch_idx(1))) {
-    } else if (OB_FAIL(last_row_patch.to_expr(rd_coord_exprs_, eval_ctx))) {
-      LOG_WARN("to expr failed", K(ret));
-    } else {// do nothing
+      LOG_WARN("save store row failed", K(ret));
     }
     for (int i = 0; OB_SUCC(ret) && i < rd_wfs_.count(); i++) {
       const WinFuncInfo &wf_info = wf_infos_.at(rd_wfs_.at(i));
@@ -3794,169 +3776,37 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
       const bool is_dense_rank = (wf_info.func_type_ == T_WIN_FUN_DENSE_RANK);
       const bool is_range_frame = (wf_info.win_type_ == WINDOW_RANGE);
       int64_t res_idx = i + rd_sort_collations_.count();
-      ObExpr *patch_expr = rd_coord_exprs_.at(res_idx);
-      if (FALSE_IT(patch_expr->get_vector(eval_ctx)->set_null(0))) {
-      } else if (FALSE_IT(patch_expr->get_vector(eval_ctx)->set_null(1))) {
-        // do nothing
-      } else if (is_rank || is_dense_rank) {
-        prev = nullptr;
-        int64_t prev_idx = idx - 1;
-        bool prev_same_part = (prev_idx >= 0);
-        if (prev_same_part) {
-          prev = msg_ctx.infos_.at(prev_idx);
-          if (OB_FAIL(rd_pby_cmp(cur->row_meta_, prev->last_row_, cur->first_row_, cmp_ret))) {
-            LOG_WARN("compare failed", K(ret));
-          } else {
-            prev_same_part = (cmp_ret == 0);
-          }
+      if (is_rank || is_dense_rank) {
+        if (OB_FAIL(rd_gen_rank_patches(msg_ctx, eval_ctx, idx, res_idx, wf_info, prev_rank_res,
+                                        first_row_patch, last_row_patch))) {
+          LOG_WARN("gen rank patches failed", K(ret));
         }
-        // patch first_row
-        guard.set_batch_idx(0);
-        if (OB_FAIL(ret)) {
-        } else if (!prev_same_part) {
-          // do nothing
-        } else if (OB_FAIL(rd_oby_cmp(cur->row_meta_, prev->last_row_, cur->first_row_, cmp_ret))) {
-          LOG_WARN("compare failed", K(ret));
-        } else if (cmp_ret == 0) { // prev same order
-          // prev last row
-          patch_expr->get_vector(eval_ctx)->get_payload(3, payload, len);
-          ObCompactRow *prev_last_row_patch = patch_pairs.at(prev_idx).second;
-          if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, false, payload, len, -1))) {
-            LOG_WARN("add rank failed", K(ret));
-          }
-        } else if (is_rank
-                   && OB_FAIL(part_res.add_rank<ObIVector>(wf_info, true, nullptr, 0,
-                                                           cur->first_row_frame_offset()))) {
-          LOG_WARN("add rank failed", K(ret));
-        } else if (is_dense_rank) {
-          patch_expr->get_vector(eval_ctx)->get_payload(3, payload, len);
-          if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, false, payload, len, 0))) {
-            LOG_WARN("add rank failed", K(ret));
-          }
-        }
-        // if first_row & last_row in different partition, patch is not needed for last_row
-        // if first_row & last_row in same partition, patch_first will patch value into last row, no need patching for last row as well
-
-        // store rank results
-        patch_expr->get_vector(eval_ctx)->set_null(2);
-        patch_expr->get_vector(eval_ctx)->set_null(3);
-        ObIVector *patch = patch_expr->get_vector(eval_ctx);
-        guard.set_batch_idx(2);
-        if (FALSE_IT(cur->first_row_->get_cell_payload(cur->row_meta_, res_idx, payload, len))) {
-        } else if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, cur->first_row_->is_null(res_idx),
-                                                        payload, len, 0))) {
-          LOG_WARN("add rank failed", K(ret));
-        } else if (FALSE_IT(patch->get_payload(0, payload, len))) {
-        } else if (OB_FAIL(
-                     part_res.add_rank<ObIVector>(wf_info, patch->is_null(0), payload, len, 0))) {
-          LOG_WARN("add rank failed", K(ret));
-        }
-        guard.set_batch_idx(3);
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(rd_pby_cmp(cur->row_meta_, cur->first_row_, cur->last_row_, cmp_ret))) {
-          LOG_WARN("compare failed", K(ret));
-        } else if (cmp_ret == 0) {
-          // first_row & last_row have same order, add first_row's patch into last_row
-          // else add first row's frame_offset into last_row
-          if (OB_FAIL(rd_oby_cmp(cur->row_meta_, cur->first_row_, cur->last_row_, cmp_ret))) {
-            LOG_WARN("compare failed", K(ret));
-          } else if (cmp_ret == 0 || is_dense_rank) {
-            if (OB_FAIL(
-                  part_res.add_rank<ObIVector>(wf_info, patch->is_null(0), payload, len, 0))) {
-              LOG_WARN("add rank failed", K(ret));
-            }
-          } else if (cmp_ret != 0
-                     && OB_FAIL(part_res.add_rank<ObIVector>(wf_info, true, nullptr, 0,
-                                                             cur->first_row_frame_offset()))) {
-            LOG_WARN("add rank failed", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          LOG_WARN("add rank failed", K(ret));
-        } else if (FALSE_IT(cur->get_cell(res_idx, false, payload, len))) {
-        } else if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, cur->is_null(res_idx, false),
-                                                        payload, len, 0))) {
-          LOG_WARN("add rank failed", K(ret));
-        }
-      } else { // aggregation function
-        cmp_ret = 0;
-        // coordinator will patch partial results in following steps:
-        // 1. for [0...part_cnt], patch first_row's patch into each rows in partition
-        // 2. for [0...part_cnt], patch last_row's patch into rows which have same order as last_row in partition
-
-        // hence, first_row's patch is sum of previous partial results with same partition
-        // last_row's patch is sum of following partial results with same partition and same order
-
-        // first row's patch
-        guard.set_batch_idx(0);
-        for (int prev_idx = idx - 1; cmp_ret == 0 && OB_SUCC(ret) && prev_idx >= 0; prev_idx--) {
-          RDWinFuncPXPartialInfo *prev = msg_ctx.infos_.at(prev_idx);
-          if (OB_FAIL(rd_pby_cmp(cur->row_meta_, prev->last_row_, cur->first_row_, cmp_ret))) {
-            LOG_WARN("compare failed", K(ret));
-          } else if (cmp_ret == 0) {
-            prev->get_cell(res_idx, false, payload, len);
-            null_payload = prev->is_null(res_idx, false);
-            if (OB_FAIL(part_res.merge<ObIVector>(wf_info, null_payload, payload, len))) {
-              LOG_WARN("merge result failed", K(ret));
-            }
-          }
-        } // end for
-
-        // last row's patch
-        guard.set_batch_idx(1);
-        cmp_ret = 0;
-        for (int post_idx = idx + 1;
-             is_range_frame && cmp_ret == 0 && OB_SUCC(ret) && post_idx < msg_ctx.infos_.count();
-             post_idx++) {
-          RDWinFuncPXPartialInfo *post = msg_ctx.infos_.at(post_idx);
-          if (OB_FAIL(rd_pby_oby_cmp(cur->row_meta_, post->first_row_, cur->last_row_, cmp_ret))) {
-            LOG_WARN("compare failed", K(ret));
-          } else if (cmp_ret == 0) {
-            post->get_cell(res_idx, true, payload, len);
-            null_payload = post->is_null(res_idx, true);
-            if (OB_FAIL(part_res.merge<ObIVector>(wf_info, null_payload, payload, len))) {
-              LOG_WARN("merge result failed", K(ret));
-            }
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        patch_expr->set_evaluated_projected(eval_ctx);
+      } else if (OB_FAIL(rd_gen_agg_patches(msg_ctx, eval_ctx, idx, res_idx, wf_info,
+                                            first_row_patch,
+                                            last_row_patch))) { // aggregation function
+        LOG_WARN("gen aggregate patches failed", K(ret));
       }
     } // end iter of wf_infos
     if (OB_SUCC(ret)) {
-      int64_t mock_skip = 0;
-      ObBatchRows tmp_brs;
-      tmp_brs.size_ = 2;
-      tmp_brs.skip_ = to_bit_vector(&mock_skip);
-      tmp_brs.end_ = false;
-      guard.set_batch_idx(0);
       patch_pair tmp_pair;
-      if (OB_FAIL(first_row_patch.save_store_row(rd_coord_exprs_, tmp_brs, eval_ctx, sizeof(int64_t), false))) {
-        LOG_WARN("save store row failed", K(ret));
-      } else if (FALSE_IT(guard.set_batch_idx(1))) {
-      } else if (OB_FAIL(
-                   last_row_patch.save_store_row(rd_coord_exprs_, tmp_brs, eval_ctx, sizeof(int64_t), false))) {
-        LOG_WARN("save store row failed", K(ret));
+
+      *reinterpret_cast<int64_t *>(first_row_patch.compact_row_->get_extra_payload(
+        cur->row_meta_)) = cur->first_row_frame_offset();
+      *reinterpret_cast<int64_t *>(last_row_patch.compact_row_->get_extra_payload(cur->row_meta_)) =
+        cur->last_row_frame_offset();
+      int32_t buf_size =
+        first_row_patch.compact_row_->get_row_size() + last_row_patch.compact_row_->get_row_size();
+      char *buf = (char *)msg_ctx.arena_alloc_.alloc(buf_size);
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
       } else {
-        *reinterpret_cast<int64_t *>(first_row_patch.compact_row_->get_extra_payload(
-          cur->row_meta_)) = cur->first_row_frame_offset();
-        *reinterpret_cast<int64_t *>(last_row_patch.compact_row_->get_extra_payload(
-          cur->row_meta_)) = cur->last_row_frame_offset();
-        int32_t buf_size = first_row_patch.compact_row_->get_row_size()
-                           + last_row_patch.compact_row_->get_row_size();
-        char *buf = (char *)msg_ctx.arena_alloc_.alloc(buf_size);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory failed", K(ret));
-        } else {
-          MEMCPY(buf, first_row_patch.compact_row_, first_row_patch.compact_row_->get_row_size());
-          tmp_pair.first = reinterpret_cast<ObCompactRow *>(buf);
-          buf += first_row_patch.compact_row_->get_row_size();
-          MEMCPY(buf, last_row_patch.compact_row_, last_row_patch.compact_row_->get_row_size());
-          tmp_pair.second = reinterpret_cast<ObCompactRow *>(buf);
-          if (OB_FAIL(patch_pairs.push_back(tmp_pair))) { LOG_WARN("push back failed", K(ret)); }
-        }
+        MEMCPY(buf, first_row_patch.compact_row_, first_row_patch.compact_row_->get_row_size());
+        tmp_pair.first = reinterpret_cast<ObCompactRow *>(buf);
+        buf += first_row_patch.compact_row_->get_row_size();
+        MEMCPY(buf, last_row_patch.compact_row_, last_row_patch.compact_row_->get_row_size());
+        tmp_pair.second = reinterpret_cast<ObCompactRow *>(buf);
+        if (OB_FAIL(patch_pairs.push_back(tmp_pair))) { LOG_WARN("push back failed", K(ret)); }
       }
     }
   }
@@ -3980,6 +3830,188 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
     LOG_INFO("after generating patch", K(i), K(first_row), K(last_row), K(first_row_extra), K(last_row_extra));
   }
 #endif
+  return ret;
+}
+
+int ObWindowFunctionVecSpec::rd_gen_rank_patches(RDWinFuncPXPieceMsgCtx &msg_ctx,
+                                                 ObEvalCtx &eval_ctx, const int64_t part_info_idx, const int64_t res_idx,
+                                                 const WinFuncInfo &wf_info,
+                                                 LastCompactRow &prev_rank_res,
+                                                 LastCompactRow &first_row_patch,
+                                                 LastCompactRow &last_row_patch) const
+{
+  int ret = OB_SUCCESS;
+  __PartialResult<T_INVALID> part_res(eval_ctx, msg_ctx.arena_alloc_);
+  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
+  guard.set_batch_size(1);
+  guard.set_batch_idx(0);
+  ObExpr *patch_expr = rd_coord_exprs_.at(res_idx);
+  RDWinFuncPXPartialInfo *prev = (part_info_idx > 0 ? msg_ctx.infos_.at(part_info_idx - 1) : nullptr);
+  RDWinFuncPXPartialInfo *cur = msg_ctx.infos_.at(part_info_idx);
+  bool prev_same_part = (prev != nullptr);
+  const char *payload = nullptr;
+  bool null_payload = false;
+  int32_t len = 0;
+  int cmp_ret = 0;
+  const bool is_rank = (wf_info.func_type_ == T_WIN_FUN_RANK);
+  const bool is_dense_rank = (wf_info.func_type_ == T_WIN_FUN_DENSE_RANK);
+  int64_t mock_skip = 0;
+  ObBatchRows tmp_brs;
+  tmp_brs.size_ = 1;
+  tmp_brs.skip_ = to_bit_vector(&mock_skip);
+  tmp_brs.end_ = false;
+
+  if (prev_same_part) {
+    if (OB_FAIL(rd_pby_cmp(cur->row_meta_, prev->last_row_, cur->first_row_, cmp_ret))) {
+      LOG_WARN("compare failed", K(ret));
+    } else {
+      prev_same_part = (cmp_ret == 0);
+    }
+  }
+  // patch first row
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(first_row_patch.to_expr(rd_coord_exprs_, eval_ctx))) {
+    LOG_WARN("to expr failed", K(ret));
+  } else if (FALSE_IT(patch_expr->get_vector(eval_ctx)->set_null(0))) {
+  } else if (!prev_same_part) {
+    // do nothing
+  } else if (OB_FAIL(rd_oby_cmp(cur->row_meta_, prev->last_row_, cur->first_row_, cmp_ret))) {
+    LOG_WARN("compare failed", K(ret));
+  } else if (cmp_ret == 0) { // same order as previous row
+    prev_rank_res.compact_row_->get_cell_payload(cur->row_meta_, res_idx, payload, len);
+    if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, false, payload, len, -1))) {
+      LOG_WARN("add rank failed", K(ret));
+    }
+  } else if (is_rank && OB_FAIL(part_res.add_rank<ObIVector>(wf_info, true, nullptr, 0, cur->first_row_frame_offset()))) {
+    LOG_WARN("add rank failed", K(ret));
+  } else if (is_dense_rank) {
+    prev_rank_res.compact_row_->get_cell_payload(cur->row_meta_, res_idx, payload, len);
+    if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, false, payload, len, 0))) {
+      LOG_WARN("add rank failed", K(ret));
+    }
+  }
+  // if first_row & last_row in different partition, patch is not needed for last_row
+  // if first_row & last_row in same partition, patch_first will patch value into last row, no need patching for last row as well
+  // save first row patch
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(first_row_patch.save_store_row(rd_coord_exprs_, tmp_brs, eval_ctx))) {
+    LOG_WARN("save store row failed", K(ret));
+  } else if (OB_FAIL(last_row_patch.to_expr(rd_coord_exprs_, eval_ctx))) {
+    LOG_WARN("to expr failed", K(ret));
+  } else if (FALSE_IT(patch_expr->get_vector(eval_ctx)->set_null(0))) {
+  } else if (OB_FAIL(last_row_patch.save_store_row(rd_coord_exprs_, tmp_brs, eval_ctx))) {
+    LOG_WARN("save store row failed", K(ret));
+  } else {
+    // store last row's ranking results
+    if (OB_FAIL(prev_rank_res.save_store_row(*cur->last_row_))) {
+      LOG_WARN("save store row failed", K(ret));
+    } else if (OB_FAIL(prev_rank_res.to_expr(rd_coord_exprs_, eval_ctx))) {
+      LOG_WARN("to expr failed", K(ret));
+    } else if (FALSE_IT(patch_expr->get_vector(eval_ctx)->set_null(0))) {
+    } else if (OB_FAIL(rd_pby_cmp(cur->row_meta_, cur->first_row_, cur->last_row_, cmp_ret))) {
+      LOG_WARN("compare failed", K(ret));
+    } else if (cmp_ret == 0) {
+      // first_row & last_row have same order, add first_row's patch into last_row
+      // else add first row's frame_offset into last_row
+      if (OB_FAIL(rd_oby_cmp(cur->row_meta_, cur->first_row_, cur->last_row_, cmp_ret))) {
+        LOG_WARN("compare failed", K(ret));
+      } else if (cmp_ret == 0 || is_dense_rank) {
+        first_row_patch.compact_row_->get_cell_payload(cur->row_meta_, res_idx, payload, len);
+        null_payload = first_row_patch.compact_row_->is_null(res_idx);
+        if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, null_payload, payload, len, 0))) {
+          LOG_WARN("add rank failed", K(ret));
+        }
+      } else if (cmp_ret != 0 && OB_FAIL(part_res.add_rank<ObIVector>(wf_info, true, nullptr, 0, cur->first_row_frame_offset()))) {
+        LOG_WARN("add rank failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(cur->get_cell(res_idx, false, payload, len))) {
+    } else if (OB_FAIL(part_res.add_rank<ObIVector>(wf_info, cur->is_null(res_idx, false), payload, len, 0))) {
+      LOG_WARN("add rank failed", K(ret));
+    } else if (OB_FAIL(prev_rank_res.save_store_row(rd_coord_exprs_, tmp_brs, eval_ctx))) {
+      LOG_WARN("save store row failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObWindowFunctionVecSpec::rd_gen_agg_patches(RDWinFuncPXPieceMsgCtx &msg_ctx,
+                                                ObEvalCtx &eval_ctx, const int64_t part_info_idx,
+                                                const int64_t res_idx,
+                                                const WinFuncInfo &wf_info,
+                                                LastCompactRow &first_row_patch,
+                                                LastCompactRow &last_row_patch) const
+{
+  int ret = OB_SUCCESS;
+  __PartialResult<T_INVALID> part_res(eval_ctx, msg_ctx.arena_alloc_);
+  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
+  guard.set_batch_size(1);
+  guard.set_batch_idx(0);
+  ObExpr *patch_expr = rd_coord_exprs_.at(res_idx);
+  RDWinFuncPXPartialInfo *cur = msg_ctx.infos_.at(part_info_idx);
+  const bool is_range_frame = (wf_info.win_type_ == WINDOW_RANGE);
+  const char *payload = nullptr;
+  int32_t len = 0;
+  bool null_payload = false;
+  int cmp_ret = 0;
+  int64_t mock_skip = 0;
+  ObBatchRows tmp_brs;
+  tmp_brs.size_ = 1;
+  tmp_brs.skip_ = to_bit_vector(&mock_skip);
+  tmp_brs.end_ = false;
+  // coordinator will patch partial results in following steps:
+  // 1. for [0...part_cnt], patch first_row's patch into each rows in partition
+  // 2. for [0...part_cnt], patch last_row's patch into rows which have same order as last_row in partition
+
+  // hence, first_row's patch is sum of previous partial results with same partition
+  // last_row's patch is sum of following partial results with same partition and same order
+
+  // first row's patch
+  if (OB_FAIL(first_row_patch.to_expr(rd_coord_exprs_, eval_ctx))) {
+    LOG_WARN("to expr failed", K(ret));
+  } else if (FALSE_IT(patch_expr->get_vector(eval_ctx)->set_null(0))) {
+  } else {
+    for (int prev_idx = part_info_idx - 1; OB_SUCC(ret) && prev_idx >= 0 && cmp_ret == 0; prev_idx--) {
+      RDWinFuncPXPartialInfo *prev = msg_ctx.infos_.at(prev_idx);
+      if (OB_FAIL(rd_pby_cmp(cur->row_meta_, prev->last_row_, cur->first_row_, cmp_ret))) {
+        LOG_WARN("compare failed", K(ret));
+      } else if (cmp_ret == 0) {
+        prev->get_cell(res_idx, false, payload, len);
+        null_payload = prev->is_null(res_idx, false);
+        if (OB_FAIL(part_res.merge<ObIVector>(wf_info, null_payload, payload, len))) {
+          LOG_WARN("merge result failed", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(first_row_patch.save_store_row(rd_coord_exprs_, tmp_brs, eval_ctx))) {
+    LOG_WARN("save first row patch failed", K(ret));
+  } else if (OB_FAIL(last_row_patch.to_expr(rd_coord_exprs_, eval_ctx))) {
+    LOG_WARN("to expr failed", K(ret));
+  } else if (FALSE_IT(patch_expr->get_vector(eval_ctx)->set_null(0))) {
+  }
+  // last row's patch
+  cmp_ret = 0;
+  for (int post_idx = part_info_idx + 1;
+       is_range_frame && cmp_ret == 0 && OB_SUCC(ret) && post_idx < msg_ctx.infos_.count();
+       post_idx++) {
+    RDWinFuncPXPartialInfo *post = msg_ctx.infos_.at(post_idx);
+    if (OB_FAIL(rd_pby_oby_cmp(cur->row_meta_, post->first_row_, cur->last_row_, cmp_ret))) {
+      LOG_WARN("compare failed", K(ret));
+    } else if (cmp_ret == 0) {
+      post->get_cell(res_idx, true, payload, len);
+      null_payload = post->is_null(res_idx, true);
+      if (OB_FAIL(part_res.merge<ObIVector>(wf_info, null_payload, payload, len))) {
+        LOG_WARN("merge result failed", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(last_row_patch.save_store_row(rd_coord_exprs_, tmp_brs, eval_ctx))) {
+    LOG_WARN("save store row failed", K(ret));
+  }
   return ret;
 }
 

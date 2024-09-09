@@ -32,6 +32,9 @@ namespace common
                       uint64_t seed,                \
                       uint64_t &res
 
+typedef int (*HashFuncTypeForTc) (HASH_ARG_LIST);
+typedef int (*NullHashFuncTypeForTc) (uint64_t seed, uint64_t &res);
+
 template<VecValueTypeClass value_tc, typename HashMethod, bool hash_v2>
 struct VecTCHashCalc {
   inline static int hash(HASH_ARG_LIST) {
@@ -307,6 +310,34 @@ struct VecTCHashCalc<VEC_TC_JSON, HashMethod, hash_v2>
         COMMON_LOG(WARN, "Lob: fail to reset json bin iter", K(ret), K(j_bin_str));
       } else if (OB_FAIL(j_base->calc_json_hash_value(seed, HashMethod::hash, res))) {
         COMMON_LOG(WARN, "Lob: fail to calc hash", K(ret), K(*j_base));
+      }
+    }
+    return ret;
+  }
+};
+
+template<typename HashMethod, bool hash_v2>
+struct VecTCHashCalc<VEC_TC_COLLECTION, HashMethod, hash_v2>
+{
+  inline static int hash(HASH_ARG_LIST)
+  {
+    int ret = OB_SUCCESS;
+    ObString bin_str;
+    res = 0;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                       MTL_ID());
+    ObTextStringIter str_iter(ObJsonType, CS_TYPE_BINARY,
+                              ObString(len, reinterpret_cast<const char *>(data)),
+                              meta.has_lob_header());
+    if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: str iter init failed", K(ret));
+    } else if (OB_FAIL(str_iter.get_full_data(bin_str))) {
+      COMMON_LOG(WARN, "Lob: str iter get full data failed", K(ret));
+    } else {
+      res = seed;
+      if (bin_str.length() > 0) {
+        res = ObCharset::hash(CS_TYPE_BINARY, bin_str.ptr(), bin_str.length(), seed, false,
+                              HashMethod::is_varchar_hash ? HashMethod::hash : NULL);
       }
     }
     return ret;
@@ -753,6 +784,18 @@ struct VecTCCmpCalc<VEC_TC_GEO, VEC_TC_GEO>
 };
 
 template<>
+struct VecTCCmpCalc<VEC_TC_COLLECTION, VEC_TC_COLLECTION>
+{
+  static const constexpr bool defined_ = true;
+  inline static int cmp(CMP_ARG_LIST)
+  {
+    int ret = OB_SUCCESS;
+    // not used
+    return ret;
+  }
+};
+
+template<>
 struct VecTCCmpCalc<VEC_TC_EXTEND, VEC_TC_EXTEND>
 {
   static const constexpr bool defined_ = true;
@@ -791,7 +834,6 @@ struct VecTCCmpCalc<VEC_TC_UDT, VEC_TC_UDT>
     return ret;
   }
 };
-
 
 // null type comparison
 
@@ -1061,6 +1103,11 @@ struct VecTCCmpCalc<VEC_TC_LOB, VEC_TC_STRING>
   }
 };
 
+#ifndef HashFuncTypeForTcFlag
+#define HashFuncTypeForTcFlag
+HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc) ;
+NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc);
+#endif // HashFuncTypeForTcFlag
 } // end namespace common
 } // end namespace oceanbase
 

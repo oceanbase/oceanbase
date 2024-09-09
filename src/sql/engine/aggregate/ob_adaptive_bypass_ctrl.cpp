@@ -25,7 +25,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
                                              int64_t mem_size)
 {
   int64_t min_period_cnt = MIN_PERIOD_CNT;
-  processed_cnt_ += probe_cnt;
+  processed_cnt_ = probe_cnt + last_round_processed_cnt_;
   if (!by_pass_ctrl_enabled_) {
     // do nothing
   } else if (STATE_PROCESS_HT == state_) {
@@ -34,6 +34,10 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
   } else if (STATE_L2_INSERT == state_) {
     // insert until exceed l2 cache
     if (!in_cache_mem_bound(row_cnt, mem_size, INIT_L2_CACHE_SIZE)) {
+      state_ = STATE_ANALYZE;
+    }
+  } else if (STATE_L2_INSERT_5X == state_) {
+    if (!in_cache_mem_bound(row_cnt, mem_size, INIT_L2_CACHE_SIZE_5X)) {
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_L3_INSERT == state_) {
@@ -58,16 +62,21 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
     if (static_cast<double> (exists_cnt) / probe_cnt >=
                       std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
       // very good distinct rate, can expend hash map to l3 cache
+      // 命中率>95%,升级到L3cache
       rebuild_times_ = 0;
       if (scaled_llc_est_ndv_) {
         state_ = STATE_PROCESS_HT;
       } else if (in_cache_mem_bound(row_cnt, mem_size, INIT_L3_CACHE_SIZE)) {
+        // now is L2_INSERT or L2_INSERT_5, can update to L3
         state_ = STATE_L3_INSERT;
         need_resize_hash_table_ = true;
       } else {
+        // now is L3_INSERT, restart round
         state_ = STATE_PROCESS_HT;
       }
-    } else if (round_times_ >= MAX_REBUILD_TIMES) {
+    } else if (round_times_ >= MAX_REBUILD_TIMES && in_cache_mem_bound(row_cnt,
+                mem_size, min(INIT_L2_CACHE_SIZE_5X, INIT_L3_CACHE_SIZE))) {
+      // if in L3insert or L2insert_5, no need calc new_ratio
       double select_rows = 0.0;
       double ndv = 0.0;
       for (int64_t i = 0; i < MAX_REBUILD_TIMES; ++i) {
@@ -92,6 +101,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
       } else if (new_ratio >= 1 - (1 / static_cast<double> (cut_ratio_))) {
         // good distinct rate, reset rebuild times
         state_ = STATE_PROCESS_HT;
+        need_become_l2_insert_5x_ = true;
         rebuild_times_ = 0;
       } else {
         // distinct rate is not good
@@ -107,12 +117,21 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
                                           1 - (1 / static_cast<double> (cut_ratio_))) {
       // good distinct rate, reset rebuild times
       state_ = STATE_PROCESS_HT;
+      if (!in_cache_mem_bound(row_cnt, mem_size, INIT_L2_CACHE_SIZE_5X)) {
+        // now is L2_INSERT_5 or L3_INSERT , resize ht is ok
+        need_resize_hash_table_ = true;
+      }
       rebuild_times_ = 0;
     } else {
       // distinct rate is not good
       // prepare to release curr hash table
       state_ = STATE_PROCESS_HT;
       if (scaled_llc_est_ndv_) {
+        set_max_rebuild_times();
+      }
+      if (!in_cache_mem_bound(row_cnt, mem_size, INIT_L2_CACHE_SIZE_5X)) {
+        // now is L2_INSERT_5 or L3_INSERT , resize ht is ok
+        need_resize_hash_table_ = true;
         set_max_rebuild_times();
       }
     }

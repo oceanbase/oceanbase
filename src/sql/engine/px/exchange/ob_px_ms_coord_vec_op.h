@@ -32,6 +32,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 #include "sql/engine/basic/ob_compact_row.h"
 #include "sql/engine/basic/ob_temp_row_store.h"
+#include "sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
 
 namespace oceanbase
 {
@@ -171,6 +172,7 @@ private:
   ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
   ObRDWinFuncPXPieceMsgP rd_winfunc_px_piece_msg_proc_;
   ObSPWinFuncPXPieceMsgP sp_winfunc_px_piece_msg_proc_;
+  ObJoinFilterCountRowPieceMsgP join_filter_count_row_piece_msg_proc_;
   // 存储merge sort的每一路的当前行
   ObArray<LastCompactRow *> store_rows_;
   LastCompactRow *last_pop_row_;

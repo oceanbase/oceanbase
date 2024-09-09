@@ -602,7 +602,8 @@ int ObMultiTableInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr 
       value_desc->set_ref_id(table_info.table_id_, column_ref->get_column_id());
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       value_desc->set_udt_set_id(column_ref->get_udt_set_id());
-      if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
+      if ((ob_is_enumset_tc(column_ref->get_result_type().get_type())
+           || ob_is_collection_sql_type(column_ref->get_result_type().get_type()))
           && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
         LOG_WARN("failed to set_enum_set_values", K(*column_ref), K(ret));
       }

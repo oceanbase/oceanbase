@@ -26,7 +26,6 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
-#include "storage/tablet/ob_tablet_slog_helper.h"
 #include "storage/init_basic_struct.h"
 
 namespace oceanbase
@@ -96,6 +95,8 @@ inline void TestTabletHelper::prepare_sstable_param(
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
+  param.table_backup_flag_.reset();
+  param.table_shared_flag_.reset();
 }
 
 inline int TestTabletHelper::create_tablet(
@@ -137,7 +138,8 @@ inline int TestTabletHelper::create_tablet(
     } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
-        snapshot_version, create_tablet_schema, need_create_empty_major_sstable, need_generate_cs_replica_cg_array, freezer))){
+        snapshot_version, create_tablet_schema, need_create_empty_major_sstable,
+        false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;

@@ -553,7 +553,7 @@ int ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(const int r
   } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(sql_proxy, index_schema.get_tenant_id(), tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(index_schema.get_tenant_id()));
   } else if (OB_FAIL(build_ddl_error_message(ret_code, index_schema.get_tenant_id(), data_table_id, error_message, index_name,
-      index_table_id, ((DATA_VERSION_4_2_2_0 <= tenant_data_format_version && tenant_data_format_version < DATA_VERSION_4_3_0_0) || tenant_data_format_version >= DATA_VERSION_4_3_2_0) && index_schema.is_storage_local_index_table() && index_schema.is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX, index_key, report_ret_code))) {
+      index_table_id, get_create_index_type(tenant_data_format_version, index_schema), index_key, report_ret_code))) {
     LOG_WARN("build ddl error message failed", K(ret), K(data_table_id), K(index_name));
   } else if (OB_FAIL(report_ddl_error_message(error_message,    //report into __all_ddl_error_message
       tenant_id, trace_id, task_id, parent_task_id, data_table_id, schema_version, object_id, addr, sql_proxy))) {

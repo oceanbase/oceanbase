@@ -503,7 +503,8 @@ public:
            || stmt_type == stmt::T_EMPTY_QUERY
            // TODO: When T_LOCK_TABLE is actually implemented, needs to be checked for legitimacy
            || stmt_type == stmt::T_LOCK_TABLE
-           || stmt_type == stmt::T_CHANGE_TENANT;
+           || stmt_type == stmt::T_CHANGE_TENANT
+           || stmt_type == stmt::T_CHANGE_EXTERNAL_STORAGE_DEST;
   }
 
   // following stmt don't do retry

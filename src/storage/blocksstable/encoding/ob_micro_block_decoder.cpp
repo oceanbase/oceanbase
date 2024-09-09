@@ -15,6 +15,7 @@
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/access/ob_pushdown_aggregate.h"
+#include "storage/access/ob_pushdown_aggregate_vec.h"
 #include "storage/access/ob_table_access_context.h"
 
 namespace oceanbase
@@ -920,6 +921,7 @@ ObMicroBlockDecoder::ObMicroBlockDecoder()
     decoder_allocator_(ObModIds::OB_DECODER_CTX),
     buf_allocator_("OB_MICB_DECODER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
+  reader_type_ = Decoder;
   need_release_decoders_.set_allocator(&buf_allocator_);
 }
 
@@ -2143,7 +2145,7 @@ int ObMicroBlockDecoder::get_distinct_count(const int32_t group_by_col, int64_t&
 int ObMicroBlockDecoder::read_distinct(
     const int32_t group_by_col,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2162,7 +2164,7 @@ int ObMicroBlockDecoder::read_reference(
     const int32_t group_by_col,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2213,6 +2215,73 @@ int ObMicroBlockDecoder::get_group_by_aggregate_result(
   return ret;
 }
 
+int ObMicroBlockDecoder::get_group_by_aggregate_result(
+    const int32_t *row_ids,
+    const char **cell_datas,
+    const int64_t row_cap,
+    const int64_t vec_offset,
+    uint32_t *len_array,
+    sql::ObEvalCtx &eval_ctx,
+    storage::ObGroupByCellVec &group_by_cell)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMicroBlockDecoder is not init", K(ret));
+  } else {
+    const int32_t group_by_col = group_by_cell.get_group_by_col_offset();
+    int32_t last_agg_col_offset = INT32_MIN;
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_by_cell.get_agg_cells().count(); ++i) {
+      storage::ObAggCellVec *agg_cell =  group_by_cell.get_sorted_cell(i);
+      const int32_t agg_col_offset = agg_cell->get_col_offset();
+      bool need_get_col = (0 == i || agg_col_offset != last_agg_col_offset) && agg_cell->need_get_row_ids();
+      if (agg_col_offset == group_by_col) {
+        // agg on group by column
+        ObDatum *datums = static_cast<ObStorageDatum *>(group_by_cell.get_group_by_col_datums());
+        if (OB_FAIL(group_by_cell.eval_batch(datums, row_cap, i, true))) {
+          LOG_WARN("Failed to eval batch", K(ret), K(i));
+        }
+      } else {
+        if (need_get_col) {
+          sql::ObExpr &expr = *(agg_cell->get_project_expr());
+          const bool need_padding = agg_cell->need_padding();
+          const share::schema::ObColumnParam *col_param = agg_cell->get_col_param();
+          if (0 == vec_offset) {
+            const VectorFormat format = need_padding ? VectorFormat::VEC_DISCRETE : expr.get_default_res_format();
+            if (OB_FAIL(storage::init_expr_vector_header(expr, eval_ctx, eval_ctx.max_batch_size_, format))) {
+              LOG_WARN("Failed to init vector", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ObVectorDecodeCtx vector_decode_ctx(
+                cell_datas, len_array, row_ids, row_cap, vec_offset, expr.get_vector_header(eval_ctx));
+            if (OB_FAIL(get_col_data(agg_col_offset, vector_decode_ctx))) {
+              LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(vector_decode_ctx));
+            } else if (need_padding && OB_FAIL(storage::pad_on_rich_format_columns(
+                col_param->get_accuracy(),
+                col_param->get_meta_type().get_collation_type(),
+                row_cap,
+                vec_offset,
+                decoder_allocator_.get_inner_allocator(),
+                expr,
+                eval_ctx))) {
+              LOG_WARN("Failed pad on rich format columns", K(ret), K(expr));
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(group_by_cell.eval_batch(nullptr, row_cap, i, false))) {
+          LOG_WARN("Failed to eval batch", K(ret), K(i));
+        } else if (need_get_col) {
+          last_agg_col_offset = agg_col_offset;
+        }
+      }
+      LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(i), K(group_by_col), K(agg_col_offset), K(group_by_cell), K(need_get_col));
+    }
+  }
+  return ret;
+}
+
 int ObMicroBlockDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
@@ -2222,7 +2291,8 @@ int ObMicroBlockDecoder::get_rows(
     const int64_t vec_offset,
     uint32_t *len_array,
     sql::ObEvalCtx &eval_ctx,
-    sql::ObExprPtrIArray &exprs)
+    sql::ObExprPtrIArray &exprs,
+    const bool need_init_vector)
 {
   int ret = OB_SUCCESS;
   decoder_allocator_.reuse();
@@ -2239,10 +2309,15 @@ int ObMicroBlockDecoder::get_rows(
       const int32_t col_id = cols.at(i);
       sql::ObExpr &expr = *(exprs.at(i));
       const bool need_padding = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_fixed_len_char_type();
+      const bool need_dispatch_collection = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_collection_sql_type();
       if (0 == vec_offset) {
-        const VectorFormat format = need_padding ? VectorFormat::VEC_DISCRETE : expr.get_default_res_format();
-        if (OB_FAIL(storage::init_expr_vector_header(expr, eval_ctx, eval_ctx.max_batch_size_, format))) {
-          LOG_WARN("Fail to init vector", K(ret));
+        if (need_init_vector) {
+          const VectorFormat format = (need_padding || need_dispatch_collection) ? VectorFormat::VEC_DISCRETE : expr.get_default_res_format();
+          if (OB_FAIL(storage::init_expr_vector_header(expr, eval_ctx, eval_ctx.max_batch_size_, format))) {
+            LOG_WARN("Fail to init vector", K(ret));
+          }
+        } else {
+          expr.set_all_not_null(eval_ctx, eval_ctx.max_batch_size_);
         }
       }
       if (OB_SUCC(ret)) {
@@ -2259,6 +2334,9 @@ int ObMicroBlockDecoder::get_rows(
             expr,
             eval_ctx))) {
           LOG_WARN("Failed pad on rich format columns", K(ret), K(expr));
+        } else if (need_dispatch_collection
+                   && OB_FAIL(storage::distribute_attrs_on_rich_format_columns(row_cap, vec_offset, expr, eval_ctx))) {
+          LOG_WARN("failed to dispatch collection cells", K(ret), K(i), K(row_cap), K(vec_offset));
         }
       }
     }

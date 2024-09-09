@@ -38,7 +38,7 @@ public:
            ObTableLoadTransStoreWriter *writer);
   int prepare_write(const common::ObTabletID &tablet_id,
                     const common::ObIArray<uint64_t> &column_ids);
-  int write(const common::ObNewRow &row);
+  int write(const blocksstable::ObDatumRow  &row);
 
   TO_STRING_KV(KP_(store_ctx),
                KP_(trans),

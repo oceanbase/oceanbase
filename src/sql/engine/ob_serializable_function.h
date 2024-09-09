@@ -127,6 +127,12 @@ typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
   OB_SFA_COLLECTION_EXPR_EVAL,                   \
   OB_SFA_COLLECTION_EXPR_EVAL_BATCH,             \
   OB_SFA_COLLECTION_EXPR_EVAL_VEC,               \
+  OB_SFA_RELATION_EXPR_COLLECTION_EVAL,          \
+  OB_SFA_RELATION_EXPR_COLLECTION_EVAL_BATCH,    \
+  OB_SFA_DATUM_CMP_COLLECTION,                   \
+  OB_SFA_DATUM_NULLSAFE_COLLECTION_CMP,          \
+  OB_SFA_EXPR_COLLECTION_BASIC_PART1,            \
+  OB_SFA_EXPR_COLLECTION_BASIC_PART2,            \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

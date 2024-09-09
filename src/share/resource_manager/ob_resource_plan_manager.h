@@ -28,6 +28,7 @@ class ObString;
 namespace share
 {
 static constexpr int64_t OTHER_GROUPS_IOPS_WEIGHT = 100L;
+static constexpr int64_t OTHER_GROUPS_NET_BANDWIDTH_WEIGHT = 100L;
 class ObResourcePlanManager
 {
 public:
@@ -50,6 +51,9 @@ private:
   int normalize_iops_directives(const uint64_t tenant_id,
                                 ObPlanDirectiveSet &directives,
                                 ObPlanDirective &other_group_directive);
+  int normalize_net_bandwidth_directives(const uint64_t tenant_id,
+                                         ObPlanDirectiveSet &directives,
+                                         ObPlanDirective &other_group_directive);
   int refresh_tenant_group_io_config(const uint64_t tenant_id);
   common::hash::ObHashMap<uint64_t, ObResMgrVarcharValue> tenant_plan_map_;
   int32_t background_quota_;

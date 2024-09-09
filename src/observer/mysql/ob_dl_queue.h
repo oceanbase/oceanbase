@@ -18,13 +18,12 @@
 #include "ob_ra_queue.h"
 #include "lib/lock/ob_rwlock.h"
 #include "lib/function/ob_function.h"
-#include "ob_mysql_request_manager.h"
 
 namespace oceanbase
 {
 namespace obmysql
 {
-  class ObMySQLRequestManager;
+class ObMySQLRequestManager;
 }
 namespace common
 {

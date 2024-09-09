@@ -24,6 +24,9 @@
 #include "storage/tx_storage/ob_ls_handle.h" // ObLSHandle
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
 #include "storage/tablet/ob_tablet.h" // ObTablet
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/compaction/ob_ss_meta_checker.h" // ObTenantSSMetaChecker
+#endif
 
 namespace oceanbase
 {
@@ -58,8 +61,16 @@ ObTenantTabletMetaTableCheckTask::ObTenantTabletMetaTableCheckTask(
 void ObTenantTabletMetaTableCheckTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(checker_.check_tablet_table())) {
-    LOG_WARN("fail to check tablet meta table", KR(ret));
+  if (!GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(checker_.check_tablet_table())) {
+      LOG_WARN("fail to check tablet meta table", KR(ret));
+    }
+  } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_FAIL(compaction::ObTenantSSMetaChecker::check_tablet_table())) {
+      LOG_WARN("fail to check tablet replica checksum table", KR(ret));
+    }
+#endif
   }
   if (OB_FAIL(checker_.schedule_tablet_meta_check_task())) {
     // overwrite ret
@@ -624,6 +635,9 @@ int ObTenantMetaChecker::check_report_replicas_(
   } else if (OB_ISNULL(GCTX.ob_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ob_service is null", KR(ret));
+  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("compaction should be local mode", KR(ret));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(
       ls_iter,
       ObLSGetMod::OBSERVER_MOD))) {
@@ -714,6 +728,7 @@ int ObTenantMetaChecker::check_report_replicas_(
   }
   return ret;
 }
+
 
 } // end namespace observer
 } // end namespace oceanbase

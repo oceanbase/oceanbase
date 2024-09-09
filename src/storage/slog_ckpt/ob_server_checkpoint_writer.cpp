@@ -29,7 +29,7 @@ namespace storage
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-int ObServerCheckpointWriter::init()
+int ObServerCheckpointWriter::init(ObStorageLogger *server_slogger)
 {
   int ret = OB_SUCCESS;
   const int64_t MEM_LIMIT = 128 << 20;  // 128M
@@ -45,6 +45,7 @@ int ObServerCheckpointWriter::init()
   } else if (OB_FAIL(tenant_meta_item_writer_.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("fail to init tenant meta item writer", K(ret));
   } else {
+    server_slogger_ = server_slogger;
     is_inited_ = true;
   }
   return ret;
@@ -53,7 +54,6 @@ int ObServerCheckpointWriter::init()
 int ObServerCheckpointWriter::write_checkpoint(const ObLogCursor &log_cursor)
 {
   int ret = OB_SUCCESS;
-  ObStorageLogger *server_slogger = nullptr;
   LOG_INFO("start to write server checkpoint", K(log_cursor));
 
   MacroBlockId tenant_meta_entry;
@@ -65,11 +65,9 @@ int ObServerCheckpointWriter::write_checkpoint(const ObLogCursor &log_cursor)
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(write_tenant_meta_checkpoint(tenant_meta_entry))) {
     LOG_WARN("fail to write tenant config checkpoint", K(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.update_super_block(log_cursor, tenant_meta_entry))) {
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.update_super_block(log_cursor, tenant_meta_entry))) {
     LOG_WARN("fail to update server super block", K(ret), K(log_cursor), K(tenant_meta_entry));
-  } else if (OB_FAIL(SLOGGERMGR.get_server_slogger(server_slogger))) {
-    LOG_WARN("fail to get server slogger", K(ret));
-  } else if (OB_FAIL(server_slogger->remove_useless_log_file(log_cursor.file_id_, OB_SERVER_TENANT_ID))) {
+  } else if (OB_FAIL(server_slogger_->remove_useless_log_file(log_cursor.file_id_, OB_SERVER_TENANT_ID))) {
     LOG_WARN("fail to remove_useless_log_file", K(ret));
   } else {
     LOG_INFO("succeed to write server checkpoint", K(log_cursor), K(tenant_meta_entry));

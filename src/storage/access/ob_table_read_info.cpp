@@ -287,7 +287,8 @@ int64_t ObReadInfoStruct::to_string(char *buf, const int64_t buf_len) const
         K_(rowkey_cnt),
         K_(cols_index),
         K_(cols_desc),
-        K_(datum_utils));
+        K_(datum_utils),
+        K_(memtable_cols_index));
     J_OBJ_END();
   }
   return pos;

@@ -22,6 +22,7 @@
 #include "sql/dtl/ob_dtl_utils.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/aggregate/ob_merge_groupby_op.h"
+#include "sql/engine/aggregate/ob_merge_groupby_vec_op.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include <unordered_set>
 
@@ -141,18 +142,7 @@ ObPxTransmitOp::ObPxTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, Ob
   batch_param_remain_(false),
   receive_channel_ready_(false),
   data_msg_type_(dtl::ObDtlMsgType::PX_DATUM_ROW),
-  slice_info_bkts_(nullptr),
-  slice_bkt_item_cnts_(nullptr),
-  vectors_(&px_row_allocator_),
-  selector_array_(nullptr),
-  selector_cnt_(0),
-  row_size_array_(nullptr),
-  return_rows_(nullptr),
-  use_hash_reorder_(false),
-  fallback_array_(nullptr),
-  fallback_cnt_(0),
-  blocks_(nullptr),
-  init_hash_reorder_struct_(false)
+  params_(px_row_allocator_)
 {
   MEMSET(rand48_buf_, 0, sizeof(rand48_buf_));
 }
@@ -161,7 +151,6 @@ void ObPxTransmitOp::destroy()
 {
   task_ch_set_.reset();
   px_row_allocator_.reset();
-  use_hash_reorder_ = false;
   ch_blocks_.reset();
   blk_bufs_.reset();
   task_channels_.reset();
@@ -180,7 +169,7 @@ void ObPxTransmitOp::destroy()
   cur_transmit_sampled_rows_ = NULL;
   sampled_rows2transmit_.reset();
   sampled_input_rows_.~ObRADatumStore();
-  meta_.reset();
+  params_.meta_.reset();
   ObTransmitOp::destroy();
 }
 
@@ -206,33 +195,18 @@ int ObPxTransmitOp::inner_open()
   } else {
     if (get_spec().use_rich_format_) {
       init_data_msg_type(get_spec().output_);
-      if (OB_ISNULL(row_size_array_
-                            = static_cast<uint32_t *>
-                                (px_row_allocator_.alloc(get_spec().max_batch_size_
-                                                         * sizeof(uint32_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc row size array", K(ret), K(get_spec().max_batch_size_));
-      } else if (OB_ISNULL(return_rows_
-                            = static_cast<ObCompactRow **>
-                                (px_row_allocator_.alloc(get_spec().max_batch_size_
-                                                         * sizeof(ObCompactRow *))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc return rows", K(ret), K(get_spec().max_batch_size_));
-      } else if (OB_FAIL(vectors_.init(get_spec().output_.count()))) {
-        LOG_WARN("failed to init vector array", K(ret));
-      } else if (OB_ISNULL(fallback_array_ = static_cast<uint16_t *>
-                  (px_row_allocator_.alloc(get_spec().max_batch_size_ * sizeof(uint16_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc row size array", K(ret), K(get_spec().max_batch_size_));
-      } else if (OB_ISNULL(selector_array_ = static_cast<uint16_t *>
-                  (px_row_allocator_.alloc(get_spec().max_batch_size_ * sizeof(uint16_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc row size array", K(ret), K(get_spec().max_batch_size_));
+      if (OB_FAIL(params_.init_basic_params(get_spec().max_batch_size_,
+                  task_channels_.count(),
+                  get_spec().output_.count(),
+                  px_row_allocator_,
+                  ctx_))) {
+        LOG_WARN("failed to init basic params", K(ret));
       }
     }
     rand48_buf_[0] = 0x330E; // 0x330E is the arbitrary value of srand48
     rand48_buf_[1] = trans_input->get_sqc_id();
     rand48_buf_[2] = trans_input->get_task_id();
+    OZ(params_.meta_.init(get_spec().output_, 0, params_.reorder_fixed_expr_));
     if (is_object_sample()) {
       OZ(init_channel(*trans_input));
       OZ(set_expect_range_count());
@@ -241,62 +215,24 @@ int ObPxTransmitOp::inner_open()
       OZ(fetch_first_row());
       OZ(init_channel(*trans_input));
     }
-    OZ(meta_.init(get_spec().output_, 0, false));
+    chs_agent_.set_row_meta(params_.meta_);
     if (OB_SUCC(ret)
         && get_spec().use_rich_format_
         && NULL == static_cast<const ObPxTransmitSpec &> (get_spec()).tablet_id_expr_
         && MY_SPEC.max_batch_size_ * task_channels_.count() <= MAX_BKT_FOR_REORDER) {
-      if (PX_VECTOR_ROW != data_msg_type_) {
-        use_hash_reorder_ = true;
-      } else {
-        init_hash_reorder_struct_ = true;
-      }
-      if (OB_ISNULL(slice_info_bkts_ = static_cast<uint16_t **>
-                 (px_row_allocator_.alloc(task_channels_.count() * sizeof(uint16_t *))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc slice info bkts", K(ret), K(task_channels_.count()));
-      } else if (OB_ISNULL(slice_bkt_item_cnts_ = static_cast<uint16_t *>
-                 (px_row_allocator_.alloc(task_channels_.count() * sizeof(uint16_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc slice info bkts", K(ret), K(task_channels_.count()));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < task_channels_.count(); ++i) {
-          if (OB_ISNULL(slice_info_bkts_[i] = static_cast<uint16_t *>
-                  (px_row_allocator_.alloc(get_spec().max_batch_size_ * sizeof(uint16_t))))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to alloc slice info bkts", K(ret), K(get_spec().max_batch_size_));
-          }
-        }
+      if (OB_FAIL(params_.init_hash_params(get_spec().max_batch_size_,
+                                           task_channels_.count(),
+                                           get_spec().output_.count(),
+                                           px_row_allocator_))) {
+        LOG_WARN("failed to init hash params", K(ret));
       }
     }
-    if (OB_SUCC(ret) && get_spec().use_rich_format_ &&!use_hash_reorder_) {
-      data_msg_type_ = PX_VECTOR_ROW;
-      if (OB_ISNULL(blocks_ =
-                static_cast<ObTempRowStore::DtlRowBlock  **> (px_row_allocator_.alloc(task_channels_.count()
-                                                              * sizeof(ObTempRowStore::DtlRowBlock *))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc buffers", K(ret), K(task_channels_.count()));
-      } else if (OB_ISNULL(heads_ = static_cast<int64_t *> (px_row_allocator_.alloc(task_channels_.count()
-                                                                            * sizeof(int64_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc heads", K(ret), K(task_channels_.count()));
-      } else if (OB_ISNULL(tails_ = static_cast<int64_t *> (px_row_allocator_.alloc(task_channels_.count()
-                                                                            * sizeof(int64_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc tails", K(ret), K(task_channels_.count()));
-      } else if (OB_ISNULL(init_pos_ = static_cast<int64_t *> (px_row_allocator_.alloc(task_channels_.count()
-                                                                            * sizeof(int64_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc init sizes", K(ret), K(task_channels_.count()));
-      } else if (OB_ISNULL(channel_unobstructeds_ = static_cast<bool *> (px_row_allocator_.alloc(task_channels_.count()
-                                                                            * sizeof(bool))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc can adds", K(ret), K(task_channels_.count()));
-      } else {
-        memset(blocks_, 0, task_channels_.count() * sizeof(ObTempRowStore::DtlRowBlock *));
-        memset(heads_, 0, task_channels_.count() * sizeof(int64_t));
-        memset(tails_, 0, task_channels_.count() * sizeof(int64_t));
-        memset(init_pos_, 0, task_channels_.count() * sizeof(int64_t));
+    if (OB_SUCC(ret) && get_spec().use_rich_format_) {
+      if (OB_FAIL(params_.init_keep_order_params(get_spec().max_batch_size_,
+                                                 task_channels_.count(),
+                                                 get_spec().output_.count(),
+                                                 px_row_allocator_))) {
+        LOG_WARN("failed to init keep order params", K(ret));
       }
     }
   }
@@ -455,7 +391,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
     }
 
     ARRAY_FOREACH_X(channels, idx, cnt, OB_SUCC(ret)) {
-      dtl::ObDtlChannel *ch = channels.at(idx);
+      dtl::ObDtlBasicChannel *ch = static_cast<dtl::ObDtlBasicChannel *> (channels.at(idx));
       if (OB_ISNULL(ch)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL unexpected", K(ch), K(ret));
@@ -472,6 +408,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
         ch->set_compression_type(dfc_.get_compressor_type());
         ch->set_operator_owner();
         ch->set_thread_id(thread_id);
+        ch->set_row_meta(params_.meta_);
       }
       LOG_TRACE("Transmit channel", K(ch), KP(ch->get_id()), K(ch->get_peer()));
     }
@@ -675,6 +612,15 @@ int ObPxTransmitOp::set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc)
     while (OB_NOT_NULL(child) && OB_SUCC(ret)) {
       if (ObPhyOperatorType::PHY_MERGE_GROUP_BY == child->get_spec().type_) {
         ObMergeGroupByOp *merge_groupby = static_cast<ObMergeGroupByOp *>(child);
+        int64_t n_keys = 0;
+        if (OB_FAIL(merge_groupby->get_n_shuffle_keys_for_exchange(n_keys))) {
+          LOG_WARN("failed to get shuffle keys for exchange", K(ret));
+        } else {
+          slice_calc.set_calc_hash_keys(n_keys);
+        }
+        break;
+      } else if (ObPhyOperatorType::PHY_VEC_MERGE_GROUP_BY == child->get_spec().type_) {
+        ObMergeGroupByVecOp *merge_groupby = static_cast<ObMergeGroupByVecOp *>(child);
         int64_t n_keys = 0;
         if (OB_FAIL(merge_groupby->get_n_shuffle_keys_for_exchange(n_keys))) {
           LOG_WARN("failed to get shuffle keys for exchange", K(ret));
@@ -938,8 +884,8 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
           LOG_WARN("eval expr failed", K(ret));
         }
       }
-      if (use_hash_reorder_ || init_hash_reorder_struct_) {
-        memset(slice_bkt_item_cnts_, 0, task_channels_.count() * sizeof(uint16_t));
+      if (params_.init_hash_reorder_struct_) {
+        memset(params_.slice_bkt_item_cnts_, 0, task_channels_.count() * sizeof(uint16_t));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
         if (brs_.skip_->at(i)) {
@@ -958,7 +904,7 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
                    && OB_FAIL(slice_calc.get_previous_row_tablet_id(tablet_id))) {
           LOG_WARN("failed to get previous row tablet_id", K(ret));
         }
-        if (!use_hash_reorder_ && !init_hash_reorder_struct_) {
+        if (!params_.init_hash_reorder_struct_) {
           LOG_DEBUG("[VEC2.0 PX] send rows vec without prefetch", K(i), K(slice_idx_array), K(tablet_id.get_int()));
           FOREACH_CNT_X(slice_idx, slice_idx_array, OB_SUCC(ret)) {
             if (OB_FAIL(send_row(*slice_idx, send_row_time_recorder, tablet_id.get_int(), i))) {
@@ -972,12 +918,12 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
               op_monitor_info_.otherstat_1_value_++;
               op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
             } else {
-              slice_info_bkts_[slice_idx][slice_bkt_item_cnts_[slice_idx]++] = static_cast<uint16_t> (i);
+              params_.slice_info_bkts_[slice_idx][params_.slice_bkt_item_cnts_[slice_idx]++] = static_cast<uint16_t> (i);
             }
           }
         }
       }
-      if (OB_SUCC(ret) && (use_hash_reorder_ || init_hash_reorder_struct_)) {
+      if (OB_SUCC(ret) && params_.init_hash_reorder_struct_) {
         if (OB_FAIL(hash_reorder_send_batch(batch_info_guard))) {
           LOG_WARN("failed to send batch", K(ret));
         }
@@ -1014,29 +960,30 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (use_hash_reorder_) {
-          memset(slice_bkt_item_cnts_, 0, task_channels_.count() * sizeof(uint16_t));
-          for (int64_t i = 0; i < brs_.size_; ++i) {
-            if (brs_.skip_->at(i)) {
-              continue;
+        } else {
+          if (PX_VECTOR_FIXED == data_msg_type_) {
+            if (OB_FAIL(keep_order_send_batch_fixed(batch_info_guard, indexes))) {
+              LOG_WARN("failed to send batch", K(ret));
             }
-            if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == indexes[i]) {
-              op_monitor_info_.otherstat_1_value_++;
-              op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
-            } else {
-              int64_t slice_idx = indexes[i];
-              slice_info_bkts_[slice_idx][slice_bkt_item_cnts_[slice_idx]++] = static_cast<uint16_t> (i);
-            }
-          }
-          if (OB_FAIL(hash_reorder_send_batch(batch_info_guard))) {
+          } else if (OB_FAIL(keep_order_send_batch(batch_info_guard, indexes))) {
             LOG_WARN("failed to send batch", K(ret));
           }
-        } else if (OB_FAIL(keep_order_send_batch(batch_info_guard, indexes))) {
-          LOG_WARN("failed to send batch", K(ret));
         }
       }
     }
     if (OB_SUCC(ret) && brs_.end_) {
+      if (get_spec().use_rich_format_ && PX_VECTOR_FIXED == data_msg_type_) {
+        for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
+          ObDtlBasicChannel *channel =
+                          static_cast<ObDtlBasicChannel *> (task_channels_.at(idx));
+          ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
+          if (row_writer.is_inited() && params_.row_cnts_[idx] > 0) {
+            row_writer.update_row_cnt(params_.row_cnts_[idx]);
+            row_writer.update_buffer_used();
+            params_.row_cnts_[idx] = 0;
+          }
+        }
+      }
       if (OB_FAIL(try_wait_channel())) {
         LOG_WARN("failed to wait channel init", K(ret));
       } else if (batch_param_remain_) {
@@ -1078,33 +1025,137 @@ void ObPxTransmitOp::fill_batch_ptrs(const int64_t *indexes)
       op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
     } else {
       int64_t slice_idx = indexes[i];
-      const int64_t row_size = row_size_array_[i];
-      const int64_t head_pos = heads_[slice_idx];
-      ObTempRowStore::DtlRowBlock *block = blocks_[slice_idx];
+      const int64_t row_size = params_.row_size_array_[i];
+      const int64_t head_pos = params_.heads_[slice_idx];
+      ObTempRowStore::DtlRowBlock *block = params_.blocks_[slice_idx];
       if (nullptr == block
-          || !channel_unobstructeds_[slice_idx]
-          || row_size > tails_[slice_idx] - head_pos) {
-        fallback_array_[fallback_cnt_++] = i;
-        channel_unobstructeds_[slice_idx] = false;
+          || !params_.channel_unobstructeds_[slice_idx]
+          || row_size > params_.tails_[slice_idx] - head_pos) {
+        params_.fallback_array_[params_.fallback_cnt_++] = i;
+        params_.channel_unobstructeds_[slice_idx] = false;
       } else {
         ObCompactRow *ptr = reinterpret_cast<ObCompactRow *> (reinterpret_cast<char *> (block) + head_pos);
-        return_rows_[selector_cnt_] = ptr;
-        heads_[slice_idx] += row_size;
+        params_.return_rows_[params_.selector_cnt_] = ptr;
+        params_.heads_[slice_idx] += row_size;
         const static int64_t MEMSET_SIZE = 128;
-        while (heads_[slice_idx] > init_pos_[slice_idx]) {
-          if (init_pos_[slice_idx] + MEMSET_SIZE < tails_[slice_idx]) {
-            memset(reinterpret_cast<char *> (block) + init_pos_[slice_idx], 0, MEMSET_SIZE);
-            init_pos_[slice_idx] += MEMSET_SIZE;
+        while (params_.heads_[slice_idx] > params_.init_pos_[slice_idx]) {
+          if (params_.init_pos_[slice_idx] + MEMSET_SIZE < params_.tails_[slice_idx]) {
+            memset(reinterpret_cast<char *> (block) + params_.init_pos_[slice_idx], 0, MEMSET_SIZE);
+            params_.init_pos_[slice_idx] += MEMSET_SIZE;
           } else {
             memset(ptr, 0, row_size);
-            init_pos_[slice_idx] = heads_[slice_idx];
+            params_.init_pos_[slice_idx] = params_.heads_[slice_idx];
           }
         }
         block->cnt_ += 1;
-        selector_array_[selector_cnt_++] = i;
+        params_.selector_array_[params_.selector_cnt_++] = i;
       }
     }
   }
+}
+
+void ObPxTransmitOp::fill_batch_ptrs_fixed(const int64_t *indexes)
+{
+  for (int64_t i = 0; i < brs_.size_; ++i) {
+    if (brs_.skip_->at(i)) {
+      continue;
+    }
+    if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == indexes[i]) {
+      op_monitor_info_.otherstat_1_value_++;
+      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
+    } else {
+      int64_t slice_idx = indexes[i];
+      char *header = params_.fixed_payload_headers_[slice_idx];
+      if (nullptr == header
+          || params_.row_cnts_[slice_idx] >= params_.row_limit_) {
+        params_.fallback_array_[params_.fallback_cnt_++] = i;
+      } else {
+        params_.fixed_rows_[params_.selector_cnt_] = header;
+        params_.row_idx_[params_.selector_cnt_] = params_.row_cnts_[slice_idx];
+        params_.row_cnts_[slice_idx] += 1;
+        params_.selector_array_[params_.selector_cnt_++] = i;
+      }
+    }
+  }
+  for (int64_t col_idx = 0; col_idx < get_spec().output_.count(); ++col_idx) {
+    int64_t fixed_len = params_.column_lens_[col_idx];
+    switch (params_.vectors_.at(col_idx)->get_format()) {
+      case VEC_FIXED : {
+        const char *payload = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_data();
+        ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
+        if (!params_.vectors_.at(col_idx)->has_null()) {
+          if (8 == fixed_len) {
+            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * 8,
+                    payload + fixed_len * params_.selector_array_[i], 8);
+            }
+          } else {
+            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
+                    payload + fixed_len * params_.selector_array_[i], fixed_len);
+            }
+          }
+        } else {
+          ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
+          for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+            if (nulls->at(params_.selector_array_[i])) {
+              ObDtlBasicChannel *channel =
+                        static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
+              ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
+              row_writer.set_null(col_idx, params_.row_idx_[i]);
+            } else {
+              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
+                  payload + fixed_len * params_.selector_array_[i], fixed_len);
+            }
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM : {
+        ObDatum *datums = (static_cast<ObUniformBase *> (params_.vectors_.at(col_idx)))->get_datums();
+        for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+          if (datums[params_.selector_array_[i]].is_null()) {
+            ObDtlBasicChannel *channel =
+                      static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
+            ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
+            row_writer.set_null(col_idx, params_.row_idx_[i]);
+          } else {
+            memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
+                datums[params_.selector_array_[i]].ptr_, fixed_len);
+          }
+        }
+        break;
+      }
+      default :
+        for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+          if (params_.vectors_.at(col_idx)->is_null(params_.selector_array_[i])) {
+            ObDtlBasicChannel *channel =
+                      static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
+            ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
+            row_writer.set_null(col_idx, params_.row_idx_[i]);
+          } else {
+            memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * params_.column_lens_[col_idx],
+                  params_.vectors_.at(col_idx)->get_payload(params_.selector_array_[i]), params_.column_lens_[col_idx]);
+          }
+        }
+    }
+  }
+}
+
+int ObPxTransmitOp::prepare_for_nested_expr()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); ++i) {
+    ObExpr *expr = get_spec().output_.at(i);
+    if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx_))) {
+      if (OB_FAIL(expr->nested_cast_to_uniform(brs_.size_, eval_ctx_, brs_.skip_))) {
+        LOG_WARN("failed to cast nested expr to uniform", K(ret));
+      } else {
+        params_.vectors_.at(i) = expr->get_vector(eval_ctx_);
+      }
+    }
+  }
+  return ret;
 }
 
 int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes)
@@ -1112,50 +1163,103 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
   int ret = OB_SUCCESS;
   int64_t send_row_time_recorder = 0;
   ObObj tablet_id; //not used
-  fallback_cnt_ = 0;
-  selector_cnt_ = 0;
-  if (vectors_.empty()) {
+  params_.fallback_cnt_ = 0;
+  params_.selector_cnt_ = 0;
+  if (params_.vectors_.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); ++i) {
-      OZ (vectors_.push_back(get_spec().output_.at(i)->get_vector(eval_ctx_)));
+      OZ (params_.vectors_.push_back(get_spec().output_.at(i)->get_vector(eval_ctx_)));
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObTempRowStore::DtlRowBlock::calc_rows_size(vectors_, meta_,
-                                                    brs_, row_size_array_))) {
+  } else if (OB_FAIL(prepare_for_nested_expr())) {
+    LOG_WARN("failed to prepare for nested expr", K(ret));
+  } else if (OB_FAIL(ObTempRowStore::DtlRowBlock::calc_rows_size(params_.vectors_, params_.meta_,
+                                                    brs_, params_.row_size_array_))) {
     LOG_WARN("failed to calc size", K(ret));
   } else {
     fill_batch_ptrs(indexes);
-    for (int64_t i = 0; i < selector_cnt_; ++i) {
-      return_rows_[i]->set_row_size(row_size_array_[selector_array_[i]]);
+    for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+      params_.return_rows_[i]->set_row_size(params_.row_size_array_[params_.selector_array_[i]]);
     }
     for (int64_t idx = 0; idx < get_spec().output_.count(); ++idx) {
-      vectors_.at(idx)->to_rows(meta_, return_rows_,
-                            selector_array_, selector_cnt_, idx);
+      params_.vectors_.at(idx)->to_rows(params_.meta_, params_.return_rows_,
+                            params_.selector_array_, params_.selector_cnt_, idx);
     }
     for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
-      if (nullptr != blocks_[idx]) {
-        blocks_[idx]->get_buffer()->fast_update_head(heads_[idx]);
+      if (nullptr != params_.blocks_[idx]) {
+        params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < fallback_cnt_; i++) {
-      batch_info_guard.set_batch_idx(fallback_array_[i]);
+    for (int64_t i = 0; OB_SUCC(ret) && i < params_.fallback_cnt_; i++) {
+      batch_info_guard.set_batch_idx(params_.fallback_array_[i]);
       metric_.count();
-      int64_t slice_idx = indexes[fallback_array_[i]];
+      int64_t slice_idx = indexes[params_.fallback_array_[i]];
       ObDtlBasicChannel *channel =
                       static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx));
       ObDtlVectorRowMsgWriter &row_writer = channel->get_vector_row_writer();
       if (nullptr != row_writer.get_write_buffer()) {
         row_writer.get_write_buffer()->pos() = row_writer.used();
       }
-      if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(), fallback_array_[i]))) {
+      if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(), params_.fallback_array_[i]))) {
         LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx));
       } else {
-        blocks_[slice_idx] = static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx))->get_vector_row_writer().get_block();
-        if (nullptr != blocks_[slice_idx]) {
-          heads_[slice_idx] = blocks_[slice_idx]->get_buffer()->head_pos();
-          tails_[slice_idx] = blocks_[slice_idx]->get_buffer()->tail_pos();
-          init_pos_[slice_idx] = heads_[slice_idx];
-          channel_unobstructeds_[slice_idx] = true;
+        params_.blocks_[slice_idx] = static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx))->get_vector_row_writer().get_block();
+        if (nullptr != params_.blocks_[slice_idx]) {
+          params_.heads_[slice_idx] = params_.blocks_[slice_idx]->get_buffer()->head_pos();
+          params_.tails_[slice_idx] = params_.blocks_[slice_idx]->get_buffer()->tail_pos();
+          params_.init_pos_[slice_idx] = params_.heads_[slice_idx];
+          params_.channel_unobstructeds_[slice_idx] = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxTransmitOp::keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes)
+{
+  int ret = OB_SUCCESS;
+  int64_t send_row_time_recorder = 0;
+  ObObj tablet_id; //not used
+  params_.fallback_cnt_ = 0;
+  params_.selector_cnt_ = 0;
+  if (params_.vectors_.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); ++i) {
+      OZ (params_.vectors_.push_back(get_spec().output_.at(i)->get_vector(eval_ctx_)));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    fill_batch_ptrs_fixed(indexes);
+    for (int64_t i = 0; OB_SUCC(ret) && i < params_.fallback_cnt_; i++) {
+      batch_info_guard.set_batch_idx(params_.fallback_array_[i]);
+      metric_.count();
+      int64_t slice_idx = indexes[params_.fallback_array_[i]];
+      ObDtlBasicChannel *channel =
+                      static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx));
+      ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
+      if (row_writer.is_inited()) {
+        row_writer.update_row_cnt(params_.row_cnts_[slice_idx]);
+        row_writer.update_buffer_used();
+      }
+      if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(), params_.fallback_array_[i]))) {
+        LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx));
+      } else if (static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx))->get_vector_fixed_msg_writer().is_inited()) {
+        params_.fixed_payload_headers_[slice_idx] = static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx))->get_vector_fixed_msg_writer().get_header(0);
+        if (nullptr != params_.fixed_payload_headers_[slice_idx]) {
+          if (!params_.offset_inited_) {
+            for (int64_t i = 1; i < get_spec().output_.count(); ++i) {
+              params_.column_offsets_[i] = row_writer.get_header(i) - row_writer.get_header(0);
+            }
+            for (int64_t i = 0; i < get_spec().output_.count(); ++i) {
+              params_.column_lens_[i] = row_writer.get_fixed_len(i);
+            }
+            params_.offset_inited_ = true;
+          }
+          if (params_.row_limit_ < 0) {
+            params_.row_limit_ = row_writer.get_row_limit();
+          }
+          params_.row_cnts_[slice_idx] = row_writer.get_row_cnt();
         }
       }
     }
@@ -1698,18 +1802,20 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
   ObObj tablet_id; //not used
   if (OB_FAIL(try_wait_channel())) {
     LOG_WARN("failed to wait channel init", K(ret));
-  } else if (vectors_.empty()) {
+  } else if (params_.vectors_.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); ++i) {
-      OZ (vectors_.push_back(get_spec().output_.at(i)->get_vector(eval_ctx_)));
+      OZ (params_.vectors_.push_back(get_spec().output_.at(i)->get_vector(eval_ctx_)));
     }
   }
   const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(prepare_for_nested_expr())) {
+    LOG_WARN("failed to prepare for nested expr", K(ret));
   } else {
     switch (data_msg_type_) {
       case dtl::ObDtlMsgType::PX_VECTOR_FIXED: {
         for (int64_t channel_idx = 0; OB_SUCC(ret) && channel_idx < task_channels_.count(); ++channel_idx) {
-          if (0 == slice_bkt_item_cnts_[channel_idx]) {
+          if (0 == params_.slice_bkt_item_cnts_[channel_idx]) {
             continue;
           }
           bool is_send_row_normal = false;
@@ -1718,8 +1824,8 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
           ObDtlVectorFixedMsgWriter &fixed_writer = channel->get_vector_fixed_msg_writer();
           if (!fixed_writer.is_inited()) {
             is_send_row_normal = true;
-          } else if (OB_FAIL(fixed_writer.append_batch(spec.output_, vectors_,
-                                                    slice_info_bkts_[channel_idx], slice_bkt_item_cnts_[channel_idx],
+          } else if (OB_FAIL(fixed_writer.append_batch(spec.output_, params_.vectors_,
+                                                    params_.slice_info_bkts_[channel_idx], params_.slice_bkt_item_cnts_[channel_idx],
                                                     eval_ctx_))) {
             if (OB_BUF_NOT_ENOUGH != ret) {
               LOG_WARN("failed to append row", K(ret));
@@ -1730,15 +1836,15 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
             }
           } else {
             fixed_writer.update_buffer_used();
-            metric_.count(slice_bkt_item_cnts_[channel_idx]);
+            metric_.count(params_.slice_bkt_item_cnts_[channel_idx]);
           }
           if (is_send_row_normal && OB_SUCC(ret)) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < slice_bkt_item_cnts_[channel_idx]; ++i) {
-              batch_info_guard.set_batch_idx(slice_info_bkts_[channel_idx][i]);
+            for (int64_t i = 0; OB_SUCC(ret) && i < params_.slice_bkt_item_cnts_[channel_idx]; ++i) {
+              batch_info_guard.set_batch_idx(params_.slice_info_bkts_[channel_idx][i]);
               if (OB_FAIL(send_row_normal(channel_idx,
                                           send_row_time_recorder,
                                           tablet_id.get_int(),
-                                          slice_info_bkts_[channel_idx][i]))) {
+                                          params_.slice_info_bkts_[channel_idx][i]))) {
                 LOG_WARN("fail to send row normal", K(ret));
               }
             }
@@ -1748,7 +1854,7 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
       }
       case dtl::ObDtlMsgType::PX_VECTOR_ROW: {
         for (int64_t channel_idx = 0; OB_SUCC(ret) && channel_idx < task_channels_.count(); ++channel_idx) {
-          if (0 == slice_bkt_item_cnts_[channel_idx]) {
+          if (0 == params_.slice_bkt_item_cnts_[channel_idx]) {
             continue;
           }
           bool is_send_row_normal = false;
@@ -1759,10 +1865,10 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
           ObDtlVectorRowMsgWriter &row_writer = channel->get_vector_row_writer();
           if (!row_writer.is_inited() || (data_msg_type_ == dtl::ObDtlMsgType::PX_VECTOR && is_rpc_channel)) {
             is_send_row_normal = true;
-          } else if (OB_FAIL(row_writer.try_append_batch(spec.output_, vectors_,
-                                                        eval_ctx_, slice_info_bkts_[channel_idx],
-                                                        slice_bkt_item_cnts_[channel_idx], row_size_array_,
-                                                        return_rows_))) {
+          } else if (OB_FAIL(row_writer.try_append_batch(spec.output_, params_.vectors_,
+                                                        eval_ctx_, params_.slice_info_bkts_[channel_idx],
+                                                        params_.slice_bkt_item_cnts_[channel_idx], params_.row_size_array_,
+                                                        params_.return_rows_))) {
             if (OB_BUF_NOT_ENOUGH != ret) {
               LOG_WARN("failed to append row", K(ret));
             } else {
@@ -1770,15 +1876,15 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
               ret = OB_SUCCESS;
             }
           } else {
-            metric_.count(slice_bkt_item_cnts_[channel_idx]);
+            metric_.count(params_.slice_bkt_item_cnts_[channel_idx]);
           }
           if (is_send_row_normal && OB_SUCC(ret)) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < slice_bkt_item_cnts_[channel_idx]; ++i) {
-              batch_info_guard.set_batch_idx(slice_info_bkts_[channel_idx][i]);
+            for (int64_t i = 0; OB_SUCC(ret) && i < params_.slice_bkt_item_cnts_[channel_idx]; ++i) {
+              batch_info_guard.set_batch_idx(params_.slice_info_bkts_[channel_idx][i]);
               if (OB_FAIL(send_row_normal(channel_idx,
                                           send_row_time_recorder,
                                           tablet_id.get_int(),
-                                          slice_info_bkts_[channel_idx][i]))) {
+                                          params_.slice_info_bkts_[channel_idx][i]))) {
                 LOG_WARN("fail to send row normal", K(ret));
               }
             }
@@ -1790,6 +1896,140 @@ int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batc
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid msg type", K(ret), K(data_msg_type_));
     }
+  }
+  return ret;
+}
+
+int ObPxTransmitOp::VectorSendParams::init_basic_params(const int64_t max_batch_size,
+                                                        const int64_t channel_cnt,
+                                                        const int64_t output_cnt,
+                                                        ObIAllocator &alloc,
+                                                        ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(row_size_array_
+                        = static_cast<uint32_t *>
+                            (alloc.alloc(max_batch_size * sizeof(uint32_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc row size array", K(ret), K(max_batch_size));
+  } else if (OB_ISNULL(return_rows_
+                        = static_cast<ObCompactRow **>
+                            (alloc.alloc(max_batch_size * sizeof(ObCompactRow *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc return rows", K(ret), K(max_batch_size));
+  } else if (OB_FAIL(vectors_.init(output_cnt))) {
+    LOG_WARN("failed to init vector array", K(ret));
+  } else if (OB_ISNULL(fallback_array_ = static_cast<uint16_t *>
+              (alloc.alloc(max_batch_size * sizeof(uint16_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc row size array", K(ret), K(max_batch_size));
+  } else if (OB_ISNULL(selector_array_ = static_cast<uint16_t *>
+              (alloc.alloc(max_batch_size * sizeof(uint16_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc row size array", K(ret), K(max_batch_size));
+  } else if (OB_ISNULL(ctx.get_physical_plan_ctx()) || OB_ISNULL(ctx.get_physical_plan_ctx()->get_phy_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get phy plan", K(ret));
+  } else {
+    reorder_fixed_expr_ = ctx.get_physical_plan_ctx()->get_phy_plan()
+                                                     ->get_min_cluster_version()
+                          >= CLUSTER_VERSION_4_3_3_0;
+  }
+  return ret;
+}
+int ObPxTransmitOp::VectorSendParams::init_hash_params(const int64_t max_batch_size,
+                                                       const int64_t channel_cnt,
+                                                       const int64_t output_cnt,
+                                                       ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  init_hash_reorder_struct_ = true;
+  if (OB_ISNULL(slice_info_bkts_ = static_cast<uint16_t **>
+              (alloc.alloc(channel_cnt * sizeof(uint16_t *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc slice info bkts", K(ret), K(channel_cnt));
+  } else if (OB_ISNULL(slice_bkt_item_cnts_ = static_cast<uint16_t *>
+              (alloc.alloc(channel_cnt * sizeof(uint16_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc slice info bkts", K(ret), K(channel_cnt));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < channel_cnt; ++i) {
+      if (OB_ISNULL(slice_info_bkts_[i] = static_cast<uint16_t *>
+              (alloc.alloc(max_batch_size * sizeof(uint16_t))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc slice info bkts", K(ret), K(max_batch_size));
+      }
+    }
+  }
+  return ret;
+}
+int ObPxTransmitOp::VectorSendParams::init_keep_order_params(const int64_t max_batch_size,
+                                                             const int64_t channel_cnt,
+                                                             const int64_t output_cnt,
+                                                             ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(blocks_ =
+            static_cast<ObTempRowStore::DtlRowBlock  **> (alloc.alloc(channel_cnt
+                                                          * sizeof(ObTempRowStore::DtlRowBlock *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc buffers", K(ret), K(channel_cnt));
+  } else if (OB_ISNULL(heads_ = static_cast<int64_t *> (alloc.alloc(channel_cnt
+                                                                        * sizeof(int64_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc heads", K(ret), K(channel_cnt));
+  } else if (OB_ISNULL(tails_ = static_cast<int64_t *> (alloc.alloc(channel_cnt
+                                                                        * sizeof(int64_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc tails", K(ret), K(channel_cnt));
+  } else if (OB_ISNULL(init_pos_ = static_cast<int64_t *> (alloc.alloc(channel_cnt
+                                                                        * sizeof(int64_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc init sizes", K(ret), K(channel_cnt));
+  } else if (OB_ISNULL(channel_unobstructeds_ = static_cast<bool *> (alloc.alloc(channel_cnt
+                                                                        * sizeof(bool))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc can adds", K(ret), K(channel_cnt));
+  } else if (OB_ISNULL(fixed_payload_headers_ = static_cast<char **> (alloc.alloc(channel_cnt
+                                                                        * sizeof(char *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc headers", K(ret), K(channel_cnt));
+  } else if (OB_ISNULL(row_cnts_ = static_cast<int64_t *> (alloc.alloc(channel_cnt
+                                                                        * sizeof(int64_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc row cnts", K(ret), K(channel_cnt));
+  } else if (output_cnt > 0
+              && OB_ISNULL(column_offsets_ = static_cast<int64_t *> (alloc.alloc(output_cnt
+                                                                        * sizeof(int64_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc offsets", K(ret), K(output_cnt));
+  } else if (output_cnt > 0
+              && OB_ISNULL(column_lens_ = static_cast<int64_t *> (alloc.alloc(output_cnt
+                                                                        * sizeof(int64_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc lens", K(ret), K(output_cnt));
+  } else if (OB_ISNULL(row_idx_ = static_cast<int64_t *> (alloc.alloc(max_batch_size * sizeof(int64_t))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc row idx", K(ret), K(max_batch_size));
+  } else if (OB_ISNULL(fixed_rows_ = static_cast<char **>
+                            (alloc.alloc(max_batch_size
+                                                      * sizeof(char *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc fixed rows", K(ret), K(max_batch_size));
+  } else {
+    memset(blocks_, 0, channel_cnt * sizeof(ObTempRowStore::DtlRowBlock *));
+    memset(heads_, 0, channel_cnt * sizeof(int64_t));
+    memset(tails_, 0, channel_cnt * sizeof(int64_t));
+    memset(init_pos_, 0, channel_cnt * sizeof(int64_t));
+    memset(channel_unobstructeds_, 0, channel_cnt * sizeof(bool));
+    memset(fixed_payload_headers_, 0, channel_cnt * sizeof(char *));
+    memset(row_cnts_, 0, channel_cnt * sizeof(int64_t));
+    if (output_cnt > 0) {
+      memset(column_offsets_, 0, output_cnt * sizeof(int64_t));
+      memset(column_lens_, 0, output_cnt * sizeof(int64_t));
+    }
+    memset(row_idx_, 0, max_batch_size * sizeof(int64_t));
+    memset(fixed_rows_, 0, max_batch_size * sizeof(char *));
   }
   return ret;
 }

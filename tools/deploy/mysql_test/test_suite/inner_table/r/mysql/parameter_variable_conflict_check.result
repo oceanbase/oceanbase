@@ -14,9 +14,9 @@ connection_control_failed_connections_threshold	connection_control_failed_connec
 ######  case2: under mysql tenant  ######
 SELECT a.name as para_name, b.name as var_name 
 FROM V$OB_PARAMETERS a, __all_sys_variable b 
-WHERE a.name = b.name;
+WHERE a.name = b.name order by para_name;
 para_name	var_name
-range_optimizer_max_mem_size	range_optimizer_max_mem_size
+connection_control_failed_connections_threshold	connection_control_failed_connections_threshold
 connection_control_max_connection_delay	connection_control_max_connection_delay
 connection_control_min_connection_delay	connection_control_min_connection_delay
-connection_control_failed_connections_threshold	connection_control_failed_connections_threshold
+range_optimizer_max_mem_size	range_optimizer_max_mem_size

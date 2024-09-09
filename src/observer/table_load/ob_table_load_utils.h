@@ -44,7 +44,6 @@ class ObSQLSessionInfo;
 } // namespace sql
 namespace observer
 {
-class ObGlobalContext;
 
 class ObTableLoadUtils
 {

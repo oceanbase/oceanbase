@@ -463,6 +463,25 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
   return ret;
 }
 
+int ObVirtualTableIterator::get_next_rows(int64_t &count, int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(capacity < 1)) {
+  } else if (OB_ISNULL(scan_param_) || OB_ISNULL(scan_param_->op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null arguments", K(ret));
+  } else {
+    ObEvalCtx::BatchInfoScopeGuard guard(scan_param_->op_->get_eval_ctx());
+    guard.set_batch_size(1);
+    guard.set_batch_idx(0);
+    if (OB_FAIL(get_next_row())) {
+      if (OB_ITER_END != ret) { LOG_WARN("get next row failed", K(ret)); }
+    } else {
+      count = 1;
+    }
+  }
+  return ret;
+}
 int ObVirtualTableIterator::get_next_row()
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);

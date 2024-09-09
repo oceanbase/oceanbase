@@ -251,6 +251,7 @@ bool is_json_type(const int ctype);
 bool is_geometry_type(const int ctype);
 bool is_xml_type(const int ctype);
 bool is_roaringbitmap_type(const int ctype);
+bool is_collection_type(const int ctype);
 int64_t get_non_hidden_column_count(const oceanbase::share::schema::ObTableSchema &table_schema);
 
 double get_delay_sec(const int64_t tstamp);

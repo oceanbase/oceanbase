@@ -81,6 +81,16 @@ public:
   int init(const ObDDLTableMergeDagParam &ddl_dag_param, const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs);
   virtual int process() override;
   TO_STRING_KV(K_(is_inited), K_(merge_param));
+#ifdef OB_BUILD_SHARED_STORAGE
+private:
+  int dump_in_shared_storage_mode(
+    const ObLSHandle &ls_handle,
+    ObTablet &tablet,
+    ObTableStoreIterator &ddl_table_iter,
+    const ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+    common::ObArenaAllocator &allocator,
+    ObTableHandleV2 &compacted_sstable_handle);
+#endif
 private:
   int merge_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
   int merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
@@ -105,6 +115,7 @@ private:
   blocksstable::ObSSTable *sstable_;
   ObIAllocator *allocator_;
   blocksstable::ObIMacroBlockIterator *macro_block_iter_;
+  // TODO(baichangmin): replace SecMetaIterator to DualIterator.
   blocksstable::ObSSTableSecMetaIterator *sec_meta_iter_;
   blocksstable::DDLBtreeIterator ddl_iter_;
 };
@@ -133,6 +144,7 @@ public:
       ObTablet &tablet,
       const ObTabletDDLParam &ddl_param,
       const ObIArray<ObDDLBlockMeta> &meta_array,
+      const ObIArray<blocksstable::MacroBlockId> &macro_id_array,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
@@ -192,11 +204,17 @@ public:
       share::SCN &compact_start_scn,
       share::SCN &compact_end_scn);
 
+  static int schedule_ddl_minor_merge_on_demand(
+      const bool need_freeze,
+      const share::ObLSID &ls_id,
+      ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+
 private:
 
   static int create_ddl_sstable(
       ObTablet &tablet,
       blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
+      const ObIArray<blocksstable::MacroBlockId> &macro_id_array,
       const ObTabletDDLParam &ddl_param,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const int64_t macro_block_column_count,

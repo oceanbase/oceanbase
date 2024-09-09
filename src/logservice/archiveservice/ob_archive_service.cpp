@@ -400,6 +400,7 @@ int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
   int ret = OB_SUCCESS;
   ArchiveKey key(attr.incarnation_, attr.dest_id_, attr.round_id_);
   ObBackupDest dest;
+  int64_t dest_id = 0;
   ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(mysql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
@@ -409,9 +410,12 @@ int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
           *mysql_proxy, attr.key_.tenant_id_, attr.path_, dest))) {
     ARCHIVE_LOG(ERROR, "get backup dest failed", K(ret), K(attr));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(
+          *mysql_proxy, attr.key_.tenant_id_, dest, dest_id))) {
+    ARCHIVE_LOG(ERROR, "get_dest_id failed", K(ret), K(attr), K(dest));
   } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key, attr.start_scn_,
           attr.piece_switch_interval_, attr.start_scn_, attr.base_piece_id_,
-          share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest))) {
+          share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest, dest_id))) {
     ARCHIVE_LOG(ERROR, "archive round mgr set archive info failed", K(ret), K(attr));
   } else {
     notify_start_();

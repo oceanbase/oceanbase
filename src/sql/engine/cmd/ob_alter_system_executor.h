@@ -25,6 +25,7 @@ namespace sql
 class ObExecContext;
 class ObAdminServerStmt;
 class ObAdminZoneStmt;
+class ObAdminStorageStmt;
 class ObBootstrapStmt;
 
 #define DEF_SIMPLE_EXECUTOR(name)                          \
@@ -38,6 +39,8 @@ class ObBootstrapStmt;
     DISALLOW_COPY_AND_ASSIGN(name##Executor);              \
   }
 
+DEF_SIMPLE_EXECUTOR(ObAdminStorage);
+
 DEF_SIMPLE_EXECUTOR(ObFreeze);
 
 DEF_SIMPLE_EXECUTOR(ObFlushCache);
@@ -47,6 +50,8 @@ DEF_SIMPLE_EXECUTOR(ObFlushKVCache);
 DEF_SIMPLE_EXECUTOR(ObFlushIlogCache);
 
 DEF_SIMPLE_EXECUTOR(ObFlushDagWarnings);
+
+DEF_SIMPLE_EXECUTOR(ObFlushSSMicroCache);
 
 DEF_SIMPLE_EXECUTOR(ObSwitchReplicaRole);
 
@@ -71,6 +76,8 @@ DEF_SIMPLE_EXECUTOR(ObWashMemFragmentation);
 DEF_SIMPLE_EXECUTOR(ObRefreshIOCalibraiton);
 
 DEF_SIMPLE_EXECUTOR(ObSetConfig);
+
+DEF_SIMPLE_EXECUTOR(ObChangeExternalStorageDest);
 
 DEF_SIMPLE_EXECUTOR(ObClearLocationCache);
 

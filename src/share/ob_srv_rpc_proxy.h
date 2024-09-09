@@ -18,8 +18,9 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_common_id.h"
 #include "share/ob_rpc_struct.h"
-#include "observer/ob_server_struct.h"
+#include "share/ob_server_struct.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_struct.h"
+#include "observer/net/ob_shared_storage_net_throt_rpc_struct.h"
 #include "share/ob_heartbeat_struct.h"
 #include "share/resource_limit_calculator/ob_resource_commmon.h"
 #include "observer/table_load/control/ob_table_load_control_rpc_struct.h"
@@ -28,10 +29,6 @@
 
 namespace oceanbase
 {
-namespace observer
-{
-class ObGlobalContext;
-}
 namespace obrpc
 {
 
@@ -106,8 +103,9 @@ public:
   RPC_S(PR5 refresh_memory_stat, OB_REFRESH_MEMORY_STAT);
   RPC_S(PR5 wash_memory_fragmentation, OB_WASH_MEMORY_FRAGMENTATION);
   RPC_S(PR5 bootstrap, OB_BOOTSTRAP, (ObBootstrapArg));
-  RPC_S(PR5 is_empty_server, OB_IS_EMPTY_SERVER, (ObCheckServerEmptyArg), Bool);
-  RPC_S(PR5 check_server_for_adding_server, OB_CHECK_SERVER_FOR_ADDING_SERVER, (ObCheckServerForAddingServerArg), ObCheckServerForAddingServerResult);
+  RPC_S(PR5 check_server_empty, OB_CHECK_SERVER_EMPTY, (ObCheckServerEmptyArg), Bool);
+  RPC_S(PR5 check_server_empty_with_result, OB_CHECK_SERVER_EMPTY_WITH_RESULT, (ObCheckServerEmptyArg), ObCheckServerEmptyResult);
+  RPC_S(PR5 prepare_server_for_adding_server, OB_PREPARE_SERVER_FOR_ADDING_SERVER, (ObPrepareServerForAddingServerArg), ObPrepareServerForAddingServerResult);
   RPC_S(PR5 check_server_machine_status, OB_CHECK_SERVER_MACHINE_STATUS, (ObCheckServerMachineStatusArg), ObCheckServerMachineStatusResult);
   RPC_S(PR5 check_deployment_mode_match, OB_CHECK_DEPLOYMENT_MODE, (ObCheckDeploymentModeArg), Bool);
 #ifdef OB_BUILD_TDE_SECURITY
@@ -149,9 +147,11 @@ public:
   RPC_S(PR5 calc_column_checksum_request, OB_CALC_COLUMN_CHECKSUM_REQUEST, (ObCalcColumnChecksumRequestArg), obrpc::ObCalcColumnChecksumRequestRes);
   RPC_AP(PR5 build_ddl_single_replica_request, OB_DDL_BUILD_SINGLE_REPLICA_REQUEST, (obrpc::ObDDLBuildSingleReplicaRequestArg), obrpc::ObDDLBuildSingleReplicaRequestResult);
   RPC_S(PR5 check_and_cancel_ddl_complement_dag, OB_CHECK_AND_CANCEL_DDL_COMPLEMENT_DAG, (ObDDLBuildSingleReplicaRequestArg), Bool);
+  RPC_S(PR5 check_and_cancel_delete_lob_meta_row_dag, OB_CHECK_AND_CANCEL_DELETE_LOB_META_ROW_DAG, (ObDDLBuildSingleReplicaRequestArg), Bool);
   RPC_S(PR5 fetch_tablet_autoinc_seq_cache, OB_FETCH_TABLET_AUTOINC_SEQ_CACHE, (obrpc::ObFetchTabletSeqArg), obrpc::ObFetchTabletSeqRes);
   RPC_AP(PR5 batch_get_tablet_autoinc_seq, OB_BATCH_GET_TABLET_AUTOINC_SEQ, (obrpc::ObBatchGetTabletAutoincSeqArg), obrpc::ObBatchGetTabletAutoincSeqRes);
   RPC_AP(PR5 batch_set_tablet_autoinc_seq, OB_BATCH_SET_TABLET_AUTOINC_SEQ, (obrpc::ObBatchSetTabletAutoincSeqArg), obrpc::ObBatchSetTabletAutoincSeqRes);
+  RPC_S(PR5 set_tablet_autoinc_seq, OB_SET_TABLET_AUTOINC_SEQ, (obrpc::ObBatchSetTabletAutoincSeqArg), obrpc::ObBatchSetTabletAutoincSeqRes);
   RPC_AP(PR5 clear_tablet_autoinc_seq_cache, OB_CLEAR_TABLET_AUTOINC_SEQ_CACHE, (obrpc::ObClearTabletAutoincSeqCacheArg), obrpc::Int64);
   RPC_S(PR5 batch_get_tablet_binding, OB_BATCH_GET_TABLET_BINDING, (obrpc::ObBatchGetTabletBindingArg), obrpc::ObBatchGetTabletBindingRes);
   RPC_S(PRD force_create_sys_table, OB_FORCE_CREATE_SYS_TABLE, (ObForceCreateSysTableArg));
@@ -215,6 +215,17 @@ public:
   RPC_S(PR4 admin_update_lock_op, OB_UPDATE_OBJ_LOCK, (transaction::tablelock::ObAdminUpdateLockOpArg));
   RPC_S(PR5 remote_write_ddl_redo_log, OB_REMOTE_WRITE_DDL_REDO_LOG, (obrpc::ObRpcRemoteWriteDDLRedoLogArg));
   RPC_S(PR5 remote_write_ddl_commit_log, OB_REMOTE_WRITE_DDL_COMMIT_LOG, (obrpc::ObRpcRemoteWriteDDLCommitLogArg), obrpc::Int64);
+  #ifdef OB_BUILD_SHARED_STORAGE
+  RPC_S(PR5 remote_write_ddl_finsih_log, OB_REMOTE_WRITE_DDL_FINISH_LOG, (obrpc::ObRpcRemoteWriteDDLFinishLogArg));
+  RPC_S(PR5 get_ss_macro_block, OB_GET_SS_MACRO_BLOCK, (obrpc::ObGetSSMacroBlockArg), obrpc::ObGetSSMacroBlockResult);
+  RPC_S(PR5 sync_hot_micro_key, OB_SYNC_HOT_MICRO_KEY, (obrpc::ObLSSyncHotMicroKeyArg));
+  RPC_S(PR5 get_ss_phy_block_info, OB_GET_SS_PHY_BLOCK_INFO, (obrpc::ObGetSSPhyBlockInfoArg), obrpc::ObGetSSPhyBlockInfoResult);
+  RPC_S(PR5 get_ss_micro_block_meta, OB_GET_SS_MICRO_BLOCK_META, (obrpc::ObGetSSMicroBlockMetaArg), obrpc::ObGetSSMicroBlockMetaResult);
+  RPC_S(PR5 get_ss_macro_block_by_uri, OB_GET_SS_MACRO_BLOCK_BY_URI, (obrpc::ObGetSSMacroBlockByURIArg), obrpc::ObGetSSMacroBlockByURIResult);
+  RPC_S(PR5 del_ss_tablet_meta, OB_DEL_SS_TABLET_META, (obrpc::ObDelSSTabletMetaArg));
+  RPC_S(PR5 enable_ss_micro_cache, OB_ENABLE_SS_MICRO_CACHE, (obrpc::ObEnableSSMicroCacheArg));
+  RPC_S(PR5 get_ss_micro_cache_info, OB_GET_SS_MICRO_CACHE_INFO, (obrpc::ObGetSSMicroCacheInfoArg), obrpc::ObGetSSMicroCacheInfoResult);
+  #endif
   RPC_S(PR5 remote_write_ddl_inc_commit_log, OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG, (obrpc::ObRpcRemoteWriteDDLIncCommitLogArg), ObRpcRemoteWriteDDLIncCommitLogRes);
   RPC_S(PR5 check_ls_can_offline, OB_CHECK_LS_CAN_OFFLINE, (obrpc::ObCheckLSCanOfflineArg));
   RPC_S(PR5 clean_sequence_cache, obrpc::OB_CLEAN_SEQUENCE_CACHE, (obrpc::UInt64));
@@ -249,6 +260,7 @@ public:
   RPC_AP(PR5 update_tenant_info_cache, OB_UPDATE_TENANT_INFO_CACHE, (obrpc::ObUpdateTenantInfoCacheArg), obrpc::ObUpdateTenantInfoCacheRes);
   RPC_AP(PR5 broadcast_consensus_version, OB_BROADCAST_CONSENSUS_VERSION, (obrpc::ObBroadcastConsensusVersionArg), obrpc::ObBroadcastConsensusVersionRes);
   RPC_S(PR5 direct_load_control, OB_DIRECT_LOAD_CONTROL, (observer::ObDirectLoadControlRequest), observer::ObDirectLoadControlResult);
+  RPC_AP(PR5 check_storage_operation_status, OB_CHECK_STORAGE_OPERATION_STATUS, (obrpc::ObCheckStorageOperationStatusArg), obrpc::ObCheckStorageOperationStatusResult);
   RPC_S(PR5 direct_load_resource, OB_DIRECT_LOAD_RESOURCE, (observer::ObDirectLoadResourceOpRequest), observer::ObDirectLoadResourceOpResult);
   RPC_S(PR5 dispatch_ttl, OB_TABLE_TTL, (obrpc::ObTTLRequestArg), obrpc::ObTTLResponseArg);
   RPC_S(PR5 admin_unlock_member_list_op, OB_HA_UNLOCK_MEMBER_LIST, (obrpc::ObAdminUnlockMemberListOpArg));
@@ -259,17 +271,21 @@ public:
   RPC_S(PR5 notify_clone_scheduler, OB_NOTIFY_CLONE_SCHEDULER, (obrpc::ObNotifyCloneSchedulerArg), obrpc::ObNotifyCloneSchedulerResult);
   RPC_S(PR5 notify_tenant_thread, OB_NOTIFY_TENANT_THREAD, (obrpc::ObNotifyTenantThreadArg));
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
+  RPC_AP(PR5 shared_storage_net_throt_predict, OB_SHARED_STORAGE_NET_THROT_PREDICT, (obrpc::ObSSNTEndpointArg), obrpc::ObSharedDeviceResourceArray);
+  RPC_AP(PR5 shared_storage_net_throt_set, OB_SHARED_STORAGE_NET_THROT_SET, (obrpc::ObSharedDeviceResourceArray), obrpc::ObSSNTSetRes);
   RPC_AP(PR5 kill_client_session, OB_KILL_CLIENT_SESSION, (ObKillClientSessionArg), ObKillClientSessionRes);
   RPC_S(PR5 client_session_create_time, OB_CLIENT_SESSION_CONNECT_TIME, (ObClientSessionCreateTimeAndAuthArg), ObClientSessionCreateTimeAndAuthRes);
   RPC_AP(PR5 tablet_location_send, OB_TABLET_LOCATION_BROADCAST, (obrpc::ObTabletLocationSendArg), obrpc::ObTabletLocationSendResult);
   RPC_S(PR5 cancel_gather_stats, OB_CANCEL_GATHER_STATS, (ObCancelGatherStatsArg));
   RPC_S(PR5 force_set_tenant_log_disk, OB_LOG_FORCE_SET_TENANT_LOG_DISK, (obrpc::ObForceSetTenantLogDiskArg));
   RPC_S(PR5 dump_server_usage, OB_FORCE_DUMP_SERVER_USAGE, (obrpc::ObDumpServerUsageRequest), obrpc::ObDumpServerUsageResult);
+  RPC_S(PR5 change_external_storage_dest, obrpc::OB_CHANGE_EXTERNAL_STORAGE_DEST, (ObAdminSetConfigArg));
   RPC_AP(PR5 refresh_service_name, OB_REFRESH_SERVICE_NAME, (obrpc::ObRefreshServiceNameArg), obrpc::ObRefreshServiceNameRes);
   RPC_AP(PR5 get_tenant_logical_resource, OB_CAL_STANDBY_TENANT_PHY_RESOURCE, (obrpc::ObGetTenantResArg), obrpc::ObTenantLogicalRes);
   RPC_S(PR5 phy_res_calculate_by_unit, OB_CAL_UNIT_PHY_RESOURCE, (obrpc::Int64), share::ObMinPhyResourceResult);
   RPC_S(PR5 rpc_reverse_keepalive, OB_RPC_REVERSE_KEEPALIVE, (obrpc::ObRpcReverseKeepaliveArg), obrpc::ObRpcReverseKeepaliveResp);
   RPC_AP(PR5 kill_query_client_session, OB_KILL_QUERY_CLIENT_SESSION, (ObKillQueryClientSessionArg), obrpc::Int64);
+  RPC_S(PR5 notify_shared_storage_info, OB_NOTIFY_SHARED_STORAGE_INFO, (obrpc::ObNotifySharedStorageInfoArg), obrpc::ObNotifySharedStorageInfoResult);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc

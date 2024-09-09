@@ -76,7 +76,7 @@ public:
   RPC_S(PRD rename_table, obrpc::OB_RENAME_TABLE, (ObRenameTableArg));
   RPC_S(PRD truncate_table, obrpc::OB_TRUNCATE_TABLE, (ObTruncateTableArg), ObDDLRes);
   RPC_S(PRD truncate_table_v2, obrpc::OB_TRUNCATE_TABLE_V2, (ObTruncateTableArg), ObDDLRes);
-  RPC_S(PRD generate_aux_index_schema, obrpc::OB_GENERATE_AUX_INDEX_SCHEMA, (obrpc::ObGenerateAuxIndexSchemaArg), obrpc::ObGenerateAuxIndexSchemaRes);
+  RPC_S(PRD create_aux_index, obrpc::OB_CREATE_AUX_INDEX, (obrpc::ObCreateAuxIndexArg), obrpc::ObCreateAuxIndexRes);
   RPC_S(PRD create_index, obrpc::OB_CREATE_INDEX, (ObCreateIndexArg), ObAlterTableRes);
   RPC_S(PRD drop_index, obrpc::OB_DROP_INDEX, (ObDropIndexArg), ObDropIndexRes);
   RPC_S(PRD rebuild_vec_index, obrpc::OB_REBUILD_VEC_INDEX, (ObRebuildIndexArg), ObAlterTableRes);
@@ -252,6 +252,9 @@ public:
   RPC_S(PR5 start_zone, obrpc::OB_START_ZONE, (ObAdminZoneArg));
   RPC_S(PR5 stop_zone, obrpc::OB_STOP_ZONE, (ObAdminZoneArg));
   RPC_S(PR5 alter_zone, obrpc::OB_ALTER_ZONE, (ObAdminZoneArg));
+  RPC_S(PR5 add_storage, obrpc::OB_ADD_STORAGE, (ObAdminStorageArg));
+  RPC_S(PR5 drop_storage, obrpc::OB_DROP_STORAGE, (ObAdminStorageArg));
+  RPC_S(PR5 alter_storage, obrpc::OB_ALTER_STORAGE, (ObAdminStorageArg));
   RPC_S(PR5 admin_set_tracepoint, obrpc::OB_RS_SET_TP, (ObAdminSetTPArg));
   RPC_S(PR5 refresh_time_zone_info, obrpc::OB_REFRESH_TIME_ZONE_INFO, (ObRefreshTimezoneArg));
   RPC_S(PR5 request_time_zone_info, obrpc::OB_REQUEST_TIME_ZONE_INFO, (common::ObRequestTZInfoArg), common::ObRequestTZInfoResult);

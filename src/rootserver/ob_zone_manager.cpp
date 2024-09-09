@@ -367,7 +367,9 @@ int ObZoneManagerBase::add_zone(
   ObRegion my_region = region;
   ObIDC my_idc = idc;
   ObZoneType my_zone_type = zone_type;
-  ObZoneInfo::StorageType storage_type = ObZoneInfo::STORAGE_TYPE_LOCAL;
+  ObZoneInfo::StorageType storage_type = GCTX.is_shared_storage_mode() ?
+                                         ObZoneInfo::STORAGE_TYPE_SHARED_STORAGE :
+                                         ObZoneInfo::STORAGE_TYPE_LOCAL;
   if (my_region.is_empty()) {
     my_region.assign(DEFAULT_REGION_NAME); // compatible with ob1.2
   }
@@ -397,6 +399,9 @@ int ObZoneManagerBase::add_zone(
     LOG_ERROR("zone is already exist, cannot add", K(zone), K(ret));
   } else if (OB_ENTRY_NOT_EXIST != ret) {
     LOG_WARN("find_zone failed", K(zone), K(ret));
+  } else if (GCTX.is_shared_storage_mode()
+             && OB_FAIL(check_all_zone_regions_the_same_(my_region))) {
+    LOG_WARN("failed to check_all_zone_regions_the_same", KR(ret), K(my_region));
   } else {
     ret = OB_SUCCESS;
     zone_infos_[zone_count_].reset();
@@ -573,7 +578,24 @@ int ObZoneManagerBase::alter_zone(
         LOG_ERROR("invalid index", K(ret), K(index));
       } else {
         ObZoneItemTransUpdater updater;
-        if (OB_FAIL(updater.start(*proxy_))) {
+        if (GCTX.is_shared_storage_mode()
+            && arg.alter_zone_options_.has_member(obrpc::ObAdminZoneArg::ALTER_ZONE_REGION)) {
+          // For now in shared_storage mode, all zones must keep the same region,
+          //  and can not update region name after bootstrap.
+          // This constraint will be canceled in later verison.
+          ObRegion old_region;
+          if (OB_FAIL(zone_infos_[index].get_region(old_region))) {
+            LOG_WARN("failed to get_region", KR(ret));
+          } else if (old_region != my_region) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("alter region of one of several zones not allowed in shared_storage mode",
+                     KR(ret), K(old_region), K(arg));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one region in shared-storage mode");
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // failed
+        } else if (OB_FAIL(updater.start(*proxy_))) {
           LOG_WARN("start transaction failed", K(ret));
         } else {
           if (arg.alter_zone_options_.has_member(obrpc::ObAdminZoneArg::ALTER_ZONE_REGION)) {
@@ -1184,6 +1206,35 @@ int ObZoneManagerBase::construct_zone_region_list(
           LOG_WARN("fail to push back", K(ret));
         } else {} // no more to do
       }
+    }
+  }
+  return ret;
+}
+
+int ObZoneManagerBase::check_all_zone_regions_the_same_(const common::ObRegion &region)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check_inner_stat failed", K(ret));
+  } else {
+    bool same = true;
+    for (int64_t i = 0; OB_SUCC(ret) && same && i < zone_count_; ++i) {
+      common::ObRegion zone_region;
+      if (OB_UNLIKELY(!zone_infos_[i].is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid zone_info", KR(ret), "zone_info", zone_infos_[i]);
+      } else if (OB_FAIL(zone_infos_[i].get_region(zone_region))) {
+        LOG_WARN("fail to get region", K(ret));
+      } else if (zone_region != region) {
+        same = false;
+      }
+    }
+    if (OB_SUCC(ret) && !same) {
+      // For now in shared_storage mode, all zones must keep the same region.
+      // This constraint will be canceled in later verison.
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("new region is different with current zone regions", KR(ret), K(region));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one region in shared-storage mode");
     }
   }
   return ret;

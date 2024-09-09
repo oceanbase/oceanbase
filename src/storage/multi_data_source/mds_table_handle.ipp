@@ -124,6 +124,7 @@ template <typename MdsTableType>
 int MdsTableHandle::init(ObIAllocator &allocator,
                          const ObTabletID tablet_id,
                          const share::ObLSID ls_id,
+                         const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
                          ObTabletPointer *pointer,
                          ObMdsTableMgr *p_mgr)
 {
@@ -141,7 +142,7 @@ int MdsTableHandle::init(ObIAllocator &allocator,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(p_mds_table.construct(allocator))) {
       MDS_LOG(WARN, "construct mds table impl failed", KP(this), K(lbt()));
-    } else if (OB_FAIL(p_mds_table->init(tablet_id, ls_id, pointer, p_mgr))) {
+    } else if (OB_FAIL(p_mds_table->init(tablet_id, ls_id, mds_ckpt_scn_from_tablet, pointer, p_mgr))) {
       MDS_LOG(WARN, "init mds table failed", KR(ret), K(mds_table_id_),
                     K(typeid(MdsTableType).name()));
     } else {
@@ -875,7 +876,7 @@ inline int MdsTableHandle::mark_switched_to_empty_shell() const
 }
 
 template <int N>
-inline int MdsTableHandle::forcely_reset_mds_table(const char (&reason)[N])
+inline int MdsTableHandle::forcely_remove_nodes(const char (&reason)[N], share::SCN redo_scn_limit)
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
@@ -883,7 +884,7 @@ inline int MdsTableHandle::forcely_reset_mds_table(const char (&reason)[N])
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(WARN, "p_mds_table_base_ is invalid", K(*this));
   } else {
-    p_mds_table_base_->forcely_reset_mds_table(reason);
+    p_mds_table_base_->forcely_remove_nodes(reason, redo_scn_limit);
   }
   return ret;
 }

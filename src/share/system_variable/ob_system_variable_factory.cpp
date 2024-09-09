@@ -911,6 +911,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_transmission_checksum",
   "ob_enable_truncate_flashback",
   "ob_global_debug_sync",
+  "ob_hnsw_ef_search",
   "ob_interm_result_mem_limit",
   "ob_kv_mode",
   "ob_last_schema_version",
@@ -1518,6 +1519,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM,
   SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK,
   SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
+  SYS_VAR_OB_HNSW_EF_SEARCH,
   SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT,
   SYS_VAR_OB_KV_MODE,
   SYS_VAR_OB_LAST_SCHEMA_VERSION,
@@ -2222,6 +2224,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "group_replication_group_seeds",
   "slave_rows_search_algorithms",
   "slave_type_conversions",
+  "ob_hnsw_ef_search",
   "delay_key_write",
   "innodb_large_prefix",
   "key_buffer_size",
@@ -3030,6 +3033,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarGroupReplicationGroupSeeds)
         + sizeof(ObSysVarSlaveRowsSearchAlgorithms)
         + sizeof(ObSysVarSlaveTypeConversions)
+        + sizeof(ObSysVarObHnswEfSearch)
         + sizeof(ObSysVarDelayKeyWrite)
         + sizeof(ObSysVarInnodbLargePrefix)
         + sizeof(ObSysVarKeyBufferSize)
@@ -7624,6 +7628,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLAVE_TYPE_CONVERSIONS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarSlaveTypeConversions));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswEfSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswEfSearch", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_HNSW_EF_SEARCH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObHnswEfSearch));
       }
     }
     if (OB_SUCC(ret)) {
@@ -14065,6 +14078,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveTypeConversions())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarSlaveTypeConversions", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_HNSW_EF_SEARCH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObHnswEfSearch)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObHnswEfSearch)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswEfSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObHnswEfSearch", K(ret));
       }
       break;
     }

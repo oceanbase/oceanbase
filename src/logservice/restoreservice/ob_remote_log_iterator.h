@@ -86,6 +86,10 @@ public:
       archive::LargeBufferPool *buffer_pool,
       logservice::ObLogExternalStorageHandler *log_ext_handler,
       const int64_t single_read_size = DEFAULT_SINGLE_READ_SIZE);
+
+  // set user of the remote log iterator
+  // @param[in] user_type
+  int set_io_context(const palf::LogIOContext &io_ctx);
   // @brief used as local iterator, get one entry if not to end
   // @param[out] entry LogGroupEntry or LogEntry
   // @param[out] lsn entry start lsn

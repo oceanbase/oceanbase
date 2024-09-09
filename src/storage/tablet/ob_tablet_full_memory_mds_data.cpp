@@ -12,7 +12,7 @@
 
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "lib/allocator/ob_allocator.h"
-#include "storage/blockstore/ob_shared_block_reader_writer.h"
+#include "storage/blockstore/ob_shared_object_reader_writer.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/multi_data_source/mds_table_impl.h"

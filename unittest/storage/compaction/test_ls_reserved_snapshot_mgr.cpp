@@ -58,7 +58,7 @@ void TestLSReservedSnapshotMgr::SetUpTestCase()
 
   // ls service cannot service before ObServerCheckpointSlogHandler starts
   // running
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  ObServerStorageMetaService::get_instance().is_started_ = true;
   // create ls
   ObLSHandle ls_handle;
   ret = TestDmlCommon::create_ls(TEST_TENANT_ID, ObLSID(TEST_LS_ID), ls_handle);

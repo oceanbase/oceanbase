@@ -83,29 +83,29 @@ int ObTabletMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
 }
 
 
-int ObTabletMdsMinorMergeCtx::update_tablet(
-    const ObSSTable &sstable,
-    ObTabletHandle &new_tablet_handle)
+int ObTabletMdsMinorMergeCtx::update_tablet(ObTabletHandle &new_tablet_handle)
 {
   int ret = OB_SUCCESS;
-  const ObUpdateTableStoreParam mds_param(&sstable,
-                                          static_param_.version_range_.snapshot_version_,
-                                          1/*multi_version_start*/,
-                                          ObMdsSchemaHelper::get_instance().get_storage_schema(),
-                                          get_ls_rebuild_seq(),
-                                          true/*need_check_transfer_seq*/,
-                                          get_tablet()->get_tablet_meta().transfer_info_.transfer_seq_,
-                                          false/*need_report*/,
-                                          sstable.get_end_scn()/*clog_checkpoint_scn*/,
-                                          false/*need_check_sstable*/,
-                                          false/*allow_duplicate_sstable*/,
-                                          get_merge_type()/*merge_type*/);
-  if (OB_FAIL(get_ls()->update_tablet_table_store(get_tablet_id(), mds_param, new_tablet_handle))) {
-    LOG_WARN("failed to update tablet table store", K(ret), K(mds_param), K(new_tablet_handle));
-    CTX_SET_DIAGNOSE_LOCATION(*this);
+  const ObSSTable *sstable = nullptr;
+  if (OB_FAIL(create_sstable(sstable))) {
+    LOG_WARN("failed to create sstable", KR(ret), "dag_param", get_dag_param());
   } else {
-    LOG_INFO("success to update tablet table store with mds table", K(sstable), K(new_tablet_handle));
-    time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
+    ObUpdateTableStoreParam mds_param(static_param_.version_range_.snapshot_version_,
+                                      1/*multi_version_start*/,
+                                      ObMdsSchemaHelper::get_instance().get_storage_schema(),
+                                      get_ls_rebuild_seq(),
+                                      sstable,
+                                      false/*allow_duplicate_sstable*/);
+    if (OB_FAIL(mds_param.init_with_compaction_info(
+      ObCompactionTableStoreParam(get_merge_type(), sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/)))) {
+      LOG_WARN("failed to init with compaction info", KR(ret));
+    } else if (OB_FAIL(get_ls()->update_tablet_table_store(get_tablet_id(), mds_param, new_tablet_handle))) {
+      LOG_WARN("failed to update tablet table store", K(ret), K(mds_param), K(new_tablet_handle));
+      CTX_SET_DIAGNOSE_LOCATION(*this);
+    } else {
+      LOG_INFO("success to update tablet table store with mds table", K(sstable), K(new_tablet_handle));
+      time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
+    }
   }
   return ret;
 }
@@ -162,9 +162,7 @@ int ObTabletCrossLSMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &ge
   return ret;
 }
 
-int ObTabletCrossLSMdsMinorMergeCtx::update_tablet(
-    const blocksstable::ObSSTable &sstable,
-    ObTabletHandle &new_tablet_handle)
+int ObTabletCrossLSMdsMinorMergeCtx::update_tablet(ObTabletHandle &new_tablet_handle)
 {
   int ret = OB_NOT_SUPPORTED;
   // only called in finish merge task, such as ObTabletMergeFinishTask/ObCOMergeFinishTask

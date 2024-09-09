@@ -109,6 +109,7 @@ int ObInnerTableSchema::all_tenant_profile_aux_lob_piece_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_PROFILE_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_PROFILE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -199,6 +200,7 @@ int ObInnerTableSchema::all_tenant_profile_history_aux_lob_piece_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_PROFILE_HISTORY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_PROFILE_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -289,6 +291,7 @@ int ObInnerTableSchema::all_tenant_security_audit_aux_lob_piece_schema(ObTableSc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SECURITY_AUDIT_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_SECURITY_AUDIT_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -379,6 +382,7 @@ int ObInnerTableSchema::all_tenant_security_audit_history_aux_lob_piece_schema(O
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SECURITY_AUDIT_HISTORY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_SECURITY_AUDIT_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -469,6 +473,7 @@ int ObInnerTableSchema::all_tenant_trigger_aux_lob_piece_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TRIGGER_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TRIGGER_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -559,6 +564,7 @@ int ObInnerTableSchema::all_tenant_trigger_history_aux_lob_piece_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TRIGGER_HISTORY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TRIGGER_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -649,6 +655,7 @@ int ObInnerTableSchema::all_seed_parameter_aux_lob_piece_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_SEED_PARAMETER_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_SEED_PARAMETER_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -739,6 +746,7 @@ int ObInnerTableSchema::all_tenant_security_audit_record_aux_lob_piece_schema(Ob
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SECURITY_AUDIT_RECORD_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_SECURITY_AUDIT_RECORD_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -829,6 +837,7 @@ int ObInnerTableSchema::all_tenant_sysauth_aux_lob_piece_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SYSAUTH_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_SYSAUTH_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -919,6 +928,7 @@ int ObInnerTableSchema::all_tenant_sysauth_history_aux_lob_piece_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SYSAUTH_HISTORY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_SYSAUTH_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1009,6 +1019,7 @@ int ObInnerTableSchema::all_tenant_objauth_aux_lob_piece_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OBJAUTH_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OBJAUTH_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1099,6 +1110,7 @@ int ObInnerTableSchema::all_tenant_objauth_history_aux_lob_piece_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OBJAUTH_HISTORY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OBJAUTH_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1189,6 +1201,7 @@ int ObInnerTableSchema::all_restore_info_aux_lob_piece_schema(ObTableSchema &tab
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_RESTORE_INFO_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_RESTORE_INFO_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1279,6 +1292,7 @@ int ObInnerTableSchema::all_tenant_error_aux_lob_piece_schema(ObTableSchema &tab
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_ERROR_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_ERROR_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1369,6 +1383,7 @@ int ObInnerTableSchema::all_restore_progress_aux_lob_piece_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_RESTORE_PROGRESS_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_RESTORE_PROGRESS_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1459,6 +1474,7 @@ int ObInnerTableSchema::all_tenant_object_type_aux_lob_piece_schema(ObTableSchem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OBJECT_TYPE_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OBJECT_TYPE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1549,6 +1565,7 @@ int ObInnerTableSchema::all_tenant_object_type_history_aux_lob_piece_schema(ObTa
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OBJECT_TYPE_HISTORY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OBJECT_TYPE_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1639,6 +1656,7 @@ int ObInnerTableSchema::all_tenant_time_zone_aux_lob_piece_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TIME_ZONE_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TIME_ZONE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1729,6 +1747,7 @@ int ObInnerTableSchema::all_tenant_time_zone_name_aux_lob_piece_schema(ObTableSc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TIME_ZONE_NAME_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TIME_ZONE_NAME_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1819,6 +1838,7 @@ int ObInnerTableSchema::all_tenant_time_zone_transition_aux_lob_piece_schema(ObT
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TIME_ZONE_TRANSITION_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TIME_ZONE_TRANSITION_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1909,6 +1929,7 @@ int ObInnerTableSchema::all_tenant_time_zone_transition_type_aux_lob_piece_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TIME_ZONE_TRANSITION_TYPE_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TIME_ZONE_TRANSITION_TYPE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1999,6 +2020,7 @@ int ObInnerTableSchema::all_tenant_constraint_column_aux_lob_piece_schema(ObTabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_CONSTRAINT_COLUMN_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_CONSTRAINT_COLUMN_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2089,6 +2111,7 @@ int ObInnerTableSchema::all_tenant_constraint_column_history_aux_lob_piece_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_CONSTRAINT_COLUMN_HISTORY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_CONSTRAINT_COLUMN_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2179,6 +2202,7 @@ int ObInnerTableSchema::all_tenant_global_transaction_aux_lob_piece_schema(ObTab
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_GLOBAL_TRANSACTION_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_GLOBAL_TRANSACTION_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2269,6 +2293,7 @@ int ObInnerTableSchema::all_tenant_dependency_aux_lob_piece_schema(ObTableSchema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_DEPENDENCY_AUX_LOB_PIECE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_DEPENDENCY_TID);
 
   table_schema.set_max_used_column_id(column_id);

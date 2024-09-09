@@ -69,7 +69,7 @@ public:
     ASSERT_EQ(OB_SUCCESS, init_tenant_mgr());
     blocksstable::TestDataFilePrepare::SetUp();
     ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
-    ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
+    ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
     if (!is_server_tenant(tenant_id_)) {
       static ObTenantBase tenant_ctx(tenant_id_);
       ObTenantEnv::set_tenant(&tenant_ctx);
@@ -83,7 +83,7 @@ public:
       tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
       EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
       EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
-      tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+      tf_mgr->get_sn_file_manager().page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
       EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
       tenant_ctx.set(tf_mgr);
 

@@ -14,6 +14,7 @@
 
 #include "storage/backup/ob_backup_extern_info_mgr.h"
 #include "common/ob_smart_var.h"
+#include "common/storage/ob_device_common.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_path.h"
 #include "storage/backup/ob_backup_data_store.h"
@@ -113,23 +114,24 @@ ObExternLSMetaMgr::ObExternLSMetaMgr()
       backup_set_desc_(),
       ls_id_(),
       turn_id_(),
-      retry_id_()
+      retry_id_(),
+      dest_id_()
 {}
 
 ObExternLSMetaMgr::~ObExternLSMetaMgr()
 {}
 
 int ObExternLSMetaMgr::init(const ObBackupDest &backup_dest, const ObBackupSetDesc &backup_set_desc,
-    const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id)
+    const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const int64_t dest_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("extern backup data mgr init twice.", K(ret));
   } else if (!backup_dest.is_valid() || !backup_set_desc.is_valid() ||
-             !ls_id.is_valid()) {
+             !ls_id.is_valid() || dest_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(backup_dest), K(backup_set_desc), K(ls_id));
+    LOG_WARN("get invalid args", K(ret), K(backup_dest), K(backup_set_desc), K(ls_id), K(dest_id));
   } else if (OB_FAIL(backup_dest_.deep_copy(backup_dest))) {
     LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
   } else {
@@ -137,6 +139,7 @@ int ObExternLSMetaMgr::init(const ObBackupDest &backup_dest, const ObBackupSetDe
     ls_id_ = ls_id;
     turn_id_ = turn_id;
     retry_id_ = retry_id;
+    dest_id_ = dest_id;
     is_inited_ = true;
   }
   return ret;
@@ -151,6 +154,10 @@ int ObExternLSMetaMgr::write_ls_meta_info(const ObBackupLSMetaInfo &ls_meta)
   ObArenaAllocator allocator;
   ObBackupPath path;
   ObBackupIoAdapter util;
+  ObStorageIdMod mod;
+  mod.storage_id_ = dest_id_;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+  const int64_t dest_id = dest_id_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data extern mgr not init", K(ret));
@@ -166,7 +173,11 @@ int ObExternLSMetaMgr::write_ls_meta_info(const ObBackupLSMetaInfo &ls_meta)
     LOG_WARN("failed to get ls meta backup path", K(ret), K(ls_meta));
   } else if (OB_FAIL(util.mk_parent_dir(path.get_obstr(), backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to make parent dir", K(ret), K(path));
-  } else if (OB_FAIL(util.write_single_file(path.get_obstr(), backup_dest_.get_storage_info(), buf, buf_size))) {
+  } else if (OB_FAIL(util.write_single_file(path.get_obstr(),
+                                            backup_dest_.get_storage_info(),
+                                            buf,
+                                            buf_size,
+                                            mod))) {
     LOG_WARN("failed to write tenant tablet logstream info.", K(ret), K(path), K(ls_meta));
   } else {
     LOG_INFO("succeed to write ls meta info", K(path), K(ls_meta));
@@ -184,13 +195,16 @@ int ObExternLSMetaMgr::read_ls_meta_info(ObBackupLSMetaInfo &ls_meta)
   ObArenaAllocator allocator;
   ObBackupIoAdapter util;
   share::ObBackupStorageInfo storage_info;
+  ObStorageIdMod mod;
+  mod.storage_id_ = dest_id_;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup extern mgr not init.", K(ret));
   } else if (OB_FAIL(get_ls_meta_backup_path_(path))) {
     LOG_WARN("failed to get backup ls meta path", K(ret));
   } else if (OB_FAIL(util.get_file_length(path.get_obstr(), backup_dest_.get_storage_info(), file_length))) {
-    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+    if (OB_OBJECT_NOT_EXIST != ret) {
       LOG_WARN("failed to get ls meta backup path file length.", K(ret), K(path));
     } else {
       LOG_INFO("tablet to ls info file not exist.", K(ret), K(path));
@@ -201,7 +215,12 @@ int ObExternLSMetaMgr::read_ls_meta_info(ObBackupLSMetaInfo &ls_meta)
   } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(path), K(file_length));
-  } else if (OB_FAIL(util.read_single_file(path.get_obstr(), backup_dest_.get_storage_info(), buf, file_length, read_size))) {
+  } else if (OB_FAIL(util.read_single_file(path.get_obstr(),
+                                           backup_dest_.get_storage_info(),
+                                           buf,
+                                           file_length,
+                                           read_size,
+                                           mod))) {
     LOG_WARN("failed to read tablet to ls info file.", K(ret), K(path), K(file_length));
   } else if (file_length != read_size) {
     ret = OB_ERR_UNEXPECTED;
@@ -339,14 +358,15 @@ int64_t ObTabletInfoTrailer::get_serialize_size_() const
 
 int ObExternTabletMetaWriter::init(
     const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
-    const int64_t turn_id, const int64_t retry_id, const bool is_final_fuse, common::ObInOutBandwidthThrottle &bandwidth_throttle)
+    const int64_t turn_id, const int64_t retry_id, const int64_t dest_id,
+    const bool is_final_fuse, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   const int64_t start_file_id = 1;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tablet meta writer init twice", K(ret));
-  } else if (!backup_set_dest.is_valid() || !ls_id.is_valid() || turn_id < 1 || retry_id < 0) {
+  } else if (!backup_set_dest.is_valid() || !ls_id.is_valid() || turn_id < 1 || retry_id < 0 || dest_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(backup_set_dest), K(ls_id), K(turn_id), K(retry_id));
   } else if (OB_FAIL(backup_set_dest_.deep_copy(backup_set_dest))) {
@@ -357,6 +377,7 @@ int ObExternTabletMetaWriter::init(
     ls_id_ = ls_id;
     turn_id_ = turn_id;
     retry_id_ = retry_id;
+    dest_id_ = dest_id;
     is_final_fuse_ = is_final_fuse;
     bandwidth_throttle_ = &bandwidth_throttle;
     if (OB_FAIL(prepare_backup_file_(start_file_id))) {
@@ -375,13 +396,20 @@ int ObExternTabletMetaWriter::prepare_backup_file_(const int64_t file_id)
   common::ObBackupIoAdapter util;
   const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
   const int64_t data_file_size = get_data_file_size();
+  ObStorageIdMod mod;
+  mod.storage_id_ = dest_id_;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
   if (OB_FAIL(ObBackupPathUtil::get_ls_data_tablet_info_path(
       backup_set_dest_, ls_id_, turn_id_, retry_id_, file_id, is_final_fuse_, backup_path))) {
     LOG_WARN("failed to get ls data tablet info path", K(ret), K(backup_set_dest_), K(ls_id_), K(turn_id_), K(retry_id_));
   } else if (OB_FAIL(util.mk_parent_dir(backup_path.get_obstr(), backup_set_dest_.get_storage_info()))) {
     LOG_WARN("failed to make parent dir", K(backup_path));
-  } else if (OB_FAIL(util.open_with_access_type(
-      dev_handle_, io_fd_, backup_set_dest_.get_storage_info(), backup_path.get_obstr(), access_type))) {
+  } else if (OB_FAIL(util.open_with_access_type(dev_handle_,
+                                                io_fd_,
+                                                backup_set_dest_.get_storage_info(),
+                                                backup_path.get_obstr(),
+                                                access_type,
+                                                mod))) {
     LOG_WARN("failed to open with access type", K(ret), K(backup_set_dest_), K(backup_path));
   } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_, *bandwidth_throttle_))) {
     LOG_WARN("failed to open file write ctx", K(ret), K_(io_fd), K(backup_path), K(data_file_size), K(file_id));
@@ -538,25 +566,31 @@ int ObExternTabletMetaWriter::write_data_align_(
   return ret;
 }
 
-int ObExternTabletMetaReader::init(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, const bool is_final_fuse)
+int ObExternTabletMetaReader::init(const share::ObBackupDest &backup_set_dest,
+    const ObStorageIdMod &mod, const share::ObLSID &ls_id, const bool is_final_fuse)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tablet meta reader init twice", K(ret), K(backup_set_dest), K(ls_id));
+  } else if (!backup_set_dest.is_valid() || !mod.is_valid() || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(backup_set_dest), K(mod), K(ls_id));
   } else if (OB_FAIL(backup_set_dest_.deep_copy(backup_set_dest))) {
     LOG_WARN("failed to assign backup dest", K(ret));
-  } else if (OB_FAIL(fill_tablet_info_trailer_(backup_set_dest, ls_id, is_final_fuse))) {
-    LOG_WARN("failed to fill tablet info trailer", K(ret), K(backup_set_dest), K(ls_id));
+  } else if (OB_FAIL(fill_tablet_info_trailer_(backup_set_dest, ls_id, mod, is_final_fuse))) {
+    LOG_WARN("failed to fill tablet info trailer", K(ret), K(backup_set_dest), K(ls_id), K(mod));
   } else {
     ls_id_ = ls_id;
     is_final_fuse_ = is_final_fuse;
+    mod_ = mod;
     is_inited_ = true;
   }
   return ret;
 }
 
-int ObExternTabletMetaReader::fill_tablet_info_trailer_(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, const bool is_final_fuse)
+int ObExternTabletMetaReader::fill_tablet_info_trailer_(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const ObStorageIdMod &mod, const bool is_final_fuse)
 {
   int ret = OB_SUCCESS;
   ObExternBackupInfoIdGetter id_getter;
@@ -573,7 +607,7 @@ int ObExternTabletMetaReader::fill_tablet_info_trailer_(const share::ObBackupDes
       ObTabletInfoTrailer trailer;
       if (OB_FAIL(ObBackupPathUtil::get_ls_data_tablet_info_path(backup_set_dest, ls_id, turn_id_, retry_id_, file_ids.at(i), is_final_fuse, path))) {
         LOG_WARN("failed to get ls data tablet info path", K(ret), K(backup_set_dest_), K(ls_id_), K(turn_id_), K(retry_id_));
-      } else if (OB_FAIL(read_file_trailer_(path.get_obstr(), backup_set_dest.get_storage_info(), trailer))) {
+      } else if (OB_FAIL(read_file_trailer_(path.get_obstr(), backup_set_dest.get_storage_info(), mod, trailer))) {
         LOG_WARN("failed to read file trailer", K(ret), K(path));
       } else if (OB_FAIL(tablet_info_trailer_array_.push_back(trailer))) {
         LOG_WARN("failed to push back trailer", K(ret));
@@ -592,7 +626,8 @@ int ObExternTabletMetaReader::fill_tablet_info_trailer_(const share::ObBackupDes
 }
 
 int ObExternTabletMetaReader::read_file_trailer_(
-    const common::ObString &path, const share::ObBackupStorageInfo *storage_info, ObTabletInfoTrailer &trailer)
+    const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
+    const ObStorageIdMod &mod, ObTabletInfoTrailer &trailer)
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter io_util;
@@ -607,7 +642,7 @@ int ObExternTabletMetaReader::read_file_trailer_(
   if (OB_FAIL(io_util.is_exist(path, storage_info, exist))) {
     LOG_WARN("failed to check file exist", K(ret), K(path), KP(storage_info));
   } else if (OB_UNLIKELY(!exist)) {
-    ret = OB_BACKUP_FILE_NOT_EXIST;
+    ret = OB_OBJECT_NOT_EXIST;
     LOG_WARN("index file do not exist", K(ret), K(path));
   } else if (OB_FAIL(io_util.get_file_length(path, storage_info, file_length))) {
     LOG_WARN("failed to get file length", K(ret), K(path), KP(storage_info));
@@ -617,7 +652,7 @@ int ObExternTabletMetaReader::read_file_trailer_(
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(trailer_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(trailer_len));
-  } else if (OB_FAIL(ObLSBackupRestoreUtil::pread_file(path, storage_info, file_length - trailer_len, trailer_len, buf))) {
+  } else if (OB_FAIL(ObLSBackupRestoreUtil::pread_file(path, storage_info, mod, file_length - trailer_len, trailer_len, buf))) {
     LOG_WARN("failed to pread file", K(ret), K(path), KP(storage_info), K(file_length), K(trailer_len));
   } else if (OB_FAIL(serializer_wrapper.deserialize(buf, trailer_len, pos))) {
     LOG_WARN("failed to deserialize.", K(ret));
@@ -689,7 +724,7 @@ int ObExternTabletMetaReader::read_next_range_tablet_metas_()
     LOG_WARN("failed to alloc read buf", K(ret), K(buf_len));
   } else if (OB_FAIL(ObBackupPathUtil::get_ls_data_tablet_info_path(backup_set_dest_, ls_id_, turn_id_, retry_id_, file_id, is_final_fuse_, path))) {
     LOG_WARN("failed to get ls data tablet info path", K(ret), K(backup_set_dest_), K(ls_id_), K(turn_id_), K(retry_id_));
-  } else if (OB_FAIL(ObLSBackupRestoreUtil::pread_file(path.get_obstr(), backup_set_dest_.get_storage_info(), cur_buf_offset_, buf_len, buf))) {
+  } else if (OB_FAIL(ObLSBackupRestoreUtil::pread_file(path.get_obstr(), backup_set_dest_.get_storage_info(), mod_, cur_buf_offset_, buf_len, buf))) {
     LOG_WARN("failed to pread buffer", K(ret), K(path), K(buf_len));
   } else {
     storage::ObMigrationTabletParam tablet_meta;
@@ -778,7 +813,7 @@ int ObExternBackupInfoIdGetter::get_max_turn_id_and_retry_id(const share::ObLSID
   } else if (OB_FAIL(util.list_directories(backup_path.get_obstr(), backup_set_dest_.get_storage_info(), filter))) {
     LOG_WARN("failed to list directories", K(ret), K(backup_path), K(backup_set_dest_));
   } else if (filter.turn_id() <= 0 || filter.retry_id() < 0) {
-    ret = OB_BACKUP_FILE_NOT_EXIST;
+    ret = OB_OBJECT_NOT_EXIST;
     LOG_WARN("invalid turn id and retry id, may not have meta info dir", K(ret), K(filter), K(backup_path));
   } else {
     turn_id = filter.turn_id();

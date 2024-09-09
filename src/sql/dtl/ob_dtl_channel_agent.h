@@ -38,7 +38,8 @@ public:
   : use_row_store_(false),
     tenant_id_(500),
     buffer_(nullptr),
-    msg_writer_(nullptr)
+    msg_writer_(nullptr),
+    meta_(nullptr)
   {}
   ~ObDtlBufEncoder() {}
   void set_tenant_id(int64_t tenant_id) {
@@ -51,7 +52,11 @@ public:
   int write_data_msg(const ObDtlMsg &msg, ObEvalCtx *eval_ctx, bool is_eof);
   int set_new_buffer(ObDtlLinkedBuffer *buffer) {
     buffer_ = buffer;
-    return msg_writer_->init(buffer_, tenant_id_);
+    int ret = msg_writer_->init(buffer_, tenant_id_);
+    if (VECTOR_ROW_WRITER == msg_writer_->type()) {
+      (static_cast<ObDtlVectorRowMsgWriter *> (msg_writer_))->set_row_meta(meta_);
+    }
+    return ret;
   }
   void reset_writer()
   {
@@ -70,6 +75,7 @@ public:
   void write_msg_type(ObDtlLinkedBuffer* buffer)
   { msg_writer_->write_msg_type(buffer); }
   ObDtlLinkedBuffer *get_buffer() { return buffer_; }
+  void set_row_meta(RowMeta &meta) { meta_ = &meta; }
 private:
   int64_t use_row_store_;
   int64_t tenant_id_;
@@ -81,6 +87,7 @@ private:
   ObDtlVectorMsgWriter vector_msg_writer_;
   ObDtlVectorFixedMsgWriter vector_fixed_msg_writer_;
   ObDtlChannelEncoder *msg_writer_;
+  RowMeta *meta_;
 };
 
 class ObDtlBcastService
@@ -135,6 +142,7 @@ public:
            int64_t tenant_id,
            int64_t timeout_ts);
   int destroy();
+  void set_row_meta(RowMeta &meta) { dtl_buf_encoder_.set_row_meta(meta); }
 private:
   int switch_buffer(int64_t need_size);
   int send_last_buffer(ObDtlLinkedBuffer *&last_buffer);

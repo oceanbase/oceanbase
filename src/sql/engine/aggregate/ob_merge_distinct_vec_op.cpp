@@ -359,7 +359,7 @@ int ObMergeDistinctVecOp::Compare::equal_in_row(const common::ObIArray<ObExpr*> 
     ObLength r_len = 0;
     for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < set_exprs->count(); i++) {
       ObIVector *vec = set_exprs->at(i)->get_vector(*eval_ctx_);
-      r->compact_row_->get_cell_payload(r->row_meta_, i, r_v, r_len);
+      r->compact_row_->get_cell_payload(*r->ref_row_meta_, i, r_v, r_len);
       if (OB_FAIL(vec->null_last_cmp(*set_exprs->at(i), curr_idx, r->compact_row_->is_null(i),
                                       r_v, r_len, cmp))) {
         LOG_WARN("failed to cmp left and right", K(ret));

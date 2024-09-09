@@ -20,6 +20,7 @@
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
+#include "storage/ddl/ob_direct_load_mgr_agent.h"
 #include "storage/direct_load/ob_direct_load_trans_param.h"
 
 namespace oceanbase
@@ -175,10 +176,12 @@ public:
   TO_STRING_KV(KPC_(table_ctx),
                KP_(param),
                K_(context_id),
+	             K_(direct_load_type),
                K_(ls_id),
                K_(origin_tablet_id),
                K_(tablet_id),
                K_(lob_tablet_id),
+               K_(ddl_agent),
                K_(tablet_id_in_lob_id),
                K_(min_insert_lob_id),
                K_(start_scn),
@@ -199,6 +202,7 @@ private:
   ObDirectLoadInsertTableContext *table_ctx_;
   const ObDirectLoadInsertTableParam *param_;
   int64_t context_id_;
+  ObDirectLoadType direct_load_type_;
   share::ObLSID ls_id_;
   common::ObTabletID origin_tablet_id_;
   common::ObTabletID tablet_id_;
@@ -209,6 +213,7 @@ private:
   blocksstable::ObMacroDataSeq lob_start_seq_;
   share::ObTabletCacheInterval pk_cache_;
   share::ObTabletCacheInterval lob_pk_cache_;
+  ObDirectLoadMgrAgent ddl_agent_;
   ObLobId min_insert_lob_id_;
   share::SCN start_scn_;
   ObTabletDirectLoadMgrHandle handle_;
@@ -243,6 +248,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE ObDirectLoadInsertTableParam &get_param() { return param_; }
   OB_INLINE int64_t get_context_id() const { return ddl_ctrl_.context_id_; }
+  OB_INLINE ObDirectLoadType get_direct_load_type() const { return ddl_ctrl_.direct_load_type_; }
 
   OB_INLINE bool need_rescan() const { return (!param_.is_incremental_ && param_.is_column_store_); }
   OB_INLINE bool need_del_lob() const { return (param_.is_incremental_ && param_.lob_column_count_ > 0); }

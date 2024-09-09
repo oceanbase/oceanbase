@@ -33,6 +33,11 @@
 #include "share/ob_define.h"
 #include "share/scn.h"
 #include "storage/tx/ob_ts_mgr.h"
+#include "logservice/ob_log_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+// shared log start
+#include "log/ob_shared_log_interface.h"
+#endif
 
 namespace oceanbase
 {
@@ -57,6 +62,10 @@ ObLogHandler::ObLogHandler() : self_(),
                                compressor_wrapper_(),
 #endif
                                get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP)
+#ifdef OB_BUILD_SHARED_STORAGE
+                               , rebuild_cb_adapter_()
+                               , locate_by_scn_stat_("[SHARED LOG STAT COST TIME]", 1 * 1000 * 1000)
+#endif
 {
 }
 
@@ -209,6 +218,9 @@ void ObLogHandler::destroy()
   apply_status_ = NULL;
   apply_service_ = NULL;
   replay_service_ = NULL;
+#ifdef OB_BUILD_SHARED_STORAGE
+  rebuild_cb_adapter_.destroy();
+#endif
   if (NULL != palf_env_ && true == palf_handle_.is_valid()) {
     palf_env_->close(palf_handle_);
   }
@@ -327,8 +339,8 @@ int ObLogHandler::change_access_mode(const int64_t mode_version,
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(palf_handle_.change_access_mode(proposal_id, mode_version, access_mode, ref_scn))) {
-   CLOG_LOG(WARN, "palf change_access_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version),
-        K(access_mode), K(ref_scn));
+    CLOG_LOG(WARN, "palf change_access_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version),
+             K(access_mode), K(ref_scn));
   } else {
     FLOG_INFO("change_access_mode success", K(ret), K_(id), K(proposal_id), K(mode_version), K(access_mode), K(ref_scn));
   }
@@ -337,20 +349,58 @@ int ObLogHandler::change_access_mode(const int64_t mode_version,
 
 int ObLogHandler::seek(const LSN &lsn, PalfBufferIterator &iter)
 {
-  RLockGuard guard(lock_);
-  return palf_handle_.seek(lsn, iter);
+  int ret = OB_SUCCESS;
+  constexpr int64_t default_suggested_max_read_buf_size = PALF_BLOCK_SIZE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(seek_log_iterator_dispatch_(lsn, default_suggested_max_read_buf_size, iter))) {
+    CLOG_LOG(WARN, "seek_log_iterator_dispatch failed", KP(palf_env_), K(id_), K(lsn));
+  } else {
+    CLOG_LOG(TRACE, "seek success", KP(palf_env_), K(id_), K(lsn));
+  }
+  return ret;
 }
 
 int ObLogHandler::seek(const LSN &lsn, PalfGroupBufferIterator &iter)
 {
-  RLockGuard guard(lock_);
-  return palf_handle_.seek(lsn, iter);
+  int ret = OB_SUCCESS;
+  constexpr int64_t default_suggested_max_read_buf_size = PALF_BLOCK_SIZE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(seek_log_iterator_dispatch_(lsn, default_suggested_max_read_buf_size, iter))) {
+    CLOG_LOG(WARN, "seek_log_iterator_dispatch failed", KP(palf_env_), K(id_), K(lsn));
+  } else {
+    CLOG_LOG(TRACE, "seek success", KP(palf_env_), K(id_), K(lsn));
+  }
+  return ret;
 }
 
-int ObLogHandler::seek(const SCN &scn, palf::PalfGroupBufferIterator &iter)
+int ObLogHandler::seek(const SCN &scn, PalfBufferIterator &iter)
 {
-  RLockGuard guard(lock_);
-  return palf_handle_.seek(scn, iter);
+  int ret = OB_SUCCESS;
+  constexpr int64_t default_suggested_max_read_buf_size = PALF_BLOCK_SIZE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(seek_log_iterator_dispatch_(scn, default_suggested_max_read_buf_size, iter))) {
+    CLOG_LOG(WARN, "seek_log_iterator_dispatch failed", KP(palf_env_), K(id_), K(scn));
+  } else {
+    CLOG_LOG(TRACE, "seek success", KP(palf_env_), K(id_), K(scn));
+  }
+  return ret;
+}
+
+int ObLogHandler::seek(const SCN &scn, PalfGroupBufferIterator &iter)
+{
+  int ret = OB_SUCCESS;
+  constexpr int64_t default_suggested_max_read_buf_size = PALF_BLOCK_SIZE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(seek_log_iterator_dispatch_(scn, default_suggested_max_read_buf_size, iter))) {
+    CLOG_LOG(WARN, "seek_log_iterator_dispatch failed", KP(palf_env_), K(id_), K(scn));
+  } else {
+    CLOG_LOG(TRACE, "seek success", KP(palf_env_), K(id_), K(scn));
+  }
+  return ret;
 }
 
 int ObLogHandler::set_initial_member_list(const common::ObMemberList &member_list,
@@ -386,14 +436,52 @@ int ObLogHandler::reset_election_priority()
 
 int ObLogHandler::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
 {
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    int64_t start_ts = ObTimeUtility::current_time();
+    if (OB_FAIL(ObSharedLogInterface::locate_by_scn_coarsely(ObLSID(id_), scn, result_lsn))) {
+      CLOG_LOG(WARN, "locate_by_scn_coarsely from ObLogService failed", K(id_), K(scn));
+    }
+    int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+    locate_by_scn_stat_.stat(cost_ts);
+  } else {
+    RLockGuard guard(lock_);
+    if (OB_FAIL(palf_handle_.locate_by_scn_coarsely(scn, result_lsn))) {
+      CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", K(id_), K(scn));
+    }
+  }
+#else
   RLockGuard guard(lock_);
-  return palf_handle_.locate_by_scn_coarsely(scn, result_lsn);
+  if (OB_FAIL(palf_handle_.locate_by_scn_coarsely(scn, result_lsn))) {
+    CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", K(id_), K(scn));
+  }
+#endif
+
+  return ret;
 }
 
 int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
 {
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(ObSharedLogInterface::locate_by_lsn_coarsely(ObLSID(id_), lsn, result_scn))) {
+      CLOG_LOG(WARN, "locate_by_scn_coarsely from ObLogService failed", KR(ret), K(id_), K(lsn));
+    }
+  } else {
+    RLockGuard guard(lock_);
+    if (OB_FAIL(palf_handle_.locate_by_lsn_coarsely(lsn, result_scn))) {
+      CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", KR(ret), K(id_), K(lsn));
+    }
+  }
+#else
   RLockGuard guard(lock_);
-  return palf_handle_.locate_by_lsn_coarsely(lsn, result_scn);
+  if (OB_FAIL(palf_handle_.locate_by_lsn_coarsely(lsn, result_scn))) {
+    CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", KR(ret), K(id_), K(lsn));
+  }
+#endif
+  return ret;
 }
 
 int ObLogHandler::get_max_decided_scn_as_leader(share::SCN &scn) const
@@ -414,14 +502,36 @@ int ObLogHandler::get_max_decided_scn_as_leader(share::SCN &scn) const
 
 int ObLogHandler::advance_base_lsn(const LSN &lsn)
 {
-  RLockGuard guard(lock_);
-  return palf_handle_.advance_base_lsn(lsn);
+  return advance_base_lsn_impl_(lsn);
 }
 
 int ObLogHandler::get_begin_lsn(LSN &lsn) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_begin_lsn(lsn);
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = palf_handle_.get_begin_lsn(lsn);
+  } else {
+    LSN local_lsn, shared_lsn;
+    if (OB_FAIL(palf_handle_.get_begin_lsn(local_lsn))) {
+      CLOG_LOG(WARN, "get_begin_lsn from palf failed", KR(ret), K_(id));
+    } else if (OB_SUCC(ObSharedLogInterface::get_begin_lsn(ObLSID(id_), shared_lsn))) {
+    } else if (OB_ENTRY_NOT_EXIST == ret) {
+      CLOG_LOG(TRACE, "there is no log blocks on shared storage", KR(ret), K(id_), K(local_lsn));
+      shared_lsn = LSN(LOG_MAX_LSN_VAL);
+      ret = OB_SUCCESS;
+    }
+    if (OB_FAIL(ret)) {
+      CLOG_LOG(WARN, "get_begin_lsn_ failed", KR(ret), K(id_));
+    } else {
+      lsn = MIN(shared_lsn, local_lsn);
+    }
+  }
+#else
+  ret = palf_handle_.get_begin_lsn(lsn);
+#endif
+  return ret;
 }
 
 int ObLogHandler::get_end_lsn(LSN &lsn) const
@@ -526,8 +636,6 @@ int ObLogHandler::advance_base_info(const PalfBaseInfo &palf_base_info, const bo
 
 int ObLogHandler::get_palf_base_info(const LSN &base_lsn, PalfBaseInfo &palf_base_info)
 {
-  // 传入的base_lsn是ls基线数据的lsn，可能已经小于palf当前的base_lsn
-  // 因此为了保证数据完整，需要以根据的base_lsn生成palf_base_info
   int ret = OB_SUCCESS;
   LSN new_base_lsn;
   RLockGuard guard(lock_);
@@ -539,10 +647,21 @@ int ObLogHandler::get_palf_base_info(const LSN &base_lsn, PalfBaseInfo &palf_bas
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "Invalid argument", K(ret), K(base_lsn), K(lbt()));
   } else if (FALSE_IT(new_base_lsn.val_ = lsn_2_block(base_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE)) {
-  } else if (OB_FAIL(palf_handle_.get_base_info(new_base_lsn, palf_base_info))) {
-    CLOG_LOG(WARN, "get_base_info failed", K(ret), K(new_base_lsn), K(base_lsn), K(palf_base_info));
   } else {
-    CLOG_LOG(INFO, "get_palf_base_info success", K(ret), K(base_lsn), K(new_base_lsn), K(palf_base_info));
+    #ifdef OB_BUILD_SHARED_STORAGE
+    if (!GCTX.is_shared_storage_mode()) {
+      ret = palf_handle_.get_base_info(new_base_lsn, palf_base_info);
+    } else if (OB_FAIL(palf_handle_.get_base_info(new_base_lsn, palf_base_info))
+               && !need_get_palf_base_info_on_shared_stoarge_(ret, new_base_lsn)) {
+      CLOG_LOG(WARN, "get_base_info from palf failed", KR(ret), K(new_base_lsn), K_(id));
+    } else if (need_get_palf_base_info_on_shared_stoarge_(ret, new_base_lsn)
+               && OB_FAIL(ObSharedLogInterface::get_palf_base_info(ObLSID(id_), new_base_lsn, palf_base_info))) {
+      CLOG_LOG(WARN, "get_base_info from shared storage failed", KR(ret), K(new_base_lsn), K_(id));
+    }
+    #else
+    ret = palf_handle_.get_base_info(new_base_lsn, palf_base_info);
+    #endif
+    CLOG_LOG(INFO, "get_palf_base_info finish", KR(ret), K_(id), K(base_lsn), K(new_base_lsn), K(palf_base_info));
   }
   return ret;
 }
@@ -1646,9 +1765,22 @@ int ObLogHandler::register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb)
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else {
-    ret = palf_handle_.register_rebuild_cb(rebuild_cb);
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(rebuild_cb_adapter_.register_rebuild_cb(rebuild_cb))) {
+      CLOG_LOG(WARN, "adapter register_rebuild_cb failed", K(ret), KPC(this));
+    } else if (OB_FAIL(palf_handle_.register_rebuild_cb(&rebuild_cb_adapter_))) {
+      CLOG_LOG(WARN, "register_rebuild_cb failed", K(ret), KPC(this));
+      rebuild_cb_adapter_.unregister_rebuild_cb();
+    }
+  } else if (OB_FAIL(palf_handle_.register_rebuild_cb(rebuild_cb))) {
+    CLOG_LOG(WARN, "register_rebuild_cb failed", K(ret), KPC(this));
   }
+#else
+  } else if (OB_FAIL(palf_handle_.register_rebuild_cb(rebuild_cb))) {
+    CLOG_LOG(WARN, "register_rebuild_cb failed", K(ret), KPC(this));
+  }
+#endif
 	return ret;
 }
 
@@ -1660,8 +1792,14 @@ int ObLogHandler::unregister_rebuild_cb()
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(palf_handle_.unregister_rebuild_cb())) {
+    CLOG_LOG(WARN, "unregister_rebuild_cb failed", K(ret), KPC(this));
   } else {
-    ret = palf_handle_.unregister_rebuild_cb();
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      ret = rebuild_cb_adapter_.unregister_rebuild_cb();
+    }
+#endif
   }
 	return ret;
 }
@@ -1793,5 +1931,123 @@ int ObLogHandler::is_replay_fatal_error(bool &has_fatal_error)
   return ret;
 }
 
+int ObLogHandler::advance_base_lsn_impl_(const LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (GCTX.is_shared_storage_mode()) {
+    // no need advance_base_lsn when it's in shared storage mode.
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is not running", KR(ret), K_(id));
+  } else if (OB_FAIL(palf_handle_.advance_base_lsn(lsn))) {
+    CLOG_LOG(WARN, "advance_base_lsn failed", KR(ret), K(lsn));
+  } else {}
+  return ret;
+}
+
+int __get_log_handler(const ObLSID &ls_id,
+                      ObLogHandler *&log_handler,
+                      ObLSHandle &ls_handle)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = MTL(ObLSService*);
+  ObLS *ls = NULL;
+  if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+    CLOG_LOG(WARN, "get_ls failed", K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "unexpected error!!! ls must not nullptr", K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "unexpected error!!! ls must not nullptr", K(ls_id));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {}
+  return ret;
+}
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLogHandler::init_log_fast_rebuild_engine(ObLogFastRebuildEngine *log_fast_rebuild_engine)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_fast_rebuild_engine)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), KP(log_fast_rebuild_engine));
+  } else if (OB_FAIL(rebuild_cb_adapter_.init(self_, id_, log_fast_rebuild_engine, rpc_proxy_, lc_cb_))) {
+    CLOG_LOG(WARN, "rebuild_cb_adapter_ init failed", K(ret), K_(id),
+        KP(log_fast_rebuild_engine), KP_(rpc_proxy), KP_(lc_cb));
+  }
+  return ret;
+}
+
+int ObLogHandler::handle_acquire_log_rebuild_info_msg(const LogAcquireRebuildInfoMsg &msg)
+{
+  int ret = common::OB_SUCCESS;
+  const common::ObAddr &server = msg.src_;
+  const bool is_req = msg.is_req();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (false == msg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(msg));
+  } else if (is_req) {
+    RLockGuard guard(lock_);
+    const int64_t CONN_TIMEOUT_US = GCONF.rpc_timeout;
+    // TODO by yunlong
+    const int64_t FAST_REBUILD_THRESHOLD = 1 * 1024 * 1024 * 1024;
+    palf::LSN leader_begin_lsn, leader_end_lsn;
+    common::ObAddr election_leader;
+
+    if (OB_FAIL(palf_handle_.get_election_leader(election_leader))) {
+      CLOG_LOG(WARN, "get_election_leader failed", K(ret), K_(id));
+    } else if (self_ != election_leader) {
+      CLOG_LOG(WARN, "self is not election leader, ignore", K(ret), K_(id), K(election_leader), K(msg));
+    } else if (OB_FAIL(palf_handle_.get_begin_lsn(leader_begin_lsn))) {
+      CLOG_LOG(WARN, "get_begin_lsn failed", K(ret), K_(id));
+    } else if (OB_FAIL(palf_handle_.get_end_lsn(leader_end_lsn))) {
+      CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K_(id));
+    } else if (msg.rebuild_replica_end_lsn_ > leader_begin_lsn) {
+      CLOG_LOG(INFO, "stale msg, ignore", K(ret), K_(id), K(msg), K(leader_begin_lsn));
+    } else {
+      const LogRebuildType type = (leader_end_lsn.val_ - msg.rebuild_replica_end_lsn_.val_ > FAST_REBUILD_THRESHOLD)?
+          LogRebuildType::FULL_REBUILD: LogRebuildType::FAST_REBUILD;
+      palf::LSN base_lsn;
+      palf::PalfBaseInfo base_info;
+      if (LogRebuildType::FULL_REBUILD == type && OB_FAIL(palf_handle_.get_base_lsn(base_lsn))) {
+        CLOG_LOG(WARN, "get_base_lsn failed", K(ret), K_(id));
+      } else if (LogRebuildType::FAST_REBUILD == type && OB_FAIL(palf_handle_.get_end_lsn(base_lsn))) {
+        CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K_(id));
+      } else if (FALSE_IT(base_lsn = LSN(lsn_2_block(base_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE))) {
+      } else if (OB_FAIL(palf_handle_.get_base_info(base_lsn, base_info))) {
+        CLOG_LOG(WARN, "get_base_info failed", K(ret), K_(id));
+      } else {
+        LogAcquireRebuildInfoMsg resp(self_, id_, msg.rebuild_replica_end_lsn_, base_info, type);
+        if (OB_FAIL(rpc_proxy_->to(server).timeout(CONN_TIMEOUT_US).trace_time(true).
+            max_process_handler_time(CONN_TIMEOUT_US).by(MTL_ID()).acquire_log_rebuild_info(resp, NULL))) {
+          CLOG_LOG(WARN, "acquire_log_rebuild_info failed", K(ret), K_(id), K(server), K(resp));
+        } else {
+          CLOG_LOG(INFO, "handle_acquire_log_rebuild_info_req success", K(ret), K(msg), K(resp));
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(rebuild_cb_adapter_.handle_acquire_log_rebuild_info_resp(msg))) {
+      CLOG_LOG(WARN, "handle_acquire_log_rebuild_info_resp failed", K(ret), K_(id), K(server), K(msg));
+    } else {
+      CLOG_LOG(INFO, "handle_acquire_log_rebuild_info_resp success", K(ret), K(msg));
+    }
+  }
+  return ret;
+}
+
+bool ObLogHandler::need_get_palf_base_info_on_shared_stoarge_(const int ret,
+                                                              const palf::LSN base_lsn) const
+{
+  return OB_ERR_OUT_OF_LOWER_BOUND == ret;
+}
+#endif
 } // end namespace logservice
 } // end napespace oceanbase

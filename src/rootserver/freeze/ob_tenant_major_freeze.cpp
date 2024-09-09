@@ -16,6 +16,10 @@
 
 #include "share/ob_errno.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction/ob_tenant_ls_merge_checker.h"
+#endif
+
 
 namespace oceanbase
 {
@@ -163,19 +167,19 @@ bool ObTenantMajorFreeze::is_paused() const
   return is_paused;
 }
 
-int ObTenantMajorFreeze::set_freeze_info()
+int ObTenantMajorFreeze::set_freeze_info(const ObMajorFreezeReason freeze_reason)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(major_merge_info_mgr_.set_freeze_info())) {
+  } else if (OB_FAIL(major_merge_info_mgr_.set_freeze_info(freeze_reason))) {
     LOG_WARN("fail to set_freeze_info", KR(ret), K_(tenant_id));
   }
   return ret;
 }
 
-int ObTenantMajorFreeze::launch_major_freeze()
+int ObTenantMajorFreeze::launch_major_freeze(const ObMajorFreezeReason freeze_reason)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("launch_major_freeze", K_(tenant_id));
@@ -200,7 +204,7 @@ int ObTenantMajorFreeze::launch_major_freeze()
     } else {
       LOG_WARN("fail to check freeze info", KR(ret), K_(tenant_id));
     }
-  } else if (OB_FAIL(set_freeze_info())) {
+  } else if (OB_FAIL(set_freeze_info(freeze_reason))) {
     LOG_WARN("fail to set_freeze_info", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(major_merge_info_detector_.signal())) {
     LOG_WARN("fail to signal", KR(ret), K_(tenant_id));
@@ -277,10 +281,26 @@ int ObTenantMajorFreeze::clear_merge_error()
     if (-1 == expected_epoch) {
       ret = OB_EAGAIN;
       LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_,
-                                                                         expected_epoch))) {
+    } else if (!GCTX.is_shared_storage_mode()
+            && OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_, expected_epoch))) {
       LOG_WARN("fail to batch update status", KR(ret), K_(tenant_id), K(expected_epoch));
-    } else if (OB_FAIL(major_merge_info_mgr_.get_zone_merge_mgr().set_merge_error(error_type, expected_epoch))) {
+    } else if (GCTX.is_shared_storage_mode()) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      MTL_SWITCH(tenant_id_) {
+        compaction::ObTenantLSMergeChecker *tenant_ls_merge_checker = nullptr;
+        if (OB_ISNULL(tenant_ls_merge_checker = MTL(compaction::ObTenantLSMergeChecker *))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ls merge checker is unexpected null", K(ret), K_(tenant_id));
+        } else {
+          tenant_ls_merge_checker->clear_merge_error();
+        }
+      } else {
+        LOG_WARN("fail to switch tenant", K(ret), K_(tenant_id));
+      }
+#endif
+    }
+
+    if (FAILEDx(major_merge_info_mgr_.get_zone_merge_mgr().set_merge_status(error_type, expected_epoch))) {
       LOG_WARN("fail to set merge error", KR(ret), K_(tenant_id), K(error_type), K(expected_epoch));
     }
   }

@@ -165,6 +165,8 @@ int ObRemoteLogRawReader::read_once_(char *buffer, const int64_t buffer_size, in
   common::ObObjectStorageInfo storage_info_base;
   char storage_info_cstr[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {'\0'};
   ObRemoteLocationParent *source = static_cast<ObRemoteLocationParent*>(source_guard_.get_source());
+  palf::LogIOContext io_ctx(tenant_id_, id_.id(), palf::LogIOUser::DEFAULT);
+  CONSUMER_GROUP_FUNC_GUARD(io_ctx.get_function_type());
 
   if (OB_ISNULL(source)) {
     ret = OB_ERR_UNEXPECTED;
@@ -189,10 +191,13 @@ int ObRemoteLogRawReader::read_once_(char *buffer, const int64_t buffer_size, in
           storage_info_cstr, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
     CLOG_LOG(WARN, "get storage_info str failed", K(id_));
   } else {
+    // storage_id is not shared in different cluster, therefore, using OB_INVALID_ID
+    // for qos.
+    const uint64_t storage_id = OB_INVALID_ID;
     ObString uri(path.get_obstr());
     ObString storage_info(storage_info_cstr);
-    if (OB_FAIL(log_ext_handler_->pread(uri, storage_info, file_offset,
-            buffer, buffer_size, read_size))) {
+    if (OB_FAIL(log_ext_handler_->pread(uri, storage_info, storage_id, file_offset,
+            buffer, buffer_size, read_size, io_ctx))) {
       if (OB_FILE_LENGTH_INVALID == ret) {
         ret = OB_SUCCESS;
         read_size = 0;

@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LOGSERVICE_I_LOG_STORAGE_
 #define OCEANBASE_LOGSERVICE_I_LOG_STORAGE_
 #include <cstdint>
+#include "lib/utility/ob_print_utils.h"                 // VIRTUAL_TO_STRING_KV
 namespace oceanbase
 {
 namespace palf
@@ -20,9 +21,17 @@ namespace palf
 class ReadBuf;
 class LSN;
 class LogIOContext;
+enum class ILogStorageType {
+  MEMORY_STORAGE = 0,
+  DISK_STORAGE = 1,
+  HYBRID_STORAGE = 2
+};
+
 class ILogStorage
 {
 public:
+  ILogStorage(const ILogStorageType type) : type_(type) {}
+  virtual ~ILogStorage() {}
   // @retval
   //   OB_SUCCESS
   //   OB_INVALID_ARGUMENT
@@ -34,6 +43,21 @@ public:
                     ReadBuf &read_buf,
                     int64_t &out_read_size,
                     LogIOContext &io_ctx) = 0;
+  ILogStorageType get_log_storage_type()
+  { return type_; }
+  const char *get_log_storage_type_str()
+  {
+    if (ILogStorageType::MEMORY_STORAGE == type_) {
+      return "MEMORY_STORAGE";
+    } else if (ILogStorageType::DISK_STORAGE == type_) {
+      return "DISK_STORAGE";
+    } else {
+      return "HYBRID_STORAGE";
+    }
+  }
+  VIRTUAL_TO_STRING_KV(K_(type));
+private:
+  ILogStorageType type_;
 };
 }
 }

@@ -347,25 +347,29 @@ int ObTenantMdsTimer::process_with_tablet_(ObTablet &tablet)
 
 int ObTenantMdsTimer::get_tablet_oldest_scn_(ObTablet &tablet, share::SCN &oldest_scn)
 {
-  #define PRINT_WRAPPER KR(ret), K(ls_id), K(tablet_id), K(oldest_scn), KPC(this)
+  #define PRINT_WRAPPER KR(ret), K(ls_id), K(tablet_id), K(oldest_scn), K(op.min_mds_ckpt_scn_), KPC(this)
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet.get_ls_id();
   const common::ObTabletID &tablet_id = tablet.get_tablet_id();
   MDS_TG(5_ms);
+  oldest_scn = SCN::min_scn();// means can not recycle any node
+  ScanAllVersionTabletsOp::GetMinMdsCkptScnOp op(oldest_scn);
   if (OB_ISNULL(MTL(ObTenantMetaMemMgr*))) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG_GC(ERROR, "MTL ObTenantMetaMemMgr is NULL");
-  } else if (MDS_FAIL(MTL(ObTenantMetaMemMgr*)->get_min_mds_ckpt_scn(ObTabletMapKey(ls_id, tablet_id),
-                                                                     oldest_scn))) {
+  } else if (MDS_FAIL(MTL(ObTenantMetaMemMgr*)->scan_all_version_tablets(ObTabletMapKey(ls_id, tablet_id), op))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       MDS_LOG_GC(WARN, "get_min_mds_ckpt_scn meet OB_ENTRY_NOT_EXIST");
+    } else if (OB_ITEM_NOT_SETTED == ret) {
+      ret = OB_SUCCESS;
+      MDS_LOG_GC(WARN, "get_min_mds_ckpt_scn meet OB_ITEM_NOT_SETTED");
     } else {
       MDS_LOG_GC(WARN, "fail to get oldest tablet min_mds_ckpt_scn");
     }
-    oldest_scn = SCN::min_scn();// means can not recycle any node
   } else if (oldest_scn.is_max() || !oldest_scn.is_valid()) {
-    oldest_scn = SCN::min_scn();// means can not recycle any node
+    MDS_LOG_GC(WARN, "get min_mds_ckpt_scn, but is invalid");
+    oldest_scn.set_min();
   }
   MDS_LOG_GC(DEBUG, "get tablet oldest scn");
   return ret;

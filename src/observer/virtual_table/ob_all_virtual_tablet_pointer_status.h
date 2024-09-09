@@ -75,10 +75,11 @@ private:
 
 private:
   static const int64_t STR_LEN = 128;
+  static const int64_t ADDR_STR_LEN = 256;
 private:
   common::ObAddr addr_;
   char ip_buf_[common::OB_IP_STR_BUFF];
-  char address_[STR_LEN];
+  char address_[ADDR_STR_LEN];
   char pointer_[STR_LEN];
   char old_chain_[STR_LEN];
   /* 跨租户访问的资源必须由ObMultiTenantOperator来处理释放*/

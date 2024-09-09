@@ -15,6 +15,7 @@
 
 #include "storage/blocksstable/ob_micro_block_cache.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "share/storage/ob_i_pre_warmer.h"
 
 
 namespace oceanbase
@@ -22,17 +23,20 @@ namespace oceanbase
 namespace common
 {
 
-class ObDataBlockCachePreWarmer
+class ObDataBlockCachePreWarmer : public share::ObIPreWarmer
 {
 public:
   ObDataBlockCachePreWarmer();
   virtual ~ObDataBlockCachePreWarmer();
   void reset();
-  void reuse();
-  int init(const ObIArray<share::schema::ObColDesc> *col_desc_array);
-  OB_INLINE bool is_valid() const { return nullptr != cache_; }
-  int reserve_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc, const int64_t level = 0);
-  int update_and_put_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc);
+  virtual void reuse() override;
+  virtual int init(const ObIArray<share::schema::ObColDesc> *col_desc_array) override;
+  virtual int reserve(const blocksstable::ObMicroBlockDesc &micro_block_desc,
+                      bool &reserve_succ_flag,
+                      const int64_t level = 0) override;
+  virtual int add(const blocksstable::ObMicroBlockDesc &micro_block_desc, const bool reserve_succ_flag) override;
+  virtual int close() override { return OB_SUCCESS; }
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(rest_size), K_(warm_size_percentage), K_(update_step));
 protected:
   void update_rest();
   void inner_update_rest();
@@ -66,7 +70,7 @@ class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
 public:
   ObIndexBlockCachePreWarmer();
   virtual ~ObIndexBlockCachePreWarmer();
-  int init(const ObIArray<share::schema::ObColDesc> *col_desc_array);
+  virtual int init(const ObIArray<share::schema::ObColDesc> *col_desc_array) override;
 protected:
   virtual void calculate_base_percentage(const int64_t free_memory) override;
   virtual int do_reserve_kvpair(

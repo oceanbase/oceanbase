@@ -83,7 +83,7 @@ void MediumInfoCommon::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  ObServerStorageMetaService::get_instance().is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;

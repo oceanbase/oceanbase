@@ -1285,12 +1285,12 @@ int ObArchiveStore::get_single_piece_info(const int64_t dest_id, const int64_t r
     LOG_WARN("ObArchiveStore not init", K(ret));
   } else if (OB_FAIL(read_single_piece(dest_id, round_id, piece_id, single_piece))) {
     // not a frozen piece, build single piece info with extend and checkpoint info.
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ObPieceCheckpointDesc checkpoint_desc;
       ObTenantArchivePieceInfosDesc extend_desc;
       ret = OB_SUCCESS;
       if (OB_FAIL(read_piece_checkpoint(dest_id, round_id, piece_id, 0, checkpoint_desc))) {
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           is_empty_piece = true;
         } else {
@@ -1910,7 +1910,7 @@ int ObArchiveStore::ObRoundFilter::func(const dirent *entry)
   } else if (OB_FAIL(parse_round_file_(dir_name, dest_id, round_id))) {
     LOG_WARN("failed to parse dir name", K(ret), K(dir_name));
   } else if (OB_FAIL(store_->read_round_end(dest_id, round_id, end_desc))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       if (OB_FAIL(store_->read_round_start(dest_id, round_id, start_desc))) {
         LOG_WARN("failed to read round start file", K(ret), K(dest_id), K(round_id));

@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_checker.h"
 #include "storage/blocksstable/ob_super_block_buffer_holder.h"
+#include "storage/blocksstable/ob_storage_object_handle.h"
 #include "storage/ob_super_block_struct.h"
 #include "storage/tablet/ob_tablet_block_aggregated_info.h"
 
@@ -31,7 +32,7 @@ namespace oceanbase
 
 namespace storage
 {
-class ObTenantCheckpointSlogHandler;
+class ObTenantStorageMetaService;
 class ObTabletHandle;
 struct ObTabletBlockInfo;
 }
@@ -41,6 +42,7 @@ namespace blocksstable
 
 class ObMacroBlockHandle;
 struct ObMacroBlocksWriteCtx;
+class ObObjectManager;
 
 class ObSuperBlockPreadChecker : public common::ObIODPreadChecker
 {
@@ -148,14 +150,15 @@ public:
   char *buf_;
 };
 
-class ObMacroBlockSeqGenerator final
+
+class ObMacroBlockRewriteSeqGenerator final
 {
 public:
   // start to give an alarm when remaining 10T size to rewrite.
   static const int64_t BLOCK_SEQUENCE_WARNING_LINE = MacroBlockId::MAX_WRITE_SEQ - 5000000;
 public:
-  ObMacroBlockSeqGenerator();
-  ~ObMacroBlockSeqGenerator();
+  ObMacroBlockRewriteSeqGenerator();
+  ~ObMacroBlockRewriteSeqGenerator();
   void reset();
 
   // thread safe
@@ -178,13 +181,12 @@ public:
   ObBlockManager();
   virtual ~ObBlockManager();
 
-  int init(
-      common::ObIODevice *io_device,
-      const int64_t block_size);
-  int start(const int64_t reserved_size);
+  int init(common::ObIODevice *io_device, const int64_t block_size);
+  int start(const int64_t reserved_size, bool &need_format);
   void stop();
   void wait();
   void destroy();
+  int alloc_object(ObStorageObjectHandle &object_handle);
 
   // block interfaces
   int alloc_block(
@@ -202,20 +204,13 @@ public:
       const ObMacroBlockReadInfo &read_info,
       ObMacroBlockHandle &macro_handle);
 
-  int read_super_block(storage::ObServerSuperBlock &super_block);
-  int write_super_block(const storage::ObServerSuperBlock &super_block);
-  OB_INLINE const storage::ObServerSuperBlock &get_server_super_block() const
-  {
-    return super_block_;
-  }
-  int update_super_block(const common::ObLogCursor &replay_start_point,
-                         const blocksstable::MacroBlockId &tenant_meta_entry);
+  int read_super_block(storage::ObServerSuperBlock &super_block, ObSuperBlockBufferHolder &buf_holder);
+  int write_super_block(const storage::ObServerSuperBlock &super_block, ObSuperBlockBufferHolder &buf_holder);
 
-  int64_t get_macro_block_size() const;
-  int64_t get_total_macro_block_count() const;
   int64_t get_free_macro_block_count() const;
   int64_t get_used_macro_block_count() const;
   int64_t get_max_macro_block_count(int64_t reserved_size) const;
+  int64_t get_total_block_size() const;
   int get_all_macro_ids(ObArray<MacroBlockId> &ids_array);
 
   int check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const;
@@ -229,7 +224,8 @@ public:
   int resize_file(
       const int64_t new_data_file_size,
       const int64_t new_data_file_disk_percentage,
-      const int64_t reserved_size);
+      const int64_t reserved_size,
+      storage::ObServerSuperBlock &super_block);
 
   // reference count interfaces
   int inc_ref(const MacroBlockId &macro_id);
@@ -395,7 +391,7 @@ private:
   int mark_tenant_ckpt_blocks(
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
-      storage::ObTenantCheckpointSlogHandler &hdl,
+      storage::ObTenantStorageMetaService &meta_service,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_tmp_file_blocks(
       MacroBlkIdMap &mark_info,
@@ -482,13 +478,10 @@ private:
 private:
   friend class InspectBadBlockTask;
 
-  common::SpinRWLock lock_;
   ObBucketLock bucket_lock_;
   BlockMap block_map_;
 
   ObIOFd super_block_fd_;
-  storage::ObServerSuperBlock super_block_; // read only memory cache
-  ObSuperBlockBufferHolder super_block_buf_holder_;
   int64_t default_block_size_;
   ObMacroBlockMarkerStatus marker_status_;
   common::SpinRWLock marker_lock_;
@@ -504,9 +497,8 @@ private:
   common::ObArray<ObBadBlockInfo> bad_block_infos_;
 
   common::ObIODevice *io_device_;
-  ObMacroBlockSeqGenerator blk_seq_generator_;
+  ObMacroBlockRewriteSeqGenerator blk_seq_generator_;
   int64_t alloc_num_;
-  lib::ObMutex resize_file_lock_;
 
   // for resource_isolation
   uint64_t group_id_;

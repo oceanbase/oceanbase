@@ -23,6 +23,7 @@ namespace tmp_file
 {
 
 class ObTmpPageValueHandle;
+class ObSNTmpFileInfo;
 
 struct ObSharedNothingTmpFileMetaItem
 {
@@ -278,19 +279,27 @@ public:
   {
     StatInfo() : meta_page_flushing_cnt_(0),
                  all_type_page_flush_cnt_(0),
-                 all_type_flush_page_released_cnt_(0) {}
+                 all_type_flush_page_released_cnt_(0),
+                 meta_page_alloc_cnt_(0),
+                 meta_page_free_cnt_(0) {}
     void reset()
     {
       meta_page_flushing_cnt_ = 0;
       all_type_page_flush_cnt_ = 0;
       all_type_flush_page_released_cnt_ = 0;
+      meta_page_alloc_cnt_ = 0;
+      meta_page_free_cnt_ = 0;
     }
     int64_t meta_page_flushing_cnt_;
     //can contain the same page if page is flushed again
     // contain total pages(meta and data)
     int64_t all_type_page_flush_cnt_;
     int64_t all_type_flush_page_released_cnt_;
-    TO_STRING_KV(K(meta_page_flushing_cnt_), K(all_type_page_flush_cnt_), K(all_type_flush_page_released_cnt_));
+    //alloc and free in write cache
+    int64_t meta_page_alloc_cnt_;
+    int64_t meta_page_free_cnt_;
+    TO_STRING_KV(K(meta_page_flushing_cnt_), K(all_type_page_flush_cnt_), K(all_type_flush_page_released_cnt_),
+                 K(meta_page_alloc_cnt_), K(meta_page_free_cnt_));
   };
 
 public:
@@ -354,6 +363,8 @@ public:
   void print_meta_tree_overview_info();
   //NOTE: need control print frequency.
   void print_meta_tree_total_info();
+  //for virtual table to show
+  int copy_info(ObSNTmpFileInfo &tmp_file_info);
 
 private:
   int modify_meta_items_at_parent_level_(const ObTmpFileTreeIOInfo &meta_io,
@@ -369,7 +380,9 @@ private:
                                   bool &is_last_item,
                                   ObIArray<ObSharedNothingTmpFileMetaItem> &meta_items);
   int backtrace_truncate_tree_(const int64_t end_offset,
-                               ObIArray<BacktraceNode> &search_path);
+                               ObIArray<BacktraceNode> &search_path,
+                               ObIArray<ObSharedNothingTmpFileMetaItem> &reserved_meta_items,
+                               ObIArray<ObTmpPageValueHandle> &p_handles);
   int backtrace_search_data_items_(const int64_t end_offset,
                                    int64_t &offset,
                                    ObIArray<BacktraceNode> &search_path,

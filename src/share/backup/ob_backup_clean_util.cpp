@@ -36,7 +36,7 @@ int ObBackupCleanFileOp::func(const dirent *entry)
     LOG_WARN("failed to join file name", K(ret), K(entry->d_name));
   } else if (OB_FAIL(util.del_file(tmp_path.get_ptr(), storage_info_))) {
     // File does not exist should be considered successful
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       LOG_INFO("file is not exist", K(ret), K(tmp_path));
       ret = OB_SUCCESS;
     } else {
@@ -103,7 +103,7 @@ int ObBackupPrefixDeleteFileOp::func(const dirent *entry)
     LOG_WARN("failed to join file name", K(ret));
   } else if (OB_FAIL(util.del_file(tmp_path.get_ptr(), storage_info_))) {
     // File does not exist should be considered successful
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       LOG_INFO("file is not exist", K(ret), K(tmp_path));
       ret = OB_SUCCESS;
     } else {
@@ -273,7 +273,7 @@ int ObBackupCleanUtil::delete_backup_file(
         //do nothing
       } else if (OB_FAIL(util.del_file(path.get_ptr(), storage_info))) {
         // File does not exist should be considered successful
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
           LOG_INFO("file is not exist", K(ret), K(path), KP(storage_info));
           ret = OB_SUCCESS;
         } else {

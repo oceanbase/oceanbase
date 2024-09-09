@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/ob_subschema_ctx.h"
 #include "deps/oblib/src/lib/udt/ob_udt_type.h"
+#include "deps/oblib/src/lib/udt/ob_array_type.h"
 #include "src/share/rc/ob_tenant_base.h"
 
 namespace oceanbase
@@ -119,9 +120,94 @@ int subschema_value_deep_copy<OB_SUBSCHEMA_UDT_TYPE>(const void *src_value, void
   return ret;
 }
 
+template<>
+int subschema_value_serialize<OB_SUBSCHEMA_COLLECTION_TYPE>(void *value, char* buf, const int64_t buf_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null sql udt value for seriazlie", K(ret), K(OB_SUBSCHEMA_COLLECTION_TYPE));
+  } else {
+    const ObSqlCollectionInfo* coll_meta = reinterpret_cast<ObSqlCollectionInfo *>(value);
+    if (OB_FAIL(coll_meta->serialize(buf, buf_len, pos))) {
+      LOG_WARN("failed to do sql udt meta seriazlie", K(ret), K(*coll_meta));
+    }
+  }
+
+  return ret;
+}
+
+template <>
+int subschema_value_deserialize<OB_SUBSCHEMA_COLLECTION_TYPE>(void *value, const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null sql udt value for deseriazlie", K(ret), K(OB_SUBSCHEMA_COLLECTION_TYPE));
+  } else {
+    ObSqlCollectionInfo* coll_meta = reinterpret_cast<ObSqlCollectionInfo *>(value);
+    if (OB_FAIL(coll_meta->deserialize(buf, data_len, pos))) {
+      LOG_WARN("failed to do sql udt meta deseriazlie", K(ret), KP(buf), K(data_len));
+    }
+  }
+  return ret;
+}
+
+template <>
+int64_t subschema_value_serialize_size<OB_SUBSCHEMA_COLLECTION_TYPE>(void *value)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  if (OB_ISNULL(value)) {
+  } else {
+    ObSqlCollectionInfo* coll_meta = reinterpret_cast<ObSqlCollectionInfo *>(value);
+    len += coll_meta->get_serialize_size();
+  }
+  return len;
+}
+
+template <>
+int subschema_value_get_signature<OB_SUBSCHEMA_COLLECTION_TYPE>(void *value, uint64_t &signature)
+{
+  int ret = OB_SUCCESS;
+  signature = 0;
+  if (OB_ISNULL(value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null subschema value", K(ret), K(OB_SUBSCHEMA_COLLECTION_TYPE));
+  } else {
+    const ObSqlCollectionInfo* coll_meta = reinterpret_cast<ObSqlCollectionInfo *>(value);
+    signature = coll_meta->get_def_string().hash();
+  }
+  return ret;
+}
+
+template <>
+int subschema_value_deep_copy<OB_SUBSCHEMA_COLLECTION_TYPE>(const void *src_value, void *&dst_value, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null subschema value for deep copy", K(ret), K(OB_SUBSCHEMA_COLLECTION_TYPE));
+  } else {
+    const ObSqlCollectionInfo* coll_meta = reinterpret_cast<const ObSqlCollectionInfo *>(src_value);
+    ObSqlCollectionInfo* copy_meta = NULL;
+    if (OB_FAIL(coll_meta->deep_copy(allocator, copy_meta))) {
+      LOG_WARN("failed to deep copy udt meta", K(ret), K(OB_SUBSCHEMA_COLLECTION_TYPE));
+    } else if (OB_ISNULL(copy_meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deep copy udt meta result is null", K(ret), K(OB_SUBSCHEMA_COLLECTION_TYPE));
+    } else {
+      dst_value = static_cast<void *>(copy_meta);
+    }
+  }
+  return ret;
+}
+
 ObSubSchemaFuncs SUBSCHEMA_FUNCS[OB_SUBSCHEMA_MAX_TYPE] =
 {
   DEF_SUBSCHEMA_ENTRY(OB_SUBSCHEMA_UDT_TYPE),
+  DEF_SUBSCHEMA_ENTRY(OB_SUBSCHEMA_ENUM_SET_TYPE),
+  DEF_SUBSCHEMA_ENTRY(OB_SUBSCHEMA_COLLECTION_TYPE),
 };
 
 int ObSubSchemaValue::deep_copy_value(const void *src_value, ObIAllocator &allocator)
@@ -159,6 +245,27 @@ OB_DEF_DESERIALIZE(ObSubSchemaValue)
               signature_);
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to deserialize subschema type info", K(ret), K(type_), K(signature_));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret), K(type_), K(signature_));
+  } else if (type_ == ObSubSchemaType::OB_SUBSCHEMA_UDT_TYPE) {
+    ObSqlUDTMeta *udt_meta = OB_NEWx(ObSqlUDTMeta, allocator_);
+    if (OB_ISNULL(udt_meta)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc udt meta memory failed", K(ret));
+    } else {
+      value_ = udt_meta;
+    }
+  } else if (type_ == ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
+    ObSqlCollectionInfo *coll_meta = OB_NEWx(ObSqlCollectionInfo, allocator_, *allocator_);
+    if (OB_ISNULL(coll_meta)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc collection info memory failed", K(ret));
+    } else {
+      value_ = coll_meta;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(SUBSCHEMA_FUNCS[type_].value_deserialize(value_, buf, data_len, pos))) {
     LOG_WARN("fail to deserialize subschema data", K(ret), K(type_), K(signature_));
   }
@@ -216,13 +323,10 @@ OB_DEF_DESERIALIZE(ObSubSchemaCtx)
         for (int64_t i = 0; OB_SUCC(ret) && i < subschema_count; i++) {
           uint64_t subschema_id = 0;
           ObSubSchemaValue value;
-          ObSqlUDTMeta udt_meta;
-          value.value_ = &udt_meta;
+          value.allocator_ = &allocator_;
           OB_UNIS_DECODE(subschema_id);
           OB_UNIS_DECODE(value);
-          if (OB_FAIL(ret)) { // copy value from buffer to local memory
-          } else if (OB_FAIL(value.deep_copy_value(value.value_, allocator_))) {
-            LOG_WARN("deep copy value failed", K(ret), K(subschema_id), K(value));
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(set_subschema(subschema_id, value))) {
              LOG_WARN("fail to set subschema", K(ret), K(subschema_id), K(value));
           }
@@ -286,19 +390,25 @@ int ObSubSchemaCtx::init()
   if (is_inited_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub schema ctx already inited", K(ret), K(*this));
-  } else if (OB_FAIL(subschema_map_.create(SUBSCHEMA_BUCKET_NUM,
-                                    "SubSchemaHash",
-                                    "SubSchemaHash",
-                                    MTL_ID()))) {
-    LOG_WARN("fail to create subschema map", K(ret));
-  } else if (OB_FAIL(subschema_reverse_map_.create(SUBSCHEMA_BUCKET_NUM,
-                                    "SubSchemaRev",
-                                    "SubSchemaRev",
-                                    MTL_ID()))) {
-    LOG_WARN("fail to create subschema map", K(ret));
   } else {
-    is_inited_ = true;
-    used_subschema_id_ = MAX_NON_RESERVED_SUBSCHEMA_ID;
+    uint64_t tenant_id = MTL_ID();
+    if (tenant_id == OB_INVALID_TENANT_ID) {
+      tenant_id = OB_SERVER_TENANT_ID;
+    }
+    if (OB_FAIL(subschema_map_.create(SUBSCHEMA_BUCKET_NUM,
+                                      "SubSchemaHash",
+                                      "SubSchemaHash",
+                                      tenant_id))) {
+      LOG_WARN("fail to create subschema map", K(ret));
+    } else if (OB_FAIL(subschema_reverse_map_.create(SUBSCHEMA_BUCKET_NUM,
+                                      "SubSchemaRev",
+                                      "SubSchemaRev",
+                                      tenant_id))) {
+      LOG_WARN("fail to create subschema map", K(ret));
+    } else {
+      is_inited_ = true;
+      used_subschema_id_ = MAX_NON_RESERVED_SUBSCHEMA_ID;
+    }
   }
   return ret;
 }
@@ -361,12 +471,17 @@ int ObSubSchemaCtx::set_subschema(uint16_t subschema_id, ObSubSchemaValue &value
   int ret = OB_SUCCESS;
   uint64_t key = subschema_id;
   ObSubSchemaValue tmp_value;
+  ObSubSchemaReverseKey rev_key(value.type_, value.signature_);
   if (OB_FAIL(subschema_map_.get_refactored(key, tmp_value))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get subschema", K(ret), K(key), K(tmp_value), K(value));
-    } else { // not exist
+    } else if (value.type_ == ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
+      ObSqlCollectionInfo *meta_info = static_cast<ObSqlCollectionInfo *>(value.value_);
+      rev_key.str_signature_ = meta_info->get_def_string();
+    }
+    if (OB_HASH_NOT_EXIST == ret) {
+      // not exist
       ret = OB_SUCCESS;
-      ObSubSchemaReverseKey rev_key(value.type_, value.signature_);
       LOG_INFO("add new subschema", K(ret), K(subschema_id), K(value));
       if (OB_FAIL(subschema_map_.set_refactored(key, value))) {
         LOG_WARN("set subschema map failed", K(ret), K(subschema_id));
@@ -399,6 +514,112 @@ int ObSubSchemaCtx::get_subschema_id(uint64_t value_signature,
   uint64_t value = ObMaxSystemUDTSqlType; // init invalid subschema value
   int ret = subschema_reverse_map_.get_refactored(rev_key, value);
   subschema_id = value;
+  return ret;
+}
+
+int ObSubSchemaCtx::get_subschema_id_by_typedef(const ObString &type_def,
+                                                uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  ObSubSchemaReverseKey rev_key(OB_SUBSCHEMA_COLLECTION_TYPE, type_def);
+  uint64_t tmp_subid = ObMaxSystemUDTSqlType;
+  if (OB_FAIL(subschema_reverse_map_.get_refactored(rev_key, tmp_subid))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get subschemaid from reverse map", K(ret));
+    } else {
+      ObSqlCollectionInfo *buf = NULL;
+      uint16_t new_tmp_id;
+      char *name_def = NULL;
+      // construnct collection meta
+      if (OB_ISNULL(buf = OB_NEWx(ObSqlCollectionInfo, &allocator_, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to create ObSqlCollectionInfo buffer", K(ret));
+      } else if (OB_FAIL(get_new_subschema_id(new_tmp_id))) {
+        LOG_WARN("fail to get new subschema id", K(ret));
+      } else if (OB_ISNULL(name_def = static_cast<char *>(allocator_.alloc(type_def.length())))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to create ObSqlCollectionInfo buffer", K(ret));
+      } else {
+        tmp_subid = new_tmp_id;
+        ObString type_info;
+        type_info.assign_buffer(name_def, type_def.length());
+        type_info.write(type_def.ptr(), type_def.length());
+        buf->set_name(type_info);
+        if (OB_FAIL(buf->parse_type_info())) {
+          LOG_WARN("fail to parse ObSqlCollectionInfo", K(ret));
+        } else {
+          ObSubSchemaValue value;
+          value.type_ = OB_SUBSCHEMA_COLLECTION_TYPE;
+          value.value_ = static_cast<void *>(buf);
+          uint64_t key = tmp_subid;
+          rev_key.str_signature_.assign_ptr(type_info.ptr(), type_info.length());
+          if (OB_FAIL(subschema_map_.set_refactored(key, value))) {
+            LOG_WARN("set subschema map failed", K(ret), K(key));
+          } else if (OB_FAIL(subschema_reverse_map_.set_refactored(rev_key, key))) {
+            LOG_WARN("set subschema map failed", K(ret), K(rev_key));
+            int tmp_ret = subschema_map_.erase_refactored(key);
+            if (tmp_ret != OB_SUCCESS) {
+              LOG_WARN("erase subschema map failed", K(ret), K(tmp_ret), K(key));
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    subschema_id = tmp_subid;
+  }
+  return ret;
+}
+
+int ObSubSchemaCtx::get_subschema_id_by_typedef(const ObString &type_def,
+                                                uint16_t &subschema_id) const
+{
+  int ret = OB_SUCCESS;
+  ObSubSchemaReverseKey rev_key(OB_SUBSCHEMA_COLLECTION_TYPE, type_def);
+  uint64_t tmp_subid = ObMaxSystemUDTSqlType;
+  if (OB_FAIL(subschema_reverse_map_.get_refactored(rev_key, tmp_subid))) {
+    LOG_WARN("failed to get subschemaid from reverse map", K(ret));
+  } else {
+    subschema_id = tmp_subid;
+  }
+  return ret;
+}
+
+int ObSubSchemaCtx::get_subschema_id_by_typedef(ObNestedType coll_type,
+                                                const ObDataType &elem_type,
+                                                uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  const int MAX_LEN = 256;
+  char tmp[MAX_LEN] = {0};
+  if (OB_FAIL(ObArrayUtil::get_type_name(elem_type, tmp, MAX_LEN))) {
+    LOG_WARN("failed to convert len to string", K(ret));
+  } else {
+    ObString tmp_def(strlen(tmp), tmp);
+    if (OB_FAIL(get_subschema_id_by_typedef(tmp_def, subschema_id))) {
+      LOG_WARN("failed to get subschemaid by typedef", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSubSchemaCtx::get_subschema_id_by_typedef(ObNestedType coll_type,
+                                                const ObDataType &elem_type,
+                                                uint16_t &subschema_id) const
+{
+  int ret = OB_SUCCESS;
+  const int MAX_LEN = 256;
+  int64_t pos = 0;
+  char tmp[MAX_LEN] = {0};
+  if (OB_FAIL(ObArrayUtil::get_type_name(elem_type, tmp, MAX_LEN))) {
+    LOG_WARN("failed to convert len to string", K(ret));
+  } else {
+    ObString tmp_def(strlen(tmp), tmp);
+    if (OB_FAIL(get_subschema_id_by_typedef(tmp_def, subschema_id))) {
+      LOG_WARN("failed to get subschemaid by typedef", K(ret));
+    }
+  }
   return ret;
 }
 

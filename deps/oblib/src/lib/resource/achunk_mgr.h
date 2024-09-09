@@ -30,7 +30,6 @@ namespace lib
 {
 
 class ProtectedStackAllocator;
-class ObMemoryCutter;
 struct AChunk;
 
 static const uint64_t MAXADDR = (1L << 52);
@@ -39,7 +38,6 @@ static const uint64_t CHUNK_BITMAP_SIZE = MAXADDR / MEMCHK_CHUNK_ALIGN;
 // A stack style chunk list, support push and pop operations.
 class AChunkList
 {
-  friend class ObMemoryCutter;
   DISALLOW_COPY_AND_ASSIGN(AChunkList);
 
 public:
@@ -192,7 +190,6 @@ private:
 class AChunkMgr
 {
   friend class ProtectedStackAllocator;
-  friend class ObMemoryCutter;
 private:
   struct Slot
   {

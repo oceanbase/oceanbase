@@ -35,6 +35,9 @@ public:
     bool &could_schedule_merge);
   static int check_ls_state(storage::ObLS &ls, bool &need_merge);
   static int check_ls_state_in_major(storage::ObLS &ls, bool &need_merge);
+  static bool check_weak_read_ts_ready(
+      const int64_t &merge_version,
+      storage::ObLS &ls);
   // check tenant restore data mode is remote or not, if it is, can not schedule medium and major
   static int check_mtl_tenant_is_remote(bool &is_remote);
 private:

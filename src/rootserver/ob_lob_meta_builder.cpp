@@ -94,6 +94,10 @@ int ObLobMetaBuilder::generate_aux_lob_meta_schema(
         LOG_WARN("fail to fetch new tablet id", K(aux_lob_meta_schema), K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      aux_lob_meta_schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
+    }
+
   }
   return ret;
 }

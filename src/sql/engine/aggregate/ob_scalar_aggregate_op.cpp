@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/aggregate/ob_scalar_aggregate_op.h"
+#include "sql/engine/px/ob_px_util.h"
 #include "lib/number/ob_number_v2.h"
 
 
@@ -28,6 +29,15 @@ int ObScalarAggregateOp::inner_open()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObGroupByOp::inner_open())) {
     LOG_WARN("failed to inner_open", K(ret));
+  } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    LOG_WARN("failed to alloc dir id", K(ret));
+  } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
+  } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
+  } else if (MY_SPEC.enable_hash_base_distinct_
+    && OB_FAIL(init_hp_infras_group_mgr())) {
+    LOG_WARN("failed to init hp infras group manager", K(ret));
+  } else if (OB_FAIL(aggr_processor_.init_one_group())) {
+    LOG_WARN("failed to init one group",  K(ret));
   } else {
     bool need_dir_id = aggr_processor_.processor_need_alloc_dir_id();
     if (need_dir_id && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
@@ -45,13 +55,21 @@ int ObScalarAggregateOp::inner_open()
 
 int ObScalarAggregateOp::inner_close()
 {
-  started_ = false;
-  return ObGroupByOp::inner_close();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObGroupByOp::inner_close())) {
+    LOG_WARN("failed to inner close", K(ret));
+  } else {
+    started_ = false;
+  }
+  sql_mem_processor_.unregister_profile();
+  return ret;
 }
 
 void ObScalarAggregateOp::destroy()
 {
   started_ = false;
+  sql_mem_processor_.unregister_profile_if_necessary();
+  hp_infras_mgr_.destroy();
   ObGroupByOp::destroy();
 }
 
@@ -190,6 +208,41 @@ int ObScalarAggregateOp::inner_get_next_batch(const int64_t max_row_cnt)
   LOG_DEBUG("after inner_get_next_batch",
             "hold_mem_size", aggr_processor_.get_aggr_hold_size(),
             "used_mem_size", aggr_processor_.get_aggr_used_size(), K(batch_cnt));
+  return ret;
+}
+
+int ObScalarAggregateOp::init_hp_infras_group_mgr()
+{
+  int ret = OB_SUCCESS;
+  int64_t distinct_cnt = 0;
+  uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+  if (aggr_processor_.has_distinct()) {
+    int64_t est_rows = MY_SPEC.rows_;
+    aggr_processor_.set_io_event_observer(&io_event_observer_);
+    if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
+        &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
+      LOG_WARN("failed to get px size", K(ret));
+    } else if (OB_FAIL(sql_mem_processor_.init(
+                    &ctx_.get_allocator(),
+                    tenant_id,
+                    est_rows * MY_SPEC.width_,
+                    MY_SPEC.type_,
+                    MY_SPEC.id_,
+                    &ctx_))) {
+      LOG_WARN("failed to init sql mem processor", K(ret));
+    } else if (OB_FAIL(hp_infras_mgr_.init(tenant_id,
+      GCONF.is_sql_operator_dump_enabled(), est_rows, MY_SPEC.width_, true/*unique*/, 1/*ways*/,
+      &eval_ctx_, &sql_mem_processor_, &io_event_observer_))) {
+      LOG_WARN("failed to init hash infras group", K(ret));
+    } else if (FALSE_IT(distinct_cnt = aggr_processor_.get_distinct_count())) {
+    } else if (aggr_processor_.has_distinct() && distinct_cnt > 0
+        && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(distinct_cnt))) {
+      LOG_WARN("failed to reserve", K(ret), K(distinct_cnt));
+    } else {
+      aggr_processor_.set_hp_infras_mgr(&hp_infras_mgr_);
+      aggr_processor_.set_enable_hash_distinct();
+    }
+  }
   return ret;
 }
 

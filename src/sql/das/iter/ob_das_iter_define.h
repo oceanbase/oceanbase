@@ -31,6 +31,7 @@ enum ObDASIterType : uint32_t
   DAS_ITER_TEXT_RETRIEVAL,
   DAS_ITER_SORT,
   DAS_ITER_TEXT_RETRIEVAL_MERGE,
+  DAS_ITER_VEC_VID_MERGE,
   // append DASIterType before me
   DAS_ITER_MAX
 };
@@ -67,6 +68,7 @@ struct ObDASRelatedTabletID
 public:
   common::ObTabletID lookup_tablet_id_;
   common::ObTabletID aux_lookup_tablet_id_;
+  common::ObTabletID rowkey_vid_tablet_id_;
 
   /* used by fulltext index */
   common::ObTabletID inv_idx_tablet_id_;
@@ -77,6 +79,7 @@ public:
   {
     lookup_tablet_id_.reset();
     aux_lookup_tablet_id_.reset();
+    rowkey_vid_tablet_id_.reset();
     inv_idx_tablet_id_.reset();
     fwd_idx_tablet_id_.reset();
     doc_id_idx_tablet_id_.reset();

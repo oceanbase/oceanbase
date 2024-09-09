@@ -18,6 +18,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
+#include "storage/blocksstable/ob_datum_row_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
@@ -43,7 +44,7 @@ using namespace share;
 namespace sql
 {
 
-class ObDASUpdIterator : public ObNewRowIterator
+class ObDASUpdIterator : public blocksstable::ObDatumRowIterator
 {
 public:
   ObDASUpdIterator(const ObDASUpdCtDef *das_ctdef,
@@ -60,10 +61,8 @@ public:
   {
   }
   virtual ~ObDASUpdIterator();
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
-  virtual void reset() override { }
   int rewind(const ObDASDMLBaseCtDef *das_ctdef)
   {
     int ret = common::OB_SUCCESS;
@@ -92,12 +91,12 @@ public:
   }
 private:
   // domain index
-  int get_next_domain_index_row(ObNewRow *&row);
+  int get_next_domain_index_row(blocksstable::ObDatumRow *&row);
 private:
   const ObDASUpdCtDef *das_ctdef_;
   ObDASWriteBuffer &write_buffer_;
-  ObNewRow *old_row_;
-  ObNewRow *new_row_;
+  blocksstable::ObDatumRow *old_row_;
+  blocksstable::ObDatumRow *new_row_;
   ObDASWriteBuffer::Iterator result_iter_;
   ObDomainDMLIterator *domain_iter_;
   bool got_old_row_;
@@ -105,7 +104,7 @@ private:
   common::ObIAllocator &allocator_;
 };
 
-int ObDASUpdIterator::get_next_row(ObNewRow *&row)
+int ObDASUpdIterator::get_next_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = NULL;
@@ -119,7 +118,7 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
   } else if (!got_old_row_) {
     got_old_row_ = true;
     if (OB_ISNULL(old_row_)) {
-      if (OB_FAIL(ob_create_row(allocator_, das_ctdef_->old_row_projector_.count(), old_row_))) {
+      if (OB_FAIL(blocksstable::ObDatumRowUtils::ob_create_row(allocator_, das_ctdef_->old_row_projector_.count(), old_row_))) {
         LOG_WARN("create row buffer failed", K(ret), K(das_ctdef_->old_row_projector_.count()));
       } else if (OB_FAIL(write_buffer_.begin(result_iter_))) {
         LOG_WARN("begin datum result iterator failed", K(ret));
@@ -127,7 +126,7 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
     }
 
     if (OB_SUCC(ret) && OB_ISNULL(new_row_)) {
-      if (OB_FAIL(ob_create_row(allocator_, das_ctdef_->new_row_projector_.count(), new_row_))) {
+      if (OB_FAIL(blocksstable::ObDatumRowUtils::ob_create_row(allocator_, das_ctdef_->new_row_projector_.count(), new_row_))) {
         LOG_WARN("create row buffer failed", K(ret), K(das_ctdef_->new_row_projector_.count()));
       }
     }
@@ -182,7 +181,7 @@ ObDASUpdIterator::~ObDASUpdIterator()
   }
 }
 
-int ObDASUpdIterator::get_next_domain_index_row(ObNewRow *&row)
+int ObDASUpdIterator::get_next_domain_index_row(ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   if (!iter_has_built_) {
@@ -223,7 +222,16 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
 {
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
-  if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_domain_index())) {
+  if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_vector_delta_buffer() &&
+                  !ctdef.is_access_mlog_as_master_table_)) {
+    // for vector delta buffer, only do insert when DML with main table
+    if (OB_FAIL(as->insert_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
+                                ctdef.column_ids_, &iter, affected_rows))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("insert rows to access service failed", K(ret), K(ls_id), K(tablet_id));
+      }
+    }
+  } else if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_domain_index())) {
     if (OB_FAIL(as->delete_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
                                 ctdef.column_ids_, &iter, affected_rows))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {

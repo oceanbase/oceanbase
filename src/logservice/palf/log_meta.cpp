@@ -41,7 +41,7 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
   if (false == is_valid_access_mode(access_mode) || false == palf_base_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(INFO, "invalid argument", KPC(this), K(access_mode), K(palf_base_info));
-  } else if (OB_FAIL(log_snapshot_meta_.generate(palf_base_info.curr_lsn_, palf_base_info.prev_log_info_))) {
+  } else if (OB_FAIL(log_snapshot_meta_.generate(palf_base_info.curr_lsn_, palf_base_info.prev_log_info_, palf_base_info.curr_lsn_))) {
     PALF_LOG(WARN, "generate snapshot_meta failed", K(ret), K(palf_base_info));
   } else {
     const int64_t prev_log_proposal_id = palf_base_info.prev_log_info_.log_proposal_id_;

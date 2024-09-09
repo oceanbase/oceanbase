@@ -18,6 +18,8 @@
 
 #include "lib/oblog/ob_log_module.h"        // LOG_ERROR
 #include "lib/file/file_directory_utils.h"  // FileDirectoryUtils
+#include "share/io/ob_io_manager.h"         // ObIOManager
+#include "share/ob_device_manager.h"        // ObDeviceManager
 #include "share/ob_version.h"               // build_version
 #include "share/system_variable/ob_system_variable.h" // ObPreProcessSysVars
 #include "share/ob_time_utility2.h"         // ObTimeUtility2
@@ -810,6 +812,22 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       }
       LOG_INFO("set fetching mode", K(fetching_mode_str), K(fetching_mode_), "fetching_mode",
       print_fetching_mode(fetching_mode_));
+    }
+  }
+
+  // init io manager for operate io device directly in obcdc
+  const int64_t io_mgr_memory_limit = 200 * _M_;
+  if (OB_SUCC(ret) && is_direct_fetching_mode(fetching_mode_)) {
+    if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      LOG_ERROR("init device manager failed", KR(ret));
+    } else if (ObIOManager::get_instance().is_inited()) {
+      // do nothing
+    }
+    // mini_mode will start 2 io scheduler threads, !mini_mode will start 16 io scheduler threads
+    else if (OB_FAIL(ObIOManager::get_instance().init(io_mgr_memory_limit))) {
+      LOG_ERROR("init io manager fail", KR(ret));
+    } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+      LOG_ERROR("start io manager fail", KR(ret));
     }
   }
 

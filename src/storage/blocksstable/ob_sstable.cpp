@@ -268,7 +268,9 @@ ObSSTable::~ObSSTable()
   reset();
 }
 
-int ObSSTable::init(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator *allocator)
+int ObSSTable::init(
+    const ObTabletCreateSSTableParam &param,
+    common::ObArenaAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   bool inc_success = false;
@@ -1492,7 +1494,7 @@ void ObSSTable::dec_macro_ref() const
       LOG_ERROR("fail to get data block iterator", K(ret), KPC(this));
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {
-        if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to dec data block ref cnt", K(ret), K(macro_id));
         } else {
           LOG_DEBUG("barry debug decrease data ref cnt", K(macro_id), KPC(this), K(lbt()));
@@ -1508,7 +1510,7 @@ void ObSSTable::dec_macro_ref() const
       LOG_ERROR("fail to get other block iterator", K(ret), KPC(this));
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {
-        if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           // overwrite ret
           LOG_ERROR("fail to dec other block ref cnt", K(ret), K(macro_id));
         } else {
@@ -1522,7 +1524,7 @@ void ObSSTable::dec_macro_ref() const
       LOG_ERROR("fail to get linked block iterator", K(ret), KPC(this));
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {
-        if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to dec other block ref cnt", K(ret), K(macro_id));
         } else {
           LOG_DEBUG("barry debug decrease link ref cnt", K(macro_id), KPC(this), K(lbt()));
@@ -1561,7 +1563,7 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next macro id", K(ret), K(macro_id));
         }
-      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_id))) {
         LOG_ERROR("fail to inc data block ref cnt", K(ret), K(macro_id));
       } else {
         ++data_blk_cnt;
@@ -1583,7 +1585,7 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next macro id", K(ret), K(macro_id));
         }
-      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_id))) {
         LOG_ERROR("fail to inc other block ref cnt", K(ret), K(macro_id));
       } else {
         ++other_blk_cnt;
@@ -1605,7 +1607,7 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next macro id", K(ret), K(macro_id));
         }
-      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_id))) {
         LOG_ERROR("fail to inc linked block ref cnt", K(ret), K(macro_id));
       } else {
         ++linked_blk_cnt;
@@ -1633,7 +1635,7 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
       for (int64_t i = data_blk_cnt; i > 0; --i) { // ignore ret
         if (OB_TMP_FAIL(iter.get_next_macro_id(macro_id))) {
           LOG_ERROR("fail to get next macro id", K(ret), K(iter));
-        } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to dec data block ref cnt", K(ret), K(tmp_ret), K(macro_id));
         } else {
           LOG_DEBUG("barry debug decrease data ref cnt", K(macro_id), KPC(this), K(lbt()));
@@ -1647,7 +1649,7 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
       for (int64_t i = other_blk_cnt; i > 0; --i) { // ignore ret
         if (OB_TMP_FAIL(iter.get_next_macro_id(macro_id))) {
           LOG_ERROR("fail to get next macro id", K(ret), K(iter));
-        } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to dec other block ref cnt", K(ret), K(tmp_ret), K(macro_id));
         } else {
           LOG_DEBUG("barry debug decrease other ref cnt", K(macro_id), KPC(this), K(lbt()));
@@ -1661,7 +1663,7 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
       for (int64_t i = linked_blk_cnt; i > 0; --i) {
         if (OB_TMP_FAIL(iter.get_next_macro_id(macro_id))) {
           LOG_ERROR("fail to get next macro id", K(ret), K(iter));
-        } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to dec linked block ref cnt", K(ret), K(tmp_ret), K(macro_id));
         } else {
           LOG_DEBUG("barry debug decrease link ref cnt", K(macro_id), KPC(this), K(lbt()));
@@ -1964,6 +1966,38 @@ int ObSSTable::get_cs_range(
   return ret;
 }
 
+int ObSSTable::persist_linked_block_if_need(
+    ObArenaAllocator &allocator,
+    const ObTabletID &tablet_id,
+    const int64_t snapshot_version,
+    blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
+    int64_t &macro_start_seq,
+    ObSharedObjectsWriteCtx &linked_block_write_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMetaHandle meta_handle;
+  ObSSTableLinkBlockWriteInfo link_write_info(macro_start_seq);
+  if (OB_FAIL(get_meta(meta_handle))) {
+    LOG_WARN("fail to get sstable meta", K(ret));
+  } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != meta_->macro_info_.entry_id_) {
+    // linked block had been persisted
+  } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count()
+              < ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD) {
+    // need not persist linked_block
+  } else if (OB_FAIL(link_write_info.init(ddl_redo_cb))) {
+    LOG_WARN("fail to init link_write_info", K(ret), KP(ddl_redo_cb));
+  } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(tablet_id,
+                                                          snapshot_version,
+                                                          allocator,
+                                                          &link_write_info,
+                                                          linked_block_write_ctx))) {
+    LOG_WARN("fail to persist linked_block", K(ret), K(meta_->macro_info_), K(tablet_id), K(snapshot_version), K(link_write_info));
+  } else {
+    macro_start_seq += link_write_info.get_written_macro_cnt();
+  }
+  return ret;
+}
+
 int ObSSTable::get_meta(
     ObSSTableMetaHandle &meta_handle,
     common::ObSafeArenaAllocator *allocator) const
@@ -2086,6 +2120,20 @@ int ObSSTable::init_sstable_meta(
   return ret;
 }
 
+int ObSSTable::fill_column_ckm_array(ObIArray<int64_t> &column_checksums) const
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMetaHandle main_major_meta_hdl;
+  if (OB_FAIL(get_meta(main_major_meta_hdl))) {
+    LOG_WARN("failed to get sstable meta handle", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < main_major_meta_hdl.get_sstable_meta().get_col_checksum_cnt(); ++i) {
+    if (OB_FAIL(column_checksums.push_back(main_major_meta_hdl.get_sstable_meta().get_col_checksum()[i]))) {
+      LOG_WARN("fail to push back column checksum", K(ret), K(i));
+    }
+  }
+  return ret;
+}
 
 int ObSSTable::inner_deep_copy_and_inc_macro_ref(
     common::ObIAllocator &allocator,
@@ -2126,6 +2174,32 @@ int ObSSTable::inner_deep_copy_and_inc_macro_ref(
     LOG_INFO("succeeded to copy sstable and increase macro reference count", K(ret), KPC(sstable));
   }
 
+return ret;
+}
+
+int ObSSTable::modify_snapshot_and_seq(
+    const int64_t new_major_snapshot,
+    const int64_t new_root_macro_seq)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_tmp_sstable_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support modify variables for tmp sstable", KR(ret), K_(is_tmp_sstable));
+  } else if (OB_ISNULL(meta_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("meta is unexpected null", KR(ret), K_(meta));
+  } else if (OB_UNLIKELY(get_snapshot_version() >= new_major_snapshot
+      || meta_->get_basic_meta().root_macro_seq_ >= new_root_macro_seq)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), "snapshot_of_sstable", get_snapshot_version(), K(new_major_snapshot),
+      "root_macro_seq_on_sstable", meta_->get_basic_meta().root_macro_seq_, K(new_root_macro_seq), K(get_key()));
+  } else {
+    LOG_INFO("success to modify snapshot and seq", KR(ret),
+      "snapshot_of_sstable", get_snapshot_version(), K(new_major_snapshot),
+      "root_macro_seq_on_sstable", meta_->get_basic_meta().root_macro_seq_, K(new_root_macro_seq), K(get_key()));
+    get_version_range().snapshot_version_ = new_major_snapshot;
+    meta_->get_basic_meta().root_macro_seq_ = new_root_macro_seq;
+  }
   return ret;
 }
 

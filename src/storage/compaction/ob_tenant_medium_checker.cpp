@@ -90,7 +90,12 @@ ObTenantMediumChecker::~ObTenantMediumChecker()
 int ObTenantMediumChecker::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls_locality_cache_.init(MTL_ID()))) {
+  if (GCTX.is_shared_storage_mode()) {
+    FLOG_INFO("cluster is shared storage mode, not init ObTenantMediumChecker", KR(ret));
+  } else if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTenantMediumChecker is inited before", KR(ret), KPC(this));
+  } else if (OB_FAIL(ls_locality_cache_.init(MTL_ID()))) {
     LOG_WARN("failed to init ls locality cache", K(ret));
   } else if (OB_FAIL(tablet_ls_set_.create(DEFAULT_MAP_BUCKET, "MedCheckSet", "CheckSetNode", MTL_ID()))) {
     LOG_WARN("failed to create set", K(ret));
@@ -214,14 +219,24 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObLSColumnReplicaCache cs_replica_cache; // a copy one from ls_locality_cache_
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMediumChecker is not inited", K(ret));
-  } else if (OB_FAIL(ls_locality_cache_.refresh_ls_locality(false /*force_refresh*/))) {
-    LOG_WARN("failed to refresh ls locality");
-    ADD_COMMON_SUSPECT_INFO(MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
-        SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, ret);
+  } else if (OB_FAIL(cs_replica_cache.init())) {
+    LOG_WARN("failed to init cs_replica_cache", K(ret));
   } else {
+    lib::ObMutexGuard guard(lock_);
+    if (OB_FAIL(ls_locality_cache_.refresh_ls_locality(false /*force_refresh*/))) {
+      LOG_WARN("failed to refresh ls locality");
+      ADD_COMMON_SUSPECT_INFO(MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+          SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, ret);
+    } else if (OB_FAIL(cs_replica_cache.assign(ls_locality_cache_.get_cs_replica_cache()))) {
+      LOG_WARN("failed to assign cs_replica_cache", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     DEL_SUSPECT_INFO(MEDIUM_MERGE, UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
     TabletLSArray tablet_ls_infos;
     tablet_ls_infos.set_attr(ObMemAttr(MTL_ID(), "CheckInfos"));
@@ -260,7 +275,7 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
       int64_t cost_ts = ObTimeUtility::fast_current_time();
       ObBatchFinishCheckStat stat;
       while (start_idx < end_idx) {
-        if (OB_TMP_FAIL(check_medium_finish(tablet_ls_infos, start_idx, end_idx, batch_tablet_ls_infos, finish_tablet_ls_infos, stat))) {
+        if (OB_TMP_FAIL(check_medium_finish(tablet_ls_infos, start_idx, end_idx, batch_tablet_ls_infos, finish_tablet_ls_infos, stat, cs_replica_cache))) {
           LOG_WARN("failed to check medium finish", K(tmp_ret));
         }
         start_idx = end_idx;
@@ -268,7 +283,7 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
       }
       cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
       ADD_COMPACTION_EVENT(
-        MTL(ObTenantTabletScheduler*)->get_frozen_version(),
+        MERGE_SCHEDULER_PTR->get_frozen_version(),
         ObServerCompactionEvent::COMPACTION_FINISH_CHECK,
         ObTimeUtility::fast_current_time(),
         K(cost_ts), "batch_check_stat", stat);
@@ -283,7 +298,8 @@ int ObTenantMediumChecker::check_medium_finish(
     int64_t end_idx,
     ObIArray<ObTabletCheckInfo> &check_tablet_ls_infos,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
-    ObBatchFinishCheckStat &stat)
+    ObBatchFinishCheckStat &stat,
+    const share::ObLSColumnReplicaCache &ls_cs_replica_cache)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -313,7 +329,7 @@ int ObTenantMediumChecker::check_medium_finish(
     ObCompactionScheduleTimeGuard time_guard;
     stat.filter_cnt_ += (end_idx - start_idx - check_tablet_ls_infos.count());
     if (FAILEDx(ObMediumCompactionScheduleFunc::batch_check_medium_finish(
-        ls_info_map_, finish_tablet_ls_infos, check_tablet_ls_infos, time_guard, ls_locality_cache_.get_cs_replica_cache()))) {
+        ls_info_map_, finish_tablet_ls_infos, check_tablet_ls_infos, time_guard, ls_cs_replica_cache))) {
       LOG_WARN("failed to batch check medium finish", K(ret), K(tablet_ls_infos.count()), K(check_tablet_ls_infos.count()),
         K(tablet_ls_infos), K(check_tablet_ls_infos));
       stat.fail_cnt_ += check_tablet_ls_infos.count();

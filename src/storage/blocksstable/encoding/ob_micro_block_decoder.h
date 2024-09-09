@@ -72,12 +72,12 @@ public:
   { return decoder_->get_distinct_count(distinct_cnt); }
   OB_INLINE int read_distinct(
       const char **cell_datas,
-      storage::ObGroupByCell &group_by_cell) const
+      storage::ObGroupByCellBase &group_by_cell) const
   { return decoder_->read_distinct(*ctx_, cell_datas, group_by_cell); }
   OB_INLINE int read_reference(
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const
+      storage::ObGroupByCellBase &group_by_cell) const
   { return decoder_->read_reference(*ctx_, row_ids, row_cap, group_by_cell); }
 public:
   const ObIColumnDecoder *decoder_;
@@ -245,7 +245,6 @@ public:
   static int update_cached_decoders(char *cache, const int64_t cache_size,
       const char *old_block, const char *cur_block, const int64_t block_size);
 
-  virtual ObReaderType get_type() override { return Decoder; }
   virtual void reset();
   virtual int init(
       const ObMicroBlockData &block_data,
@@ -347,17 +346,25 @@ public:
   virtual int read_distinct(
       const int32_t group_by_col,
       const char **cell_datas,
-      storage::ObGroupByCell &group_by_cell) const override;
+      storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int read_reference(
       const int32_t group_by_col,
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const override;
+      storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int get_group_by_aggregate_result(
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) override;
+  virtual int get_group_by_aggregate_result(
+      const int32_t *row_ids,
+      const char **cell_datas,
+      const int64_t row_cap,
+      const int64_t vec_offset,
+      uint32_t *len_array,
+      sql::ObEvalCtx &eval_ctx,
+      storage::ObGroupByCellVec &group_by_cell) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
@@ -367,7 +374,8 @@ public:
       const int64_t vec_offset,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      sql::ObExprPtrIArray &exprs) override;
+      sql::ObExprPtrIArray &exprs,
+      const bool need_init_vector) override;
   virtual bool has_lob_out_row() const override final
   { return nullptr != header_ && header_->has_lob_out_row(); }
 

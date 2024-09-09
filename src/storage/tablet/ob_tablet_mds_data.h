@@ -96,7 +96,8 @@ public:
       const int64_t finish_medium_scn);
   int init_with_update_medium_info(
       common::ObIAllocator &allocator,
-      const ObTabletMdsData &other);
+      const ObTabletMdsData &other,
+      const bool clear_wait_check_flag);
   int init_empty_shell(
       const ObTabletCreateDeleteMdsUserData &tablet_status);
   bool is_valid() const;

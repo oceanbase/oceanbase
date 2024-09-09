@@ -28,6 +28,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/memtable/ob_memtable_util.h"
+#include "storage/meta_mem/ob_external_tablet_cnt_map.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_tablet_pointer_map.h"
 #include "storage/meta_mem/ob_tablet_pointer_handle.h"
@@ -197,7 +198,7 @@ public:
       const share::SCN &ls_checkpoint,
       share::SCN &min_end_scn_from_latest,
       share::SCN &min_end_scn_from_old);
-  int get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::SCN &scn);
+  int scan_all_version_tablets(const ObTabletMapKey &key, const ObFunction<int(ObTablet &)> &op);
 
   // garbage collector for sstable and memtable.
   int push_table_into_gc_queue(ObITable *table, const ObITable::TableType table_type);
@@ -259,6 +260,12 @@ public:
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle,
       const bool force_alloc_new = false);
+
+  int get_current_version_for_tablet(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      int64_t &tablet_version,
+      bool &allow_tablet_version_gc);
   int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
@@ -281,6 +288,9 @@ public:
   int get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const;
 
   int get_tablet_pointer_initial_state(const ObTabletMapKey &key, bool &initial_state);
+  int get_tablet_migration_required_size(
+      const ObTabletMapKey &key,
+      int64_t &required_size);
   int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   ObFullTabletCreator &get_mstx_tablet_creator() { return full_tablet_creator_; }
   common::ObIAllocator &get_meta_cache_io_allocator() { return meta_cache_io_allocator_; }
@@ -295,6 +305,9 @@ public:
 
   int inc_ref_in_leak_checker(const int32_t index);
   int dec_ref_in_leak_checker(const int32_t index);
+  int inc_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
+  int dec_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
+
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler
   {
@@ -518,6 +531,7 @@ private:
   ObBucketLock bucket_lock_;
   ObFullTabletCreator full_tablet_creator_;
   ObTabletPointerMap tablet_map_;
+  ObExternalTabletCntMap external_tablet_cnt_map_;
   int tg_id_;
   int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.
   TableGCTask table_gc_task_;

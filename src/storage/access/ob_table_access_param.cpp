@@ -61,8 +61,7 @@ ObTableIterParam::ObTableIterParam()
       auto_split_params_(nullptr),
       is_tablet_spliting_(false),
       is_column_replica_table_(false)
-{
-}
+{}
 
 ObTableIterParam::~ObTableIterParam()
 {

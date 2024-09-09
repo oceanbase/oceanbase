@@ -19,10 +19,6 @@
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 namespace oceanbase
 {
-namespace storage
-{
-class ObSSTableMergeInfo;
-}
 namespace compaction
 {
 struct ObCompactionProgress
@@ -118,7 +114,7 @@ public:
       const ObCompactionTimeGuard *time_guard = nullptr,
       const bool co_merge = false);
   int update_unfinish_tablet(const int64_t major_snapshot_version);
-  int update_compression_ratio(const int64_t major_snapshot_version, storage::ObSSTableMergeInfo &info);
+  int update_compression_ratio(const int64_t major_snapshot_version, compaction::ObSSTableMergeHistory &merge_history);
 
 private:
   int loop_major_sstable_(int64_t version, int64_t &cnt, int64_t &size);

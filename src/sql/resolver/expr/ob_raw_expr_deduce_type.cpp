@@ -175,11 +175,28 @@ int ObRawExprDeduceType::visit(ObColumnRefRawExpr &expr)
     } else if (OB_ISNULL(exec_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("need context to search subschema mapping", K(ret), K(udt_id));
-    } else if (FALSE_IT(subschema_id = ObMaxSystemUDTSqlType)) {
-    } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
-      LOG_WARN("failed to get subschema id by udt id", K(ret), K(udt_id));
+    } else if (ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
+      subschema_id = ObMaxSystemUDTSqlType;
+      if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+        LOG_WARN("failed to get subschema id by udt id", K(ret), K(udt_id));
+      } else {
+        expr.set_subschema_id(subschema_id);
+      }
+    } else if (expr.get_enum_set_values().count() > 0) {
+      // array type
+      if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(expr.get_enum_set_values().at(0), subschema_id))) {
+        LOG_WARN("failed to get array type subschema id", K(ret));
+      } else if (FALSE_IT(expr.set_subschema_id(subschema_id))) {
+      } else if (OB_FAIL(construct_collecton_attr_expr(expr))) {
+        LOG_WARN("failed to construct collection attr expr", K(ret));
+      }
     } else {
-      expr.set_subschema_id(subschema_id);
+      // stmt : insert into arr_t1 select array(), array() is mock colunmn_expr which isn't with enum_set_values
+      // just check subschema_id validity
+      ObSubSchemaValue meta_unused;
+      if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, meta_unused))) {
+        LOG_WARN("invalid subschema id", K(ret), K(subschema_id));
+      }
     }
   }
   return ret;
@@ -721,10 +738,147 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
       if (expr.get_result_type().has_result_flag(ZEROFILL_FLAG)) {
         cast_mode |= CM_ZERO_FILL;
       }
+      if (ob_is_collection_sql_type(expr.get_result_type().get_type())
+          && !ObObjUDTUtil::ob_is_supported_sql_udt(expr.get_result_type().get_udt_id())) {
+        if (expr.get_expr_class() == ObRawExpr::EXPR_OPERATOR
+            || expr.get_expr_class() == ObRawExpr::EXPR_SYS_FUNC
+            || expr.get_expr_class() == ObRawExpr::EXPR_SET_OP) {
+          ObOpRawExpr *op_expr = static_cast<ObOpRawExpr*>(&expr);
+          if (OB_FAIL(construct_collecton_attr_expr(*op_expr))) {
+            LOG_WARN("failed to construct collection attr expr", K(ret));
+          }
+        } else if (expr.get_expr_class() == ObRawExpr::EXPR_CASE_OPERATOR) {
+          ObCaseOpRawExpr *op_expr = static_cast<ObCaseOpRawExpr*>(&expr);
+          if (OB_FAIL(construct_collecton_attr_expr(*op_expr))) {
+            LOG_WARN("failed to construct collection attr expr", K(ret));
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected expr class type", K(ret), K(expr));
+        }
+      }
     }
     LOG_DEBUG("calc_result_type", K(ret), K(expr), K(types), K(cast_mode));
   }
 #undef GET_TYPE_ARRAY
+  return ret;
+}
+
+template<typename RawExprType>
+int ObRawExprDeduceType::add_attr_exprs(const ObCollectionTypeBase *coll_meta, RawExprType &expr)
+{
+  int ret = OB_SUCCESS;
+  ObItemType expr_type = T_REF_COLUMN;
+  if (coll_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    ObColumnRefRawExpr *attr_expr = NULL;
+    const ObCollectionArrayType *arr_meta = static_cast<const ObCollectionArrayType*>(coll_meta);
+    if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                 expr_type, ArrayAttr::ATTR_NULL_BITMAP,
+                                                 attr_expr))) {
+      LOG_WARN("failed to create nullbitmap attr expr", K(ret));
+    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+      LOG_WARN("failed to add attr expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                 expr_type, ArrayAttr::ATTR_OFFSETS,
+                                                 attr_expr))) {
+      LOG_WARN("failed to create offset attr expr", K(ret));
+    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+      LOG_WARN("failed to add attr expr", K(ret));
+    } else if (OB_FAIL(add_attr_exprs(arr_meta->element_type_, expr))) {
+      LOG_WARN("failed to add attr expr", K(ret));
+    }
+  } else if (coll_meta->type_id_ == ObNestedType::OB_BASIC_TYPE) {
+    ObColumnRefRawExpr *attr_expr = NULL;
+    const ObCollectionBasicType *elem_type = static_cast<const ObCollectionBasicType*>(coll_meta);
+    if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                 expr_type, ArrayAttr::ATTR_NULL_BITMAP,
+                                                 attr_expr))) {
+      LOG_WARN("failed to create nullbitmap attr expr", K(ret));
+    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+      LOG_WARN("failed to add attr expr", K(ret));
+    } else if (!is_fixed_length(elem_type->basic_meta_.get_obj_type())) {
+      if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                 expr_type, ArrayAttr::ATTR_OFFSETS,
+                                                 attr_expr))) {
+        LOG_WARN("failed to create nullbitmap attr expr", K(ret));
+      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+        LOG_WARN("failed to add attr expr", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                        expr_type, ArrayAttr::ATTR_DATA,
+                                                        attr_expr))) {
+      LOG_WARN("failed to create nullbitmap attr expr", K(ret));
+    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+      LOG_WARN("failed to add attr expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+template<typename RawExprType>
+int ObRawExprDeduceType::construct_collecton_attr_expr(RawExprType &expr)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = expr.get_result_type().get_subschema_id();
+  ObExecContext *exec_ctx = const_cast<ObExecContext *>(my_session_->get_cur_exec_ctx());
+  ObSubSchemaValue value;
+  const ObSqlCollectionInfo *coll_info = NULL;
+  ObItemType expr_type = expr.get_expr_type();
+  bool need_set_values = expr.get_enum_set_values().empty();
+  bool need_construct_attrs = true;
+  if (expr.get_attr_count() > 0) {
+    // attrs constructed already, do nothing
+    need_construct_attrs = false;
+  } else if (expr.is_const_expr()) {
+    // is uniform format, do nothing
+    need_construct_attrs = false;
+  }
+  if (!need_set_values && !need_construct_attrs) {
+    // do nothing
+  } else if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_ISNULL(expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null raw expr", K(ret));
+  } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+    LOG_WARN("failed to get subschema ctx", K(ret));
+  } else if (OB_ISNULL(value.value_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("subschema is null", K(ret));
+  } else {
+    coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
+    ObCollectionTypeBase *coll_meta = coll_info->collection_meta_;
+    ObColumnRefRawExpr *attr_expr = NULL;
+    if (coll_meta->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_meta->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected meta type", K(ret), K(coll_meta->type_id_));
+    } else if (OB_ISNULL(coll_meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subschema is null", K(ret));
+    } else if (need_construct_attrs) {
+      if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
+                                                          T_REF_COLUMN, ArrayAttr::ATTR_LENGTH,
+                                                          attr_expr))) {
+        LOG_WARN("failed to create nullbitmap attr expr", K(ret));
+      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
+        LOG_WARN("failed to add attr expr", K(ret));
+      } else if (OB_FAIL(add_attr_exprs(reinterpret_cast<ObCollectionArrayType *>(coll_meta)->element_type_, expr))) {
+        LOG_WARN("failed to add attr expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && need_set_values) {
+      ObString def = coll_info->get_def_string();
+      ObSEArray<ObString, 1> enum_set_values;
+      if (OB_FAIL(enum_set_values.push_back(def))) {
+        LOG_WARN("failed to push back array", K(ret));
+      } else if (OB_FAIL(expr.set_enum_set_values(enum_set_values))) {
+        LOG_WARN("failed to set values", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -1699,6 +1853,36 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               scale_increment_recover = result_type.get_scale();
               result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
             }
+          } else if (ob_is_collection_sql_type(obj_type)) {
+            if (T_FUN_SUM == expr.get_expr_type() || T_FUN_AVG == expr.get_expr_type()) {
+              ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(my_session_);
+              ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+              uint16_t subschema_id = result_type.get_subschema_id();
+              ObSubSchemaValue value;
+              const ObSqlCollectionInfo *coll_info = NULL;
+              if (OB_ISNULL(exec_ctx)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("need context to search subschema mapping", K(ret), K(subschema_id));
+              } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+                LOG_WARN("failed to get subschema ctx", K(ret));
+              } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("invalid subschema type", K(ret), K(value));
+              } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+              } else if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+                result_type.set_collection(subschema_id);
+                expr.set_result_type(result_type);
+                if (OB_FAIL(construct_collecton_attr_expr(expr))) {
+                  LOG_WARN("failed to construct collection attr expr", K(ret));
+                }
+              } else {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not supported collection type", K(ret), "type", coll_info->collection_meta_->type_id_);
+              }
+            } else {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("Incorrect collection arguments", K(child_expr->get_data_type()), K(ret));
+            }
           } else {
             if (ob_is_number_tc(obj_type)) {
               result_type.set_number();
@@ -2500,8 +2684,13 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
 
 int ObRawExprDeduceType::visit(ObSetOpRawExpr &expr)
 {
-  UNUSED(expr);
   int ret = OB_SUCCESS;
+  if (ob_is_collection_sql_type(expr.get_result_type().get_type())
+      && !ObObjUDTUtil::ob_is_supported_sql_udt(expr.get_result_type().get_udt_id())) {
+    if (OB_FAIL(construct_collecton_attr_expr(expr))) {
+      LOG_WARN("failed to construct collection attr expr", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -2607,6 +2796,11 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       LOG_WARN("deduce type failed", K(ret));
     } else {
       expr.set_result_type(expr.get_agg_expr()->get_result_type());
+      if (expr.get_result_type().is_collection_sql_type()) {
+        if (OB_FAIL(expr.set_enum_set_values(expr.get_agg_expr()->get_enum_set_values()))) {
+          LOG_WARN("failed to set_enum_set_values", K(ret));
+        }
+      }
     }
   //here pl_agg_udf_expr_ in win_expr must be null, defensive check!!!
   } else if (OB_UNLIKELY(expr.get_pl_agg_udf_expr() != NULL)) {
@@ -3295,6 +3489,9 @@ int ObRawExprDeduceType::set_agg_min_max_result_type(ObAggFunRawExpr &expr,
   } else if (OB_UNLIKELY(ob_is_roaringbitmap(child_expr->get_data_type()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Incorrect roaringbitmap arguments", K(child_expr->get_data_type()), K(ret));
+  } else if (OB_UNLIKELY(ob_is_collection_sql_type(child_expr->get_data_type()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Incorrect collection arguments", K(child_expr->get_data_type()), K(ret));
   } else if (OB_UNLIKELY(ob_is_enumset_tc(child_expr->get_data_type()))) {
     // To compatible with MySQL, we need to add cast expression that enumset to varchar
     // to evalute MIN/MAX aggregate functions.

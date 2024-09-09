@@ -275,6 +275,7 @@ public:
   OB_INLINE bool is_not_null_for_write() const { return has_result_flag(NOT_NULL_WRITE_FLAG); }
   // calc_type: 表示表达式计算时，表达式将转换成calc_type后再计算
   OB_INLINE void set_calc_type(const common::ObObjType &type) { calc_type_.set_type(type); }
+  OB_INLINE void set_calc_subschema_id(const uint16_t subschema_id) { calc_type_.set_subschema_id(subschema_id); }
   OB_INLINE void set_calc_collation_utf8()
   {
     set_calc_collation_by_charset(common::CHARSET_UTF8MB4);

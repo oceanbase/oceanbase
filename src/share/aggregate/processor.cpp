@@ -14,6 +14,7 @@
 #include "processor.h"
 #include "share/aggregate/iaggregate.h"
 #include "share/aggregate/single_row.h"
+#include "share/aggregate/aggr_extra.h"
 
 namespace oceanbase
 {
@@ -90,6 +91,8 @@ void Processor::destroy()
   fast_single_row_aggregates_.reset();
   allocator_.reset();
   row_selector_ = nullptr;
+  cur_batch_group_idx_ = 0;
+  cur_batch_group_buf_ = nullptr;
   inited_ = false;
 }
 
@@ -106,6 +109,8 @@ void Processor::reuse()
       fast_single_row_aggregates_.at(i)->reuse();
     }
   }
+  cur_batch_group_idx_ = 0;
+  cur_batch_group_buf_ = nullptr;
 }
 
 int Processor::add_batch_rows(const int32_t start_agg_id, const int32_t end_agg_id,
@@ -151,6 +156,130 @@ int Processor::add_batch_rows(const int32_t start_agg_id, const int32_t end_agg_
             agg_ctx_, col_id, *brs.skip_, bound, aggr_cell, RowSelector(selector_array, count)))) {
         SQL_LOG(WARN, "add batch rows failed", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int Processor::advance_collect_result(const int64_t cur_group_id, const RowMeta &row_meta,
+                                      aggregate::AggrRowPtr group_row)
+{
+  int ret = OB_SUCCESS;
+  int32_t batch_size =
+    min(1, static_cast<int32_t>(agg_ctx_.agg_rows_.count() - cur_group_id));
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    SQL_LOG(WARN, "not inited", K(ret));
+  } else if (OB_UNLIKELY(batch_size <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected batch size", K(ret), K(batch_size));
+  } else {
+    int32_t output_size = batch_size;
+    bool got_result = false;
+    ObEvalCtx::BatchInfoScopeGuard guard(agg_ctx_.eval_ctx_);
+    guard.set_batch_size(1);
+    for (int i = 0; OB_SUCC(ret) && i < agg_ctx_.aggr_infos_.count(); i++) {
+      int32_t agg_col_idx = i;
+      ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(agg_col_idx);
+      if (helper::has_extra_info(aggr_info)) {
+        int32_t cur_batch_size = 0;
+        char *curr_agg_cell = agg_ctx_.row_meta().locate_cell_payload(agg_col_idx, group_row);
+        VecExtraResult *&extra = agg_ctx_.get_extra(agg_col_idx, curr_agg_cell);
+        if (OB_ISNULL(extra)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "is null", K(extra), K(agg_col_idx));
+        } else if (OB_UNLIKELY(agg_col_idx >= aggregates_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "unexpected agg_col_idx", K(agg_col_idx), K(aggregates_));
+        } else if (OB_ISNULL(aggr_info.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "invalid null aggregate expr", K(ret));
+        } else {
+          // do nothing
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(aggregates_.at(agg_col_idx)
+                             ->eval_group_extra_result(agg_ctx_, agg_col_idx,
+                                                       static_cast<int32_t>(cur_group_id)))) {
+          SQL_LOG(WARN, "collect group results failed", K(ret), K(batch_size));
+        } else {
+          if (!got_result) {
+            output_size = cur_batch_size;
+            got_result = true;
+          } else if (OB_UNLIKELY(output_size != cur_batch_size)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "unexepcted output batch", K(output_size), K(cur_batch_size), K(ret));
+          }
+          extra->set_is_evaluated();
+          extra->reuse();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int Processor::collect_group_results(const RowMeta &row_meta, int32_t &output_batch_size,
+                                     ObBatchRows &output_brs, int64_t &cur_group_id)
+{
+  int ret = OB_SUCCESS;
+  int32_t batch_size =
+    min(output_batch_size, static_cast<int32_t>(agg_ctx_.agg_rows_.count() - cur_group_id));
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    SQL_LOG(WARN, "not inited", K(ret));
+  } else if (OB_UNLIKELY(batch_size <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected batch size", K(ret), K(batch_size));
+  } else {
+    int32_t aggr_cnt = static_cast<int32_t>(agg_ctx_.aggr_infos_.count());
+    // default to batch_size
+    // if no aggregate functions, there is no need to collect group results, e.g.
+    // `select /*+parallel(2)*/ count(distinct b), a from t group by a`, stage 1.
+    // However, HashGroupBy operator still adds aggregate rows into processor and
+    // calls `collect_group_results` to get output row size to stop iteration.
+    int32_t output_size = batch_size;
+    bool got_result = false;
+    ObEvalCtx::BatchInfoScopeGuard guard(agg_ctx_.eval_ctx_);
+    guard.set_batch_size(batch_size);
+    for (int i = 0; OB_SUCC(ret) && i < agg_ctx_.aggr_infos_.count(); i++) {
+      int32_t agg_col_idx = i;
+      int32_t output_start_idx = static_cast<int32_t>(output_brs.size_);
+      int32_t cur_batch_size = 0;
+      int32_t start_gid = static_cast<int32_t>(cur_group_id);
+      ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(agg_col_idx);
+      if (OB_UNLIKELY(agg_col_idx >= aggregates_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected agg_col_idx", K(agg_col_idx), K(aggregates_));
+      } else if (OB_ISNULL(aggr_info.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "invalid null aggregate expr", K(ret));
+      } else {
+        // do nothing
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(aggregates_.at(agg_col_idx)
+                           ->collect_batch_group_results(agg_ctx_, agg_col_idx, start_gid,
+                                                         output_start_idx, batch_size,
+                                                         cur_batch_size))) {
+        SQL_LOG(WARN, "collect group results failed", K(ret), K(batch_size));
+      } else if (!got_result) {
+        output_size = cur_batch_size;
+        got_result = true;
+      } else if (OB_UNLIKELY(output_size != cur_batch_size)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexepcted output batch", K(output_size), K(cur_batch_size), K(ret));
+      }
+      OX (agg_ctx_.aggr_infos_.at(i).expr_->get_eval_info(agg_ctx_.eval_ctx_).projected_ = true);
+    }
+    LOG_DEBUG("collect group results", K(ret), K(output_size), K(cur_group_id), K(output_brs),
+              K(output_batch_size));
+    if (OB_SUCC(ret)) {
+      output_batch_size = output_size;
+      output_brs.size_ += output_size;
+      cur_group_id += output_size;
     }
   }
   return ret;
@@ -209,9 +338,8 @@ int Processor::collect_group_results(const RowMeta &row_meta,
       } else if (OB_UNLIKELY(output_size != cur_batch_size)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "unexepcted output batch", K(output_size), K(cur_batch_size), K(ret));
-      } else {
-        agg_ctx_.aggr_infos_.at(i).expr_->get_eval_info(agg_ctx_.eval_ctx_).projected_ = true;
       }
+      OX (agg_ctx_.aggr_infos_.at(i).expr_->get_eval_info(agg_ctx_.eval_ctx_).projected_ = true);
     }
 
     if (OB_SUCC(ret)) { clear_op_evaluated_flag(); }
@@ -323,7 +451,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
 }
 
 int Processor::setup_rt_info(AggrRowPtr row,
-                             RuntimeContext &agg_ctx)
+                             RuntimeContext &agg_ctx,
+                             ObIAllocator *extra_allocator /*=nullptr*/,
+                             const int64_t group_id /*=0*/)
 {
   static const int constexpr extra_arr_buf_size = 16;
   int ret = OB_SUCCESS;
@@ -359,11 +489,98 @@ int Processor::setup_rt_info(AggrRowPtr row,
       LOG_WARN("allocate memory failed", K(ret));
     } else {
       MEMSET(extra_array_buf, 0, extra_size);
-      if (OB_FAIL(agg_ctx.agg_extras_.push_back((AggregateExtras)extra_array_buf))) {
+      if (OB_FAIL(init_aggr_row_extra_info(
+            agg_ctx, (char *)extra_array_buf,
+            nullptr == extra_allocator ? agg_ctx.allocator_ : *extra_allocator, group_id))) {
+        SQL_LOG(WARN, "failed to init aggr row extra info", K(ret), K(group_id));
+      } else if (OB_FAIL(agg_ctx.agg_extras_.push_back((AggregateExtras)extra_array_buf))) {
         SQL_LOG(WARN, "push back element failed", K(ret));
       } else {
         *reinterpret_cast<int32_t *>(row + agg_ctx.row_meta().extra_idx_offset_) =
           static_cast<int32_t>(agg_ctx.agg_extras_.count()) - 1;
+      }
+    }
+  }
+  return ret;
+}
+
+VecExtraResult *&Processor::get_extra(const int64_t agg_col_id, RuntimeContext &agg_ctx,
+                                      char *extra_array_buf)
+{
+  OB_ASSERT(agg_col_id < agg_ctx.agg_row_meta_.col_cnt_);
+  OB_ASSERT(agg_ctx.agg_row_meta_.extra_idxes_ != nullptr);
+  OB_ASSERT(agg_ctx.agg_row_meta_.extra_idxes_[agg_col_id] >= 0);
+  int32_t agg_extra_id = agg_ctx.agg_row_meta_.extra_idxes_[agg_col_id];
+  OB_ASSERT(agg_ctx.agg_row_meta_.extra_cnt_ > agg_extra_id);
+  return ((AggregateExtras)extra_array_buf)[agg_extra_id];
+}
+
+int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_array_buf,
+                                        ObIAllocator &extra_allocator, const int64_t group_id /*=0*/)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
+    switch (aggr_info.get_expr_type()) {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_GROUP_RANK:
+      case T_FUN_GROUP_DENSE_RANK:
+      case T_FUN_GROUP_PERCENT_RANK:
+      case T_FUN_GROUP_CUME_DIST:
+      case T_FUN_MEDIAN:
+      case T_FUN_GROUP_PERCENTILE_CONT:
+      case T_FUN_GROUP_PERCENTILE_DISC:
+      case T_FUN_KEEP_MAX:
+      case T_FUN_KEEP_MIN:
+      case T_FUN_KEEP_SUM:
+      case T_FUN_KEEP_COUNT:
+      case T_FUN_KEEP_WM_CONCAT:
+      case T_FUN_WM_CONCAT:
+      case T_FUN_PL_AGG_UDF:
+      case T_FUN_JSON_ARRAYAGG:
+      case T_FUN_ORA_JSON_ARRAYAGG:
+      case T_FUN_JSON_OBJECTAGG:
+      case T_FUN_ORA_JSON_OBJECTAGG:
+      case T_FUN_ORA_XMLAGG:
+      case T_FUN_HYBRID_HIST:
+      case T_FUN_TOP_FRE_HIST:
+      case T_FUN_AGG_UDF: {
+        agg_ctx.need_advance_collect_ = true;
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported aggregate type", K(ret), K(aggr_info.get_expr_type()));
+        break;
+      }
+      default: break;
+    }
+    if (OB_SUCC(ret) && aggr_info.has_distinct_) {
+      agg_ctx.need_advance_collect_ = true;
+      VecExtraResult *&extra = get_extra(i, agg_ctx, extra_array_buf);
+      if (nullptr == extra) {
+        void *tmp_buf = NULL;
+        if (OB_ISNULL(tmp_buf =
+                        agg_ctx.allocator_.alloc(sizeof(HashBasedDistinctVecExtraResult)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else {
+          extra = new (tmp_buf)
+            HashBasedDistinctVecExtraResult(extra_allocator, *agg_ctx.op_monitor_info_);
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        // In window function, get result will be called more than once, rewind is needed.
+        //
+        // The distinct set will iterate twice with rollup, for rollup processing and aggregation,
+        // rewind is needed for the second iteration.
+        //
+        // Rollup is supported and only supported in sort based group by with multi-groups,
+        // only groups with group id greater than zero need to rewind.
+        // The groupid of hash groupby also is greater then 0, then need rewind ???
+        const bool need_rewind = (agg_ctx.in_window_func_ || group_id > 0);
+        if (OB_FAIL(static_cast<HashBasedDistinctVecExtraResult *>(extra)->init_distinct_set(
+              aggr_info, need_rewind, *agg_ctx.hp_infras_mgr_, agg_ctx.eval_ctx_))) {
+          LOG_WARN("init_distinct_set failed", K(ret));
+        }
       }
     }
   }
@@ -485,6 +702,33 @@ int Processor::collect_scalar_results(const RowMeta &row_meta, const ObCompactRo
   return ret;
 }
 
+int Processor::rollup_batch_process(const AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                    int64_t diff_group_idx /* -1 */,
+                                    const int64_t max_group_cnt /* INT64_MIN */)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(group_row) || OB_ISNULL(rollup_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null aggregate row", K(ret));
+  } else {
+    for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
+      const ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
+      if (OB_ISNULL(aggr_info.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null aggregate expr", K(ret));
+      } else if (T_FUN_TOP_FRE_HIST == aggr_info.get_expr_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("topk fre hist not support in group by rollup", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "topk fre hist in group by rollup");
+      } else if (OB_FAIL(aggregates_.at(col_id)->rollup_aggregation(
+                   agg_ctx_, col_id, group_row, rollup_row, diff_group_idx, max_group_cnt))) {
+        LOG_WARN("collect batch group results failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int Processor::collect_empty_set(bool collect_for_third_stage) const
 {
   int ret = OB_SUCCESS;
@@ -564,28 +808,42 @@ int Processor::collect_empty_set(bool collect_for_third_stage) const
   return ret;
 }
 
-int Processor::init_scalar_aggregate_row(ObCompactRow *&row, RowMeta &row_meta,
-                                         ObIAllocator &allocator)
+int Processor::init_aggr_row_meta(RowMeta &row_meta)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObExpr *, 1> mock_exprs;
-  int64_t row_size = 0;
-  void *row_buf = nullptr;
   row_meta.reset();
+  ObSEArray<ObExpr *, 1> mock_exprs;
   if (OB_FAIL(row_meta.init(mock_exprs, agg_ctx_.row_meta().row_size_))) {
     LOG_WARN("init row meta failed", K(ret));
-  } else {
-    row_size = row_meta.get_row_fixed_size() + agg_ctx_.row_meta().row_size_;
-    if (OB_ISNULL(row_buf = allocator.alloc(row_size))) {
+  }
+  return ret;
+}
+
+int Processor::init_one_aggr_row(const RowMeta &row_meta, ObCompactRow *&row,
+                                 ObIAllocator &extra_allocator, const int64_t group_id /*=0*/)
+{
+  int ret = OB_SUCCESS;
+  int64_t alloc_size = row_meta.get_row_fixed_size() + agg_ctx_.row_meta().row_size_;
+  if (0 == cur_batch_group_idx_ % BATCH_GROUP_SIZE) {
+    if (OB_ISNULL(cur_batch_group_buf_ =
+                    (char *)agg_ctx_.allocator_.alloc(alloc_size * BATCH_GROUP_SIZE))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
+      LOG_WARN("allocate memory failed", K(ret), K(alloc_size), K(group_id));
     } else {
-      row = new(row_buf)ObCompactRow();
-      row->init(row_meta);
-      AggrRowPtr agg_row = (char *)row->get_extra_payload(row_meta);
-      if (OB_FAIL(setup_rt_info(agg_row, agg_ctx_))) {
-        LOG_WARN("setup rt info failed", K(ret));
-      }
+      MEMSET(cur_batch_group_buf_, 0, alloc_size * BATCH_GROUP_SIZE);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    row = new (cur_batch_group_buf_) ObCompactRow();
+    row->init(row_meta);
+    AggrRowPtr agg_row = (char *)row->get_extra_payload(row_meta);
+    cur_batch_group_buf_ += alloc_size;
+    ++cur_batch_group_idx_;
+    cur_batch_group_idx_ %= BATCH_GROUP_SIZE;
+    if (OB_FAIL(setup_rt_info(agg_row, agg_ctx_, &extra_allocator, group_id))) {
+      LOG_WARN("setup rt info failed", K(ret));
+    } else if (OB_FAIL(agg_ctx_.agg_rows_.push_back(agg_row))) {
+      SQL_LOG(WARN, "push back element failed", K(ret));
     }
   }
   return ret;
@@ -629,6 +887,54 @@ int Processor::add_one_aggregate_row(AggrRowPtr data, const int32_t row_size,
     SQL_LOG(WARN, "setup runtime info failed", K(ret));
   } else if (push_agg_row && OB_FAIL(agg_ctx_.agg_rows_.push_back(data))) {
     SQL_LOG(WARN, "push back element failed", K(ret));
+  }
+  return ret;
+}
+
+int Processor::reuse_group(const int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  AggrRowPtr agg_row = agg_ctx_.agg_rows_.at(group_id);
+  int32_t extra_idx = 0;
+  // backup extra_idx
+  if (agg_ctx_.has_extra_) {
+    extra_idx = *reinterpret_cast<const int32_t *>(agg_row + agg_ctx_.row_meta().extra_idx_offset_);
+  }
+  MEMSET(agg_row, 0, agg_ctx_.row_meta().row_size_);
+  // restore extra_idx
+  if (agg_ctx_.has_extra_) {
+    *reinterpret_cast<int32_t *>(agg_row + agg_ctx_.row_meta().extra_idx_offset_) = extra_idx;
+  }
+  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
+    ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
+    ObDatumMeta &res_meta = aggr_info.expr_->datum_meta_;
+    VecValueTypeClass res_tc = get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
+    char *cell = nullptr;
+    int32_t cell_len = 0;
+    if (res_tc == VEC_TC_NUMBER && aggr_info.get_expr_type() != T_FUN_COUNT) {
+      agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+      ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
+      // set zero number
+      d.len_ = 0;
+      d.sign_ = number::ObNumber::POSITIVE;
+      d.exp_ = 0;
+    } else if (res_tc == VEC_TC_FLOAT) {
+      agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+      *reinterpret_cast<float *>(cell) = float();
+    } else if (res_tc == VEC_TC_DOUBLE || res_tc == VEC_TC_FIXED_DOUBLE) {
+      agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+      *reinterpret_cast<double *>(cell) = double();
+    }
+    if (agg_ctx_.has_extra_ && helper::has_extra_info(aggr_info)) {
+      char *curr_agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
+      VecExtraResult *&extra = agg_ctx_.get_extra(col_id, curr_agg_cell);
+      if (OB_ISNULL(extra)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "is null", K(extra), K(col_id));
+      } else {
+        extra->reuse();
+      }
+    }
   }
   return ret;
 }

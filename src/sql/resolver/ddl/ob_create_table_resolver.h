@@ -136,6 +136,7 @@ private:
   int check_max_row_data_length(const ObTableSchema &table_schema);
 
   int create_default_partition_for_table(ObTableSchema &table_schema);
+  int set_default_micro_index_clustered_(share::schema::ObTableSchema &table_schema);
 
 private:
   // data members
@@ -152,6 +153,7 @@ private:
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
 
   uint64_t cur_udt_set_id_;
+  common::ObSEArray<uint64_t, 4> vec_index_col_ids_;
 };
 
 } // end namespace sql

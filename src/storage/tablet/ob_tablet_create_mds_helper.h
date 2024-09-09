@@ -172,7 +172,8 @@ private:
       const obrpc::ObCreateTabletInfo &info,
       const int64_t index,
       const ObCreateTabletSchema *&create_tablet_schema,
-      bool &need_create_empty_major_sstable);
+      bool &need_create_empty_major_sstable,
+      bool &micro_index_clustered);
 };
 } // namespace storage
 } // namespace oceanbase

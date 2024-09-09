@@ -376,8 +376,14 @@ int ObConstDecoder::pushdown_operator(
         break;
       }
       case sql::WHITE_OP_IN: {
-        if (OB_FAIL(in_operator(col_ctx, filter, pd_filter_info, result_bitmap))) {
-          LOG_WARN("Failed on running IN pushed down operator", K(ret), K(col_ctx), K(filter));
+        if (filter.is_filter_dynamic_node()) {
+          if (OB_FAIL(in_operator<sql::ObDynamicFilterExecutor>(col_ctx, static_cast<const sql::ObDynamicFilterExecutor &>(filter), pd_filter_info, result_bitmap))) {
+            LOG_WARN("Failed on running IN pushed down operator", K(ret), K(col_ctx), K(filter));
+          }
+        } else {
+          if (OB_FAIL(in_operator<sql::ObWhiteFilterExecutor>(col_ctx, filter, pd_filter_info, result_bitmap))) {
+            LOG_WARN("Failed on running IN pushed down operator", K(ret), K(col_ctx), K(filter));
+          }
         }
         break;
       }
@@ -487,7 +493,7 @@ int ObConstDecoder::const_only_operator(
             } else {
               bool is_existed = false;
               // Check const datum in hashset or not
-              if (OB_FAIL(filter.exist_in_datum_set(const_datum, is_existed))) {
+              if (OB_FAIL(filter.exist_in_set(const_datum, is_existed))) {
                 LOG_WARN("Failed to check datum in hashset", K(ret));
               } else if (is_existed) {
                 if (OB_FAIL(result_bitmap.bit_not())) {
@@ -746,9 +752,10 @@ int ObConstDecoder::bt_operator(
   return ret;
 }
 
+template <typename ObFilterExecutor>
 int ObConstDecoder::in_operator(
     const ObColumnDecoderCtx &col_ctx,
-    const sql::ObWhiteFilterExecutor &filter,
+    const ObFilterExecutor &filter,
     const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
@@ -775,7 +782,7 @@ int ObConstDecoder::in_operator(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(filter.exist_in_datum_set(const_datum, const_in_result_set))) {
+      } else if (OB_FAIL(filter.exist_in_set(const_datum, const_in_result_set))) {
         LOG_WARN("Failed to check whether const value is in set", K(ret));
       } else if (const_in_result_set) {
         if (OB_FAIL(result_bitmap.bit_not())) {
@@ -800,7 +807,7 @@ int ObConstDecoder::in_operator(
                         || ((*trav_it).is_null() && lib::is_mysql_mode()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("There should not be null datum in dictionary", K(ret));
-        } else if (OB_FAIL(filter.exist_in_datum_set(*trav_it, cur_in_result_set))) {
+        } else if (OB_FAIL(filter.exist_in_set(*trav_it, cur_in_result_set))) {
           LOG_WARN("Failed to check wheter current value is in set", K(ret));
         } else if (!const_in_result_set == cur_in_result_set) {
           found = true;
@@ -967,7 +974,7 @@ int ObConstDecoder::get_distinct_count(int64_t &distinct_count) const
 int ObConstDecoder::read_distinct(
     const ObColumnDecoderCtx &ctx,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (0 == meta_header_->count_) {
@@ -997,7 +1004,7 @@ int ObConstDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   UNUSED(ctx);
   int ret = OB_SUCCESS;

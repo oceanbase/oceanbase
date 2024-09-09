@@ -21,7 +21,7 @@ using namespace storage;
 using namespace common;
 namespace blocksstable
 {
-#define FPRINTF(args...) fprintf(stderr, ##args)
+#define FPRINTF(args...) fprintf(fd_, ##args)
 #define P_BAR() FPRINTF("|")
 #define P_DASH() FPRINTF("------------------------------")
 #define P_END_DASH() FPRINTF("--------------------------------------------------------------------------------")
@@ -96,7 +96,8 @@ static const char * OB_OBJ_TYPE_NAMES[ObMaxType] = {
     "ObTimestampTZType", "ObTimestampLTZType", "ObTimestampNanoType",
     "ObRawType", "ObIntervalYMType", "ObIntervalDSType", "ObNumberFloatType",
     "ObNVarchar2Type", "ObNCharType", "ObURowIDType", "ObLobType",
-    "ObJsonType", "ObGeometryType", "ObUserDefinedSQLType","ObDecimalIntType"
+    "ObJsonType", "ObGeometryType", "ObUserDefinedSQLType","ObDecimalIntType",
+    "ObCollectionSQLType"
 };
 
 void ObSSTablePrinter::print_title(const char *title, const int64_t level)

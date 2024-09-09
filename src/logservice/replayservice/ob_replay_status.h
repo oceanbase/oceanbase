@@ -29,6 +29,7 @@
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
 #include "share/ob_ls_id.h"
+#include "logservice/ob_log_handler.h"
 
 namespace oceanbase
 {
@@ -288,7 +289,7 @@ public:
   }
   int init(const palf::LSN &base_lsn,
            const share::SCN &base_scn,
-           palf::PalfHandle *palf_handle,
+           const share::ObLSID &id,
            ObReplayStatus *replay_status);
   void reset() override;
   void destroy() override;
@@ -309,7 +310,7 @@ public:
   int next_log(const share::SCN &replayable_point,
                bool &iterate_end_by_replayable_point);
   // 以当前的终点作为新起点重置迭代器
-  int reset_iterator(palf::PalfHandle &palf_handle,
+  int reset_iterator(const share::ObLSID &id,
                      const palf::LSN &begin_lsn);
 
   INHERIT_TO_STRING_KV("ObReplayServiceSubmitTask", ObReplayServiceTask,
@@ -525,7 +526,10 @@ public:
                                   int64_t &first_handle_ts,
                                   int64_t &replay_cost,
                                   int64_t &retry_cost);
-  int get_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);
+  int get_replay_process(int64_t &submitted_log_size,
+                         int64_t &unsubmitted_log_size,
+                         int64_t &replayed_log_size,
+                         int64_t &unreplayed_log_size);
   //提交日志检查barrier状态
   int check_submit_barrier();
   //回放日志检查barrier状态

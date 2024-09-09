@@ -66,6 +66,8 @@ int ObVertialPartitionBuilder::generate_aux_vp_table_schema(
       aux_vp_table_schema.set_table_type(AUX_VERTIAL_PARTITION_TABLE);
       if (OB_FAIL(aux_vp_table_schema.set_table_name(aux_vp_table_name))) {
         LOG_WARN("set_table_name failed", K(aux_vp_table_name), K(ret));
+      } else {
+        aux_vp_table_schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
       }
     }
   }

@@ -56,7 +56,7 @@ public:
   static const int64_t META_TENANT_MEMORY_PERCENTAGE = 10;
   static const int64_t META_TENANT_MIN_MEMORY = 512LL * MB;
   static const int64_t USER_TENANT_MIN_MEMORY = 512LL * MB;
-  static const int64_t UNIT_MIN_MEMORY = META_TENANT_MIN_MEMORY + USER_TENANT_MIN_MEMORY;
+  static const int64_t UNIT_MIN_MEMORY = META_TENANT_MIN_MEMORY + USER_TENANT_MIN_MEMORY; // 1G
 
   // For now, META tenant memory can not be too small.
   // So define safe memory for META tenant
@@ -77,15 +77,34 @@ public:
   // USER_TENANT: 512M * 3 = 1.5G   -> 3 LS at least for every USER tenant unit
   static const int64_t META_TENANT_MIN_LOG_DISK_SIZE = 512LL * MB;
   static const int64_t USER_TENANT_MIN_LOG_DISK_SIZE = 3LL * 512LL * MB;   // 1.5G
-  static const int64_t UNIT_MIN_LOG_DISK_SIZE = META_TENANT_MIN_LOG_DISK_SIZE + USER_TENANT_MIN_LOG_DISK_SIZE; // 2G
+  // unit_min_log_disk_size and mem_to_log_disk_default_factor are different in SS and SN mode,
+  //   check GCTX.is_shared_storage_mode() and decide which to use.
+  // default factor of mapping MEMORY_SIZE to LOG_DISK_SIZE
+  //   MEMORY_SIZE * FACTOR = LOG_DISK_SIZE
+  // shared-nothing mode:
+  static const int64_t UNIT_MIN_LOG_DISK_SIZE_SN = META_TENANT_MIN_LOG_DISK_SIZE + USER_TENANT_MIN_LOG_DISK_SIZE; // 2G
+  static const int64_t MEMORY_TO_LOG_DISK_FACTOR_SN = 3;
+  // shared-storage mode:
+  static const int64_t UNIT_MIN_LOG_DISK_SIZE_SS = 3LL * GB; // 3G
+  static const int64_t MEMORY_TO_LOG_DISK_FACTOR_SS = 1;
   // META tenant LOG_DISK_SIZE is auto configured by default percentage and min log disk limit.
   static const int64_t META_TENANT_LOG_DISK_SIZE_PERCENTAGE = 10;
-  // default factor of mapping MEMORY_SIZE to LOG_DISK_SIZE
-  // MEMORY_SIZE * FACTOR = LOG_DISK_SIZE
-  static const int64_t MEMORY_TO_LOG_DISK_FACTOR = 3;
   static const int64_t INVALID_LOG_DISK_SIZE = -1;
 
-  ////////////////////////// DATA DISK ////////////////////////////
+  ////////////////////////// DATA DISK /////////////////////////
+  // DATA DISK SIZE is only valid in shared-storage mode, representing cache disk allowed to use.
+  // META tenant DATA_DISK_SIZE is auto configured by default percentage and min and max data disk limit.
+  static const int64_t META_TENANT_DATA_DISK_SIZE_PERCENTAGE = 10;
+  static const int64_t HIDDEN_SYS_TENANT_MIN_DATA_DISK_SIZE = 2LL * GB;  // 2G
+  static const int64_t META_TENANT_MIN_DATA_DISK_SIZE = 1LL * GB;  // 1G
+  static const int64_t META_TENANT_MAX_DATA_DISK_SIZE = 4LL * GB;  // 4G
+  static const int64_t USER_TENANT_MIN_DATA_DISK_SIZE = 1LL * GB;  // 1G
+  static const int64_t UNIT_MIN_DATA_DISK_SIZE = META_TENANT_MIN_DATA_DISK_SIZE + USER_TENANT_MIN_DATA_DISK_SIZE;  // 2G
+  // default factor of mapping MEMORY_SIZE to DATA_DISK_SIZE
+  // MEMORY_SIZE * FACTOR = DATA_DISK_SIZE
+  static const int64_t MEMORY_TO_DATA_DISK_FACTOR = 2;
+  // 0 is the default value in ObUnitResource and __all_unit table.
+  // it also means data_disk_size is not effective, for example in Shared-Nothing mode.
   static const int64_t DEFAULT_DATA_DISK_SIZE = 0;
   static const int64_t INVALID_DATA_DISK_SIZE = -1;
 
@@ -100,8 +119,12 @@ public:
   // MIN_CPU * FACTOR = IOPS
   static constexpr double CPU_TO_IOPS_FACTOR = 10000;
 
-  ////////////////////// NET_BANDWIDTH //////////////////////////
+  ////////////////////// NET BANDWIDTH /////////////////////////
+  static const int64_t UNIT_MIN_NET_BANDWIDTH = 1L * MB;                        // 1M
+  static const int64_t TENANT_MIN_NET_BANDWIDTH = UNIT_MIN_NET_BANDWIDTH;       // 1M
+  static const int64_t INVALID_NET_BANDWIDTH = 0;
   static const int64_t DEFAULT_NET_BANDWIDTH = INT64_MAX;
+  static const int64_t INVALID_NET_BANDWIDTH_WEIGHT = -1;
   static const int64_t DEFAULT_NET_BANDWIDTH_WEIGHT = 0;
 
 public:
@@ -112,22 +135,29 @@ public:
       const double min_cpu,
       const int64_t memory_size,
       const int64_t log_disk_size,
+      const int64_t data_disk_size,
       const int64_t max_iops,
       const int64_t min_iops,
-      const int64_t iops_weight);
+      const int64_t iops_weight,
+      const int64_t max_net_bandwidth,
+      const int64_t net_bandwidth_weight);
   virtual ~ObUnitResource() {}
 
   ///////////////////////////////////  init/check funcs ////////////////////////////////////
   void reset();
+  void reset_all_invalid();
   // direct set, do not check valid
   void set(
       const double max_cpu,
       const double min_cpu,
       const int64_t memory_size,
       const int64_t log_disk_size,
+      const int64_t data_disk_size,
       const int64_t max_iops,
       const int64_t min_iops,
-      const int64_t iops_weight);
+      const int64_t iops_weight,
+      const int64_t max_net_bandwidth,
+      const int64_t net_bandwidth_weight);
 
   // Init from user specified resources and check valid for creating unit
   //
@@ -141,27 +171,6 @@ public:
   // @ret OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT    resource value is blow limit
   // @ret OB_SUCCESS                            SUCCESS
   int init_and_check_valid_for_unit(const ObUnitResource &user_spec);
-
-  // same with 'init_and_check_valid_for_unit'
-  // user must specify max_cpu and memory_size, other resource can be invalid
-  int init_and_check_valid_for_unit(
-      const double max_cpu,
-      const int64_t memory_size,
-      const double min_cpu = 0,
-      const int64_t log_disk_size = 0,
-      const int64_t max_iops = 0,
-      const int64_t min_iops = 0,
-      const int64_t iops_weight = -1)
-  {
-    return init_and_check_valid_for_unit(ObUnitResource(
-        max_cpu,
-        min_cpu,
-        memory_size,
-        log_disk_size,
-        max_iops,
-        min_iops,
-        iops_weight));
-  }
 
   // update based on user specified and check valid for resource unit
   //
@@ -177,32 +186,10 @@ public:
   int update_and_check_valid_for_unit(const ObUnitResource &user_spec);
 
   // basic valid function
-  bool is_valid() const
-  {
-    return is_max_cpu_valid()
-        && is_min_cpu_valid()
-        && max_cpu_ >= min_cpu_
-        && is_memory_size_valid()
-        && is_log_disk_size_valid()
-        && is_max_iops_valid()
-        && is_min_iops_valid()
-        && max_iops_ >= min_iops_
-        && is_iops_weight_valid();
-  }
+  bool is_valid() const;
 
   // is valid to create resource unit
-  bool is_valid_for_unit() const
-  {
-    return is_max_cpu_valid_for_unit()
-        && is_min_cpu_valid_for_unit()
-        && max_cpu_ >= min_cpu_
-        && is_memory_size_valid_for_unit()
-        && is_log_disk_size_valid_for_unit()
-        && is_max_iops_valid_for_unit()
-        && is_min_iops_valid_for_unit()
-        && max_iops_ >= min_iops_
-        && is_iops_weight_valid_for_unit();
-  }
+  bool is_valid_for_unit() const;
 
   // is valid for meta tenant
   bool is_valid_for_meta_tenant() const
@@ -212,10 +199,13 @@ public:
         && max_cpu_ >= min_cpu_
         && is_memory_size_valid_for_meta_tenant()
         && is_log_disk_size_valid_for_meta_tenant()
+        && is_data_disk_size_valid_for_meta_tenant()
         && is_max_iops_valid_for_meta_tenant()
         && is_min_iops_valid_for_meta_tenant()
         && max_iops_ >= min_iops_
-        && is_iops_weight_valid_for_meta_tenant();
+        && is_iops_weight_valid_for_meta_tenant()
+        && is_max_net_bandwidth_valid_for_meta_tenant()
+        && is_net_bandwidth_weight_valid_for_meta_tenant();
   }
 
   // is valid for user tenant
@@ -226,10 +216,13 @@ public:
         && max_cpu_ >= min_cpu_
         && is_memory_size_valid_for_user_tenant()
         && is_log_disk_size_valid_for_user_tenant()
+        && is_data_disk_size_valid_for_user_tenant()
         && is_max_iops_valid_for_user_tenant()
         && is_min_iops_valid_for_user_tenant()
         && max_iops_ >= min_iops_
-        && is_iops_weight_valid_for_user_tenant();
+        && is_iops_weight_valid_for_user_tenant()
+        && is_max_net_bandwidth_valid_for_user_tenant()
+        && is_net_bandwidth_weight_valid_for_user_tenant();
   }
 
   ///////////////////////////////////  compare funcs ///////////////////////////////////
@@ -270,27 +263,53 @@ public:
 
   int64_t log_disk_size() const { return log_disk_size_; }
   bool is_log_disk_size_valid() const { return log_disk_size_ >= 0; }
-  bool is_log_disk_size_valid_for_unit() const { return 0 == log_disk_size_ || log_disk_size_ >= UNIT_MIN_LOG_DISK_SIZE; }
+  bool is_log_disk_size_valid_for_unit() const;
   bool is_log_disk_size_valid_for_meta_tenant() const { return log_disk_size_ >= META_TENANT_MIN_LOG_DISK_SIZE; }
   bool is_log_disk_size_valid_for_user_tenant() const { return log_disk_size_ >= USER_TENANT_MIN_LOG_DISK_SIZE; }
+
+  int64_t data_disk_size() const { return data_disk_size_; }
+  void set_data_disk_size(const int64_t data_disk_size) { data_disk_size_ = data_disk_size; }
+  // this func only checks value itself is valid
+  bool is_data_disk_size_valid() const { return data_disk_size_ >= 0; }
+  bool is_data_disk_size_valid_for_unit() const;
+  bool is_data_disk_size_valid_for_meta_tenant() const;
+  bool is_data_disk_size_valid_for_user_tenant() const;
+  int check_data_disk_size_supported() const;
 
   int64_t max_iops() const { return max_iops_; }
   bool is_max_iops_valid() const { return max_iops_ > 0; }
   bool is_max_iops_valid_for_unit() const { return max_iops_ >= UNIT_MIN_IOPS; }
   bool is_max_iops_valid_for_meta_tenant() const { return max_iops_ >= META_TENANT_MIN_IOPS; }
-  bool is_max_iops_valid_for_user_tenant() const { return max_iops_ >= META_TENANT_MIN_IOPS; }
+  bool is_max_iops_valid_for_user_tenant() const { return max_iops_ >= USER_TENANT_MIN_IOPS; }
 
   int64_t min_iops() const { return min_iops_; }
   bool is_min_iops_valid() const { return min_iops_ > 0; }
   bool is_min_iops_valid_for_unit() const { return min_iops_ >= UNIT_MIN_IOPS; }
   bool is_min_iops_valid_for_meta_tenant() const { return min_iops_ >= META_TENANT_MIN_IOPS; }
-  bool is_min_iops_valid_for_user_tenant() const { return min_iops_ >= META_TENANT_MIN_IOPS; }
+  bool is_min_iops_valid_for_user_tenant() const { return min_iops_ >= USER_TENANT_MIN_IOPS; }
 
   int64_t iops_weight() const { return iops_weight_; }
   bool is_iops_weight_valid() const { return iops_weight_ >= 0; }
   bool is_iops_weight_valid_for_unit() const { return is_iops_weight_valid(); }
   bool is_iops_weight_valid_for_meta_tenant() const { return is_iops_weight_valid(); }
   bool is_iops_weight_valid_for_user_tenant() const { return is_iops_weight_valid(); }
+
+  int64_t max_net_bandwidth() const { return max_net_bandwidth_; }
+  bool is_max_net_bandwidth_valid() const { return max_net_bandwidth_ > 0; }
+  bool is_max_net_bandwidth_valid_for_unit() const { return max_net_bandwidth_ >= UNIT_MIN_NET_BANDWIDTH; }
+  bool is_max_net_bandwidth_valid_for_meta_tenant() const { return max_net_bandwidth_ >= TENANT_MIN_NET_BANDWIDTH; }
+  bool is_max_net_bandwidth_valid_for_user_tenant() const { return max_net_bandwidth_ >= TENANT_MIN_NET_BANDWIDTH; }
+
+  int64_t net_bandwidth_weight() const { return net_bandwidth_weight_; }
+  bool is_net_bandwidth_weight_valid() const { return net_bandwidth_weight_ >= 0; }
+  bool is_net_bandwidth_weight_valid_for_unit() const { return is_net_bandwidth_weight_valid(); }
+  bool is_net_bandwidth_weight_valid_for_meta_tenant() const { return is_net_bandwidth_weight_valid(); }
+  bool is_net_bandwidth_weight_valid_for_user_tenant() const { return is_net_bandwidth_weight_valid(); }
+  int check_net_bandwidth_supported() const;
+  int check_net_bandwidth_supported(
+      const ObUnitResource &user_spec,
+      const bool &need_check_if_user_spec,
+      bool &is_during_upgrade) const;
 
   ////////////////////////////////////// comparison functions ////////////////////////////////////
   bool has_expanded_resource_than(const ObUnitResource &other) const;
@@ -315,9 +334,12 @@ public:
   /////////////////////////////////// static functions ///////////////////////////////////
 
   // get default LOG_DISK_SIZE based on MEMORY_SIZE
-  static int64_t get_default_log_disk_size(const int64_t memory_size)
+  static int64_t get_default_log_disk_size(const int64_t memory_size);
+
+  // get default DATA_DISK_SIZE based on MEMORY_SIZE
+  static int64_t get_default_data_disk_size(const int64_t memory_size)
   {
-    return memory_size * MEMORY_TO_LOG_DISK_FACTOR;
+    return memory_size * MEMORY_TO_DATA_DISK_FACTOR;
   }
 
   // default IOPS = INT64_MAX
@@ -328,6 +350,18 @@ public:
 
   // get default IOPS_WEIGHT based on CPU
   static int64_t get_default_iops_weight(const double cpu)
+  {
+    return static_cast<int64_t>(cpu);
+  }
+
+  // default NET_BANDWIDTH = INT64_MAX
+  static int64_t get_default_net_bandwidth()
+  {
+    return DEFAULT_NET_BANDWIDTH; // INT64_MAX
+  }
+
+  // get default NET_BANDWIDTH_WEIGHT based on CPU
+  static int64_t get_default_net_bandwidth_weight(const double cpu)
   {
     return static_cast<int64_t>(cpu);
   }
@@ -358,6 +392,13 @@ public:
     int64_t meta_log_disk = unit_log_disk * META_TENANT_LOG_DISK_SIZE_PERCENTAGE / 100;
     return max(meta_log_disk, META_TENANT_MIN_LOG_DISK_SIZE);
   }
+  // generate meta tenant data disk by unit data disk
+  static int64_t gen_meta_tenant_data_disk_size(const int64_t unit_data_disk)
+  {
+    int64_t meta_data_disk = unit_data_disk * META_TENANT_DATA_DISK_SIZE_PERCENTAGE / 100;
+    return min(max(meta_data_disk, META_TENANT_MIN_DATA_DISK_SIZE),
+               META_TENANT_MAX_DATA_DISK_SIZE);
+  }
   // generate meta tenant iops by unit iops
   static int64_t gen_meta_tenant_iops(const int64_t unit_iops)
   {
@@ -368,6 +409,16 @@ public:
   {
     return unit_iops_weight;
   }
+  // generate meta tenant net_bandwidth by unit net_bandwidth
+  static int64_t gen_meta_tenant_net_bandwidth(const int64_t unit_net_bandwidth)
+  {
+    return unit_net_bandwidth;
+  }
+  // generate meta tenant net_bandwidth_weight by unit net_bandwidth_weight
+  static int64_t gen_meta_tenant_net_bandwidth_weight(const int64_t unit_net_bandwidth_weight)
+  {
+    return unit_net_bandwidth_weight;
+  }
 
 public:
   DECLARE_TO_STRING;
@@ -376,11 +427,15 @@ private:
   int init_and_check_cpu_(const ObUnitResource &user_spec);
   int init_and_check_mem_(const ObUnitResource &user_spec);
   int init_and_check_log_disk_(const ObUnitResource &user_spec);
+  int init_and_check_data_disk_(const ObUnitResource &user_spec);
   int init_and_check_iops_(const ObUnitResource &user_spec);
+  int init_and_check_net_bandwidth_(const ObUnitResource &user_spec);
   int update_and_check_cpu_(const ObUnitResource &user_spec);
   int update_and_check_mem_(const ObUnitResource &user_spec);
   int update_and_check_log_disk_(const ObUnitResource &user_spec);
+  int update_and_check_data_disk_(const ObUnitResource &user_spec);
   int update_and_check_iops_(const ObUnitResource &user_spec);
+  int update_and_check_net_bandwidth_(const ObUnitResource &user_spec);
 
 protected:
   double  max_cpu_;
@@ -390,9 +445,19 @@ protected:
   int64_t max_iops_;
   int64_t min_iops_;
   int64_t iops_weight_;
-  int64_t data_disk_size_;          // not used, only as placeholder
-  int64_t max_net_bandwidth_;       // not used, only as placeholder
-  int64_t net_bandwidth_weight_;    // not used, only as placeholder
+  // The members below were added after 4.0 and have different behavior from others.
+  // Considering upgrade compatability, these rules need to be followed:
+  // 1. Define a valid value as DEFAULT value for each member, using for both inner_table column
+  //    and data structure ObUnitResource, to make sure it is valid after upgrading from lower
+  //    version.
+  // 2. Define an INVALID value for each member, only for ObResourceResolver to mark when it's
+  //    not specified by user. The resolver needs to invoke reset_all_invalid() to set all
+  //    members to this invalid value.
+  // 3. Default constructor, reset() method will set these members as DEFAULT values,
+  //    reset_all_invalid() will set these members as INVALID values.
+  int64_t data_disk_size_;                    // DEFAULT: 0,         INVALID: -1
+  int64_t max_net_bandwidth_;                 // DEFAULT: INT64_MAX, INVALID: 0
+  int64_t net_bandwidth_weight_;              // DEFAULT: 0,         INVALID: -1
 };
 
 

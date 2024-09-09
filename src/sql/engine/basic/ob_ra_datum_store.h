@@ -132,6 +132,7 @@ public:
     char payload_[0];
   } __attribute__((packed));
 
+  class BlockBuffer;
   struct Block
   {
     static const int64_t MAGIC = 0x35f4451b9b56eb12;
@@ -189,14 +190,13 @@ public:
     {
       return row_id_ <= row_id && row_id < row_id_ + rows_;
     }
-
     int get_store_row(const int64_t row_id, const StoredRow *&sr);
-
     TO_STRING_KV(K_(magic), K_(row_id), K_(rows), K_(idx_off));
 
     int64_t magic_;
-    int64_t row_id_;
-    int32_t rows_;
+    int64_t row_id_; // the row_id of first row in this block
+    int32_t rows_; // the row_cnt of this block
+    // the relative distance of blkbuf.blk_->payload_ away from the idx of the last row
     int32_t idx_off_;
     char payload_[0];
   } __attribute__((packed));
@@ -205,17 +205,18 @@ public:
   struct BlockIndex
   {
     static bool compare(const BlockIndex &bi, const int64_t row_id) { return bi.row_id_ < row_id; }
-    TO_STRING_KV(K_(is_idx_block), K_(on_disk), K_(row_id), K_(offset), K_(length));
+    TO_STRING_KV(K_(is_idx_block), K_(on_disk), K_(row_id), K_(offset), K_(length), K_(capacity));
 
     uint64_t is_idx_block_:1;
     uint64_t on_disk_:1;
     uint64_t row_id_ : 62;
     union {
-      IndexBlock *idx_blk_;
-      Block *blk_;
-      int64_t offset_;
+      IndexBlock *idx_blk_; // avaliable while !on_disk_ && is_idx_block_
+      Block *blk_; // avaliable while !on_disk_ && !is_idx_block_
+      int64_t offset_; // avaliable while on_disk_, the distance from the start position of the file
     };
-    int32_t length_;
+    int32_t length_; // the space used after block compacted, including idx array at the end of buf
+    int32_t capacity_; // the whole memhold of the block
   } __attribute__((packed));
 
   struct IndexBlock
@@ -234,6 +235,7 @@ public:
     // may return false when row in position (false negative),
     // since block index only contain start row_id, we can not detect right boundary.
     inline bool row_in_pos(const int64_t row_id, const int64_t pos);
+    inline int64_t row_id() const { return block_indexes_[0].row_id_; }
 
     void reset() { cnt_ = 0; }
 
@@ -316,16 +318,18 @@ public:
     // idx_blk_, blk_ may point to the writing block,
     // we need to invalid the pointers if file_size_ change.
     int64_t file_size_;
+    // avaliable while idx_blk_ is not dumpped, need reset_cursor after dumpped
     IndexBlock *idx_blk_;
-    int64_t ib_pos_; // current block index position in index block
+    // current block index position in index block
+    int64_t ib_pos_;
+    // avaliable while blk_ is not dumpped, need reset_cursor after dumpped
     Block *blk_;
-
+    // the data of this buf is read from file, and will automatically free expired blocks after used
     ShrinkBuffer buf_;
+    // the bi of this buf is read from file, and will automatically free expired blocks after used
     ShrinkBuffer idx_buf_;
-
     IterationAge *age_;
     TryFreeMemBlk *try_free_list_;
-
     DISALLOW_COPY_AND_ASSIGN(Reader);
   };
 
@@ -357,6 +361,12 @@ public:
   int add_row(const StoredRow &src_stored_row,
               StoredRow **stored_row = nullptr);
   int finish_add_row();
+
+  bool is_all_dumped() const { return blk_mem_list_.is_empty(); }
+  int dump(const bool all_dump, const int64_t target_dump_size = INT64_MAX);
+  int dump_block_if_need(const int64_t extra_size);
+  bool need_dump(const int64_t extra_size);
+
   // row memory will hold until the next non-const method of ObRADatumStore called.
   int get_row(const int64_t row_id, const StoredRow *&sr)
   {
@@ -368,6 +378,8 @@ public:
 
   bool is_inited() const { return inited_; }
   bool is_file_open() const { return fd_ >= 0; }
+  // save_row_cnt_ is 0 means that there is no block switching and only one block in store.
+  inline bool is_empty_save_row_cnt() const { return 0 == save_row_cnt_; }
 
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_mem_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
@@ -385,67 +397,65 @@ public:
   void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
   void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
 
-  TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
-      K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
+  TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit), K_(mem_hold),
+      K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size), K(blk_mem_list_.get_size()));
 
 private:
+  inline static int64_t block_magic(const void *mem)
+  {
+    return *(static_cast<const int64_t *>(mem));
+  }
+  inline static bool is_block(const void *mem) { return Block::MAGIC == block_magic(mem); };
+  inline static bool is_index_block(const void *mem)
+  {
+    return IndexBlock::MAGIC == block_magic(mem);
+  }
+  inline bool is_last_block(const void *mem) const
+  {
+    return mem == blkbuf_.blk_ || mem == idx_blk_;
+  }
   static int get_timeout(int64_t &timeout_ms);
-  void *alloc_blk_mem(const int64_t size);
+  int link_idx_block(IndexBlock *idx_blk);
+  void *alloc_blk_mem(const int64_t size, const bool link_mem_list);
   void free_blk_mem(void *mem, const int64_t size = 0);
   int setup_block(BlockBuffer &blkbuf) const;
   int alloc_block(BlockBuffer &blkbuf, const int64_t min_size);
-  // new block is not needed if %min_size is zero. (finish add row)
-  int switch_block(const int64_t min_size);
-  int add_block_idx(const BlockIndex &bi);
   int alloc_idx_block(IndexBlock *&ib);
   int build_idx_block();
+  int switch_block(const int64_t min_size);
+  int add_block_idx(const BlockIndex &bi);
   int switch_idx_block(bool finish_add = false);
-
   int load_block(Reader &reader, const int64_t row_id);
   int load_idx_block(Reader &reader, IndexBlock *&ib, const BlockIndex &bi);
-  int find_block_idx(Reader &reader, BlockIndex &bi, const int64_t row_id);
-
+  template<bool IS_IB = false>
+  int find_block_idx(Reader &reader, const int64_t row_id, BlockIndex *&bi);
   int get_store_row(Reader &reader, const int64_t row_id, const StoredRow *&sr);
-
   int ensure_reader_buffer(Reader &reader, ShrinkBuffer &buf, const int64_t size);
-
   int write_file(BlockIndex &bi, void *buf, int64_t size);
   int read_file(void *buf, const int64_t size, const int64_t offset);
-
-  bool need_dump();
   inline bool has_index_block() const { return nullptr != idx_blk_; }
-
 private:
   bool inited_;
   uint64_t tenant_id_;
   const char *label_;
   int64_t ctx_id_;
   int64_t mem_limit_;
-
-
-  BlockBuffer blkbuf_;
-  IndexBlock *idx_blk_;
-
-  int64_t save_row_cnt_;
-  int64_t row_cnt_;
-
+  BlockBuffer blkbuf_; // current BlockBuffer for add row, the last one in blk_mem_list_
+  IndexBlock *idx_blk_; // current IndexBlock for add block index
+  int64_t save_row_cnt_; // total number of rows of blocks other than the block being written
+  int64_t row_cnt_; // total number of rows of blocks
   int64_t fd_;
   int64_t dir_id_;
-  int64_t file_size_;
-
+  int64_t file_size_; // size of dumpped file
   Reader inner_reader_;
-
   common::ObDList<LinkNode> blk_mem_list_;
   common::ObSEArray<BlockIndex, DEFAULT_BLOCK_CNT> blocks_;
-
-  int64_t mem_hold_;
+  int64_t mem_hold_; // total mem allocated, including mem allocated in blocks but not yet used
   common::DefaultPageAllocator inner_allocator_;
   common::ObIAllocator *allocator_;
-
   uint32_t row_extend_size_;
   ObSqlMemoryCallback *mem_stat_;
   ObIOEventObserver *io_observer_;
-
   DISALLOW_COPY_AND_ASSIGN(ObRADatumStore);
 };
 
@@ -505,6 +515,7 @@ inline bool ObRADatumStore::IndexBlock::row_in_pos(const int64_t row_id, const i
   }
   return in_pos;
 }
+
 } // end namespace sql
 } // end namespace oceanbase
 

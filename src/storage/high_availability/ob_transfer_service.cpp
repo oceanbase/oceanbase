@@ -14,7 +14,7 @@
 #include "ob_transfer_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "observer/ob_server_struct.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -131,7 +131,7 @@ void ObTransferService::run1()
 
   while (!has_set_stop()) {
     ls_id_array_.reset();
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
     } else if (OB_FAIL(get_ls_id_array_())) {

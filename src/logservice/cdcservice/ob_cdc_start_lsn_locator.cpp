@@ -173,7 +173,6 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     ObLocateLSNByTsResp &resp)
 {
   int ret = OB_SUCCESS;
-  palf::PalfHandleGuard palf_handle_guard;
   palf::PalfGroupBufferIterator group_iter;
   share::SCN start_scn;
   LogGroupEntry log_group_entry;
@@ -189,23 +188,19 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
   } else if (fetch_archive_only && OB_SYS_TENANT_ID != tenant_id_) {
     need_seek_archive = true;
   } else {
-    if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
-      if (OB_LS_NOT_EXIST == ret && OB_SYS_TENANT_ID != tenant_id_) {
-        ret = OB_SUCCESS;
-        need_seek_archive = true;
-      } else {
-        LOG_WARN("init_palf_handle_guard_ fail", KR(ret), K(ls_id));
-      }
     // - OB_SUCCESS: seek success
     // - OB_ENTRY_NOT_EXIST: there is no log's log_ts is higher than ts_ns
     // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
-    } else if (OB_FAIL(palf_handle_guard.seek(start_scn, group_iter))) {
-      if (OB_ERR_OUT_OF_LOWER_BOUND == ret && OB_SYS_TENANT_ID != tenant_id_) {
+    // - OB_LS_NOT_EXIST: the log stream has been deleted, try consume archive
+    if (OB_FAIL(logservice::seek_log_iterator(ls_id, start_scn, group_iter))) {
+      if (OB_ERR_OUT_OF_LOWER_BOUND == ret || OB_LS_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         need_seek_archive = true;
       } else {
         LOG_WARN("PalfHandle seek fail", KR(ret), K(tenant_id_), K(locate_param));
       }
+    } else if (OB_FAIL(group_iter.set_io_context(palf::LogIOContext(tenant_id_, ls_id.id(), palf::LogIOUser::CDC)))) {
+      LOG_WARN("iterator set_io_context failed", KR(ret), K(tenant_id_), K(locate_param));
     } else if (OB_FAIL(group_iter.next())) {
       LOG_WARN("PalfGroupBufferIterator next failed, unexpected", KR(ret), K_(tenant_id), K(ls_id));
     } else if (OB_FAIL(group_iter.get_entry(log_group_entry, result_lsn))) {
@@ -248,11 +243,14 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
       LSN lsn;
       int64_t retry_time = 0;
       do {
+        const bool iter_inited = remote_group_iter.is_init();
         if (OB_FAIL(host_->init_archive_source_if_needed(ls_id, ctx))) {
           LOG_WARN("failed to init archive source", K(ctx), K(ls_id));
-        } else if (! remote_group_iter.is_init() && OB_FAIL(remote_group_iter.init(tenant_id_, ls_id, start_scn,
+        } else if (! iter_inited && OB_FAIL(remote_group_iter.init(tenant_id_, ls_id, start_scn,
                 result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_))) {
           LOG_WARN("init remote group iter failed when retriving log group entry in start lsn locator", KR(ret), K(ls_id), K(tenant_id_));
+        } else if (! iter_inited && OB_FAIL(remote_group_iter.set_io_context(palf::LogIOContext(tenant_id_, ls_id.id(), palf::LogIOUser::CDC)))) {
+          LOG_WARN("set_io_context failed", KR(ret), K(ls_id), K(tenant_id_));
         } else if (OB_FAIL(remote_group_iter.next(log_group_entry, lsn, next_buf, next_buf_size))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("iterate through archive log failed", KR(ret), K(ls_id), K(tenant_id_));

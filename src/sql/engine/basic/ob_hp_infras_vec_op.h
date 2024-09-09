@@ -28,6 +28,18 @@ namespace oceanbase
 {
 namespace sql
 {
+struct StoreRowFunctor
+{
+  StoreRowFunctor(ObTempRowStore &row_store) : row_store_(row_store)
+  {}
+  int operator()(const IVectorPtrs &vectors, const uint16_t selector[], const int64_t size,
+                 ObCompactRow **stored_rows)
+  {
+    int ret = row_store_.add_batch(vectors, selector, size, stored_rows);
+    return ret;
+  }
+  ObTempRowStore &row_store_;
+};
 
 /*
 |        |extra: hash value + next ptr|       |
@@ -137,13 +149,13 @@ using HPInfrasFixedBktByte64 = ObFixedLenHashPartBucket<ObHashPartItem, 64>;
 class ObIHashPartInfrastructure
 {
 public:
+  using HpGroupAggrFunc = std::function<int64_t ()>;
   ObIHashPartInfrastructure(int64_t tenant_id, lib::MemoryContext &mem_context) :
     tenant_id_(tenant_id), mem_context_(mem_context), alloc_(nullptr), arena_alloc_(nullptr),
-    preprocess_part_(), left_part_list_(), right_part_list_(),
+    preprocess_part_(), left_part_list_(), right_part_list_(), rewind_part_list_(),
     left_part_map_(), right_part_map_(), io_event_observer_(nullptr), sql_mem_processor_(nullptr),
-    sort_collations_(nullptr), eval_ctx_(nullptr),
-    cur_left_part_(nullptr), cur_right_part_(nullptr),
-    left_dumped_parts_(nullptr), right_dumped_parts_(nullptr),
+    sort_collations_(nullptr), eval_ctx_(nullptr), cur_left_part_(nullptr),
+    cur_right_part_(nullptr), left_dumped_parts_(nullptr), right_dumped_parts_(nullptr),
     cur_dumped_parts_(nullptr), left_row_store_iter_(), right_row_store_iter_(),
     hash_table_row_store_iter_(), enable_sql_dumped_(false), unique_(false), need_pre_part_(false),
     ways_(InputWays::TWO), init_part_func_(nullptr), insert_row_func_(nullptr),
@@ -152,7 +164,8 @@ public:
     est_part_cnt_(INT64_MAX), cur_level_(0), part_shift_(0), period_row_cnt_(0),
     left_part_cur_id_(0), right_part_cur_id_(0), my_skip_(nullptr),
     is_push_down_(false), exprs_(nullptr), is_inited_vec_(false), max_batch_size_(0),
-    compressor_type_(NONE_COMPRESSOR)
+    compressor_type_(NONE_COMPRESSOR), need_rewind_(false), is_inited_pre_part_(false),
+    has_dump_preprocess_part_(false)
   {}
   virtual ~ObIHashPartInfrastructure();
 public:
@@ -233,6 +246,8 @@ public:
 
 public:
   virtual void reset();
+  virtual void reuse();
+  virtual int rewind();
   virtual void destroy();
   virtual int64_t get_hash_bucket_num() = 0;
   virtual int64_t get_bucket_num() const = 0;
@@ -248,7 +263,9 @@ public:
               uint64_t *hash_values_for_batch) = 0;
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
     int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type);
+    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type,
+    bool need_rewind);
+  int set_need_rewind(bool need_rewind);
   void switch_left()
   { cur_side_ = InputSide::LEFT; }
   void switch_right()
@@ -362,11 +379,11 @@ public:
   OB_INLINE bool has_dumped_partitions()
   { return !(left_part_list_.is_empty() && right_part_list_.is_empty()); }
   int calc_hash_value_for_batch(const common::ObIArray<ObExpr *> &batch_exprs,
-                                const ObBatchRows &child_brs,
-                                uint64_t *hash_values_for_batch,
-                                int64_t start_idx = 0,
-                                uint64_t *hash_vals = nullptr);
-  int init_my_skip(const int64_t batch_size) {
+                                const ObBitVector &skip, const int64_t size,
+                                const bool all_rows_active, uint64_t *hash_values_for_batch,
+                                int64_t start_idx = 0, uint64_t *hash_vals = nullptr);
+  int init_my_skip(const int64_t batch_size)
+  {
     int ret = OB_SUCCESS;
     void *data = nullptr;
     if (OB_ISNULL(alloc_)) {
@@ -415,8 +432,28 @@ public:
   {
     io_event_observer_ = observer;
   }
+  int64_t get_total_mem_used()
+  {
+    int ret = OB_SUCCESS;
+    if (INT64_MAX == est_part_cnt_) {
+      est_partition_count();
+    }
+    return est_part_cnt_ * BLOCK_SIZE + get_mem_used();
+  }
+  void set_hp_infras_group_func(HpGroupAggrFunc total_mem_used_func,
+                                HpGroupAggrFunc slice_cnt_func)
+  {
+    total_mem_used_func_ = total_mem_used_func;
+    slice_cnt_func_ = slice_cnt_func;
+  }
+   bool is_slice_ht() const
+  {
+    return slice_cnt_func_ ? true : false;
+  }
+  bool is_equal_hash_infras(const common::ObIArray<ObExpr*> &compare_exprs);
 
 protected:
+  virtual int dump_preprocess_part() = 0;
   virtual int set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
                                   uint64_t *hash_values_for_batch,
                                   const int64_t batch_size,
@@ -426,6 +463,22 @@ protected:
                           const int64_t batch_size,
                           const ObBitVector *skip,
                           ObBitVector &my_skip) = 0;
+  int64_t get_each_slice_avg_size(int64_t total_size) const
+  {
+    int64_t slice_cnt = 1;
+    if (slice_cnt_func_) {
+      slice_cnt = slice_cnt_func_();
+    }
+    return total_size / slice_cnt;
+  }
+  int64_t get_slice_count() const
+  {
+    int64_t slice_cnt = 1;
+    if (slice_cnt_func_) {
+      slice_cnt = slice_cnt_func_();
+    }
+    return slice_cnt;
+  }
   bool is_left() const { return InputSide::LEFT == cur_side_; }
   bool is_right() const { return InputSide::RIGHT == cur_side_; }
 
@@ -448,8 +501,13 @@ protected:
   int get_cur_matched_partition(InputSide input_side);
 
   void est_partition_count();
+  void dump_hp_infras_group_info();
   bool need_dump()
   {
+    int64_t slice_cnt = 1;
+    if (slice_cnt_func_) {
+      slice_cnt = slice_cnt_func_();
+    }
     if (INT64_MAX == est_part_cnt_) {
       est_partition_count();
     }
@@ -461,7 +519,11 @@ protected:
       return true;
     }
 
-    return (sql_mem_processor_->get_mem_bound() <= est_part_cnt_ * BLOCK_SIZE + get_mem_used());
+    int64_t avg_mem_bound = get_each_slice_avg_size(sql_mem_processor_->get_mem_bound());
+    avg_mem_bound = avg_mem_bound > MIN_MEM_BOUND ? avg_mem_bound : MIN_MEM_BOUND;
+    SQL_ENG_LOG(TRACE, "check need dump", K(period_row_cnt_), K(est_part_cnt_), K(slice_cnt),
+      K(avg_mem_bound), K(sql_mem_processor_->get_mem_bound()));
+    return (avg_mem_bound <= est_part_cnt_ * BLOCK_SIZE + get_mem_used()) && (period_row_cnt_ > MIN_PERIOD_ROW_CNT);
   }
 
   int64_t get_mem_used() { return (nullptr == mem_context_) ? 0 : mem_context_->used();}
@@ -485,6 +547,8 @@ protected:
   static const int64_t MIN_BUCKET_NUM = 128;
   static const int64_t MAX_BUCKET_NUM = 131072;   // 1M = 131072 * 8
   static const int64_t MAX_PART_LEVEL = 4;
+  static const int64_t MIN_MEM_BOUND = 2 * 1024 * 1024; // 2M
+  static const int64_t MIN_PERIOD_ROW_CNT = 16;
   uint64_t tenant_id_;
   lib::MemoryContext &mem_context_;
   common::ObIAllocator *alloc_;
@@ -492,6 +556,7 @@ protected:
   ObIntraPartition preprocess_part_;
   common::ObDList<ObIntraPartition> left_part_list_;
   common::ObDList<ObIntraPartition> right_part_list_;
+  common::ObDList<ObIntraPartition> rewind_part_list_;
   common::hash::ObHashMap<ObIntraPartKey, ObIntraPartition*, common::hash::NoPthreadDefendMode>
                                                                                     left_part_map_;
   common::hash::ObHashMap<ObIntraPartKey, ObIntraPartition*, common::hash::NoPthreadDefendMode>
@@ -536,6 +601,11 @@ protected:
   int64_t max_batch_size_;
   common::ObCompressorType compressor_type_;
   bool is_test_for_dump_ = true; // tracepoint for dump once.
+  bool need_rewind_;
+  bool is_inited_pre_part_;
+  bool has_dump_preprocess_part_;
+  HpGroupAggrFunc total_mem_used_func_;
+  HpGroupAggrFunc slice_cnt_func_;
 };
 
 template<typename HashBucket>
@@ -549,7 +619,9 @@ public:
   }
   virtual ~ObHashPartInfrastructureVec();
   void reset() override;
+  void reuse() override;
   void destroy() override;
+  int rewind() override;
   int64_t get_hash_bucket_num() override { return hash_table_.get_bucket_num(); }
   int64_t get_bucket_num() const override { return hash_table_.get_bucket_num(); }
   int64_t get_each_bucket_size() const override { return sizeof(HashBucket); }
@@ -572,6 +644,7 @@ public:
                   const ObBatchRows &brs, ObBitVector *skip,
                 uint64_t *hash_values_for_batch) override;
 private:
+  virtual int dump_preprocess_part() override;
   int set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
                          uint64_t *hash_values_for_batch,
                          const int64_t batch_size,
@@ -626,13 +699,15 @@ private:
   const static int64_t EXTENDED_RATIO = 2;
   const static int64_t MAX_MEM_PERCENT = 40;
   const static int64_t INITIAL_SIZE = 128;
+  const static int64_t SLICE_HT_INITIAL_SIZE = 8;
   const int64_t EXTEND_BKT_NUM_PUSH_DOWN = INIT_L3_CACHE_SIZE / sizeof(HashBucket);
   ObExtendHashTableVec<HashBucket> hash_table_;
 };
 
-class ObHashPartInfrastructureVecImpl final
+class ObHashPartInfrastructureVecImpl final : public common::ObDLinkBase<ObHashPartInfrastructureVecImpl>
 {
 public:
+  using HpGroupAggrFunc = ObIHashPartInfrastructure::HpGroupAggrFunc;
   enum BucketType : int32_t
   {
     INVALID_TYPE = -1,
@@ -642,11 +717,10 @@ public:
     BYTE_TYPE_64,
     TYPE_MAX
   };
-  ObHashPartInfrastructureVecImpl()
-    : mem_context_(nullptr), alloc_(nullptr), is_inited_(false),
-      bkt_size_(0), bkt_type_(INVALID_TYPE), hp_infras_(nullptr)
-  {
-  }
+  ObHashPartInfrastructureVecImpl() :
+    mem_context_(nullptr), alloc_(nullptr), is_inited_(false), is_destroyed_(false), bkt_size_(0),
+    bkt_type_(INVALID_TYPE), hp_infras_(nullptr)
+  {}
   ~ObHashPartInfrastructureVecImpl()
   {
     destroy();
@@ -666,11 +740,15 @@ public:
     return ret;
   }
   void reset();
+  void reuse();
+  int rewind();
   void destroy();
+  bool is_destroyed() const { return is_destroyed_; }
   bool is_inited() const { return is_inited_; }
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
     int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type);
+    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type,
+    bool need_rewind = false);
   int init_mem_context(uint64_t tenant_id);
   int decide_hp_infras_type(const common::ObIArray<ObExpr*> &exprs, BucketType &bkt_type, uint64_t &payload_len);
   template<typename BktType>
@@ -705,10 +783,9 @@ public:
                       int64_t max_bucket = MAX_BUCKET_NUM);
   int init_my_skip(const int64_t batch_size);
   int calc_hash_value_for_batch(const common::ObIArray<ObExpr *> &batch_exprs,
-                                const ObBatchRows &child_brs,
-                                uint64_t *hash_values_for_batch,
-                                int64_t start_idx = 0,
-                                uint64_t *hash_vals = nullptr);
+                                const ObBitVector &skip, const int64_t size,
+                                const bool all_rows_active, uint64_t *hash_values_for_batch,
+                                int64_t start_idx = 0, uint64_t *hash_vals = nullptr);
   int finish_insert_row();
   int open_cur_part(InputSide input_side);
   int close_cur_part(InputSide input_side);
@@ -750,12 +827,19 @@ public:
   int64_t get_hash_store_mem_used() const;
   void destroy_my_skip();
   int64_t estimate_total_count() const;
+  bool is_equal_hash_infras(const common::ObIArray<ObExpr*> &compare_exprs);
+  int64_t get_total_mem_used() const;
+  void set_hp_infras_group_func(HpGroupAggrFunc total_mem_used_func,
+                                HpGroupAggrFunc slice_cnt_func);
+  int set_need_rewind(bool need_rewind);
+
 private:
   static const int64_t MIN_BUCKET_NUM = 128;
   static const int64_t MAX_BUCKET_NUM = 131072;   // 1M = 131072 * 8
   lib::MemoryContext mem_context_;
   common::ObIAllocator *alloc_;
   bool is_inited_;
+  bool is_destroyed_;
   int64_t bkt_size_;
   BucketType bkt_type_;
   ObIHashPartInfrastructure *hp_infras_;
@@ -776,10 +860,60 @@ void ObHashPartInfrastructureVec<HashBucket>::reset()
 }
 
 template<typename HashBucket>
+void ObHashPartInfrastructureVec<HashBucket>::reuse()
+{
+  hash_table_.reuse();
+  ObIHashPartInfrastructure::reuse();
+}
+
+template<typename HashBucket>
 void ObHashPartInfrastructureVec<HashBucket>::destroy()
 {
   hash_table_.destroy();
   ObIHashPartInfrastructure::destroy();
+}
+
+template<typename HashBucket>
+int ObHashPartInfrastructureVec<HashBucket>::rewind()
+{
+  int ret = OB_SUCCESS;
+  hash_table_.reuse();
+  if (OB_FAIL(ObIHashPartInfrastructure::rewind())) {
+    SQL_ENG_LOG(WARN, "failed to rewind", K(ret));
+  }
+  return ret;
+}
+
+template<typename HashBucket>
+int ObHashPartInfrastructureVec<HashBucket>::dump_preprocess_part()
+{
+  int ret = OB_SUCCESS;
+  auto func = [this] (HashBucket &bucket) -> int {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(cur_dumped_parts_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "unexpected status: cur dumped partitions is null", K(ret));
+    } else {
+      const uint64_t hash_value = bucket.get_hash();
+      ObCompactRow *sr = nullptr;
+      int64_t part_idx = get_part_idx(hash_value);
+      ObHashPartItem *store_row = static_cast<ObHashPartItem *>(&bucket.get_item());
+      if (bucket.is_empty() || nullptr == store_row) {
+      } else if (FALSE_IT(store_row->set_hash_value(
+                   hash_value, cur_dumped_parts_[part_idx]->store_.get_row_meta()))) {
+      } else if (OB_FAIL(cur_dumped_parts_[part_idx]->store_.add_row(
+                   static_cast<ObCompactRow *>(&bucket.get_item()), sr))) {
+        SQL_ENG_LOG(WARN, "failed to add row", K(ret));
+      }
+    }
+    return ret;
+  };
+  if (OB_FAIL(hash_table_.foreach(func))) {
+    SQL_ENG_LOG(WARN, "failed to do foreach", K(ret));
+  } else {
+    has_dump_preprocess_part_ = true;
+  }
+  return ret;
 }
 
 template<typename HashBucket>
@@ -806,8 +940,9 @@ int ObHashPartInfrastructureVec<HashBucket>::init_hash_table(int64_t initial_siz
   mem_attr.ctx_id_ = common::ObCtxIds::WORK_AREA;
   bool nullable = true;
   bool all_int64 = false;
+  int64_t avg_mem_bound = get_each_slice_avg_size(sql_mem_processor_->get_mem_bound());
   int64_t hash_bucket_cnt = est_extend_hash_bucket_num(
-    initial_size * EXTENDED_RATIO, sql_mem_processor_->get_mem_bound(), min_bucket);
+    initial_size * EXTENDED_RATIO, avg_mem_bound, min_bucket);
   if (OB_ISNULL(alloc_) || !start_round_) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "allocator is null or it don'e start to round", K(ret), K(start_round_));
@@ -832,8 +967,10 @@ int64_t ObHashPartInfrastructureVec<HashBucket>::est_extend_hash_bucket_num(
     est_bucket_num >>= 1;
     est_size = est_bucket_num * sizeof(HashBucket);
   }
-  if (est_bucket_num < INITIAL_SIZE) {
-    est_bucket_num = INITIAL_SIZE;
+  if (is_slice_ht()) {
+    est_bucket_num = est_bucket_num < SLICE_HT_INITIAL_SIZE ? SLICE_HT_INITIAL_SIZE : est_bucket_num;
+  } else {
+    est_bucket_num = est_bucket_num < INITIAL_SIZE ? INITIAL_SIZE : est_bucket_num;
   }
   if (est_bucket_num < min_bucket) {
     est_bucket_num = min_bucket;
@@ -857,17 +994,11 @@ set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
   batch_info_guard.set_batch_idx(0);
   batch_info_guard.set_batch_size(batch_size);
-  auto sf = [&] (const IVectorPtrs &vectors,
-                  const uint16_t selector[],
-                  const int64_t size,
-                  ObCompactRow **stored_rows) -> int {
-    ret = preprocess_part_.store_.add_batch(vectors, selector, size, stored_rows);
-    return ret;
-  };
   if (!is_push_down_ && OB_FAIL(prefetch<HashBucket>(hash_values_for_batch, batch_size, skip))) {
     SQL_ENG_LOG(WARN, "failed to prefetch", K(ret));
-  } else if (OB_FAIL(hash_table_.set_distinct_batch(preprocess_part_.store_.get_row_meta(), batch_size, skip,
-                                             my_skip, hash_values_for_batch, sf))) {
+  } else if (OB_FAIL(hash_table_.set_distinct_batch(
+               preprocess_part_.store_.get_row_meta(), batch_size, skip, my_skip,
+               hash_values_for_batch, StoreRowFunctor(preprocess_part_.store_)))) {
     LOG_WARN("failed to set batch", K(ret));
   }
   return ret;
@@ -886,7 +1017,8 @@ int ObHashPartInfrastructureVec<HashBucket>::exists_batch(
   } else if (OB_ISNULL(skip)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "skip vector is null", K(ret));
-  } else if (OB_FAIL(calc_hash_value_for_batch(exprs, brs, hash_values_for_batch))) {
+  } else if (OB_FAIL(calc_hash_value_for_batch(
+               exprs, *brs.skip_, brs.size_, false /* all_rows_active */, hash_values_for_batch))) {
     SQL_ENG_LOG(WARN, "failed to calc hash values", K(ret));
   } else {
     const ObHashPartItem *exists_item = nullptr;

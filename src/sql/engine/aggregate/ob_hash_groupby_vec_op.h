@@ -121,7 +121,12 @@ public:
   static const int64_t MIN_BATCH_SIZE_REORDER_AGGR_ROWS = 256;
   static const int64_t FIX_SIZE_PER_PART = sizeof(DatumStoreLinkPartition) + ObTempRowStore::BLOCK_SIZE;
   static const uint64_t HASH_SEED = 99194853094755497L;
-
+  // used for data skew :
+  static const int64_t SKEW_TEST_STEP_SIZE = 5;
+  static const uint64_t MIN_CHECK_POPULAR_VALID_ROWS = 10000;
+  constexpr static const float SKEW_POPULAR_MAX_RATIO = 0.5;
+  const static int64_t SKEW_HEAP_SIZE = 15;
+  const static int64_t INIT_BUCKET_COUNT_FOR_POPULAR = 32;
 
 public:
   ObHashGroupByVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
@@ -182,7 +187,12 @@ public:
       dump_add_row_selectors_item_cnt_(nullptr),
       dump_vectors_(nullptr),
       dump_rows_(nullptr),
-      need_reinit_vectors_(true)
+      need_reinit_vectors_(true),
+      skew_detection_enabled_(false),
+      by_pass_rows_(0),
+      total_load_rows_(0),
+      popular_map_(),
+      by_pass_agg_rows_(0)
   {
   }
   void reset(bool for_rescan);
@@ -336,6 +346,10 @@ private:
   void check_groupby_exprs(const common::ObIArray<ObExpr *> &groupby_exprs, bool &nullable, bool &all_int64);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupByVecOp);
+  int init_popular_values(); // Data skew constructs the initial popular map based on the data
+                            // during the loaddata sampling period and use in the bypass phase.
+  int by_pass_return_batch(int64_t op_max_batch_size);
+  int update_popular_map();
 
 private:
   int by_pass_prepare_one_batch(const int64_t batch_size);
@@ -431,6 +445,16 @@ private:
   common::ObFixedArray<ObIVector *, common::ObIAllocator> dump_vectors_;
   ObCompactRow **dump_rows_;
   bool need_reinit_vectors_;
+  // for data skew :
+  bool skew_detection_enabled_;
+  uint64_t by_pass_rows_;
+  uint64_t total_load_rows_;
+  typedef common::hash::ObHashMap<uint64_t, uint64_t, hash::NoPthreadDefendMode> PopularMapType;
+  PopularMapType popular_map_;
+  uint64_t by_pass_agg_rows_;
+  common::ObArray<std::pair<const ObCompactRow *, int32_t>> popular_array_temp_;
+  common::ObFixedArray<HashFuncTypeForTc, ObIAllocator> hash_func_for_expr_;
+  common::ObFixedArray<NullHashFuncTypeForTc, ObIAllocator> null_hash_func_for_expr_;
 };
 
 } // end namespace sql

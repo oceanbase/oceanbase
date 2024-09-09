@@ -169,6 +169,8 @@ public:
       const bool is_lower_bound,
       bool &equal,
       bool &is_beyond_the_range);
+  /* `cascade` and `is_reverse_scan` can set to false by default */
+  int pull_up(const bool cascade, const bool is_reverse_scan);
   int pull_up_to_root();
   int move_forward(const bool is_reverse_scan);
 
@@ -178,6 +180,8 @@ public:
   int get_idx_parser(const ObIndexBlockRowParser *&parser);
   int get_idx_row_header(const ObIndexBlockRowHeader *&idx_header);
   int get_macro_block_id(MacroBlockId &macro_id);
+  int get_current_node_macro_id(MacroBlockId &macro_id);
+  int get_parent_node_macro_id(MacroBlockId &macro_id);
 
   // Need to release held item at the end of lifetime
   int get_child_micro_infos(
@@ -211,7 +215,6 @@ private:
   // Index blocks store endkeys, so locate with lower_bound() can make sure we find
   // the exact micro block by which the search key is included in range
   int drill_down();
-  int pull_up(const bool cascade = false, const bool is_reverse_scan = false);
   int locate_rowkey_in_curr_block(const ObDatumRowkey &rowkey, bool &is_beyond_the_range);
   int search_rowkey_in_transformed_block(
       const ObDatumRowkey &rowkey,

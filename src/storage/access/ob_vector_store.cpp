@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_vector_store.h"
+#include "ob_aggregated_store_vec.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
@@ -27,7 +28,8 @@ namespace storage
 ObVectorStore::ObVectorStore(
     const int64_t batch_size,
     sql::ObEvalCtx &eval_ctx,
-    ObTableAccessContext &context)
+    ObTableAccessContext &context,
+    sql::ObBitVector *skip_bit)
     : ObBlockBatchedRowStore(batch_size, eval_ctx, context),
     count_(0),
     exprs_(*context_.stmt_allocator_),
@@ -37,7 +39,8 @@ ObVectorStore::ObVectorStore(
     group_idx_expr_(nullptr),
     default_row_(),
     group_by_cell_(nullptr),
-    iter_param_(nullptr)
+    iter_param_(nullptr),
+    skip_bit_(skip_bit)
   {}
 
 ObVectorStore::~ObVectorStore()
@@ -55,19 +58,20 @@ void ObVectorStore::reset()
   col_params_.reset();
   group_idx_expr_ = nullptr;
   iter_param_ = nullptr;
+  skip_bit_ = nullptr;
   default_row_.reset();
   if (nullptr != group_by_cell_) {
-    group_by_cell_->~ObGroupByCell();
+    group_by_cell_->~ObGroupByCellBase();
     context_.stmt_allocator_->free(group_by_cell_);
     group_by_cell_ = nullptr;
   }
 }
 
-int ObVectorStore::init(const ObTableAccessParam &param)
+int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (IS_INIT) {
+  if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("vector store init twice", K(ret), K(*this));
   } else if (OB_UNLIKELY(nullptr == param.output_exprs_ ||
@@ -99,10 +103,13 @@ int ObVectorStore::init(const ObTableAccessParam &param)
     for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; i++) {
       common::ObDatum *datums = nullptr;
       sql::ObExpr *expr = nullptr;
+      bool is_agg_mask = false;
       if (param.iter_param_.need_fill_group_idx() &&
           T_PSEUDO_GROUP_ID == param.output_exprs_->at(i)->type_) {
         group_idx_expr_ = param.output_exprs_->at(i);
-      } else if (nullptr == output_sel_mask || output_sel_mask->at(i)) {
+      } else if (OB_FAIL(check_agg_mask(out_cols_projector.at(i), agg_col_mask, is_agg_mask))) {
+        LOG_WARN("fail to check if the column is masked", K(out_cols_projector.at(i)), K(agg_col_mask));
+      } else if ((nullptr == output_sel_mask || output_sel_mask->at(i)) && !is_agg_mask) {
         if (OB_FAIL(exprs_.push_back(param.output_exprs_->at(i)))) {
           LOG_WARN("fail to push back expr", K(ret));
         } else if (OB_FAIL(cols_projector_.push_back(out_cols_projector.at(i)))) {
@@ -150,20 +157,63 @@ int ObVectorStore::init(const ObTableAccessParam &param)
     }
     default_row_.count_ = col_params_.count();
   }
-  if (OB_SUCC(ret) && param.iter_param_.enable_pd_group_by()) {
-    void *buf = nullptr;
-    if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(ObGroupByCell)))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("Failed to alloc datum buf", K(ret));
-    } else if (FALSE_IT(group_by_cell_ = new (buf) ObGroupByCell(batch_size_, *context_.stmt_allocator_))) {
-    } else if (OB_FAIL(group_by_cell_->init(param, context_, eval_ctx_))) {
-      LOG_WARN("Failed to init group by cell", K(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(alloc_group_by_cell(param))) {
+      LOG_WARN("Failed to alloc group by cell", K(ret), K(param));
+    } else {
+      iter_param_ = &(param.iter_param_);
     }
   }
   if (OB_FAIL(ret)) {
     reset();
-  } else {
-    iter_param_ = &(param.iter_param_);
+  }
+  return ret;
+}
+
+int ObVectorStore::check_agg_mask(
+    const int32_t col_offset,
+    common::hash::ObHashSet<int32_t> *agg_col_mask,
+    bool &is_agg_mask) const
+{
+  int ret = OB_SUCCESS;
+  is_agg_mask = false;
+  if (nullptr != agg_col_mask) {
+    ret = agg_col_mask->exist_refactored(col_offset);
+    if (OB_HASH_EXIST == ret) {
+      is_agg_mask = true;
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      is_agg_mask = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("Failed to search in hashset", K(ret), K(col_offset));
+    }
+  }
+  return ret;
+}
+
+int ObVectorStore::alloc_group_by_cell(const ObTableAccessParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (param.iter_param_.enable_pd_group_by()) {
+    void *buf = nullptr;
+    if (param.iter_param_.use_new_format()) {
+      if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(ObGroupByCellVec)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc datum buf", K(ret));
+      } else if (FALSE_IT(group_by_cell_ = new (buf) ObGroupByCellVec(batch_size_, eval_ctx_, skip_bit_, *context_.stmt_allocator_))) {
+      } else if (OB_FAIL(group_by_cell_->init(param, context_, eval_ctx_))) {
+        LOG_WARN("Failed to init group by cell", K(ret));
+      }
+    } else {
+      if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(ObGroupByCell)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc datum buf", K(ret));
+      } else if (FALSE_IT(group_by_cell_ = new (buf) ObGroupByCell(batch_size_, *context_.stmt_allocator_))) {
+      } else if (OB_FAIL(group_by_cell_->init(param, context_, eval_ctx_))) {
+        LOG_WARN("Failed to init group by cell", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -199,10 +249,8 @@ int ObVectorStore::fill_row(blocksstable::ObDatumRow &row)
     if (count_ >= row_capacity_) {
       set_end();
     }
-    if (nullptr != group_by_cell_) {
-      if (OB_FAIL(group_by_cell_->copy_output_row(count_))) {
-        LOG_WARN("Failed to copy output row row", K(ret));
-      }
+    if (nullptr != group_by_cell_ && OB_FAIL(group_by_cell_->copy_output_row(count_, *iter_param_))) {
+      LOG_WARN("Failed to copy output rows", K(ret));
     }
   }
   return ret;
@@ -210,7 +258,7 @@ int ObVectorStore::fill_row(blocksstable::ObDatumRow &row)
 
 int ObVectorStore::fill_rows(
     const int64_t group_idx,
-    blocksstable::ObIMicroBlockRowScanner *scanner,
+    blocksstable::ObIMicroBlockRowScanner &scanner,
     int64_t &begin_index,
     const int64_t end_index,
     const ObFilterResult &res)
@@ -221,15 +269,11 @@ int ObVectorStore::fill_rows(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector store is not inited", K(ret));
-  } else if (OB_ISNULL(scanner)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null scanner", K(ret));
-  } else if (OB_UNLIKELY((nullptr == scanner) ||
-                         (0 != count_ && nullptr == group_by_cell_))) {
+  } else if (OB_UNLIKELY(0 != count_ && nullptr == group_by_cell_)) {
     // defense code: data cross fuse and micro block is banned
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected vector store count", K(ret), KP(scanner), K_(count), KP_(group_by_cell));
-  } else if (FALSE_IT(reader = scanner->get_reader())) {
+    LOG_WARN("Unexpected vector store count", K(ret), K_(count), KP_(group_by_cell));
+  } else if (FALSE_IT(reader = scanner.get_reader())) {
   } else if (OB_FAIL(check_can_group_by(reader, begin_index, end_index, res, can_group_by))) {
     LOG_WARN("Failed to checkout pushdown group by", K(ret));
   } else if (can_group_by) {
@@ -242,13 +286,8 @@ int ObVectorStore::fill_rows(
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to fill output rows", K(ret));
     }
-  } else if (nullptr != group_by_cell_) {
-    if (iter_param_->use_uniform_format() &&
-        OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx_, false))) {
-      LOG_WARN("Failed to init uniform header", K(ret));
-    } else if (OB_FAIL(group_by_cell_->copy_output_rows(count_))) {
-      LOG_WARN("Failed to copy output rows", K(ret));
-    }
+  } else if (nullptr != group_by_cell_ && OB_FAIL(group_by_cell_->copy_output_rows(count_, *iter_param_))) {
+    LOG_WARN("Failed to copy output rows", K(ret));
   }
   return ret;
 }
@@ -256,10 +295,12 @@ int ObVectorStore::fill_rows(
 // shallow copy
 int ObVectorStore::fill_output_rows(
     const int64_t group_idx,
-    blocksstable::ObIMicroBlockRowScanner *scanner,
+    blocksstable::ObIMicroBlockRowScanner &scanner,
     int64_t &begin_index,
     const int64_t end_index,
-    const ObFilterResult &res)
+    const ObFilterResult &res,
+    const bool need_set_end,
+    const bool need_init_vector)
 {
   int ret = OB_SUCCESS;
   int64_t row_capacity = 0;
@@ -270,14 +311,14 @@ int ObVectorStore::fill_output_rows(
     // defense code: data cross fuse and micro block is banned
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected vector store count", K(ret), K(count_));
-  } else if (OB_FAIL(get_row_ids(scanner->get_reader(), begin_index, end_index, row_capacity, true, res))) {
+  } else if (OB_FAIL(get_row_ids(scanner.get_reader(), begin_index, end_index, row_capacity, true, res))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get row ids", K(ret), K(begin_index), K(end_index));
     }
   } else if (0 == row_capacity) {
     // skip if no rows selected
   } else if (iter_param_->use_new_format()) {
-    if (OB_FAIL(scanner->get_rows_for_rich_format(cols_projector_,
+    if (OB_FAIL(scanner.get_rows_for_rich_format(cols_projector_,
                                                   col_params_,
                                                   row_ids_,
                                                   row_capacity,
@@ -285,10 +326,11 @@ int ObVectorStore::fill_output_rows(
                                                   cell_data_ptrs_,
                                                   len_array_,
                                                   exprs_,
-                                                  &default_row_))) {
+                                                  &default_row_,
+                                                  need_init_vector))) {
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
-  } else if (OB_FAIL(scanner->get_rows_for_old_format(cols_projector_,
+  } else if (OB_FAIL(scanner.get_rows_for_old_format(cols_projector_,
                                                       col_params_,
                                                       row_ids_,
                                                       row_capacity,
@@ -303,7 +345,9 @@ int ObVectorStore::fill_output_rows(
     count_ = row_capacity;
     eval_ctx_.set_batch_idx(count_);
     // todo: support data cross microblocks in vectorized
-    set_end();
+    if (need_set_end) {
+      set_end();
+    }
     if (OB_FAIL(fill_group_idx(group_idx))) {
       LOG_WARN("Failed to fill group idx", K(ret));
     } else {
@@ -329,28 +373,21 @@ int ObVectorStore::fill_group_by_rows(
 {
   int ret = OB_SUCCESS;
   int64_t output_cnt = 0;
-  bool already_init_uniform = false;
+  bool already_init_header = false;
   if (!group_by_cell_->is_processing()) {
-    if (iter_param_->use_uniform_format() &&
-        OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx_))) {
-      LOG_WARN("Failed to init uniform header", K(ret));
-    } else if (OB_FAIL(do_group_by(group_idx, reader, begin_index, end_index, res))) {
+    if (OB_FAIL(do_group_by(group_idx, reader, begin_index, end_index, res))) {
       LOG_WARN("Failed to do group by", K(ret));
     } else if (!group_by_cell_->is_exceed_sql_batch()) {
       output_cnt = group_by_cell_->get_distinct_cnt();
     } else {
       group_by_cell_->reset_projected_cnt();
       group_by_cell_->set_is_processing(true);
-      already_init_uniform = true;
+      already_init_header = true;
     }
   }
   if (OB_FAIL(ret)) {
   } else if (group_by_cell_->is_processing()) {
-    if (!already_init_uniform &&
-        iter_param_->use_uniform_format() &&
-        OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx_))) {
-      LOG_WARN("Failed to init uniform header", K(ret));
-    } else if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt))) {
+    if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt, *iter_param_))) {
       if (OB_LIKELY(OB_ITER_END == ret)) {
         ret = OB_SUCCESS;
         group_by_cell_->set_is_processing(false);
@@ -446,7 +483,13 @@ int ObVectorStore::do_group_by(
       } else if (need_do_aggregate) {
         if (OB_FAIL(group_by_cell_->check_distinct_and_ref_valid())) {
           LOG_WARN("Failed to check valid", K(ret));
-        } else if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity, *group_by_cell_))) {
+        } else if (iter_param_->use_new_format()) {
+          if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
+                          0, len_array_, eval_ctx_, *static_cast<ObGroupByCellVec *>(group_by_cell_)))) {
+            LOG_WARN("Failed to get aggregate result", K(ret));
+          }
+        } else if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
+                               *static_cast<ObGroupByCell *>(group_by_cell_)))) {
           LOG_WARN("Failed to get aggregate result", K(ret));
         }
       }

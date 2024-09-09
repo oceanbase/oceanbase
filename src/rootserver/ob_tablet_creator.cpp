@@ -215,7 +215,9 @@ int ObBatchCreateTabletHelper::add_table_schema_(
       LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
     } else if (OB_FAIL(batch_arg_.create_tablet_schemas_.push_back(create_tablet_schema))) {
       LOG_WARN("failed to push back table schema", KR(ret), K(table_schema));
-    } else if (OB_FAIL(create_tablet_extr_info.init(tenant_data_version, need_create_empty_major))) {
+    } else if (OB_FAIL(create_tablet_extr_info.init(tenant_data_version,
+                                                    need_create_empty_major,
+                                                    table_schema.get_micro_index_clustered()))) {
       LOG_WARN("init create table extra info failed", K(ret), K(tenant_data_version), K(need_create_empty_major), K(table_schema));
     } else if (OB_FAIL(batch_arg_.tablet_extra_infos_.push_back(create_tablet_extr_info))) {
       LOG_WARN("failed to push back tablet extra infos", K(ret), K(create_tablet_extr_info));

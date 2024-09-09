@@ -93,6 +93,9 @@ public:
   {
     return static_cast<char *>(this->get_extra_payload(row_meta));
   }
+  void inc_hit_cnt() { header_.cnt_++; }
+  void init_hit_cnt(uint32_t cnt) { header_.cnt_ = cnt; }
+  uint32_t get_hit_cnt() const { return header_.cnt_; }
   const ObCompactRow *get_groupby_row() const { return this; }
 };
 
@@ -518,6 +521,10 @@ public:
   const static int64_t SIZE_BUCKET_SCALE = 2;
   const static int64_t MAX_MEM_PERCENT = 40;
 
+  const static int64_t SKEW_HEAP_SIZE = 15;
+  const static int64_t SKEW_ITEM_CNT_TOLERANCE = 64;
+  constexpr static const float SKEW_POPULAR_MIN_RATIO = 0.3;
+
   using BucketArray = common::ObSegmentArray<GroupRowBucket,
                                              OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                              common::ModulePageAllocator,
@@ -638,8 +645,72 @@ public:
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(store_iter_.get_next_batch(max_rows, read_rows, rows))) {
-        SQL_ENG_LOG(WARN, "failed to get batch", K(ret), K(read_rows), K(max_rows));
+        if (ret == OB_ITER_END && read_rows == 0) {
+          // for hash table size is zero
+          // overwrite ret
+          ret = OB_SUCCESS;
+          iter_end_ = true;
+        } else {
+          SQL_ENG_LOG(WARN, "failed to get batch", K(ret), K(read_rows), K(max_rows));
+        }
       } else {
+        scan_cnt_ += read_rows;
+        iter_end_ = (read_rows == 0);
+      }
+      return ret;
+    }
+    int get_next_batch_from_store(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows,
+        common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp,
+      uint64_t &total_load_rows, int64_t probe_cnt)
+    {
+      int ret = OB_SUCCESS;
+      if (!inited_) {
+        OZ (store_iter_.init(&hash_set_.group_store_));
+        inited_ = true;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(store_iter_.get_next_batch(max_rows, read_rows, rows))) {
+        if (ret == OB_ITER_END && read_rows == 0) {
+          // for hash table size is zero
+          // overwrite ret
+          ret = OB_SUCCESS;
+          iter_end_ = true;
+        } else {
+          SQL_ENG_LOG(WARN, "failed to get batch", K(ret), K(read_rows), K(max_rows));
+        }
+      } else {
+        if (read_rows > 0) {
+          // insert {CompactRow*, cnt} of item in this batch to top_n_cnt heap
+          for (int i = 0; OB_SUCC(ret) && i < read_rows; i++) {
+            const ObGroupRowItemVec* item_ptr = static_cast<ObGroupRowItemVec*>(const_cast<ObCompactRow*>(rows[i]));
+            if (OB_ISNULL(item_ptr)) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_LOG(WARN, "invalid compact row", K(ret), K(i));
+            } else {
+              uint32_t cnt = item_ptr->get_hit_cnt();
+              total_load_rows += cnt;
+              if (cnt > max(SKEW_ITEM_CNT_TOLERANCE, (int) (probe_cnt * 0.01 + 1))) {
+                if (popular_array_temp.count() <= SKEW_HEAP_SIZE - 1) {
+                  if (OB_FAIL(popular_array_temp.push_back(std::make_pair(const_cast<ObCompactRow*>(rows[i]), cnt)))) {
+                    LOG_WARN("popular array temp push back failed", K(ret));
+                  } else if (popular_array_temp.count() == SKEW_HEAP_SIZE) {
+                    // Create a small top heap based on the number of occurrences of the element cnt
+                    std::make_heap(popular_array_temp.begin(), popular_array_temp.end(),
+                                  group_row_items_greater);
+                  }
+                } else {
+                  if (cnt > popular_array_temp.at(0).second) {
+                    std::pop_heap(popular_array_temp.begin(), popular_array_temp.end(),
+                                  group_row_items_greater);
+                    popular_array_temp.at(SKEW_HEAP_SIZE - 1) = std::make_pair(const_cast<ObCompactRow*>(rows[i]), cnt);
+                    std::push_heap(popular_array_temp.begin(), popular_array_temp.end(),
+                                  group_row_items_greater);
+                  }
+                }
+              }
+            }
+          }
+        }
         scan_cnt_ += read_rows;
         iter_end_ = (read_rows == 0);
       }
@@ -730,6 +801,29 @@ public:
                                     const RowMeta &row_meta,
                                     const int64_t col_idx,
                                     bool &need_fallback);
+
+  static bool group_row_items_greater(const std::pair<const ObCompactRow*, int32_t> &a,
+                                      const std::pair<const ObCompactRow*, int32_t> &b);
+
+  int process_popular_value_batch(ObBatchRows *result_brs,
+                                  const common::ObIArray<ObExpr *> &exprs,
+                                  const common::ObIArray<int64_t> &lengths,
+                                  uint64_t *hash_vals,
+                                  int64_t dop,
+                                  uint64_t &by_pass_rows,
+                                  const uint64_t check_valid_threshold,
+                                  int64_t &agg_row_cnt,
+                                  int64_t &agg_group_cnt,
+                                  char **batch_old_rows,
+                                  char **batch_new_rows,
+                                  common::hash::ObHashMap<uint64_t, uint64_t,
+                                  hash::NoPthreadDefendMode> *popular_map);
+
+  int check_popular_values_validity(uint64_t &by_pass_rows,
+                                    const uint64_t check_valid_threshold,
+                                    int64_t dop,
+                                    common::hash::ObHashMap<uint64_t, uint64_t,
+                                    hash::NoPthreadDefendMode> *popular_map);
   void prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const;
   // Link item to hash table, extend buckets if needed.
   // (Do not check item is exist or not)
@@ -747,11 +841,16 @@ public:
                              false/* enable_dump*/, extra_size, NONE_COMPRESSOR);
   }
 
-  int get_next_batch(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows)
+  int get_next_batch(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows,
+    common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp,
+    uint64_t &total_load_rows, bool get_top_n_item)
   {
     int ret = OB_SUCCESS;
     if (ObGroupRowBucketType::INLINE == GroupRowBucket::TYPE) {
       ret = iter_.get_next_batch_from_table(rows, max_rows, read_rows);
+    } else if (get_top_n_item) {
+      ret = iter_.get_next_batch_from_store(rows, max_rows, read_rows, popular_array_temp, total_load_rows,
+        probe_cnt_);
     } else {
       ret = iter_.get_next_batch_from_store(rows, max_rows, read_rows);
     }
@@ -779,7 +878,7 @@ public:
       MEMSET(&col_has_null_.at(0), 0, col_has_null_.count());
     }
     size_ = 0;
-    group_store_.reset();
+    group_store_.reuse();
     iter_.reset();
     if (sstr_aggr_.is_valid()) {
       sstr_aggr_.reuse();
@@ -847,6 +946,21 @@ public:
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
       if (buckets_->at(i).is_valid() && OB_FAIL(cb(buckets_->at(i).get_hash()))) {
+        SQL_ENG_LOG(WARN, "call back failed", K(ret));
+      }
+    }
+    return ret;
+  }
+  template <typename CB>
+  int foreach(CB &cb) const
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_ISNULL(buckets_)) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_ENG_LOG(WARN, "invalid null buckets", K(ret), K(buckets_));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
+      if (OB_FAIL(cb(buckets_->at(i)))) {
         SQL_ENG_LOG(WARN, "call back failed", K(ret));
       }
     }

@@ -98,7 +98,7 @@ void TestLSTabletInfoWR::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;
@@ -170,7 +170,8 @@ void TestLSTabletInfoWR::fill_tablet_meta()
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(arena_allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_commit_scn;
@@ -208,7 +209,7 @@ TEST_F(TestLSTabletInfoWR, testTabletInfoWriterAndReader)
   const bool is_final_fuse = false;
   backup::ObExternTabletMetaWriter writer;
   backup::ObExternTabletMetaReader reader;
-  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0, is_final_fuse, bandwidth_throttle));
+  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0, 1, is_final_fuse, bandwidth_throttle));
   for (int i = 0; i < tablet_metas.count(); i++) {
     blocksstable::ObSelfBufferWriter buffer_writer("TestBuff");
     blocksstable::ObBufferReader buffer_reader;
@@ -222,7 +223,10 @@ TEST_F(TestLSTabletInfoWR, testTabletInfoWriterAndReader)
     }
   }
   ASSERT_EQ(OB_SUCCESS, writer.close());
-  ASSERT_EQ(OB_SUCCESS, reader.init(backup_set_dest_, ObLSID(TEST_LS_ID), false/*is_final_fuse*/));
+  ObStorageIdMod mod;
+  mod.storage_id_ = 1;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+  ASSERT_EQ(OB_SUCCESS, reader.init(backup_set_dest_, mod, ObLSID(TEST_LS_ID), false/*is_final_fuse*/));
   while (OB_SUCC(ret)) {
     storage::ObMigrationTabletParam tablet_meta;
     ret = reader.get_next(tablet_meta);

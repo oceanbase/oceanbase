@@ -130,6 +130,10 @@ struct ObDASIRScanCtDef;
 struct ObDASIRScanRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_IR_SCAN, ObDASIRScanCtDef, ObDASIRScanRtDef);
 
+struct ObDASVecAuxScanCtDef;
+struct ObDASVecAuxScanRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_VEC_SCAN, ObDASVecAuxScanCtDef, ObDASVecAuxScanRtDef);
+
 struct ObDASIRAuxLookupCtDef;
 struct ObDASIRAuxLookupRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_IR_AUX_LOOKUP, ObDASIRAuxLookupCtDef, ObDASIRAuxLookupRtDef);
@@ -137,6 +141,11 @@ REGISTER_DAS_ATTACH_OP(DAS_OP_IR_AUX_LOOKUP, ObDASIRAuxLookupCtDef, ObDASIRAuxLo
 struct ObDASSortCtDef;
 struct ObDASSortRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_SORT, ObDASSortCtDef, ObDASSortRtDef);
+
+struct ObDASVIdMergeCtDef;
+struct ObDASVIdMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_VID_MERGE, ObDASVIdMergeCtDef, ObDASVIdMergeRtDef);
+
 
 #undef REGISTER_DAS_ATTACH_OP
 }  // namespace sql

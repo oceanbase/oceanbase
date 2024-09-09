@@ -19,7 +19,6 @@ namespace oceanbase
 {
 namespace observer
 {
-struct ObGlobalContext;
 class ObInfoSchemaGlobalStatusTable : public common::ObVirtualTableScannerIterator
 {
   #define GLOBAL_STATUS_MAP_BUCKET_NUM 10

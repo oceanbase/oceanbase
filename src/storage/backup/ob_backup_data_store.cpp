@@ -598,7 +598,7 @@ int ObBackupDataStore::read_deleted_tablet_info(const ObLSID &ls_id, ObIArray<Ob
   } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(read_single_file(full_path, deleted_tablet_info))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       LOG_INFO("backup deleted file not exist", K(ret));
     } else {
@@ -923,7 +923,7 @@ int ObBackupDataStore::get_max_backup_set_file_info(const common::ObString &pass
             get_backup_dest(), backup_desc_, backup_set_dest_))) {
           LOG_WARN("fail to construct backup set dest", K(ret));
         } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
-          if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          if (OB_OBJECT_NOT_EXIST == ret) {
             LOG_WARN("backup set info not exist", K(ret), K(backup_set_desc));
             ret = OB_SUCCESS;
             continue;
@@ -982,7 +982,7 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
               get_backup_dest(), backup_desc_, backup_set_dest_))) {
             LOG_WARN("fail to construct backup set dest", K(ret));
           } else if (OB_FAIL(read_tenant_locality_info(locality_info))) {
-            if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+            if (OB_OBJECT_NOT_EXIST == ret) {
               LOG_WARN("backup set info not exist", K(ret), K(backup_set_desc));
               ret = OB_SUCCESS;
               continue;
@@ -990,7 +990,7 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
               LOG_WARN("fail to read backup set info", K(ret), K(backup_set_desc));
             }
           } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
-            if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+            if (OB_OBJECT_NOT_EXIST == ret) {
               LOG_WARN("backup set info not exist", K(ret), K(backup_set_desc));
               ret = OB_SUCCESS;
               continue;
@@ -1087,7 +1087,7 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
         get_backup_dest(), backup_desc_, backup_set_dest_))) {
       LOG_WARN("fail to construct backup set dest", K(ret));
     } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
-      if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      if (OB_OBJECT_NOT_EXIST == ret) {
         LOG_WARN("backup set info not exist", K(ret), K(backup_set_desc));
         ret = OB_SUCCESS;
         continue;
@@ -1277,12 +1277,16 @@ int ObBackupDataStore::extract_id_from_str(const common::ObString &file_name, co
   
 }
 
-int ObBackupDataStore::read_base_tablet_list(const share::ObLSID &ls_id, ObIArray<common::ObTabletID> &tablet_id_array)
+int ObBackupDataStore::read_base_tablet_list(const share::ObLSID &ls_id, const int64_t dest_id,
+    ObIArray<common::ObTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
   backup::ObExternTabletMetaReader reader;
+  ObStorageIdMod mod;
+  mod.storage_id_ = dest_id;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
   const bool is_final_fuse = false;
-  if (OB_FAIL(reader.init(backup_set_dest_, ls_id, is_final_fuse))) {
+  if (OB_FAIL(reader.init(backup_set_dest_, mod, ls_id, is_final_fuse))) {
     LOG_WARN("fail to init reader", K(ret), K(backup_set_dest_), K(ls_id));
   } else {
     storage::ObMigrationTabletParam tablet_meta;
@@ -1360,7 +1364,7 @@ int ObBackupDataStore::read_deleted_tablet_info_v_4_1_x(
   } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(read_single_file(full_path, deleted_tablet_info))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       LOG_INFO("backup deleted file not exist", K(ret));
     } else {

@@ -260,6 +260,13 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
               = max_sess_num;
         }
       }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+      int tmp_ret = OB_SUCCESS;
+      if (GCTX.is_shared_storage_mode() && OB_TMP_FAIL(set_ss_stats(tenant_id, stat_events))) {
+        SERVER_LOG(ERROR, "fail to set ss stats", KR(ret), KR(tmp_ret), K(tenant_id));
+      }
+#endif
     }
 
     ret = ret_bk;

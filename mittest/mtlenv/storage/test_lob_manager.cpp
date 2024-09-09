@@ -50,7 +50,7 @@ public:
     EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
     MTL(transaction::ObTransService*)->tx_desc_mgr_.tx_id_allocator_ =
       [](transaction::ObTransID &tx_id) { tx_id = transaction::ObTransID(1001); return OB_SUCCESS; };
-    ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
   }
   static void TearDownTestCase()
   {
@@ -328,7 +328,7 @@ void TestLobManager::insert_lob_piece(
   ASSERT_NE(nullptr, tablet);
 
   // insert rows
-  ObMockNewRowIterator mock_iter;
+  ObMockDatumRowIterator mock_iter;
   ObSEArray<uint64_t, 512> column_ids;
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 0); // pk
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 1); // c1
@@ -452,7 +452,7 @@ void TestLobManager::insert_lob_meta(
   ASSERT_NE(nullptr, tablet);
 
   // insert rows
-  ObMockNewRowIterator mock_iter;
+  ObMockDatumRowIterator mock_iter;
   ObSEArray<uint64_t, 512> column_ids;
   for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
     column_ids.push_back(OB_APP_MIN_COLUMN_ID + i);

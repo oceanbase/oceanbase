@@ -38,9 +38,9 @@ public:
   ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
 
   static int pread_block(const ObMetaDiskAddr &addr,
-      blocksstable::ObMacroBlockHandle &handler, char *item_buf);
+      blocksstable::ObStorageObjectHandle &handler, char *item_buf);
   static int read_block_by_id(const blocksstable::MacroBlockId &block_id,
-      blocksstable::ObMacroBlockHandle &handler, char *io_buf);
+      blocksstable::ObStorageObjectHandle &handler, char *io_buf);
 
 private:
   int get_meta_blocks(const blocksstable::MacroBlockId &entry_block);
@@ -52,9 +52,9 @@ private:
 
 private:
   bool is_inited_;
-  blocksstable::ObMacroBlockHandle handles_[2];
+  blocksstable::ObStorageObjectHandle handles_[2];
   int64_t handle_pos_;
-  blocksstable::ObMacroBlocksHandle macros_handle_;
+  blocksstable::ObStorageObjectsHandle macros_handle_;
   int64_t prefetch_macro_block_idx_;
   int64_t read_macro_block_cnt_;
   common::ObArenaAllocator allocator_;
@@ -90,7 +90,7 @@ private:
 private:
   bool is_inited_;
   const blocksstable::ObMacroBlockCommonHeader *common_header_;
-  const ObLinkedMacroBlockHeader *linked_header_;
+  ObLinkedMacroBlockHeader linked_header_;
   ObLinkedMacroBlockReader block_reader_;
 
   // record the macro block that the buf belongs to,
@@ -99,6 +99,7 @@ private:
   char *buf_;
   int64_t buf_pos_;
   int64_t buf_len_;
+  int64_t first_item_offset_in_block_;
   common::ObArenaAllocator allocator_;
 };
 

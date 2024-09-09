@@ -144,5 +144,64 @@ int binary_operand_vector_eval(const ObExpr &expr,
   return ret;
 }
 
+int ObNestedArithOpBaseFunc::construct_attr_param(ObIAllocator &alloc, ObEvalCtx &ctx, ObExpr &param_expr,
+                                  const uint16_t meta_id, int64_t row_idx, ObIArrayType *&param_obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, meta_id, param_obj))) {
+    LOG_WARN("construct array obj failed", K(ret));
+  } else if (OB_FAIL(ObArrayExprUtils::assemble_array_attrs(ctx, param_expr, row_idx, param_obj))) {
+    LOG_WARN("assemble array attrs failed", K(ret));
+  }
+  return ret;
+}
+
+int ObNestedArithOpBaseFunc::construct_param(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id,
+                             ObString &str_data, ObIArrayType *&param_obj)
+{
+  return ObArrayExprUtils::get_array_obj(alloc, ctx, meta_id, str_data, param_obj);
+}
+
+int ObNestedArithOpBaseFunc::construct_res_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id, ObIArrayType *&res_obj)
+{
+  return ObArrayExprUtils::construct_array_obj(alloc, ctx, meta_id, res_obj, false);
+}
+
+int ObNestedArithOpBaseFunc::construct_params(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t left_meta_id,
+                              const uint16_t right_meta_id, const uint16_t res_meta_id, ObString &left, ObString right,
+                              ObIArrayType *&left_obj, ObIArrayType *&right_obj, ObIArrayType *&res_obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObArrayExprUtils::get_array_obj(alloc, ctx, left_meta_id, left, left_obj))) {
+    SQL_ENG_LOG(WARN, "get array failed", K(ret));
+  } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(alloc, ctx, right_meta_id, right, right_obj))) {
+    SQL_ENG_LOG(WARN, "get array failed", K(ret));
+  } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, res_meta_id, res_obj, false))) {
+    SQL_ENG_LOG(WARN, "construct res array failed", K(ret));
+  }
+  return ret;
+}
+
+int ObNestedArithOpBaseFunc::get_res(ObEvalCtx &ctx, ObIArrayType *res_obj, const ObExpr &expr, ObString &res_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(res_obj->init())) {
+    LOG_WARN("array init failed", K(ret));
+  } else if (OB_FAIL(ObArrayExprUtils::set_array_res(res_obj, res_obj->get_raw_binary_len(), expr, ctx, res_str))) {
+    LOG_WARN("set array result failed", K(ret));
+  }
+  return ret;
+}
+
+int ObNestedArithOpBaseFunc::distribute_expr_attrs(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx, ObIArrayType &res_obj)
+{
+  return ObArrayExprUtils::dispatch_array_attrs_rows(ctx, &res_obj, idx, expr.attrs_, expr.attrs_cnt_, false);
+}
+
+void ObNestedArithOpBaseFunc::set_expr_attrs_null(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx)
+{
+  ObArrayExprUtils::set_expr_attrs_null(expr, ctx, idx);
+}
+
 } // end namespace sql
 } // end namespace oceanbase

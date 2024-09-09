@@ -19,7 +19,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_resource_limit.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/slog/ob_storage_logger_manager.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 using namespace oceanbase::common;
 
@@ -209,7 +209,7 @@ int ObLocalDevice::reconfig(const common::ObIODOpts &opts)
     if (OB_SUCC(ret)) {
       lib::ObMutexGuard guard(block_lock_);
       int64_t new_datafile_size = block_file_size_;
-      if (OB_FAIL(get_block_file_size(sstable_dir_, reserved_size, block_size_,
+      if (OB_FAIL(ObIODeviceLocalFileOp::get_block_file_size(sstable_dir_, reserved_size, block_size_,
           datafile_size, datafile_disk_percentage, new_datafile_size))) {
         SHARE_LOG(WARN, "Fail to get block file size", K(ret), K(reserved_size), K(block_size_),
             K(datafile_size), K(datafile_disk_percentage));
@@ -247,11 +247,16 @@ int ObLocalDevice::start(const common::ObIODOpts &opts)
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid opt arguments", K(ret), K(opts.opts_[0].key_),
         K(opts.opts_[0].value_.value_int64));
-  } else if (OB_FAIL(open_block_file(store_dir_, sstable_dir_, block_size_, block_file_size_,
-      disk_percentage_, opts.opts_[0].value_.value_int64, is_exist))) {
-    SHARE_LOG(WARN, "Fail to open block file, ", K(ret));
   } else {
-    opts.opts_[0].set("need_format_super_block", !is_exist);
+    BlockFileAttr block_file_attr(store_path_, BLOCK_SSTBALE_DIR_NAME, BLOCK_SSTBALE_FILE_NAME,
+      block_fd_, block_file_size_, block_size_, total_block_cnt_, free_block_array_, block_bitmap_,
+      free_block_cnt_, free_block_push_pos_, free_block_pop_pos_, "LDBlockBitMap");
+    if (OB_FAIL(ObIODeviceLocalFileOp::open_block_file(store_dir_, sstable_dir_, block_size_,
+        block_file_size_, disk_percentage_, opts.opts_[0].value_.value_int64, is_exist, block_file_attr))) {
+      SHARE_LOG(WARN, "Fail to open block file, ", K(ret));
+    } else {
+      opts.opts_[0].set("need_format_super_block", !is_exist);
+    }
   }
   return ret;
 }
@@ -289,20 +294,9 @@ void ObLocalDevice::destroy()
 //file/dir interfaces
 int ObLocalDevice::open(const char *pathname, const int flags, const mode_t mode, ObIOFd &fd, common::ObIODOpts *opts)
 {
-  UNUSED(opts);
   int ret = OB_SUCCESS;
-  int local_fd = 0;
-
-  if (OB_ISNULL(pathname)) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid pathname, ", K(ret), KP(pathname));
-  } else if ((local_fd = ::open(pathname, flags, mode)) < 0) {
-    ret = convert_sys_errno();
-    // use DEBUG log level to avoid too many unnecessary logs
-    SHARE_LOG(DEBUG, "Fail to open file, ", K(ret), K(pathname), K(flags), K(mode), K(local_fd), KERRMSG);
-  } else {
-    fd.first_id_ = ObIOFd::NORMAL_FILE_ID;
-    fd.second_id_ = local_fd;
+  if (OB_FAIL(ObIODeviceLocalFileOp::open(pathname, flags, mode, fd, opts))) {
+    SHARE_LOG(WARN, "Fail to open", K(ret), K(pathname), K(flags), K(mode), K(fd));
   }
   return ret;
 }
@@ -322,12 +316,8 @@ int ObLocalDevice::abort(const ObIOFd &fd)
 int ObLocalDevice::close(const ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(fd.is_block_file())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "The block file does not need close, ", K(ret), K(fd));
-  } else if (0 != ::close(static_cast<int32_t>(fd.second_id_))) {
-    ret = convert_sys_errno();
-    SHARE_LOG(WARN, "Fail to close file, ", K(ret), K(fd));
+  if (OB_FAIL(ObIODeviceLocalFileOp::close(fd))) {
+    SHARE_LOG(WARN, "Fail to close", K(ret), K(fd));
   }
   return ret;
 }
@@ -335,16 +325,8 @@ int ObLocalDevice::close(const ObIOFd &fd)
 int ObLocalDevice::mkdir(const char *pathname, mode_t mode)
 {
   int ret = OB_SUCCESS;
-  if (NULL == pathname || STRLEN(pathname) == 0) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid arguments.", K(pathname), K(ret));
-  } else if (::mkdir(pathname, mode) != 0) {
-    if (EEXIST == errno) {
-      ret = OB_SUCCESS;
-    } else {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "create directory failed.", K(pathname), K(errno), KERRMSG, K(ret));
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::mkdir(pathname, mode))) {
+    SHARE_LOG(WARN, "Fail to mkdir", K(ret), K(pathname), K(mode));
   }
   return ret;
 }
@@ -352,18 +334,8 @@ int ObLocalDevice::mkdir(const char *pathname, mode_t mode)
 int ObLocalDevice::rmdir(const char *pathname)
 {
   int ret = OB_SUCCESS;
-  ObIODFileStat f_stat;
-  if (OB_ISNULL(pathname) || OB_UNLIKELY(0 == STRLEN(pathname))) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid arguments.", K(ret), KP(pathname));
-  } else if (OB_FAIL(stat(pathname, f_stat))) {
-    SHARE_LOG(WARN, "stat path fail", K(pathname), K(ret));
-  } else if (!S_ISDIR(f_stat.mode_)) {
-    ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-    SHARE_LOG(WARN, "file path is not a directory.", K(pathname), K(ret));
-  } else if (0 != ::rmdir(pathname)) {
-    ret = convert_sys_errno();
-    SHARE_LOG(WARN, "rmdir failed.", K(pathname), K(errno), KERRMSG, K(ret));
+  if (OB_FAIL(ObIODeviceLocalFileOp::rmdir(pathname))) {
+    SHARE_LOG(WARN, "Fail to rmdir", K(ret), K(pathname));
   }
   return ret;
 }
@@ -371,129 +343,61 @@ int ObLocalDevice::rmdir(const char *pathname)
 int ObLocalDevice::unlink(const char *pathname)
 {
   int ret = OB_SUCCESS;
-  ObIODFileStat f_stat;
-  if (OB_ISNULL(pathname) || OB_UNLIKELY(0 == STRLEN(pathname))) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid arguments.", K(pathname), K(ret));
-  } else if (OB_FAIL(stat(pathname, f_stat))) {
-    SHARE_LOG(WARN, "stat path fail", K(pathname), K(ret));
-  } else if (!S_ISREG(f_stat.mode_)) {
-    ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-    SHARE_LOG(WARN, "file path is a directory.", K(pathname), K(ret));
-  } else if (0 != ::unlink(pathname)){
-    ret = convert_sys_errno();
-    SHARE_LOG(WARN, "unlink file failed.", K(pathname), K(errno), KERRMSG, K(ret));
+  if (OB_FAIL(ObIODeviceLocalFileOp::unlink(pathname))) {
+    SHARE_LOG(WARN, "Fail to unlink", K(ret), K(pathname));
   }
   return ret;
+}
+
+int ObLocalDevice::batch_del_files(
+    const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx)
+{
+  UNUSED(files_to_delete);
+  UNUSED(failed_files_idx);
+  return OB_NOT_SUPPORTED;
 }
 
 int ObLocalDevice::rename(const char *oldpath, const char *newpath)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(oldpath) || OB_ISNULL(newpath)) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid argument, ", K(ret), KP(oldpath), KP(newpath));
-  } else {
-    int sys_ret = 0;
-    if (0 != (sys_ret = ::rename(oldpath, newpath))) {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "Fail to rename file, ", K(ret), K(sys_ret), KERRMSG);
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::rename(oldpath, newpath))) {
+    SHARE_LOG(WARN, "Fail to rename", K(ret), K(oldpath), K(newpath));
   }
   return ret;
 }
 
 int ObLocalDevice::seal_file(const ObIOFd &fd)
 {
-  UNUSED(fd);
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIODeviceLocalFileOp::seal_file(fd))) {
+    SHARE_LOG(WARN, "Fail to seal_file", K(ret), K(fd));
+  }
+  return ret;
 }
 
 int ObLocalDevice::scan_dir(const char *dir_name, int (*func)(const dirent *entry))
 {
   int ret = OB_SUCCESS;
-  DIR *open_dir = nullptr;
-  struct dirent entry;
-  struct dirent *result;
-
-  if (OB_ISNULL(dir_name)) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid argument", K(ret), K(dir_name));
-  } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
-    if (ENOENT != errno) {
-      ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
-    } else {
-      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
-    }
-  } else {
-    while (OB_SUCC(ret) && NULL != open_dir) {
-      if (0 != ::readdir_r(open_dir, &entry, &result)) {
-        ret = convert_sys_errno();
-        SHARE_LOG(WARN, "read dir error", K(ret), KERRMSG);
-      } else if (NULL != result
-          && 0 != STRCMP(entry.d_name, ".")
-          && 0 != STRCMP(entry.d_name, "..")) {
-        if (OB_FAIL((*func)(&entry))) {
-          SHARE_LOG(WARN, "fail to operate dir entry", K(ret), K(dir_name));
-        }
-      } else if (NULL == result) {
-        break;//end file
-      }
-    }
-    //close dir
-    if (NULL != open_dir) {
-      ::closedir(open_dir);
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::scan_dir(dir_name, func))) {
+    SHARE_LOG(WARN, "Fail to scan_dir", K(ret), K(dir_name));
   }
   return ret;
 }
 
 int ObLocalDevice::is_tagging(const char *pathname, bool &is_tagging)
 {
-  UNUSED(pathname);
-  UNUSED(is_tagging);
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIODeviceLocalFileOp::is_tagging(pathname, is_tagging))) {
+    SHARE_LOG(WARN, "Fail to check is_tagging", K(ret), K(pathname));
+  }
+  return ret;
 }
 
 int ObLocalDevice::scan_dir(const char *dir_name, common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
-  DIR *open_dir = nullptr;
-  struct dirent entry;
-  struct dirent *result;
-
-  if (OB_ISNULL(dir_name)) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid argument", K(ret), K(dir_name));
-  } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
-    if (ENOENT != errno) {
-      ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
-    } else {
-      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
-    }
-  } else {
-    while (OB_SUCC(ret) && NULL != open_dir) {
-      if (0 != ::readdir_r(open_dir, &entry, &result)) {
-        ret = convert_sys_errno();
-        SHARE_LOG(WARN, "read dir error", K(ret), KERRMSG);
-      } else if (NULL != result
-          && 0 != STRCMP(entry.d_name, ".")
-          && 0 != STRCMP(entry.d_name, "..")) {
-        if (OB_FAIL(op.func(&entry))) {
-          SHARE_LOG(WARN, "fail to operate dir entry", K(ret), K(dir_name));
-        }
-      } else if (NULL == result) {
-        break; //end file
-      }
-    }
-    //close dir
-    if (NULL != open_dir) {
-      ::closedir(open_dir);
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::scan_dir(dir_name, op))) {
+    SHARE_LOG(WARN, "Fail to scan_dir", K(ret), K(dir_name));
   }
   return ret;
 }
@@ -501,15 +405,8 @@ int ObLocalDevice::scan_dir(const char *dir_name, common::ObBaseDirEntryOperator
 int ObLocalDevice::fsync(const ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!fd.is_normal_file())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid fd, not normal file, ", K(ret), K(fd));
-  } else {
-    int sys_ret = 0;
-    if (0 != (sys_ret = ::fsync(static_cast<int32_t>(fd.second_id_)))) {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "Fail to fsync, ", K(ret), K(sys_ret), K(fd), KERRMSG);
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::fsync(fd))) {
+    SHARE_LOG(WARN, "Fail to fsync", K(ret), K(fd));
   }
   return ret;
 }
@@ -517,15 +414,8 @@ int ObLocalDevice::fsync(const ObIOFd &fd)
 int ObLocalDevice::fdatasync(const ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!fd.is_normal_file())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid fd, not normal file, ", K(ret), K(fd));
-  } else {
-    int sys_ret = 0;
-    if (0 != (sys_ret = ::fdatasync(static_cast<int32_t>(fd.second_id_)))) {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "Fail to fdatasync, ", K(ret), K(sys_ret), K(fd), KERRMSG);
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::fdatasync(fd))) {
+    SHARE_LOG(WARN, "Fail to fdatasync", K(ret), K(fd));
   }
   return ret;
 }
@@ -533,15 +423,8 @@ int ObLocalDevice::fdatasync(const ObIOFd &fd)
 int ObLocalDevice::fallocate(const ObIOFd &fd, mode_t mode, const int64_t offset, const int64_t len)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!fd.is_normal_file())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid args, not normal file", K(ret), K(fd));
-  } else {
-    int sys_ret = 0;
-    if (0 != (sys_ret = ::fallocate(static_cast<int32_t>(fd.second_id_), mode, offset, len))) {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "fail to fallocate", K(ret), K(sys_ret), K(fd), K(offset), K(len), KERRMSG);
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::fallocate(fd, mode, offset, len))) {
+    SHARE_LOG(WARN, "Fail to fallocate", K(ret), K(fd), K(mode), K(offset), K(len));
   }
   return ret;
 }
@@ -549,12 +432,8 @@ int ObLocalDevice::fallocate(const ObIOFd &fd, mode_t mode, const int64_t offset
 int ObLocalDevice::lseek(const ObIOFd &fd, const int64_t offset, const int whence, int64_t &result_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!fd.is_normal_file())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid args, not normal file", K(ret), K(fd));
-  } else if (-1 == (result_offset = ::lseek(static_cast<int32_t>(fd.second_id_), offset, whence))) {
-    ret = convert_sys_errno();
-    SHARE_LOG(WARN, "fail to lseek", K(ret), K(fd), K(offset), K(errno), KERRMSG);
+  if (OB_FAIL(ObIODeviceLocalFileOp::lseek(fd, offset, whence, result_offset))) {
+    SHARE_LOG(WARN, "Fail to lseek", K(ret), K(fd), K(offset), K(whence));
   }
   return ret;
 }
@@ -562,15 +441,8 @@ int ObLocalDevice::lseek(const ObIOFd &fd, const int64_t offset, const int whenc
 int ObLocalDevice::truncate(const char *pathname, const int64_t len)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pathname) || STRLEN(pathname) == 0) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid argument", K(ret), KP(pathname));
-  } else {
-    int sys_ret = 0;
-    if (0 != (sys_ret = ::truncate(pathname, len))) {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "fail to ftruncate", K(ret), K(sys_ret), K(pathname), K(len), KERRMSG);
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::truncate(pathname, len))) {
+    SHARE_LOG(WARN, "Fail to truncate", K(ret), K(pathname), K(len));
   }
   return ret;
 }
@@ -578,21 +450,8 @@ int ObLocalDevice::truncate(const char *pathname, const int64_t len)
 int ObLocalDevice::exist(const char *pathname, bool &is_exist)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pathname) || STRLEN(pathname) == 0) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid argument", K(ret), KP(pathname));
-  } else {
-    if (0 != ::access(pathname, F_OK)) {
-      if (errno == ENOENT) {
-        ret = OB_SUCCESS;
-        is_exist = false;
-      } else {
-        ret = convert_sys_errno();
-        SHARE_LOG(WARN, "Fail to access file, ", K(ret), K(pathname), K(errno), KERRMSG);
-      }
-    } else {
-      is_exist = true;
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::exist(pathname, is_exist))) {
+    SHARE_LOG(WARN, "Fail to check is exist", K(ret), K(pathname));
   }
   return ret;
 }
@@ -600,31 +459,8 @@ int ObLocalDevice::exist(const char *pathname, bool &is_exist)
 int ObLocalDevice::stat(const char *pathname, ObIODFileStat &statbuf)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pathname) || STRLEN(pathname) == 0) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid argument", K(ret), KP(pathname));
-  } else {
-    struct stat buf;
-    if (0 != ::stat(pathname, &buf)) {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "Fail to stat file, ", K(ret), K(pathname), K(errno), KERRMSG);
-    } else {
-      statbuf.rdev_ = static_cast<uint64_t>(buf.st_rdev);
-      statbuf.dev_ = static_cast<uint64_t>(buf.st_dev);
-      statbuf.inode_ = static_cast<uint64_t>(buf.st_ino);
-      statbuf.mask_ = 0; // local file system stat does not offer mask
-      statbuf.mode_ = static_cast<uint32_t>(buf.st_mode);
-      statbuf.nlink_ = static_cast<uint32_t>(buf.st_nlink);
-      statbuf.uid_ = static_cast<uint64_t>(buf.st_uid);
-      statbuf.gid_ = static_cast<uint64_t>(buf.st_gid);
-      statbuf.size_ = static_cast<uint64_t>(buf.st_size);
-      statbuf.block_cnt_ = static_cast<uint64_t>(buf.st_blocks);
-      statbuf.block_size_ = static_cast<uint64_t>(buf.st_blksize);
-      statbuf.atime_s_ = static_cast<int64_t>(buf.st_atim.tv_sec);
-      statbuf.mtime_s_ = static_cast<int64_t>(buf.st_mtim.tv_sec);
-      statbuf.ctime_s_ = static_cast<int64_t>(buf.st_ctim.tv_sec);
-      statbuf.btime_s_ = INT64_MAX; // local file system stat does not offer birth time
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::stat(pathname, statbuf))) {
+    SHARE_LOG(WARN, "Fail to stat", K(ret), K(pathname));
   }
   return ret;
 }
@@ -632,31 +468,8 @@ int ObLocalDevice::stat(const char *pathname, ObIODFileStat &statbuf)
 int ObLocalDevice::fstat(const ObIOFd &fd, ObIODFileStat &statbuf)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!fd.is_normal_file())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "invalid args, not normal file", K(ret), K(fd));
-  } else {
-    struct stat buf;
-    if (0 != ::fstat(static_cast<int32_t>(fd.second_id_), &buf)) {
-      ret = convert_sys_errno();
-      SHARE_LOG(WARN, "Fail to stat file, ", K(ret), K(fd), K(errno), KERRMSG);
-    } else {
-      statbuf.rdev_ = static_cast<uint64_t>(buf.st_rdev);
-      statbuf.dev_ = static_cast<uint64_t>(buf.st_dev);
-      statbuf.inode_ = static_cast<uint64_t>(buf.st_ino);
-      statbuf.mask_ = 0; // local file system stat does not offer mask
-      statbuf.mode_ = static_cast<uint32_t>(buf.st_mode);
-      statbuf.nlink_ = static_cast<uint32_t>(buf.st_nlink);
-      statbuf.uid_ = static_cast<uint64_t>(buf.st_uid);
-      statbuf.gid_ = static_cast<uint64_t>(buf.st_gid);
-      statbuf.size_ = static_cast<uint64_t>(buf.st_size);
-      statbuf.block_cnt_ = static_cast<uint64_t>(buf.st_blocks);
-      statbuf.block_size_ = static_cast<uint64_t>(buf.st_blksize);
-      statbuf.atime_s_ = static_cast<int64_t>(buf.st_atim.tv_sec);
-      statbuf.mtime_s_ = static_cast<int64_t>(buf.st_mtim.tv_sec);
-      statbuf.ctime_s_ = static_cast<int64_t>(buf.st_ctim.tv_sec);
-      statbuf.btime_s_ = INT64_MAX; // local file system stat does not offer birth time
-    }
+  if (OB_FAIL(ObIODeviceLocalFileOp::fstat(fd, statbuf))) {
+    SHARE_LOG(WARN, "Fail to fstat", K(ret), K(fd));
   }
   return ret;
 }
@@ -927,11 +740,11 @@ int ObLocalDevice::pread(
     if (OB_UNLIKELY(0 != offset) || OB_ISNULL(checker)) {
       ret = OB_INVALID_ARGUMENT;
       SHARE_LOG(WARN, "super block read offset or checker is invalid", K(ret), K(offset), KP(checker));
-    } else if (OB_FAIL(pread_impl(block_fd_, buf, size, 0, read_size))) {
+    } else if (OB_FAIL(ObIODeviceLocalFileOp::pread_impl(block_fd_, buf, size, 0, read_size))) {
       SHARE_LOG(WARN, "read main super block fail", K(ret), K(offset), K(size), KP(buf), K(block_fd_), KERRMSG);
     } else if (OB_FAIL(checker->do_check(buf, read_size))) {
       SHARE_LOG(WARN, "check main super block fail", K(ret), K(read_size), KP(buf));
-    } else if (OB_FAIL(pread_impl(block_fd_, buf, size, block_size_, read_size))) {
+    } else if (OB_FAIL(ObIODeviceLocalFileOp::pread_impl(block_fd_, buf, size, block_size_, read_size))) {
       SHARE_LOG(WARN, "read main super block fail", K(ret), K(block_size_), K(size), KP(buf), K(block_fd_), KERRMSG);
     } else if (OB_FAIL(checker->do_check(buf, read_size))) {
       SHARE_LOG(WARN, "check backup super block fail", K(ret), K(read_size), KP(buf));
@@ -939,11 +752,11 @@ int ObLocalDevice::pread(
   } else {
     if (fd.is_block_file()) {
       const int64_t block_file_offset = get_block_file_offset(fd, offset);
-      if (OB_FAIL(pread_impl(block_fd_, buf, size, block_file_offset, read_size))) {
+      if (OB_FAIL(ObIODeviceLocalFileOp::pread_impl(block_fd_, buf, size, block_file_offset, read_size))) {
         SHARE_LOG(WARN, "failed to pread", K(ret), K(block_fd_), K(size), K(block_file_offset));
       }
     } else if (fd.is_normal_file()) {
-      if (OB_FAIL(pread_impl(fd.second_id_, buf, size, offset, read_size))) {
+      if (OB_FAIL(ObIODeviceLocalFileOp::pread_impl(fd.second_id_, buf, size, offset, read_size))) {
         SHARE_LOG(WARN, "failed to pread", K(ret), K(fd), K(size), K(offset));
       }
     }
@@ -977,23 +790,23 @@ int ObLocalDevice::pwrite(
     if (OB_UNLIKELY(0 != offset)) {
       ret = OB_INVALID_ARGUMENT;
       SHARE_LOG(WARN, "super block write offset must be 0", K(ret), K(offset));
-    } else if (OB_FAIL(pwrite_impl(block_fd_, buf, size, 0, write_size))) {
+    } else if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(block_fd_, buf, size, 0, write_size))) {
         SHARE_LOG(WARN, "Fail to write main superblock, try backup", K(ret), K(write_size), K(offset), K(size), KP(buf));
-        if (OB_FAIL(pwrite_impl(block_fd_, buf, size, block_size_, write_size))) {
+        if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(block_fd_, buf, size, block_size_, write_size))) {
           SHARE_LOG(WARN, "Neither main nor backup superblock write success!!!", K(ret), K(write_size), K(offset), K(size), KP(buf));
         }
-    } else if (OB_UNLIKELY(OB_SUCCESS != pwrite_impl(block_fd_, buf, size, 1 * block_size_ + offset, write_size))) {
+    } else if (OB_UNLIKELY(OB_SUCCESS != ObIODeviceLocalFileOp::pwrite_impl(block_fd_, buf, size, 1 * block_size_ + offset, write_size))) {
       // main superblock success, allow backup failure
       SHARE_LOG(WARN, "Fail to write backup superblock", K(write_size), K(offset), K(size), KP(buf));
     }
   } else {
     if (fd.is_block_file()) {
       const int64_t block_file_offset = get_block_file_offset(fd, offset);
-      if (OB_FAIL(pwrite_impl(block_fd_, buf, size, block_file_offset, write_size))) {
+      if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(block_fd_, buf, size, block_file_offset, write_size))) {
         SHARE_LOG(WARN, "failed to pwrite", K(ret), K(block_fd_), K(size), K(block_file_offset));
       }
     } else if (fd.is_normal_file()) {
-      if (OB_FAIL(pwrite_impl(fd.second_id_, buf, size, offset, write_size))) {
+      if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(fd.second_id_, buf, size, offset, write_size))) {
         SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(size), K(offset));
       }
     }
@@ -1018,12 +831,8 @@ int ObLocalDevice::read(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "The ObLocalDevice has not been inited, ", K(ret));
-  } else if (OB_UNLIKELY(!fd.is_normal_file())) {
-    ret = OB_ERR_UNEXPECTED;
-    SHARE_LOG(WARN, "fd is not normal file", K(ret), K(fd));
-  } else if (-1 == (read_size = ::read(static_cast<int32_t>(fd.second_id_), buf, size))) {
-    ret = convert_sys_errno();
-    SHARE_LOG(WARN, "fail to read", K(ret), K(fd), K(size), K(errno), KERRMSG);
+  } else if (OB_FAIL(ObIODeviceLocalFileOp::read(fd, buf, size, read_size))) {
+    SHARE_LOG(WARN, "Fail to read", K(ret), K(fd), K(buf), K(size));
   }
   return ret;
 }
@@ -1038,14 +847,56 @@ int ObLocalDevice::write(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "The ObLocalDevice has not been inited, ", K(ret));
-  } else if (OB_UNLIKELY(!fd.is_normal_file())) {
-    ret = OB_ERR_UNEXPECTED;
-    SHARE_LOG(WARN, "fd is not normal file", K(ret), K(fd));
-  } else if (-1 == (write_size = ::write(static_cast<int32_t>(fd.second_id_), buf, size))) {
-    ret = convert_sys_errno();
-    SHARE_LOG(WARN, "fail to read", K(ret), K(fd), K(size), K(errno), KERRMSG);
+  } else if (OB_FAIL(ObIODeviceLocalFileOp::write(fd, buf, size, write_size))) {
+    SHARE_LOG(WARN, "Fail to write", K(ret), K(fd), K(buf), K(size));
   }
   return ret;
+}
+
+int ObLocalDevice::upload_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const int64_t part_id,
+    int64_t &write_size)
+{
+  UNUSED(fd);
+  UNUSED(buf);
+  UNUSED(size);
+  UNUSED(part_id);
+  UNUSED(write_size);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::buf_append_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const uint64_t tenant_id,
+    bool &is_full)
+{
+  UNUSED(fd);
+  UNUSED(buf);
+  UNUSED(size);
+  UNUSED(tenant_id);
+  UNUSED(is_full);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::get_part_id(const ObIOFd &fd, bool &is_exist, int64_t &part_id)
+{
+  UNUSED(fd);
+  UNUSED(is_exist);
+  UNUSED(part_id);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::get_part_size(const ObIOFd &fd, const int64_t part_id, int64_t &part_size)
+{
+  UNUSED(fd);
+  UNUSED(part_id);
+  UNUSED(part_size);
+  return OB_NOT_SUPPORTED;
 }
 
 //async io interfaces
@@ -1091,9 +942,13 @@ int ObLocalDevice::io_destroy(common::ObIOContext *io_context)
   } else if (OB_ISNULL(io_context)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "Invalid argument, ", KP(io_context));
-  } else if (OB_ISNULL(local_io_context = dynamic_cast<ObLocalIOContext*> (io_context))) {
+  } else if (OB_UNLIKELY(ObIOContextType::IO_CONTEXT_TYPE_LOCAL != io_context->get_type())) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid io context pointer, ", K(ret), KP(io_context));
+    SHARE_LOG(WARN, "Invalid io context pointer", K(ret), KP(io_context),
+              "io_context_type", io_context->get_type());
+  } else if (OB_ISNULL(local_io_context = static_cast<ObLocalIOContext *> (io_context))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local io context is null", K(ret), KP(io_context));
   } else {
     int sys_ret = 0;
     if ((sys_ret = ::io_destroy(local_io_context->io_context_)) != 0) {
@@ -1123,9 +978,12 @@ int ObLocalDevice::io_prepare_pwrite(
   } else if (OB_ISNULL(buf) || OB_ISNULL(iocb)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "Invalid argument, ", K(ret), KP(buf), KP(iocb));
-  } else if (OB_ISNULL(local_iocb = dynamic_cast<ObLocalIOCB*> (iocb))) {
+  } else if (OB_UNLIKELY(ObIOCBType::IOCB_TYPE_LOCAL != iocb->get_type())) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid iocb pointer, ", K(ret), KP(iocb));
+    SHARE_LOG(WARN, "Invalid iocb pointer", K(ret), KP(iocb), "iocb_type", iocb->get_type());
+  } else if (OB_ISNULL(local_iocb = static_cast<ObLocalIOCB *> (iocb))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local iocb is null", K(ret), KP(iocb));
   } else if (OB_UNLIKELY(fd.is_super_block())) {
     ret = OB_NOT_SUPPORTED;
     SHARE_LOG(WARN, "server entry doesn't support AIO", K(ret), K(fd));
@@ -1157,9 +1015,12 @@ int ObLocalDevice::io_prepare_pread(
   } else if (OB_ISNULL(buf) || OB_ISNULL(iocb)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "Invalid argument, ", K(ret), KP(buf), KP(iocb));
-  } else if (OB_ISNULL(local_iocb = dynamic_cast<ObLocalIOCB*> (iocb))) {
+  } else if (OB_UNLIKELY(ObIOCBType::IOCB_TYPE_LOCAL != iocb->get_type())) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid iocb pointer, ", K(ret), KP(iocb));
+    SHARE_LOG(WARN, "Invalid iocb pointer", K(ret), KP(iocb), "iocb_type", iocb->get_type());
+  } else if (OB_ISNULL(local_iocb = static_cast<ObLocalIOCB *> (iocb))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local iocb is null", K(ret), KP(iocb));
   } else if (OB_UNLIKELY(fd.is_super_block())) {
     ret = OB_NOT_SUPPORTED;
     SHARE_LOG(WARN, "server entry doesn't support AIO", K(ret), K(fd));
@@ -1191,12 +1052,17 @@ int ObLocalDevice::io_submit(
   } else if (OB_ISNULL(io_context) || OB_ISNULL(iocb)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "Invalid argument, ", KP(io_context), KP(iocb));
-  } else if (OB_ISNULL(local_iocb = dynamic_cast<ObLocalIOCB*> (iocb))) {
+  } else if (OB_UNLIKELY((ObIOContextType::IO_CONTEXT_TYPE_LOCAL != io_context->get_type())
+                         || (ObIOCBType::IOCB_TYPE_LOCAL != iocb->get_type()))) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid iocb pointer, ", K(ret), KP(iocb));
-  } else if (OB_ISNULL(local_io_context = dynamic_cast<ObLocalIOContext*> (io_context))) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid io context pointer, ", K(ret), KP(io_context));
+    SHARE_LOG(WARN, "Invalid io_context or iocb pointer", K(ret), KP(io_context), "io_context_type",
+             io_context->get_type(), KP(iocb), "iocb_type", iocb->get_type());
+  } else if (OB_ISNULL(local_iocb = static_cast<ObLocalIOCB *> (iocb))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local iocb pointer is null", K(ret), KP(iocb));
+  } else if (OB_ISNULL(local_io_context = static_cast<ObLocalIOContext *> (io_context))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local io context pointer is null", K(ret), KP(io_context));
   } else {
     iocbp = &(local_iocb->iocb_);
     int submit_ret = ::io_submit(local_io_context->io_context_, 1, &iocbp);
@@ -1224,12 +1090,17 @@ int ObLocalDevice::io_cancel(
   } else if (OB_ISNULL(io_context) || OB_ISNULL(iocb)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "Invalid argument, ", KP(io_context),KP(iocb));
-  } else if (OB_ISNULL(local_iocb = dynamic_cast<ObLocalIOCB*> (iocb))) {
+  } else if (OB_UNLIKELY((ObIOContextType::IO_CONTEXT_TYPE_LOCAL != io_context->get_type())
+                         || (ObIOCBType::IOCB_TYPE_LOCAL != iocb->get_type()))) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid iocb pointer, ", K(ret), KP(iocb));
-  } else if (OB_ISNULL(local_io_context = dynamic_cast<ObLocalIOContext*> (io_context))) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid io context pointer, ", K(ret), KP(io_context));
+    SHARE_LOG(WARN, "Invalid io_context or iocb pointer", K(ret), KP(io_context), "io_context_type",
+             io_context->get_type(), KP(iocb), "iocb_type", iocb->get_type());
+  } else if (OB_ISNULL(local_iocb = static_cast<ObLocalIOCB *> (iocb))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local iocb pointer is null", K(ret), KP(iocb));
+  } else if (OB_ISNULL(local_io_context = static_cast<ObLocalIOContext *> (io_context))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local io context pointer is null", K(ret), KP(io_context));
   } else {
     int sys_ret = 0;
     if ((sys_ret = ::io_cancel(local_io_context->io_context_, &(local_iocb->iocb_), &local_event)) < 0) {
@@ -1256,12 +1127,17 @@ int ObLocalDevice::io_getevents(
   } else if (OB_ISNULL(io_context) || OB_ISNULL(events)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "Invalid argument, ", KP(io_context),KP(events));
-  } else if (OB_ISNULL(local_io_events = dynamic_cast<ObLocalIOEvents*> (events))) {
+  } else if (OB_UNLIKELY((ObIOContextType::IO_CONTEXT_TYPE_LOCAL != io_context->get_type())
+                         || (ObIOEventsType::IO_EVENTS_TYPE_LOCAL != events->get_type()))) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid io events pointer, ", K(ret), KP(events));
-  } else if (OB_ISNULL(local_io_context = dynamic_cast<ObLocalIOContext*> (io_context))) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid io context pointer, ", K(ret), KP(io_context));
+    SHARE_LOG(WARN, "Invalid io_context or io_events pointer", K(ret), KP(io_context),
+      "io_context_type", io_context->get_type(), KP(events), "io_events_type", events->get_type());
+  } else if (OB_ISNULL(local_io_events = static_cast<ObLocalIOEvents *> (events))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local io events pointer is null", K(ret), KP(events));
+  } else if (OB_ISNULL(local_io_context = static_cast<ObLocalIOContext *> (io_context))) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "local io context pointer is null", K(ret), KP(io_context));
   } else {
     int sys_ret = 0;
     {
@@ -1283,8 +1159,9 @@ int ObLocalDevice::io_getevents(
   return ret;
 }
 
-common::ObIOCB* ObLocalDevice::alloc_iocb()
+common::ObIOCB* ObLocalDevice::alloc_iocb(const uint64_t tenant_id)
 {
+  UNUSED(tenant_id);
   ObLocalIOCB *iocb = nullptr;
   ObLocalIOCB *buf = nullptr;
   if (OB_LIKELY(is_inited_)) {
@@ -1316,10 +1193,19 @@ common::ObIOEvents *ObLocalDevice::alloc_io_events(const uint32_t max_events)
 
 void ObLocalDevice::free_iocb(common::ObIOCB *iocb)
 {
+  int ret = OB_SUCCESS;
   if (OB_LIKELY(is_inited_)) {
-    ObLocalIOCB *local_iocb = static_cast<ObLocalIOCB *>(iocb);
-    local_iocb->~ObLocalIOCB();
-    iocb_pool_.free(local_iocb);
+    ObLocalIOCB *local_iocb = nullptr;
+    if (OB_UNLIKELY(ObIOCBType::IOCB_TYPE_LOCAL != iocb->get_type())) {
+      ret = OB_INVALID_ARGUMENT;
+      SHARE_LOG(WARN, "Invalid iocb pointer", K(ret), KP(iocb), "iocb_type", iocb->get_type());
+    } else if (OB_ISNULL(local_iocb = static_cast<ObLocalIOCB *>(iocb))) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "local iocb is null", K(ret), KP(iocb));
+    } else {
+      local_iocb->~ObLocalIOCB();
+      iocb_pool_.free(local_iocb);
+    }
   }
 }
 
@@ -1365,7 +1251,7 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "Failed to get max block size", K(ret), K(sstable_dir_));
   } else if (OB_UNLIKELY(0 != statvfs(sstable_dir_, &svfs))) {
-    ret = convert_sys_errno();
+    ret = ObIODeviceLocalFileOp::convert_sys_errno();
     SHARE_LOG(WARN, "Failed to get disk space", K(ret), K(sstable_dir_));
   } else {
     const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize));
@@ -1445,7 +1331,7 @@ int ObLocalDevice::get_data_disk_used_percentage_(
   } else if (OB_UNLIKELY(required_size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(required_size));
-  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(reserved_size))) {
     SHARE_LOG(WARN, "Fail to get reserved size", K(ret));
   } else {
     int64_t max_block_cnt = get_max_block_count(reserved_size);
@@ -1457,122 +1343,6 @@ int ObLocalDevice::get_data_disk_used_percentage_(
     const int64_t free_count = actual_free_block_cnt - required_count;
     percent = 100 - 100 * free_count / total_block_cnt_;
   }
-  return ret;
-}
-
-int ObLocalDevice::get_block_file_size(
-    const char *sstable_dir,
-    const int64_t reserved_size,
-    const int64_t block_size,
-    const int64_t suggest_file_size,
-    const int64_t disk_percentage,
-    int64_t &block_file_size)
-{
-  int ret = OB_SUCCESS;
-  // check space availability if file not exist
-  int64_t total_space = 0;
-  int64_t free_space = 0;
-  struct statvfs svfs;
-
-  if (OB_ISNULL(sstable_dir)
-      || OB_UNLIKELY(reserved_size < 0)
-      || OB_UNLIKELY(block_size <= 0)
-      || OB_UNLIKELY(suggest_file_size < 0)
-      || OB_UNLIKELY(disk_percentage < 0)
-      || OB_UNLIKELY(disk_percentage >= 100)
-      || OB_UNLIKELY(block_file_size < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "Invalid argument, ", K(ret), KP(sstable_dir), K(reserved_size), K(block_size),
-        K(suggest_file_size), K(disk_percentage), K(block_file_size));
-  } else if (OB_UNLIKELY(0 != statvfs(sstable_dir, &svfs))) {
-    ret = convert_sys_errno();
-    SHARE_LOG(WARN, "Failed to get disk space ", K(ret), K(sstable_dir));
-  } else {
-    const int64_t old_block_file_size = block_file_size;
-    // remove reserved space for root user
-    total_space = std::max(0L, (int64_t)((svfs.f_blocks + svfs.f_bavail - svfs.f_bfree) * svfs.f_bsize - reserved_size));
-    free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
-    block_file_size = suggest_file_size > 0 ? suggest_file_size : total_space * disk_percentage / 100;
-    if (block_file_size > old_block_file_size + free_space) {
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
-      LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret), K(block_file_size_), K(total_space),
-          K(free_space), K(reserved_size), K(old_block_file_size), K(block_file_size));
-    } else if (block_file_size <= block_size) {
-      ret = OB_INVALID_ARGUMENT;
-      SHARE_LOG(ERROR, "data file size is too small, ", K(ret), K(total_space), K(free_space),
-          K(reserved_size), K(old_block_file_size), K(block_file_size));
-    } else {
-      block_file_size = lower_align(block_file_size, block_size);
-    }
-  }
-  return ret;
-}
-
-int ObLocalDevice::open_block_file(
-    const char *store_dir,
-    const char *sstable_dir,
-    const int64_t block_size,
-    const int64_t file_size,
-    const int64_t disk_percentage,
-    const int64_t reserved_size,
-    bool &is_exist)
-{
-  int ret = OB_SUCCESS;
-  int sys_ret = 0;
-  is_exist = false;
-  int64_t adjust_file_size = 0; // The original data file size is 0 because of the first initialization.
-
-  if (OB_FAIL(databuff_printf(store_path_, OB_MAX_FILE_NAME_LENGTH, "%s/%s/%s",
-    store_dir, BLOCK_SSTBALE_DIR_NAME, BLOCK_SSTBALE_FILE_NAME))) {
-    SHARE_LOG(WARN, "The block file path is too long, ", K(ret), K(store_dir));
-  } else if (OB_FAIL(exist(store_path_, is_exist))) {
-    SHARE_LOG(WARN, "Fail to check if file exist, ", K(ret), K(store_path_));
-  } else if (!is_exist
-      && OB_FAIL(get_block_file_size(sstable_dir, reserved_size, block_size,
-          file_size, disk_percentage, adjust_file_size))) {
-    SHARE_LOG(WARN, "Fail to get block file size", K(ret), K(block_size), K(file_size),
-        K(adjust_file_size), K(disk_percentage));
-  } else {
-    int open_flag = is_exist ? O_DIRECT | O_RDWR | O_LARGEFILE
-                          : O_CREAT | O_EXCL | O_DIRECT | O_RDWR | O_LARGEFILE;
-    if ((block_fd_ = ::open(store_path_, open_flag, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
-      ret = OB_IO_ERROR;
-      SHARE_LOG(ERROR, "open file error", K(ret), K(store_path_), K(errno), KERRMSG);
-    } else {
-      if (!is_exist) {
-        if (0 != (sys_ret = ::fallocate(block_fd_, 0/*MODE*/, 0/*offset*/, adjust_file_size))) {
-          ret = convert_sys_errno();
-          SHARE_LOG(ERROR, "Fail to fallocate block file, ", K(ret), K(sys_ret), K(store_path_), K(adjust_file_size), KERRMSG);
-        } else {
-          block_file_size_ = adjust_file_size;
-        }
-      } else {
-        ObIODFileStat f_stat;
-        if (OB_FAIL(stat(store_path_, f_stat))) {
-          SHARE_LOG(ERROR, "stat store_path_ fail ", K(ret), K(store_path_));
-        } else {
-          block_file_size_ = lower_align(f_stat.size_, block_size);
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      const ObMemAttr mem_attr = SET_IGNORE_MEM_VERSION(ObMemAttr(OB_SYS_TENANT_ID, "LDBlockBitMap"));
-      total_block_cnt_ = block_file_size_ / block_size_;
-      if (OB_ISNULL(free_block_array_ = (int64_t *) ob_malloc(sizeof(int64_t) * total_block_cnt_, mem_attr))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SHARE_LOG(WARN, "Fail to allocate memory, ", K(ret), K(block_file_size_), K(total_block_cnt_));
-      } else if (OB_ISNULL(block_bitmap_ = (bool *) ob_malloc(sizeof(bool) * total_block_cnt_, mem_attr))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SHARE_LOG(WARN, "Fail to allocate memory, ", K(ret), K(block_file_size_), K(total_block_cnt_));
-      } else {
-        free_block_cnt_ = 0;
-        free_block_push_pos_ = 0;
-        free_block_pop_pos_ = 0;
-      }
-    }
-  }
-
   return ret;
 }
 
@@ -1594,7 +1364,7 @@ int ObLocalDevice::resize_block_file(const int64_t new_size)
   } else if (0 == delta_size) {
     SHARE_LOG(INFO, "The file size is not changed, ", K(new_size), K(block_file_size_));
   } else if (0 != (sys_ret = ::fallocate(block_fd_, 0, block_file_size_, delta_size))) {
-    ret = convert_sys_errno();;
+    ret = ObIODeviceLocalFileOp::convert_sys_errno();;
     SHARE_LOG(WARN, "fail to expand file size", K(ret), K(sys_ret), K(block_file_size_),
         K(delta_size), K(errno), KERRMSG);
   } else if (OB_ISNULL(new_free_block_array
@@ -1652,100 +1422,5 @@ int ObLocalDevice::resize_block_file(const int64_t new_size)
   return ret;
 }
 
-int ObLocalDevice::pread_impl(const int64_t fd, void *buf, const int64_t size, const int64_t offset, int64_t &read_size)
-{
-  int ret = OB_SUCCESS;
-  read_size = 0;
-  char *buffer = static_cast<char *>(buf);
-  int64_t read_sz = size;
-  int64_t read_offset = offset;
-  ssize_t sz = 0;
-  while (OB_SUCC(ret) && read_sz > 0) {
-    sz = ::pread(static_cast<int32_t>(fd), buffer, read_sz, read_offset);
-    if (sz < 0) {
-      if (EINTR == errno) {
-        SHARE_LOG(INFO, "pread is interrupted before any data is read, just retry", K(errno), KERRMSG);
-      } else {
-        ret = OB_IO_ERROR;
-        SHARE_LOG(WARN, "failed to pread", K(ret), K(fd), K(read_sz), K(read_offset), K(errno), KERRMSG);
-      }
-    } else if (0 == sz) {
-      // actual read size is 0, may reach the end of file
-      SHARE_LOG(INFO, "read nothing because the end of file is reached", K(ret), K(read_sz), K(read_offset));
-      break;
-    } else {
-      buffer += sz;
-      read_sz -= sz;
-      read_offset += sz;
-      read_size += sz;
-    }
-  }
-  return ret;
-}
-
-int ObLocalDevice::pwrite_impl(const int64_t fd, const void *buf, const int64_t size, const int64_t offset, int64_t &write_size)
-{
-  int ret = OB_SUCCESS;
-  write_size = 0;
-  const char *buffer = static_cast<const char *>(buf);
-  int64_t write_sz = size;
-  int64_t write_offset = offset;
-  ssize_t sz = 0;
-  while (OB_SUCC(ret) && write_sz > 0) {
-    sz = ::pwrite(static_cast<int32_t>(fd), buffer, write_sz, write_offset);
-    if (sz <= 0) {
-      // if physical end of medium is reached and there's no space for any byte, EFBIG is set
-      // and we think pwrite will never return 0
-      if (EINTR == errno) {
-        SHARE_LOG(INFO, "pwrite is interrupted before any data is written, just retry", K(errno), KERRMSG);
-      } else {
-        ret = OB_IO_ERROR;
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(write_sz), K(write_offset), K(errno), KERRMSG);
-      }
-    } else {
-      buffer += sz;
-      write_sz -= sz;
-      write_offset += sz;
-      write_size += sz;
-    }
-  }
-  return ret;
-}
-
-int ObLocalDevice::convert_sys_errno()
-{
-  int ret = OB_IO_ERROR;
-  bool use_warn_log = false;
-  switch (errno) {
-    case EACCES:
-      ret = OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
-      break;
-    case ENOENT:
-      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      break;
-    case EEXIST:
-    case ENOTEMPTY:
-      ret = OB_FILE_OR_DIRECTORY_EXIST;
-      break;
-    case ETIMEDOUT:
-      ret = OB_TIMEOUT;
-      break;
-    case EAGAIN:
-      ret = OB_EAGAIN;
-      break;
-    case ENOSPC:
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
-      break;
-    default:
-      use_warn_log = true;
-      break;
-  }
-  if (use_warn_log) {
-    SHARE_LOG(WARN, "convert sys errno", K(ret), K(errno), KERRMSG);
-  } else {
-    SHARE_LOG(INFO, "convert sys errno", K(ret), K(errno), KERRMSG);
-  }
-  return ret;
-}
 } /* namespace share */
 } /* namespace oceanbase */

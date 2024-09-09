@@ -40,6 +40,7 @@
 #include "observer/ob_server.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_config.h"
+#include "share/object_storage/ob_object_storage_struct.h"
 #include "observer/mysql/ob_query_response_time.h"
 #include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
 #include "sql/resolver/cmd/ob_kill_stmt.h"
@@ -569,7 +570,10 @@ int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to specify ls to major freeze", K(ret), "ls_id", freeze_stmt->get_ls_id());
   } else if (freeze_stmt->get_tablet_id().is_valid()) { // tablet major freeze
-    if (T_TABLET_ID == opt_tenant_list_or_tablet_id->type_) {
+    if (GCTX.is_shared_storage_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not allowed to schedule tablet major for shared storage mode", KR(ret));
+    } else if (T_TABLET_ID == opt_tenant_list_or_tablet_id->type_) {
       if (OB_UNLIKELY(0 != freeze_stmt->get_tenant_ids().count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tenant ids should be empty for type T_TABLET_ID", K(ret));
@@ -1154,6 +1158,54 @@ int ObFlushKVCacheResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObFlushSSMicroCacheResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_FLUSH_SS_MICRO_CACHE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_FLUSH_SS_MICRO_CACHE", "type", get_type_name(parse_tree.type_));
+  } else {
+    ObFlushSSMicroCacheStmt *stmt = create_stmt<ObFlushSSMicroCacheStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObFlushKVCacheStmt failed");
+    } else {
+      stmt_ = stmt;
+      if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children should not be null");
+      } else {
+        ParseNode *node = parse_tree.children_[0];
+        if (NULL == node) {
+          stmt->tenant_name_.reset();
+        } else {
+          if (OB_UNLIKELY(NULL == node->children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("children should not be null");
+          } else {
+            node = node->children_[0];
+            if (OB_UNLIKELY(NULL == node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node should not be null");
+            } else {
+              if (node->str_len_ <= 0) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("empty tenant name");
+              } else {
+                ObString tenant_name(node->str_len_, node->str_value_);
+                if (OB_FAIL(stmt->tenant_name_.assign(tenant_name))) {
+                  LOG_WARN("assign tenant name failed", K(tenant_name), K(ret));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObFlushIlogCacheResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -1380,6 +1432,143 @@ int ObAdminZoneResolver::resolve(const ParseNode &parse_tree)
             }
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminStorageResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObAdminStorageStmt *admin_storage_stmt = NULL;
+  if (OB_UNLIKELY(T_ADMIN_STORAGE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_ADMIN_STORAGE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null");
+  } else if (6 != parse_tree.num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (NULL == (admin_storage_stmt = create_stmt<ObAdminStorageStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SQL_RESV_LOG(ERROR, "create ObAdminStorageStmt failed");
+  } else {
+    stmt_ = admin_storage_stmt;
+    ParseNode *admin_op = parse_tree.children_[0];
+    ParseNode *path_info = parse_tree.children_[1];
+    ParseNode *access_info = parse_tree.children_[2];
+    ParseNode *attribute_info = parse_tree.children_[3];
+    ParseNode *use_for_info = parse_tree.children_[4];
+    ParseNode *scope_str = parse_tree.children_[5];
+
+    ObString path;
+    ObString accessinfo;
+    ObString attribute;
+    ObStorageUsedType::TYPE use_for;
+    ObZone zone;
+    ObRegion region;
+    bool wait_type = false;
+    if (OB_UNLIKELY(NULL == admin_op || NULL == path_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "admin_op and path_info should not be null");
+    } else if (admin_op->value_ < 1 || admin_op->value_ > 3) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "invalid action code", "action", admin_op->value_);
+    } else {
+      ObAdminStorageArg::AdminStorageOp op = static_cast<ObAdminStorageArg::AdminStorageOp>(admin_op->value_);
+      admin_storage_stmt->set_op(op);
+      if (path_info->str_len_ <= 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "empty path");
+      } else {
+        path.assign_ptr(path_info->str_value_, path_info->str_len_);
+        if (OB_FAIL(admin_storage_stmt->set_path(path))) {
+          SQL_RESV_LOG(WARN, "fail to set path", KR(ret), K(path));
+        }
+      }
+      if (OB_SUCC(ret) && NULL != access_info) {
+        if (admin_storage_stmt->has_alter_accessinfo_option()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple access info option");
+        } else if (access_info->str_len_ <= 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "empty access_info");
+        } else {
+          accessinfo.assign_ptr(access_info->str_value_, access_info->str_len_);
+          if (OB_FAIL(admin_storage_stmt->set_alter_accessinfo_option())) {
+            SQL_RESV_LOG(WARN, "fail to set alter access info option", KR(ret));
+          } else if (OB_FAIL(admin_storage_stmt->set_accessinfo(accessinfo))) {
+            SQL_RESV_LOG(WARN, "fail to set access info", KR(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (NULL != attribute_info) {
+          if (admin_storage_stmt->has_alter_attribute_option()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple attribute option");
+          } else if (attribute_info->str_len_ <= 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "empty attribute_info");
+          } else {
+            attribute.assign_ptr(attribute_info->str_value_, attribute_info->str_len_);
+            if (OB_FAIL(admin_storage_stmt->set_alter_attribute_option())) {
+              SQL_RESV_LOG(WARN, "fail to set alter attribute option", KR(ret));
+            } else if (OB_FAIL(admin_storage_stmt->set_attribute(attribute))) {
+              SQL_RESV_LOG(WARN, "fail to set attribute", KR(ret), K(attribute));
+            }
+          }
+        } else {
+          int64_t max_iops = 0;
+          int64_t max_bandwidth = 0;
+          char attribute_str[OB_MAX_STORAGE_ATTRIBUTE_LENGTH] = {0};
+          if (OB_FAIL(databuff_printf(attribute_str, sizeof(attribute_str), "%s%ld&%s%ldB",
+                      STORAGE_MAX_IOPS, max_iops, STORAGE_MAX_BANDWIDTH, max_bandwidth))) {
+            SQL_RESV_LOG(WARN, "fail to databuff printf", KR(ret));
+          } else {
+            attribute.assign_ptr(attribute_str, strlen(attribute_str));
+            if (OB_FAIL(admin_storage_stmt->set_attribute(attribute))) {
+              SQL_RESV_LOG(WARN, "fail to set attribute", KR(ret), K(attribute));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret) && NULL != use_for_info) {
+        use_for = ObStorageUsedType::get_type(use_for_info->str_value_);
+        if (ObStorageUsedType::TYPE::USED_TYPE_MAX == use_for) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage use for type error");
+        } else {
+          admin_storage_stmt->set_storage_use_type(use_for);
+        }
+      }
+      if (OB_SUCC(ret) && NULL != scope_str) {
+        if (scope_str->str_len_ <= 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "empty scope name");
+        } else if (scope_str->type_ == T_ZONE) {
+          if (OB_FAIL(zone.assign(ObString(scope_str->str_len_, scope_str->str_value_)))) {
+            SQL_RESV_LOG(WARN, "assign path failed", K(zone), K(ret));
+          } else {
+            admin_storage_stmt->set_zone(zone);
+            admin_storage_stmt->set_scope_type(ObScopeType::TYPE::ZONE);
+          }
+        } else if (scope_str->type_ == T_REGION) {
+          if (OB_FAIL(region.assign(ObString(scope_str->str_len_, scope_str->str_value_)))) {
+            SQL_RESV_LOG(WARN, "assign path failed", K(region), K(ret));
+          } else {
+            admin_storage_stmt->set_region(region);
+            admin_storage_stmt->set_scope_type(ObScopeType::TYPE::REGION);
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "scope type not supported");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        admin_storage_stmt->set_wait_type(wait_type);
       }
     }
   }
@@ -2518,6 +2707,85 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
     }
   }
 #endif
+  return ret;
+}
+
+int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_CHANGE_EXTERNAL_STORAGE_DEST != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_CHANGE_EXTERNAL_STORAGE_DEST", "type", get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null");
+  } else if (OB_UNLIKELY(3 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(parse_tree.children_[0]) && (OB_ISNULL(parse_tree.children_[1]) || OB_ISNULL(parse_tree.children_[2])) ) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret), "children", parse_tree.children_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObChangeExternalStorageDestStmt *stmt = create_stmt<ObChangeExternalStorageDestStmt>();
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("create stmt failed", K(ret));
+    } else {
+      // path
+      if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[0])) {
+        HEAP_VAR(ObAdminSetConfigItem, item) {
+          item.exec_tenant_id_ = session_info_->get_effective_tenant_id();
+          const ObString path_value = parse_tree.children_[0]->str_value_;
+          if (OB_FAIL(item.name_.assign("path"))) {
+            LOG_WARN("failed to assign attribute", K(ret));
+          } else if (OB_FAIL(item.value_.assign(path_value))) {
+            LOG_WARN("failed to assign config value", K(ret));
+          } else if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
+            LOG_WARN("add config item failed", K(ret), K(item));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        HEAP_VAR(ObAdminSetConfigItem, item) {
+          item.exec_tenant_id_ = session_info_->get_effective_tenant_id();
+          if (OB_FAIL(item.name_.assign("access_info"))) {
+            LOG_WARN("failed to assign attribute", K(ret));
+          }
+          // access info may be null
+          if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
+            const ObString access_info_value = parse_tree.children_[1]->str_value_;
+            if (OB_FAIL(item.value_.assign(access_info_value))) {
+              LOG_WARN("failed to assign config value", K(ret));
+            }
+          }
+          if (FAILEDx(stmt->get_rpc_arg().items_.push_back(item))) {
+            LOG_WARN("add config item failed", K(ret), K(item));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        HEAP_VAR(ObAdminSetConfigItem, item) {
+          item.exec_tenant_id_ = session_info_->get_effective_tenant_id();
+          if (OB_FAIL(item.name_.assign("attribute"))) {
+            LOG_WARN("failed to assign attribute", K(ret));
+          }
+          // attribute may be null
+          if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[2])) {
+            const ObString attribute_value = parse_tree.children_[2]->str_value_;
+            if (OB_FAIL(item.value_.assign(attribute_value))) {
+              LOG_WARN("failed to assign config value", K(ret));
+            }
+          }
+          if (FAILEDx(stmt->get_rpc_arg().items_.push_back(item))) {
+            LOG_WARN("add config item failed", K(ret), K(item));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

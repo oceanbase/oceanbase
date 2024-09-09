@@ -25,17 +25,17 @@ DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_MAX, "DAG_NET_TYPE_MAX")
 #endif
 
 #ifdef DAG_SCHEDULER_DAG_PRIO_DEF
-// DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_ENUM, DAG_PRIORITY_SCORE, DAG_PRIORITY_STR)
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_HIGH,   6, "PRIO_COMPACTION_HIGH")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_HIGH,        8, "PRIO_HA_HIGH")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_MID, 6, "PRIO_COMPACTION_MID")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_MID,         5, "PRIO_HA_MID")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_LOW, 6, "PRIO_COMPACTION_LOW")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_LOW,         2, "PRIO_HA_LOW")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL,            2, "PRIO_DDL")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL_HIGH,       6, "PRIO_DDL_HIGH")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_TTL,            2, "PRIO_TTL")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_MAX,            0, "INVALID")
+// DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_ENUM, DAG_PRIORITY_SCORE, DAG_PRIORITY_STR, DAG_FUNCTION_TYPE)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_HIGH,   6, "PRIO_COMPACTION_HIGH", PRIO_COMPACTION_HIGH)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_HIGH,        8, "PRIO_HA_HIGH", PRIO_HA_HIGH)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_MID, 6, "PRIO_COMPACTION_MID", PRIO_COMPACTION_MID)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_MID,         5, "PRIO_HA_MID", PRIO_HA_MID)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_LOW, 6, "PRIO_COMPACTION_LOW", PRIO_COMPACTION_LOW)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_LOW,         2, "PRIO_HA_LOW", PRIO_HA_LOW)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL,            2, "PRIO_DDL", PRIO_DDL)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL_HIGH,       6, "PRIO_DDL_HIGH", PRIO_DDL_HIGH)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_TTL,            2, "PRIO_TTL", DEFAULT_FUNCTION)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_MAX,            0, "INVALID", MAX_FUNCTION_NUM)
 #endif
 
 #ifdef DAG_SCHEDULER_DAG_TYPE_DEF
@@ -58,8 +58,14 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TX_TABLE_MERGE, ObDagPrio::DAG_PRIO_COMPACTI
     false, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_MINI_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::MDS_MINI_MERGE_TASK, "MDS_MINI_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "flush_scn"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_VERIFY_CKM, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "VERIFY_CKM", "COMPACTION",
+    false, 2, {"ls_id", "tablet_count"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BATCH_FREEZE_TABLETS, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::BATCH_FREEZE_TABLET_TASK, "BATCH_FREEZE", "COMPACTION",
     false, 2, {"ls_id", "tablet_count"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_UPDATE_SKIP_MAJOR, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "UPDATE_SKIP_MAJOR", "COMPACTION",
+    false, 2, {"ls_id", "tablet_count"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_REFRESH_SSTABLES, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "REFRESH_MAJOR", "COMPACTION",
+    false, 3, {"ls_id", "tablet_id", "compaction_scn"})
 /*
  * NOTICE: if you add/delete a compaction dag type here, remember to alter function is_compaction_dag and get_diagnose_tablet_type in ob_tenant_dag_scheduler.h
  * AND update check_ls_compaction_dag_exist_with_cancel
@@ -73,11 +79,15 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SQL_BUILD_INDEX, ObDagPrio::DAG_PRIO_DDL, Ob
     true, 0, {})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL_KV_MERGE, ObDagPrio::DAG_PRIO_DDL_HIGH, ObSysTaskType::DDL_KV_MERGE_TASK, "DDL_KV_MERGE", "DDL",
     true, 3, {"ls_id", "tablet_id", "rec_scn"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL_DEL_LOB_META, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL_DEL_LOB_META", "DROP_VEC_INDEX",
+    true, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
 
 // DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MIGRATE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "MIGRATE", "MIGRATE")
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_COMPLETE_MIGRATION, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "INITIAL_COMPLETE_MIGRATION", "MIGRATE",
     true, 3, {"tenant_id", "ls_id", "op_type"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_START_COMPLETE_MIGRATION, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "START_COMPLETE_MIGRATION", "MIGRATE",
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MIGRATE_WARMUP, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "MIGRATE_WARMUP", "MIGRATE",
+    true, 3, {"tenant_id", "ls_id", "op_type"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_WAIT_DATA_READY, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "WAIT_DATA_READY", "MIGRATE",
     true, 3, {"tenant_id", "ls_id", "op_type"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_FINISH_COMPLETE_MIGRATION, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "FINISH_COMPLETE_MIGRATION", "MIGRATE",
     true, 3, {"tenant_id", "ls_id", "op_type"})
@@ -185,6 +195,8 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TENANT_SNAPSHOT_CREATE, ObDagPrio::DAG_PRIO_
     false, 1, {"tsnap_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TENANT_SNAPSHOT_GC, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::TENANT_SNAPSHOT_GC_TASK, "TENANT_SNAPSHOT_GC","TSNAP_GC",
     false, 1, {"tsnap_id"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_VECTOR_INDEX, ObDagPrio::DAG_PRIO_TTL, ObSysTaskType::VECTOR_INDEX_TASK, "VECTOR_INDEX_DAG", "VECTOR_INDEX",
+    false, 4, {"tenant_id", "ls_id", "table_id", "tablet_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType::MAX_SYS_TASK_TYPE, "DAG_TYPE_MAX", "INVALID", false, 0, {})
 #endif
 
@@ -200,6 +212,7 @@ DIAGNOSE_INFO_PRIORITY_DEF(DIAGNOSE_PRIORITY_HIGH)
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "ob_sys_task_stat.h"
+#include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {
@@ -217,6 +230,7 @@ struct ObDagPrioStruct
 {
   int64_t score_;
   const char *dag_prio_str_;
+  const ObFunctionType function_type_;
   TO_STRING_KV(K_(score), K_(dag_prio_str));
 };
 
@@ -224,15 +238,15 @@ struct ObDagPrio
 {
   enum ObDagPrioEnum
   {
-#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str) dag_prio,
+#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str, dag_function_type) dag_prio,
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_PRIO_DEF
   };
 };
 
 static constexpr ObDagPrioStruct OB_DAG_PRIOS[] = {
-#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str) \
-    {score, dag_prio_str},
+#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str, dag_function_type) \
+    {score, dag_prio_str, ObFunctionType::dag_function_type},
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_PRIO_DEF
 };
@@ -285,6 +299,32 @@ static constexpr ObDagTypeStruct OB_DAG_TYPES[] = {
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_TYPE_DEF
 };
+
+inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
+{
+  return ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type ||
+         ObDagType::DAG_TYPE_CO_MERGE_SCHEDULE == dag_type ||
+         ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE == dag_type ||
+         ObDagType::DAG_TYPE_CO_MERGE_FINISH == dag_type ||
+         ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type ||
+         ObDagType::DAG_TYPE_MINI_MERGE == dag_type ||
+         ObDagType::DAG_TYPE_MERGE_EXECUTE == dag_type ||
+         ObDagType::DAG_TYPE_TX_TABLE_MERGE == dag_type ||
+         ObDagType::DAG_TYPE_MDS_MINI_MERGE == dag_type;
+}
+
+inline bool is_batch_exec_dag(ObDagType::ObDagTypeEnum dag_type)
+{
+  return ObDagType::DAG_TYPE_VERIFY_CKM == dag_type
+      || ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == dag_type
+      || ObDagType::DAG_TYPE_UPDATE_SKIP_MAJOR == dag_type;
+}
+
+inline bool is_diagnose_dag(ObDagType::ObDagTypeEnum dag_type)
+{
+  return is_compaction_dag(dag_type)
+      || is_batch_exec_dag(dag_type);
+}
 
 } // namespace share
 } // namespace oceanbase

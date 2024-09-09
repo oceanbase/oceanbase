@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include "storage/backup/ob_backup_device_wrapper.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "share/ob_device_manager.h"
 #include "lib/restore/ob_object_device.h"
 #include "common/storage/ob_device_common.h"
 #include "share/ob_ls_id.h"
@@ -61,6 +62,10 @@ TEST(TestBackupDeviceWrapper, test_alloc_block) {
   io_d_opts_write.opt_cnt_ = opt_cnt;
 
   io_d_opts_write.opts_[0].set("storage_info", "");
+
+  const uint64_t test_memory = 6L * 1024L * 1024L * 1024L;
+  OK(ObDeviceManager::get_instance().init_devices_env());
+  OK(ObIOManager::get_instance().init(test_memory));
 
   OK(ObBackupWrapperIODevice::setup_io_opts_for_backup_device(
       backup_set_id, ls_id, backup_data_type, turn_id, retry_id, file_id, block_type, OB_STORAGE_ACCESS_RANDOMWRITER, &io_d_opts_write));

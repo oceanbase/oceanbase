@@ -69,6 +69,27 @@ void LogBlockHeader::update_palf_id_and_curr_block_id(const int64_t palf_id,
   curr_block_id_ = curr_block_id;
 }
 
+int LogBlockHeader::generate(const int64_t palf_id,
+                             const block_id_t block_id,
+                             const LSN &min_lsn,
+                             const share::SCN &min_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((!is_valid_palf_id(palf_id)) || (!is_valid_block_id(block_id))
+                  || (!min_lsn.is_valid()) || (!min_scn.is_valid()))) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid arguments", K(palf_id), K(block_id), K(min_lsn), K(min_scn));
+  } else {
+    magic_ = MAGIC;
+    version_ = LOG_INFO_BLOCK_VERSION;
+    palf_id_ = palf_id;
+    curr_block_id_ = block_id;
+    min_lsn_ = min_lsn;
+    min_scn_ = min_scn;
+    checksum_ = calc_checksum_();
+  }
+  return ret;
+}
 void LogBlockHeader::mark_block_can_be_reused(const SCN &max_scn)
 {
   flag_ |= REUSED_BLOCK_MASK;

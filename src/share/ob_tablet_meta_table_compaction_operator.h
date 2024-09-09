@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_SHARE_OB_TABLET_MEDIUM_SNAPSHOT_TABLE_OPERATOR_
-#define OCEANBASE_SHARE_OB_TABLET_MEDIUM_SNAPSHOT_TABLE_OPERATOR_
+#ifndef OCEANBASE_SHARE_OB_TABLET_META_TABLE_COMPACTION_OPERATOR_
+#define OCEANBASE_SHARE_OB_TABLET_META_TABLE_COMPACTION_OPERATOR_
 
 #include "lib/container/ob_iarray.h"
 #include "lib/mysqlclient/ob_isql_client.h"
@@ -20,6 +20,7 @@
 #include "share/ob_ls_id.h"
 #include "share/tablet/ob_tablet_info.h"
 #include "observer/ob_server_struct.h"
+#include "storage/compaction/ob_ckm_error_tablet_info.h"
 
 namespace oceanbase
 {
@@ -90,7 +91,7 @@ class ObTabletMetaTableCompactionOperator
 public:
   static int batch_set_info_status(
       const uint64_t tenant_id,
-      const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
+      const ObIArray<compaction::ObCkmErrorTabletLSInfo> &tablet_ls_pairs,
       int64_t &affected_rows);
   static int get_status(
       const ObTabletCompactionScnInfo &input_info,
@@ -143,12 +144,6 @@ private:
       const common::ObTabletID &start_tablet_id,
       const int64_t batch_size,
       common::ObTabletID &max_tablet_id);
-  static int inner_batch_set_info_status_(
-      const uint64_t tenant_id,
-      const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
-      const int64_t start_idx,
-      const int64_t end_idx,
-      int64_t &affected_rows);
   // is_update_finish_scn = TRUE: update finish_scn
   // is_update_finish_scn = FALSE: delete rows
   static int inner_batch_update_with_trans(
@@ -212,4 +207,4 @@ private:
 } // end namespace share
 } // end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_OB_TABLET_MEDIUM_SNAPSHOT_TABLE_OPERATOR_
+#endif  // OCEANBASE_SHARE_OB_TABLET_META_TABLE_COMPACTION_OPERATOR_

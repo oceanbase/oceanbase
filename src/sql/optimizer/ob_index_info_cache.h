@@ -141,6 +141,7 @@ public:
     is_geo_index_(false),
     is_fulltext_index_(false),
     is_multivalue_index_(false),
+    is_vector_index_(false),
     range_info_(),
     ordering_info_(),
     interesting_order_info_(OrderingFlag::NOT_MATCH),
@@ -176,6 +177,8 @@ public:
   void set_is_index_geo(const bool is_index_geo) { is_geo_index_ = is_index_geo; }
   bool is_fulltext_index() const { return is_fulltext_index_; }
   void set_is_fulltext_index(const bool is_fulltext_index) { is_fulltext_index_ = is_fulltext_index; }
+  bool is_vector_index() const { return is_vector_index_; }
+  void set_is_vector_index(const bool is_vector_index) { is_vector_index_ = is_vector_index; }
   void set_partition_info(ObTablePartitionInfo *partition_info) { partition_info_ = partition_info; }
   ObTablePartitionInfo *get_partition_info() const { return partition_info_; }
   void set_sharding_info(ObShardingInfo *sharding_info) { sharding_info_ = sharding_info; }
@@ -193,6 +196,7 @@ private:
   bool is_geo_index_;
   bool is_fulltext_index_;
   bool is_multivalue_index_;
+  bool is_vector_index_;
   QueryRangeInfo range_info_;
   OrderingInfo ordering_info_;
   int64_t interesting_order_info_;  // 记录索引的序在stmt中的哪些地方用到 e.g. join, group by, order by

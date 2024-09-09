@@ -21,22 +21,14 @@ namespace oceanbase
 namespace omt
 {
 
-enum class ObTenantCreateStatus
-{
-  CREATING = 0,
-  CREATE_COMMIT, // 1
-  CREATE_ABORT, // 2
-  DELETING, // 3
-  DELETE_COMMIT // 4
-};
-
 struct ObTenantMeta final
 {
 public:
   ObTenantMeta()
     : unit_(),
       super_block_(),
-      create_status_(ObTenantCreateStatus::CREATING) {}
+      create_status_(storage::ObTenantCreateStatus::CREATING),
+      epoch_(0) {}
   ObTenantMeta(const ObTenantMeta &) = default;
   ObTenantMeta &operator=(const ObTenantMeta &) = default;
 
@@ -44,22 +36,21 @@ public:
 
   bool is_valid() const
   {
-    return unit_.is_valid() && super_block_.is_valid();
+    return unit_.is_valid() && super_block_.is_valid() && epoch_ >= 0;
   }
-
 
   int build(const share::ObUnitInfoGetter::ObTenantConfig &unit,
             const storage::ObTenantSuperBlock &super_block);
 
-
-  TO_STRING_KV(K_(unit), K_(super_block), K_(create_status));
+  TO_STRING_KV(K_(unit), K_(super_block), K_(create_status), K_(epoch));
 
   OB_UNIS_VERSION_V(1);
 
 public:
   share::ObUnitInfoGetter::ObTenantConfig unit_;
   storage::ObTenantSuperBlock super_block_;
-  ObTenantCreateStatus create_status_;
+  storage::ObTenantCreateStatus create_status_;
+  int64_t epoch_; // no need serialize for shared-nothing
 };
 
 }  // end namespace omt

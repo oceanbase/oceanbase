@@ -19,6 +19,8 @@ SQL_MONITOR_STATNAME_DEF(HASH_SLOT_TOTAL_COUNT, sql_monitor_statname::INT, "tota
 SQL_MONITOR_STATNAME_DEF(HASH_BUCKET_COUNT, sql_monitor_statname::INT, "bucket size",  "total hash bucket count")
 SQL_MONITOR_STATNAME_DEF(HASH_NON_EMPTY_BUCKET_COUNT, sql_monitor_statname::INT, "non-empty bucket count", "non-empty hash bucket count")
 SQL_MONITOR_STATNAME_DEF(HASH_ROW_COUNT, sql_monitor_statname::INT, "total row count", "total row count building hash table")
+SQL_MONITOR_STATNAME_DEF(HASH_POPULAR_MAP_SIZE, sql_monitor_statname::INT, "popular hash group item cnt", "size of popular map")
+SQL_MONITOR_STATNAME_DEF(HASH_BY_PASS_AGG_CNT, sql_monitor_statname::INT, "agg row cnt when bypass", "hit count of popular map")
 // DTL
 SQL_MONITOR_STATNAME_DEF(DTL_LOOP_TOTAL_MISS, sql_monitor_statname::INT, "dtl miss count", "the total count of dtl loop miss")
 SQL_MONITOR_STATNAME_DEF(DTL_LOOP_TOTAL_MISS_AFTER_DATA, sql_monitor_statname::INT, "dtl miss count after data", "the total count of dtl loop miss after get data")

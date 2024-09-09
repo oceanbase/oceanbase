@@ -109,6 +109,28 @@ int ObBootstrapResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    ParseNode *shared_storage_node = parse_tree.children_[1];
+    ObString shared_storage_info;
+    if (OB_ISNULL(shared_storage_node)) {
+      LOG_INFO("shared_storage_node is NULL", KR(ret));
+    } else if (T_SHARED_STORAGE_INFO != shared_storage_node->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_node type is not T_SHARED_STORAGE_INFO", KR(ret), K(shared_storage_node->type_));
+    } else if (OB_ISNULL(allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator_ is NULL", KR(ret));
+    } else {
+      ObString shared_storage_str;
+      shared_storage_str.assign_ptr(shared_storage_node->str_value_,
+          static_cast<int32_t>(shared_storage_node->str_len_));
+      if (OB_FAIL(ob_write_string(*allocator_, shared_storage_str, shared_storage_info))) {
+        LOG_WARN("write shared storage info failed", KR(ret), K(shared_storage_str));
+      } else {
+        bootstrap_stmt->set_shared_storage_info(shared_storage_info);
+      }
+    }
+  }
 
   return ret;
 }

@@ -693,7 +693,7 @@ void TestPartitionIncrementalRangeSliter::SetUp()
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   if (!is_inited_) {
     int ret = OB_SUCCESS;
-    OB_SERVER_BLOCK_MGR.super_block_.body_.macro_block_size_ = 1;
+    OB_STORAGE_OBJECT_MGR.super_block_.body_.macro_block_size_ = 1;
 
     ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, tenant_id_);
     ret = t3m->init();

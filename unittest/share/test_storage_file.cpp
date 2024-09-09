@@ -23,6 +23,7 @@
 #include "common/storage/ob_fd_simulator.h"
 #include "share/ob_device_manager.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/io/ob_io_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -49,10 +50,28 @@ public:
 
   static void SetUpTestCase()
   {
+    ObTenantBase *tenant_base = new ObTenantBase(OB_SYS_TENANT_ID);
+    auto malloc = ObMallocAllocator::get_instance();
+    if (NULL == malloc->get_tenant_ctx_allocator(OB_SYS_TENANT_ID, 0)) {
+      malloc->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);
+    }
+    tenant_base->init();
+    ObTenantEnv::set_tenant(tenant_base);
+    ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
+    ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().init());
+    ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().start());
+    ObTenantIOManager *io_service = nullptr;
+    EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
+    EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+    EXPECT_EQ(OB_SUCCESS, io_service->start());
+    tenant_base->set(io_service);
+    ObTenantEnv::set_tenant(tenant_base);
   }
 
   static void TearDownTestCase()
   {
+    ObIOManager::get_instance().stop();
+    ObIOManager::get_instance().destroy();
   }
 private:
   // disallow copy
@@ -82,7 +101,8 @@ TEST_F(TestStorageFile, test_util)
   ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "file://%s/test_file", test_dir_));
   ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, &storage_info, is_exist));
   ASSERT_FALSE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content)));
+  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content),
+                                               ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, util.get_file_length(uri, &storage_info, read_size));
   ASSERT_EQ(strlen(test_content), read_size);
   ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, &storage_info, is_exist));
@@ -95,20 +115,26 @@ TEST_F(TestStorageFile, test_util)
   ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, &storage_info, is_exist));
   ASSERT_FALSE(is_exist);
 
-  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content)));
-  ASSERT_EQ(OB_SUCCESS, util.read_single_file(uri, &storage_info, read_buf, sizeof(read_buf), read_size));
+  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content),
+                                               ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_SUCCESS, util.read_single_file(uri, &storage_info, read_buf, sizeof(read_buf), read_size,
+                                              ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(strlen(test_content), read_size);
   ASSERT_EQ(0, strncmp(test_content, read_buf, read_size));
-  ASSERT_EQ(OB_SUCCESS, util.read_single_text_file(uri, &storage_info, read_buf, sizeof(read_buf)));
+  ASSERT_EQ(OB_SUCCESS, util.read_single_text_file(uri, &storage_info, read_buf, sizeof(read_buf),
+                                                   ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(strlen(test_content), strlen(read_buf));
   ASSERT_EQ(0, strcmp(test_content, read_buf));
 
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.is_exist("bad://", &storage_info, is_exist));
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.get_file_length("bad://", &storage_info, read_size));
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.del_file("bad://", &storage_info));
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.read_single_file("bad://", &storage_info, read_buf, sizeof(read_buf), read_size));
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.read_single_text_file("bad://", &storage_info, read_buf, sizeof(read_buf)));
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.write_single_file("bad://", &storage_info, test_content, strlen(test_content)));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.read_single_file("bad://", &storage_info, read_buf,
+                                    sizeof(read_buf), read_size, ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.read_single_text_file("bad://", &storage_info, read_buf,
+                                    sizeof(read_buf), ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.write_single_file("bad://", &storage_info, test_content,
+                                    strlen(test_content), ObStorageIdMod::get_default_id_mod()));
 }
 
 TEST_F(TestStorageFile, test_reader)
@@ -128,12 +154,17 @@ TEST_F(TestStorageFile, test_reader)
   ObIOFd fd;
   ObIOFd fd_2;
 
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.open_with_access_type(dev_handle, fd, &storage_info, "bad://",  OB_STORAGE_ACCESS_READER));
-  ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER));
-  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content)));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.open_with_access_type(dev_handle, fd, &storage_info, "bad://",  OB_STORAGE_ACCESS_READER,
+                                                               ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER,
+                                                            ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content),
+                                               ObStorageIdMod::get_default_id_mod()));
 
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER));
-  ASSERT_EQ(OB_INIT_TWICE, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER,
+                                                   ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_INIT_TWICE, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_READER,
+                                                      ObStorageIdMod::get_default_id_mod()));
   //in the old version, use a valid fd to open twice, fd will be closed automatic, this behavir has changed.
   //in such scenario, just return error. so here should success.
   //difference: OB_NOT_INIT -> OB_SUCCESS
@@ -141,7 +172,8 @@ TEST_F(TestStorageFile, test_reader)
   ASSERT_EQ(OB_SUCCESS, dev_handle->pread(fd, 0, sizeof(read_buf), read_buf, read_size));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd));
 
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri, OB_STORAGE_ACCESS_READER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri, OB_STORAGE_ACCESS_READER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, dev_handle->pread(fd_2, 0, sizeof(read_buf), read_buf, read_size));
   ASSERT_EQ(strlen(test_content), read_size);
   ASSERT_EQ(0, strncmp(test_content, read_buf, read_size));
@@ -170,11 +202,15 @@ TEST_F(TestStorageFile, test_writer)
   ASSERT_EQ(OB_SUCCESS, util.mkdir(test_dir_uri_, &storage_info));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "file://%s/test_file", test_dir_));
 
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.open_with_access_type(dev_handle, fd, &storage_info, "bad://", OB_STORAGE_ACCESS_OVERWRITER));
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER));
-  ASSERT_EQ(OB_INIT_TWICE, util.open_with_access_type(dev_handle, fd, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, util.open_with_access_type(dev_handle, fd, &storage_info, "bad://", OB_STORAGE_ACCESS_OVERWRITER,
+                                                               ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER,
+                                                   ObStorageIdMod::get_default_id_mod()));
+  ASSERT_EQ(OB_INIT_TWICE, util.open_with_access_type(dev_handle, fd, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER,
+                                                      ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd));
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri, OB_STORAGE_ACCESS_OVERWRITER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, dev_handle->write(fd_2, test_content, strlen(test_content), write_size));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd_2));
   ASSERT_EQ(OB_NOT_INIT,  dev_handle->close(fd_2));
@@ -196,18 +232,20 @@ TEST_F(TestStorageFile, test_file_writer_fail)
   ASSERT_EQ(OB_SUCCESS, util.mkdir(test_dir_uri_, &storage_info));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "file://%s/test_file", test_dir_));
 
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, dev_handle->write(fd, test_content, strlen(test_content) , write_size));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd));
 
-  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER));
+  ASSERT_EQ(OB_SUCCESS, util.open_with_access_type(dev_handle, fd_2, &storage_info, uri,  OB_STORAGE_ACCESS_OVERWRITER,
+                                                   ObStorageIdMod::get_default_id_mod()));
   ASSERT_EQ(OB_SUCCESS, dev_handle->write(fd_2, test_content2, strlen(test_content2), write_size));
   ASSERT_EQ(OB_SUCCESS, dev_handle->close(fd_2));
 
   char read_buf[OB_MAX_URI_LENGTH];
   int64_t read_size = 0;
   ASSERT_EQ(OB_SUCCESS, util.read_single_file(uri, &storage_info,
-      read_buf, sizeof(read_buf), read_size));
+      read_buf, sizeof(read_buf), read_size, ObStorageIdMod::get_default_id_mod()));
   COMMON_LOG(INFO, "dump buf", K(test_content), K(test_content2), K(read_buf));
   //comment by zhangyi, now we can not just used storage api to change has_error_;
   //ASSERT_EQ(0, MEMCMP(test_content, read_buf, read_size));
@@ -273,11 +311,68 @@ TEST_F(TestStorageFile, test_parallel_mkdir)
   pool.destroy();
 }
 
+TEST_F(TestStorageFile, test_list_files_with_marker)
+{
+  class ObTestListFilesWithMarker : public ObBaseDirEntryOperator {
+  public:
+    ObTestListFilesWithMarker() : ObBaseDirEntryOperator(), global_objects_(0){}
+    int func(const dirent *entry) final
+    {
+      global_objects_++;
+      uris_.push_back(entry->d_name);
+      return OB_SUCCESS;
+    };
+    int64_t global_objects_;
+    std::vector<std::string> uris_;
+  };
+  ObBackupIoAdapter util;
+  ObBackupStorageInfo storage_info;
+  storage_info.device_type_ = ObStorageType::OB_STORAGE_FILE;
+  int64_t write_size = -1;
+  std::string test_dir_uri_root_str = std::string(test_dir_uri_);
+  std::string test_dir_uri_str = test_dir_uri_root_str + "/" + "list_files_with_marker";
+  ObString test_dir_uri(test_dir_uri_str.c_str());
+  EXPECT_EQ(OB_SUCCESS, util.mkdir(test_dir_uri, &storage_info));
+  bool mkdir_success = false;
+  EXPECT_EQ(OB_SUCCESS, util.is_exist(test_dir_uri, &storage_info, mkdir_success));
+  const int64_t scan_count = 10;
+  ObTestListFilesWithMarker op;
+  ASSERT_EQ(OB_SUCCESS, op.set_marker_flag("", scan_count));
+  EXPECT_EQ(OB_SUCCESS, util.adaptively_list_files(test_dir_uri, &storage_info, op));
+  EXPECT_EQ(0, op.global_objects_);
+  EXPECT_EQ(0, op.uris_.size());
+  char uri[OB_MAX_URI_LENGTH];
+  char test_content[OB_MAX_URI_LENGTH];
+  memset(test_content, 'c', sizeof(test_content));
+  {
+    const int64_t file_count = 20;
+    for (int i = 0; i < file_count; i++) {
+      EXPECT_EQ(OB_SUCCESS, databuff_printf(uri, OB_MAX_URI_LENGTH, "%s/%012d", test_dir_uri_str.c_str(), i));
+      EXPECT_EQ(OB_SUCCESS, util.write_single_file(uri, &storage_info, test_content, strlen(test_content),
+                                                   ObStorageIdMod::get_default_id_mod()));
+    }
+    op.global_objects_ = 0;
+    op.uris_.clear();
+    std::string test_with_marker_str = test_dir_uri_str+"/";
+    ASSERT_EQ(OB_SUCCESS, op.set_marker_flag("0", scan_count));
+    EXPECT_EQ(OB_SUCCESS, util.adaptively_list_files(test_with_marker_str.c_str(), &storage_info, op));
+    EXPECT_EQ(scan_count, op.global_objects_);
+    // 输出文件序与对象存储保持一致，字典序升序
+    int j = 0;
+    for (int i = 0; i < scan_count; i++) {
+      char expected_uri_c[OB_MAX_URI_LENGTH] = {'\0'};
+      EXPECT_EQ(OB_SUCCESS, databuff_printf(expected_uri_c, OB_MAX_URI_LENGTH, "%012d", i));
+      std::string expected_uri(expected_uri_c);
+      EXPECT_EQ(expected_uri, op.uris_[j++]);
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   system("rm -f test_storage_file.log");
   OB_LOGGER.set_file_name("test_storage_file.log");
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("TRACE");
   ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

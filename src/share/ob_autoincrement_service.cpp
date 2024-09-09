@@ -784,6 +784,37 @@ int ObAutoincrementService::try_lock_autoinc_row(const uint64_t &tenant_id,
   return ret;
 }
 
+int ObAutoincrementService::calculate_idempotent_autoinc_val_for_ddl(
+                                               AutoincParam *autoinc_param,
+                                               const int64_t table_all_slice_count,
+                                               const int64_t table_level_slice_idx,
+                                               const int64_t slice_row_idx,
+                                               const int64_t autoinc_range_interval,
+                                               uint64_t &autoinc_value)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(autoinc_param)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(autoinc_param),
+             K(table_all_slice_count), K(table_level_slice_idx), K(slice_row_idx));
+  } else {
+    const int64_t range_id = slice_row_idx / autoinc_range_interval;
+    const int64_t row_id_in_range = slice_row_idx % autoinc_range_interval;
+    const ObObjType column_type = autoinc_param->autoinc_col_type_;
+    // for now, only `offset` param is supported, `increment` param is not supported
+    const uint64_t offset = autoinc_param->autoinc_offset_;
+    const uint64_t max_value = get_max_value(column_type);
+    autoinc_value =
+        min(offset + table_level_slice_idx * autoinc_range_interval +
+                (table_all_slice_count * range_id * autoinc_range_interval) + row_id_in_range,
+            max_value);
+    autoinc_param->global_value_to_sync_ = max(autoinc_param->global_value_to_sync_, autoinc_value);
+  }
+
+  return ret;
+}
+
 int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
                                                     const uint64_t table_id,
                                                     const uint64_t column_id,

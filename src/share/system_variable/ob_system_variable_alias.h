@@ -514,6 +514,7 @@ namespace share
   static const char* const OB_SV_GROUP_REPLICATION_GROUP_SEEDS = "group_replication_group_seeds";
   static const char* const OB_SV_SLAVE_ROWS_SEARCH_ALGORITHMS = "slave_rows_search_algorithms";
   static const char* const OB_SV_SLAVE_TYPE_CONVERSIONS = "slave_type_conversions";
+  static const char* const OB_SV_HNSW_EF_SEARCH = "ob_hnsw_ef_search";
   static const char* const OB_SV_DELAY_KEY_WRITE = "delay_key_write";
   static const char* const OB_SV_INNODB_LARGE_PREFIX = "innodb_large_prefix";
   static const char* const OB_SV_KEY_BUFFER_SIZE = "key_buffer_size";

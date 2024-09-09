@@ -23,6 +23,7 @@
 #include "storage/backup/ob_backup_index_compressor.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "common/storage/ob_device_common.h"
 
 namespace oceanbase {
 namespace backup {
@@ -31,7 +32,7 @@ struct ObBackupIndexStoreParam {
   ObBackupIndexStoreParam();
   bool is_valid() const;
   TO_STRING_KV(K_(index_level), K_(tenant_id), K_(backup_set_id), K_(ls_id), K_(is_tenant_level), K_(backup_data_type),
-      K_(turn_id), K_(retry_id));
+      K_(turn_id), K_(retry_id), K_(dest_id));
   ObBackupIndexLevel index_level_;
   uint64_t tenant_id_;
   int64_t backup_set_id_;
@@ -40,6 +41,7 @@ struct ObBackupIndexStoreParam {
   share::ObBackupDataType backup_data_type_;
   int64_t turn_id_;
   int64_t retry_id_;
+  int64_t dest_id_;
 };
 
 class ObIBackupIndexStore {
@@ -73,7 +75,8 @@ protected:
       common::ObIAllocator &allocator, blocksstable::ObBufferReader &buffer_reader);
   int put_block_to_cache_(const ObBackupFileType &backup_file_type, const int64_t offset, const int64_t length,
       const blocksstable::ObBufferReader &buffer);
-  int read_file_trailer_(const common::ObString &backup_path, const share::ObBackupStorageInfo *storage_info);
+  int read_file_trailer_(const common::ObString &backup_path, const share::ObBackupStorageInfo *storage_info,
+      const common::ObStorageIdMod &mod);
   int fetch_index_block_from_dest_(const common::ObString &backup_path, const share::ObBackupStorageInfo *storage_info,
       const int64_t offset, const int64_t length, common::ObIAllocator &allocator,
       blocksstable::ObBufferReader &buffer_reader);
@@ -89,6 +92,7 @@ protected:
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
+  common::ObStorageIdMod mod_;
   share::ObBackupSetDesc backup_set_desc_;
   share::ObBackupDataType backup_data_type_;
   ObBackupIndexKVCache *index_kv_cache_;

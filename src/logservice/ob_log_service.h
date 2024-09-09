@@ -34,9 +34,13 @@
 #include "ob_ls_adapter.h"
 #include "ob_locality_adapter.h"
 #include "ob_location_adapter.h"
-#include "ob_log_flashback_service.h"                  // ObLogFlashbackService
+#include "ob_log_flashback_service.h"                    // ObLogFlashbackService
 #include "ob_log_handler.h"
 #include "ob_log_monitor.h"
+
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "log/ob_shared_log_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -85,6 +89,9 @@ class ObLocalityManager;
 
 namespace logservice
 {
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObSharedLogGarbageCollector;
+#endif
 
 class ObLogService
 {
@@ -225,12 +232,24 @@ public:
   cdc::ObCdcService *get_cdc_service() { return &cdc_service_; }
   ObLogRestoreService *get_log_restore_service() { return &restore_service_; }
   ObLogReplayService *get_log_replay_service()  { return &replay_service_; }
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSharedLogService *get_shared_log_service() {return &shared_log_service_;}
+#endif
   ObLogApplyService *get_log_apply_service()  { return &apply_service_; }
 #ifdef OB_BUILD_ARBITRATION
   ObArbitrationService *get_arbitration_service() { return &arb_service_; }
+
 #endif
   obrpc::ObLogServiceRpcProxy *get_rpc_proxy() { return &rpc_proxy_; }
   ObLogFlashbackService *get_flashback_service() { return &flashback_service_; }
+#ifdef OB_BUILD_SHARED_STORAGE
+  // ============================= shared log start ====================================
+  ObSharedLogGarbageCollector *get_shared_log_gc() { return shared_log_service_.get_shared_log_gc(); }
+  ObLogExternalStorageHandler *get_log_ext_handler() {return shared_log_service_.get_log_ext_handler();}
+  // ============================= shared log end ====================================
+#endif
+  int check_need_do_checkpoint(bool &need_do_checkpoint);
+
 private:
   int create_ls_(const share::ObLSID &id,
                  const common::ObReplicaType &replica_type,
@@ -239,9 +258,16 @@ private:
                  const bool allow_log_sync,
                  ObLogHandler &log_handler,
                  ObLogRestoreHandler &restore_handler);
+  struct GetUnrecycableLogDiskSizeFunctor {
+    GetUnrecycableLogDiskSizeFunctor() : unrecycable_log_disk_size_(0) {}
+    ~GetUnrecycableLogDiskSizeFunctor() { unrecycable_log_disk_size_ = 0; }
+    int operator()(ObLS *ls);
+    int64_t unrecycable_log_disk_size_;
+  };
 private:
   bool is_inited_;
   bool is_running_;
+  bool enable_shared_storage_;
 
   common::ObAddr self_;
   palf::PalfEnv *palf_env_;
@@ -256,6 +282,11 @@ private:
   obrpc::ObLogServiceRpcProxy rpc_proxy_;
   ObLogReporterAdapter reporter_;
   cdc::ObCdcService cdc_service_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // ========================== shared log start =================================
+  ObSharedLogService shared_log_service_;
+  // ========================== shared log end ===================================
+#endif
 #ifdef OB_BUILD_ARBITRATION
   ObArbitrationService arb_service_;
 #endif
@@ -267,6 +298,7 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogService);
 };
+
 } // end namespace logservice
 } // end namespace oceanbase
 #endif // OCEANBASE_LOGSERVICE_OB_LOG_SERVICE_

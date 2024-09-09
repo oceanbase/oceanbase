@@ -166,12 +166,28 @@ int ObPxBloomFilter::init(const ObPxBloomFilter *filter)
   }
   return ret;
 }
+
 void ObPxBloomFilter::reset_filter()
 {
   MEMSET(bits_array_, 0, bits_array_length_ * sizeof(int64_t));
   px_bf_recieve_count_ = 0;
   px_bf_recieve_size_ = 0;
 }
+
+void ObPxBloomFilter::reset_for_rescan()
+{
+  // all the member inited should be reset
+  data_length_ = 0;
+  max_bit_count_ = 0;
+  bits_count_ = 0;
+  fpp_ = 0;
+  hash_func_count_ = 0;
+  is_inited_ = false;
+  bits_array_length_ = 0;
+  bits_array_ = nullptr;
+  allocator_.reset();
+}
+
 // previous version bits_num = - data_length * ln(p) / (ln2)^2
 // close-to 2^n
 // blocked bloom filter: fpp = (1 - (1 - 1 / w) ^ x) ^ 4.  x = n / block_count

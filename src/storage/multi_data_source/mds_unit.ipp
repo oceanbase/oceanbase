@@ -202,7 +202,7 @@ int MdsUnit<K, V>::for_each_row(FowEachRowAction action_type, OP &&op)// node ma
       // (to resolve replay out of order problem, if repaly concurrent happened with calculate rec_scn, without lock's protection, will finally get a wrong rec_scn)
       // but destroy mds_row will add row's lock inner destruction, which will resulting deadlock in same thread.
       // so only operations logic behaves like gc should recycle empty row.
-      if (FowEachRowAction::RECYCLE == action_type || FowEachRowAction::RESET == action_type) {
+      if (FowEachRowAction::RECYCLE == action_type || FowEachRowAction::REMOVE == action_type) {
         MDS_LOG_SCAN(DEBUG, "scan row to recycle or reset", K(action_type), KPC(p_k));
         erase_kv_from_list_if_empty_(&const_cast<KvPair<K, Row<K, V>> &>(kv_row));
       }
@@ -251,10 +251,17 @@ int MdsUnit<K, V>::insert_empty_kv_to_list_(const K &key, KvPair<K, Row<K, V>> *
     MDS_LOG_SET(WARN, "MdsUnit create kv pair failed");
   } else if (FALSE_IT(p_kv->v_.p_mds_unit_ = this)) {
   } else if (MDS_FAIL(common::meta::copy_or_assign(key, p_kv->k_))) {
-    MDS_LOG_SET(ERROR, "copy user key failed");
+    MDS_LOG_SET(WARN, "copy user key failed");
+  } else if (MDS_FAIL(multi_row_list_.insert(p_kv))) {
+    MDS_LOG_SET(WARN, "insert new kv row to multi_row_list_ failed");
   } else {
     p_kv->v_.key_ = &(p_kv->k_);
-    multi_row_list_.insert(p_kv);
+  }
+  if (MDS_FAIL(ret)) {
+    if (OB_NOT_NULL(p_kv)) {
+      MdsFactory::destroy(p_kv);
+      p_kv = nullptr;
+    }
   }
   reset_mds_mem_check_thread_local_info();
   return ret;

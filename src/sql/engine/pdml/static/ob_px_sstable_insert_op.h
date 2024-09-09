@@ -23,6 +23,7 @@ namespace storage
 class ObSSTableInsertRowIterator;
 typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletIDPair;
 struct ObInsertMonitor;
+struct ObTabletSliceParam;
 }
 
 namespace sql
@@ -54,6 +55,7 @@ public:
 public:
   ObExpr *flashback_query_expr_;
   bool regenerate_heap_table_pk_;
+  int64_t ddl_slice_id_idx_; // record idx of exprs for ddl slice id
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertSpec);
 };
 
@@ -73,7 +75,12 @@ public:
       count_rows_finish_(false),
       is_all_partition_finished_(false),
       curr_part_idx_(0),
-      snapshot_version_(0)
+      snapshot_version_(0),
+      is_partitioned_table_(false),
+      table_all_slice_count_(0),
+      autoinc_range_interval_(0),
+      is_vec_data_complement_(false),
+      is_vec_gen_vid_(false)
   {}
   virtual ~ObPxMultiPartSSTableInsertOp() { destroy(); }
   const ObPxMultiPartSSTableInsertSpec &get_spec() const;
@@ -81,9 +88,10 @@ public:
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
   int get_next_row_with_cache();
-  int get_tablet_id_from_row(const ObExprPtrIArray &row,
-                             const int64_t part_id_idx,
-                             common::ObTabletID &tablet_id);
+  int get_tablet_info_from_row(
+      const ObExprPtrIArray &row,
+      common::ObTabletID &tablet_id,
+      storage::ObTabletSliceParam *tablet_slice_param = nullptr);
 private:
   struct ObLSTabletIDPairCmp final
   {
@@ -101,7 +109,9 @@ private:
 private:
   int get_all_rows_and_count();
   int create_tablet_store(common::ObTabletID &tablet_id, ObChunkDatumStore *&tablet_store);
-  bool need_count_rows() const { return MY_SPEC.regenerate_heap_table_pk_ && !count_rows_finish_; }      
+  int build_table_slice_info();
+  int update_sqc_global_autoinc_value();
+  bool need_count_rows() const { return (MY_SPEC.regenerate_heap_table_pk_ || is_vec_gen_vid_) && !count_rows_finish_; }
   int get_next_tablet_id(common::ObTabletID &tablet_id);
 private:
   friend class storage::ObSSTableInsertRowIterator;
@@ -118,6 +128,14 @@ private:
   bool is_all_partition_finished_;
   int64_t curr_part_idx_;
   int64_t snapshot_version_; // ddl snapshot version.
+  bool is_partitioned_table_;
+  int64_t table_all_slice_count_;
+  // record the count of slices before the current tablet
+  common::hash::ObHashMap<int64_t, int64_t> tablet_pre_slice_count_map_;
+  int64_t autoinc_range_interval_;
+  // vector index
+  bool is_vec_data_complement_;
+  bool is_vec_gen_vid_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);
 };
 

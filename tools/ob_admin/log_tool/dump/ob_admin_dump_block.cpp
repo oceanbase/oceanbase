@@ -212,6 +212,7 @@ int ObAdminDumpBlock::decompress_()
     } else {
       LSN cur_lsn;
       SCN cur_scn;
+      bool is_raw_write = false;
       const int64_t start_ts = ObTimeUtility::fast_current_time();
       int64_t before_get_entry_ts = start_ts;
       int64_t after_get_entry_ts = 0;
@@ -222,7 +223,7 @@ int ObAdminDumpBlock::decompress_()
       while (OB_SUCC(ret) && OB_SUCC(iter.next())) {
         const char *buf = NULL;
         int64_t buf_len = 0;
-        if (OB_FAIL(iter.get_entry(buf, buf_len, cur_scn, cur_lsn))) {
+        if (OB_FAIL(iter.get_entry(buf, buf_len, cur_scn, cur_lsn, is_raw_write))) {
           if (OB_ITER_END != ret) {
             LOG_ERROR("ObAdminDumpIterator get_entry failed", K(iter));
           } else {

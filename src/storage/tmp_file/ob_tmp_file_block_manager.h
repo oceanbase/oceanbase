@@ -212,7 +212,6 @@ private:
   ObTmpFileBlockMap block_map_;
   common::ObConcurrentFIFOAllocator block_allocator_;
   common::SpinRWLock stat_lock_; // to protect the consistency of used_page_num_ and physical_block_num_
-  common::SpinRWLock map_lock_; // to protect the for_each operation of block_map_
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileBlockManager);
 };
 

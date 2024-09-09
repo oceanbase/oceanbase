@@ -21,6 +21,8 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "share/ob_force_print_log.h"
 #include "logservice/palf/log_define.h"
+#include "common/ob_role.h"
+#include "rootserver/ob_root_utils.h"
 
 namespace oceanbase
 {
@@ -282,6 +284,7 @@ int ObServiceEpochProxy::check_and_update_service_epoch(
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
       || palf::INVALID_PROPOSAL_ID == service_epoch)
       || OB_ISNULL(name)) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(service_epoch), KP(name));
   } else if (OB_FAIL(ObServiceEpochProxy::select_service_epoch_for_update(
       trans,
@@ -313,6 +316,26 @@ int ObServiceEpochProxy::check_and_update_service_epoch(
   } else {}
   FLOG_INFO("check and update service epoch", KR(ret), K(tenant_id), K(name),
       K(service_epoch), K(persistent_service_epoch));
+  return ret;
+}
+
+int ObServiceEpochProxy::check_and_update_server_zone_op_service_epoch(ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  int64_t proposal_id = palf::INVALID_PROPOSAL_ID;
+  ObRole role;
+  if (OB_FAIL(rootserver::ObRootUtils::get_proposal_id_from_sys_ls(proposal_id, role))) {
+    LOG_WARN("fail to get proposal id from sys ls", KR(ret));
+  } else if (ObRole::LEADER != role) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("not leader ls", KR(ret), K(proposal_id), K(role));
+  } else if (palf::INVALID_PROPOSAL_ID == proposal_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid proposal id", KR(ret), K(proposal_id));
+  } else if (OB_FAIL(check_and_update_service_epoch(trans, OB_SYS_TENANT_ID,
+          SERVER_ZONE_OP_SERVICE_EPOCH, proposal_id))) {
+    LOG_WARN("fail to check and update server zone op service epoch", KR(ret), K(proposal_id));
+  }
   return ret;
 }
 

@@ -76,7 +76,7 @@ class ObDDLSingleReplicaExecutor
 {
 public:
   int build(const ObDDLSingleReplicaExecutorParam &param);
-  int check_build_end(bool &is_end, int64_t &ret_code);
+  int check_build_end(const bool need_checksum, bool &is_end, int64_t &ret_code);
   int set_partition_task_status(const common::ObTabletID &tablet_id,
                                 const int ret_code,
                                 const int64_t row_scanned,

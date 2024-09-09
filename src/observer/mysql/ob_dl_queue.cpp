@@ -75,11 +75,13 @@ int ObDlQueue::construct_leaf_queue() {
     LOG_WARN("fail to allocate memory", K(ret));
   } else if (OB_FAIL(cur_lf_queue->init(ObModIds::OB_MYSQL_REQUEST_RECORD, LEAF_QUEUE_SIZE, tenant_id_))) {
     cur_lf_queue->destroy();
+    ob_free(cur_lf_queue);
     cur_lf_queue = NULL;
     LOG_WARN("fail to init leaf queue", K(ret), K(tenant_id_));
   } else if (OB_FAIL(rq_.push_with_imme_seq(cur_lf_queue, root_push_idx))) {
     SERVER_LOG(WARN, "Failed to push leaf queue", K(ret));
     cur_lf_queue->destroy();
+    ob_free(cur_lf_queue);
     cur_lf_queue = NULL;
   }
 

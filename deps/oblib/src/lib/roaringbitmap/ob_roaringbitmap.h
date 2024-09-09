@@ -30,6 +30,14 @@ namespace common {
 #define MAX_BITMAP_SET_VALUES 32
 #define IS_VALID_RB_VERSION(ver) (ver == BITMAP_VESION_1)
 
+#define ROARING_TRY_CATCH(statement)                               \
+    try {                                                          \
+      statement;                                                   \
+    } catch (const std::bad_alloc &e) {                            \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                             \
+      LOG_WARN("fail to alloc memory in croaring", K(ret));        \
+    }
+
 static const uint32_t RB_VERSION_SIZE = sizeof(uint8_t);
 static const uint32_t RB_TYPE_SIZE = sizeof(uint8_t);
 static const uint32_t RB_BIN_TYPE_SIZE = sizeof(uint8_t);
@@ -94,10 +102,9 @@ public:
   int value_or(ObRoaringBitmap *rb);
   int value_xor(ObRoaringBitmap *rb);
   int value_andnot(ObRoaringBitmap *rb);
-  int value_calc(ObRoaringBitmap *rb, ObRbOperation op);
 
   int optimize();
-  int deserialize(const ObString &rb_bin);
+  int deserialize(const ObString &rb_bin, bool need_validate = false);
   int serialize(ObStringBuffer &res_rb_bin);
 
   inline void set_empty() {
@@ -123,7 +130,6 @@ public:
     type_ = ObRbType::SINGLE;
   }
 
-  int convert_bitmap_to_smaller_type();
   int convert_to_bitmap();
 
 private:

@@ -137,7 +137,7 @@ public:
       transaction::ObTxDesc &tx_desc,
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
-      common::ObNewRowIterator *row_iter,
+      blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
   int put_rows(
       const share::ObLSID &ls_id,
@@ -145,7 +145,7 @@ public:
       transaction::ObTxDesc &tx_desc,
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
-      common::ObNewRowIterator *row_iter,
+      blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
   int insert_rows(
       const share::ObLSID &ls_id,
@@ -153,7 +153,7 @@ public:
       transaction::ObTxDesc &tx_desc,
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
-      common::ObNewRowIterator *row_iter,
+      blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
   int insert_row(
       const share::ObLSID &ls_id,
@@ -162,11 +162,11 @@ public:
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
       const common::ObIArray<uint64_t> &duplicated_column_ids,
-      const common::ObNewRow &row,
+      blocksstable::ObDatumRow &row,
       const ObInsertFlag flag,
       int64_t &affected_rows,
-      common::ObNewRowIterator *&duplicated_rows);
-  int revert_insert_iter(common::ObNewRowIterator *iter);
+      blocksstable::ObDatumRowIterator *&duplicated_rows);
+  int revert_insert_iter(blocksstable::ObDatumRowIterator *iter);
   int update_rows(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
@@ -174,7 +174,7 @@ public:
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
       const common::ObIArray< uint64_t> &updated_column_ids,
-      common::ObNewRowIterator *row_iter,
+      blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
   int lock_rows(
       const share::ObLSID &ls_id,
@@ -183,7 +183,7 @@ public:
       const ObDMLBaseParam &dml_param,
       const int64_t abs_lock_timeout, /* -1: undefined, 0: nowait */
       const ObLockFlag lock_flag,
-      common::ObNewRowIterator *row_iter,
+      blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
   int lock_row(
       const share::ObLSID &ls_id,
@@ -191,7 +191,7 @@ public:
       transaction::ObTxDesc &tx_desc,
       const ObDMLBaseParam &dml_param,
       const int64_t abs_lock_timeout,
-      const common::ObNewRow &row,
+      blocksstable::ObDatumRow &row,
       const ObLockFlag lock_flag);
   int estimate_row_count(
       const ObTableScanParam &param,

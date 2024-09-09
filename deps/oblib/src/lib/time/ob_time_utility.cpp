@@ -37,6 +37,21 @@ int64_t ObTimeUtility::current_time()
           static_cast<int64_t>(t.tv_usec));
 }
 
+int64_t ObTimeUtility::current_time_s()
+{
+  return (ObTimeUtility::current_time() / 1000000L);
+}
+
+int64_t ObTimeUtility::current_time_ms()
+{
+  return (ObTimeUtility::current_time() / 1000L);
+}
+
+int64_t ObTimeUtility::current_time_us()
+{
+  return ObTimeUtility::current_time();
+}
+
 int64_t ObTimeUtility::current_time_ns()
 {
 	int err_ret = 0;

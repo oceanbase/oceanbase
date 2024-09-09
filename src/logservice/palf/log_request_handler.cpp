@@ -87,7 +87,7 @@ int LogRequestHandler::handle_request<LogPushResp>(
       PALF_LOG(TRACE, "PalfHandleImpl ack_log success", K(ret), K(server), K(req), KPC(palf_env_impl_));
     }
   }
-  return ret;
+ return ret;
 }
 
 template <>

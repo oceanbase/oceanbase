@@ -256,6 +256,59 @@ int ObStorageStreamRpcReader<RPC_CODE>::fetch_next_buffer()
   return ret;
 }
 
+template <ObRpcPacketCode RPC_CODE>
+int do_fetch_next_buffer_if_need(
+    ObInOutBandwidthThrottle &bandwidth_throttle,
+    ObDataBuffer &rpc_buffer,
+    int64_t &rpc_buffer_parse_pos,
+    ObStorageRpcProxy::SSHandle<RPC_CODE> &handle,
+    int64_t &last_send_time,
+    int64_t &total_data_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_idle_time = OB_DEFAULT_STREAM_WAIT_TIMEOUT - OB_DEFAULT_STREAM_RESERVE_TIME;
+
+  if (rpc_buffer_parse_pos < 0 || last_send_time < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", KR(ret), K(rpc_buffer_parse_pos), K(last_send_time));
+  } else if (rpc_buffer.get_position() - rpc_buffer_parse_pos > 0) {
+    // do nothing
+    STORAGE_LOG(DEBUG, "has left data, no need to get more", K(rpc_buffer), K(rpc_buffer_parse_pos));
+  } else {
+    int tmp_ret = bandwidth_throttle.limit_in_and_sleep(rpc_buffer.get_position(), last_send_time, max_idle_time);
+    if (OB_SUCCESS != tmp_ret) {
+      STORAGE_LOG(WARN, "failed to sleep_for_bandlimit", K(tmp_ret));
+    }
+
+    rpc_buffer.get_position() = 0;
+    rpc_buffer_parse_pos = 0;
+    if (handle.has_more()) {
+      if (OB_FAIL(handle.get_more(rpc_buffer))) {
+        STORAGE_LOG(WARN, "get_more(send request) failed", KR(ret));
+      } else if (rpc_buffer.get_position() < 0) {
+        ret = OB_ERR_SYS;
+        STORAGE_LOG(ERROR, "rpc buffer has no data", KR(ret), K(rpc_buffer));
+      } else if (0 == rpc_buffer.get_position()) {
+        if (!handle.has_more()) {
+          ret = OB_ITER_END;
+          STORAGE_LOG(DEBUG, "empty rpc buffer, no more data", K(rpc_buffer), K(rpc_buffer_parse_pos));
+        } else {
+          ret = OB_ERR_SYS;
+          STORAGE_LOG(ERROR, "rpc buffer has no data", KR(ret), K(rpc_buffer));
+        }
+      } else {
+        STORAGE_LOG(DEBUG, "get more data", K(rpc_buffer), K(rpc_buffer_parse_pos));
+        total_data_size += rpc_buffer.get_position();
+      }
+      last_send_time = ObTimeUtility::current_time();
+    } else {
+      ret = OB_ITER_END;
+      STORAGE_LOG(DEBUG, "no more data", K(rpc_buffer), K(rpc_buffer_parse_pos));
+    }
+  }
+  return ret;
+}
+
 } // End of namespace storage
 } // End of namespace oceanbase
 

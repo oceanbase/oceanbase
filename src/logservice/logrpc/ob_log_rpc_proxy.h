@@ -33,12 +33,20 @@ public:
       (logservice::LogChangeAccessModeCmd));
   RPC_AP(PR3 send_log_flashback_msg, OB_LOG_FLASHBACK_CMD,
       (logservice::LogFlashbackMsg));
+#ifdef OB_BUILD_SHARED_STORAGE
+  RPC_AP(PR3 acquire_log_rebuild_info, OB_LOG_ACQUIRE_REBUILD_INFO,
+      (logservice::LogAcquireRebuildInfoMsg));
+#endif
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 create_arb, OB_CREATE_ARB, (obrpc::ObCreateArbArg), obrpc::ObCreateArbResult);
   RPC_S(PR5 delete_arb, OB_DELETE_ARB, (obrpc::ObDeleteArbArg), obrpc::ObDeleteArbResult);
 #endif
   RPC_S(PR3 get_palf_stat, OB_LOG_GET_PALF_STAT,
       (logservice::LogGetPalfStatReq), logservice::LogGetPalfStatResp);
+  RPC_S(PR3 get_ls_ckpt, OB_LOG_GET_LS_CKPT,
+      (logservice::LogGetCkptReq), logservice::LogGetCkptResp);
+  RPC_AP(PR3 sync_base_lsn, OB_LOG_SYNC_BASE_LSN_REQ,
+         (logservice::LogSyncBaseLSNReq));
 };
 
 } // end namespace obrpc

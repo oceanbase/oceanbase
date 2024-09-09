@@ -32,10 +32,6 @@
 
 namespace oceanbase
 {
-namespace observer
-{
-struct ObGlobalContext;
-}
 
 namespace sql
 {
@@ -62,7 +58,7 @@ public:
   int init_exec_env(ObExecContext &exec_ctx);
   ObPxSQCProxy &get_sqc_proxy() { return sqc_ctx_.sqc_proxy_; }
   ObSqcCtx &get_sqc_ctx() { return sqc_ctx_; }
-  int64_t get_ddl_context_id() const { return ddl_ctrl_.context_id_; }
+  const ObDDLCtrl &get_ddl_control() { return ddl_ctrl_; }
   int set_partitions_info(ObIArray<ObPxTabletInfo> &partitions_info) {
     return sqc_ctx_.partitions_info_.assign(partitions_info);
   }

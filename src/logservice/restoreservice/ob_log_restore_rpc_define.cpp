@@ -15,8 +15,7 @@
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "logservice/palf/palf_iterator.h"  // PalfGroupBufferIterator
-#include "logservice/palf_handle_guard.h"   // PalfHandleGuard
+#include "logservice/ob_log_handler.h"  // PalfGroupBufferIterator
 #include "share/rc/ob_tenant_base.h"        // MTL*
 #include "logservice/ob_log_service.h"      // ObLogService
 
@@ -150,16 +149,15 @@ int ObRemoteFetchLogP::fetch_log_(const share::ObLSID &id,
     int64_t &data_len)
 {
   int ret = OB_SUCCESS;
-  palf::PalfHandleGuard guard;
   palf::PalfGroupBufferIterator iter;
   uint64_t buf_len = end_lsn - start_lsn;
   const uint64_t tenant_id = MTL_ID();
   const int64_t buf_size = logservice::MAX_FETCH_LOG_BUF_LEN;
   data_len = 0;
-  if (OB_FAIL(log_service_->open_palf(id, guard))) {
+  if (OB_FAIL(logservice::seek_log_iterator(id, start_lsn, iter))) {
     CLOG_LOG(WARN, "open palf failed", K(ret), K(id));
-  } else if (OB_FAIL(guard.seek(start_lsn, iter))) {
-    CLOG_LOG(WARN, "seek iter failed", K(ret), K(id), K(start_lsn));
+  } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id.id(), palf::LogIOUser::RESTORE)))) {
+    CLOG_LOG(WARN, "set_io_context failed", K(ret), K(id));
   } else {
     int64_t pos = 0;
     int64_t append_data_len = 0;

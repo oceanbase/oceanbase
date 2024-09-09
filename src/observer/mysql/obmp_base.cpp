@@ -450,7 +450,7 @@ int ObMPBase::setup_user_resource_group(
       req_->set_group_id(session->get_expect_group_id());
     }
     // also set conn.group_id_. It means use current consumer group when execute next query for first time.
-    conn.group_id_ = session->get_expect_group_id();
+    // conn.group_id_ = session->get_expect_group_id();
     // reset to invalid because session.expected_group_id is single_use.
     session->set_expect_group_id(OB_INVALID_ID);
   } else if (!is_valid_tenant_id(tenant_id)) {
@@ -465,7 +465,7 @@ int ObMPBase::setup_user_resource_group(
     // 将 group id 设置到调度层，之后这个 session 上的所有请求都是用这个 cgroup 的资源
     conn.group_id_ = group_id;
   }
-  LOG_DEBUG("setup user resource group", K(user_id), K(tenant_id), K(ret));
+  LOG_TRACE("setup user resource group", K(user_id), K(tenant_id), K(ret));
   return ret;
 }
 

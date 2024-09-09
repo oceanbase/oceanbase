@@ -48,7 +48,8 @@ RemoteDataGenerator::RemoteDataGenerator(const uint64_t tenant_id,
   end_scn_(end_scn),
   end_lsn_(end_lsn),
   to_end_(false),
-  log_ext_handler_(log_ext_handler)
+  log_ext_handler_(log_ext_handler),
+  io_ctx_()
 {}
 
 RemoteDataGenerator::~RemoteDataGenerator()
@@ -116,7 +117,11 @@ int RemoteDataGenerator::read_file_(const ObString &base,
       LOG_WARN("get_storage_info_str failed", K(ret), K(uri), K(storage_info));
     } else {
       ObString storage_info_ob_str(storage_info_cstr);
-      if (OB_FAIL(log_ext_handler_->pread(uri, storage_info_ob_str, offset, data, data_len, real_size))) {
+      // get dest_id from __all_log_restore_source is difficult,
+      // so set dest_id of restore as OB_INVALID_ID
+      const uint64_t dest_id = OB_INVALID_ID;
+      CONSUMER_GROUP_FUNC_GUARD(io_ctx_.get_function_type());
+      if (OB_FAIL(log_ext_handler_->pread(uri, storage_info_ob_str, dest_id, offset, data, data_len, real_size, io_ctx_))) {
         LOG_WARN("read file failed", K(ret), K(uri), K(storage_info));
       } else if (0 == real_size) {
         ret = OB_ITER_END;
@@ -727,7 +732,9 @@ int RawPathDataGenerator::read_file_(const ObString &base,
     } else if (0 == file_length) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("file_length is empty", K(ret), K(uri), KP(storage_info), K(file_length));
-    } else if (OB_FAIL(ObArchiveFileUtils::read_file(uri, storage_info, data_, file_length, real_size))) {
+    } else if (OB_FAIL(ObArchiveFileUtils::read_file(uri, storage_info,
+        common::ObStorageIdMod(OB_INVALID_ID/*storage_id*/, ObStorageUsedMod::STORAGE_USED_RESTORE),
+        data_, file_length, real_size))) {
       LOG_WARN("read file failed", K(ret), K_(id), K(file_id));
     } else if (0 == real_size) {
       ret = OB_ITER_END;

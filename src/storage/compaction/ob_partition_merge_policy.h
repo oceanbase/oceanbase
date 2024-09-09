@@ -129,7 +129,7 @@ public:
 private:
   static int find_mini_merge_tables(
       const storage::ObGetMergeTablesParam &param,
-      const storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
+      const int64_t max_snapshot_version,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       common::ObIArray<ObTableHandleV2> &memtable_handles,
@@ -158,19 +158,11 @@ private:
       const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       storage::ObGetMergeTablesResult &result);
-
   static int deal_with_minor_result(
       const compaction::ObMergeType &merge_type,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
-  static int get_neighbour_freeze_info(
-      const int64_t snapshot_version,
-      const int64_t last_major_snapshot_version,
-      storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
-      const bool is_multi_version_merge);
-
   static int64_t cal_hist_minor_merge_threshold();
   static int generate_input_result_array(
       const storage::ObGetMergeTablesResult &input_result,
@@ -249,6 +241,10 @@ public:
     USER_REQUEST = 6,
     REBUILD_COLUMN_GROUP = 7, // use row_store to rebuild column_store(when column store have error)
     CRAZY_MEDIUM_FOR_TEST = 8,
+    // no incremental data(MEMTABLE/MINI/MINOR) after last major
+    NO_INC_DATA = 9,
+    // no major sstable / table schema is hidden or invalid index
+    DURING_DDL = 10,
     INVALID_REASON
   };
 
@@ -261,6 +257,7 @@ public:
 
   static const char *merge_reason_to_str(const int64_t merge_reason);
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
   static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);

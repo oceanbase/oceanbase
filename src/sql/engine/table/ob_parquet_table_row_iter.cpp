@@ -353,8 +353,21 @@ int ObParquetTableRowIterator::next_file()
             ObDatumMeta &meta = file_column_exprs_.at(i)->datum_meta_;
             const char *ob_type = ob_obj_type_str(file_column_exprs_.at(i)->datum_meta_.type_);
             if (OB_SUCCESS == buf.allocate_array(allocator_, 100)) {
+              ObArray<ObString> extended_type_info;
+              if (ob_is_collection_sql_type(meta.type_)) {
+                int tmp_ret = OB_SUCCESS;
+                const ObSqlCollectionInfo *coll_info = NULL;
+                uint16_t subschema_id = file_column_exprs_.at(i)->obj_meta_.get_subschema_id();
+                ObSubSchemaValue value;
+                if (OB_SUCCESS != (tmp_ret = eval_ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+                  LOG_WARN("failed to get subschema ctx", K(tmp_ret));
+                } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+                } else if (OB_SUCCESS != (tmp_ret = extended_type_info.push_back(coll_info->get_def_string()))) {
+                  LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
+                }
+              }
               ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_,
-                              OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_);
+                              OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_, extended_type_info);
               if (pos < buf.count()) {
                 buf.at(pos++) = '\0';
                 ob_type = buf.get_data();

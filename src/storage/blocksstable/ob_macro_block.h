@@ -24,16 +24,14 @@
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/compaction/ob_compaction_memory_pool.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 
 namespace oceanbase {
-namespace storage {
-struct ObSSTableMergeInfo;
-}
 namespace blocksstable {
 class ObSSTableIndexBuilder;
 struct ObMicroBlockDesc;
 struct ObMacroBlocksWriteCtx;
-class ObMacroBlockHandle;
+class ObStorageObjectHandle;
 struct ObDataStoreDesc;
 
 class ObMicroBlockCompressor
@@ -60,14 +58,17 @@ class ObMacroBlock
 public:
   ObMacroBlock();
   virtual ~ObMacroBlock();
-  int init(const ObDataStoreDesc &spec, const int64_t &cur_macro_seq);
+  int init(
+    const ObDataStoreDesc &spec,
+    const int64_t &cur_macro_seq,
+    compaction::ObMergeBlockInfo &merge_block_info);
   int write_micro_block(const ObMicroBlockDesc &micro_block_desc, int64_t &data_offset);
   int write_index_micro_block(
       const ObMicroBlockDesc &micro_block_desc,
       const bool is_leaf_index_block,
       int64_t &data_offset);
   int get_macro_block_meta(ObDataMacroBlockMeta &macro_meta);
-  int flush(ObMacroBlockHandle &macro_handle,
+  int flush(ObStorageObjectHandle &macro_handle,
             ObMacroBlocksWriteCtx &block_write_ctx,
             ObIODevice *device_handle = nullptr);
   void reset();
@@ -79,6 +80,9 @@ public:
   OB_INLINE char *get_data_buf() { return data_.data(); }
   OB_INLINE int32_t get_row_count() const { return macro_header_.fixed_header_.row_count_; }
   OB_INLINE int32_t get_micro_block_count() const { return macro_header_.fixed_header_.micro_block_count_; }
+  OB_INLINE int64_t get_data_checksum() const { return macro_header_.fixed_header_.data_checksum_; }
+
+  int64_t get_compaction_scn() const; // for dump macro
   OB_INLINE ObRowStoreType get_row_store_type() const
   {
     return static_cast<ObRowStoreType>(macro_header_.fixed_header_.row_store_type_);
@@ -93,6 +97,7 @@ public:
   {
     contain_uncommitted_row_ = true;
   }
+  const storage::ObCompactionBufferBlock &get_block_buffer() const { return data_.get_block_buffer(); } // for dump macro
   static int64_t calc_basic_micro_block_data_offset(
     const int64_t column_cnt,
     const int64_t rowkey_col_cnt,
@@ -111,6 +116,7 @@ private:
   OB_INLINE int64_t get_micro_block_data_size() const { return data_.length() - data_base_offset_; }
 private:
   const ObDataStoreDesc *spec_;
+  compaction::ObMergeBlockInfo *merge_block_info_;
   storage::ObCompactionBufferWriter data_; //micro header + data blocks;
   ObSSTableMacroBlockHeader macro_header_; //macro header store in head of data_;
   int64_t data_base_offset_;

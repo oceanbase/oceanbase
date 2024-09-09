@@ -38,6 +38,7 @@ public:
   friend class PalfEnvImpl;
   friend class PalfHandleGuard;
   PalfHandle();
+  PalfHandle(const PalfHandle &rhs);
   ~PalfHandle();
   bool is_valid() const;
 
@@ -101,6 +102,7 @@ public:
   // @param[in] buffer, the start of 'buffer', must be aligned with LOG_DIO_ALIGN_SIZE.
   // @param[in] nbytes, the read size, must aligned with LOG_DIO_ALIGN_SIZE
   // @param[out] read_size, the number of bytes read return.
+  // @param[out] io_ctx, io context
   //
   // @return value
   // OB_SUCCESS.
@@ -117,7 +119,8 @@ public:
   int raw_read(const palf::LSN &lsn,
                void *buffer,
                const int64_t nbytes,
-               int64_t &read_size);
+               int64_t &read_size,
+               palf::LogIOContext &io_ctx);
 
   // iter->next返回的是append调用写入的值，不会在返回的buf中携带Palf增加的header信息
   //           返回的值不包含未确认日志
@@ -133,7 +136,7 @@ public:
 
   int seek(const LSN &lsn, PalfGroupBufferIterator &iter);
 
-  // @desc: seek a group buffer iterator by scn, the first log A in iterator must meet
+  // @desc: seek a buffer(group buffer) iterator by scn, the first log A in iterator must meet
   // one of the following conditions:
   // 1. scn of log A equals to scn
   // 2. scn of log A is higher than scn and A is the first log which scn is higher
@@ -149,6 +152,7 @@ public:
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
   // - others: bug
   int seek(const share::SCN &scn, PalfGroupBufferIterator &iter);
+  int seek(const share::SCN &scn, PalfBufferIterator &iter);
 
   // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
   // its lsn and scn are result_lsn and result_scn, and result_scn <= scn.
@@ -206,6 +210,11 @@ public:
   int get_max_lsn(LSN &lsn) const;
   int get_max_scn(share::SCN &scn) const;
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const;
+  // @brief get readable end lsn for this replica, all logs before it can be readable.
+  // @param[out] lsn, readable end lsn.
+  // -- OB_NOT_INIT           not_init
+  // -- OB_SUCCESS
+  int get_readable_end_lsn(LSN &lsn) const;
 
   //================= 分布式相关接口 =========================
 
@@ -218,6 +227,7 @@ public:
  	// @return :TODO
   int get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pending_state) const;
   int get_palf_id(int64_t &palf_id) const;
+  int get_palf_epoch(int64_t &palf_epoch) const;
 
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const;
@@ -474,6 +484,7 @@ public:
   //   OB_SUCCESS
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const;
   int get_access_mode(AccessMode &access_mode) const;
+  int get_access_mode_version(int64_t &mode_version) const;
   int get_access_mode_ref_scn(int64_t &mode_version,
                               AccessMode &access_mode,
                               SCN &ref_scn) const;
@@ -556,7 +567,9 @@ public:
   // -- OB_EAGAIN             is_locking or unlocking
   int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked);
 
-	// @param [out] diagnose info, current diagnose info of palf
+
+
+  // @param [out] diagnose info, current diagnose info of palf
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
 
   TO_STRING_KV(KP(palf_handle_impl_), KP(rc_cb_), KP(fs_cb_));

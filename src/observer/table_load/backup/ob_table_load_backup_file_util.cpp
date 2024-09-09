@@ -14,6 +14,7 @@
 
 #include "observer/table_load/backup/ob_table_load_backup_file_util.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -82,8 +83,9 @@ int ObTableLoadBackupFileUtil::read_single_file(const common::ObString &path,
   int ret = OB_SUCCESS;
   int64_t retry_count = 0;
   ObBackupIoAdapter adapter;
+
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(adapter.read_single_file(path, storage_info, buf, buf_size, read_size))) {
+    if (OB_FAIL(adapter.read_single_file(path, storage_info, buf, buf_size, read_size, ObStorageIdMod(table::OB_STORAGE_ID_DDL, ObStorageUsedMod::STORAGE_USED_DDL)))) {
       LOG_WARN("fail to list directories", K(ret), K(retry_count));
       if (ret == OB_OSS_ERROR) {
         retry_count++;

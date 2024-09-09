@@ -266,6 +266,7 @@ int ObDRTaskTableUpdater::batch_process_tasks(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DELETE_TASK_TRANSACTION_COMMIT_ERROR);
 int ObDRTaskTableUpdater::process_task_(
     const ObDRTaskTableUpdateTask &task)
 {
@@ -296,6 +297,21 @@ int ObDRTaskTableUpdater::process_task_(
     } else if (OB_FAIL(task_operator.finish_task(trans, task))) {
       LOG_WARN("task_operator get_task failed", KR(ret), K(task));
     }
+    if (trans.is_started()) {
+      if (OB_UNLIKELY(ERRSIM_DELETE_TASK_TRANSACTION_COMMIT_ERROR)) {
+        ret = ERRSIM_DELETE_TASK_TRANSACTION_COMMIT_ERROR;
+        LOG_WARN("errsim delete task transaction commit error", KR(ret));
+      }
+      int trans_ret = trans.end(OB_SUCCESS == ret);
+      if (OB_SUCCESS != trans_ret) {
+        LOG_WARN("end transaction failed", KR(trans_ret));
+        ret = OB_SUCCESS == ret ? trans_ret : ret;
+      } else {
+        LOG_INFO("success to delete row from ls disaster task table", K(task), K(sql_tenant_id));
+      }
+    }
+    // The memory is cleaned up only after the internal table is deleted successfully, and the transaction
+    // must be committed successfully, if memory cleaning fails, rely on detection to clean up the memory.
     if (FAILEDx(task_mgr_->do_cleaning(
                      task.get_task_id(),
                      task.get_task_key(),
@@ -305,15 +321,7 @@ int ObDRTaskTableUpdater::process_task_(
                      task.get_ret_comment()))) {
       LOG_WARN("fail to clean task info inside memory", KR(ret), K(task));
     } else {
-      LOG_INFO("success to delete row from ls disaster task table and do cleaning",
-              K(task), K(sql_tenant_id));
-    }
-    if (trans.is_started()) {
-      int trans_ret = trans.end(OB_SUCCESS == ret);
-      if (OB_SUCCESS != trans_ret) {
-        LOG_WARN("end transaction failed", KR(trans_ret));
-        ret = OB_SUCCESS == ret ? trans_ret : ret;
-      }
+      LOG_INFO("success to delete task memory in task_mgr", K(task), K(sql_tenant_id));
     }
   }
   return ret;

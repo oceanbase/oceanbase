@@ -52,8 +52,6 @@ public:
     const ObDDLTaskInfo &addition_info) override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual bool support_longops_monitoring() const { return true; }
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const override;
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;

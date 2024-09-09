@@ -197,7 +197,6 @@ public:
     }
     return ret;
   }
-
   template <typename ColumnFmt>
   OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                        const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
@@ -283,6 +282,72 @@ public:
     CmpCalcInfo info = CmpCalcInfo(obj_meta, static_cast<int16_t>(agg_cell_len));
     if (not_nulls.at(agg_col_idx)) { info.set_calculated(); }
     return info;
+  }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    int cmp_ret = 0;
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    int64_t curr_info = get_batch_calc_info(agg_ctx, agg_col_idx, curr_agg_cell);
+    int64_t rollup_info = get_batch_calc_info(agg_ctx, agg_col_idx, rollup_agg_cell);
+    const CmpCalcInfo &curr_calc_info = reinterpret_cast<const CmpCalcInfo &>(curr_info);
+    CmpCalcInfo &rollup_calc_info = reinterpret_cast<CmpCalcInfo &>(rollup_info);
+    const NotNullBitVector &curr_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx) && rollup_not_nulls.at(agg_col_idx)) {
+      if (!helper::is_var_len_agg_cell(vec_tc)) {
+        ret = VecTCCmpCalc<vec_tc, vec_tc>::cmp(
+          curr_calc_info.obj_meta_, curr_calc_info.obj_meta_, rollup_agg_cell,
+          rollup_calc_info.agg_cell_len_, curr_agg_cell, curr_calc_info.agg_cell_len_, cmp_ret);
+        if (OB_FAIL(ret)) {
+          SQL_LOG(WARN, "compare failed", K(ret));
+        } else if ((is_min && cmp_ret > 0) || (!is_min && cmp_ret < 0)) {
+          MEMCPY(rollup_agg_cell, curr_agg_cell, curr_calc_info.agg_cell_len_);
+        }
+      } else {
+        int32_t rollup_agg_cell_len = *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *));
+        const char *rollup_agg_data =
+          reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(rollup_agg_cell));
+        const char *cur_agg_data =
+          reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(curr_agg_cell));
+        int32_t cur_agg_cell_len = *reinterpret_cast<int32_t *>(curr_agg_cell + sizeof(char *));
+        ret = VecTCCmpCalc<vec_tc, vec_tc>::cmp(
+          curr_calc_info.obj_meta_, curr_calc_info.obj_meta_, rollup_agg_data, rollup_agg_cell_len,
+          cur_agg_data, cur_agg_cell_len, cmp_ret);
+        if (OB_FAIL(ret)) {
+          SQL_LOG(WARN, "compare failed", K(ret));
+        } else if ((is_min && cmp_ret > 0) || (!is_min && cmp_ret < 0)) {
+          *reinterpret_cast<int64_t *>(rollup_agg_cell) = *reinterpret_cast<int64_t *>(curr_agg_cell);
+          *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = cur_agg_cell_len;
+        }
+      }
+      rollup_calc_info.set_calculated();
+      rollup_calc_info.set_min_max_idx_changed();
+    } else if (curr_not_nulls.at(agg_col_idx)) {
+      int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+      if (helper::is_var_len_agg_cell(vec_tc)) {
+        *reinterpret_cast<int64_t *>(rollup_agg_cell) =
+          *reinterpret_cast<const int64_t *>(curr_agg_cell);
+        *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = curr_agg_cell_len;
+      } else {
+        MEMCPY(rollup_agg_cell, curr_agg_cell, curr_agg_cell_len);
+      }
+      rollup_calc_info.set_calculated();
+      rollup_calc_info.set_min_max_idx_changed();
+    } else {
+      // do nothing
+    }
+    if (OB_FAIL(ret)) {
+    } else if (rollup_calc_info.calculated()) {
+      rollup_not_nulls.set(agg_col_idx);
+    }
+    return ret;
   }
 
   TO_STRING_KV("aggregate", (is_min ? "min" : "max"), K(vec_tc));

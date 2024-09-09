@@ -68,7 +68,7 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
         TRANS_LOG(WARN, "pdml duplicate primary key found", K(ret),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
-                  K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
+                  K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no), K(reader_seq_no));
       // Case 2.1: For the case of the update in the storage layer, it may be
       // split into lock and update in a single statement and fail the check, so
       // we need bypass this case(Currently only the update of the lob will cause

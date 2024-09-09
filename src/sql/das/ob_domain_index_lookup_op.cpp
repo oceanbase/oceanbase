@@ -21,9 +21,9 @@ namespace oceanbase
 using namespace common;
 using namespace storage;
 using namespace transaction;
+
 namespace sql
 {
-
 int ObDomainIndexLookupOp::init(
     const ObDASScanCtDef *lookup_ctdef,
     ObDASScanRtDef *lookup_rtdef,
@@ -371,6 +371,7 @@ int ObDomainIndexLookupOp::revert_iter()
   if (OB_NOT_NULL(doc_id_lookup_rtdef_)) {
     doc_id_scan_param_.need_switch_param_ = false;
     doc_id_scan_param_.destroy_schema_guard();
+    doc_id_scan_param_.~ObTableScanParam();
   }
 
   if (OB_FAIL(ObLocalIndexLookupOp::revert_iter())) {

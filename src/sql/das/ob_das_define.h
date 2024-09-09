@@ -83,6 +83,8 @@ enum ObDASOpType
   DAS_OP_IR_SCAN,
   DAS_OP_IR_AUX_LOOKUP,
   DAS_OP_SORT,
+  DAS_OP_VEC_SCAN,
+  DAS_OP_VID_MERGE,
   //append OpType before me
   DAS_OP_MAX
 };
@@ -419,13 +421,17 @@ OB_INLINE ObDuplicateType loc_meta_to_duplicate_type(const ObDASTableLocMeta &lo
   return dup_type;
 }
 
-enum ObTSCIRScanType : uint8_t
+enum ObTSCIRScanType : uint16_t
 {
   OB_NOT_A_SPEC_SCAN = 0,
   OB_IR_DOC_ID_IDX_AGG,
   OB_IR_INV_IDX_AGG,
   OB_IR_INV_IDX_SCAN,
   OB_IR_FWD_IDX_AGG,
+  OB_VEC_DELTA_BUF_SCAN,
+  OB_VEC_IDX_ID_SCAN,
+  OB_VEC_SNAPSHOT_SCAN,
+  OB_VEC_COM_AUX_SCAN
 };
 
 }  // namespace sql

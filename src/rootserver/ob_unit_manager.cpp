@@ -100,6 +100,9 @@ double ObUnitManager::ObUnitLoad::get_demand(ObResourceType resource_type) const
     case RES_LOG_DISK:
       ret = static_cast<double>(unit_config_->log_disk_size());
       break;
+    case RES_DATA_DISK:
+      ret = static_cast<double>(unit_config_->data_disk_size());
+      break;
     default:
       ret = -1;
       break;
@@ -5689,21 +5692,25 @@ int ObUnitManager::get_excluded_servers(
         // server which can be migrated in must have its resource_info
         LOG_WARN("fail to get server_resource_info", KR(ret), K(report_servers_resource_info), K(server));
       } else {
-        int64_t required_size = unit_stat.get_required_size() + server_resource_info.disk_in_use_;
-        int64_t total_size = server_resource_info.disk_total_;
-        if (total_size <= required_size || total_size <= 0) {
-          is_exclude = true;
-          LOG_INFO("server total size no bigger than required size", K(module), K(required_size),
-              K(total_size), K(unit_stat), K(server_resource_info));
-        } else if (required_size <= 0) {
-          //nothing todo
+        if (GCTX.is_shared_storage_mode()) {
+          // skip, no need to check data_disk_usage in shared_storage mode
         } else {
-          int64_t required_percent = (100 * required_size) / total_size;
-          int64_t limit_percent = GCONF.data_disk_usage_limit_percentage;
-          if (required_percent > limit_percent) {
+          int64_t required_size = unit_stat.get_required_size() + server_resource_info.data_disk_in_use_;
+          int64_t total_size = server_resource_info.data_disk_total_;
+          if (total_size <= required_size || total_size <= 0) {
             is_exclude = true;
-            LOG_INFO("server disk percent will out of control;", K(module), K(required_percent), K(limit_percent),
-                     K(required_size), K(total_size));
+            LOG_INFO("server total size no bigger than required size", K(module), K(required_size),
+                K(total_size), K(unit_stat), K(server_resource_info));
+          } else if (required_size <= 0) {
+            //nothing todo
+          } else {
+            int64_t required_percent = (100 * required_size) / total_size;
+            int64_t limit_percent = GCONF.data_disk_usage_limit_percentage;
+            if (required_percent > limit_percent) {
+              is_exclude = true;
+              LOG_INFO("server disk percent will out of control;", K(module), K(required_percent), K(limit_percent),
+                      K(required_size), K(total_size));
+            }
           }
         }
       }
@@ -5956,6 +5963,7 @@ int ObUnitManager::check_server_status_valid_and_construct_log_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_USE_DUMMY_SERVER);
 int ObUnitManager::check_server_resource_enough_and_construct_log_(
     const ObUnitPlacementStrategy::ObServerResource &server_resource,
     const share::ObUnitResource &config,
@@ -5979,9 +5987,15 @@ int ObUnitManager::check_server_resource_enough_and_construct_log_(
                              not_enough_resource, not_enough_resource_config))) {
     // shall never be here
   } else if (!is_resource_enough) {
-    resource_not_enough_reason =
-        resource_not_enough_reason + "server '" + to_cstring(server) + "' "
-        + resource_type_to_str(not_enough_resource) + " resource not enough\n";
+    if (OB_SUCCESS != ERRSIM_USE_DUMMY_SERVER) {
+      resource_not_enough_reason =
+          resource_not_enough_reason + "server '" + "127.0.0.1:1000" + "' "
+          + resource_type_to_str(not_enough_resource) + " resource not enough\n";
+    } else {
+      resource_not_enough_reason =
+          resource_not_enough_reason + "server '" + to_cstring(server) + "' "
+          + resource_type_to_str(not_enough_resource) + " resource not enough\n";
+    }
   }
   return ret;
 }
@@ -6168,19 +6182,26 @@ int ObUnitManager::compute_server_resource_(
     // When performing allocation, rs reports the maximum value of resource information from its own resource view
     // and observer side as a reference for unit resource allocation
     server_resource.addr_ = server;
+    // RES_CPU
     server_resource.assigned_[RES_CPU] = sum_load.min_cpu() > report_resource.report_cpu_assigned_
                                          ? sum_load.min_cpu() : report_resource.report_cpu_assigned_;
     server_resource.max_assigned_[RES_CPU] = sum_load.max_cpu() > report_resource.report_cpu_max_assigned_
                                          ? sum_load.max_cpu() : report_resource.report_cpu_max_assigned_;
     server_resource.capacity_[RES_CPU] = report_resource.cpu_;
+    // RES_MEM
     server_resource.assigned_[RES_MEM] = sum_load.memory_size() > report_resource.report_mem_assigned_
                                          ? static_cast<double>(sum_load.memory_size())
                                          : static_cast<double>(report_resource.report_mem_assigned_);
     server_resource.max_assigned_[RES_MEM] = server_resource.assigned_[RES_MEM];
     server_resource.capacity_[RES_MEM] = static_cast<double>(report_resource.mem_total_);
+    // RES_LOG_DISK
     server_resource.assigned_[RES_LOG_DISK] = static_cast<double>(sum_load.log_disk_size());
-    server_resource.max_assigned_[RES_LOG_DISK] = static_cast<double>(sum_load.log_disk_size());
+    server_resource.max_assigned_[RES_LOG_DISK] = server_resource.assigned_[RES_LOG_DISK];
     server_resource.capacity_[RES_LOG_DISK] = static_cast<double>(report_resource.log_disk_total_);
+    // RES_DATA_DISK
+    server_resource.assigned_[RES_DATA_DISK] = static_cast<double>(sum_load.data_disk_size());
+    server_resource.max_assigned_[RES_DATA_DISK] = server_resource.assigned_[RES_DATA_DISK];
+    server_resource.capacity_[RES_DATA_DISK] = static_cast<double>(report_resource.data_disk_total_);
   }
 
   LOG_INFO("compute server resource", KR(ret),
@@ -6222,6 +6243,10 @@ bool ObUnitManager::check_resource_enough_for_unit_(
              r.capacity_[RES_LOG_DISK] < r.assigned_[RES_LOG_DISK] + u.log_disk_size()) {
     not_enough_resource = RES_LOG_DISK;
     not_enough_resource_config = LOG_DISK;
+  } else if (u.is_data_disk_size_valid() &&
+             r.capacity_[RES_DATA_DISK] < r.assigned_[RES_DATA_DISK] + u.data_disk_size()) {
+    not_enough_resource = RES_DATA_DISK;
+    not_enough_resource_config = DATA_DISK;
   } else {
     is_enough = true;
     not_enough_resource = RES_MAX;
@@ -6622,6 +6647,12 @@ int ObUnitManager::sum_servers_resources(ObUnitPlacementStrategy::ObServerResour
                                         static_cast<double>(unit_config.log_disk_size());
   server_resource.max_assigned_[RES_LOG_DISK] = server_resource.max_assigned_[RES_LOG_DISK] +
                                             static_cast<double>(unit_config.log_disk_size());
+  if (unit_config.data_disk_size() > 0) {
+    server_resource.assigned_[RES_DATA_DISK] = server_resource.assigned_[RES_DATA_DISK] +
+                                          static_cast<double>(unit_config.data_disk_size());
+    server_resource.max_assigned_[RES_DATA_DISK] = server_resource.max_assigned_[RES_DATA_DISK] +
+                                              static_cast<double>(unit_config.data_disk_size());
+  }
   return ret;
 }
 
@@ -8180,7 +8211,6 @@ int ObUnitManager::check_full_resource_pool_memory_condition(
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_USE_DUMMY_SERVER);
 int ObUnitManager::check_expand_resource_(
     const char *module,
     const common::ObIArray<share::ObResourcePool  *> &pools,
@@ -8245,8 +8275,13 @@ int ObUnitManager::check_expand_resource_(
         LOG_WARN("check expand resource failed", KR(ret), K(server_info));
       } else if (!can_expand) {
         const ObZone &zone = server_info.get_zone();
-        LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone), to_cstring(server),
-            alter_resource_err_to_str(err_index));
+        if (OB_SUCCESS != ERRSIM_USE_DUMMY_SERVER) {
+          LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, "dummy_zone", "127.0.0.1:1000",
+              alter_resource_err_to_str(err_index));
+        } else {
+          LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone), to_cstring(server),
+              alter_resource_err_to_str(err_index));
+        }
         // return ERROR
         ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
       }
@@ -8358,6 +8393,18 @@ int ObUnitManager::check_shrink_resource_(const share::ObResourcePool &pool,
     if (new_resource.log_disk_size() < resource.log_disk_size()) {
       // log disk don't need check.
     } 
+
+    if (GCTX.is_shared_storage_mode() &&
+        new_resource.data_disk_size() < resource.data_disk_size()) {
+      if (!pool.is_granted_to_tenant()) {
+        // do nothing
+      } else {
+        // data disk do not allow to shrink for now
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("shrinking data_disk_size not supported", KR(ret), K(resource), K(new_resource));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "shrinking data_disk_size");
+      }
+    }
   }
   return ret;
 }
@@ -9376,21 +9423,25 @@ int ObUnitManager::try_migrate_unit(const uint64_t unit_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit stat", K(unit_id), K(unit_stat), K(ret));
   } else {
-    int64_t mig_required_size = 0;
-    for (int64_t i = 0; i < migrating_unit_stat.count(); ++i) {
-      mig_required_size +=  migrating_unit_stat.at(i).get_required_size();
-    }
-    // sstable Space constraints
-    int64_t required_size =
-        mig_required_size + unit_stat.get_required_size() + dst_resource_info.disk_in_use_;
-    int64_t total_size = dst_resource_info.disk_total_;
-    int64_t required_percent = (100 * required_size) / total_size;
-    int64_t limit_percent = GCONF.data_disk_usage_limit_percentage;
-    if (required_percent >= limit_percent) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_ERROR("migrate unit fail. dest server out of space",
-                K(unit_id), K(unit_stat), K(dst),
-                K(required_size), K(total_size), K(limit_percent), K(ret));
+    if (GCTX.is_shared_storage_mode()) {
+      // skip, no need to check data_disk_usage in shared-storage mode
+    } else {
+      int64_t mig_required_size = 0;
+      for (int64_t i = 0; i < migrating_unit_stat.count(); ++i) {
+        mig_required_size +=  migrating_unit_stat.at(i).get_required_size();
+      }
+      // sstable Space constraints
+      int64_t required_size =
+          mig_required_size + unit_stat.get_required_size() + dst_resource_info.data_disk_in_use_;
+      int64_t total_size = dst_resource_info.data_disk_total_;
+      int64_t required_percent = (100 * required_size) / total_size;
+      int64_t limit_percent = GCONF.data_disk_usage_limit_percentage;
+      if (required_percent >= limit_percent) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_ERROR("migrate unit fail. dest server out of space",
+                  K(unit_id), K(unit_stat), K(dst),
+                  K(required_size), K(total_size), K(limit_percent), K(ret));
+      }
     }
 
     if (FAILEDx(migrate_unit_(unit_id, dst, is_manual))) {

@@ -60,7 +60,6 @@ using obrpc::ObRpcTranslator;
 using obrpc::ObRpcSessionHandler;
 using obmysql::ObMySQLTranslator;
 using common::ObIAllocator;
-struct ObGlobalContext;
 
 
 ObIAllocator &get_sql_arena_allocator();

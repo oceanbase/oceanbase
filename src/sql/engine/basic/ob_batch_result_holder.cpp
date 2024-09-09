@@ -23,7 +23,8 @@ using namespace common;
 namespace sql
 {
 
-int ObBatchResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx)
+int ObBatchResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx,
+                              common::ObIAllocator *allocator /*nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -34,8 +35,10 @@ int ObBatchResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx
     exprs_ = &exprs;
     eval_ctx_ = &eval_ctx;
     int64_t batch_size = eval_ctx.max_batch_size_;
-    datums_ = static_cast<ObDatum *>(eval_ctx.exec_ctx_.get_allocator().alloc(
-        batch_size * exprs.count() * sizeof(*datums_)));
+    allocator_ = allocator;
+    common::ObIAllocator &alloc =
+      (nullptr != allocator) ? *allocator : eval_ctx.exec_ctx_.get_allocator();
+    datums_ = static_cast<ObDatum *>(alloc.alloc(batch_size * exprs.count() * sizeof(*datums_)));
     if (OB_ISNULL(datums_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(batch_size), K(exprs.count()));
@@ -44,6 +47,15 @@ int ObBatchResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx
     saved_size_ = 0;
   }
   return ret;
+}
+
+void ObBatchResultHolder::destroy()
+{
+  if (nullptr != datums_ && nullptr != allocator_) {
+    allocator_->free(datums_);
+    datums_ = nullptr;
+  }
+  reset();
 }
 
 int ObBatchResultHolder::save(int64_t size)

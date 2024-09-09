@@ -29,6 +29,8 @@ struct ObBackupDestType final
     DEST_TYPE_BACKUP_DATA = 0,
     DEST_TYPE_ARCHIVE_LOG,
     DEST_TYPE_BACKUP_KEY,
+    DEST_TYPE_RESTORE_DATA,
+    DEST_TYPE_RESTORE_LOG,
     DEST_TYPE_MAX
   };
   static const char *get_str(const TYPE &type);
@@ -177,6 +179,8 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_;
+  int64_t max_iops_;
+  int64_t max_bandwidth_;
   ObBackupDestType::TYPE dest_type_;
   share::ObBackupDest backup_dest_;
   common::ObISQLClient *sql_proxy_;

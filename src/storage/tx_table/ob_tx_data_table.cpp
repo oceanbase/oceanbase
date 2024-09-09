@@ -69,7 +69,6 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
     memtable_mgr_ = static_cast<ObTxDataMemtableMgr *>(memtable_mgr_handle.get_memtable_mgr());
     tx_ctx_table_ = tx_ctx_table;
     tablet_id_ = LS_TX_DATA_TABLET;
-    calc_upper_trans_is_disabled_ = false;
     latest_transfer_scn_.reset();
 
     is_inited_ = true;
@@ -181,7 +180,6 @@ void ObTxDataTable::reset()
   tx_ctx_table_ = nullptr;
   calc_upper_trans_version_cache_.reset();
   memtables_cache_.reuse();
-  calc_upper_trans_is_disabled_ = false;
   latest_transfer_scn_.reset();
   is_started_ = false;
   is_inited_ = false;
@@ -236,7 +234,6 @@ int ObTxDataTable::online()
       calc_upper_trans_version_cache_.reset();
     }
     latest_transfer_scn_.reset();
-    ATOMIC_STORE(&calc_upper_trans_is_disabled_, false);
     is_started_ = true;
   }
 
@@ -774,8 +771,6 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The tx data table is not inited.", KR(ret));
-  } else if (ATOMIC_LOAD(&calc_upper_trans_is_disabled_)) {
-    skip_calc = true;
   } else if (true == (skip_calc = skip_this_sstable_end_scn_(sstable_end_scn))) {
     // there is a start_scn of running transactions is smaller than the sstable_end_scn
   } else {
@@ -1234,7 +1229,6 @@ int ObTxDataTable::get_start_tx_scn(SCN &start_tx_scn)
 
 void ObTxDataTable::disable_upper_trans_calculation()
 {
-  ATOMIC_STORE(&calc_upper_trans_is_disabled_, true);
   {
     TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
     calc_upper_trans_version_cache_.reset();
@@ -1252,7 +1246,6 @@ void ObTxDataTable::enable_upper_trans_calculation(const share::SCN latest_trans
   } else {
     latest_transfer_scn_ = latest_transfer_scn;
   }
-  ATOMIC_STORE(&calc_upper_trans_is_disabled_, false);
 }
 
 int ObTxDataTable::dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd)

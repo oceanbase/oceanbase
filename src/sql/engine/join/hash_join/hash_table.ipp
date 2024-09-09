@@ -83,7 +83,7 @@ int HashTable<Bucket, Prober>::build_prepare(int64_t row_count, int64_t bucket_c
 // Get Item list which has the same hash value.
 // return NULL if not found.
 template <typename Bucket, typename Prober>
-inline typename Bucket::Item *HashTable<Bucket, Prober>::get(const uint64_t hash_val)
+OB_INLINE typename Bucket::Item *HashTable<Bucket, Prober>::get(const uint64_t hash_val)
 {
   uint64_t mask = nbuckets_ - 1;
   uint64_t pos = hash_val & mask;

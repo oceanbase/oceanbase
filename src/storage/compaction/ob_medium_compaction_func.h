@@ -19,6 +19,10 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/compaction/ob_tenant_medium_checker.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/compaction/ob_ckm_error_tablet_info.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction/ob_ls_compaction_list.h"
+#endif
 
 namespace oceanbase
 {
@@ -51,8 +55,9 @@ public:
       ObTablet &tablet,
       ObTabletSchedulePair &schedule_pair,
       bool &create_dag_flag,
-      const int64_t major_frozen_scn = 0,
-      const bool scheduler_called = false);
+      const int64_t major_frozen_scn,
+      const bool scheduler_called,
+      const ObExecMode exec_mode);
   /*
    * see
    * standby tenant should catch up broadcast scn when freeze info is recycled
@@ -82,7 +87,8 @@ public:
     const int64_t schema_version,
     const int64_t medium_compat_version,
     ObIAllocator &allocator,
-    storage::ObStorageSchema &storage_schema);
+    storage::ObStorageSchema &storage_schema,
+    bool &is_skip_merge_index);
   static int batch_check_medium_finish(
     const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
@@ -90,14 +96,35 @@ public:
     ObCompactionTimeGuard &time_guard,
     const share::ObLSColumnReplicaCache &ls_cs_replica_cache);
   static int check_replica_checksum_items(
-      const ObIArray<ObTabletReplicaChecksumItem> &checksum_items,
+      const ObReplicaCkmArray &checksum_items,
       const ObLSColumnReplicaCache &ls_cs_replica_cache,
       const bool is_medium_checker);
-
+  static int check_need_merge_and_schedule(
+      ObLS &ls,
+      ObTablet &tablet,
+      const int64_t schedule_scn,
+      const ObExecMode exec_mode,
+      bool &tablet_need_freeze_flag,
+      bool &create_dag_flag);
   int schedule_next_medium_for_leader(
     const int64_t major_snapshot,
     const bool is_tombstone,
     bool &medium_clog_submitted);
+#ifdef OB_BUILD_SHARED_STORAGE
+  // medium compaction is not considered
+  int prepare_ls_major_merge_info(
+    const int64_t merge_version,
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+    bool &submit_clog_flag);
+  int check_tablet_inc_data(
+    ObTablet &tablet,
+    ObMediumCompactionInfo &medium_info,
+    bool &no_inc_data);
+  int check_progressive_merge(
+    ObTablet &tablet,
+    const storage::ObStorageSchema &storage_schema,
+    bool &is_progressive_merge);
+#endif
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 protected:
@@ -113,8 +140,7 @@ protected:
   int init_parallel_range_and_schema_changed_and_co_merge_type(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
-  int init_schema_changed(
-    ObMediumCompactionInfo &medium_info);
+  int check_if_schema_changed(ObMediumCompactionInfo &medium_info);
   int init_co_major_merge_type(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
@@ -139,12 +165,12 @@ protected:
       bool &merge_finish);
   static int init_tablet_filters(share::ObTabletReplicaFilterHolder &filters);
   static int check_tablet_checksum(
-      const ObIArray<ObTabletReplicaChecksumItem> &checksum_items,
+      const share::ObReplicaCkmArray &checksum_items,
       const ObLSColumnReplicaCache &ls_cs_replica_cache,
       const int64_t start_idx,
       const int64_t end_idx,
       const bool is_medium_checker,
-      ObIArray<ObTabletLSPair> &error_pairs,
+      ObIArray<ObCkmErrorTabletLSInfo> &error_pairs,
       int &check_ret);
   int choose_medium_snapshot(
       const int64_t max_sync_medium_scn,
@@ -165,12 +191,6 @@ protected:
     ObMediumCompactionInfo &medium_info,
     int64_t &schema_version);
 
-  static int check_need_merge_and_schedule(
-      ObLS &ls,
-      ObTablet &tablet,
-      const int64_t schedule_scn,
-      bool &tablet_need_freeze_flag,
-      bool &create_dag_flag);
   int schedule_next_medium_primary_cluster(
     const int64_t major_snapshot,
     const bool is_tombstone,

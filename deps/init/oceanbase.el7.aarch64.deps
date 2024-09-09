@@ -22,17 +22,19 @@ devdeps-mxml-2.12.0-12022090616.el7.aarch64.rpm
 devdeps-apr-1.6.5-32022090616.el7.aarch64.rpm
 devdeps-xz-5.2.2-42022090615.el7.aarch64.rpm
 devdeps-lua-5.4.6-22023082916.el7.aarch64.rpm
-devdeps-oss-c-sdk-3.9.2-182022100412.el7.aarch64.rpm
+devdeps-oss-c-sdk-3.11.1-72024080916.el7.aarch64.rpm
 devdeps-zlib-static-1.2.13-32023061421.el7.aarch64.rpm
 devdeps-ncurses-static-6.2-72022100815.el7.aarch64.rpm
 devdeps-boost-1.74.0-22022110914.el7.aarch64.rpm
 devdeps-s2geometry-0.9.0-12023092021.el7.aarch64.rpm
 devdeps-icu-69.1-72022112416.el7.aarch64.rpm
-devdeps-cos-c-sdk-5.0.16-52023070517.el7.aarch64.rpm
+devdeps-cos-c-sdk-5.0.21-202024080916.el7.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el7.aarch64.rpm
 devdeps-protobuf-c-1.4.1-100000072023102410.el7.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el7.aarch64.rpm
 devdeps-apache-arrow-9.0.0-302024052920.el7.aarch64.rpm
+# devdeps-apache-orc-1.8.3-202024072510.el7.aarch64.rpm
+devdeps-vsag-1.0.0-102024082710.el7.aarch64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el7.aarch64.rpm

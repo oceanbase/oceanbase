@@ -53,6 +53,7 @@ enum SelectParserOffset
   PARSE_SELECT_FORMER,
   PARSE_SELECT_LATER,
   PARSE_SELECT_ORDER,
+  PARSE_SELECT_APPROX,
   PARSE_SELECT_LIMIT,
   PARSE_SELECT_FOR_UPD,
   PARSE_SELECT_HINTS,
@@ -433,6 +434,7 @@ extern bool nodename_is_sdo_geometry_type(const ParseNode *node);
 #define OB_NODE_CAST_NUMBER_TYPE_IDX 1
 #define OB_NODE_CAST_C_LEN_IDX 1
 #define OB_NODE_CAST_GEO_TYPE_IDX 1
+#define OB_NODE_CAST_CS_LEVEL_IDX 2
 
 typedef enum ObNumberParseType
 {

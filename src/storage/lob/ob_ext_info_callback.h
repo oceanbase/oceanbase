@@ -30,6 +30,8 @@ enum ObExtInfoLogType
 {
   OB_INVALID_EXT_INFO_LOG = 0,
   OB_JSON_DIFF_EXT_INFO_LOG = 1,
+  OB_OUTROW_DISK_LOB_LOCATOR_EXT_INFO_LOG = 2,
+  OB_VALID_OLD_LOB_VALUE_LOG = 3,
 };
 
 
@@ -153,12 +155,13 @@ public:
     const blocksstable::ObDmlFlag dml_flag,
     transaction::ObTxDesc *tx_desc,
     transaction::ObTxSEQ &parent_seq_no,
-    ObObj &index_data,
+    blocksstable::ObStorageDatum &index_data,
+    ObObjType &type,
     ObObj &ext_info_data);
 
 private:
 
-  static ObExtInfoLogType get_type(ObObjType obj_type)
+  static ObExtInfoLogType get_type(ObObjType &obj_type)
   {
     ObExtInfoLogType res = OB_INVALID_EXT_INFO_LOG;
     switch (obj_type)
@@ -174,12 +177,12 @@ private:
 
   int build_data_iter(ObObj &ext_info_data);
 
-  int set_index_data(ObObj &index_data);
-  int set_outrow_ctx_seq_no(ObObj& index_data);
+  int set_index_data(blocksstable::ObStorageDatum &index_data, ObObjType &type);
+  int set_outrow_ctx_seq_no(blocksstable::ObStorageDatum& index_data);
 
   int get_data(ObString &data);
 
-  int init_header(ObObj& index_data, ObObj &ext_info_data);
+  int init_header(ObObjType &type);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));

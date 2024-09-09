@@ -62,7 +62,7 @@ public:
   bool is_paused() const;
 
   uint64_t get_tenant_id() const { return tenant_id_; }
-  int launch_major_freeze();
+  int launch_major_freeze(const ObMajorFreezeReason freeze_reason);
 
   int suspend_merge();
 
@@ -81,7 +81,7 @@ private:
   int check_freeze_info();
   int check_tenant_status() const;
 
-  int set_freeze_info();
+  int set_freeze_info(const ObMajorFreezeReason freeze_reason);
 
   bool is_primary_service() const { return is_primary_service_; }
 

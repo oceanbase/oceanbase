@@ -1281,6 +1281,7 @@ int ObBasicSessionInfo::load_default_configs_in_pc()
 {
   int ret = OB_SUCCESS;
   inf_pc_configs_.pushdown_storage_level_ = ObConfigInfoInPC::DEFAULT_PUSHDOWN_STORAGE_LEVEL;
+  inf_pc_configs_.enable_hyperscan_regexp_engine_ = false;
   inf_pc_configs_.min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
   return ret;
 }
@@ -2907,8 +2908,16 @@ void ObBasicSessionInfo::trace_all_sys_vars() const
     store_idx = ObSysVarsToIdxMap::get_store_idx((int64_t)ObSysVariables::get_sys_var_id(i));
     OV (0 <= store_idx && store_idx < ObSysVarFactory::ALL_SYS_VARS_COUNT);
     OV (OB_NOT_NULL(sys_vars_[store_idx]));
-    if (OB_SUCC(ret) && (sys_vars_[store_idx]->get_value() != sys_vars_[store_idx]->get_global_default_value())) {
-      OPT_TRACE("  ", sys_vars_[store_idx]->get_name(), " = ", sys_vars_[store_idx]->get_value());
+    if (OB_SUCC(ret)) {
+      int cmp = 0;
+      if (sys_vars_[store_idx]->get_value().can_compare(sys_vars_[store_idx]->get_global_default_value())) {
+        if (OB_FAIL(sys_vars_[store_idx]->get_value().compare(sys_vars_[store_idx]->get_global_default_value(), cmp))) {
+          //ignore fail code
+          ret = OB_SUCCESS;
+        } else if (0 != cmp) {
+          OPT_TRACE("  ", sys_vars_[store_idx]->get_name(), " = ", sys_vars_[store_idx]->get_value());
+        }
+      }
     }
   }
 }
@@ -3865,6 +3874,11 @@ int ObBasicSessionInfo::get_net_buffer_length(int64_t &net_buffer_len) const
 int ObBasicSessionInfo::get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const
 {
   return get_bool_sys_var(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE, show_ddl_in_compat_mode);
+}
+
+int ObBasicSessionInfo::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const
+{
+  return get_uint64_sys_var(SYS_VAR_OB_HNSW_EF_SEARCH, ob_hnsw_ef_search);
 }
 
 int ObBasicSessionInfo::get_sql_quote_show_create(bool &sql_quote_show_create) const
@@ -7151,6 +7165,13 @@ bool ObBasicSessionInfo::has_active_autocommit_trans(transaction::ObTransID & tr
     ret =  true;
   }
   return ret;
+}
+
+bool ObBasicSessionInfo::get_enable_hyperscan_regexp_engine() const
+{
+  // disable hyperscan during upgrading
+  return inf_pc_configs_.enable_hyperscan_regexp_engine_
+         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0;
 }
 
 }//end of namespace sql

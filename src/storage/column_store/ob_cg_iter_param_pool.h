@@ -35,32 +35,38 @@ public:
   int get_iter_param(
     const int32_t cg_idx,
     const ObTableIterParam &row_param,
-    const common::ObIArray<sql::ObExpr*> &exprs,
+    const common::ObIArray<sql::ObExpr*> &output_exprs,
     ObTableIterParam *&iter_param,
-    const bool is_aggregate = false);
+    const common::ObIArray<sql::ObExpr*> *agg_exprs = nullptr);
 private:
   int new_iter_param(
       const int32_t cg_idx,
       const ObTableIterParam &row_param,
-      const common::ObIArray<sql::ObExpr*> &exprs,
+      const common::ObIArray<sql::ObExpr*> &output_exprs,
       ObTableIterParam *&iter_param,
-      const bool is_aggregate = false);
+      const common::ObIArray<sql::ObExpr*> *agg_exprs);
   int fill_cg_iter_param(
       const ObTableIterParam &row_param,
       const int32_t cg_idx,
-      const common::ObIArray<sql::ObExpr*> &exprs,
-      ObTableIterParam &cg_param);
+      const common::ObIArray<sql::ObExpr*> &output_exprs,
+      ObTableIterParam &cg_param,
+      const common::ObIArray<sql::ObExpr*> *agg_exprs);
   int fill_virtual_cg_iter_param(
       const ObTableIterParam &row_param,
       const int32_t cg_idx,
       const common::ObIArray<sql::ObExpr*> &exprs,
-      ObTableIterParam &cg_param);
+      ObTableIterParam &cg_param,
+      const common::ObIArray<sql::ObExpr*> *agg_exprs);
   int generate_for_column_store(
       const ObTableIterParam &row_param,
-      const sql::ExprFixedArray *exprs,
+      const sql::ExprFixedArray *output_exprs,
+      const sql::ExprFixedArray *agg_exprs,
       const ObIArray<int32_t> *out_cols_project,
       const int32_t cg_idx,
       ObTableIterParam &cg_param);
+  int copy_param_exprs(
+      const common::ObIArray<sql::ObExpr*> &exprs,
+      sql::ExprFixedArray *&param_exprs);
   int put_iter_param(ObTableIterParam *iter_param);
   void free_iter_param(ObTableIterParam *iter_param);
   common::ObIAllocator &alloc_;

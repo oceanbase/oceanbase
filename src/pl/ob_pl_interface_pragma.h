@@ -74,6 +74,7 @@
 #include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
 #include "pl/sys_package/ob_dbms_external_table.h"
+#include "pl/sys_package/ob_dbms_vector_mysql.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -770,6 +771,17 @@
   INTERFACE_DEF(INTERFACE_DBMS_PROFILER_DROP_OBJECTS, "DBMS_PROFILER_DROP_OBJECTS", (ObDBMSProfiler::drop_objects))
   // end of dbms_profiler
 #endif // OB_BUILD_ORACLE_PL
+
+    // start of dbms_vector_mysql
+#define DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(symbol, func) \
+  INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
+
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REFRESH_INDEX, ObDBMSVectorMySql::refresh_index)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REBUILD_INDEX, ObDBMSVectorMySql::rebuild_index)
+
+#undef DEFINE_DBMS_VECTOR_MYSQL_INTERFACE
+  // end of dbms_vector_mysql
+
   /****************************************************************************/
 
   // start of dbms_trusted_certificate_manager

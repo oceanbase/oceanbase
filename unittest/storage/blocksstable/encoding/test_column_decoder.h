@@ -544,8 +544,7 @@ void TestColumnDecoder::init_in_filter(
                 return cmp_ret < 0;
             });
   filter.cmp_func_ = cmp_func;
-  filter.cmp_func_rev_ = cmp_func;
-  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_rev_);
+  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_);
 }
 
 int TestColumnDecoder::test_filter_pushdown(
@@ -2258,7 +2257,7 @@ bool VectorDecodeTestUtil::need_test_vec_with_type(
     }
   } else if (vector_format == VEC_DISCRETE) {
     VecValueTypeClass var_tc_arr[] = {VEC_TC_NUMBER, VEC_TC_EXTEND, VEC_TC_STRING, VEC_TC_ENUM_SET_INNER,
-        VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT, VEC_TC_ROARINGBITMAP};
+        VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT, VEC_TC_COLLECTION, VEC_TC_ROARINGBITMAP};
     VecValueTypeClass *vec = std::find(std::begin(var_tc_arr), std::end(var_tc_arr), vec_tc);
     if (vec == std::end(var_tc_arr)) {
       need_test_column = false;

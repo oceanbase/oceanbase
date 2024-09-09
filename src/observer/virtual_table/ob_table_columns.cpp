@@ -945,6 +945,7 @@ int ObTableColumns::deduce_column_attributes(
     const ObLengthSemantics default_length_semantics = session->get_local_nls_length_semantics();
     int16_t precision_or_length_semantics = result_type.get_precision();
     uint64_t sub_type = static_cast<uint64_t>(ObGeoType::GEOTYPEMAX);
+    ObArray<ObString> extend_type_info;
 
     if (is_oracle_mode
         && ((result_type.is_varchar_or_char()
@@ -974,6 +975,19 @@ int ObTableColumns::deduce_column_attributes(
       sub_type = result_type.get_subschema_id();
     } else if ((result_type.get_udt_id() == T_OBJ_XML) || (result_type.get_udt_id() == T_OBJ_SDO_GEOMETRY)) {
       sub_type = result_type.get_udt_id();
+    } else if (result_type.is_collection_sql_type()) {
+      if (OB_NOT_NULL(session->get_cur_exec_ctx())) {
+        int tmp_ret = OB_SUCCESS;
+        const ObSqlCollectionInfo *coll_info = NULL;
+        uint16_t subschema_id = select_item.expr_->get_result_type().get_subschema_id();
+        ObSubSchemaValue value;
+        if (OB_SUCCESS != (tmp_ret = session->get_cur_exec_ctx()->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+          LOG_WARN("failed to get subschema ctx", K(tmp_ret));
+        } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+        } else if (OB_SUCCESS != (tmp_ret = extend_type_info.push_back(coll_info->get_def_string()))) {
+          LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
+        }
+      }
     }
     if (OB_SUCC(ret) && !skip_type_str) {
       int64_t pos = 0;
@@ -985,6 +999,7 @@ int ObTableColumns::deduce_column_attributes(
                                   precision_or_length_semantics,
                                   result_type.get_scale(),
                                   result_type.get_collation_type(),
+                                  extend_type_info,
                                   sub_type))) {
         LOG_WARN("fail to get data type str", K(ret));
       } else {
