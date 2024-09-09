@@ -1791,7 +1791,7 @@ OB_SERIALIZE_MEMBER_INHERIT(ObHBaseParams,
 int ObHBaseParams::deep_copy(ObKVParamsBase *hbase_params) const
 {
   int ret = OB_SUCCESS;
-  if (hbase_params == nullptr || hbase_params->get_param_type() != ParamType::HBase) {
+  if (OB_ISNULL(hbase_params) || hbase_params->get_param_type() != ParamType::HBase) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected hbase adress", K(ret), KPC(hbase_params));
   } else {
@@ -1834,7 +1834,7 @@ OB_DEF_DESERIALIZE(ObKVParams)
 OB_DEF_SERIALIZE(ObKVParams)
 {
   int ret = OB_SUCCESS;
-  if (ob_params_ == nullptr) {
+  if (OB_ISNULL(ob_params_)) {
     ret = OB_BAD_NULL_ERROR;
     RPC_WARN("unexpected ob_params_ nullptr", K(ret));
   } else if (OB_FAIL(ob_params_->serialize(buf, buf_len, pos))) {
@@ -1846,17 +1846,33 @@ OB_DEF_SERIALIZE(ObKVParams)
 OB_DEF_SERIALIZE_SIZE(ObKVParams)
 {
   int64_t len = 0;
-  if (ob_params_ != nullptr) {
+  if (OB_NOT_NULL(ob_params_)) {
     len = ob_params_->get_serialize_size();
   }
   return len;
+}
+
+int ObKVParams::init_ob_params_for_hfilter(ObHBaseParams*& params) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ob_params_) || ob_params_->get_param_type() != ParamType::HBase) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ob_params_ adress");
+  } else {
+    params = static_cast<ObHBaseParams*>(ob_params_);
+    if (OB_ISNULL(params)) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("unexpected nullptr after static_cast");
+    }
+  }
+  return ret;
 }
 
 int ObKVParams::deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const
 {
   int ret = OB_SUCCESS;
   ob_params.set_allocator(&allocator);
-  if (ob_params_ == nullptr) {
+  if (OB_ISNULL(ob_params_)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("unexpected ob_params nullptr", K(ret));
   }
@@ -1870,18 +1886,18 @@ int ObKVParams::deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const
   return ret;
 }
 
-int ObKVParams::init_ob_params_for_hfilter(const ObHBaseParams*& params) const
+int ObKVParams::alloc_ob_params(ParamType param_type, ObKVParamsBase* &params)
 {
   int ret = OB_SUCCESS;
-  if (ob_params_ == nullptr || ob_params_->get_param_type() != ParamType::HBase) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected ob_params_ adress");
-  } else {
-    params = static_cast<ObHBaseParams*>(ob_params_);
-    if (params == nullptr) {
-      ret = OB_BAD_NULL_ERROR;
-      LOG_WARN("unexpected nullptr after static_cast");
+    if (param_type == ParamType::HBase) {
+      params = OB_NEWx(ObHBaseParams, allocator_);
+      if (OB_ISNULL(params)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        RPC_WARN("alloc params memory failed", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      RPC_WARN("not supported param_type", K(ret));
     }
-  }
-  return ret;
+    return ret;
 }

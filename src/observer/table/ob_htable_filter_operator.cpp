@@ -1071,18 +1071,19 @@ ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query,
 {
 }
 
-int ObHTableFilterOperator::init_ob_params(){
+int ObHTableFilterOperator::init_ob_params()
+{
   int ret = OB_SUCCESS;
-  const ObHBaseParams* hbase_params = nullptr;
-  if (ob_kv_params_.ob_params_ != nullptr && !is_inited_) {
+  ObHBaseParams* hbase_params = nullptr;
+  if (OB_NOT_NULL(ob_kv_params_.get_ob_params()) && !is_inited_) {
     if (OB_FAIL(ob_kv_params_.init_ob_params_for_hfilter(hbase_params))) {
       LOG_WARN("init_ob_params fail", K(ret));
     } else {
-      caching_ = hbase_params->caching_;
-      scanner_context_.limits_.set_fields(batch_, max_result_size_, hbase_params->call_timeout_, LimitScope(LimitScope::Scope::BETWEEN_ROWS));
-      check_existence_only_ = hbase_params->check_existence_only_;
-      row_iterator_.set_allow_partial_results(hbase_params->allow_partial_results_);
-      row_iterator_.set_is_cache_block(hbase_params->is_cache_block_);
+      caching_ = hbase_params->get_caching();
+      scanner_context_.limits_.set_fields(batch_, max_result_size_, hbase_params->get_call_timeout(), LimitScope(LimitScope::Scope::BETWEEN_ROWS));
+      check_existence_only_ = hbase_params->check_existence_only();
+      row_iterator_.set_allow_partial_results(hbase_params->allow_partial_results());
+      row_iterator_.set_is_cache_block(hbase_params->cache_block());
     }
   }
   if (OB_SUCC(ret)) {
@@ -1219,9 +1220,9 @@ int ObHTableFilterOperator::parse_filter_string(common::ObIAllocator* allocator)
 void ObHTableFilterOperator::init_properties(const ObHBaseParams* params, const ObTableQuery &query)
 {
   if (params != nullptr) {
-    caching_ = params->caching_;
-    scanner_context_.limits_.set_fields(query.get_batch(), max_result_size_, params->call_timeout_, LimitScope(LimitScope::Scope::BETWEEN_ROWS));
-    check_existence_only_ = params->check_existence_only_;
+    caching_ = params->get_caching();
+    scanner_context_.limits_.set_fields(query.get_batch(), max_result_size_, params->get_call_timeout(), LimitScope(LimitScope::Scope::BETWEEN_ROWS));
+    check_existence_only_ = params->check_existence_only();
   }
   row_iterator_.set_scanner_context(&scanner_context_);
 }

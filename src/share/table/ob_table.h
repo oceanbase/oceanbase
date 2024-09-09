@@ -757,11 +757,11 @@ public:
   OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
   OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }
   OB_INLINE void set_check_existence_only(const bool check_existence_only) {check_existence_only_ = check_existence_only; }
-  // int8_t bool_to_byte() const;
-  // void byte_to_bool(int8_t flag);
-  // int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  // int deserialize(const char *buf, const int64_t data_len, int64_t &pos) override;
-  // int64_t get_serialize_size() const override;
+  OB_INLINE int32_t get_caching() const { return caching_; }
+  OB_INLINE int32_t get_call_timeout() const { return call_timeout_; }
+  OB_INLINE bool allow_partial_results() const { return allow_partial_results_; }
+  OB_INLINE bool cache_block() const { return is_cache_block_; }
+  OB_INLINE bool check_existence_only() const { return check_existence_only_; }
   int deep_copy(ObKVParamsBase *ob_params) const;
   TO_STRING_KV( K_(param_type),
               K_(caching),
@@ -769,7 +769,7 @@ public:
               K_(allow_partial_results),
               K_(is_cache_block),
               K_(check_existence_only));
-public:
+private:
   int32_t caching_;
   int32_t call_timeout_;
   union
@@ -789,27 +789,15 @@ class ObKVParams
 public:
   ObKVParams(): allocator_(NULL), ob_params_(NULL){}
   ~ObKVParams() {};
+  OB_INLINE void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
+  OB_INLINE void set_ob_params(ObKVParamsBase *params) { ob_params_ = params; }
+  OB_INLINE ObKVParamsBase* get_ob_params() const { return ob_params_; }
+  int init_ob_params_for_hfilter(ObHBaseParams*& params) const;
   int deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const;
-  void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
-  int init_ob_params_for_hfilter(const ObHBaseParams*& params) const;
-
-  int alloc_ob_params(ParamType param_type, ObKVParamsBase* &params)
-  {
-    int ret = OB_SUCCESS;
-    if (param_type == ParamType::HBase) {
-      params = OB_NEWx(ObHBaseParams, allocator_);
-      if (params == nullptr) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        RPC_WARN("alloc params memory failed", K(ret));
-      }
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      RPC_WARN("not supported param_type", K(ret));
-    }
-    return ret;
-  };
+  int alloc_ob_params(ParamType param_type, ObKVParamsBase* &params);
   TO_STRING_KV(K_(ob_params));
 
+private:
   common::ObIAllocator *allocator_;
   ObKVParamsBase* ob_params_;
 };
