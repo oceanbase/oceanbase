@@ -402,6 +402,11 @@ int ObTabletPointer::deep_copy(char *buf, const int64_t buf_len, ObTabletPointer
   return ret;
 }
 
+ObTabletResidentInfo ObTabletPointer::get_tablet_resident_info(const ObTabletMapKey &key) const
+{
+  return ObTabletResidentInfo(attr_, phy_addr_, key.ls_id_, key.tablet_id_);
+}
+
 bool ObTabletPointer::get_initial_state() const
 {
   return ATOMIC_LOAD(&initial_state_);
@@ -703,13 +708,6 @@ int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
     attr_ = attr;
   }
   return ret;
-}
-
-ObTabletResidentInfo::ObTabletResidentInfo(const ObTabletMapKey &key, const ObTabletPointer &tablet_ptr)
-  : attr_(tablet_ptr.attr_), tablet_addr_(tablet_ptr.phy_addr_)
-{
-  tablet_id_ = key.tablet_id_;
-  ls_id_ = key.ls_id_;
 }
 
 int64_t ObITabletFilterOp::total_skip_cnt_ = 0;

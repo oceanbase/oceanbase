@@ -185,6 +185,7 @@ public:
                          const int64_t offset,
                          int64_t &write_size);
   static int convert_sys_errno();
+  static int convert_sys_errno(const int error_no);
 
   static int get_block_file_size(const char *sstable_dir,
                                  const int64_t reserved_size,

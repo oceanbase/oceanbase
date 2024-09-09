@@ -1376,6 +1376,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
         end_idx++;
       }
       if (OB_FAIL(check_tablet_checksum(checksum_items, ls_cs_replica_cache, start_idx, end_idx, true /*is_medium_checker*/, error_pairs, check_ret))) {
+        LOG_WARN("failed to check tablet checksum", KR(ret), K(checksum_items), K(ls_cs_replica_cache), K(start_idx), K(end_idx), K(error_pairs));
       } else {
         // update medium compaction info
         if (is_medium_checker && OB_SUCCESS == check_ret) {

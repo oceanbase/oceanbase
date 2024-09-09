@@ -224,7 +224,7 @@ int ObLSTabletService::replay(
     LOG_WARN("failed to init replayer", K(ret), KP(log_buf), K(nbytes), K(pos), K(lsn), K(scn));
   } else if (OB_FAIL(replayer_executor.execute(scn, ls_->get_ls_id(), tablet_id))) {
     if (OB_TABLET_NOT_EXIST == ret) {
-      ret = OB_SUCCESS; // TODO (bowen.gbw): unify multi data replay logic
+      ret = OB_SUCCESS; // TODO (gaishun.gs): unify multi data replay logic
       LOG_INFO("tablet does not exist, skip", K(ret), K(replayer_executor));
     } else if (OB_TIMEOUT == ret) {
       LOG_INFO("replace timeout errno", KR(ret), K(replayer_executor));
@@ -2247,17 +2247,23 @@ int ObLSTabletService::get_ls_migration_required_size(int64_t &required_size)
     LOG_WARN("fail to get all tablet ids from set", K(ret));
   } else {
     key.ls_id_ = ls_id;
+    ObTabletResidentInfo info;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       key.tablet_id_ = tablet_ids.at(i);
-      if (OB_FAIL(t3m->get_tablet_migration_required_size(key, tmp_size))) {
+      if (OB_FAIL(t3m->get_tablet_resident_info(key, info))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // do nothing (expected: add no lock when fetching tablets from tablet_id_set_)
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("fail to get tablet required_size", K(ret), K(key), K(tmp_size));
         }
+      } else if (!info.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("in_valid resident_info", K(ret), K(key), K(info));
       } else {
-        required_size += tmp_size;
+        required_size += info.get_tablet_meta_size() +  // meta_size
+                         info.get_required_size() -     // data_size
+                         info.get_ss_public_sstable_occupy_size(); // shared_data size
       }
     } // end for
   }

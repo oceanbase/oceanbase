@@ -1487,6 +1487,10 @@ int ObMergeGroupByVecOp::process_batch(const ObBatchRows &brs)
     group_processor_.prepare_process_next_batch();
     group_end_idx = brs.size_;
     while (OB_SUCC(ret) && !is_iter_end && idx < brs.size_) {
+      if (brs.skip_->at(idx)) {
+        ++idx;
+        continue;
+      }
       found_new_group = false;
       if (nullptr == cur_aggr_row_) {
         batch_info_guard.set_batch_idx(idx);

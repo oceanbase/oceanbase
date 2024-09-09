@@ -146,6 +146,9 @@ bool ObTabletCreateSSTableParam::is_valid() const
   } else if (table_shared_flag_.is_shared_sstable() && (data_blocks_cnt_ + index_blocks_cnt_) > 0 && 0 == root_macro_seq_) {
     ret = false;
     LOG_ERROR("invalid root macro seq", K(data_blocks_cnt_), K(data_blocks_cnt_), K(root_macro_seq_));
+  } else if (!table_key_.get_tablet_id().is_ls_inner_tablet() && table_key_.is_minor_sstable() && filled_tx_scn_ < table_key_.get_end_scn()) {
+    ret = false;
+    LOG_WARN("filled tx scn is invalid", K(filled_tx_scn_), K(table_key_));
   }
   return ret;
 }
@@ -228,7 +231,13 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
       LOG_WARN("fail to fill column checksum", K(ret), K(res.data_column_checksums_));
     }
   }
-
+  if (OB_SUCC(ret)) {
+    if (!is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("init for small sstable get invalid argument", K(ret), K(res), K(table_key), KPC(this),
+          K(sstable_meta), K(block_info));
+    }
+  }
   return ret;
 }
 
@@ -309,6 +318,14 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
         LOG_WARN("fail to fill column checksum", K(ret), K(res.data_column_checksums_));
       } else if (GCTX.is_shared_storage_mode() && is_major_merge_type(static_param.get_merge_type())) {
         table_shared_flag_.set_shared_sstable();
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (!is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("init for merge sstable get invalid argument", K(ret), K(table_key), KPC(this),
+            K(res), K(ctx));
       }
     }
   }
@@ -462,6 +479,14 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
           LOG_WARN("unexpected column checksums", K(ret), K(column_count), KPC(this));
         }
       }
+
+      if (OB_SUCC(ret)) {
+        if (!is_valid()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("init for ddl sstable get invalid argument", K(ret), K(ddl_param), KPC(this),
+              K(res));
+        }
+      }
     }
   }
   return ret;
@@ -586,6 +611,7 @@ int ObTabletCreateSSTableParam::init_for_ha(
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
+  filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
@@ -601,8 +627,12 @@ int ObTabletCreateSSTableParam::init_for_ha(
 #ifdef OB_BUILD_SHARED_STORAGE
     root_macro_seq_ += oceanbase::compaction::MACRO_STEP_SIZE;
 #endif
+    if (!is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("init for ha sstable get invalid argument", K(ret), K(sstable_param), KPC(this),
+          K(res));
+    }
   }
-
   return ret;
 }
 
@@ -651,8 +681,10 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   }
   if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to assign column checksums", K(ret), K(sstable_param));
+  } else if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init for ha sstable get invalid argument", K(ret), K(sstable_param), KPC(this));
   }
-
   return ret;
 }
 
@@ -698,6 +730,7 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
+  filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
@@ -707,6 +740,9 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to fill column checksum", K(ret), K(sstable_param));
+  } else if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init for remote sstable get invalid argument", K(ret), K(sstable_param), KPC(this));
   }
   return ret;
 }
@@ -764,6 +800,12 @@ int ObTabletCreateSSTableParam::init_for_mds(
     }
   }
 
+  if (OB_SUCC(ret)) {
+    if (!is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("init for mds sstable get invalid argument", K(ret), K(res), K(ctx), KPC(this));
+    }
+  }
   return ret;
 }
 

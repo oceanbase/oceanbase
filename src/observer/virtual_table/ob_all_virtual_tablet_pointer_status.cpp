@@ -146,7 +146,7 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
     ls_id = key.ls_id_;
     tablet_id = key.tablet_id_;
     tablet_pointer = static_cast<const ObTabletPointer*>(ptr_hdl.get_resource_ptr());
-    ObTabletResidentInfo tablet_info(key, *tablet_pointer);
+    ObTabletResidentInfo tablet_info = tablet_pointer->get_tablet_resident_info(key);
 
     const int64_t col_cnt = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; i++) {

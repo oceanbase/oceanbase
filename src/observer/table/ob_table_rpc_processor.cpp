@@ -281,13 +281,12 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  ObTableApiSessGuard guard;
   const ObTableApiCredential *sess_credetial = nullptr;
   if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
-  } else if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential_, guard))) {
+  } else if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential_, sess_guard_))) {
     LOG_WARN("fail to get session info", K(ret), K_(credential));
-  } else if (OB_FAIL(guard.get_credential(sess_credetial))) {
+  } else if (OB_FAIL(sess_guard_.get_credential(sess_credetial))) {
     LOG_WARN("fail to get credential", K(ret));
   } else if (sess_credetial->hash_val_ != credential_.hash_val_) {
     ret = OB_KV_CREDENTIAL_NOT_MATCH;
@@ -300,7 +299,7 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("invalid credential cluster id", K(ret), K_(credential), K(*sess_credetial));
-  } else if (OB_FAIL(check_mode(guard.get_sess_info()))) {
+  } else if (OB_FAIL(check_mode(sess_guard_.get_sess_info()))) {
     LOG_WARN("fail to check mode", K(ret));
   } else {
     LOG_DEBUG("user can access", K_(credential));
@@ -689,59 +688,21 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
 
 void ObTableApiProcessorBase::end_audit()
 {
+  int ret = OB_SUCCESS;
+
   // credential info
   audit_record_.tenant_id_ = credential_.tenant_id_;
   audit_record_.effective_tenant_id_ = credential_.tenant_id_;
   audit_record_.user_id_ = credential_.user_id_;
   audit_record_.db_id_ = credential_.database_id_;
 
-  // update tenant_name, user_name, database_name
-  int ret = OB_SUCCESS;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
-    SERVER_LOG(WARN, "fail to get schema guard", K(ret), "tenant_id", credential_.tenant_id_);
-  } else {
-    { // set tenant name, ignore ret
-      const share::schema::ObSimpleTenantSchema *tenant_info = NULL;
-      if(OB_FAIL(schema_guard.get_tenant_info(credential_.tenant_id_, tenant_info))) {
-        SERVER_LOG(WARN, "fail to get tenant info", K(ret), K(credential_.tenant_id_));
-      } else if (OB_ISNULL(tenant_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "tenant info is null", K(ret));
-      } else if (OB_FAIL(set_audit_name(tenant_info->get_tenant_name(),
-          audit_record_.tenant_name_, audit_record_.tenant_name_len_, audit_allocator_))){
-        SERVER_LOG(WARN, "fail to set tenant name", K(ret), "tenant_name", tenant_info->get_tenant_name());
-      }
-    }
-
-    { // set user name, ignore ret
-      ret = OB_SUCCESS;
-      const share::schema::ObUserInfo *user_info = NULL;
-      if(OB_FAIL(schema_guard.get_user_info(credential_.tenant_id_, credential_.user_id_, user_info))) {
-        SERVER_LOG(WARN, "fail to get user info", K(ret), K(credential_));
-      } else if (OB_ISNULL(user_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "user info is null", K(ret));
-      } else if (OB_FAIL(set_audit_name(user_info->get_user_name(),
-          audit_record_.user_name_, audit_record_.user_name_len_, audit_allocator_))) {
-        SERVER_LOG(WARN, "fail to set user name", K(ret), "user_name", user_info->get_user_name());
-      }
-    }
-
-    { // set database name, ignore ret
-      ret = OB_SUCCESS;
-      const share::schema::ObSimpleDatabaseSchema *database_info = NULL;
-      if(OB_FAIL(schema_guard.get_database_schema(credential_.tenant_id_, credential_.database_id_, database_info))) {
-        SERVER_LOG(WARN, "fail to get database info", K(ret), K(credential_));
-      } else if (OB_ISNULL(database_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "database info is null", K(ret));
-      } else if (OB_FAIL(set_audit_name(database_info->get_database_name(),
-          audit_record_.db_name_, audit_record_.db_name_len_, audit_allocator_))) {
-        SERVER_LOG(WARN, "fail to set database name", K(ret), "database_name", database_info->get_database_name());
-      }
-    }
-  }
+  // tenant name/user name/database name
+  audit_record_.tenant_name_ = const_cast<char *>(sess_guard_.get_tenant_name().ptr());
+  audit_record_.tenant_name_len_ = sess_guard_.get_tenant_name().length();
+  audit_record_.user_name_ = const_cast<char *>(sess_guard_.get_user_name().ptr());
+  audit_record_.user_name_len_ = sess_guard_.get_user_name().length();
+  audit_record_.db_name_ = const_cast<char *>(sess_guard_.get_database_name().ptr());
+  audit_record_.db_name_len_ = sess_guard_.get_database_name().length();
 
   // append request string to query_sql
   if (NULL != request_string_ && request_string_len_ > 0) {

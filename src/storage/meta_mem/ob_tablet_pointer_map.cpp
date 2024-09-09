@@ -254,7 +254,7 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter(
       STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
     } else if (t_ptr->is_in_memory()) {
       if (t_ptr->is_attr_valid()) { // try skip tablet with attr
-        ObTabletResidentInfo info(key, *t_ptr);
+        ObTabletResidentInfo info = t_ptr->get_tablet_resident_info(key);
         bool is_skipped = false;
         if (OB_FAIL(op(info, is_skipped))) {
           STORAGE_LOG(WARN, "fail to skip tablet", K(ret), KP(t_ptr), K(key), K(info));

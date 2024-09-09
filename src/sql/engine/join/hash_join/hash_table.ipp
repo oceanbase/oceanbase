@@ -43,7 +43,7 @@ int HashTable<Bucket, Prober>::init(ObIAllocator &alloc, const int64_t max_batch
       bit_cnt_ = __builtin_ctz(BucketArray::BLOCK_CAPACITY);
       if (!std::is_same<Bucket, GenericBucket>::value) {
         void *item_buf = alloc.alloc(sizeof(ItemArray));
-        if (OB_ISNULL(bucket_buf)) {
+        if (OB_ISNULL(item_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           if (OB_NOT_NULL(item_buf)) {
             alloc.free(item_buf);

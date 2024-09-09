@@ -1024,7 +1024,7 @@ int ObTabletMeta::update_meta_last_persisted_committed_tablet_status(
 
 ObMigrationTabletParam::ObMigrationTabletParam()
   : magic_number_(MAGIC_NUM),
-    version_(PARAM_VERSION_V3), // TODO(@bowen.gbw): set version to v3
+    version_(PARAM_VERSION_V3), // TODO(@gaishun.gs): set version to v3
     is_empty_shell_(false),
     ls_id_(),
     tablet_id_(),

@@ -1846,7 +1846,8 @@ void ObDagPrioScheduler::destroy()
     ObIDag *next = NULL;
     while (NULL != cur_dag && head != cur_dag) {
       next = cur_dag->get_next();
-      if (OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(cur_dag->get_dag_id()))) {
+      if (cur_dag->get_dag_id().is_valid()
+          && OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(cur_dag->get_dag_id()))) {
         if (OB_ENTRY_NOT_EXIST != tmp_ret) {
           STORAGE_LOG_RET(WARN, tmp_ret, "failed to del sys task", K(cur_dag->get_dag_id()));
         }
@@ -4561,7 +4562,9 @@ int ObTenantDagScheduler::diagnose_dag_net(
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arugment", KP(dag_net));
   } else if (OB_FAIL(dag_net_sche_.diagnose_dag_net(*dag_net, progress_list, dag_net_id, start_time))) {
-    COMMON_LOG(WARN, "fail to diagnose dag net", K(ret), KPC(dag_net));
+    if (OB_HASH_NOT_EXIST != ret) {
+      COMMON_LOG(WARN, "fail to diagnose dag net", K(ret), KPC(dag_net));
+    }
   }
   return ret;
 }

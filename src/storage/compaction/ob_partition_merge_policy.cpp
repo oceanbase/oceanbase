@@ -65,7 +65,8 @@ ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[
       ObPartitionMergePolicy::not_support_merge_type,
       ObPartitionMergePolicy::get_mds_merge_tables,
       ObPartitionMergePolicy::not_support_merge_type,
-      ObPartitionMergePolicy::get_convert_co_major_merge_tables
+      ObPartitionMergePolicy::get_convert_co_major_merge_tables,
+      ObPartitionMergePolicy::not_support_merge_type,
     };
 
 int ObPartitionMergePolicy::get_medium_merge_tables(
@@ -535,7 +536,7 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
     const bool check_table_cnt,
     const bool is_multi_version_merge)
 {
-  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX) == ARRAYSIZEOF(get_merge_tables), "get merge table func cnt is mismatch");
+  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX + 1) == ARRAYSIZEOF(get_merge_tables), "get merge table func cnt is mismatch");
 
   int ret = OB_SUCCESS;
   const int64_t tablet_table_cnt = tablet.get_major_table_count() + tablet.get_minor_table_count();

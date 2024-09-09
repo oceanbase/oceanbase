@@ -1864,7 +1864,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
     // 4.clock设置为stop，但是不会析构
     // 5.io_usage暂不处理
     for (uint8_t i = (uint8_t)ObIOMode::READ; i <= (uint8_t)ObIOMode::MAX_MODE; ++i) {
-      uint64_t index = INT_MAX64;
+      uint64_t index = INT64_MAX;
       DRWLock::WRLockGuard guard(io_config_lock_);
       ObIOMode mode = (ObIOMode)i;
       ObIOGroupKey key(group_id, mode);
@@ -1892,7 +1892,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
           LOG_WARN("modify group io config failed", K(ret), K(tenant_id_), K(index));
         }
       }
-      if (OB_SUCC(ret) && index != 0) {
+      if (OB_SUCC(ret) && index != 0 && index != INT64_MAX) {
         if (OB_FAIL(io_scheduler_->stop_phy_queues(tenant_id_, index))) {
           LOG_WARN("stop phy queues failed", K(ret), K(tenant_id_), K(index));
         } else {

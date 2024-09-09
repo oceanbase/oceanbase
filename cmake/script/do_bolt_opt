@@ -138,11 +138,11 @@ def main():
         print_log("architecture: " + architecture)
 
     if architecture == "x86_64":
-        print_log("download corebolt-17.0.6.1-5.alios7.x86_64.rpm")
-        result = shell_run_command("wget http://yum.tbsite.net/taobao/7/x86_64/current/corebolt/corebolt-17.0.6.1-5.alios7.x86_64.rpm",
+        print_log("download corebolt-17.0.6.1-7.alios7.x86_64.rpm")
+        result = shell_run_command("wget http://yum.tbsite.net/taobao/7/x86_64/test/corebolt/corebolt-17.0.6.1-7.alios7.x86_64.rpm",
                                 False, False)
         print_log("rpm2cpio alibaba-cloud-compiler | cpio -div -u")
-        result = shell_run_command("rpm2cpio corebolt-17.0.6.1-5.alios7.x86_64.rpm | cpio -div -u", False, False)
+        result = shell_run_command("rpm2cpio corebolt-17.0.6.1-7.alios7.x86_64.rpm | cpio -div -u", False, False)
         print_log("check llvm-bolt version")
         result = shell_run_command("./opt/corebolt/bin/llvm-bolt --version", True, True)
         print_log("do bolt opt")

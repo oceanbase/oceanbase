@@ -31,6 +31,7 @@ struct ObTabletCreateSSTableParam;
 }
 namespace blocksstable
 {
+
 class ObTxContext final
 {
 public:
@@ -425,6 +426,13 @@ private:
       const int64_t new_column_count);
 };
 
+class ObSSTableMetaCompactUtil
+{
+public:
+  static int fix_filled_tx_scn_value_for_compact(
+      const ObITable::TableKey &table_key,
+      share::SCN &filled_tx_scn);
+};
 
 } // namespace blocksstable
 } // namespace oceanbase

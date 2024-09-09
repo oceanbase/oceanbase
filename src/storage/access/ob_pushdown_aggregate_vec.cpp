@@ -899,8 +899,8 @@ int ObGroupByCellVec::init(const ObTableAccessParam &param, const ObTableAccessC
     null_datum.set_null();
     for (int64_t i = 0; OB_SUCC(ret) && i < param.output_exprs_->count(); ++i) {
       if (T_PSEUDO_GROUP_ID == param.output_exprs_->at(i)->type_) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Unexpected group idx expr", K(ret), KPC(param.output_exprs_->at(i)));
+        LOG_TRACE("Group by pushdown in batch nlj", K(ret));
+        continue;
       } else if (nullptr == param.output_sel_mask_ || param.output_sel_mask_->at(i)) {
         int32_t col_offset = param.iter_param_.out_cols_project_->at(i);
         sql::ObExpr *expr = param.output_exprs_->at(i);

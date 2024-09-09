@@ -367,7 +367,8 @@ int ObTenantMdsTimer::get_tablet_oldest_scn_(ObTablet &tablet, share::SCN &oldes
     } else {
       MDS_LOG_GC(WARN, "fail to get oldest tablet min_mds_ckpt_scn");
     }
-  } else if (oldest_scn.is_max() || !oldest_scn.is_valid()) {
+  }
+  if (oldest_scn.is_max() || !oldest_scn.is_valid()) {
     MDS_LOG_GC(WARN, "get min_mds_ckpt_scn, but is invalid");
     oldest_scn.set_min();
   }

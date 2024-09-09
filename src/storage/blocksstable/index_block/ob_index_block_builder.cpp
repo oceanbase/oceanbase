@@ -1,14 +1,13 @@
 /**
- *
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan
- * PubL v2. You may obtain a copy of Mulan PubL v2 at:
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
  *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
- * Mulan PubL v2 for more details.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
  */
 
 #define USING_LOG_PREFIX STORAGE
@@ -184,13 +183,6 @@ int ObIndexTreeRootCtx::add_clustered_index_block_micro_infos(
                  ObClusteredIndexBlockMicroInfos(macro_id, block_offset,
                                                  block_size, logic_micro_id)))) {
     LOG_WARN("fail to push back clustered micro info", K(ret));
-  // TODO (baichangmin.bcm): can't compare to get_data_block_cnt() because
-  // meta_block_info_ is updated in close phase, not in process phase.
-  // } else if (OB_UNLIKELY(clustered_micro_info_array_->count() != get_data_block_cnt())) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   LOG_WARN("fail to add clustered index block micro infos, unexpected array size",
-  //       K(ret), K(clustered_micro_info_array_->count()),
-  //       K(get_data_block_cnt()));
   } else {
     LOG_DEBUG("add clustered index block micro infos", K(ret), K(macro_id),
               K(block_offset), K(block_size), K(logic_micro_id));
@@ -1088,7 +1080,6 @@ int ObSSTableIndexBuilder::merge_index_tree_from_all_mem_index_block(ObSSTableMe
   } else {
     const int64_t rowkey_column_count = index_store_desc_.get_desc().get_rowkey_column_count();
     ObIndexBlockRowParser row_parser;
-    const ObIndexBlockRowHeader *index_row_header = nullptr;
     const ObIndexBlockRowMinorMetaInfo *index_row_meta = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < roots_.count(); ++i) {
       index_block_loader_.reuse();
@@ -1105,7 +1096,7 @@ int ObSSTableIndexBuilder::merge_index_tree_from_all_mem_index_block(ObSSTableMe
         while (OB_SUCC(ret)) {
           row_parser.reset();
           index_row.reuse();
-          ObIndexBlockRowDesc row_desc(data_desc.get_desc());
+          ObIndexBlockRowDesc row_desc;
           if (OB_FAIL(index_block_loader_.get_next_row(index_row))) {
             if (OB_UNLIKELY(ret != OB_ITER_END)) {
               STORAGE_LOG(WARN, "fail to get row", K(ret),
@@ -1113,43 +1104,8 @@ int ObSSTableIndexBuilder::merge_index_tree_from_all_mem_index_block(ObSSTableMe
             }
           } else if (OB_FAIL(row_parser.init(rowkey_column_count, index_row))) {
             STORAGE_LOG(WARN, "fail to init row parser", K(ret), K(rowkey_column_count), K(index_row));
-          } else if (OB_FAIL(row_desc.row_key_.assign(index_row.storage_datums_, rowkey_column_count))) {
-            STORAGE_LOG(WARN, "fail to assign src rowkey", K(ret), K(rowkey_column_count), K(index_row));
-          } else if (OB_FAIL(row_parser.get_header(index_row_header))){
-            STORAGE_LOG(WARN, "fail to get index row header", K(ret), K(row_parser));
-          } else {
-            row_desc.is_secondary_meta_ = false;
-            row_desc.is_macro_node_ = true;
-            // TODO(baichangmin & luhaopeng): if there is confusing bug, think about this macro id here.
-            row_desc.macro_id_ = index_row_header->get_macro_id();
-            row_desc.block_offset_ = index_row_header->block_offset_;
-            row_desc.block_size_ = index_row_header->block_size_;
-            row_desc.row_count_ = index_row_header->row_count_;
-            row_desc.is_deleted_ = index_row_header->is_deleted_;
-            row_desc.contain_uncommitted_row_ = index_row_header->contain_uncommitted_row_;
-            row_desc.micro_block_count_ = index_row_header->micro_block_count_;
-            row_desc.macro_block_count_ = 1;
-            row_desc.has_string_out_row_ = index_row_header->has_string_out_row_;
-            row_desc.has_lob_out_row_ = index_row_header->all_lob_in_row_;
-            row_desc.row_offset_ = row_parser.get_row_offset();
-            row_desc.is_serialized_agg_row_ = true;
-
-            const char *agg_row_buf = nullptr;
-            int64_t agg_buf_size = 0;
-            if (!index_store_desc_.get_desc().is_major_or_meta_merge_type()) {
-              if (OB_FAIL(row_parser.get_minor_meta(index_row_meta))) {
-                STORAGE_LOG(WARN, "fail to get minor meta", K(ret), K(row_parser));
-              } else {
-                row_desc.max_merged_trans_version_ = index_row_meta->max_merged_trans_version_;
-                row_desc.row_count_delta_ = index_row_meta->row_count_delta_;
-              }
-            } else if (!index_row_header->is_major_node() || !index_row_header->is_pre_aggregated()) {
-              // Do not have aggregate data
-            } else if (OB_FAIL(row_parser.get_agg_row(agg_row_buf, agg_buf_size))) {
-              STORAGE_LOG(WARN, "Fail to get aggregate", K(ret));
-            } else {
-              row_desc.serialized_agg_row_buf_ = agg_row_buf;
-            }
+          } else if (OB_FAIL(row_desc.init(data_desc.get_desc(), row_parser, index_row))) {
+            LOG_WARN("fail to init idx row desc", K(ret), K(data_desc.get_desc()), K(row_parser), K(index_row));
           }
 
           if (OB_FAIL(ret)) {
@@ -2397,11 +2353,11 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
 {
   int ret = OB_SUCCESS;
   ObDataStoreDesc *data_desc = nullptr;
-  if (OB_UNLIKELY(nullptr == row_desc.data_store_desc_)) {
+  if (OB_UNLIKELY(nullptr == row_desc.get_data_store_desc())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid null data store desc", K(ret));
   } else if (FALSE_IT(data_desc = const_cast<ObDataStoreDesc *>(
-                          row_desc.data_store_desc_))) {
+                          row_desc.get_data_store_desc()))) {
   } else if (OB_FAIL(data_desc->static_desc_->end_scn_.convert_for_tx(
                  macro_meta.val_.snapshot_version_))) {
     STORAGE_LOG(WARN, "fail to convert scn", K(ret),
@@ -3305,7 +3261,7 @@ int ObDataIndexBlockBuilder::generate_macro_meta_row_desc(
     ObIndexBlockRowDesc &macro_row_desc)
 {
   int ret = OB_SUCCESS;
-  macro_row_desc.data_store_desc_ = index_store_desc_;
+  macro_row_desc.set_data_store_desc(index_store_desc_);
   if (OB_UNLIKELY(!micro_block_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro block desc", K(ret), K(micro_block_desc));

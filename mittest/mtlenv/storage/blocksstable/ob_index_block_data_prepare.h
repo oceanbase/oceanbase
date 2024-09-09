@@ -596,6 +596,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
   param.master_key_id_ = res.master_key_id_;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.filled_tx_scn_ = table_key.get_end_scn();
   MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (merge_type_ == MAJOR_MERGE) {
     OK(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
