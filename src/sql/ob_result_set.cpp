@@ -733,6 +733,28 @@ bool ObResultSet::need_rollback(int ret, int errcode, bool is_error_ignored) con
   return bret;
 }
 
+int ObResultSet::deal_feedback_info(ObPhysicalPlan *physical_plan, bool is_rollback, ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *physical_ctx = get_exec_context().get_physical_plan_ctx();
+  if (ctx.get_feedback_info().is_valid() && physical_plan->get_logical_plan().is_valid()) {
+    if (physical_ctx != nullptr && !is_rollback && physical_ctx->get_check_pdml_affected_rows()) {
+      if (OB_FAIL(physical_plan->check_pdml_affected_rows(ctx))) {
+        LOG_WARN("fail to check pdml affected_rows", K(ret));
+      }
+    }
+    if (physical_plan->try_record_plan_info()) {
+      if (OB_FAIL(physical_plan->set_feedback_info(ctx))) {
+        LOG_WARN("fail to set feed_back info", K(ret));
+      } else {
+        physical_plan->set_record_plan_info(false);
+      }
+    }
+  }
+
+  return ret;
+}
+
 OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 {
   int ret = common::OB_SUCCESS;
@@ -813,14 +835,8 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       ret = sret;
     }
     if (OB_SUCC(ret)) {
-      if (physical_plan_->try_record_plan_info()) {
-        if (ctx.get_feedback_info().is_valid() &&
-            physical_plan_->get_logical_plan().is_valid() &&
-            OB_FAIL(physical_plan_->set_feedback_info(ctx))) {
-          LOG_WARN("failed to set feedback info", K(ret));
-        } else {
-          physical_plan_->set_record_plan_info(false);
-        }
+      if (OB_FAIL(deal_feedback_info(physical_plan_, rollback, ctx))) {
+        LOG_WARN("fail to deal feedback info", K(ret));
       }
     }
   } else {

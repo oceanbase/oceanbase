@@ -266,10 +266,21 @@ protected:
 
   int init_das_dml_ctx();
   //to merge array binding cusor info when array binding is executed in batch mode
-  int merge_implict_cursor(int64_t insert_rows,
-                           int64_t update_rows,
-                           int64_t delete_rows,
-                           int64_t found_rows);
+  int merge_implict_cursor(int64_t affected_rows,
+                           int64_t found_rows,
+                           int64_t matched_rows,
+                           int64_t duplicated_rows);
+
+  int prepare_implict_cursor(int64_t affected_rows,
+                             int64_t found_rows,
+                             int64_t matched_rows_,
+                             int64_t duplicated_rows_,
+                             ObImplicitCursorInfo &implicit_cursor);
+
+  int replace_implict_cursor(int64_t insert_rows,
+                             int64_t update_rows,
+                             int64_t delete_rows,
+                             int64_t found_rows);
   int discharge_das_write_buffer();
   virtual void record_err_for_load_data(int err_ret, int row_num) { UNUSED(err_ret); UNUSED(row_num); }
 public:

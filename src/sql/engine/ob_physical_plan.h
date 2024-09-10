@@ -488,7 +488,9 @@ public:
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
   inline const ObLogicalPlanRawData& get_logical_plan()const { return logical_plan_; }
   int set_feedback_info(ObExecContext &ctx);
-
+  int check_pdml_affected_rows(ObExecContext &ctx);
+  int print_this_plan_info(ObExecContext &ctx);
+  int get_all_spec_op(ObIArray<const ObOpSpec *> &simple_op_infos, const ObOpSpec &root_op_spec);
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
   ObIArray<uint64_t> &get_dml_table_ids() { return dml_table_ids_; }

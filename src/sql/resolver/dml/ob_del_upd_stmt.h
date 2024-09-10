@@ -397,6 +397,7 @@ public:
         returning_exprs_(),
         returning_strs_(),
         returning_agg_items_(),
+        group_param_exprs_(),
         ignore_(false),
         has_global_index_(false),
         error_log_info_(),
@@ -405,6 +406,8 @@ public:
         dml_source_from_join_(false)
   { }
   virtual ~ObDelUpdStmt() { }
+  common::ObIArray<ObRawExpr*> &get_group_param_exprs() { return group_param_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_group_param_exprs() const { return group_param_exprs_; }
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_factory,
                             const ObDMLStmt &other) override;
@@ -474,6 +477,7 @@ protected:
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;
   common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_strs_;
   common::ObArray<ObAggFunRawExpr*, common::ModulePageAllocator, true> returning_agg_items_;
+  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> group_param_exprs_;
   bool ignore_;
   bool has_global_index_;
   ObErrLogInfo error_log_info_;

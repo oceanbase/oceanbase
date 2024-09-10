@@ -33,6 +33,7 @@
 #include "share/ob_truncated_string.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
 #include "sql/engine/ob_exec_feedback_info.h"
+#include "sql/monitor/ob_sql_plan.h"
 
 namespace oceanbase
 {
@@ -1297,6 +1298,103 @@ int ObPhysicalPlan::set_logical_plan(ObLogicalPlanRawData &logical_plan)
     logical_plan_ = logical_plan;
     logical_plan_.logical_plan_ = buf;
   }
+  return ret;
+}
+
+int ObPhysicalPlan::get_all_spec_op(ObIArray<const ObOpSpec *> &simple_op_infos, const ObOpSpec &op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(simple_op_infos.push_back(&op))) {
+    LOG_WARN("fail to push back spec_op", K(ret), K(op.get_id()));
+  }
+  for (int32_t i = 0; OB_SUCC(ret) && i < op.get_child_num(); ++i) {
+    const ObOpSpec *child_op = op.get_child(i);
+    if (OB_ISNULL(child_op)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(SMART_CALL(get_all_spec_op(simple_op_infos, *child_op)))) {
+      LOG_WARN("fail to find child ops",
+               K(ret), K(i), "op_id", op.get_id(), "child_id", child_op->get_id());
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlan::print_this_plan_info(ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  PlanText out_plan_text;
+  ObExplainDisplayOpt option;
+  ObSEArray<common::ObString, 32> plan_strs;
+  option.with_tree_line_ = false;
+  ObSqlPlan sql_plan(ctx.get_allocator());
+  ExplainType type = EXPLAIN_EXTENDED;
+  ObSEArray<ObSqlPlanItem*, 4> plan_items;
+  if (OB_FAIL(logical_plan_.uncompress_logical_plan(ctx.get_allocator(), plan_items))) {
+    LOG_WARN("failed to uncompress logical plan", K(ret));
+  } else if (OB_FAIL(sql_plan.format_sql_plan(plan_items,
+                                              type,
+                                              option,
+                                              out_plan_text))) {
+    LOG_WARN("failed to format sql plan", K(ret));
+  } else if (OB_FAIL(sql_plan.plan_text_to_strings(out_plan_text, plan_strs))) {
+    LOG_WARN("failed to convert plan text to strings", K(ret));
+  } else {
+    LOG_INFO("print plan info:");
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); i++) {
+    _OB_LOG(INFO, "%*s", plan_strs.at(i).length(), plan_strs.at(i).ptr());
+  }
+  return ret;
+}
+
+int ObPhysicalPlan::check_pdml_affected_rows(ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObOpSpec *, 16> all_ops;
+  ObExecFeedbackInfo &fb_info = ctx.get_feedback_info();
+  const common::ObIArray<ObExecFeedbackNode> &feedback_nodes = fb_info.get_feedback_nodes();
+  if (!is_use_pdml()) {
+    // do nothing
+  } else if (OB_FAIL(get_all_spec_op(all_ops, *root_op_spec_))) {
+    LOG_WARN("fail to get all spec", K(ret));
+  } else if (!fb_info.is_valid()) {
+    // do nothing
+  } else if (all_ops.count() != feedback_nodes.count()) {
+    // do nothing
+  } else {
+    int64_t pdml_write_rows = 0;
+    bool set_pdml_write_rows = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_ops.count(); ++i) {
+      const ObExecFeedbackNode &feedback_node = feedback_nodes.at(i);
+      const ObOpSpec *op = all_ops.at(i);
+      if (OB_ISNULL(op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (op->id_ != feedback_node.op_id_) {
+        // do nothing
+      } else if (op->is_pdml_operator()) {
+        if (!set_pdml_write_rows) {
+          set_pdml_write_rows = true;
+          pdml_write_rows = feedback_node.pdml_op_write_rows_;
+        } else if (pdml_write_rows != feedback_node.pdml_op_write_rows_) {
+          ret = OB_ERR_DEFENSIVE_CHECK;
+          ObString func_name = ObString::make_string("check_pdml_affected_row");
+          LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+          LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! pdml write affected row is not match with index table", K(ret),
+                    "curr_pdml_op_write_rows", feedback_node.pdml_op_write_rows_,
+                    "pdml_write_rows", pdml_write_rows,
+                    "op_info", feedback_node,
+                    K(feedback_nodes));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = print_this_plan_info(ctx))) {
+            LOG_WARN("failed to uncompress logical plan", K(tmp_ret));
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

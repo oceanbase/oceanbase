@@ -23,6 +23,8 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/engine/user_defined_function/ob_udf_ctx_mgr.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/expr/ob_expr_util.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -366,6 +368,14 @@ public:
   {
     return is_or_expand_transformed_;
   }
+  inline void set_check_pdml_affected_rows(const bool check_pdml_affected_rows)
+  {
+    check_pdml_affected_rows_ = check_pdml_affected_rows;
+  }
+  inline bool get_check_pdml_affected_rows() const
+  {
+    return check_pdml_affected_rows_;
+  }
   /*
   ** 目前OB有语句级重试和语句内部重试，当我们遇到错误码OB_TRANSACTION_SET_VIOLATION,
   ** 不会重新执行sql，而是重新执行计划，此时plan_ctx有些变量需要重置，目前梳理只有下面几种，
@@ -436,6 +446,7 @@ public:
   { return implicit_cursor_infos_; }
   int merge_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor_info);
   int merge_implicit_cursors(const common::ObIArray<ObImplicitCursorInfo> &implicit_cursors);
+  int replace_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor_info);
   void reset_cursor_info();
   void set_cur_stmt_id(int64_t cur_stmt_id) { cur_stmt_id_ = cur_stmt_id; }
   int64_t get_cur_stmt_id() const { return cur_stmt_id_; }
@@ -601,6 +612,12 @@ private:
   bool is_ps_rewrite_sql_;
   // timeout use by spm, don't need to serialize
   int64_t spm_ts_timeout_us_;
+  // for dependant exprs of generated columns
+  common::ObFixedArray<ObSolidifiedVarsContext, common::ObIAllocator> all_local_session_vars_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> last_refresh_scns_;
+  bool is_direct_insert_plan_;
+  bool check_pdml_affected_rows_; // now only worked for pdml checking affected_rows
 };
 
 }

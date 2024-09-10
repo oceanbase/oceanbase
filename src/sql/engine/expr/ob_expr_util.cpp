@@ -639,3 +639,12 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
   }
   return ret;
 }
+
+DEF_TO_STRING(ObSolidifiedVarsContext)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(local_session_var));
+  J_OBJ_END();
+  return pos;
+}

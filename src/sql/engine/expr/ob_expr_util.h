@@ -15,6 +15,7 @@
 
 #include "lib/number/ob_number_v2.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
@@ -221,6 +222,38 @@ int calc_##tritype##_expr(const ObExpr &expr, ObEvalCtx &ctx,                 \
   }                                                                           \
   return ret;                                                                 \
 }
+
+class ObSolidifiedVarsContext
+{
+public:
+  ObSolidifiedVarsContext() :
+    local_session_var_(NULL),
+    alloc_(NULL),
+    local_tz_wrap_(NULL)
+  {
+  }
+  ObSolidifiedVarsContext(share::schema::ObLocalSessionVar *local_var, common::ObIAllocator *alloc) :
+    local_session_var_(local_var),
+    alloc_(alloc),
+    local_tz_wrap_(NULL)
+  {
+  }
+  virtual ~ObSolidifiedVarsContext()
+  {
+    if (NULL != local_tz_wrap_ && NULL != alloc_) {
+      local_tz_wrap_->~ObTimeZoneInfoWrap();
+      alloc_->free(local_tz_wrap_);
+      local_tz_wrap_ = NULL;
+    }
+  }
+  share::schema::ObLocalSessionVar *get_local_vars() const { return local_session_var_; }
+  DECLARE_TO_STRING;
+private:
+  share::schema::ObLocalSessionVar *local_session_var_;
+  common::ObIAllocator *alloc_;
+  //cached vars
+  ObTimeZoneInfoWrap *local_tz_wrap_;
+};
 
 }
 }

@@ -44,6 +44,7 @@ public:
   }
   bool is_replace() const { return table_info_.is_replace_; }
   bool value_from_select() const { return !from_items_.empty(); }
+  int get_all_assignment_exprs(common::ObIArray<ObRawExpr*> &assignment_exprs);
   common::ObIArray<ObAssignment> &get_table_assignments() { return table_info_.assignments_; }
   const common::ObIArray<ObAssignment> &get_table_assignments() const { return table_info_.assignments_; }
   inline const common::ObIArray<ObColumnRefRawExpr*> &get_values_desc() const { return table_info_.values_desc_;}

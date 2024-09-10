@@ -341,6 +341,9 @@ int ObTableInsertUpOp::do_insert_up_cache()
     LOG_WARN("fail to get insert_up_row_store begin iter", K(ret));
   }
   while (OB_SUCC(ret) && OB_SUCC(insert_row_iter.get_next_row(insert_row))) {
+    int64_t insert_rows = 0;
+    int64_t update_rows = 0;
+    int64_t found_rows = 0;
     constraint_values.reuse();
     if (OB_ISNULL(insert_row)) {
       ret = OB_ERR_UNEXPECTED;
@@ -371,10 +374,11 @@ int ObTableInsertUpOp::do_insert_up_cache()
                  "insert_row", ROWEXPR2STR(eval_ctx_, get_primary_table_insert_row()));
       } else {
         modify_row.new_row_ = insert_new_row;
-        if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        insert_rows++;
+        if (OB_FAIL(replace_implict_cursor(insert_rows, 0, 0, 0))) {
+          LOG_WARN("merge implict cursor failed", K(ret));
+        } else if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
           LOG_WARN("failed to push dml modify row to modified row list", K(ret));
-        } else {
-          insert_rows_++;
         }
       }
     } else {
@@ -386,6 +390,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
       const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
       ObDMLModifyRowNode modify_row(this, &upd_ctdef, &upd_rtdef, ObDmlEventType::DE_UPDATING);
       clear_evaluated_flag();
+      found_rows++;
       if (OB_FAIL(insert_row->to_expr(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
         LOG_WARN("insert_row to expr failed", K(ret), KPC(insert_row),
                  "exprs", get_primary_table_insert_row());
@@ -414,28 +419,23 @@ int ObTableInsertUpOp::do_insert_up_cache()
         LOG_WARN("convert expr to stored row failed", K(ret), "exprs", get_primary_table_upd_old_row());
       } else if (OB_FAIL(calc_auto_increment(upd_ctdef))) {
         LOG_WARN("calc auto_inc failed", K(ret), K(upd_ctdef));
-      } else if (FALSE_IT(upd_rtdef.found_rows_++)) {
-        // do nothing
       } else if (is_ignore_) {
         if (OB_FAIL(do_update_with_ignore())) {
           LOG_WARN("do update with ignore failed", K(ret));
         } else if (upd_rtdef.is_row_changed_) {
-          insert_rows_++;
-          upd_changed_rows_++;
+          insert_rows++;
+          update_rows++;
         }
       } else if (upd_rtdef.is_row_changed_) {
+        insert_rows++;
+        update_rows++;
+        modify_row.old_row_ = const_cast<ObChunkDatumStore::StoredRow *>(upd_old_row);
+        modify_row.new_row_ = upd_new_row;
         if (OB_FAIL(conflict_checker_.update_row(upd_new_row, upd_old_row))) {
           LOG_WARN("fail to update row in conflict_checker", K(ret),
                    KPC(upd_new_row), KPC(upd_old_row));
-        } else {
-          modify_row.old_row_ = const_cast<ObChunkDatumStore::StoredRow *>(upd_old_row);
-          modify_row.new_row_ = upd_new_row;
-          if (need_after_row_process(upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
-            LOG_WARN("failed to push dml modify row to modified row list", K(ret));
-          } else {
-            insert_rows_++;
-            upd_changed_rows_++;
-          }
+        } else if (need_after_row_process(upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+          LOG_WARN("failed to push dml modify row to modified row list", K(ret));
         }
       } else {
         // create table t1(c1 int primary key, c2 timestamp default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP);
@@ -448,7 +448,21 @@ int ObTableInsertUpOp::do_insert_up_cache()
           LOG_TRACE("curr update row is not changed", KPC(upd_new_row), KPC(upd_old_row));
         }
       }
-    }
+
+      // for insertup batch_dml_optimization
+      if (OB_SUCC(ret)) {
+        ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+        int64_t affected_rows = my_session->get_capability().cap_flags_.OB_CLIENT_FOUND_ROWS ?
+            insert_rows + found_rows : insert_rows + update_rows;
+        if (OB_FAIL(replace_implict_cursor(affected_rows, found_rows, 0, update_rows))) {
+          LOG_WARN("merge implict cursor failed", K(ret));
+        }
+      }
+    } // end update
+
+    upd_rtdef.found_rows_ += found_rows;
+    insert_rows_ += insert_rows;
+    upd_changed_rows_ += update_rows;
   } // while row store end
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   return ret;
@@ -486,10 +500,10 @@ int ObTableInsertUpOp::insert_row_to_das(const ObInsCtDef &ins_ctdef,
   return ret;
 }
 
-int ObTableInsertUpOp::try_insert_row()
+int ObTableInsertUpOp::try_insert_row(bool &is_skipped)
 {
   int ret = OB_SUCCESS;
-  bool is_skipped = false;
+  is_skipped = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.insert_up_ctdefs_.count(); ++i) {
     // first time: insert each table with fetched row
     // second time: after do conflict checker, insert row without duplicate key
@@ -902,6 +916,7 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
   int ret = OB_SUCCESS;
   is_iter_end = false;
   int64_t row_cnt = 0;
+  bool reach_mem_limit = false;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   int64_t simulate_batch_row_cnt = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
   int64_t default_row_batch_cnt = simulate_batch_row_cnt > 0 ?
@@ -910,17 +925,18 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
     // If it is ignore mode or need excute row by row, degenerate into single line execution
     default_row_batch_cnt = 1;
   }
-  LOG_DEBUG("simulate lookup row batch count", K(simulate_batch_row_cnt), K(default_row_batch_cnt));
   while (OB_SUCC(ret) && ++row_cnt <= default_row_batch_cnt) {
+    bool is_skipped = false;
     if (OB_FAIL(get_next_row_from_child())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to load next row from child", K(ret));
       } else {
         iter_end_ = true;
       }
-    } else if (OB_FAIL(try_insert_row())) {
+    } else if (OB_FAIL(try_insert_row(is_skipped))) {
       LOG_WARN("try insert row to das", K(ret));
-    } else if (OB_FAIL(insert_up_row_store_.add_row(MY_SPEC.all_saved_exprs_, &eval_ctx_))) {
+    } else if (!is_skipped &&
+        OB_FAIL(insert_up_row_store_.add_row(MY_SPEC.all_saved_exprs_, &eval_ctx_))) {
       LOG_WARN("add insert_up row to row store failed", K(ret));
     } else {
       plan_ctx->record_last_insert_id_cur_stmt();
@@ -928,6 +944,11 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
       if (insert_up_row_store_.get_mem_used() >= OB_DEFAULT_INSERT_UP_MEMORY_LIMIT) {
         LOG_INFO("insert up rows used memory over limit", K(ret), K(row_cnt), K(insert_rows));
         break;
+      }
+      // record for insertup batch_dml_optimization
+      int64_t insert_row = is_skipped ? 0 : 1;
+      if (OB_FAIL(merge_implict_cursor(insert_row, 0, 0, 0))) {
+        LOG_WARN("merge implict cursor failed", K(ret));
       }
     }
   }

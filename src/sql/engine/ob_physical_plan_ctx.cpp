@@ -111,7 +111,12 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       is_ps_protocol_(false),
       plan_start_time_(0),
       is_ps_rewrite_sql_(false),
-      spm_ts_timeout_us_(0)
+      spm_ts_timeout_us_(0),
+      all_local_session_vars_(allocator),
+      mview_ids_(allocator),
+      last_refresh_scns_(allocator),
+      is_direct_insert_plan_(false),
+      check_pdml_affected_rows_(false)
 {
 }
 
@@ -357,6 +362,23 @@ int ObPhysicalPlanCtx::merge_implicit_cursor_info(const ObImplicitCursorInfo &im
                      merge_cursor(implicit_cursor))) {
     LOG_WARN("merge implicit cursor info failed", K(ret),
              K(implicit_cursor), K(implicit_cursor_infos_));
+  }
+  LOG_DEBUG("merge implicit cursor info", K(ret), K(implicit_cursor), K(lbt()));
+  return ret;
+}
+
+int ObPhysicalPlanCtx::replace_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(implicit_cursor.stmt_id_ < 0)
+      || OB_UNLIKELY(implicit_cursor.stmt_id_ >= implicit_cursor_infos_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("implicit cursor is invalid", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()));
+  } else if (OB_FAIL(implicit_cursor_infos_.at(implicit_cursor.stmt_id_).
+      replace_cursor(implicit_cursor))) {
+    LOG_WARN("merge implicit cursor info failed", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()), K(implicit_cursor));
   }
   LOG_DEBUG("merge implicit cursor info", K(ret), K(implicit_cursor), K(lbt()));
   return ret;
@@ -730,6 +752,21 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
       OB_UNIS_ENCODE(array_param_groups_.at(i));
     }
   }
+
+  OB_UNIS_ENCODE(all_local_session_vars_.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars_.count(); ++i) {
+    if (OB_ISNULL(all_local_session_vars_.at(i).get_local_vars())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      OB_UNIS_ENCODE(*all_local_session_vars_.at(i).get_local_vars());
+    }
+  }
+
+  OB_UNIS_ENCODE(mview_ids_);
+  OB_UNIS_ENCODE(last_refresh_scns_);
+  OB_UNIS_ENCODE(is_direct_insert_plan_);
+  OB_UNIS_ENCODE(check_pdml_affected_rows_);
   return ret;
 }
 
@@ -820,6 +857,16 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
       OB_UNIS_ADD_LEN(array_param_groups_.at(i));
     }
   }
+  OB_UNIS_ADD_LEN(all_local_session_vars_.count());
+  for (int64_t i = 0; i < all_local_session_vars_.count(); ++i) {
+    if (OB_NOT_NULL(all_local_session_vars_.at(i).get_local_vars())) {
+      OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i).get_local_vars());
+    }
+  }
+  OB_UNIS_ADD_LEN(mview_ids_);
+  OB_UNIS_ADD_LEN(last_refresh_scns_);
+  OB_UNIS_ADD_LEN(is_direct_insert_plan_);
+  OB_UNIS_ADD_LEN(check_pdml_affected_rows_);
   return len;
 }
 
@@ -831,6 +878,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
   int64_t param_idx = OB_INVALID_INDEX;
   ObObjParam param_obj;
   int64_t cursor_count = 0;
+  int64_t local_var_array_cnt = 0;
   // used for function sys_view_bigint_param(idx), @note unused anymore
   ObSEArray<common::ObObj, 1> sys_view_bigint_params_;
   char message_[1] = {'\0'}; //error msg buffer, unused anymore
@@ -914,6 +962,25 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       }
     }
   }
+
+  OB_UNIS_DECODE(local_var_array_cnt);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(all_local_session_vars_.reserve(local_var_array_cnt))) {
+      LOG_WARN("reserve local session vars failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < local_var_array_cnt; ++i) {
+    ObLocalSessionVar *local_vars = OB_NEWx(ObLocalSessionVar, &allocator_);
+    if (NULL == local_vars) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alloc local var failed", K(ret));
+    } else if (OB_FAIL(all_local_session_vars_.push_back(ObSolidifiedVarsContext(local_vars, &allocator_)))) {
+      LOG_WARN("push back local session var array failed", K(ret));
+    } else {
+      OB_UNIS_DECODE(*local_vars);
+    }
+  }
+  // following is not deserialize, please add deserialize ahead.
   if (OB_SUCC(ret) && array_group_count > 0 &&
       datum_param_store_.count() == 0 &&
       datum_param_store_.count() != param_store_.count()) {
@@ -921,6 +988,10 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       LOG_WARN("failed to deserialize param store", K(ret));
     }
   }
+  OB_UNIS_DECODE(mview_ids_);
+  OB_UNIS_DECODE(last_refresh_scns_);
+  OB_UNIS_DECODE(is_direct_insert_plan_);
+  OB_UNIS_DECODE(check_pdml_affected_rows_);
   return ret;
 }
 
