@@ -133,6 +133,11 @@ public:
   void inc_finished_tablet_cnt(const int64_t cnt) { (void)ATOMIC_FAA(&finished_tablet_cnt_, cnt); }
   void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); };
 
+  // !!!! this func is a tmp interface, should not be used. by gaishun.gs
+  static int record_ls_transfer_info_tmp(
+      const ObLSHandle &ls_handle,
+      const ObTabletID &tablet_id,
+      const ObTabletTransferInfo &tablet_transfer_info);
 private:
   static bool is_suitable_to_aggregate_(const int64_t tablet_cnt_in_block, const int64_t valid_size_in_block)
   {

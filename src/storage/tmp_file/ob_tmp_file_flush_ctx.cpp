@@ -81,13 +81,19 @@ int ObTmpFileBatchFlushContext::prepare_flush_ctx(
   } else if (OB_ISNULL(prio_mgr) || OB_ISNULL(flush_monitor)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(prio_mgr), KP(flush_monitor));
-  } else if (OB_FAIL(iter_.init(prio_mgr))) {
-    LOG_WARN("failed to init iterator", KR(ret), K(*this));
   } else if (OB_FAIL(flush_failed_array_.reserve(MAX_COPY_FAIL_COUNT))) {
     LOG_WARN("fail to reserve flush filed array", KR(ret), K(*this));
+  } else if (OB_FAIL(iter_.init(prio_mgr))) {
+    LOG_WARN("failed to init iterator", KR(ret), K(*this));
   } else {
     expect_flush_size_ = expect_flush_size;
     flush_monitor_ptr_ = flush_monitor;
+  }
+
+  if (OB_FAIL(ret)) {
+    flush_failed_array_.reset();
+    iter_.reset();
+    LOG_INFO("failed to prepare flush ctx, rollback ctx", KR(ret), KPC(this));
   }
   return ret;
 }
@@ -291,7 +297,7 @@ int ObTmpFileFlushTask::write_one_block()
   write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
   write_info.buffer_ = get_data_buf();
-  write_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  write_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   write_info.offset_ = 0;
 
   if (FAILEDx(blocksstable::ObBlockManager::async_write_block(write_info, handle_))) {

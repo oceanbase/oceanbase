@@ -52,6 +52,10 @@ public:
   //cos no dir
   virtual int mkdir(const common::ObString &uri);
   virtual int del_file(const common::ObString &uri);
+  virtual int batch_del_files(
+      const ObString &uri,
+      hash::ObHashMap<ObString, int64_t> &files_to_delete,
+      ObIArray<int64_t> &failed_files_idx) override;
   virtual int list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   virtual int list_files(const common::ObString &uri, ObStorageListCtxBase &list_ctx);
   virtual int del_dir(const common::ObString &uri);
@@ -73,12 +77,17 @@ public:
   virtual ~ObStorageCosBase();
 
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
+  int inner_open(const ObString &uri, ObObjectStorageInfo *storage_info);
   void reset();
   const ObCosWrapperHandle &get_handle() { return handle_; }
 
   // some cos function
   int get_cos_file_meta(bool &is_file_exist, common::qcloud_cos::CosObjectMeta &obj_meta);
   int delete_object(const common::ObString &uri);
+  int delete_objects(
+      const ObString &uri,
+      hash::ObHashMap<ObString, int64_t> &files_to_delete,
+      ObIArray<int64_t> &failed_files_idx);
   int list_objects(const common::ObString &uri,
       const common::ObString &dir_name_str, common::CosListFilesCbArg &arg);
   int list_objects(const common::ObString &uri, const common::ObString &dir_name_str,
@@ -162,7 +171,9 @@ private:
 
 // part size is in [1MB, 5GB], exclude the last part
 // max part num 10000
-class ObStorageCosMultiPartWriter: public ObStorageCosBase, public ObIStorageMultiPartWriter
+class ObStorageCosMultiPartWriter: public ObStorageCosBase,
+                                   public ObIStorageMultiPartWriter,
+                                   public ObStoragePartInfoHandler
 {
 public:
   ObStorageCosMultiPartWriter();
@@ -193,8 +204,38 @@ private:
   char *upload_id_;
   int partnum_;
   int64_t file_length_;
+  void *complete_part_list_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageCosMultiPartWriter);
+};
+
+class ObStorageParallelCosMultiPartWriter: public ObStorageCosBase,
+                                           public ObIStorageParallelMultipartWriter,
+                                           public ObStoragePartInfoHandler
+{
+public:
+  ObStorageParallelCosMultiPartWriter();
+  virtual ~ObStorageParallelCosMultiPartWriter();
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override;
+  virtual int upload_part(const char *buf, const int64_t size, const int64_t part_id) override;
+  virtual int complete() override;
+  virtual int abort() override;
+  virtual int close() override;
+  virtual bool is_opened() const override { return is_opened_; }
+
+private:
+  void reuse_();
+  void destroy_() { reuse_(); }
+
+private:
+  const static int64_t COS_MAX_PART_NUM = 10000;
+
+private:
+  char *upload_id_;
+  qcloud_cos::CosStringBuffer upload_id_str_buf_;
+  void *complete_part_list_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObStorageParallelCosMultiPartWriter);
 };
 
 } //common

@@ -38,12 +38,14 @@ public:
 
   static int read_file(const ObString &uri,
       const share::ObBackupStorageInfo *storage_info,
+      const common::ObStorageIdMod &storage_id_mod,
       char *buf,
       const int64_t file_len,
       int64_t &read_size);
 
   static int range_read(const ObString &uri,
       const share::ObBackupStorageInfo *storage_info,
+      const common::ObStorageIdMod &storage_id_mod,
       char *buf,
       const int64_t buf_size,
       const int64_t offset,
@@ -51,6 +53,7 @@ public:
 
   static int write_file(const ObString &uri,
       const share::ObBackupStorageInfo *storage_info,
+      const common::ObStorageIdMod &storage_id_mod,
       const char *buf,
       const int64_t buf_len);
 
@@ -87,6 +90,7 @@ private:
 
   static int extract_file_min_log_info_(const ObString &uri,
       share::ObBackupStorageInfo *storage_info,
+      const common::ObStorageIdMod &storage_id_mod,
       palf::LSN &lsn,
       share::SCN &scn);
 

@@ -70,7 +70,7 @@ int ObDirectLoadTableGuard::prepare_memtable(ObDDLKV *&res_memtable)
   bool tried_freeze = false;
   bool need_retry = false;
   const int64_t INC_MACRO_BLOCK_COUNT_FREEZE_TRIGGER =
-      10 * 10L * 1024L * 1024L * 1024L / OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      10 * 10L * 1024L * 1024L * 1024L / OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   const int64_t INC_MACRO_BLOCK_MEMORY_FREEZE_TRIGGER = 50 * 1024 * 1024;  // 50M;
   const int64_t start_time = ObClockGenerator::getClock();
 

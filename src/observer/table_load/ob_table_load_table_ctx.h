@@ -38,7 +38,7 @@ class ObTableLoadTableCtx : public common::ObDLinkBase<ObTableLoadTableCtx>
 public:
   ObTableLoadTableCtx();
   ~ObTableLoadTableCtx();
-  int init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param, sql::ObSQLSessionInfo *session_info);
+  int init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param, sql::ObSQLSessionInfo *session_info, sql::ObExecContext *ctx);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -79,6 +79,7 @@ public:
 private:
   int register_job_stat();
   void unregister_job_stat();
+  int new_exec_ctx();
 public:
   ObTableLoadParam param_;
   ObTableLoadDDLParam ddl_param_;
@@ -88,6 +89,7 @@ public:
   sql::ObLoadDataGID gid_;
   sql::ObLoadDataStat *job_stat_;
   sql::ObSQLSessionInfo *session_info_;
+  sql::ObDesExecContext *exec_ctx_;
   sql::ObFreeSessionCtx free_session_ctx_;
 private:
   // 只在初始化的时候使用, 线程不安全

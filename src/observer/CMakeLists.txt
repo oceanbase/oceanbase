@@ -22,7 +22,6 @@ ob_set_subtarget(ob_server common
   ob_server_event_history_table_operator.cpp
   ob_server_reload_config.cpp
   ob_server_schema_updater.cpp
-  ob_server_struct.cpp
   ob_server_utils.cpp
   ob_signal_handle.cpp
   ob_sql_client_decorator.cpp
@@ -112,6 +111,9 @@ ob_set_subtarget(ob_server net
   net/ob_ingress_bw_alloc_service.cpp
   net/ob_net_endpoint_ingress_rpc_proccessor.cpp
   net/ob_net_endpoint_ingress_rpc_struct.cpp
+  net/ob_shared_storage_net_throt_service.cpp
+  net/ob_shared_storage_net_throt_rpc_proccessor.cpp
+  net/ob_shared_storage_net_throt_rpc_struct.cpp
   net/ob_rpc_reverse_keepalive.cpp
 )
 
@@ -258,6 +260,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_server_compaction_event_history.cpp
   virtual_table/ob_all_virtual_compaction_suggestion.cpp
   virtual_table/ob_all_virtual_tablet_compaction_info.cpp
+  virtual_table/ob_virtual_table_tablet_iter.cpp
   virtual_table/ob_all_virtual_dag.cpp
   virtual_table/ob_all_virtual_dag_warning_history.cpp
   virtual_table/ob_all_virtual_dblink_info.cpp
@@ -340,6 +343,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ddl_sim_point_stat.cpp
   virtual_table/ob_all_virtual_tablet_info.cpp
   virtual_table/ob_all_virtual_server.cpp
+  virtual_table/ob_all_virtual_server_storage.cpp
   virtual_table/ob_all_virtual_tablet_compaction_history.cpp
   virtual_table/ob_all_virtual_tablet_compaction_progress.cpp
   virtual_table/ob_all_virtual_io_status.cpp
@@ -434,6 +438,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
   virtual_table/ob_all_virtual_cgroup_config.cpp
+  virtual_table/ob_all_virtual_shared_storage_quota.cpp
   virtual_table/ob_virtual_flt_config.cpp
   virtual_table/ob_all_virtual_kv_connection.cpp
   virtual_table/ob_all_virtual_tenant_resource_limit.cpp
@@ -447,6 +452,8 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sys_variable_default_value.cpp
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
+  virtual_table/ob_all_virtual_ss_local_cache_info.cpp
+  virtual_table/ob_all_virtual_vector_index_info.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
   virtual_table/ob_all_virtual_tmp_file.cpp
 )
@@ -461,7 +468,7 @@ add_library(oceanbase_static
   ${CMAKE_CURRENT_BINARY_DIR}/ob_version.cpp)
 
 target_link_libraries(oceanbase_static
-  PUBLIC ob_base "${ob_objects}" ob_sql_static ob_storage_static ob_share_static ${ob_close_modules_static_name} oblib objit)
+  PUBLIC ob_base "${ob_objects}" ob_sql_static ob_storage_static ob_share_static ${ob_close_modules_static_name} oblib objit ${HYPERSCAN_LIB})
 
 if (OB_GPERF_MODE)
   target_link_libraries(oceanbase_static

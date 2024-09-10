@@ -121,6 +121,7 @@ ob_set_subtarget(oblib_lib roaringbitmap
   roaringbitmap/ob_roaringbitmap.cpp
   roaringbitmap/ob_rb_utils.cpp
   roaringbitmap/ob_rb_bin.cpp
+  roaringbitmap/ob_rb_memory_mgr.cpp
 )
 
 ob_set_subtarget(oblib_lib encode
@@ -225,6 +226,8 @@ ob_set_subtarget(oblib_lib common_mixed
   wide_integer/ob_wide_integer_cmp_funcs.cpp
   wide_integer/ob_wide_integer_str_funcs.cpp
   udt/ob_udt_type.cpp
+  udt/ob_collection_type.cpp
+  udt/ob_array_type.cpp
   xml/ob_mul_mode_reader.cpp
   xml/ob_xml.cpp
   xml/ob_xml_parser.cpp
@@ -301,7 +304,7 @@ ob_set_subtarget(oblib_lib thread
   thread/ob_async_task_queue.cpp
   thread/ob_dynamic_thread_pool.cpp
   thread/ob_reentrant_thread.cpp
-  thread/ob_simple_thread_pool.cpp
+  thread/ob_simple_thread_pool.ipp
   thread/ob_map_queue_thread_pool.cpp
   thread/ob_work_queue.cpp
   thread/thread_mgr.cpp
@@ -337,6 +340,10 @@ ob_set_subtarget(oblib_lib ssl
 
 ob_set_subtarget(oblib_lib vtoa
   vtoa/ob_vtoa_util.cpp
+)
+
+ob_set_subtarget(oblib_lib ob_vector_util
+  vector/ob_vector_util.cpp
 )
 
 ob_lib_add_target(oblib_lib)
@@ -407,3 +414,40 @@ target_link_libraries(oblib_lib
   ${DEP_DIR}/lib/libxml2.a
   ${DEP_DIR}/lib/liblzma.a
 )
+
+# vsag vector library
+target_link_directories(
+  oblib_lib PUBLIC ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
+)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  target_link_libraries(oblib_lib
+    PUBLIC
+    libob_vsag_static.a
+    libcpuinfo.a
+    libsimd.a
+    libvsag_static.a
+    libdiskann.a
+    libopenblas.a
+    libgfortran_static.a
+    libquadmath.a
+    libgomp_static.a
+    libroaring.a
+  )
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  target_link_libraries(oblib_lib
+    PUBLIC
+    libob_vsag_static.a
+    libcpuinfo.a
+    libsimd.a
+    libvsag_static.a
+    libdiskann.a
+    libopenblas.a
+    libgfortran_static.a
+    libgomp_static.a
+    libroaring.a
+  )
+else()
+    message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()

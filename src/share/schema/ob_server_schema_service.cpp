@@ -290,8 +290,8 @@ bool ObServerSchemaService::check_inner_stat() const
 int ObServerSchemaService::check_stop() const
 {
   int ret = OB_SUCCESS;
-  if (observer::SS_STOPPING == GCTX.status_
-      || observer::SS_STOPPED == GCTX.status_) {
+  if (ObServiceStatus::SS_STOPPING == GCTX.status_
+      || ObServiceStatus::SS_STOPPED == GCTX.status_) {
     ret = OB_SERVER_IS_STOPPING;
     LOG_WARN("observer is stopping", K(ret));
   }

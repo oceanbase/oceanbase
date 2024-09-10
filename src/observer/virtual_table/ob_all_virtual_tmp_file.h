@@ -22,6 +22,7 @@ namespace oceanbase
 namespace tmp_file
 {
 class ObSNTmpFileInfo;
+class ObTmpFileGlobal;
 }
 namespace observer
 {
@@ -52,12 +53,12 @@ private:
     FILE_ID,
     TRACE_ID,
     DIR_ID,
-    BYTES,
+    DATA_BYTES,
     START_OFFSET,
     IS_DELETING,
-    CACHED_PAGE_NUM,
-    WRITE_BACK_PAGE_NUM,
-    FLUSHED_PAGE_NUM,
+    CACHED_DATA_PAGE_NUM,
+    WRITE_BACK_DATA_PAGE_NUM,
+    FLUSHED_DATA_PAGE_NUM,
     REF_CNT,
     TOTAL_WRITES,
     UNALIGNED_WRITES,
@@ -66,10 +67,21 @@ private:
     TOTAL_READ_BYTES,
     LAST_ACCESS_TIME,
     LAST_MODIFY_TIME,
-    BIRTH_TIME
+    BIRTH_TIME,
+    TMP_FILE_PTR,
+    LABEL,
+    META_TREE_EPOCH,
+    META_TREE_LEVELS,
+    META_BYTES,
+    CACHED_META_PAGE_NUM,
+    WRITE_BACK_META_PAGE_NUM,
+    PAGE_FLUSH_CNT,
   };
+  static const int64_t OB_MAX_FILE_LABEL_SIZE = tmp_file::ObTmpFileGlobal::TMP_FILE_MAX_LABEL_SIZE + 1;
   char ip_buffer_[common::OB_IP_STR_BUFF];
   char trace_id_buffer_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+  char file_ptr_buffer_[20];
+  char file_label_buffer_[OB_MAX_FILE_LABEL_SIZE];
   ObArray<int64_t> fd_arr_;
   bool is_ready_;
   int64_t fd_idx_;

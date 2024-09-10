@@ -40,7 +40,7 @@ private:
     ~MacroScanHandle() {}
     void reset();
 
-    blocksstable::ObMacroBlockHandle macro_io_handle_;
+    blocksstable::ObStorageObjectHandle macro_io_handle_;
     blocksstable::ObMacroBlockDesc macro_block_desc_;
     int64_t start_row_offset_;
     bool is_left_border_;

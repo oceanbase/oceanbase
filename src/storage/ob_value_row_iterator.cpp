@@ -307,16 +307,16 @@ int ObSingleRowGetter::get_next_row(blocksstable::ObDatumRow *&row)
 bool ObSingleRowGetter::can_use_global_iter_pool() const
 {
   bool use_pool = false;
-  if (access_param_.iter_param_.tablet_id_.is_inner_tablet()) {
-  } else if (access_param_.iter_param_.has_lob_column_out_) {
-  } else {
-    const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
-    const int64_t col_cnt = get_table_param_.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_column_count();
-    ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
-    if (OB_NOT_NULL(iter_pool)) {
-       use_pool = iter_pool->can_use_iter_pool(table_cnt, col_cnt, ITER_TYPE);
-    }
-  }
+  // if (access_param_.iter_param_.tablet_id_.is_inner_tablet()) {
+  // } else if (access_param_.iter_param_.has_lob_column_out_) {
+  // } else {
+  //   const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
+  //   const int64_t col_cnt = get_table_param_.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_column_count();
+  //   ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
+  //   if (OB_NOT_NULL(iter_pool)) {
+  //      use_pool = iter_pool->can_use_iter_pool(table_cnt, col_cnt, ITER_TYPE);
+  //   }
+  // }
   return use_pool;
 }
 

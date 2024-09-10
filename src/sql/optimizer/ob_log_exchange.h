@@ -56,6 +56,7 @@ public:
       px_batch_op_id_(OB_INVALID_ID),
       px_batch_op_type_(log_op_def::LOG_OP_INVALID),
       partition_id_expr_(NULL),
+      ddl_slice_id_expr_(NULL),
       random_expr_(NULL),
       need_null_aware_shuffle_(false),
       is_old_unblock_mode_(true),
@@ -168,6 +169,8 @@ public:
   bool is_old_unblock_mode() { return is_old_unblock_mode_; }
   void set_partition_id_expr(ObOpPseudoColumnRawExpr *expr) { partition_id_expr_ = expr; }
   ObOpPseudoColumnRawExpr *get_partition_id_expr() { return partition_id_expr_; }
+  void set_ddl_slice_id_expr(ObRawExpr *expr) { ddl_slice_id_expr_ = expr; }
+  ObRawExpr *get_ddl_slice_id_expr() { return ddl_slice_id_expr_; }
   bool need_null_aware_shuffle() const { return need_null_aware_shuffle_; }
   void set_need_null_aware_shuffle(const bool need_null_aware_shuffle)
                     { need_null_aware_shuffle_ = need_null_aware_shuffle; }
@@ -257,6 +260,7 @@ private:
   int64_t px_batch_op_id_;
   log_op_def::ObLogOpType px_batch_op_type_;
   ObOpPseudoColumnRawExpr *partition_id_expr_;
+  ObRawExpr *ddl_slice_id_expr_;
 
   // produce random number, added in %sort_keys_ of range distribution to splitting big range.
   ObRawExpr *random_expr_;

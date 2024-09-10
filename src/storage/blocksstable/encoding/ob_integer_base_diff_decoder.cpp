@@ -679,7 +679,7 @@ int ObIntegerBaseDiffDecoder::in_operator(
                          const sql::ObWhiteFilterExecutor &filter,
                          bool &result) -> int {
                         int ret = OB_SUCCESS;
-                        if (OB_FAIL(filter.exist_in_datum_set(cur_datum, result))) {
+                        if (OB_FAIL(filter.exist_in_set(cur_datum, result))) {
                           LOG_WARN("Failed to check datum in hashset", K(ret), K(cur_datum));
                         }
                         return ret;

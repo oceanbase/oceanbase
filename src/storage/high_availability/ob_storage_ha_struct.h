@@ -25,6 +25,7 @@
 #include "share/ls/ob_ls_i_life_manager.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
+#include "common/ob_learner_list.h"
 
 namespace oceanbase
 {
@@ -556,7 +557,41 @@ public:
   int64_t transfer_seq_;
 };
 
+struct ObLSMemberListInfo final
+{
+public:
+  ObLSMemberListInfo();
+  ~ObLSMemberListInfo() = default;
+  void reset();
+  bool is_valid() const;
+  int assign(const ObLSMemberListInfo &info);
 
+  TO_STRING_KV(K_(learner_list), K_(leader_addr), K_(member_list));
+  common::GlobalLearnerList learner_list_;
+  common::ObAddr leader_addr_;
+  common::ObArray<common::ObAddr> member_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLSMemberListInfo);
+};
+
+struct ObMigrationChooseSrcHelperInitParam final
+{
+public:
+  ObMigrationChooseSrcHelperInitParam();
+  ~ObMigrationChooseSrcHelperInitParam() = default;
+  void reset();
+  bool is_valid() const;
+  int assign(const ObMigrationChooseSrcHelperInitParam &param);
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(local_clog_checkpoint_scn), K_(arg), K_(info));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN local_clog_checkpoint_scn_;
+  ObMigrationOpArg arg_;
+  ObLSMemberListInfo info_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMigrationChooseSrcHelperInitParam);
+};
 }
 }
 #endif

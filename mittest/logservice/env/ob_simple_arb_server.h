@@ -89,7 +89,7 @@ public:
   IPalfEnvImpl *get_palf_env() override final
   {
     palflite::PalfEnvLite *palf_env_lite = NULL;
-    palflite::PalfEnvKey palf_env_key(cluster_id_, OB_SERVER_TENANT_ID);
+    palflite::PalfEnvKey palf_env_key(cluster_id_, ObISimpleLogServer::DEFAULT_TENANT_ID);
     palf_env_mgr_.get_palf_env_lite(palf_env_key, palf_env_lite);
     PALF_LOG(INFO, "yunlong trace get_palf_env", KP(palf_env_lite));
     return palf_env_lite;
@@ -173,17 +173,24 @@ public:
   }
   int update_server_log_disk(const int64_t log_disk_size)
     {return OB_SUCCESS;}
+  int create_ls(const int64_t palf_id,
+                const AccessMode &access_mode,
+                const PalfBaseInfo &base_info,
+                IPalfHandleImpl *&palf_handle_impl);
+  int remove_ls(const int64_t palf_id);
   MockObLocalityManager *get_locality_manager() { return NULL; }
 public:
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
                   const int64_t node_id,
+                  ObTenantIOManager *tio_manager,
                   LogMemberRegionMap *region_map,
                   bool is_bootstrap) override final;
   int simple_start(const bool is_bootstrap) override final;
   int simple_close(const bool is_shutdown) override final;
   int simple_restart(const std::string &cluster_name,
-                     const int64_t node_idx) override final;
+                     const int64_t node_idx,
+                     ObTenantIOManager *tio_manager) override final;
   void destroy();
   int create_palf_env_lite(const int64_t tenant_id);
   int remove_palf_env_lite(const int64_t tenant_id);

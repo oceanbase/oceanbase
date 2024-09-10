@@ -27,7 +27,6 @@ namespace oceanbase
 namespace tmp_file
 {
 class ObTmpFileIOCtx;
-class ObTenantTmpFileManager;
 class ObTmpWriteBufferPool;
 class ObTmpFileBlockPageBitmap;
 class ObTmpFileBlockManager;
@@ -52,7 +51,7 @@ public:
     file_size_(0),
     truncated_offset_(0),
     is_deleting_(false),
-    cached_page_num_(0),
+    cached_data_page_num_(0),
     write_back_data_page_num_(0),
     flushed_data_page_num_(0),
     ref_cnt_(0),
@@ -63,7 +62,15 @@ public:
     total_read_size_(0),
     last_access_ts_(-1),
     last_modify_ts_(-1),
-    birth_ts_(-1) {}
+    birth_ts_(-1),
+    tmp_file_ptr_(nullptr),
+    label_(),
+    meta_tree_epoch_(0),
+    meta_tree_level_cnt_(0),
+    meta_size_(0),
+    cached_meta_page_num_(0),
+    write_back_meta_page_num_(0),
+    all_type_page_flush_cnt_(0) {}
   int init(const ObCurTraceId::TraceId &trace_id,
            const uint64_t tenant_id,
            const int64_t dir_id,
@@ -82,7 +89,9 @@ public:
            const int64_t total_read_size,
            const int64_t last_access_ts,
            const int64_t last_modify_ts,
-           const int64_t birth_ts);
+           const int64_t birth_ts,
+           const void* const tmp_file_ptr,
+           const char* const label);
   void reset();
 public:
   common::ObCurTraceId::TraceId trace_id_;
@@ -92,7 +101,7 @@ public:
   int64_t file_size_;
   int64_t truncated_offset_;
   bool is_deleting_;
-  int64_t cached_page_num_;
+  int64_t cached_data_page_num_;
   int64_t write_back_data_page_num_;
   int64_t flushed_data_page_num_;
   int64_t ref_cnt_;
@@ -104,13 +113,24 @@ public:
   int64_t last_access_ts_;
   int64_t last_modify_ts_;
   int64_t birth_ts_;
+  const void *tmp_file_ptr_;
+  ObFixedLengthString<ObTmpFileGlobal::TMP_FILE_MAX_LABEL_SIZE + 1> label_;
+  int64_t meta_tree_epoch_;
+  int64_t meta_tree_level_cnt_;
+  int64_t meta_size_;
+  int64_t cached_meta_page_num_;
+  int64_t write_back_meta_page_num_;
+  int64_t all_type_page_flush_cnt_;
 
   TO_STRING_KV(K(trace_id_), K(tenant_id_), K(dir_id_), K(fd_), K(file_size_),
-               K(truncated_offset_), K(is_deleting_), K(cached_page_num_),
+               K(truncated_offset_), K(is_deleting_), K(cached_data_page_num_),
                K(write_back_data_page_num_), K(flushed_data_page_num_),
                K(ref_cnt_), K(write_req_cnt_), K(unaligned_write_req_cnt_),
                K(read_req_cnt_), K(unaligned_read_req_cnt_), K(total_read_size_),
-               K(last_access_ts_), K(last_modify_ts_), K(birth_ts_));
+               K(last_access_ts_), K(last_modify_ts_), K(birth_ts_),
+               KP(tmp_file_ptr_), K(label_), K(meta_tree_epoch_),
+               K(meta_tree_level_cnt_), K(meta_size_), K(cached_meta_page_num_),
+               K(write_back_meta_page_num_), K(all_type_page_flush_cnt_));
 };
 
 class ObSharedNothingTmpFile final
@@ -194,14 +214,16 @@ public:
            ObIAllocator *callback_allocator,
            ObIAllocator *wbp_index_cache_allocator,
            ObIAllocator *wbp_index_cache_bkt_allocator,
-           ObTmpFilePageCacheController *page_cache_controller);
+           ObTmpFilePageCacheController *page_cache_controller,
+           const char* label);
   int destroy();
   void reset();
   bool can_remove();
   bool is_deleting();
   int delete_file();
 
-// XXX Currently, K(tmp_file) is used to print the ObSharedNothingTmpFile structure without holding
+// ATTENTION!!!
+// Currently, K(tmp_file) is used to print the ObSharedNothingTmpFile structure without holding
 // the file lock. Before adding the print field, make sure it is thread-safe.
   TO_STRING_KV(K(is_inited_), K(is_deleting_),
                K(tenant_id_), K(dir_id_), K(fd_),
@@ -219,7 +241,7 @@ public:
                KP(meta_eviction_node_.get_next()), K(trace_id_),
                K(write_req_cnt_), K(unaligned_write_req_cnt_), K(read_req_cnt_),
                K(unaligned_read_req_cnt_), K(total_read_size_),
-               K(last_access_ts_), K(last_modify_ts_), K(birth_ts_));
+               K(last_access_ts_), K(last_modify_ts_), K(birth_ts_), K(label_));
 // XXX Currently, K(tmp_file) is used to print the ObSharedNothingTmpFile structure without holding
 // the file lock. Before adding the print field, make sure it is thread-safe.
 
@@ -448,6 +470,7 @@ private:
   int64_t last_access_ts_;
   int64_t last_modify_ts_;
   int64_t birth_ts_;
+  ObFixedLengthString<ObTmpFileGlobal::TMP_FILE_MAX_LABEL_SIZE + 1> label_;
   /********for virtual table end********/
 };
 

@@ -71,6 +71,9 @@ public:
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
       const SCN &min_frozen_scn);
+  static int check_exist_ckm_error_table(const uint64_t tenant_id,
+                                          const int64_t compaction_scn,
+                                          bool &exist);
 
 private:
   static int insert_column_checksum_err_info_(

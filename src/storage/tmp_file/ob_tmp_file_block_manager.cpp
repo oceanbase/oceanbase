@@ -815,7 +815,7 @@ void ObTmpFileBlockManager::print_block_usage()
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
+    LOG_WARN("ObTmpFileBlockManager has not been inited", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(get_block_usage_stat(used_page_num, block_num))) {
     LOG_WARN("fail to get block usage stat", KR(ret));
   } else if (OB_UNLIKELY(0 == block_num)) {

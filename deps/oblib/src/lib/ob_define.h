@@ -693,6 +693,14 @@ const char *const OB_PARTITION_SHARDING_NONE = "NONE";
 const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
 const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
 
+// vector index search
+const char *const OB_VEC_VID_COLUMN_NAME = "__vid";
+const char *const OB_VEC_TYPE_COLUMN_NAME_PREFIX = "__type";
+const char *const OB_VEC_VECTOR_COLUMN_NAME_PREFIX = "__vector";
+const char *const OB_VEC_SCN_COLUMN_NAME_PREFIX = "__scn";
+const char *const OB_VEC_KEY_COLUMN_NAME_PREFIX = "__key";
+const char *const OB_VEC_DATA_COLUMN_NAME_PREFIX = "__data";
+
 // fulltext search
 const char *const OB_DOC_ID_COLUMN_NAME = "__doc_id";
 const char *const OB_WORD_SEGMENT_COLUMN_NAME_PREFIX = "__word_segment";
@@ -731,7 +739,11 @@ const int64_t OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_PTAH_LIST_LENGTH = 8 * 1024;
 const int64_t OB_MAX_EXECUTOR_TENANT_LENGTH = 64 * 1024;
 
+// object storage service
+const int64_t OB_MAX_STORAGE_OPERATION_INFO_LENGTH = 8 * 1024;
+
 const char *const OB_LOCAL_PREFIX = "local://";
+const char *const OB_LOCAL_CACHE_PREFIX = "localcache://";
 const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
@@ -740,6 +752,7 @@ const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
 const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
+const int64_t OB_STORAGE_DEL_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
 const char *const OB_RESOURCE_POOL_DEFINITION = "resource_pool_definition";
 const char *const OB_CREATE_TENANT_DEFINITION = "create_tenant_definition";
@@ -1483,6 +1496,9 @@ const int64_t OB_COMPACTION_INFO_LENGTH = 128;
 const int64_t OB_MERGE_LEVEL_STR_LENGTH = 64;
 const int64_t OB_MERGE_ROLE_STR_LENGTH = 64;
 const int64_t OB_MERGE_COMMENT_INNER_STR_LENGTH = 800;
+const int64_t OB_CKM_ERROR_INFO_STR_LENGTH = 1024;
+const int64_t OB_COMPACTION_STATUS_STR_LENGTH = 256;
+const int64_t OB_STORAGE_PATH_STR_LENGTH = 256;
 
 // for erasure code
 const int64_t OB_MAX_EC_STRIPE_COUNT = 32;
@@ -1713,7 +1729,7 @@ OB_INLINE bool is_bootstrap_resource_pool(const uint64_t resource_pool_id)
 
 // ob_malloc & ob_tc_malloc
 const int64_t OB_MALLOC_NORMAL_BLOCK_SIZE = (1LL << 13) - 256;                 // 8KB
-const int64_t OB_MALLOC_MIDDLE_BLOCK_SIZE = (1LL << 16) - 128;                 // 64KB
+const int64_t OB_MALLOC_MIDDLE_BLOCK_SIZE = (1LL << 16) - 256;                 // 64KB
 const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2MB (-17KB)
 const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (240LL << 10);                 // 240KB
 

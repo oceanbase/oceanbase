@@ -43,6 +43,9 @@
 #include "storage/slog/ob_storage_logger.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/ob_file_system_router.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
 #include "common/ob_smart_var.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
@@ -734,9 +737,10 @@ int64_t RpcStatInfo::to_string(char *buf, const int64_t len) const
 
 
 ObTenant::ObTenant(const int64_t id,
+                   const int64_t epoch,
                    const int64_t times_of_workers,
                    ObCgroupCtrl &cgroup_ctrl)
-    : ObTenantBase(id, true),
+    : ObTenantBase(id, epoch, true),
       meta_lock_(),
       tenant_meta_(),
       shrink_(0),
@@ -817,6 +821,8 @@ int ObTenant::init(const ObTenantMeta &meta)
     set_unit_max_cpu(meta.unit_.config_.max_cpu());
     const int64_t memory_size = static_cast<double>(tenant_meta_.unit_.config_.memory_size());
     set_unit_memory_size(memory_size);
+    const int64_t data_disk_size = tenant_meta_.unit_.config_.data_disk_size();
+    set_unit_data_disk_size(data_disk_size);
     constexpr static int64_t MINI_MEM_UPPER = 1L<<30; // 1G
     update_mini_mode(memory_size <= MINI_MEM_UPPER);
 
@@ -1639,10 +1645,12 @@ void ObTenant::print_throttled_time()
       if (OB_TMP_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_->id_, tenant_holder))) {
         LOG_WARN_RET(tmp_ret, "get tenant io manager failed", K(tmp_ret), K(tenant_->id_));
       } else {
+        const uint64_t MODE_CNT = static_cast<uint64_t>(ObIOMode::MAX_MODE) + 1;
         for (int64_t i = 0; i < tenant_holder.get_ptr()->get_group_num(); i++) {
-          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_ &&
-              !tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).cleared_) {
-            uint64_t group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
+          uint64_t group_config_index = i * MODE_CNT;
+          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(group_config_index).deleted_ &&
+              !tenant_holder.get_ptr()->get_io_config().group_configs_.at(group_config_index).cleared_) {
+            uint64_t group_id = tenant_holder.get_ptr()->get_io_config().group_configs_.at(group_config_index).group_id_;
             if (OB_TMP_FAIL(tenant_holder.get_ptr()->get_throttled_time(group_id, group_throttled_time))) {
               LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group_id));
             } else if (OB_TMP_FAIL(tenant_->cgroup_ctrl_.get_group_info_by_group_id(tenant_->id_, group_id, g_name))) {

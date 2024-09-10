@@ -264,6 +264,7 @@ public:
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
   int check_das_need_keep_ordering(ObLogicalOperator *op);
+  int check_das_need_scan_with_vid(ObLogicalOperator *op);
 
   int gen_das_table_location_info(ObLogTableScan *table_scan,
                                   ObTablePartitionInfo *&table_partition_info);
@@ -1423,8 +1424,25 @@ public:
 
   int construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogicalOperator *log_op);
 
+  int prepare_vector_index_info(ObLogicalOperator *scan);
   int prepare_text_retrieval_scan(const ObIArray<ObRawExpr*> &exprs, ObLogicalOperator *scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
+  int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
+                                    ObRawExpr *topn_expr,
+                                    ObRawExpr *limit_expr,
+                                    ObRawExpr *offset_expr,
+                                    bool is_fetch_with_ties,
+                                    bool need_exchange,
+                                    const ObIArray<OrderItem> &sort_keys,
+                                    bool &need_further_sort);
+  int try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
+                                          ObRawExpr *topn_expr,
+                                          ObRawExpr *limit_expr,
+                                          ObRawExpr *offset_expr,
+                                          bool is_fetch_with_ties,
+                                          bool need_exchange,
+                                          const ObIArray<OrderItem> &sort_keys,
+                                          bool &need_further_sort);
   int try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
                                              ObRawExpr *topn_expr,
                                              ObRawExpr *limit_expr,

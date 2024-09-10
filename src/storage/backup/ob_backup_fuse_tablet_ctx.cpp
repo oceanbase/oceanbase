@@ -170,6 +170,7 @@ int ObBackupTabletGroupFuseCtx::init()
                                                      param_.ls_id_,
                                                      param_.turn_id_,
                                                      param_.retry_id_,
+                                                     param_.dest_id_,
                                                      true/*is_final_fuse*/,
                                                      *GCTX.bandwidth_throttle_))) {
     LOG_WARN("failed to init extern tablet meta writer", K(ret), K_(param));

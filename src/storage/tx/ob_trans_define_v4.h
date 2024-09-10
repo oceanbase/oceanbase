@@ -1121,6 +1121,11 @@ inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
     return ObTxSEQ::mk_v0(seq);
   }
 }
+
+enum ObTxCleanPolicy {
+  FAST_ROLLBACK = 1, ROLLBACK = 2, KEEP = 3
+};
+
 } // transaction
 } // oceanbase
 

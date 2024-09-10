@@ -386,6 +386,8 @@ int ObSelectStmtPrinter::print_basic_stmt()
     LOG_WARN("fail to print having", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_order_by())) {
     LOG_WARN("fail to print order by", K(ret), K(*stmt_));
+  } else if (OB_FAIL(print_approx())) {
+    LOG_WARN("fail to print order by", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_limit())) {
     LOG_WARN("fail to print limit", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_fetch())) {

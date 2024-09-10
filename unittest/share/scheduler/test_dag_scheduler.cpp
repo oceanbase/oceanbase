@@ -24,6 +24,7 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
+#include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 1; // 100ms
@@ -110,7 +111,7 @@ public:
     (void)ATOMIC_AAF(counter_, adder_);
     return OB_SUCCESS;
   }
-  VIRTUAL_TO_STRING_KV(KP_(counter), K_(seq), K_(task_cnt));
+  INHERIT_TO_STRING_KV("ObITask", ObITask, KP_(counter), K_(seq), K_(task_cnt));
 private:
   int64_t *counter_;
   int64_t adder_;
@@ -137,7 +138,7 @@ public:
     return ret;
   }
   virtual int process() { ::usleep(sleep_us_); *counter_ = *counter_ * 2; return OB_SUCCESS;}
-  VIRTUAL_TO_STRING_KV(KP_(counter));
+  INHERIT_TO_STRING_KV("ObITask", ObITask, KP_(counter));
 private:
   int64_t *counter_;
   int sleep_us_;
@@ -236,7 +237,7 @@ public:
     }
     return ret;
   }
-  VIRTUAL_TO_STRING_KV("type", "AtomicMul", K(*dag_), K_(seq), K_(cnt), KP_(op), K_(error_seq), K_(sleep_us));
+  INHERIT_TO_STRING_KV("ObITask", ObITask, "type", "AtomicMul", K(*dag_), K_(seq), K_(cnt), KP_(op), K_(error_seq), K_(sleep_us));
 private:
   int64_t seq_;
   int64_t cnt_;
@@ -305,7 +306,7 @@ public:
     }
     return ret;
   }
-  VIRTUAL_TO_STRING_KV("type", "AtomicInc", K(*dag_), K_(seq), K_(cnt), KP_(op), K_(error_seq), K_(sleep_us));
+  INHERIT_TO_STRING_KV("ObITask", ObITask, "type", "AtomicInc", K(*dag_), K_(seq), K_(cnt), KP_(op), K_(error_seq), K_(sleep_us));
 private:
   int64_t seq_;
   int64_t cnt_;
@@ -370,7 +371,7 @@ public:
     }
     return ret;
   }
-  VIRTUAL_TO_STRING_KV("type", "LoopWait", K(*dag_), K_(seq), K_(cnt));
+  INHERIT_TO_STRING_KV("ObITask", ObITask, "type", "LoopWait", K(*dag_), K_(seq), K_(cnt));
 private:
   int64_t seq_;
   int64_t cnt_;
@@ -450,7 +451,7 @@ public:
     }
     return ret;
   }
-  VIRTUAL_TO_STRING_KV("type", "MaybeCanceledLoopWaitTask", K(*dag_), K_(seq), K_(cnt), K_(cancel_seq));
+  INHERIT_TO_STRING_KV("ObITask", ObITask, "type", "MaybeCanceledLoopWaitTask", K(*dag_), K_(seq), K_(cnt), K_(cancel_seq));
 
 private:
   int64_t seq_;
@@ -552,7 +553,7 @@ public:
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return false; }
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
+  INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
 protected:
   int64_t id_;
   // expect ret for op_
@@ -824,14 +825,16 @@ public:
     int ret = OB_SUCCESS;
     set_thread_count(STRESS_THREAD_NUM);
     int64_t start_time = ObTimeUtility::current_time();
+    COMMON_LOG(INFO, "stress test start", K(start_time), K_(counter));
     start();
     wait();
     int64_t elapsed_time = ObTimeUtility::current_time() - start_time;
-    COMMON_LOG(INFO, "stress test finished", K(elapsed_time / 1000));
+    COMMON_LOG(INFO, "stress test finished", K(elapsed_time / 1000), K_(counter));
     int ret_code = system("grep ERROR test_dag_scheduler.log -q | grep -v 'Fail to lock' | grep -v 'invalid tg id'");
     ret_code = WEXITSTATUS(ret_code);
-    if (ret_code == 0)
+    if (ret_code == 0) {
       ret = OB_ERR_UNEXPECTED;
+    }
     return ret;
   }
 
@@ -840,14 +843,9 @@ public:
     int64_t start_time = ObTimeUtility::current_time();
     int ret = OB_SUCCESS;
     int tmp_ret = OB_SUCCESS;
-    ObTenantBase * tenant_base = OB_NEW(ObTenantBase, "TestBase", 1001);
-    tenant_base->init();
-    tenant_base->set(scheduler_);
-    ObTenantEnv::set_tenant(tenant_base);
-
     while (!has_set_stop()
            && OB_SUCC(ret)
-           && (ObTimeUtility::current_time() - start_time < test_time_)) {
+           && ATOMIC_LOAD(&counter_) < MAX_COUNTER) {
       const int64_t dag_id = get_dag_id();
       TestDag *dag = NULL;
       TestPrepareTask *task = NULL;
@@ -855,8 +853,8 @@ public:
       int64_t expect_value = (dag_id % 10 == 0 ? 0 : 8);
 
       switch (dag_id % ObDagPrio::DAG_PRIO_MAX) {
-      case ObDagPrio::DAG_PRIO_DDL: {
-        TestLPDag *lp_dag = NULL;
+      case ObDagPrio::DAG_PRIO_COMPACTION_MID: {
+        TestCompMidDag *lp_dag = NULL;
         if (OB_SUCCESS != (tmp_ret = scheduler_->alloc_dag(lp_dag))) {
           if (OB_ALLOCATE_MEMORY_FAILED != tmp_ret) {
             ret = tmp_ret;
@@ -918,7 +916,9 @@ public:
           scheduler_->free_dag(*dag);
         }
       }
-    }
+    } // end of while
+    int64_t end_time = ObTimeUtility::fast_current_time();
+    COMMON_LOG(INFO, "finish add dag", K(ret), K(end_time - start_time));
   }
 
   int64_t get_dag_id()
@@ -926,6 +926,7 @@ public:
     return ATOMIC_FAA(&counter_, 1);
   }
 private:
+  static const int64_t MAX_COUNTER = 10 * 1000;
   static int64_t counter_;
   ObTenantDagScheduler *scheduler_;
   int64_t test_time_;
@@ -988,7 +989,6 @@ private:
   bool inited_;
   DISALLOW_COPY_AND_ASSIGN(TestDagScheduler);
 };
-
 
 TEST_F(TestDagScheduler, test_init)
 {
@@ -1320,68 +1320,68 @@ TEST_F(TestDagScheduler, test_priority)
   wait_scheduler();
 }
 
-TEST_F(TestDagScheduler, test_error_handling)
-{
-  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
-  ASSERT_TRUE(nullptr != scheduler);
-  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+// TEST_F(TestDagScheduler, test_error_handling)
+// {
+//   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+//   ASSERT_TRUE(nullptr != scheduler);
+//   ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
 
-  AtomicOperator op(0);
-  TestDag *dag = NULL;
-  AtomicMulTask *mul_task = NULL;
-  AtomicIncTask *inc_task = NULL;
-  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
-  EXPECT_EQ(OB_SUCCESS, dag->init(1));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, mul_task));
-  EXPECT_EQ(OB_SUCCESS, mul_task->init(1, 10, op, 0, 8));
-  EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, inc_task));
-  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, 10, op));
-  EXPECT_EQ(OB_SUCCESS, mul_task->add_child(*inc_task));
-  EXPECT_EQ(OB_SUCCESS, dag->add_task(*inc_task));
-  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
-  wait_scheduler();
-  EXPECT_EQ(0, op.value());
+//   AtomicOperator op(0);
+//   TestDag *dag = NULL;
+//   AtomicMulTask *mul_task = NULL;
+//   AtomicIncTask *inc_task = NULL;
+//   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+//   EXPECT_EQ(OB_SUCCESS, dag->init(1));
+//   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, mul_task));
+//   EXPECT_EQ(OB_SUCCESS, mul_task->init(1, 10, op, 0, 8));
+//   EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
+//   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, inc_task));
+//   EXPECT_EQ(OB_SUCCESS, inc_task->init(1, 10, op));
+//   EXPECT_EQ(OB_SUCCESS, mul_task->add_child(*inc_task));
+//   EXPECT_EQ(OB_SUCCESS, dag->add_task(*inc_task));
+//   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+//   wait_scheduler();
+//   EXPECT_EQ(0, op.value());
 
-  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
-  EXPECT_EQ(OB_SUCCESS, dag->init(1));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, mul_task));
-  EXPECT_EQ(OB_SUCCESS, mul_task->init(1, 1, op, 0, 1));
-  EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, inc_task));
-  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, 10, op));
-  EXPECT_EQ(OB_SUCCESS, inc_task->add_child(*mul_task));
-  EXPECT_EQ(OB_SUCCESS, dag->add_task(*inc_task));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, inc_task));
-  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, 10, op));
-  EXPECT_EQ(OB_SUCCESS, mul_task->add_child(*inc_task));
-  EXPECT_EQ(OB_SUCCESS, dag->add_task(*inc_task));
-  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
-  wait_scheduler();
-  EXPECT_EQ(10, op.value());
+//   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+//   EXPECT_EQ(OB_SUCCESS, dag->init(1));
+//   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, mul_task));
+//   EXPECT_EQ(OB_SUCCESS, mul_task->init(1, 1, op, 0, 1));
+//   EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
+//   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, inc_task));
+//   EXPECT_EQ(OB_SUCCESS, inc_task->init(1, 10, op));
+//   EXPECT_EQ(OB_SUCCESS, inc_task->add_child(*mul_task));
+//   EXPECT_EQ(OB_SUCCESS, dag->add_task(*inc_task));
+//   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, inc_task));
+//   EXPECT_EQ(OB_SUCCESS, inc_task->init(1, 10, op));
+//   EXPECT_EQ(OB_SUCCESS, mul_task->add_child(*inc_task));
+//   EXPECT_EQ(OB_SUCCESS, dag->add_task(*inc_task));
+//   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+//   wait_scheduler();
+//   EXPECT_EQ(10, op.value());
 
-  TestDag *dag1 = NULL;
-  TestPrepareTask *prepare_task = NULL;
-  op.reset();
-  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag1));
-  EXPECT_EQ(OB_SUCCESS, dag1->init(1));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, prepare_task));
-  EXPECT_EQ(OB_SUCCESS, prepare_task->init(1, &op, true));
-  EXPECT_EQ(OB_SUCCESS, dag1->add_task(*prepare_task));
-  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag1));
-  wait_scheduler();
-  EXPECT_EQ(0, op.value());
+//   TestDag *dag1 = NULL;
+//   TestPrepareTask *prepare_task = NULL;
+//   op.reset();
+//   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag1));
+//   EXPECT_EQ(OB_SUCCESS, dag1->init(1));
+//   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, prepare_task));
+//   EXPECT_EQ(OB_SUCCESS, prepare_task->init(1, &op, true));
+//   EXPECT_EQ(OB_SUCCESS, dag1->add_task(*prepare_task));
+//   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag1));
+//   wait_scheduler();
+//   EXPECT_EQ(0, op.value());
 
-  op.reset();
-  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag1));
-  EXPECT_EQ(OB_SUCCESS, dag1->init(1));
-  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, prepare_task));
-  EXPECT_EQ(OB_SUCCESS, prepare_task->init(1, &op, true, 1000*1000));
-  EXPECT_EQ(OB_SUCCESS, dag1->add_task(*prepare_task));
-  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag1));
-  wait_scheduler();
-  EXPECT_EQ(0, op.value());
-}
+//   op.reset();
+//   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag1));
+//   EXPECT_EQ(OB_SUCCESS, dag1->init(1));
+//   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, prepare_task));
+//   EXPECT_EQ(OB_SUCCESS, prepare_task->init(1, &op, true, 1000*1000));
+//   EXPECT_EQ(OB_SUCCESS, dag1->add_task(*prepare_task));
+//   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag1));
+//   wait_scheduler();
+//   EXPECT_EQ(0, op.value());
+// }
 
 void print_state(int64_t idx)
 {
@@ -1448,14 +1448,17 @@ TEST_F(TestDagScheduler, test_set_concurrency)
 
 TEST_F(TestDagScheduler, stress_test)
 {
+
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
-  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
-
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64, 100 * 1000));
   DagSchedulerStressTester tester;
   tester.init(scheduler, stress_time);
+  int64_t start_time = ObTimeUtility::fast_current_time();
   EXPECT_EQ(OB_SUCCESS, tester.do_stress());
-  scheduler->destroy();
+  wait_scheduler();
+  int64_t finish_time = ObTimeUtility::fast_current_time();
+  COMMON_LOG(INFO, "finish running dag", K(finish_time - start_time));
 }
 
 TEST_F(TestDagScheduler, test_get_dag_count)

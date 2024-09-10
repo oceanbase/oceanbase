@@ -15,7 +15,8 @@
 #include "storage/ob_i_store.h"
 #include "storage/ob_row_fuse.h"
 #include "storage/access/ob_block_row_store.h"
-#include "storage/access/ob_aggregated_store.h"
+#include "storage/access/ob_aggregate_base.h"
+#include "storage/access/ob_block_batched_row_store.h"
 #include "storage/access/ob_index_sstable_estimator.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
@@ -266,7 +267,7 @@ int ObIMicroBlockRowScanner::get_next_rows()
       LOG_WARN("Failed to get pushdown filter result bitmap", K(ret));
     } else if (OB_FAIL(batch_store->fill_rows(
                 range_->get_group_idx(),
-                this,
+                *this,
                 current_,
                 last_ + step_,
                 res))) {
@@ -628,11 +629,7 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
 {
   int ret = OB_SUCCESS;
   sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
-  if (0 == vector_offset &&
-      param_->use_uniform_format() &&
-      OB_FAIL(init_exprs_uniform_header(&exprs, eval_ctx, eval_ctx.max_batch_size_))) {
-    LOG_WARN("Fail to init uniform header", K(ret));
-  } else if (ObIMicroBlockReader::Reader == reader_->get_type()) {
+  if (ObIMicroBlockReader::Reader == reader_->get_type()) {
     ObMicroBlockReader *flat_reader = static_cast<ObMicroBlockReader *>(reader_);
     if (OB_FAIL(flat_reader->get_rows(col_offsets,
                                       col_params,
@@ -690,7 +687,8 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
     const char **cell_datas,
     uint32_t *len_array,
     sql::ObExprPtrIArray &exprs,
-    blocksstable::ObDatumRow *default_row)
+    blocksstable::ObDatumRow *default_row,
+    const bool need_init_vector)
 {
   int ret = OB_SUCCESS;
   sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
@@ -704,7 +702,8 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
                                       row_cap,
                                       row_,
                                       exprs,
-                                      eval_ctx))) {
+                                      eval_ctx,
+                                      need_init_vector))) {
       LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
                "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
     }
@@ -719,7 +718,8 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
                                   vector_offset,
                                   len_array,
                                   eval_ctx,
-                                  exprs))) {
+                                  exprs,
+                                  need_init_vector))) {
       LOG_WARN("Failed to get rows", K(ret), K(row_cap));
     }
   } else {
@@ -910,7 +910,8 @@ int ObIMicroBlockRowScanner::get_next_rows(
     const int64_t row_cap,
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
     const int64_t datum_offset,
-    uint32_t *len_array)
+    uint32_t *len_array,
+    const bool need_init_vector)
 {
   int ret = OB_SUCCESS;
   sql::ObExprPtrIArray &exprs = *(const_cast<sql::ObExprPtrIArray *>(param_->output_exprs_));
@@ -927,7 +928,8 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                          cell_datas,
                                          len_array,
                                          exprs,
-                                         nullptr))) {
+                                         nullptr,
+                                         need_init_vector))) {
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
   // cg scanner use major sstable only, no need default row
@@ -949,14 +951,18 @@ int ObIMicroBlockRowScanner::get_aggregate_result(
     const int32_t col_idx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    ObCGAggCells &cg_agg_cells)
+    const bool projected,
+    ObAggGroupBase &agg_group)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KP_(range), K_(is_inited));
-  } else if (OB_FAIL(cg_agg_cells.process(*param_, *context_, col_idx, reader_, row_ids, row_cap))) {
-    LOG_WARN("Fail to process agg cells", K(ret));
+  } else if (OB_UNLIKELY(nullptr == row_ids || row_cap < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", K(ret), KP(row_ids), K(row_cap));
+  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_idx, reader_, row_ids, row_cap, projected))) {
+    LOG_WARN("Fail to eval batch rows", K(ret));
   }
   return ret;
 }
@@ -1029,7 +1035,7 @@ int ObIMicroBlockRowScanner::check_can_group_by(
 int ObIMicroBlockRowScanner::read_distinct(
     const int32_t group_by_col,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(blocksstable::ObIMicroBlockReader::Decoder != reader_->get_type() &&
@@ -1047,7 +1053,7 @@ int ObIMicroBlockRowScanner::read_reference(
     const int32_t group_by_col,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(blocksstable::ObIMicroBlockReader::Decoder != reader_->get_type() &&

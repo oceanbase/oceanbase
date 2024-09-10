@@ -853,7 +853,7 @@ int ObUserTenantBackupDeleteMgr::check_data_backup_dest_validity_()
     }
   } else if (backup_dest_str.is_empty()) {
     // do nothing
-  } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str,  *sql_proxy_))) {
+  } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str, *sql_proxy_))) {
     LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(backup_dest_str));
   } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
     LOG_WARN("failed to check backup dest validity", K(ret), K(job_attr_), K(backup_dest_str));

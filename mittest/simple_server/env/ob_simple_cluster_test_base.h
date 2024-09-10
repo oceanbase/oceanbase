@@ -32,7 +32,8 @@ public:
   // set_bootstrap_and_create_tenant_warn_log 默认bootstrap和创建租户使用WARN日志，加速启动
   ObSimpleClusterTestBase(const std::string &env_prefix = "run_",
                           const char *log_disk_size = "10G",
-                          const char *memory_limit = "16G");
+                          const char *memory_limit = "16G",
+                          const char *datafile_size = "10G");
   virtual ~ObSimpleClusterTestBase();
 
   int start();

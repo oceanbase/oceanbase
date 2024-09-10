@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -17,11 +19,21 @@
 #include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
+#include "storage/compaction/ob_partition_merge_iter.h"
 #include "ob_index_block_data_prepare.h"
+
+bool mock_micro_index_clustered_result = true;
 
 namespace oceanbase
 {
 using namespace common;
+
+// Mock
+
+bool ObDataStoreDesc::micro_index_clustered() const
+{
+  return ::mock_micro_index_clustered_result;
+}
 
 namespace blocksstable
 {
@@ -226,6 +238,9 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
           ASSERT_EQ(info.get_block_offset(), offset);
           offset += info.get_block_size();
         }
+        if (info.get_macro_id() != macro_desc.macro_block_id_) {
+          LOG_INFO("not equal", K(info.get_macro_id()), K(macro_desc.macro_block_id_));
+        }
         ASSERT_EQ(info.get_macro_id(), macro_desc.macro_block_id_);
       }
       STORAGE_LOG(DEBUG, "Show Macro block descriptor", K(macro_desc), K(cnt));
@@ -308,7 +323,7 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
   ObMacroBlockHandle macro_handle;
   read_info.macro_block_id_ = macro_block_id;
   read_info.offset_ = 0;
-  read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   ASSERT_NE(nullptr, read_info.buf_ = reinterpret_cast<char*>(allocator_.alloc(read_info.size_)));
@@ -417,8 +432,8 @@ TEST_F(TestIndexBlockTreeCursor, test_get_cs_range)
 int main(int argc, char **argv)
 {
   system("rm -f test_index_block_tree_cursor.log*");
-  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log", true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

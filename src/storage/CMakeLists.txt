@@ -1,6 +1,8 @@
 ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_block_cache_working_set.cpp
   blocksstable/ob_block_manager.cpp
+  blocksstable/ob_macro_seq_generator.cpp
+  blocksstable/ob_object_manager.cpp
   blocksstable/ob_block_sstable_struct.cpp
   blocksstable/ob_bloom_filter_cache.cpp
   blocksstable/ob_bloom_filter_data_reader.cpp
@@ -31,6 +33,8 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_micro_block_row_lock_checker.cpp
   blocksstable/ob_micro_block_row_scanner.cpp
   blocksstable/ob_micro_block_writer.cpp
+  blocksstable/ob_storage_object_handle.cpp
+  blocksstable/ob_storage_object_rw_info.cpp
   blocksstable/ob_row_cache.cpp
   blocksstable/ob_row_queue.cpp
   blocksstable/ob_row_reader.cpp
@@ -39,16 +43,25 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_sstable.cpp
   blocksstable/ob_sstable_macro_block_header.cpp
   blocksstable/ob_sstable_meta.cpp
+  blocksstable/ob_sstable_private_object_cleaner.cpp
   blocksstable/ob_logic_macro_id.cpp
   blocksstable/ob_sstable_printer.cpp
   blocksstable/ob_storage_cache_suite.cpp
   blocksstable/ob_super_block_buffer_holder.cpp
+  blocksstable/ob_i_tmp_file.cpp
+  blocksstable/ob_tmp_file.cpp
+  blocksstable/ob_tmp_file_cache.cpp
+  blocksstable/ob_tmp_file_store.cpp
+  blocksstable/ob_ss_tmp_file_manager.cpp
+  blocksstable/ob_ss_tmp_file_write_buffer_pool.cpp
   blocksstable/ob_storage_datum.cpp
   blocksstable/ob_datum_row.cpp
   blocksstable/ob_datum_rowkey.cpp
   blocksstable/ob_datum_row_store.cpp
   blocksstable/ob_datum_row_utils.cpp
   blocksstable/ob_data_store_desc.cpp
+  blocksstable/ob_major_checksum_info.cpp
+  blocksstable/ob_column_checksum_struct.cpp
   blocksstable/ob_table_flag.cpp
   blocksstable/ob_datum_rowkey_vector.cpp
 )
@@ -140,27 +153,42 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_skip_index_filter_executor.cpp
   blocksstable/index_block/ob_sstable_meta_info.cpp
   blocksstable/index_block/ob_sstable_sec_meta_iterator.cpp
+  blocksstable/index_block/ob_clustered_index_block_writer.cpp
+)
+
+ob_set_subtarget(ob_storage meta_store
+  meta_store/ob_server_storage_meta_service.cpp
+  meta_store/ob_server_storage_meta_persister.cpp
+  meta_store/ob_server_storage_meta_replayer.cpp
+  meta_store/ob_storage_meta_io_util.cpp
+  meta_store/ob_tenant_storage_meta_service.cpp
+  meta_store/ob_tenant_storage_meta_persister.cpp
+  meta_store/ob_tenant_storage_meta_replayer.cpp
+  meta_store/ob_tenant_seq_generator.cpp
 )
 
 ob_set_subtarget(ob_storage tmp_file
   tmp_file/ob_shared_nothing_tmp_file.cpp
-  tmp_file/ob_tmp_file_write_buffer_index_cache.cpp
-  tmp_file/ob_tmp_file_cache.cpp
-  tmp_file/ob_tmp_file_io_define.cpp
-  tmp_file/ob_tmp_file_io_ctx.cpp
-  tmp_file/ob_tmp_file_global.cpp
+  tmp_file/ob_sn_tmp_file_io_handle.cpp
+  tmp_file/ob_sn_tmp_file_manager.cpp
   tmp_file/ob_tmp_file_block_manager.cpp
-  tmp_file/ob_tmp_file_manager.cpp
+  tmp_file/ob_tmp_file_cache.cpp
   tmp_file/ob_tmp_file_eviction_manager.cpp
-  tmp_file/ob_tmp_file_flush_priority_manager.cpp
-  tmp_file/ob_tmp_file_flush_list_iterator.cpp
-  tmp_file/ob_tmp_file_meta_tree.cpp
-  tmp_file/ob_tmp_file_flush_manager.cpp
   tmp_file/ob_tmp_file_flush_ctx.cpp
+  tmp_file/ob_tmp_file_flush_list_iterator.cpp
+  tmp_file/ob_tmp_file_flush_manager.cpp
+  tmp_file/ob_tmp_file_flush_priority_manager.cpp
+  tmp_file/ob_tmp_file_global.cpp
+  tmp_file/ob_tmp_file_io_ctx.cpp
+  tmp_file/ob_tmp_file_io_handle.cpp
+  tmp_file/ob_tmp_file_io_info.cpp
+  tmp_file/ob_tmp_file_meta_tree.cpp
+  tmp_file/ob_tmp_file_manager.cpp
   tmp_file/ob_tmp_file_page_cache_controller.cpp
   tmp_file/ob_tmp_file_thread_wrapper.cpp
   tmp_file/ob_tmp_file_thread_job.cpp
   tmp_file/ob_tmp_file_write_buffer_pool.cpp
+  tmp_file/ob_tmp_file_write_buffer_index_cache.cpp
 )
 
 ob_set_subtarget(ob_storage slog
@@ -204,7 +232,10 @@ ob_set_subtarget(ob_storage fts
 
 ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_migration.cpp
+  high_availability/ob_physical_copy_ctx.cpp
   high_availability/ob_physical_copy_task.cpp
+  high_availability/ob_sstable_copy_finish_task.cpp
+  high_availability/ob_tablet_copy_finish_task.cpp
   high_availability/ob_storage_ha_macro_block_writer.cpp
   high_availability/ob_storage_ha_reader.cpp
   high_availability/ob_storage_ha_service.cpp
@@ -269,6 +300,10 @@ ob_set_subtarget(ob_storage backup
   backup/ob_backup_extern_info_mgr.cpp
   backup/ob_backup_restore_util.cpp
   backup/ob_ls_backup_clean_mgr.cpp
+  backup/ob_backup_linked_item.cpp
+  backup/ob_backup_linked_block_writer.cpp
+  backup/ob_backup_linked_block_reader.cpp
+  backup/ob_backup_other_blocks_mgr.cpp
   backup/ob_backup_device_wrapper.cpp
   backup/ob_backup_index_block_builder_mgr.cpp
   backup/ob_backup_sstable_sec_meta_iterator.cpp
@@ -299,7 +334,6 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_meta.cpp
   tablet/ob_tablet_multi_source_data.cpp
   tablet/ob_tablet_service_clog_replay_executor.cpp
-  tablet/ob_tablet_slog_helper.cpp
   tablet/ob_tablet_status.cpp
   tablet/ob_tablet_table_store.cpp
   tablet/ob_tablet_table_store_iterator.cpp
@@ -540,6 +574,7 @@ ob_set_subtarget(ob_storage access
   access/ob_block_row_store.cpp
   access/ob_vector_store.cpp
   access/ob_aggregated_store.cpp
+  access/ob_aggregated_store_vec.cpp
   access/ob_scan_merge_loser_tree.cpp
   access/ob_single_merge.cpp
   access/ob_sstable_index_filter.cpp
@@ -564,7 +599,9 @@ ob_set_subtarget(ob_storage access
   access/ob_fuse_row_cache_fetcher.cpp
   access/ob_dml_param.cpp
   access/ob_micro_block_handle_mgr.cpp
+  access/ob_aggregate_base.cpp
   access/ob_pushdown_aggregate.cpp
+  access/ob_pushdown_aggregate_vec.cpp
   access/ob_empty_read_bucket.cpp
   access/ob_global_iterator_pool.cpp
 )
@@ -572,11 +609,13 @@ ob_set_subtarget(ob_storage access
 ob_set_subtarget(ob_storage ddl
   ddl/ob_build_index_task.cpp
   ddl/ob_complement_data_task.cpp
+  ddl/ob_delete_lob_meta_row_task.cpp
   ddl/ob_ddl_clog.cpp
   ddl/ob_ddl_merge_task.cpp
   ddl/ob_ddl_redo_log_replayer.cpp
   ddl/ob_ddl_redo_log_writer.cpp
   ddl/ob_ddl_struct.cpp
+  ddl/ob_direct_load_mgr_agent.cpp
   ddl/ob_direct_load_struct.cpp
   ddl/ob_direct_insert_sstable_ctx_new.cpp
   ddl/ob_ddl_redo_log_row_iterator.cpp
@@ -587,6 +626,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_replay_executor.cpp
   ddl/ob_ddl_heart_beat_task.cpp
   ddl/ob_ddl_server_client.cpp
+  ddl/ob_ddl_seq_generator.cpp
   ddl/ob_ddl_inc_clog.cpp
   ddl/ob_ddl_inc_clog_callback.cpp
   ddl/ob_ddl_inc_redo_log_writer.cpp
@@ -609,7 +649,6 @@ ob_set_subtarget(ob_storage common
   ob_relative_table.cpp
   ob_row_fuse.cpp
   ob_row_reshape.cpp
-  ob_sstable_struct.cpp
   ob_storage_rpc.cpp
   ob_storage_rpc.ipp
   ob_storage_schema.cpp
@@ -638,6 +677,7 @@ ob_set_subtarget(ob_storage common_mixed
   checkpoint/ob_freeze_checkpoint.cpp
   meta_mem/ob_tablet_leak_checker.cpp
   checkpoint/ob_checkpoint_diagnose.cpp
+  meta_mem/ob_external_tablet_cnt_map.cpp
   meta_mem/ob_meta_obj_struct.cpp
   meta_mem/ob_tablet_handle.cpp
   meta_mem/ob_tablet_map_key.cpp
@@ -648,7 +688,7 @@ ob_set_subtarget(ob_storage common_mixed
   meta_mem/ob_tenant_meta_obj_pool.cpp
   meta_mem/ob_storage_meta_cache.cpp
   utl_file/ob_utl_file_handler.cpp
-  blockstore/ob_shared_block_reader_writer.cpp
+  blockstore/ob_shared_object_reader_writer.cpp
   concurrency_control/ob_multi_version_garbage_collector.cpp
   concurrency_control/ob_trans_stat_row.cpp
   concurrency_control/ob_data_validation_service.cpp
@@ -694,6 +734,8 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_sstable_builder.cpp
   compaction/ob_compaction_memory_pool.cpp
   compaction/ob_compaction_memory_context.cpp
+  compaction/ob_sstable_merge_history.cpp
+  compaction/ob_batch_freeze_tablets_dag.cpp
   compaction/ob_progressive_merge_helper.cpp
 )
 
@@ -879,6 +921,13 @@ ob_set_subtarget(ob_storage mview
   mview/ob_mview_transaction.cpp
   mview/ob_mview_sched_job_utils.cpp
   mview/ob_major_mv_merge_info.cpp
+)
+
+ob_set_subtarget(ob_storage vector_index
+  vector_index/cmd/ob_vector_refresh_index_executor.cpp
+  vector_index/ob_vector_index_refresh.cpp
+  vector_index/ob_vector_refresh_idx_transaction.cpp
+  vector_index/ob_vector_index_sched_job_utils.cpp
 )
 
 ob_set_subtarget(ob_storage tenant_snapshot

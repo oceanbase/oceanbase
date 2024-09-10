@@ -409,7 +409,93 @@ int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetter
       }
     }
   }
+  return ret;
+}
 
+inline bool ObResolverUtils::is_collection_support_type(const ObObjType type)
+{
+  return (type == ObTinyIntType || type == ObSmallIntType ||
+          type == ObInt32Type || type == ObIntType ||
+          type == ObUTinyIntType || type == ObUSmallIntType ||
+          type == ObUInt32Type || type == ObUInt64Type ||
+          type == ObFloatType || type == ObDoubleType ||
+          type == ObVarcharType || type == ObCollectionSQLType);
+}
+
+int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, ObStringBuffer &buf, uint8_t &depth, bool is_vector_child)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  const uint8_t OB_ARRAY_MAX_NESTED_LEVEL = 6; /* constistent with pg*/
+  bool is_vector = (type_node.type_ == T_COLLECTION && type_node.int32_values_[0] == 1);
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (type_node.type_ == T_COLLECTION && ++depth > OB_ARRAY_MAX_NESTED_LEVEL) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported array depth", K(ret), K(depth));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ARRAY DEPTH exceeds the maximum allowed(6)");
+  } else if (!is_collection_support_type(static_cast<ObObjType>(type_node.type_))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported element type", K(ret), K(type_node.type_));
+  } else if (type_node.int32_values_[1]/*is binary*/ && (type_node.type_ == T_CHAR || type_node.type_ == T_VARCHAR)) {
+    if (OB_FAIL(buf.append(type_node.type_ == T_CHAR ? "BINARY" : "VARBINARY"))) {
+      LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+    }
+  } else if (is_vector) {
+    // vector type
+    if (OB_FAIL(buf.append("VECTOR"))) {
+      LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+    }
+  } else if (!is_vector_child && OB_FAIL(buf.append(ob_sql_type_str(static_cast<ObObjType>(type_node.type_))))) {
+    LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
+  }
+
+  const int MAX_LEN = 128;
+  char tmp[MAX_LEN] = {0};
+  if (OB_FAIL(ret)) {
+  } else if (type_node.type_ == T_CHAR || type_node.type_ == T_VARCHAR
+            || type_node.type_ == T_DATETIME || type_node.type_ == T_TIMESTAMP
+            || type_node.type_ == T_TIME || type_node.type_ == T_BIT) {
+    bool is_char = (type_node.type_ == T_CHAR || type_node.type_ == T_VARCHAR);
+    bool is_bit = type_node.type_ == T_BIT;
+    int32_t length = is_bit ? type_node.int16_values_[0]
+                              : (is_char ? type_node.int32_values_[0] : type_node.int16_values_[1]);
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
+      LOG_WARN("failed to convert len to string", K(ret), K(length));
+    } else if (OB_FAIL(buf.append(tmp, pos))) {
+      LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
+    }
+  } else if (type_node.type_ == T_INT && is_vector_child) {
+    // vector dimension
+    int64_t pos = 0;
+    if (type_node.value_ <= 0 || type_node.value_ > 16000) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported vector column dim range", K(ret), K(type_node.value_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column dim less or equal to zero or larger than 16000 is");
+    } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "%ld", type_node.value_))) {
+      LOG_WARN("failed to convert len to string", K(ret));
+    } else if (OB_FAIL(buf.append(tmp, pos))) {
+      LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
+    }
+  } else if (type_node.type_ == T_NUMBER) {
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d,%d)", type_node.int16_values_[0], type_node.int16_values_[1]))) {
+      LOG_WARN("failed to convert len to string", K(ret));
+    } else if (OB_FAIL(buf.append(tmp, pos))) {
+      LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
+    }
+  } else if (type_node.type_ == T_COLLECTION && OB_FAIL(buf.append("("))) {
+    LOG_WARN("failed to append left bracket", K(ret), K(type_node.type_));
+  } else if (type_node.type_ == T_COLLECTION && OB_NOT_NULL(type_node.children_[0])
+             && OB_FAIL(resolve_collection_type_info(*type_node.children_[0], buf, depth, is_vector))) {
+    LOG_WARN("failed to resolve sub type info", K(ret), K(type_node.type_));
+  } else if (type_node.type_ == T_COLLECTION && OB_FAIL(buf.append(")"))) {
+    LOG_WARN("failed to append right bracket", K(ret), K(type_node.type_));
+  }
   return ret;
 }
 
@@ -1041,27 +1127,14 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
     } else {
       // 复杂类型的TypeClass相同, 需要检查兼容性
       bool is_compatible = false;
-#ifdef OB_BUILD_ORACLE_PL
-      if (ObPlJsonUtil::is_pl_jsontype(src_type_id)) {
-        OZ (ObPLResolver::check_composite_compatible(
-          NULL == resolve_ctx.params_.secondary_namespace_
-              ? static_cast<const ObPLINS&>(resolve_ctx)
-                  : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
-          dst_pl_type.get_user_type_id(),
-          src_type_id,
-          is_compatible), K(src_type_id), K(dst_pl_type), K(resolve_ctx.params_.is_execute_call_stmt_));
-      } else {
-#endif
-        OZ (ObPLResolver::check_composite_compatible(
-            NULL == resolve_ctx.params_.secondary_namespace_
-                ? static_cast<const ObPLINS&>(resolve_ctx)
-                    : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
-            src_type_id,
-            dst_pl_type.get_user_type_id(),
-            is_compatible), K(src_type_id), K(dst_pl_type), K(resolve_ctx.params_.is_execute_call_stmt_));
-#ifdef OB_BUILD_ORACLE_PL
-      }
-#endif
+      OZ (ObPLResolver::check_composite_compatible(
+              NULL == resolve_ctx.params_.secondary_namespace_
+                  ? static_cast<const ObPLINS &>(resolve_ctx)
+                  : static_cast<const ObPLINS &>(*resolve_ctx.params_.secondary_namespace_),
+              src_type_id,
+              dst_pl_type.get_user_type_id(),
+              is_compatible),
+          K(src_type_id), K(dst_pl_type), K(resolve_ctx.params_.is_execute_call_stmt_));
       if (OB_FAIL(ret)) {
       } else if (is_compatible) {
         OX (match_info = ObRoutineMatchInfo::MatchInfo(true, src_type, dst_type));
@@ -3534,7 +3607,7 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
 {
   int bret = false;
   if (is_key_part(part_type)) {
-    if (!ob_is_text_tc(type) && !ob_is_json_tc(type)) {
+    if (!ob_is_text_tc(type) && !ob_is_json_tc(type) && !ob_is_collection_sql_type(type)) {
       bret = true;
     }
   } else if (PARTITION_FUNC_TYPE_HASH == part_type ||
@@ -5235,6 +5308,23 @@ int ObResolverUtils::build_file_column_expr_for_file_url(
   return ret;
 }
 
+int ObResolverUtils::generate_subschema_id(ObSQLSessionInfo &session_info,
+                                           const common::ObIArray<common::ObString> &extended_type_info,
+                                           uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info.get_cur_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (extended_type_info.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type name", K(ret), K(extended_type_info.count()));
+  } else if (OB_FAIL(session_info.get_cur_exec_ctx()->get_subschema_id_by_type_string(extended_type_info.at(0), subschema_id))) {
+    LOG_WARN("failed to get array type subschema id", K(ret));
+  }
+  return ret;
+}
+
 // 解析生成列表达式时，首先在table_schema中的column_schema中寻找依赖的列，如果找不到，再在 resolved_cols中找
 int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    const ParseNode *node,
@@ -5486,8 +5576,17 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       cast_dst_type.set_accuracy(generated_column.get_accuracy());
       cast_dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
       ObRawExpr *expr_with_implicit_cast = NULL;
+      if (ob_is_collection_sql_type(cast_dst_type.get_type())) {
+        uint16_t subschema_id = 0;
+        if (OB_FAIL(generate_subschema_id(*session_info, generated_column.get_extended_type_info(), subschema_id))) {
+          LOG_WARN("generate subschema id failed", K(ret));
+        } else {
+          cast_dst_type.set_subschema_id(subschema_id);
+        }
+      }
       //only formalize once
-      if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
         LOG_WARN("fail to remove implicit cast", K(ret));
       } else if (coltype_not_defined) {
         expr_with_implicit_cast = expr;
@@ -6790,6 +6889,21 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         }
       //}
       break;
+    case ObCollectionSQLTC: {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.3.3, array type");
+      } else {
+        data_type.set_length(length);
+        data_type.set_scale(default_accuracy.get_scale());
+        data_type.set_charset_type(CHARSET_BINARY);
+        data_type.set_collation_type(CS_TYPE_INVALID);
+      }
+      break;
+    }
     case ObRoaringBitmapTC: {
       uint64_t tenant_data_version = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {

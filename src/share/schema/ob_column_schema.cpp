@@ -811,6 +811,22 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
   return ret;
 }
 
+int ObColumnSchemaV2::is_same_collection_column(const ObColumnSchemaV2 &other, bool &is_same) const
+{
+  int ret = OB_SUCCESS;
+  if (get_extended_type_info().count() == other.get_extended_type_info().count()) {
+    if (get_extended_type_info().count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to check type info incremental change", K(ret));
+    } else {
+      ObString src_sub_name = get_extended_type_info().at(0);
+      ObString dst_sub_name = other.get_extended_type_info().at(0);
+      is_same = (src_sub_name.case_compare(dst_sub_name) == 0);
+    }
+  }
+  return ret;
+}
+
 } //end of namespace schema
 } //end of namespace share
 } //end of namespace oceanbase

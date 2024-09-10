@@ -15,13 +15,13 @@
 
 #include "share/config/ob_reload_config.h"
 #include "share/config/ob_server_config.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
 namespace observer
 {
 
-struct ObGlobalContext;
 int set_cluster_name_hash(const common::ObString &cluster_name);
 int calc_cluster_name_hash(const common::ObString &cluster_name, uint64_t &cluster_name_hash);
 class ObServerReloadConfig

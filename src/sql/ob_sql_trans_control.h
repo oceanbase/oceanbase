@@ -209,7 +209,7 @@ public:
                                    ObPhysicalPlanCtx *plan_ctx,
                                    transaction::ObTransService* txs,
                                    const int64_t nested_level);
-  static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback);
+  static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback, const bool will_retry);
   static int alloc_branch_id(ObExecContext &exec_ctx, const int64_t count, int16_t &branch_id);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
   static int kill_tx(ObSQLSessionInfo *session, int cause);
@@ -314,6 +314,8 @@ public:
   // when lock conflict, stmt will do retry, we do not rollback current transaction
   // but clean the transaction level snapshot it exist
   static int reset_trans_for_autocommit_lock_conflict(ObExecContext &exec_ctx);
+  static transaction::ObTxCleanPolicy
+  decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry);
 };
 
 inline int ObSqlTransControl::get_trans_expire_ts(const ObSQLSessionInfo &my_session,

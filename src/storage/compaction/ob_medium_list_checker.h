@@ -25,14 +25,33 @@ public:
     const ObExtraMediumInfo &extra_info,
     const MediumInfoArray *medium_info_array,
     const int64_t last_major_snapshot);
+  static int check_next_schedule_medium(
+    const ObMediumCompactionInfo &next_schedule_info,
+    const int64_t last_major_snapshot,
+    const bool force_check = true);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int check_next_schedule_medium_for_ss(
+    const ObMediumCompactionInfo &next_schedule_info,
+    const int64_t last_major_snapshot);
+#endif
+
+private:
   static int check_continue(
     const MediumInfoArray &medium_info_array,
     const int64_t start_check_idx = 0);
-  static int check_next_schedule_medium(
-    const ObMediumCompactionInfo *next_schedule_info,
-    const int64_t last_major_snapshot,
-    const bool force_check = true);
-private:
+  static int inner_check_medium_list(
+    const ObExtraMediumInfo &extra_info,
+    const MediumInfoArray *medium_info_array,
+    const int64_t last_major_snapshot);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int check_continue_for_ss(
+    const MediumInfoArray &medium_info_array,
+    const int64_t start_check_idx = 0);
+  static int inner_check_medium_list_for_ss(
+    const ObExtraMediumInfo &extra_info,
+    const MediumInfoArray *medium_info_array,
+    const int64_t last_major_snapshot);
+#endif
   static int check_extra_info(
     const ObExtraMediumInfo &extra_info,
     const int64_t last_major_snapshot);

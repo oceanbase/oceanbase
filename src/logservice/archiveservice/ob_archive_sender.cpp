@@ -22,6 +22,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "share/backup/ob_archive_piece.h"    // ObArchivePiece
 #include "lib/thread/ob_thread_name.h"
+#include "logservice/palf/log_io_context.h"  // LogIOContext
 #include "share/backup/ob_archive_struct.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_debug_sync.h"
@@ -427,8 +428,11 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
 {
   int ret = OB_SUCCESS;
   const ObLSID id = task.get_ls_id();
+  palf::LogIOContext io_ctx(MTL_ID(), id.id(), palf::LogIOUser::ARCHIVE);
+  CONSUMER_GROUP_FUNC_GUARD(io_ctx.get_function_type());
   const ArchiveWorkStation &station = task.get_station();
   share::ObBackupDest backup_dest;
+  int64_t dest_id = -1;
   if (OB_UNLIKELY(! task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(task));
@@ -437,7 +441,7 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
     // normal status include DOING / SUSPEND
     // other status include INTERRUPT / STOP
     consume_status = TaskConsumeStatus::STALE_TASK;
-  } else if (OB_FAIL(round_mgr_->get_backup_dest(station.get_round(), backup_dest))) {
+  } else if (OB_FAIL(round_mgr_->get_backup_dest_and_id(station.get_round(), backup_dest, dest_id))) {
     ARCHIVE_LOG(WARN, "get backup dest failed", K(ret), K(task));
   } else {
     int64_t next_compensate_piece_id = 0;
@@ -457,7 +461,7 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
                                          backup_dest, *ls_archive_task))) {
           ARCHIVE_LOG(WARN, "do compensate piece failed", K(ret), K(task), KPC(ls_archive_task));
         }
-      } else if (OB_FAIL(archive_log_(backup_dest, arg, task, *ls_archive_task))) {
+      } else if (OB_FAIL(archive_log_(backup_dest, dest_id, arg, task, *ls_archive_task))) {
         ARCHIVE_LOG(WARN, "archive log failed", K(ret), K(task), KPC(ls_archive_task));
       } else {
         consume_status = TaskConsumeStatus::DONE;
@@ -567,6 +571,7 @@ int ObArchiveSender::do_compensate_piece_(const ObLSID &id,
 }
 
 int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
+    const int64_t backup_dest_id,
     const ObArchiveSendDestArg &arg,
     ObArchiveSendTask &task,
     ObLSArchiveTask &ls_archive_task)
@@ -618,7 +623,7 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
     ARCHIVE_LOG(WARN, "fill file header if needed failed", K(ret));
   }
   // 6. push log
-  else if (OB_FAIL(push_log_(id, path.get_obstr(), backup_dest.get_storage_info(), is_full_file,
+  else if (OB_FAIL(push_log_(id, path.get_obstr(), backup_dest.get_storage_info(), backup_dest_id, is_full_file,
           is_can_seal, new_file ? file_offset : file_offset + ARCHIVE_FILE_HEADER_SIZE,
           new_file ? filled_data : origin_data, new_file ? filled_data_len : origin_data_len))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret), K(task));
@@ -728,6 +733,7 @@ int ObArchiveSender::fill_file_header_if_needed_(const ObArchiveSendTask &task,
 int ObArchiveSender::push_log_(const ObLSID &id,
     const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
+    const int64_t backup_dest_id,
     const bool is_full_file,
     const bool is_can_seal,
     const int64_t offset,
@@ -737,7 +743,7 @@ int ObArchiveSender::push_log_(const ObLSID &id,
   int ret = OB_SUCCESS;
   ObArchiveIO archive_io;
 
-  if (OB_FAIL(archive_io.push_log(uri, storage_info, data, data_len, offset, is_full_file, is_can_seal))) {
+  if (OB_FAIL(archive_io.push_log(uri, storage_info, backup_dest_id, data, data_len, offset, is_full_file, is_can_seal))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret));
   } else {
     ARCHIVE_LOG(INFO, "push log succ", K(id));

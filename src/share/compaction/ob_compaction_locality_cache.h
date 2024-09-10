@@ -114,6 +114,21 @@ private:
   share::ObLSColumnReplicaCache ls_cs_replica_cache_;
 };
 
+struct ObMemberListInfo
+{
+  ObMemberListInfo(const uint64_t tenant_id)
+    : member_list_array_()
+  {
+    member_list_array_.set_attr(ObMemAttr(tenant_id, "MemListInfo"));
+  }
+  ~ObMemberListInfo() {}
+  int build(const ObLSReplica &tmp_replica);
+  bool check_exist(const common::ObAddr &addr);
+  bool empty() { return member_list_array_.empty(); }
+  TO_STRING_KV("member_list_cnt", member_list_array_.count(), K(member_list_array_));
+  ObSEArray<common::ObAddr, 6> member_list_array_; // including member_list & learner_list
+};
+
 } // namespace share
 } // namespace oceanbase
 

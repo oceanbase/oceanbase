@@ -256,6 +256,11 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       } else if (OB_ISNULL(exec_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("need context to search subschema mapping", K(ret), K(udt_id));
+      } else if (str_values_.count() > 0) {
+        // array type
+        if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(str_values_.at(0), subschema_id))) {
+          LOG_WARN("failed to get array type subschema id", K(ret));
+        }
       } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
         LOG_WARN("failed to get sub schema id", K(ret), K(udt_id));
       }

@@ -103,7 +103,7 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
 {
   int ret = OB_SUCCESS;
 
-  // TODO(@bowen.gbw): in the future we should use ObTablet::get_snapshot interface
+  // TODO(@gaishun.gs): in the future we should use ObTablet::get_snapshot interface
   mds::MdsDumpKV *kv = nullptr;
   compaction::ObMediumCompactionInfoKey tmp_key;
   bool found = false;

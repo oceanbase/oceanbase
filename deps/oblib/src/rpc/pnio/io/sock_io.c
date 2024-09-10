@@ -12,6 +12,12 @@
 
 static int sk_translate_io_error(sock_t* s, int64_t bytes, uint32_t epbit) {
   if (bytes > 0) {
+    // TODO fengshuo.fs: ignore 127.0.0.1 and local_io
+    if (EPOLLIN == epbit) {
+      IGNORE_RETURN ATOMIC_FAA(&pnio_read_bytes, bytes);
+    } else if (EPOLLOUT == epbit) {
+      IGNORE_RETURN ATOMIC_FAA(&pnio_write_bytes, bytes);
+    }
     return 0;
   } else if (bytes < 0) {
     if (EWOULDBLOCK == errno || EAGAIN == errno) {

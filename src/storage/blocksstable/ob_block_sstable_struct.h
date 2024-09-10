@@ -1094,7 +1094,6 @@ public:
   int64_t master_key_id_;
   const char *encrypt_key_;
 };
-
 }//end namespace blocksstable
 }//end namespace oceanbase
 #endif

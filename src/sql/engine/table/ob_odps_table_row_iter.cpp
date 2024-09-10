@@ -329,6 +329,7 @@ int ObODPSTableRowIterator::print_type_map_user_info(apsara::odps::sdk::ODPSColu
     const char* ob_type_cstr = "";
     if (OB_NOT_NULL(ob_type_expr)) {
       ObArrayWrap<char> buf;
+      ObArray<ObString> extend_info;
       int64_t pos = 0;
       ob_type_cstr = ob_obj_type_str(ob_type_expr->datum_meta_.type_);
       if (OB_SUCCESS == buf.allocate_array(arena_alloc_, 128)) { // 128 is enough to hold user info str
@@ -337,7 +338,8 @@ int ObODPSTableRowIterator::print_type_map_user_info(apsara::odps::sdk::ODPSColu
                         ob_type_expr->max_length_,
                         ob_type_expr->datum_meta_.precision_,
                         ob_type_expr->datum_meta_.scale_,
-                        ob_type_expr->datum_meta_.cs_type_);
+                        ob_type_expr->datum_meta_.cs_type_,
+                        extend_info);
         if (pos < buf.count()) {
           buf.at(pos++) = '\0';
           ob_type_cstr = buf.get_data();

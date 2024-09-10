@@ -41,6 +41,8 @@ void ObAllVirtualTmpFileInfo::reset()
   omt::ObMultiTenantOperator::reset();
   ip_buffer_[0] = '\0';
   trace_id_buffer_[0] = '\0';
+  file_ptr_buffer_[0] = '\0';
+  file_label_buffer_[0] = '\0';
   fd_arr_.reset();
   is_ready_ = false;
   fd_idx_ = -1;
@@ -62,6 +64,7 @@ bool ObAllVirtualTmpFileInfo::is_need_process(uint64_t tenant_id)
     bool_ret = true;
   }
 
+  bool_ret = bool_ret && !GCTX.is_shared_storage_mode();
   return bool_ret;
 }
 
@@ -158,7 +161,7 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
           case DIR_ID:
             cur_row_.cells_[i].set_int(tmp_file_info.dir_id_);
             break;
-          case BYTES:
+          case DATA_BYTES:
             cur_row_.cells_[i].set_int(tmp_file_info.file_size_);
             break;
           case START_OFFSET:
@@ -167,13 +170,13 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
           case IS_DELETING:
             cur_row_.cells_[i].set_bool(tmp_file_info.is_deleting_);
             break;
-          case CACHED_PAGE_NUM:
-            cur_row_.cells_[i].set_int(tmp_file_info.cached_page_num_);
+          case CACHED_DATA_PAGE_NUM:
+            cur_row_.cells_[i].set_int(tmp_file_info.cached_data_page_num_);
             break;
-          case WRITE_BACK_PAGE_NUM:
+          case WRITE_BACK_DATA_PAGE_NUM:
             cur_row_.cells_[i].set_int(tmp_file_info.write_back_data_page_num_);
             break;
-          case FLUSHED_PAGE_NUM:
+          case FLUSHED_DATA_PAGE_NUM:
             cur_row_.cells_[i].set_int(tmp_file_info.flushed_data_page_num_);
             break;
           case REF_CNT:
@@ -202,6 +205,42 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
             break;
           case BIRTH_TIME:
             cur_row_.cells_[i].set_timestamp(tmp_file_info.birth_ts_);
+            break;
+          case TMP_FILE_PTR:
+            if (NULL != tmp_file_info.tmp_file_ptr_) {
+              MEMSET(file_ptr_buffer_, '\0', 20);
+              snprintf(file_ptr_buffer_, 18, "0x%lx", (uint64_t)tmp_file_info.tmp_file_ptr_);
+              cur_row_.cells_[i].set_varchar(file_ptr_buffer_);
+            } else {
+              cur_row_.cells_[i].set_varchar(ObString::make_string("nullptr"));
+            }
+            cur_row_.cells_[i].set_default_collation_type();
+            break;
+          case LABEL:
+            MEMSET(file_label_buffer_, '\0', OB_MAX_FILE_LABEL_SIZE);
+            if (!tmp_file_info.label_.is_empty()) {
+              tmp_file_info.label_.to_string(file_label_buffer_, OB_MAX_FILE_LABEL_SIZE);
+            }
+            cur_row_.cells_[i].set_varchar(file_label_buffer_);
+            cur_row_.cells_[i].set_default_collation_type();
+            break;
+          case META_TREE_EPOCH:
+            cur_row_.cells_[i].set_int(tmp_file_info.meta_tree_epoch_);
+            break;
+          case META_TREE_LEVELS:
+            cur_row_.cells_[i].set_int(tmp_file_info.meta_tree_level_cnt_);
+            break;
+          case META_BYTES:
+            cur_row_.cells_[i].set_int(tmp_file_info.meta_size_);
+            break;
+          case CACHED_META_PAGE_NUM:
+            cur_row_.cells_[i].set_int(tmp_file_info.cached_meta_page_num_);
+            break;
+          case WRITE_BACK_META_PAGE_NUM:
+            cur_row_.cells_[i].set_int(tmp_file_info.write_back_meta_page_num_);
+            break;
+          case PAGE_FLUSH_CNT:
+            cur_row_.cells_[i].set_int(tmp_file_info.all_type_page_flush_cnt_);
             break;
           default:
             ret = OB_ERR_UNEXPECTED;

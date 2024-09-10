@@ -22,6 +22,7 @@
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "sql/engine/aggregate/ob_exec_hash_struct.h"
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 #include "sql/engine/join/ob_join_filter_material_control_info.h"
 
 namespace oceanbase
@@ -29,6 +30,44 @@ namespace oceanbase
 namespace sql
 {
 class ObHJPartitionMgr;
+class ObJoinFilterPartitionSplitter;
+
+class ObVecAllocUtil
+{
+public:
+  static inline uint64_t add_alloc_size() { return 0; }
+
+  template <typename X, typename Y, typename ...TS>
+  static inline uint64_t add_alloc_size(const X &, const Y &y, const TS &...args)
+  {
+    return y + add_alloc_size(args...);
+  }
+
+  static inline void alloc_ptr_one_by_one(void *) { return; }
+
+  template<typename X, typename Y, typename ...TS>
+  static inline void alloc_ptr_one_by_one(void *ptr, const X &x, const Y &y, const TS &...args)
+  {
+    const_cast<X &>(x) = static_cast<X>(ptr);
+    alloc_ptr_one_by_one(static_cast<char *>(ptr) + y, args...);
+  }
+
+  // allocate pointers which passed <ptr, size> pairs
+  template <typename ...TS>
+  static inline int vec_alloc_ptrs(ObIAllocator *alloc, const TS &...args)
+  {
+    int ret = OB_SUCCESS;
+    int64_t size = add_alloc_size(args...);
+    void *ptr = alloc->alloc(size);
+    if (NULL == ptr) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      MEMSET(ptr, 0, size);
+      alloc_ptr_one_by_one(ptr, args...);
+    }
+    return ret;
+  }
+};
 
 class ObHashJoinVecInput : public ObOpInput
 {
@@ -239,6 +278,10 @@ class ObHashJoinVecSpec : public ObJoinVecSpec
 OB_UNIS_VERSION_V(1);
 public:
   ObHashJoinVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
+  inline bool use_realistic_runtime_bloom_filter_size() const
+  {
+    return jf_material_control_info_.enable_material_;
+  }
 
   // all_exprs组成:(all_left_exprs keys, all_right_exprs keys)
   // 前面的all_xxx_exprs keys没有去重
@@ -506,28 +549,35 @@ private:
   int check_join_key_for_naaj_batch(const bool is_left,
                                     bool &has_null,
                                     const ObBatchRows *child_brs);
+  inline bool is_top_level_process_with_join_filter()
+  {
+    return MY_SPEC.use_realistic_runtime_bloom_filter_size() && OB_NOT_NULL(join_filter_partition_splitter_)
+           && top_part_level();
+  }
+  int fill_partition_from_join_filter(int64_t &num_left_rows);
+
+public:
+  static constexpr int64_t HASH_SEED = 16777213;
+  static constexpr int64_t MIN_ROW_COUNT = 10000;
+  static constexpr int64_t INIT_LTB_SIZE = 64;
+  static constexpr int64_t MAX_PART_COUNT_PER_LEVEL = INIT_LTB_SIZE << 1;
+  // 目前最大层次为4，通过高位4个字节作为recursive处理，超过partition level采用nest loop方式处理
+  static constexpr int64_t MIN_PART_COUNT = 8;
+  static constexpr int64_t MAX_PART_LEVEL = 4;
+  static constexpr int64_t PRICE_PER_ROW = 48;
+  static constexpr int64_t PAGE_SIZE = ObChunkDatumStore::BLOCK_SIZE;
 private:
   static const int64_t RATIO_OF_BUCKETS = 2;
   // min row count for estimated row count
-  static const int64_t MIN_ROW_COUNT = 10000;
-  static const int64_t INIT_LTB_SIZE = 64;
-  static const int64_t MIN_PART_COUNT = 8;
-  static const int64_t PAGE_SIZE = ObChunkDatumStore::BLOCK_SIZE;
   static const int64_t MIN_MEM_SIZE = (MIN_PART_COUNT + 1) * PAGE_SIZE;
-  // 目前最大层次为4，通过高位4个字节作为recursive处理，超过partition level采用nest loop方式处理
-  static const int64_t MAX_PART_LEVEL = 4;
   static const int8_t ENABLE_HJ_NEST_LOOP = 0x01;
   static const int8_t ENABLE_HJ_RECURSIVE = 0x02;
   static const int8_t ENABLE_HJ_IN_MEMORY = 0x04;
   static const int8_t HJ_PROCESSOR_MASK =
                           ENABLE_HJ_NEST_LOOP | ENABLE_HJ_RECURSIVE | ENABLE_HJ_IN_MEMORY;
   // hard code seed, 24bit max prime number
-  static const int64_t HASH_SEED = 16777213;
   static const int64_t MAX_NEST_LOOP_RIGHT_ROW_COUNT = 1000000000; // about 120M
   static const int64_t MIN_BATCH_ROW_CNT_NESTLOOP = 256;
-  static const int64_t PRICE_PER_ROW = 48;
-  static const int64_t MAX_PART_COUNT_PER_LEVEL = INIT_LTB_SIZE<< 1;
-
   int64_t max_output_cnt_;
   HJState hj_state_;
   HJProcessor hj_processor_;
@@ -569,17 +619,6 @@ private:
   uint64_t *hash_vals_;
   ObBitVector *null_skip_bitmap_;
   ObBatchRows child_brs_;
-  // Record batch idx involved in each partition, selector_list_ in row batch;
-  // For example, max_batch_size is 256, there are 10 rows of data, divided into 2 partitions,
-  //  odd numbers are partition 0, and even numbers are partition 1
-  //Then part_selectors_memory layout is:
-  // selector_list of part_0: 0,2,4,6,8, ...(251 zeros),
-  // selector_list of part_1: 1,3,5,7,9, ...(251 zeros)
-  //
-  // part_selector_sizes_ data is:
-  // 5, 5
-  uint16_t *part_selectors_;
-  uint16_t *part_selector_sizes_;
   common::ObFixedArray<ObIVector *, common::ObIAllocator> left_vectors_;
   // ********* for fill partitions end *********
 
@@ -604,6 +643,10 @@ private:
   double data_ratio_;
   OutputInfo output_info_;
   ObTempRowStore::IterationAge iter_age_;
+  BatchTempRowStoresMgr stores_mgr_;
+  int64_t *part_idxes_;
+
+  ObJoinFilterPartitionSplitter *join_filter_partition_splitter_{nullptr};
 };
 
 } // end namespace sql

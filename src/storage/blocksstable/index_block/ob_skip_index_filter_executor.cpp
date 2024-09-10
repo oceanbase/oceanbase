@@ -513,7 +513,7 @@ int ObSkipIndexFilterExecutor::in_operator(const sql::ObWhiteFilterExecutor &fil
             LOG_WARN("Failed to check datum in array", K(ret), K(min_datum), K(max_datum));
           }
         } else if (cmp_type == ObFilterInCmpType::HASH_SEARCH) {
-          if (OB_FAIL(filter.exist_in_datum_set(min_datum, is_exist))) {
+          if (OB_FAIL(filter.exist_in_set(min_datum, is_exist))) {
             LOG_WARN("Failed to check datum in hashset", K(ret), K(min_datum), K(max_datum));
           }
         } else {

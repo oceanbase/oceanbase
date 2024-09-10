@@ -61,21 +61,19 @@ int ObExprRbIsEmpty::eval_rb_is_empty(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
   ObExpr *rb_arg = expr.args_[0];
   bool is_rb_null = false;
-  ObRoaringBitmap *rb = nullptr;
-  ObDatum *rb_datum = nullptr;
-  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb_arg, rb, is_rb_null))) {
+  ObString rb_bin;
+  uint64_t cardinality = 0;
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb_arg, rb_bin, is_rb_null))) {
     LOG_WARN("fail to get input roaringbitmap", K(ret));
-  } else if (is_rb_null) {
+  } else if (is_rb_null || rb_bin == nullptr) {
     res.set_null();
+  } else if (OB_FAIL(ObRbUtils::get_cardinality(tmp_allocator, rb_bin, cardinality))){
+    LOG_WARN("failed to get cardinality from roaringbitmap binary", K(ret));
+  } else if (cardinality == 0) {
+    res.set_bool(true);
   } else {
-    uint64_t cardinality = rb->get_cardinality();
-    if (cardinality == 0) {
-      res.set_bool(true);
-    } else {
-      res.set_bool(false);
-    }
+    res.set_bool(false);
   }
-  ObRbUtils::rb_destroy(rb);
   return ret;
 }
 

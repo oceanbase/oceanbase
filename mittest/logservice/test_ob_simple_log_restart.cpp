@@ -63,6 +63,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 constexpr int64_t timeout_ts_us = 3 * 1000 * 1000;
 int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
@@ -382,9 +383,10 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     PalfBaseInfo base_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_info(
       leader.palf_handle_impl_->get_max_lsn(), base_info));
+    base_info.curr_lsn_ = LSN(10*PALF_BLOCK_SIZE);
     LogSnapshotMeta snapshot;
-    base_info.prev_log_info_.lsn_ = LSN(10*PALF_BLOCK_SIZE - 10*1024);
-    EXPECT_EQ(OB_SUCCESS, snapshot.generate(LSN(10*PALF_BLOCK_SIZE), base_info.prev_log_info_));
+    base_info.prev_log_info_.lsn_ = base_info.curr_lsn_ - 10*1024;
+    EXPECT_EQ(OB_SUCCESS, snapshot.generate(base_info.curr_lsn_, base_info.prev_log_info_, base_info.curr_lsn_));
     FlushMetaCbCtx meta_ctx;
     meta_ctx.type_ = SNAPSHOT_META;
     meta_ctx.base_lsn_ = snapshot.base_lsn_;

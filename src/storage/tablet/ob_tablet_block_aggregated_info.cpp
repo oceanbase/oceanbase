@@ -80,7 +80,7 @@ int ObBlockInfoSet::init(
     LOG_WARN("fail to create quick_resotre_remote_block id set", K(ret), K(data_bucket_num));
   } else if (OB_FAIL(shared_meta_block_info_set_.create(shared_meta_bucket_num, "ObBlockInfoSet", "ObBlockSetNode", MTL_ID()))) {
     LOG_WARN("fail to create shared meta block id set", K(ret), K(shared_meta_bucket_num));
-  } else if (OB_FAIL(shared_data_block_info_map_.create(shared_data_bucket_num, "ObBlockInfoMap", "ObBlockMapNode", MTL_ID()))) {
+  } else if (OB_FAIL(clustered_data_block_info_map_.create(shared_data_bucket_num, "ObBlockInfoMap", "ObBlockMapNode", MTL_ID()))) {
     LOG_WARN("fail to create shared data block id set", K(ret), K(shared_meta_bucket_num));
   }
   return ret;
@@ -247,13 +247,13 @@ void ObTabletMacroInfo::reset()
 int ObTabletMacroInfo::init(
     ObArenaAllocator &allocator,
     const ObBlockInfoSet &info_set,
-    ObLinkedMacroBlockItemWriter &linked_writer)
+    ObLinkedMacroBlockItemWriter *linked_writer)
 {
   int ret = OB_SUCCESS;
   const ObBlockInfoSet::TabletMacroSet &meta_block_info_set = info_set.meta_block_info_set_;
   const ObBlockInfoSet::TabletMacroSet &data_block_info_set = info_set.data_block_info_set_;
   const ObBlockInfoSet::TabletMacroSet &shared_meta_block_info_set = info_set.shared_meta_block_info_set_;
-  const ObBlockInfoSet::TabletMacroMap &shared_data_block_info_map = info_set.shared_data_block_info_map_;
+  const ObBlockInfoSet::TabletMacroMap &shared_data_block_info_map = info_set.clustered_data_block_info_map_;
   const int64_t total_macro_cnt = meta_block_info_set.size()
                             + data_block_info_set.size()
                             + shared_meta_block_info_set.size()
@@ -278,7 +278,10 @@ int ObTabletMacroInfo::init(
     LOG_WARN("fail to construct shared meta block id arr", K(ret));
   } else if (OB_FAIL(construct_block_info_arr(shared_data_block_info_map, shared_data_block_info_arr_))) {
     LOG_WARN("fail to construct shared data block info arr", K(ret));
-  } else if (ID_COUNT_THRESHOLD < total_macro_cnt && OB_FAIL(persist_macro_ids(allocator, linked_writer))) {
+  } else if (OB_NOT_NULL(linked_writer) &&
+    // tmp_tablet do not need write linked_block, becase it will be release soon later
+             ID_COUNT_THRESHOLD < total_macro_cnt &&
+             OB_FAIL(persist_macro_ids(allocator, *linked_writer))) {
     LOG_WARN("fail to persist macro ids", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -333,10 +336,7 @@ int ObTabletMacroInfo::persist_macro_ids(
     ObLinkedMacroBlockItemWriter &linked_writer)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr mem_attr(MTL_ID(), "TabletBlockId");
-  if (OB_FAIL(linked_writer.init(false /*whether need addr*/, mem_attr))) {
-    LOG_WARN("fail to init linked writer", K(ret));
-  } else if (OB_FAIL(do_flush_ids(ObTabletMacroType::META_BLOCK, meta_block_info_arr_, allocator, linked_writer))) {
+  if (OB_FAIL(do_flush_ids(ObTabletMacroType::META_BLOCK, meta_block_info_arr_, allocator, linked_writer))) {
     LOG_WARN("fail to persist meta block ids", K(ret));
   } else if (OB_FAIL(do_flush_ids(ObTabletMacroType::DATA_BLOCK, data_block_info_arr_, allocator, linked_writer))) {
     LOG_WARN("fail to persist data block ids", K(ret));
@@ -372,6 +372,7 @@ int ObTabletMacroInfo::do_flush_ids(
   if (OB_ISNULL(buf = (char *)(allocator.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory for flush buf", K(ret), K(buf_len));
+  } else if (FALSE_IT(MEMSET(buf, 0, buf_len))) {
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, static_cast<int16_t>(macro_type)))) {
     LOG_WARN("fail to serialize macro type", K(ret), K(macro_type));
   } else if (OB_FAIL(block_id_arr.serialize(buf, buf_len, pos))) {
@@ -400,6 +401,7 @@ int ObTabletMacroInfo::do_flush_ids(
   if (OB_ISNULL(buf = (char *)(allocator.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory for flush buf", K(ret), K(buf_len));
+  } else if (FALSE_IT(MEMSET(buf, 0, buf_len))) {
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, static_cast<int16_t>(ObTabletMacroType::SHARED_DATA_BLOCK)))) {
     LOG_WARN("fail to serialize macro type", K(ret));
   } else if (OB_FAIL(block_info_arr.serialize(buf, buf_len, pos))) {
@@ -473,7 +475,7 @@ int ObTabletMacroInfo::deserialize(ObArenaAllocator &allocator, const char *buf,
     LOG_WARN("fail to deserialize secondary meta header", K(ret), KP(buf), K(data_len), K(new_pos));
   } else if (FALSE_IT(crc = ob_crc64(buf + new_pos, meta_header.payload_size_))) {
   } else if (OB_UNLIKELY(crc != meta_header.checksum_)) {
-    ret = OB_CHECKSUM_ERROR;
+    ret = OB_PHYSIC_CHECKSUM_ERROR;
     LOG_WARN("tablet macro info's checksum doesn't match", K(ret), K(meta_header), K(crc));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version))) {
     LOG_WARN("fail to deserialize version", K(ret), KP(buf), K(data_len));

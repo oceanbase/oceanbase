@@ -14,11 +14,16 @@
 #define SRC_LIBRARY_SRC_LIB_RESTORE_OB_STORAGE_FILE_H_
 
 #include "ob_i_storage.h"
+#include "lib/container/ob_heap.h"            // ObBinaryHeap
+#include "lib/container/ob_array_iterator.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
+static constexpr char OB_STORAGE_NFS_ALLOCATOR[] = "StorageNFS";
+
 class ObStorageFileUtil: public ObIStorageUtil
 {
 public:
@@ -36,6 +41,10 @@ public:
   virtual int get_file_length(const common::ObString &uri, int64_t &file_length);
   virtual int head_object_meta(const common::ObString &uri, ObStorageObjectMetaBase &obj_meta);
   virtual int del_file(const common::ObString &uri);
+  virtual int batch_del_files(
+      const ObString &uri,
+      hash::ObHashMap<ObString, int64_t> &files_to_delete,
+      ObIArray<int64_t> &failed_files_idx) override;
   virtual int write_single_file(const common::ObString &uri, const char *buf, const int64_t size);
   virtual int mkdir(const common::ObString &uri);
   virtual int list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
@@ -86,6 +95,8 @@ public:
   virtual int64_t get_length() const { return file_length_; }
   virtual bool is_opened() const { return is_opened_; }
 protected:
+  int inner_pwrite(const char *buf, const int64_t size, const int64_t offset);
+protected:
   int fd_;
   bool is_opened_;
   char path_[OB_MAX_URI_LENGTH];
@@ -96,17 +107,38 @@ private:
 };
 
 // Only used for NFS file systems mounted in direct form, so there is no fsync
-class ObStorageFileWriter: public ObStorageFileBaseWriter
+// allow to call write() at most once. if call write() multiple times, then return error.
+class ObStorageFileSingleWriter: public ObStorageFileBaseWriter
 {
 public:
-  ObStorageFileWriter();
-  virtual ~ObStorageFileWriter();
+  ObStorageFileSingleWriter();
+  virtual ~ObStorageFileSingleWriter();
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
+  virtual int write(const char *buf,const int64_t size) override;
   virtual int close() override;
+protected:
+  int close_and_rename();
 protected:
   char real_path_[OB_MAX_URI_LENGTH];
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObStorageFileWriter);
+  DISALLOW_COPY_AND_ASSIGN(ObStorageFileSingleWriter);
+  bool is_file_path_obtained_;
+  bool is_written_;
+};
+
+// allow to call pwrite() mulitle times. the real file is not readable until close, which rename
+// tmp file to real file. only used for implementing MultiPartWriter.
+class ObStorageFileMultipleWriter: public ObStorageFileSingleWriter
+{
+public:
+  ObStorageFileMultipleWriter() {}
+  virtual ~ObStorageFileMultipleWriter() {}
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL) override;
+  virtual int write(const char *buf,const int64_t size) override;
+  virtual int close() override;
+  void set_error();
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageFileMultipleWriter);
 };
 
 // Only used for NFS file systems mounted in direct form, so there is no fsync
@@ -118,6 +150,7 @@ public:
   ObStorageFileAppender(StorageOpenMode mode);
   virtual ~ObStorageFileAppender();
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
+  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override;
   virtual int close() override;
   void set_open_mode(StorageOpenMode mode) {open_mode_ = mode;}
 private:
@@ -128,7 +161,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileAppender);
 };
 
-class ObStorageFileMultiPartWriter : public ObStorageFileWriter, public ObIStorageMultiPartWriter
+class ObStorageFileMultiPartWriter : public ObStorageFileMultipleWriter, public ObIStorageMultiPartWriter
 {
 public:
   ObStorageFileMultiPartWriter() {}
@@ -136,28 +169,64 @@ public:
 
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) override
   {
-    return ObStorageFileWriter::open(uri, storage_info);
+    return ObStorageFileMultipleWriter::open(uri, storage_info);
   }
   virtual int write(const char *buf, const int64_t size) override
   {
-    return ObStorageFileWriter::write(buf, size);
+    return ObStorageFileMultipleWriter::write(buf, size);
+  }
+  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override
+  {
+    UNUSED(offset);
+    return write(buf, size);
   }
   virtual int64_t get_length() const override
   {
-    return ObStorageFileWriter::get_length();
+    return ObStorageFileMultipleWriter::get_length();
   }
   virtual bool is_opened() const override
   {
-    return ObStorageFileWriter::is_opened();
+    return ObStorageFileMultipleWriter::is_opened();
   }
 
-  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override;
   virtual int complete() override;
   virtual int abort() override;
   virtual int close() override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileMultiPartWriter);
+};
+
+class ObStorageParallelFileMultiPartWriter: public ObIStorageParallelMultipartWriter
+{
+public:
+  ObStorageParallelFileMultiPartWriter();
+  virtual ~ObStorageParallelFileMultiPartWriter();
+  void reset();
+
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override;
+  // During the upload phase, each part of the file is written to a separate temporary file
+  virtual int upload_part(const char *buf, const int64_t size, const int64_t part_id) override;
+  // Upon completion, these temporary files are read in sequence according to their assigned
+  // part IDs and merged into the final target file.
+  virtual int complete() override;
+  // If the upload is aborted, all temporary
+  // files are removed to clean up the storage space
+  virtual int abort() override;
+  virtual int close() override;
+  virtual bool is_opened() const override { return is_opened_; }
+
+private:
+  static constexpr const char *TMP_NAME_FORMAT = "%s%s.tmp.%ld";
+
+  SpinRWLock lock_;
+  bool is_opened_;
+  char real_path_[OB_MAX_URI_LENGTH];
+  char path_[OB_MAX_URI_LENGTH];
+  int64_t max_part_size_;
+  ObArray<int64_t> uploaded_part_id_list_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObStorageParallelFileMultiPartWriter);
 };
 
 

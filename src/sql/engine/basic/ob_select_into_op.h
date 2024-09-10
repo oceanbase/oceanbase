@@ -17,6 +17,7 @@
 #include "lib/file/ob_file.h"
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_backup_io_adapter.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include <odps/odps_tunnel.h>
@@ -104,6 +105,24 @@ public:
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };
 
+struct ObStorageAppender
+{
+	ObStorageAppender();
+  virtual ~ObStorageAppender();
+  void reset();
+
+	int open(const share::ObBackupStorageInfo *storage_info,
+      const common::ObString &uri, const common::ObStorageAccessType &access_type);
+	int append(const char *buf, const int64_t size, int64_t &write_size);
+	int close();
+
+	bool is_opened_;
+	int64_t offset_;
+	ObIOFd fd_;
+	ObIODevice *device_handle_;
+  ObStorageAccessType access_type_;
+};
+
 class ObSelectIntoOp : public ObOperator
 {
 public:
@@ -116,7 +135,6 @@ public:
       top_limit_cnt_(INT64_MAX),
       is_first_(true),
       basic_url_(),
-      device_handle_(NULL),
       file_location_(IntoFileLocation::SERVER_DISK),
       write_offset_(0),
       data_writer_(NULL),
@@ -214,12 +232,14 @@ public:
       write_bytes_(0),
       is_file_opened_(false),
       file_appender_(),
+      storage_appender_(),
       fd_(),
       split_file_id_(0),
       url_()
     {}
     ~ObIOBufferWriter() {
       file_appender_.~ObFileAppender();
+      storage_appender_.reset();
     }
     void init(char *buf, int64_t buf_len) {
       buf_ = buf;
@@ -259,6 +279,7 @@ public:
   public:
     bool is_file_opened_;
     ObFileAppender file_appender_;
+    ObStorageAppender storage_appender_;
     ObIOFd fd_;
     int64_t split_file_id_;
     ObString url_;
@@ -384,7 +405,6 @@ private:
   ObObj file_name_;
   ObString basic_url_; // url without partition expr
   share::ObBackupStorageInfo access_info_;
-  ObIODevice* device_handle_;
   IntoFileLocation file_location_;
   int64_t write_offset_;
   ObIOBufferWriter* data_writer_;
@@ -417,8 +437,6 @@ private:
   static const int64_t MAX_OSS_FILE_SIZE = 5LL * 1024 * 1024 * 1024;
   static const int32_t ODPS_DATE_MIN_VAL = -719162; // '0001-1-1'
 };
-
-
 
 }
 }

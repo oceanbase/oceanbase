@@ -40,6 +40,7 @@
 #include "sql/resolver/cmd/ob_help_resolver.h"
 #include "lib/charset/ob_template_helper.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 
 namespace oceanbase
@@ -61,7 +62,8 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       is_temp_table_pk_added_(false),
       index_arg_(),
       current_index_name_set_(),
-      cur_udt_set_id_(0)
+      cur_udt_set_id_(0),
+      vec_index_col_ids_()
 {
 }
 
@@ -437,6 +439,20 @@ int ObCreateTableResolver::set_partition_info_for_oracle_temp_table(share::schem
   return ret;
 }
 
+int ObCreateTableResolver::set_default_micro_index_clustered_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  // set default value. If user_specified, it is modifed in resolve_table_option.
+  if (OB_FAIL(ret)) {
+    // error occurred
+  } else if (GCTX.is_shared_storage_mode()) {
+    table_schema.set_micro_index_clustered(true);
+  } else { // shared_nothing
+    table_schema.set_micro_index_clustered(false);
+  }
+  return ret;
+}
+
 int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -668,6 +684,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               pctfree_ = 0; // set default pctfree value for non-sys table
             }
             if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(set_default_micro_index_clustered_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set table options (micro_index_clustered) failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {
@@ -1306,6 +1324,19 @@ int ObCreateTableResolver::resolve_primary_key_node(const ParseNode &pk_node,
             key_name.assign_ptr(key_node->str_value_,static_cast<int32_t>(key_node->str_len_));
             if (OB_FAIL(add_primary_key_part(key_name, stats, pk_data_length))) {
               SQL_RESV_LOG(WARN, "add primary key part failed", K(ret), K(key_name));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+            ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+            const ObColumnSchemaV2 *column_schema = NULL;
+            if (is_oracle_mode()) { // oracle mode is not support vector column yet
+            } else if (OB_NOT_NULL(column_schema = table_schema.get_column_schema(key_name))) {
+              if (ob_is_collection_sql_type(column_schema->get_data_type())) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not support primary key is vector column yet", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create primary key on vector column is");
+              }
             }
           }
         }
@@ -2101,7 +2132,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               column_meta.set_type(ObLongTextType);
             }
             column.set_meta_type(column_meta);
-            if (column.is_enum_or_set()) {
+            if (column.is_enum_or_set()
+                || column.is_collection()) { // array column
               if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
                 LOG_WARN("set enum or set info failed", K(ret), K(*expr));
               }
@@ -2356,6 +2388,22 @@ int ObCreateTableResolver::generate_index_arg()
         } else {
           type = INDEX_TYPE_SPATIAL_LOCAL;
         }
+      } else if (VEC_KEY == index_keyname_) {
+        const int64_t tenant_id = session_info_->get_effective_tenant_id();
+        if (tenant_data_version < DATA_VERSION_4_3_3_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
+        } else if (global_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support global vec index now", K(ret));
+        } else if (!is_user_tenant(tenant_id)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant is not user tenant vector index not supported", K(ret), K(tenant_id));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
+        } else {
+          type = INDEX_TYPE_VEC_ROWKEY_VID_LOCAL;
+        }
       } else if (FTS_KEY == index_keyname_) {
         if (tenant_data_version < DATA_VERSION_4_3_1_0) {
           ret = OB_NOT_SUPPORTED;
@@ -2569,6 +2617,7 @@ int ObCreateTableResolver::resolve_index(
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid argument.", K(ret), K(node->children_));
   } else {
+    vec_index_col_ids_.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < index_node_position_list.size(); ++i) {
       reset();
       index_attributes_set_ = OB_DEFAULT_INDEX_ATTRIBUTES_SET;
@@ -2617,6 +2666,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
     ObColumnSchemaV2 *column_schema = NULL;
     ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     ObTableSchema &tbl_schema = create_table_stmt->get_create_table_arg().schema_;
+    int64_t vec_index_col_id = 0;
     if(ObItemType::T_INDEX == node->type_) {
       //if index_name is not specified, new index_name will be generated
       //by the first_column_name, so resolve the index_column_list_node firstly.
@@ -2642,6 +2692,13 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         }
         bool cnt_func_index_mysql = false;
         bool is_multi_value_index = false;
+        const bool is_vec_index = (index_keyname_ == INDEX_KEYNAME::VEC_KEY);
+        if (OB_FAIL(ret)) {
+        } else if (is_vec_index && index_column_list_node->num_child_ >= 2) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("multi column of vector index is not support yet", K(ret), K(index_column_list_node->num_child_));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi vector index column is");
+        }
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
           if (NULL == index_column_list_node->children_[i]
@@ -2650,14 +2707,16 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
             SQL_RESV_LOG(WARN, "invalid index_column_list_node.", K(ret));
           } else {
             index_column_node = index_column_list_node->children_[i];
+          }
+          if (OB_SUCC(ret)) {
             if (OB_ISNULL(index_column_node->children_)
                 || index_column_node->num_child_ < 3
                 || OB_ISNULL(index_column_node->children_[0])) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "invalid index_column_node.", K(ret),
-                           K(index_column_node->num_child_),
-                           K(index_column_node->children_),
-                           K(index_column_node->children_[0]));
+                          K(index_column_node->num_child_),
+                          K(index_column_node->children_),
+                          K(index_column_node->children_[0]));
             } else {
               //column_name
               if (index_column_node->children_[0]->type_ != T_IDENT) {
@@ -2735,6 +2794,9 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 if (ob_is_geometry(expr->get_data_type()) || static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY) == node->value_) {
                   ret = OB_ERR_SPATIAL_FUNCTIONAL_INDEX;
                   LOG_WARN("Spatial functional index is not supported.", K(ret), K(column_name));
+                } else if (ob_is_collection_sql_type(expr->get_data_type()) || static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY) == node->value_) {
+                  ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+                  LOG_WARN("Functional index for vector index is not supported.", K(ret), K(column_name));
                 } else if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(*expr,
                                                                                    session_info_->get_sql_mode(),
                                                                                    tbl_schema,
@@ -2764,6 +2826,15 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
               }
             }
+            if (OB_FAIL(ret)) {
+            } else if (is_vec_index) {
+              vec_index_col_id = column_schema->get_column_id();
+              if (ObVectorIndexUtil::has_multi_index_on_same_column(vec_index_col_ids_, vec_index_col_id)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("more than one vector index on same column is not supported", K(ret), K(vec_index_col_id), K(vec_index_col_ids_));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one vector index on same column is");
+              }
+            }
             if (OB_SUCC(ret)) {
               if (OB_ISNULL(session_info_)) {
                 ret = OB_NOT_INIT;
@@ -2771,6 +2842,12 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               }  else if (sort_item.prefix_len_ > column_schema->get_data_length()) {
                 ret = OB_WRONG_SUB_KEY;
                 SQL_RESV_LOG(WARN, "prefix length is longer than column length", K(sort_item), K(column_schema->get_data_length()), K(ret));
+              } else if (!is_oracle_mode // oracle mode is not support vector column yet
+                  && ob_is_collection_sql_type(column_schema->get_data_type())
+                  && static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY) != node->value_) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("index column is vector column, but is not vector index is not supported", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column index but not vector index is");
               } else if (ob_is_text_tc(column_schema->get_data_type())
                   && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
                 if (column_schema->is_hidden()) {
@@ -2785,6 +2862,10 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                   index_column_list_node->num_child_, node->value_, is_oracle_mode,
                   NULL != index_column_node->children_[2] && 1 != index_column_node->children_[2]->is_empty_))) {
                 SQL_RESV_LOG(WARN, "fail to resolve spatial index constraint", K(ret), K(column_name));
+              } else if (OB_FAIL(resolve_vec_index_constraint(*column_schema,
+                                                              node->value_,
+                                                              node->children_[2]))) {
+                SQL_RESV_LOG(WARN, "fail to resolve vec index constraint", K(ret), K(column_name));
               } else if (OB_FAIL(resolve_fts_index_constraint(*column_schema,
                                                               node->value_))) {
                 SQL_RESV_LOG(WARN, "fail to resolve fts index constraint", K(ret), K(column_name));
@@ -3020,7 +3101,21 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           }
         }
         if (OB_SUCC(ret)) {
-          if (is_fts_index(index_arg_.index_type_)) {
+          if (is_vec_index(index_arg_.index_type_)) {
+            // set index_params to create_index_arg, then will pass to index_arg_list
+            create_index_arg.index_schema_.set_index_params(index_params_);
+            if (OB_FAIL(ObDDLResolver::append_vec_args(resolve_result,
+                                                       create_index_arg,
+                                                       have_generate_vec_arg_,
+                                                       resolve_results,
+                                                       index_arg_list,
+                                                       allocator_,
+                                                       session_info_))) {
+              LOG_WARN("failed to append vec args", K(ret));
+            } else if (OB_FAIL(vec_index_col_ids_.push_back(vec_index_col_id))) {
+              LOG_WARN("fail to push back vec index col id", K(ret));
+            }
+          } else if (is_fts_index(index_arg_.index_type_)) {
             if (OB_FAIL(ObDDLResolver::append_fts_args(resolve_result,
                                                        create_index_arg,
                                                        have_generate_fts_arg_,

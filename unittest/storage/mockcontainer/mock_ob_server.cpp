@@ -24,6 +24,7 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_simple_mem_limit_getter.h"
+#include "share/ob_device_manager.h"
 
 namespace oceanbase
 {
@@ -200,7 +201,9 @@ int MockObServer::init(const char *schema_file,
 
   // init io
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObIOManager::get_instance().init())) {
+    if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      STORAGE_LOG(WARN, "init device manager failed", K(ret));
+    } else if (OB_FAIL(ObIOManager::get_instance().init())) {
       STORAGE_LOG(WARN, "io manager init failead", K(ret));
     }
   }
@@ -227,7 +230,6 @@ int MockObServer::init(const char *schema_file,
   }
 
   //init multi tenant
-  GCTX = gctx_;
   if (OB_SUCC(ret)) {
     if (OB_SUCCESS != (ret = init_multi_tenant())) {
       STORAGE_LOG(WARN, "init multi tenant failed", K(ret));

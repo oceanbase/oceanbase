@@ -64,27 +64,14 @@ int ObExprRbToString::eval_rb_to_string(const ObExpr &expr,
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
-  ObExpr *arg = expr.args_[0];
+  ObExpr *rb_arg = expr.args_[0];
   bool is_rb_null = false;
-  ObDatum *datum = nullptr;
   ObString rb_bin;
   ObString rb_str;
 
-  if (OB_FAIL(arg->eval(ctx, datum))) {
-    LOG_WARN("eval roaringbitmap args failed", K(ret));
-  } else if (datum->is_null()) {
-    is_rb_null = true;
-  } else if (OB_FALSE_IT(rb_bin = datum->get_string())) {
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator,
-                                                               *datum,
-                                                               arg->datum_meta_,
-                                                               arg->obj_meta_.has_lob_header(),
-                                                               rb_bin))) {
-    LOG_WARN("failed to get real string data", K(ret), K(rb_bin));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (is_rb_null) {
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb_arg, rb_bin, is_rb_null))) {
+    LOG_WARN("fail to get input roaringbitmap", K(ret));
+  } else if (is_rb_null || rb_bin == nullptr) {
     res.set_null();
   } else if (OB_FAIL(ObRbUtils::rb_to_string(tmp_allocator, rb_bin, rb_str))) {
     LOG_WARN("failed to print roaringbitmap to string", K(ret));

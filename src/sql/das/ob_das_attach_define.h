@@ -121,6 +121,29 @@ public:
   virtual ~ObDASSortRtDef() {}
 };
 
+struct ObDASVIdMergeCtDef final : ObDASAttachCtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASVIdMergeCtDef(common::ObIAllocator &alloc)
+    : ObDASAttachCtDef(alloc, DAS_OP_VID_MERGE)
+  {}
+  ~ObDASVIdMergeCtDef() = default;
+  INHERIT_TO_STRING_KV("ObDASVIdMergeCtDef", ObDASAttachCtDef, KP(this));
+
+};
+
+struct ObDASVIdMergeRtDef final : ObDASAttachRtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASVIdMergeRtDef()
+    : ObDASAttachRtDef(DAS_OP_VID_MERGE)
+  {}
+  ~ObDASVIdMergeRtDef() = default;
+  INHERIT_TO_STRING_KV("ObDASVIdMergeRtDef", ObDASAttachRtDef, KP(this));
+};
+
 struct ObDASAttachSpec
 {
   OB_UNIS_VERSION(1);

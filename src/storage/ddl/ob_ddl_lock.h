@@ -39,8 +39,23 @@ public:
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       ObMySQLTransaction &trans);
   static int unlock_for_add_drop_index(
+      const ObTableSchema &data_table_schema,
+      const uint64_t index_table_id,
+      const bool is_global_index,
+      const ObTableLockOwnerID lock_owner,
+      ObMySQLTransaction &trans);
+  static int lock_for_rebuild_index(
       const share::schema::ObTableSchema &data_table_schema,
-      const share::schema::ObTableSchema &index_schema,
+      const uint64_t old_index_table_id,
+      const uint64_t new_index_table_id,
+      const bool is_global_index,
+      const transaction::tablelock::ObTableLockOwnerID lock_owner,
+      ObMySQLTransaction &trans);
+  static int unlock_for_rebuild_index(
+      const share::schema::ObTableSchema &data_table_schema,
+      const uint64_t old_index_table_id,
+      const uint64_t new_index_table_id,
+      const bool is_global_index,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       ObMySQLTransaction &trans);
 
@@ -57,7 +72,10 @@ public:
       const ObIArray<ObTabletID> &del_tablet_ids,
       ObMySQLTransaction &trans);
 
-  static int lock_for_common_ddl_in_trans(const share::schema::ObTableSchema &table_schema, ObMySQLTransaction &trans);
+  static int lock_for_common_ddl_in_trans(
+      const share::schema::ObTableSchema &table_schema,
+      const bool require_strict_binary_format,
+      ObMySQLTransaction &trans);
   static int lock_for_common_ddl(
       const share::schema::ObTableSchema &table_schema,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,

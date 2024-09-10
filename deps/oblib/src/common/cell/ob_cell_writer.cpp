@@ -561,7 +561,8 @@ int ObCellWriter::append(uint64_t column_id, const ObObj &obj, ObObj *clone_obj)
       case ObMediumTextType:
       case ObLongTextType: 
       case ObJsonType:
-      case ObGeometryType: {
+      case ObGeometryType:
+      case ObCollectionSQLType: {
         ret = write_text(obj, obj.get_type(), obj.get_string(), clone_obj);
         break;
       }

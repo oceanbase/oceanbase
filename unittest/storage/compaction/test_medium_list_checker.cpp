@@ -174,15 +174,15 @@ TEST_F(TestMediumListChecker, test_check_next_schedule_medium)
     medium_info.medium_snapshot_ = 130;
     medium_info.last_medium_snapshot_ = 100;
 
-    ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 100/*last_major_snapshot*/);
+    ret = ObMediumListChecker::check_next_schedule_medium(medium_info, 100/*last_major_snapshot*/);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 120/*last_major_snapshot*/);
+    ret = ObMediumListChecker::check_next_schedule_medium(medium_info, 120/*last_major_snapshot*/);
     ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
     // medium from different cluster
     medium_info.cluster_id_ = OTHER_CLUSTER_ID;
-    ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 50/*last_major_snapshot*/);
+    ret = ObMediumListChecker::check_next_schedule_medium(medium_info, 50/*last_major_snapshot*/);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 }

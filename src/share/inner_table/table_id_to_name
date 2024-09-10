@@ -301,6 +301,8 @@
 # 450: __all_external_table_file
 # 451: __all_task_opt_stat_gather_history
 # 452: __all_table_opt_stat_gather_history
+# 453: __all_zone_storage
+# 454: __all_zone_storage_operation
 # 455: __wr_active_session_history
 # 456: __wr_snapshot
 # 457: __wr_statname
@@ -351,6 +353,7 @@
 # 506: __all_column_privilege  # BASE_TABLE_NAME
 # 507: __all_tenant_snapshot_ls_replica_history
 # 508: __all_ls_replica_task_history
+# 511: __all_tablet_checksum_error_info
 # 512: __all_user_proxy_info
 # 513: __all_user_proxy_info_history
 # 513: __all_user_proxy_info  # BASE_TABLE_NAME
@@ -358,6 +361,7 @@
 # 515: __all_user_proxy_role_info_history
 # 515: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 516: __all_service
+# 517: __all_storage_io_usage
 # 518: __all_mview_dep
 # 519: __all_scheduler_job_run_detail_v2
 # 10001: __tenant_virtual_all_table
@@ -987,6 +991,7 @@
 # 12383: __all_virtual_opt_stat_gather_monitor
 # 12384: __all_virtual_thread
 # 12385: __all_virtual_arbitration_member_info
+# 12386: __all_virtual_server_storage
 # 12387: __all_virtual_arbitration_service_status
 # 12388: __all_virtual_wr_active_session_history
 # 12388: __wr_active_session_history  # BASE_TABLE_NAME
@@ -1098,6 +1103,7 @@
 # 12453: __all_tenant_snapshot_job  # BASE_TABLE_NAME
 # 12456: __all_virtual_dbms_lock_allocated
 # 12456: __all_dbms_lock_allocated  # BASE_TABLE_NAME
+# 12457: __all_virtual_shared_storage_compaction_info
 # 12458: __all_virtual_ls_snapshot
 # 12459: __all_virtual_index_usage_info
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
@@ -1112,11 +1118,14 @@
 # 12463: __all_column_privilege_history  # BASE_TABLE_NAME1
 # 12464: __all_virtual_tenant_snapshot_ls_replica_history
 # 12464: __all_tenant_snapshot_ls_replica_history  # BASE_TABLE_NAME
+# 12465: __all_virtual_shared_storage_quota
 # 12466: ENABLED_ROLES
 # 12467: __all_virtual_ls_replica_task_history
 # 12467: __all_ls_replica_task_history  # BASE_TABLE_NAME
 # 12468: __all_virtual_session_ps_info
 # 12469: __all_virtual_tracepoint_info
+# 12472: __all_virtual_tablet_checksum_error_info
+# 12472: __all_tablet_checksum_error_info  # BASE_TABLE_NAME
 # 12473: __all_virtual_compatibility_control
 # 12474: __all_virtual_user_proxy_info
 # 12474: __all_user_proxy_info  # BASE_TABLE_NAME
@@ -1128,15 +1137,24 @@
 # 12477: __all_virtual_user_proxy_role_info_history
 # 12477: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 12477: __all_user_proxy_role_info_history  # BASE_TABLE_NAME1
+# 12479: __all_virtual_res_mgr_directive
+# 12479: __all_res_mgr_directive  # BASE_TABLE_NAME
 # 12480: __all_virtual_service
 # 12480: __all_service  # BASE_TABLE_NAME
 # 12481: __all_virtual_tenant_resource_limit
 # 12482: __all_virtual_tenant_resource_limit_detail
+# 12483: __all_virtual_group_io_stat
+# 12485: __all_virtual_storage_io_usage
+# 12485: __all_storage_io_usage  # BASE_TABLE_NAME
+# 12486: __all_virtual_zone_storage_mysql_sys_agent
+# 12486: __all_zone_storage  # BASE_TABLE_NAME
 # 12487: __all_virtual_nic_info
 # 12488: __all_virtual_scheduler_job_run_detail_v2
 # 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 12492: __all_virtual_ss_local_cache_info
+# 12496: __all_virtual_vector_index_info
 # 12505: __all_virtual_temp_file
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
@@ -1725,6 +1743,8 @@
 # 15439: __all_virtual_ls_snapshot  # BASE_TABLE_NAME
 # 15440: ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT
 # 15440: __all_index_usage_info  # BASE_TABLE_NAME
+# 15441: ALL_VIRTUAL_SHARED_STORAGE_QUOTA
+# 15441: __all_virtual_shared_storage_quota  # BASE_TABLE_NAME
 # 15443: ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
 # 15443: __all_ls_replica_task_history  # BASE_TABLE_NAME
 # 15443: __all_virtual_ls_replica_task_history  # BASE_TABLE_NAME1
@@ -1743,12 +1763,23 @@
 # 15450: __all_virtual_tenant_resource_limit  # BASE_TABLE_NAME
 # 15451: ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL
 # 15451: __all_virtual_tenant_resource_limit_detail  # BASE_TABLE_NAME
+# 15452: ALL_VIRTUAL_GROUP_IO_STAT
+# 15452: __all_virtual_group_io_stat  # BASE_TABLE_NAME
+# 15454: ALL_VIRTUAL_STORAGE_IO_USAGE
+# 15454: __all_storage_io_usage  # BASE_TABLE_NAME
+# 15454: __all_virtual_storage_io_usage  # BASE_TABLE_NAME1
+# 15455: ALL_VIRTUAL_ZONE_STORAGE_SYS_AGENT
+# 15455: __all_zone_storage  # BASE_TABLE_NAME
 # 15456: ALL_VIRTUAL_NIC_INFO
 # 15456: __all_virtual_nic_info  # BASE_TABLE_NAME
 # 15458: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT
 # 15458: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 15459: ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT
 # 15459: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 15462: ALL_VIRTUAL_SS_LOCAL_CACHE_INFO
+# 15462: __all_virtual_ss_local_cache_info  # BASE_TABLE_NAME
+# 15467: ALL_VIRTUAL_VECTOR_INDEX_INFO
+# 15467: __all_virtual_vector_index_info  # BASE_TABLE_NAME
 # 15485: ALL_VIRTUAL_TEMP_FILE
 # 15485: __all_virtual_temp_file  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
@@ -2066,6 +2097,9 @@
 # 21381: V$OB_THREAD
 # 21382: GV$OB_ARBITRATION_MEMBER_INFO
 # 21383: V$OB_ARBITRATION_MEMBER_INFO
+# 21384: DBA_OB_ZONE_STORAGE
+# 21385: GV$OB_SERVER_STORAGE
+# 21386: V$OB_SERVER_STORAGE
 # 21387: GV$OB_ARBITRATION_SERVICE_STATUS
 # 21388: V$OB_ARBITRATION_SERVICE_STATUS
 # 21389: DBA_WR_ACTIVE_SESSION_HISTORY
@@ -2152,6 +2186,8 @@
 # 21517: GV$OB_LS_SNAPSHOTS
 # 21518: V$OB_LS_SNAPSHOTS
 # 21519: DBA_OB_CLONE_HISTORY
+# 21520: GV$OB_SHARED_STORAGE_QUOTA
+# 21521: V$OB_SHARED_STORAGE_QUOTA
 # 21523: DBA_OB_LS_REPLICA_TASK_HISTORY
 # 21524: CDB_OB_LS_REPLICA_TASK_HISTORY
 # 21525: CDB_MVIEW_LOGS
@@ -2175,12 +2211,18 @@
 # 21543: GV$OB_TRACEPOINT_INFO
 # 21544: V$OB_TRACEPOINT_INFO
 # 21545: V$OB_COMPATIBILITY_CONTROL
+# 21546: DBA_OB_RSRC_DIRECTIVES
+# 21547: CDB_OB_RSRC_DIRECTIVES
 # 21548: DBA_OB_SERVICES
 # 21549: CDB_OB_SERVICES
 # 21550: GV$OB_TENANT_RESOURCE_LIMIT
 # 21551: V$OB_TENANT_RESOURCE_LIMIT
 # 21552: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
 # 21553: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 21558: V$OB_GROUP_IO_STAT
+# 21559: GV$OB_GROUP_IO_STAT
+# 21560: DBA_OB_STORAGE_IO_USAGE
+# 21561: CDB_OB_STORAGE_IO_USAGE
 # 21562: TABLESPACES
 # 21563: INNODB_BUFFER_PAGE
 # 21564: INNODB_BUFFER_PAGE_LRU
@@ -2208,6 +2250,8 @@
 # 21586: GV$OB_NIC_INFO
 # 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
 # 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
+# 21599: GV$OB_SS_LOCAL_CACHE
+# 21600: V$OB_SS_LOCAL_CACHE
 # 21603: INNODB_SYS_FIELDS
 # 21604: INNODB_SYS_FOREIGN
 # 21605: INNODB_SYS_FOREIGN_COLS
@@ -2491,6 +2535,7 @@
 # 25300: USER_MVREF_STMT_STATS
 # 25301: PROXY_USERS
 # 25302: DBA_OB_SERVICES
+# 25303: DBA_OB_STORAGE_IO_USAGE
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE
@@ -2669,17 +2714,24 @@
 # 28214: DBA_INDEX_USAGE
 # 28215: GV$OB_LS_SNAPSHOTS
 # 28216: V$OB_LS_SNAPSHOTS
+# 28217: GV$OB_SHARED_STORAGE_QUOTA
+# 28218: V$OB_SHARED_STORAGE_QUOTA
 # 28219: GV$OB_SESSION_PS_INFO
 # 28220: V$OB_SESSION_PS_INFO
 # 28221: GV$OB_TRACEPOINT_INFO
 # 28222: V$OB_TRACEPOINT_INFO
+# 28223: DBA_OB_RSRC_DIRECTIVES
 # 28224: GV$OB_TENANT_RESOURCE_LIMIT
 # 28225: V$OB_TENANT_RESOURCE_LIMIT
 # 28226: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
 # 28227: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 28228: V$OB_GROUP_IO_STAT
+# 28229: GV$OB_GROUP_IO_STAT
 # 28230: GV$OB_NIC_INFO
 # 28231: V$OB_NIC_INFO
 # 28234: DBA_OB_SPATIAL_COLUMNS
+# 28240: GV$OB_SS_LOCAL_CACHE
+# 28241: V$OB_SS_LOCAL_CACHE
 # 28264: DBA_OB_TEMP_FILES
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME

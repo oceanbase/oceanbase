@@ -17,6 +17,7 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "sql/das/ob_das_utils.h"
+#include "sql/das/ob_das_dml_vec_iter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
@@ -432,6 +433,15 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
       LOG_WARN("fail to allocate fulltext dml iterator memory", K(ret), KP(buf));
     } else {
       ObMultivalueDMLIterator *iter = new (buf) ObMultivalueDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef);
+      domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+    }
+  } else if (das_ctdef->table_param_.get_data_table().is_vector_index()) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObVecIndexDMLIterator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate fulltext dml iterator memory", K(ret), KP(buf));
+    } else {
+      ObVecIndexDMLIterator *iter = new (buf) ObVecIndexDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef);
       domain_iter = static_cast<ObDomainDMLIterator *>(iter);
     }
   } else {

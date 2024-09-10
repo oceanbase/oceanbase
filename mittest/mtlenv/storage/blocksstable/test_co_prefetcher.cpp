@@ -117,6 +117,7 @@ void TestCOPrefetcher::prepare_schema()
   table_schema_.set_compress_func_name("none");
   table_schema_.set_row_store_type(row_store_type_);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
   index_schema_.reset();
 

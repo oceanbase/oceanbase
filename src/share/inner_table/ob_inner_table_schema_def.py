@@ -120,7 +120,8 @@ fields = [
     'is_real_virtual_table',
     'owner',
     'vtable_route_policy', # value: only_rs, distributed, local(default)
-    'tablet_id'
+    'tablet_id',
+    'micro_index_clustered'
 ]
 
 global index_only_fields
@@ -161,6 +162,7 @@ default_filed_values = {
     'owner' : '',
     'vtable_route_policy' : 'local',
     'tablet_id' : '0',
+    'micro_index_clustered' : 'false'
 }
 
 ################################################################################
@@ -316,7 +318,8 @@ all_table_def = dict(
       ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('local_session_vars', 'longtext', 'true'),
       ('duplicate_read_consistency', 'int', 'false', '0'),
-      ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', '')
+      ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', ''),
+      ('micro_index_clustered', 'bool', 'false', 'false')
     ],
 )
 
@@ -1846,7 +1849,7 @@ def_table_schema(
 )
 
 # 216: __all_tenant_plan_baseline # abandoned in 4.0
-# 217: __all_tenant_plan_baseline_history # abandoned in 4.0
+# 217: __all_tenant_plan_baseline_history
 
 # 218: __all_ddl_helper # abandoned in 4.0
 
@@ -3152,7 +3155,7 @@ def_table_schema(
 )
 
 all_tenant_directory_def = dict(
-    owner = 'bowen.gbw',
+    owner = 'jiahua.cjh',
     table_name     = '__all_tenant_directory',
     table_id       = '326',
     table_type     = 'SYSTEM_TABLE',
@@ -5954,8 +5957,52 @@ def_table_schema(
     ],
 )
 
-# 453 : __all_zone_storage
-# 454 : __all_zone_storage_operation
+def_table_schema(
+  owner = 'xiaotao.ht',
+  table_name    = '__all_zone_storage',
+  table_id      = '453',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('zone', 'varchar:MAX_ZONE_LENGTH'),
+    ('path', 'varchar:MAX_PATH_SIZE'),
+    ('endpoint', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+    ('used_for', 'varchar:OB_MAX_CHAR_LENGTH'),
+  ],
+  in_tenant_space = False,
+  is_cluster_private = True,
+  normal_columns = [
+    ('storage_id', 'int'),
+    ('authorization', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+    ('encrypt_info', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH', 'true', ''),
+    ('max_iops', 'int', 'true', -1),
+    ('max_bandwidth', 'int', 'true', -1),
+    ('state', 'varchar:OB_MAX_CHAR_LENGTH'),
+    ('op_id', 'int'),
+    ('extension', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', '')
+  ],
+)
+
+
+def_table_schema(
+  owner = 'xiaotao.ht',
+  table_name    = '__all_zone_storage_operation',
+  table_id      = '454',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('storage_id', 'bigint:20'),
+    ('op_id', 'bigint:20'),
+    ('sub_op_id', 'bigint:20'),
+  ],
+  in_tenant_space = False,
+  is_cluster_private = True,
+  normal_columns = [
+    ('zone', 'varchar:MAX_ZONE_LENGTH'),
+    ('op_type', 'varchar:OB_MAX_CHAR_LENGTH'),
+    ('op_info', 'varchar:OB_MAX_STORAGE_OPERATION_INFO_LENGTH', 'true', '')
+  ],
+)
 # 455 : __wr_active_session_history
 def_table_schema(
   owner = 'roland.qk',
@@ -7264,6 +7311,32 @@ def_table_schema(
   ],
 )
 
+# 509 : __all_ls_compaction_status
+# 510 : __all_tablet_compaction_status
+
+def_table_schema(
+  owner = 'lixia.yq',
+  table_name = '__all_tablet_checksum_error_info',
+  table_id = '511',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('shared_storage_path', 'varchar:OB_STORAGE_PATH_STR_LENGTH'),
+    ('tablet_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('compaction_scn', 'uint'),
+    ('check_error_info', 'varchar:OB_CKM_ERROR_INFO_STR_LENGTH')
+  ],
+)
+# 516 : __all_service
+# 517 : __all_storage_io_usage
+
 all_user_proxy_info_def = dict(
     owner = 'mingye.swj',
     table_name    = '__all_user_proxy_info',
@@ -7306,14 +7379,8 @@ def_table_schema(**all_user_proxy_role_info_def)
 def_table_schema(**gen_history_table_def(515, all_user_proxy_role_info_def))
 
 #
-# 508 : __all_ls_replica_task_history
-# 509 : __all_ls_compaction_status
-# 510 : __all_tablet_compaction_status
-# 511 : __all_tablet_checksum_error_info
-# 512 : __all_user_proxy_info
-# 513 : __all_user_proxy_info_history
-# 514 : __all_user_proxy_role_info
 # 515 : __all_user_proxy_role_info_history
+
 def_table_schema(
   owner = 'linqiucen.lqc',
   table_name    = '__all_service',
@@ -7334,15 +7401,35 @@ def_table_schema(
   ],
 )
 
-# 517 : __all_storage_io_usage
+def_table_schema(
+  owner = 'wyh329796',
+  table_name = '__all_storage_io_usage',
+  table_id = '517',
+
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('storage_id', 'int'),
+    ('dest_id', 'int'),
+    ('storage_mod', 'varchar:32'),
+    ('type', 'varchar:128'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('total', 'int')
+  ],
+)
 
 def_table_schema(
   owner = 'yuya.yu',
   table_name = '__all_mview_dep',
   table_id = '518',
   table_type = 'SYSTEM_TABLE',
-  gm_columns = ['gmt_create', 'gmt_modified'],
-  rowkey_columns = [
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
     ('tenant_id', 'int'),
     ('mview_id', 'int'),
     ('p_order', 'int')
@@ -9971,6 +10058,7 @@ def_table_schema(
       ('end_cg_id', 'int'),
       ('kept_snapshot', 'varchar:OB_COMPACTION_INFO_LENGTH'),
       ('merge_level', 'varchar:OB_MERGE_LEVEL_STR_LENGTH'),
+      ('exec_mode', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -10037,6 +10125,9 @@ def_table_schema(
       ('min_mbps',      'int'),
       ('max_mbps',      'int'),
       ('real_mbps',     'int'),
+      ('schedule_us',   'int'),
+      ('io_delay_us',   'int'),
+      ('total_us',      'int')
     ],
     partition_columns = ['svr_ip', 'svr_port'],
     vtable_route_policy = 'distributed',
@@ -12888,7 +12979,7 @@ def_table_schema(
       ('tenant_id', 'int'),
       ('ls_id', 'int'),
       ('tablet_id', 'int'),
-      ('address', 'varchar:128'),
+      ('address', 'varchar:256'),
       ('pointer_ref', 'int'),
       ('in_memory', 'bool'),
       ('tablet_ref', 'int'),
@@ -13046,7 +13137,8 @@ def_table_schema(
       ('finished_scn', 'int'),
       ('wait_check_scn', 'int'),
       ('max_received_scn', 'int'),
-      ('serialize_scn_list', 'varchar:OB_MAX_VARCHAR_LENGTH')
+      ('serialize_scn_list', 'varchar:OB_MAX_VARCHAR_LENGTH'),
+      ('validated_scn', 'int')
     ],
     partition_columns = ['svr_ip', 'svr_port'],
     vtable_route_policy = 'distributed',
@@ -13769,7 +13861,37 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12386: __all_virtual_server_storage
+def_table_schema(
+  owner = 'xiaotao.ht',
+  table_name = '__all_virtual_server_storage',
+  table_id = '12386',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = False,
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('path', 'varchar:MAX_PATH_SIZE'),
+    ('endpoint', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+    ('used_for', 'varchar:OB_MAX_CHAR_LENGTH'),
+    ('zone', 'varchar:MAX_ZONE_LENGTH'),
+    ('storage_id', 'bigint:20'),
+    ('max_iops', 'bigint:20'),
+    ('max_bandwidth', 'bigint:20'),
+    ('create_time', 'timestamp'),
+    ('op_id', 'bigint:20'),
+    ('sub_op_id', 'bigint:20'),
+    ('authorization', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+    ('encrypt_info', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+    ('state', 'varchar:OB_MAX_CHAR_LENGTH'),
+    ('state_info', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+    ('last_check_timestamp', 'timestamp'),
+    ('extension', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'debin.jdb',
@@ -14436,12 +14558,35 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12454: __all_virtual_wr_sqltext
 # 12455: __all_virtual_trusted_root_certificate_info
+# 12456: __all_virtual_dbms_lock_allocated
+# 12457: __all_virtual_shared_storage_compaction_info
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12456',
   table_name = '__all_virtual_dbms_lock_allocated',
   keywords = all_def_keywords['__all_dbms_lock_allocated']))
 
-# 12457: __all_virtual_shared_storage_compaction_info
+def_table_schema(
+    owner = 'lixia.yq',
+    table_name     = '__all_virtual_shared_storage_compaction_info',
+    table_id       = '12457',
+    table_type     = 'VIRTUAL_TABLE',
+    gm_columns     = [],
+    rowkey_columns = [],
+
+    normal_columns = [
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+      ('tenant_id', 'int'),
+      ('ls_id', 'int'),
+      ('tablet_id', 'int'),
+      ('obj_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('last_refresh_time', 'timestamp'),
+      ('info', 'varchar:OB_MAX_VARCHAR_LENGTH')
+    ],
+    partition_columns = ['svr_ip', 'svr_port'],
+    vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'wendongbodongbo.wd',
@@ -14505,7 +14650,31 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_tenant_snapshot_ls_replica_history',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_tenant_snapshot_ls_replica_history']))
-# 12465: __all_virtual_shared_storage_quota
+
+# 12466: enabled_roles
+
+def_table_schema(
+  owner             = 'zz412656',
+  table_name        = '__all_virtual_shared_storage_quota',
+  table_id          = '12465',
+  table_type        = 'VIRTUAL_TABLE',
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('module',              'varchar:32'),
+    ('class_id',            'int'),
+    ('storage_id',          'int'),
+    ('type',                'varchar:32')
+  ],
+  in_tenant_space   = True,
+  normal_columns    = [
+    ('requirement',         'int'),
+    ('assign',              'int')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'jim.wjh',
@@ -14582,9 +14751,16 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
 # 12470: __all_virtual_ls_compaction_status
 # 12471: __all_virtual_tablet_compaction_status
-# 12472: __all_virtual_tablet_checksum_error_info
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12472',
+  table_name = '__all_virtual_tablet_checksum_error_info',
+  keywords = all_def_keywords['__all_tablet_checksum_error_info'],
+  in_tenant_space = True))
+
 
 def_table_schema(
   owner = 'sean.yyj',
@@ -14624,7 +14800,13 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_user_proxy_role_info_history']))
 
 # 12478: __all_virtual_tablet_reorganize_history
-# 12479: __all_virtual_res_mgr_directive
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12479',
+  table_name = '__all_virtual_res_mgr_directive',
+  keywords = all_def_keywords['__all_res_mgr_directive'],
+  in_tenant_space = True))
+
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12480',
   table_name = '__all_virtual_service',
@@ -14679,11 +14861,41 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+def_table_schema(
+  owner      = 'wyh329796',
+  table_name = '__all_virtual_group_io_stat',
+  table_id = '12483',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('group_id', 'int')
+  ],
+  normal_columns = [
+    ('group_name', 'varchar:OB_MAX_RESOURCE_PLAN_NAME_LENGTH'),
+    ('mode', 'varchar:OB_MAX_RESOURCE_PLAN_NAME_LENGTH'),
+    ('min_iops', 'int'),
+    ('max_iops', 'int'),
+    ('real_iops', 'int'),
+    ('max_net_bandwidth', 'int'),
+    ('max_net_bandwidth_display', 'varchar:128'),
+    ('real_net_bandwidth', 'int'),
+    ('real_net_bandwidth_display', 'varchar:128'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
-# 12483: __all_virtual_group_io_stat
 # 12484: __all_virtual_res_mgr_consumer_group
-# 12485: __all_virtual_storage_io_usage
-# 12486: __all_zone_storage
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12485',
+  table_name = '__all_virtual_storage_io_usage',
+  keywords = all_def_keywords['__all_storage_io_usage'],
+  in_tenant_space = True))
+def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12486', all_def_keywords['__all_zone_storage']))
 
 def_table_schema(
   owner             = 'gengfu.zpc',
@@ -14716,12 +14928,73 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12491: __all_virtual_log_transport_dest_stat
 
-# 12492: __all_virtual_ss_local_cache_info
+def_table_schema(
+  owner             = 'donglou.zl',
+  table_name        = '__all_virtual_ss_local_cache_info',
+  table_id          = '12492',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('cache_name', 'varchar:128'),
+    ('priority', 'bigint'),
+    ('hit_ratio', 'number:38:3'),
+    ('total_hit_cnt', 'bigint'),
+    ('total_hit_bytes', 'bigint'),
+    ('total_miss_cnt', 'bigint'),
+    ('total_miss_bytes', 'bigint'),
+    ('hold_size', 'bigint'),
+    ('alloc_disk_size', 'bigint'),
+    ('used_disk_size', 'bigint'),
+    ('used_mem_size', 'bigint'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 # 12493: __all_virtual_kv_group_commit_status
+
 # 12494: __all_virtual_session_sys_variable
 # 12495: __all_virtual_spm_evo_result
-# 12496: __all_virtual_vector_index_info
+def_table_schema(
+  owner = 'huhaosheng.hhs',
+  table_name     = '__all_virtual_vector_index_info',
+  table_id       = '12496',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('rowkey_vid_table_id', 'int'),
+    ('vid_rowkey_table_id', 'int'),
+    ('inc_index_table_id', 'int'),
+    ('vbitmap_table_id', 'int'),
+    ('snapshot_index_table_id', 'int'),
+    ('data_table_id', 'int'),
+    ('rowkey_vid_tablet_id', 'int'),
+    ('vid_rowkey_tablet_id', 'int'),
+    ('inc_index_tablet_id', 'int'),
+    ('vbitmap_tablet_id', 'int'),
+    ('snapshot_index_tablet_id', 'int'),
+    ('data_tablet_id', 'int'),
+    # memory usage, status..., logic_version
+    ('statistics', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
+    # sync snapshot...
+    ('sync_info', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 # 12497: __all_virtual_pkg_type
 # 12498: __all_virtual_pkg_type_attr
@@ -14730,6 +15003,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12501: __all_virtual_wr_sql_plan
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
+
 # 12504: __all_virtual_function_io_stat
 
 def_table_schema(
@@ -14746,14 +15020,14 @@ def_table_schema(
     ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
     ('svr_port', 'int'),
     ('file_id', 'int'),
-    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE',  'true', ''),
     ('dir_id', 'int'),
-    ('bytes', 'int'),
+    ('data_bytes', 'int'),
     ('start_offset', 'int'),
     ('is_deleting', 'bool'),
-    ('cached_page_num', 'int'),
-    ('write_back_page_num', 'int'),
-    ('flushed_page_num', 'int'),
+    ('cached_data_page_num', 'int'),
+    ('write_back_data_page_num', 'int'),
+    ('flushed_data_page_num', 'int'),
     ('ref_cnt', 'int'),
     ('total_writes', 'int'),
     ('unaligned_writes', 'int'),
@@ -14763,6 +15037,14 @@ def_table_schema(
     ('last_access_time', 'timestamp'),
     ('last_modify_time', 'timestamp'),
     ('birth_time', 'timestamp'),
+    ('file_ptr', 'varchar:20'),
+    ('file_label', 'varchar:16', 'true', ''),
+    ('meta_tree_epoch', 'int'),
+    ('meta_tree_levels', 'int'),
+    ('meta_bytes', 'int'),
+    ('cached_meta_page_num', 'int'),
+    ('write_back_meta_page_num', 'int'),
+    ('page_flush_cnt', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -15067,7 +15349,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15302'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
-
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -15227,9 +15508,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15438: abandoned
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15439', all_def_keywords['__all_virtual_ls_snapshot'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
-# 余留位置
 
-# 15441: __all_virtual_shared_storage_quota
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15441', all_def_keywords['__all_virtual_shared_storage_quota'])))
+
+# 余留位置
 # 15442: __all_virtual_column_group
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15443', all_def_keywords['__all_virtual_ls_replica_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15444', all_def_keywords['__all_virtual_session_ps_info'])))
@@ -15242,18 +15524,24 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451', all_def_keywords['__all_virtual_tenant_resource_limit_detail'])))
 
 # 15452: __all_virtual_group_io_stat
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15452', all_def_keywords['__all_virtual_group_io_stat'])))
 # 15453: __all_storage_io_usage
 # 15454: __all_virtual_storage_io_usage
 # 15455: __all_zone_storage
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15454', all_def_keywords['__all_virtual_storage_io_usage'])))
+def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15455', all_def_keywords['__all_zone_storage'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
 # 15457: __all_virtual_query_response_time
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_keywords['__all_scheduler_job_run_detail_v2']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15459', all_def_keywords['__all_spatial_reference_systems'])))
 # 15460: idx_scheduler_job_run_detail_v2_time_real_agent
 # 15461: __all_virtual_log_transport_dest_stat
-# 15462: __all_virtual_ss_local_cache_info
+
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15462', all_def_keywords['__all_virtual_ss_local_cache_info'])))
+
 # 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent
 # 15464: __all_virtual_kv_group_commit_status
+
 # 15465: __all_virtual_session_sys_variable
 # 15466: __all_spm_evo_result
 # 15467: __all_virtual_vector_index_info
@@ -15271,6 +15559,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15478: __all_pkg_coll_type
 # 15479: __all_pkg_coll_type
 # 15480: __all_virtual_kv_client_info
+#
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15467', all_def_keywords['__all_virtual_vector_index_info'])))
 # 15481: __all_virtual_wr_sql_plan
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
@@ -19761,9 +20051,16 @@ SELECT T.unit_id AS UNIT_ID,
        U.MIN_CPU AS MIN_CPU,
        U.MEMORY_SIZE AS MEMORY_SIZE,
        U.LOG_DISK_SIZE AS LOG_DISK_SIZE,
+       CASE DATA_DISK_SIZE
+           WHEN 0 THEN NULL
+           WHEN -1 THEN NULL
+           ELSE DATA_DISK_SIZE
+       END AS DATA_DISK_SIZE,
        U.MAX_IOPS AS MAX_IOPS,
        U.MIN_IOPS AS MIN_IOPS,
-       U.IOPS_WEIGHT AS IOPS_WEIGHT
+       U.IOPS_WEIGHT AS IOPS_WEIGHT,
+       U.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
+       U.NET_BANDWIDTH_WEIGHT AS NET_BANDWIDTH_WEIGHT
 FROM
   oceanbase.__all_unit T,
   oceanbase.__all_resource_pool R,
@@ -19792,9 +20089,16 @@ SELECT UNIT_CONFIG_ID,
        MIN_CPU,
        MEMORY_SIZE,
        LOG_DISK_SIZE,
+       CASE DATA_DISK_SIZE
+           WHEN 0 THEN NULL
+           WHEN -1 THEN NULL
+           ELSE DATA_DISK_SIZE
+       END AS DATA_DISK_SIZE,
        MAX_IOPS,
        MIN_IOPS,
-       IOPS_WEIGHT
+       IOPS_WEIGHT,
+       MAX_NET_BANDWIDTH,
+       NET_BANDWIDTH_WEIGHT
 FROM oceanbase.__all_unit_config
 """.replace("\n", " ")
 )
@@ -24011,6 +24315,7 @@ SELECT
   LOG_DISK_ASSIGNED,
   LOG_DISK_IN_USE,
   DATA_DISK_CAPACITY,
+  DATA_DISK_ASSIGNED,
   DATA_DISK_IN_USE,
   DATA_DISK_HEALTH_STATUS,
   MEMORY_LIMIT,
@@ -24051,6 +24356,7 @@ def_table_schema(
   LOG_DISK_ASSIGNED,
   LOG_DISK_IN_USE,
   DATA_DISK_CAPACITY,
+  DATA_DISK_ASSIGNED,
   DATA_DISK_IN_USE,
   DATA_DISK_HEALTH_STATUS,
   MEMORY_LIMIT,
@@ -24087,8 +24393,11 @@ def_table_schema(
            MAX_IOPS,
            MIN_IOPS,
            IOPS_WEIGHT,
+           MAX_NET_BANDWIDTH,
+           NET_BANDWIDTH_WEIGHT,
            LOG_DISK_SIZE,
            LOG_DISK_IN_USE,
+           DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
            usec_to_time(create_time) AS CREATE_TIME
@@ -24119,8 +24428,11 @@ def_table_schema(
            MAX_IOPS,
            MIN_IOPS,
            IOPS_WEIGHT,
+           MAX_NET_BANDWIDTH,
+           NET_BANDWIDTH_WEIGHT,
            LOG_DISK_SIZE,
            LOG_DISK_IN_USE,
+           DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
            CREATE_TIME
@@ -24623,7 +24935,8 @@ def_table_schema(
       START_CG_ID,
       END_CG_ID,
       KEPT_SNAPSHOT,
-      MERGE_LEVEL
+      MERGE_LEVEL,
+      EXEC_MODE
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -24667,7 +24980,8 @@ def_table_schema(
       START_CG_ID,
       END_CG_ID,
       KEPT_SNAPSHOT,
-      MERGE_LEVEL
+      MERGE_LEVEL,
+      EXEC_MODE
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -25116,7 +25430,25 @@ def_table_schema(
     AUTHORIZATION,
     EXTENSION,
     CHECK_FILE_NAME,
-    USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP
+    USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,
+    MAX_IOPS,
+    MAX_BANDWIDTH,
+    CASE
+      WHEN MAX_BANDWIDTH = 0
+        THEN "UNLIMITED"
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')
+      WHEN MAX_BANDWIDTH >= 1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
+      ELSE
+        CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
+    END AS MAX_BANDWIDTH_DISPLAY
     FROM oceanbase.__all_virtual_backup_storage_info
 """.replace("\n", " ")
 )
@@ -26546,7 +26878,25 @@ def_table_schema(
     AUTHORIZATION,
     EXTENSION,
     CHECK_FILE_NAME,
-    USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP
+    USEC_TO_TIME(LAST_CHECK_TIME) AS LAST_CHECK_TIMESTAMP,
+    MAX_IOPS,
+    MAX_BANDWIDTH,
+    CASE
+      WHEN MAX_BANDWIDTH = 0
+        THEN "UNLIMITED"
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')
+      WHEN MAX_BANDWIDTH >= 1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
+      ELSE
+        CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
+    END AS MAX_BANDWIDTH_DISPLAY
     FROM oceanbase.__all_virtual_backup_storage_info_history
 """.replace("\n", " ")
 )
@@ -31185,9 +31535,93 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21384: DBA_OB_ZONE_STORAGE
-# 21385: GV$OB_SERVER_STORAGE
-# 21386: V$OB_SERVER_STORAGE
+def_table_schema(
+  owner           = 'xiaotao.ht',
+  table_name      = 'DBA_OB_ZONE_STORAGE',
+  table_id        = '21384',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+  SELECT CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
+         CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
+         ZONE,
+         PATH,
+         ENDPOINT,
+         USED_FOR,
+         STORAGE_ID,
+         AUTHORIZATION,
+         MAX_IOPS,
+         MAX_BANDWIDTH,
+         STATE,
+         EXTENSION
+  FROM OCEANBASE.__all_zone_storage;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'xiaotao.ht',
+  table_name      = 'GV$OB_SERVER_STORAGE',
+  table_id        = '21385',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+  SELECT SVR_IP,
+         SVR_PORT,
+         PATH,
+         ENDPOINT,
+         USED_FOR,
+         ZONE,
+         STORAGE_ID,
+         MAX_IOPS,
+         MAX_BANDWIDTH,
+         CREATE_TIME,
+         AUTHORIZATION,
+         STATE,
+         STATE_INFO,
+         LAST_CHECK_TIMESTAMP,
+         EXTENSION
+  FROM OCEANBASE.__all_virtual_server_storage;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'xiaotao.ht',
+  table_name      = 'V$OB_SERVER_STORAGE',
+  table_id        = '21386',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+  SELECT SVR_IP,
+         SVR_PORT,
+         PATH,
+         ENDPOINT,
+         USED_FOR,
+         ZONE,
+         STORAGE_ID,
+         MAX_IOPS,
+         MAX_BANDWIDTH,
+         CREATE_TIME,
+         AUTHORIZATION,
+         STATE,
+         STATE_INFO,
+         LAST_CHECK_TIMESTAMP,
+         EXTENSION
+    FROM OCEANBASE.GV$OB_SERVER_STORAGE
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'debin.jdb',
@@ -34177,8 +34611,83 @@ SELECT job_id AS CLONE_JOB_ID,
 FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
 """.replace("\n", " ")
 )
-#21520: GV$OB_SHARED_STORAGE_QUOTA
-#21521: V$OB_SHARED_STORAGE_QUOTA
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_SHARED_STORAGE_QUOTA',
+  table_id        = '21520',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+(
+SELECT
+  A.SVR_IP AS SVR_IP,
+  A.SVR_PORT AS SVR_PORT,
+  IFNULL(B.ENDPOINT, '') AS ENDPOINT,
+  IFNULL(B.PATH, 'local://') AS PATH,
+  A.CLASS_ID AS CLASS_ID,
+  A.TYPE AS TYPE,
+  A.REQUIREMENT AS REQUIREMENT,
+  A.ASSIGN AS ASSIGN
+FROM
+  oceanbase.__all_virtual_shared_storage_quota A
+JOIN
+  (SELECT dest_id, path, endpoint FROM oceanbase.__all_virtual_backup_storage_info GROUP BY dest_id, path, endpoint) B
+ON
+  A.STORAGE_ID = B.DEST_ID
+WHERE
+  A.MODULE = 'BACKUP/ARCHIVE/RESTORE'
+)
+UNION
+(
+SELECT
+  C.SVR_IP AS SVR_IP,
+  C.SVR_PORT AS SVR_PORT,
+  IFNULL(D.ENDPOINT, '') AS ENDPOINT,
+  IFNULL(D.PATH, 'local://') AS PATH,
+  C.CLASS_ID AS CLASS_ID,
+  C.TYPE AS TYPE,
+  C.REQUIREMENT AS REQUIREMENT,
+  C.ASSIGN AS ASSIGN
+FROM
+  oceanbase.__all_virtual_shared_storage_quota C
+JOIN
+  (SELECT storage_id, path, endpoint FROM oceanbase.__all_virtual_zone_storage_mysql_sys_agent GROUP BY storage_id, path, endpoint) D
+ON
+  C.STORAGE_ID = D.STORAGE_ID
+WHERE
+  C.MODULE = 'CLOG/DATA'
+)
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_SHARED_STORAGE_QUOTA',
+  table_id        = '21521',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  SVR_IP,
+  SVR_PORT,
+  ENDPOINT,
+  PATH,
+  CLASS_ID,
+  TYPE,
+  REQUIREMENT,
+  ASSIGN
+FROM oceanbase.GV$OB_SHARED_STORAGE_QUOTA
+WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
 #21522: CDB_UNUSED_COL_TABS
 
 def_table_schema(
@@ -35283,8 +35792,58 @@ def_table_schema(
 """.replace("\n", " "),
   normal_columns  = [],
 )
-# 21546: DBA_OB_RSRC_DIRECTIVES
-# 21547: CDB_OB_RSRC_DIRECTIVES
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'DBA_OB_RSRC_DIRECTIVES',
+  table_id        = '21546',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      PLAN,
+      GROUP_OR_SUBPLAN,
+      COMMENTS,
+      MGMT_P1,
+      UTILIZATION_LIMIT,
+      MIN_IOPS,
+      MAX_IOPS,
+      WEIGHT_IOPS,
+      MAX_NET_BANDWIDTH,
+      NET_BANDWIDTH_WEIGHT
+    FROM
+       oceanbase.__all_res_mgr_directive
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'CDB_OB_RSRC_DIRECTIVES',
+  table_id        = '21547',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      PLAN,
+      GROUP_OR_SUBPLAN,
+      COMMENTS,
+      MGMT_P1,
+      UTILIZATION_LIMIT,
+      MIN_IOPS,
+      MAX_IOPS,
+      WEIGHT_IOPS,
+      MAX_NET_BANDWIDTH,
+      NET_BANDWIDTH_WEIGHT
+    FROM
+       oceanbase.__all_virtual_res_mgr_directive
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'linqiucen.lqc',
@@ -35396,6 +35955,7 @@ SELECT
      limit_value AS LIMIT_VALUE
 FROM
     oceanbase.__all_virtual_tenant_resource_limit_detail
+
 """.replace("\n", " ")
 )
 
@@ -35424,10 +35984,187 @@ AND
 # 21555: INNODB_LOCKS
 # 21556: INNODB_TRX
 # 21557: ndb_transid_mysql_connection_map
-# 21558: V$OB_GROUP_IO_STAT
-# 21559: GV$OB_GROUP_IO_STAT
-# 21560: DBA_OB_STORAGE_IO_USAGE
-# 21561: CDB_OB_STORAGE_IO_USAGE
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'V$OB_GROUP_IO_STAT',
+  table_id        = '21558',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      A.TENANT_ID AS TENANT_ID,
+      A.SVR_IP AS SVR_IP,
+      A.SVR_PORT AS SVR_PORT,
+      A.GROUP_ID AS GROUP_ID,
+      A.GROUP_NAME AS GROUP_NAME,
+      A.MODE AS MODE,
+      A.MIN_IOPS AS MIN_IOPS,
+      A.MAX_IOPS AS MAX_IOPS,
+      A.REAL_IOPS AS REAL_IOPS,
+      A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
+      A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
+      A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,
+      A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY
+    FROM
+      OCEANBASE.GV$OB_GROUP_IO_STAT AS A
+    WHERE
+      SVR_IP=HOST_IP()
+      AND
+      SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'GV$OB_GROUP_IO_STAT',
+  table_id        = '21559',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.TENANT_ID AS TENANT_ID,
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.GROUP_ID AS GROUP_ID,
+    A.GROUP_NAME AS GROUP_NAME,
+    A.MODE AS MODE,
+    A.MIN_IOPS AS MIN_IOPS,
+    A.MAX_IOPS AS MAX_IOPS,
+    A.REAL_IOPS AS REAL_IOPS,
+    A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
+    A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
+    A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,
+    A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY
+  FROM
+    OCEANBASE.__ALL_VIRTUAL_GROUP_IO_STAT AS A
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'DBA_OB_STORAGE_IO_USAGE',
+  table_id        = '21560',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  (
+  SELECT
+    A.TENANT_ID AS TENANT_ID,
+    IFNULL(B.PATH, 'LOCAL://') AS PATH,
+    IFNULL(B.ENDPOINT, '') AS ENDPOINT,
+    A.TYPE AS TYPE,
+    A.TOTAL AS TOTAL
+  FROM
+    OCEANBASE.__ALL_VIRTUAL_STORAGE_IO_USAGE AS A
+  LEFT JOIN
+    OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO AS B
+  ON
+    A.DEST_ID = B.DEST_ID
+    AND
+    A.TENANT_ID = B.TENANT_ID
+  WHERE
+    A.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND
+    A.STORAGE_MOD ='BACKUP/ARCHIVE/RESTORE'
+  )
+  UNION
+  (
+  SELECT
+    A.TENANT_ID,
+    IFNULL(B.PATH, 'LOCAL://') AS PATH,
+    IFNULL(B.ENDPOINT, '') AS ENDPOINT,
+    A.TYPE,
+    A.TOTAL
+  FROM
+    OCEANBASE.__ALL_VIRTUAL_STORAGE_IO_USAGE AS A
+  JOIN
+    OCEANBASE.__ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT AS B
+  ON
+    A.STORAGE_ID = B.STORAGE_ID
+  WHERE
+    A.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND
+    A.STORAGE_MOD ='CLOG/DATA'
+  )
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'CDB_OB_STORAGE_IO_USAGE',
+  table_id        = '21561',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  (
+  SELECT
+    A.TENANT_ID AS TENANT_ID,
+    IFNULL(B.PATH, 'LOCAL://') AS PATH,
+    IFNULL(B.ENDPOINT, '') AS ENDPOINT,
+    A.TYPE AS TYPE,
+    A.TOTAL AS TOTAL
+  FROM
+    OCEANBASE.__ALL_VIRTUAL_STORAGE_IO_USAGE AS A
+  LEFT JOIN
+    OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO AS B
+  ON
+    A.DEST_ID = B.DEST_ID
+    AND
+    A.TENANT_ID = B.TENANT_ID
+  WHERE
+    A.STORAGE_MOD ='BACKUP/ARCHIVE/RESTORE'
+  )
+  UNION
+  (
+  SELECT
+    A.TENANT_ID,
+    IFNULL(B.PATH, 'LOCAL://') AS PATH,
+    IFNULL(B.ENDPOINT, '') AS ENDPOINT,
+    A.TYPE,
+    A.TOTAL
+  FROM
+    OCEANBASE.__ALL_VIRTUAL_STORAGE_IO_USAGE AS A
+  JOIN
+    OCEANBASE.__ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT AS B
+  ON
+    A.STORAGE_ID = B.STORAGE_ID
+  WHERE
+    A.STORAGE_MOD ='CLOG/DATA'
+  )
+""".replace("\n", " ")
+)
+
+# 21562: TABLESPACES
+# 21563: INNODB_BUFFER_PAGE
+# 21564: INNODB_BUFFER_PAGE_LRU
+# 21565: INNODB_BUFFER_POOL_STATS
+# 21566: INNODB_CMP
+# 21567: INNODB_CMP_PER_INDEX
+# 21568: INNODB_CMP_PER_INDEX_RESET
+# 21569: INNODB_CMP_RESET
+# 21570: INNODB_CMPMEM
+# 21571: INNODB_CMPMEM_RESET
+# 21572: INNODB_SYS_DATAFILES
+# 21573: INNODB_SYS_INDEXES
+# 21574: INNODB_SYS_TABLES
+# 21575: INNODB_SYS_TABLESPACES
+# 21576: INNODB_SYS_TABLESTATS
+# 21577: INNODB_SYS_VIRTUAL
+# 21578: INNODB_TEMP_TABLE_INFO
+# 21579: INNODB_METRICS
+# 21580: EVENTS
 
 def_table_schema(
   owner = 'chaser.ch',
@@ -36371,6 +37108,63 @@ SELECT
 # 21594: CDB_OB_SPACE_USAGE
 # 21595: DBA_OB_TABLE_SPACE_USAGE
 # 21596: CDB_OB_TABLE_SPACE_USAGE
+
+
+def_table_schema(
+  owner           = 'donglou.zl',
+  table_name      = 'GV$OB_SS_LOCAL_CACHE',
+  table_id        = '21599',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    CACHE_NAME,
+    PRIORITY,
+    HIT_RATIO,
+    TOTAL_HIT_CNT,
+    TOTAL_MISS_CNT,
+    HOLD_SIZE,
+    ALLOC_DISK_SIZE,
+    USED_DISK_SIZE,
+    USED_MEM_SIZE
+  FROM oceanbase.__all_virtual_ss_local_cache_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'donglou.zl',
+  table_name      = 'V$OB_SS_LOCAL_CACHE',
+  table_id        = '21600',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    CACHE_NAME,
+    PRIORITY,
+    HIT_RATIO,
+    TOTAL_HIT_CNT,
+    TOTAL_MISS_CNT,
+    HOLD_SIZE,
+    ALLOC_DISK_SIZE,
+    USED_DISK_SIZE,
+    USED_MEM_SIZE
+  FROM oceanbase.GV$OB_SS_LOCAL_CACHE
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
+
 # 21597: GV$OB_LOG_TRANSPORT_DEST_STAT
 # 21598: V$OB_LOG_TRANSPORT_DEST_STAT
 # 21599: GV$OB_SS_LOCAL_CACHE
@@ -36482,7 +37276,7 @@ def_table_schema(
     FILE_ID,
     TRACE_ID,
     DIR_ID,
-    BYTES,
+    DATA_BYTES,
     START_OFFSET,
     TOTAL_WRITES,
     UNALIGNED_WRITES,
@@ -36512,7 +37306,7 @@ def_table_schema(
     FILE_ID,
     TRACE_ID,
     DIR_ID,
-    BYTES,
+    DATA_BYTES,
     START_OFFSET,
     TOTAL_WRITES,
     UNALIGNED_WRITES,
@@ -56857,6 +57651,7 @@ where U1.TENANT_ID = U2.TENANT_ID
   and V.CLIENT_USER_ID = P.CLIENT_USER_ID
 """.replace("\n", " ")
 )
+
 def_table_schema(
   owner           = 'linqiucen.lqc',
   table_name      = 'DBA_OB_SERVICES',
@@ -56880,6 +57675,60 @@ def_table_schema(
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'DBA_OB_STORAGE_IO_USAGE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25303',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  (
+  SELECT
+    NVL(B.PATH, 'LOCAL://') AS PATH,
+    NVL(B.ENDPOINT, '') AS ENDPOINT,
+    A.TYPE AS TYPE,
+    A.TOTAL AS TOTAL
+  FROM
+    SYS.ALL_VIRTUAL_STORAGE_IO_USAGE A
+  LEFT JOIN
+    SYS.ALL_VIRTUAL_BACKUP_STORAGE_INFO B
+  ON
+    A.DEST_ID = B.DEST_ID
+    AND
+    A.TENANT_ID = B.TENANT_ID
+  WHERE
+    A.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND
+    A.STORAGE_MOD ='BACKUP/ARCHIVE/RESTORE'
+  )
+  UNION
+  (
+  SELECT
+    NVL(D.PATH, 'LOCAL://') AS PATH,
+    NVL(D.ENDPOINT, '') AS ENDPOINT,
+    C.TYPE AS TYPE,
+    C.TOTAL AS TOTAL
+  FROM
+    SYS.ALL_VIRTUAL_STORAGE_IO_USAGE C
+  LEFT JOIN
+    SYS.ALL_VIRTUAL_ZONE_STORAGE_SYS_AGENT D
+  ON
+    C.STORAGE_ID = D.STORAGE_ID
+  WHERE
+    C.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND
+    C.STORAGE_MOD ='CLOG/DATA'
+  )
+""".replace("\n", " ")
+)
+
+
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -60693,7 +61542,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'bowen.gbw',
+  owner = 'jiahua.cjh',
   table_name      = 'ALL_DIRECTORIES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '28099',
@@ -60715,7 +61564,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'bowen.gbw',
+  owner = 'jiahua.cjh',
   table_name      = 'DBA_DIRECTORIES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '28100',
@@ -61377,8 +62226,11 @@ def_table_schema(
            MIN_IOPS,
            MAX_IOPS,
            IOPS_WEIGHT,
+           MAX_NET_BANDWIDTH,
+           NET_BANDWIDTH_WEIGHT,
            LOG_DISK_SIZE,
            LOG_DISK_IN_USE,
+           DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
            CREATE_TIME
@@ -61411,8 +62263,11 @@ def_table_schema(
            MIN_IOPS,
            MAX_IOPS,
            IOPS_WEIGHT,
+           MAX_NET_BANDWIDTH,
+           NET_BANDWIDTH_WEIGHT,
            LOG_DISK_SIZE,
            LOG_DISK_IN_USE,
+           DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
            CREATE_TIME
@@ -61940,7 +62795,10 @@ def_table_schema(
       MACRO_ID_LIST,
       COMMENTS,
       START_CG_ID,
-      END_CG_ID
+      END_CG_ID,
+      KEPT_SNAPSHOT,
+      MERGE_LEVEL,
+      EXEC_MODE
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -61984,7 +62842,10 @@ def_table_schema(
       MACRO_ID_LIST,
       COMMENTS,
       START_CG_ID,
-      END_CG_ID
+      END_CG_ID,
+      KEPT_SNAPSHOT,
+      MERGE_LEVEL,
+      EXEC_MODE
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -64094,8 +64955,6 @@ FROM SYS.GV$OB_CGROUP_CONFIG
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
-
-# 28202: DBA_OB_FORMAT_OUTLINES
 # 28203: GV$OB_SQLSTAT
 # 28204: V$OB_SQLSTAT
 # 28205: GV$OB_SESS_TIME_MODEL
@@ -64287,8 +65146,86 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 28217: GV$OB_SHARED_STORAGE_QUOTA
-# 28218: V$OB_SHARED_STORAGE_QUOTA
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_SHARED_STORAGE_QUOTA',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28217',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+(
+SELECT
+  A.SVR_IP AS SVR_IP,
+  A.SVR_PORT AS SVR_PORT,
+  NVL(B.ENDPOINT, '') AS ENDPOINT,
+  NVL(B.PATH, 'local://') AS PATH,
+  A.CLASS_ID AS CLASS_ID,
+  A.TYPE AS TYPE,
+  A.REQUIREMENT AS REQUIREMENT,
+  A.ASSIGN AS ASSIGN
+FROM
+  SYS.ALL_VIRTUAL_SHARED_STORAGE_QUOTA A
+JOIN
+  (SELECT dest_id, path, endpoint FROM SYS.ALL_VIRTUAL_BACKUP_STORAGE_INFO GROUP BY dest_id, path, endpoint) B
+ON
+  A.STORAGE_ID = B.DEST_ID
+WHERE
+  A.MODULE = 'BACKUP/ARCHIVE/RESTORE'
+)
+UNION
+(
+SELECT
+  C.SVR_IP AS SVR_IP,
+  C.SVR_PORT AS SVR_PORT,
+  NVL(D.ENDPOINT, '') AS ENDPOINT,
+  NVL(D.PATH, 'local://') AS PATH,
+  C.CLASS_ID AS CLASS_ID,
+  C.TYPE AS TYPE,
+  C.REQUIREMENT AS REQUIREMENT,
+  C.ASSIGN AS ASSIGN
+FROM
+  SYS.ALL_VIRTUAL_SHARED_STORAGE_QUOTA C
+JOIN
+  (SELECT storage_id, path, endpoint FROM SYS.ALL_VIRTUAL_ZONE_STORAGE_SYS_AGENT GROUP BY storage_id, path, endpoint) D
+ON
+  C.STORAGE_ID = D.STORAGE_ID
+WHERE
+  C.MODULE = 'CLOG/DATA'
+)
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_SHARED_STORAGE_QUOTA',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28218',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  SVR_IP,
+  SVR_PORT,
+  ENDPOINT,
+  PATH,
+  CLASS_ID,
+  TYPE,
+  REQUIREMENT,
+  ASSIGN
+FROM SYS.GV$OB_SHARED_STORAGE_QUOTA
+WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
 def_table_schema(
   owner = 'gongyusen.gys',
   table_name     = 'GV$OB_SESSION_PS_INFO',
@@ -64401,7 +65338,34 @@ def_table_schema(
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
-# 28223: DBA_OB_RSRC_DIRECTIVES
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'DBA_OB_RSRC_DIRECTIVES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28223',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      PLAN,
+      GROUP_OR_SUBPLAN,
+      COMMENTS,
+      MGMT_P1,
+      UTILIZATION_LIMIT,
+      MIN_IOPS,
+      MAX_IOPS,
+      WEIGHT_IOPS,
+      MAX_NET_BANDWIDTH,
+      NET_BANDWIDTH_WEIGHT
+    FROM
+      SYS.ALL_VIRTUAL_RES_MGR_DIRECTIVE_REAL_AGENT
+""".replace("\n", " ")
+)
+
 def_table_schema(
   owner = 'cxf262476',
   table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT',
@@ -64500,8 +65464,72 @@ AND
     SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
-# 28228: V$OB_GROUP_IO_STAT
-# 28229: GV$OB_GROUP_IO_STAT
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'V$OB_GROUP_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28228',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      A.TENANT_ID AS TENANT_ID,
+      A.SVR_IP AS SVR_IP,
+      A.SVR_PORT AS SVR_PORT,
+      A.GROUP_ID AS GROUP_ID,
+      A.GROUP_NAME AS GROUP_NAME,
+      A."MODE" AS "MODE",
+      A.MIN_IOPS AS MIN_IOPS,
+      A.MAX_IOPS AS MAX_IOPS,
+      A.REAL_IOPS AS REAL_IOPS,
+      A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
+      A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
+      A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,
+      A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY
+    FROM
+      SYS.GV$OB_GROUP_IO_STAT A
+    WHERE
+      SVR_IP=HOST_IP()
+      AND
+      SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'wyh329796',
+  table_name      = 'GV$OB_GROUP_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28229',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.TENANT_ID AS TENANT_ID,
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.GROUP_ID AS GROUP_ID,
+    A.GROUP_NAME AS GROUP_NAME,
+    A."MODE" AS "MODE",
+    A.MIN_IOPS AS MIN_IOPS,
+    A.MAX_IOPS AS MAX_IOPS,
+    A.REAL_IOPS AS REAL_IOPS,
+    A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
+    A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
+    A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,
+    A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY
+  FROM
+    SYS.ALL_VIRTUAL_GROUP_IO_STAT A
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'gengfu.zpc',
@@ -64639,8 +65667,66 @@ left join
 # 28237: DBA_OB_TABLE_SPACE_USAGE
 # 28238: GV$OB_LOG_TRANSPORT_DEST_STAT
 # 28239: V$OB_LOG_TRANSPORT_DEST_STAT
-# 28240: GV$OB_SS_LOCAL_CACHE
-# 28241: V$OB_SS_LOCAL_CACHE
+
+def_table_schema(
+  owner           = 'donglou.zl',
+  table_name      = 'GV$OB_SS_LOCAL_CACHE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28240',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    CACHE_NAME,
+    PRIORITY,
+    HIT_RATIO,
+    TOTAL_HIT_CNT,
+    TOTAL_MISS_CNT,
+    HOLD_SIZE,
+    ALLOC_DISK_SIZE,
+    USED_DISK_SIZE,
+    USED_MEM_SIZE
+  FROM SYS.ALL_VIRTUAL_SS_LOCAL_CACHE_INFO
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'donglou.zl',
+  table_name      = 'V$OB_SS_LOCAL_CACHE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28241',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    CACHE_NAME,
+    PRIORITY,
+    HIT_RATIO,
+    TOTAL_HIT_CNT,
+    TOTAL_MISS_CNT,
+    HOLD_SIZE,
+    ALLOC_DISK_SIZE,
+    USED_DISK_SIZE,
+    USED_MEM_SIZE
+  FROM SYS.GV$OB_SS_LOCAL_CACHE
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
+
 # 28242: GV$OB_KV_GROUP_COMMIT_STATUS
 # 28243: V$OB_KV_GROUP_COMMIT_STATUS
 # 28244: ALL_PLSQL_TYPES
@@ -64681,7 +65767,7 @@ def_table_schema(
     FILE_ID,
     TRACE_ID,
     DIR_ID,
-    BYTES,
+    DATA_BYTES,
     START_OFFSET,
     TOTAL_WRITES,
     UNALIGNED_WRITES,

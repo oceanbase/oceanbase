@@ -22,7 +22,6 @@
 #include "ob_macro_block_bare_iterator.h"
 #include "ob_macro_block_reader.h"
 #include "ob_micro_block_reader.h"
-#include "ob_sstable_printer.h"
 #include "ob_micro_block_header.h"
 
 namespace oceanbase
@@ -564,7 +563,8 @@ ObSSTableDataBlockReader::ObSSTableDataBlockReader()
   : data_(NULL), size_(0), common_header_(), macro_header_(), linked_header_(),
     bloomfilter_header_(NULL), column_types_(NULL), column_orders_(NULL),
     column_checksum_(NULL), macro_reader_(), allocator_(ObModIds::OB_CS_SSTABLE_READER),
-    hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false), column_type_array_cnt_(0)
+    hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false), column_type_array_cnt_(0),
+    printer_()
 {
 }
 
@@ -572,7 +572,7 @@ ObSSTableDataBlockReader::~ObSSTableDataBlockReader()
 {
 }
 
-int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const bool hex_print)
+int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const bool hex_print, FILE *fd)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -587,6 +587,8 @@ int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const b
     LOG_ERROR("deserialize common header fail", K(ret), KP(data), K(size), K(pos));
   } else if (OB_FAIL(common_header_.check_integrity())) {
     LOG_ERROR("invalid common header", K(ret), K_(common_header));
+  } else if (OB_FAIL(check_macro_crc_(data, size))) {
+    LOG_ERROR("invalid macro payload", K(ret), K_(common_header));
   } else {
     data_ = data;
     size_ = size;
@@ -635,6 +637,8 @@ int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const b
   }
 
   if (OB_SUCC(ret)) {
+    FILE *output_fd = (NULL == fd ? stderr : fd);
+    printer_.set_fd(output_fd);
     is_inited_ = true;
   }
   if (IS_NOT_INIT) {
@@ -667,10 +671,10 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
     ret = OB_NOT_INIT;
     LOG_WARN("ObSSTableDataBlockReader is not inited", K(ret));
   } else if (check_need_print(tablet_id, scn)) {
-    ObSSTablePrinter::print_common_header(&common_header_);
+    printer_.print_common_header(&common_header_);
     switch (common_header_.get_type()) {
     case ObMacroBlockCommonHeader::SSTableData:
-      ObSSTablePrinter::print_macro_block_header(&macro_header_);
+      printer_.print_macro_block_header(&macro_header_);
       if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.get_col_type_array_cnt()))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
       } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::DATA))) {
@@ -678,16 +682,16 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
       }
       break;
     case ObMacroBlockCommonHeader::LinkedBlock:
-      ObSSTablePrinter::print_macro_block_header(&linked_header_);
+      printer_.print_macro_block_header(&linked_header_);
       break;
     case ObMacroBlockCommonHeader::BloomFilterData:
-      ObSSTablePrinter::print_macro_block_header(bloomfilter_header_);
+      printer_.print_macro_block_header(bloomfilter_header_);
       if (OB_FAIL(dump_bloom_filter_data_block())) {
         LOG_WARN("Failed to dump bloomfilter macro block", K(ret));
       }
       break;
     case ObMacroBlockCommonHeader::SSTableIndex:
-      ObSSTablePrinter::print_macro_block_header(&macro_header_);
+      printer_.print_macro_block_header(&macro_header_);
       if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.column_count_))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
       } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::INDEX))) {
@@ -695,7 +699,7 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
       }
       break;
     case ObMacroBlockCommonHeader::SSTableMacroMeta:
-      ObSSTablePrinter::print_macro_block_header(&macro_header_);
+      printer_.print_macro_block_header(&macro_header_);
       if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.column_count_))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
       } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::MACRO_META))) {
@@ -721,6 +725,25 @@ bool ObSSTableDataBlockReader::check_need_print(const uint64_t tablet_id, const 
     }
   }
   return need_print;
+}
+
+int ObSSTableDataBlockReader::check_macro_crc_(const char *data, const int64_t size) const
+{
+  int ret = OB_SUCCESS;
+  const int32_t payload_size = common_header_.get_payload_size();
+  const int64_t common_header_size = common_header_.get_serialize_size();
+  if (OB_UNLIKELY(common_header_size + payload_size > size)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("macro block buffer not enough", K(ret), K_(common_header), K(common_header_size), K(size));
+  } else {
+    const char *payload_buf = data + common_header_size;
+    const int32_t calculated_checksum = static_cast<int32_t>(ob_crc64(payload_buf, payload_size));
+    if (OB_UNLIKELY(calculated_checksum != common_header_.get_payload_checksum())) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("macro block checksum inconsistant", K(ret), K(calculated_checksum), K_(common_header));
+    }
+  }
+  return ret;
 }
 
 int ObSSTableDataBlockReader::dump_sstable_macro_block(const MicroBlockType block_type)
@@ -800,20 +823,20 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
     LOG_ERROR("Failed to deserialize sstble micro block header", K(ret), K(micro_data));
   } else {
     if (MicroBlockType::DATA == block_type) {
-      ObSSTablePrinter::print_title("Data Micro Block", micro_idx, 1);
+      printer_.print_title("Data Micro Block", micro_idx, 1);
     } else if (MicroBlockType::INDEX == block_type) {
-      ObSSTablePrinter::print_title("Index Micro Block", micro_idx, 1);
+      printer_.print_title("Index Micro Block", micro_idx, 1);
     } else {
-      ObSSTablePrinter::print_title("Macro Meta Micro Block", micro_idx, 1);
+      printer_.print_title("Macro Meta Micro Block", micro_idx, 1);
     }
 
-    ObSSTablePrinter::print_micro_header(&micro_block_header);
+    printer_.print_micro_header(&micro_block_header);
     row_cnt = micro_block_header.row_count_;
     if (ObRowStoreType::FLAT_ROW_STORE == row_store_type) {
     } else if (ObStoreFormat::is_row_store_type_with_pax_encoding(row_store_type)) {
       const ObColumnHeader *encode_col_header = reinterpret_cast<const ObColumnHeader *>(micro_block_buf + pos);
       for (int64_t i = 0; i < macro_header_.fixed_header_.column_count_; ++i) {
-        ObSSTablePrinter::print_encoding_column_header(&encode_col_header[i], i);
+        printer_.print_encoding_column_header(&encode_col_header[i], i);
       }
     } else if (ObStoreFormat::is_row_store_type_with_cs_encoding(row_store_type)) {
       ObCSMicroBlockTransformer transformer;
@@ -829,7 +852,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
   }
 
   if (OB_SUCC(ret)) {
-    ObSSTablePrinter::print_title("Total Rows", row_cnt, 1);
+    printer_.print_title("Total Rows", row_cnt, 1);
   }
 
   return ret;
@@ -863,14 +886,14 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
       LOG_WARN("Fail to get next row from iter", K(ret), K(row_idx), K(row_cnt));
     } else {
       if (!is_trans_sstable_) {
-        ObSSTablePrinter::print_row_title(row, row_idx);
+        printer_.print_row_title(row, row_idx);
       } else {
-        fprintf(stderr, "ROW[%ld]:", row_idx);
+        fprintf(printer_.fd_, "ROW[%ld]:", row_idx);
       }
       if (OB_NOT_NULL(hex_print_buf_) && !is_trans_sstable_) {
-        ObSSTablePrinter::print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
+        printer_.print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
       } else {
-        ObSSTablePrinter::print_store_row(
+        printer_.print_store_row(
             row, column_types_, column_type_array_cnt_, MicroBlockType::INDEX == block_type, is_trans_sstable_);
       }
 
@@ -883,7 +906,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
         } else if (OB_ISNULL(idx_row_header)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Null pointer to index block row header", K(ret));
-        } else if (FALSE_IT(ObSSTablePrinter::print_index_row_header(idx_row_header))) {
+        } else if (FALSE_IT(printer_.print_index_row_header(idx_row_header))) {
         } else if (idx_row_header->is_major_node()) {
           // skip
         } else if (OB_FAIL(idx_row_parser.get_minor_meta(minor_meta))) {
@@ -892,7 +915,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Null pointer to minor meta", K(ret));
         } else {
-          ObSSTablePrinter::print_index_minor_meta(minor_meta);
+          printer_.print_index_minor_meta(minor_meta);
         }
 
         if (OB_SUCC(ret) && idx_row_header->is_pre_aggregated()) {
@@ -904,14 +927,14 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
           } else if (OB_FAIL(agg_row_reader.init(agg_row_buf, agg_row_buf_size))) {
             LOG_WARN("Failed to init agg row reader", K(ret));
           } else {
-            ObSSTablePrinter::print_pre_agg_row(macro_header_.fixed_header_.column_count_, agg_row_reader);
+            printer_.print_pre_agg_row(macro_header_.fixed_header_.column_count_, agg_row_reader);
           }
         }
       }
     }
   }
   if (nullptr != hex_print_buf_) {
-    ObSSTablePrinter::print_hex_micro_block(*block_data, hex_print_buf_, OB_DEFAULT_MACRO_BLOCK_SIZE);
+    printer_.print_hex_micro_block(*block_data, hex_print_buf_, OB_DEFAULT_MACRO_BLOCK_SIZE);
   }
   return ret;
 }
@@ -936,9 +959,9 @@ int ObSSTableDataBlockReader::dump_macro_block_meta_block(ObMacroBlockRowBareIte
   } else if (OB_FAIL(macro_meta.parse_row(*const_cast<ObDatumRow *>(row)))) {
     LOG_WARN("Failed to parse macro block meta", K(ret));
   } else {
-    ObSSTablePrinter::print_store_row(
+    printer_.print_store_row(
             row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, true, is_trans_sstable_);
-    ObSSTablePrinter::print_macro_meta(&macro_meta);
+    printer_.print_macro_meta(&macro_meta);
   }
   return ret;
 }
@@ -966,8 +989,8 @@ int ObSSTableDataBlockReader::dump_bloom_filter_data_block()
       STORAGE_LOG(WARN, "Unexcepted micro data", K(micro_data), K(ret));
     } else {
       const ObBloomFilterMicroBlockHeader *header = reinterpret_cast<const ObBloomFilterMicroBlockHeader *>(micro_data.get_buf());
-      ObSSTablePrinter::print_bloom_filter_micro_header(header);
-      ObSSTablePrinter::print_bloom_filter_micro_block(micro_data.get_buf() + sizeof(ObBloomFilterMicroBlockHeader),
+      printer_.print_bloom_filter_micro_header(header);
+      printer_.print_bloom_filter_micro_block(micro_data.get_buf() + sizeof(ObBloomFilterMicroBlockHeader),
           micro_data.get_buf_size() - sizeof(ObBloomFilterMicroBlockHeader));
     }
   }
@@ -986,17 +1009,17 @@ int ObSSTableDataBlockReader::dump_column_info(const int64_t col_cnt, const int6
     LOG_WARN("Invalid column info", K(ret), K(col_cnt),
         KP_(column_types), KP_(column_orders), KP_(column_checksum));
   } else if (col_cnt > 0) {
-    ObSSTablePrinter::print_cols_info_start("column_index", "column_type", "column_order", "column_checksum", "collation_type");
+    printer_.print_cols_info_start("column_index", "column_type", "column_order", "column_checksum", "collation_type");
     int64_t i = 0;
     for (; i < type_array_col_cnt; ++i) {
-      ObSSTablePrinter::print_cols_info_line(i, column_types_[i].get_type(), column_orders_[i],
+      printer_.print_cols_info_line(i, column_types_[i].get_type(), column_orders_[i],
           column_checksum_[i], column_types_[i].get_collation_type());
     }
     for (; i < col_cnt; ++i) {
-      ObSSTablePrinter::print_cols_info_line(i, ObUnknownType, ASC,
+      printer_.print_cols_info_line(i, ObUnknownType, ASC,
           column_checksum_[i], column_types_[i].get_collation_type());
     }
-    ObSSTablePrinter::print_end_line();
+    printer_.print_end_line();
   }
   return ret;
 }

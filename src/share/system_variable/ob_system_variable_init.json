@@ -7275,16 +7275,17 @@
   "ob_hnsw_ef_search": {
     "id": 10419,
       "name": "ob_hnsw_ef_search",
-      "default_value": "40",
+      "default_value": "64",
       "base_value": "40",
       "data_type": "uint",
       "info": "The number of neighbor nodes considered during any HNSW vector index search on the session",
       "flags": "SESSION",
+      "min_val": "1",
+      "max_val": "1000",
       "publish_version": "433",
       "info_cn": "",
       "background_cn": "",
-      "ref_url": "",
-      "placeholder": true
+      "ref_url": ""
   },
   "ndb_allow_copying_alter_table": {
     "id": 10420,

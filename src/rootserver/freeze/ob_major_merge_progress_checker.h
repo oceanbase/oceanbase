@@ -46,8 +46,39 @@ class ObMySQLProxy;
 namespace rootserver
 {
 class ObMajorMergeInfoManager;
-typedef common::hash::ObHashMap<ObTabletID, compaction::ObTabletCompactionStatus> ObTabletStatusMap;
-class ObMajorMergeProgressChecker
+typedef common::hash::ObHashMap<ObTabletID, compaction::ObTabletCompactionStatusEnum> ObTabletStatusMap;
+
+
+class ObBasicMergeProgressChecker
+{
+public:
+  ObBasicMergeProgressChecker() = default;
+  virtual ~ObBasicMergeProgressChecker() {}
+
+  virtual int init(
+      const bool is_primary_service,
+      common::ObMySQLProxy &sql_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      share::ObIServerTrace &server_trace,
+      ObMajorMergeInfoManager &merge_info_mgr) = 0;
+  virtual int set_basic_info(
+      share::SCN global_broadcast_scn,
+      const int64_t expected_epoch) = 0;
+  virtual int clear_cached_info() = 0;
+  virtual int check_progress() = 0;
+  virtual void reset_uncompacted_tablets() {};
+  virtual int get_uncompacted_tablets(
+    common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
+    common::ObArray<uint64_t> &uncompacted_table_ids) const
+  {
+    UNUSEDx(uncompacted_tablets, uncompacted_table_ids);
+    return OB_SUCCESS;
+  }
+  virtual const compaction::ObBasicMergeProgress &get_merge_progress() const = 0;
+};
+
+
+class ObMajorMergeProgressChecker : public ObBasicMergeProgressChecker
 {
 public:
   ObMajorMergeProgressChecker(
@@ -55,21 +86,23 @@ public:
     volatile bool &stop);
   virtual ~ObMajorMergeProgressChecker() {}
 
-  int init(const bool is_primary_service,
-           common::ObMySQLProxy &sql_proxy,
-           share::schema::ObMultiVersionSchemaService &schema_service,
-           share::ObIServerTrace &server_trace,
-           ObMajorMergeInfoManager &merge_info_mgr);
+  virtual int init(
+      const bool is_primary_service,
+      common::ObMySQLProxy &sql_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      share::ObIServerTrace &server_trace,
+      ObMajorMergeInfoManager &merge_info_mgr) override;
 
-  int set_basic_info(
+  virtual int set_basic_info(
     share::SCN global_broadcast_scn,
-    const int64_t expected_epoch); // For each round major_freeze, need invoke this once.
-  int clear_cached_info();
-  int get_uncompacted_tablets(
+    const int64_t expected_epoch) override; // For each round major_freeze, need invoke this once.
+  virtual int clear_cached_info() override;
+  virtual int get_uncompacted_tablets(
     common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
-    common::ObArray<uint64_t> &uncompacted_table_ids) const;
-  OB_INLINE void reset_uncompacted_tablets() { uncompact_info_.reset(); }
-  int check_progress(compaction::ObMergeProgress &progress);
+    common::ObArray<uint64_t> &uncompacted_table_ids) const override;
+  OB_INLINE virtual void reset_uncompacted_tablets() override { uncompact_info_.reset(); }
+  virtual int check_progress() override;
+  const compaction::ObBasicMergeProgress &get_merge_progress() const override { return progress_; }
   const compaction::ObTabletLSPairCache &get_tablet_ls_pair_cache() const { return tablet_ls_pair_cache_; }
 private:
   int set_table_compaction_info_status(const uint64_t table_id, const compaction::ObTableCompactionInfo::Status status);

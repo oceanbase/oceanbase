@@ -243,6 +243,7 @@ tools/obtest/1.1.1_beta/
 tools/obtest/1_*
 tools/obtest/2_*
 tools/obtest/3_*
+tools/obtest/4_*
 tools/obtest/agent/*
 tools/obtest/agent/agentrestore.conf.template
 tools/obtest/agent/agentserver.conf.template
@@ -257,6 +258,7 @@ tools/obtest/lib/libobserver.so.0
 tools/obtest/lib/libobserver.so.0.0.0
 tools/obtest/log/
 tools/obtest/mytest.log*
+tools/obtest/obcdc/
 tools/obtest/oblog/
 tools/obtest/observer.debug
 tools/obtest/rollback_sql_post.txt

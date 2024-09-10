@@ -87,7 +87,7 @@ ObDDLIncRedoClogCb::ObDDLIncRedoClogCb()
 ObDDLIncRedoClogCb::~ObDDLIncRedoClogCb()
 {
   int ret = OB_SUCCESS;
-  if (macro_block_id_.is_valid() && OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_block_id_))) {
+  if (macro_block_id_.is_valid() && OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_block_id_))) {
     LOG_ERROR("dec ref failed", K(ret), K(macro_block_id_), K(common::lbt()));
   }
   macro_block_id_.reset();
@@ -105,7 +105,7 @@ int ObDDLIncRedoClogCb::init(const share::ObLSID &ls_id,
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_block_id))) {
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_block_id))) {
     LOG_WARN("inc reference count failed", K(ret), K(macro_block_id));
   } else {
     redo_info_ = redo_info;
@@ -140,12 +140,20 @@ int ObDDLIncRedoClogCb::on_success()
       LOG_INFO("data buffer is freed, do not need to callback");
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_block_id_))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
+    } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_block_id_,
+                                                       redo_info_.data_buffer_.ptr(),
+                                                       redo_info_.data_buffer_.length(),
+                                                       redo_info_.block_type_,
+                                                       true))) {
+      LOG_WARN("fail to set data macro meta", K(ret), K(macro_block_id_),
+                                                      KP(redo_info_.data_buffer_.ptr()),
+                                                      K(redo_info_.data_buffer_.length()),
+                                                      K(redo_info_.block_type_));
+
     } else {
       macro_block.block_type_ = redo_info_.block_type_;
       macro_block.logic_id_ = redo_info_.logic_id_;
       macro_block.scn_ = __get_scn();
-      macro_block.buf_ = redo_info_.data_buffer_.ptr();
-      macro_block.size_ = redo_info_.data_buffer_.length();
       macro_block.ddl_start_scn_ = redo_info_.start_scn_;
       macro_block.table_key_ = redo_info_.table_key_;
       macro_block.end_row_id_ = redo_info_.end_row_id_;

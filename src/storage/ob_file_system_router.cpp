@@ -45,6 +45,7 @@ ObFileSystemRouter::ObFileSystemRouter()
   slog_file_spec_.retry_write_policy_ = "normal";
   slog_file_spec_.log_create_policy_ = "normal";
   slog_file_spec_.log_write_policy_ = "truncate";
+
   svr_seq_ = 0;
   is_inited_ = false;
 }
@@ -68,23 +69,16 @@ void ObFileSystemRouter::reset()
   is_inited_ = false;
 }
 
-int ObFileSystemRouter::init(
-    const char *data_dir,
-    const char *cluster_name,
-    const int64_t cluster_id,
-    const char *zone,
-    const ObAddr &svr_addr)
+int ObFileSystemRouter::init(const char *data_dir)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_ISNULL(data_dir) || OB_ISNULL(cluster_name) || OB_UNLIKELY(!svr_addr.is_valid())
-      || OB_UNLIKELY(cluster_id < 0) || OB_ISNULL(zone)) {
+  } else if (OB_ISNULL(data_dir)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(data_dir), KP(cluster_name), K(svr_addr),
-        K(cluster_id), KP(zone));
+    LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(init_local_dirs(data_dir))) {
     LOG_WARN("init local dir fail", K(ret), K(data_dir));
   } else {
@@ -95,6 +89,7 @@ int ObFileSystemRouter::init(
     slog_file_spec_.retry_write_policy_ = "normal";
     slog_file_spec_.log_create_policy_ = "normal";
     slog_file_spec_.log_write_policy_ = "truncate";
+
     is_inited_ = true;
   }
 

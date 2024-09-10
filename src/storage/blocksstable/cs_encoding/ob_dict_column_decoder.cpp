@@ -1201,10 +1201,18 @@ int ObDictColumnDecoder::datum_dict_val_in_op(
         break;
       }
       case ObFilterInCmpType::HASH_SEARCH: {
-        if (OB_FAIL(in_operator_hash_search(ctx, filter, ref_bitset,
-                                            matched_ref_cnt,
-                                            is_const_result_set))) {
-          LOG_WARN("Failed to hash search in IN operator", KR(ret));
+        if (filter.is_filter_dynamic_node()) {
+          if (OB_FAIL(in_operator_hash_search<sql::ObDynamicFilterExecutor>(ctx, static_cast<const sql::ObDynamicFilterExecutor &>(filter), ref_bitset,
+                                              matched_ref_cnt,
+                                              is_const_result_set))) {
+            LOG_WARN("Failed to hash search in IN operator", KR(ret));
+          }
+        } else {
+          if (OB_FAIL(in_operator_hash_search<sql::ObWhiteFilterExecutor>(ctx, filter, ref_bitset,
+                                              matched_ref_cnt,
+                                              is_const_result_set))) {
+            LOG_WARN("Failed to hash search in IN operator", KR(ret));
+          }
         }
         break;
       }
@@ -1243,10 +1251,10 @@ int ObDictColumnDecoder::in_operator_merge_search(
   int cmp_ret = 0;
   bool equal = false;
   ObDatumComparator cmp(filter.cmp_func_, ret, equal);
-  ObDatumComparator cmp_rev(filter.cmp_func_rev_, ret, equal);
+  ObDatumComparator cmp_rev(filter.cmp_func_, ret, equal, true);
   while (OB_SUCC(ret) && trav_it != end_it && param_it != params->end()) {
-    const ObDatum dict_datum = *trav_it;
-    const ObDatum param_datum = *param_it;
+    const ObDatum &dict_datum = *trav_it;
+    const ObDatum &param_datum = *param_it;
     if (equal) {
       cmp_ret = 0;
     } else if (OB_FAIL(filter.cmp_func_(dict_datum, param_datum, cmp_ret))) {
@@ -1293,7 +1301,7 @@ int ObDictColumnDecoder::in_operator_binary_search_dict(
   bool is_exist = false;
   ObDatumComparator cmp(filter.cmp_func_, ret, is_exist);
   while (OB_SUCC(ret) && trav_it != end_it && param_it != params->end()) {
-    const ObDatum param_datum = *param_it;
+    const ObDatum &param_datum = *param_it;
     is_exist = false;
     trav_it = std::lower_bound(trav_it, end_it, param_datum, cmp);
     if (OB_FAIL(ret)) {
@@ -1326,7 +1334,7 @@ int ObDictColumnDecoder::in_operator_binary_search(
   array::Iterator<ObFixedArrayImpl<ObDatum, ObIAllocator>, const ObDatum> param_it = params->begin();
   bool is_exist = false;
   while (OB_SUCC(ret) && trav_it != end_it && param_it != params->end()) {
-    const ObDatum dict_datum = *trav_it;
+    const ObDatum &dict_datum = *trav_it;
     if (OB_FAIL(filter.exist_in_datum_array(dict_datum, is_exist, param_it - params->begin()))) {
       LOG_WARN("Failed to check dict datum in param array", K(ret), K(dict_datum));
     } else if (is_exist) {
@@ -1339,9 +1347,10 @@ int ObDictColumnDecoder::in_operator_binary_search(
   return ret;
 }
 
+template <typename ObFilterExecutor>
 int ObDictColumnDecoder::in_operator_hash_search(
     const ObDictColumnDecoderCtx &ctx,
-    const sql::ObWhiteFilterExecutor &filter,
+    const ObFilterExecutor &filter,
     sql::ObBitVector *ref_bitset,
     int64_t &matched_ref_cnt,
     const bool is_const_result_set)
@@ -1351,13 +1360,10 @@ int ObDictColumnDecoder::in_operator_hash_search(
   ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
   ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
   ObDictValueIterator trav_it = begin_it;
-  const ObFixedArray<ObDatum, ObIAllocator> *params
-          = static_cast<const ObFixedArray<ObDatum, ObIAllocator> *>(&(filter.get_datums()));
-  array::Iterator<ObFixedArrayImpl<ObDatum, ObIAllocator>, const ObDatum> param_it = params->begin();
   bool is_exist = false;
-  while (OB_SUCC(ret) && trav_it != end_it && param_it != params->end()) {
-    const ObDatum dict_datum = *trav_it;
-    if (OB_FAIL(filter.exist_in_datum_set(dict_datum, is_exist))) {
+  while (OB_SUCC(ret) && trav_it != end_it) {
+    const ObDatum &dict_datum = *trav_it;
+    if (OB_FAIL(filter.exist_in_set(dict_datum, is_exist))) {
       LOG_WARN("Failed to check dict datum in param set", K(ret), K(dict_datum));
     } else if (is_exist) {
       ++matched_ref_cnt;
@@ -1668,7 +1674,7 @@ int ObDictColumnDecoder::do_const_only_operator(
       } else if (1 == const_ref_desc.const_ref_) {
       } else {
         bool is_existed = false;
-        if (OB_FAIL(filter.exist_in_datum_set(const_datum, is_existed))) {
+        if (OB_FAIL(filter.exist_in_set(const_datum, is_existed))) {
           LOG_WARN("fail to check object in hashset", KR(ret), K(const_datum));
         } else if (is_existed) {
           if (OB_FAIL(result_bitmap.bit_not())) {
@@ -1911,7 +1917,7 @@ int ObDictColumnDecoder::in_const_operator(
   } else {
     ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0);
     ObStorageDatum &const_datum = *(dict_iter + const_ref_desc.const_ref_);
-    if (OB_FAIL(filter.exist_in_datum_set(const_datum, is_const_result_set))) {
+    if (OB_FAIL(filter.exist_in_set(const_datum, is_const_result_set))) {
       LOG_WARN("fail to check whether const value is in set", KR(ret), K(const_datum));
     } else if (is_const_result_set) {
       if (OB_FAIL(result_bitmap.bit_not())) {
@@ -2195,7 +2201,7 @@ int ObDictColumnDecoder::get_distinct_count(const ObColumnCSDecoderCtx &ctx, int
 
 int ObDictColumnDecoder::read_distinct(
     const ObColumnCSDecoderCtx &ctx,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
@@ -2231,7 +2237,7 @@ int ObDictColumnDecoder::read_reference(
     const ObColumnCSDecoderCtx &ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const
+    storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
@@ -2264,7 +2270,7 @@ int ObDictColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &col_ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObAggCell &agg_cell) const
+    storage::ObAggCellBase &agg_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = col_ctx.dict_ctx_;
@@ -2306,7 +2312,7 @@ int ObDictColumnDecoder::get_aggregate_result(
 
 int ObDictColumnDecoder::traverse_datum_dict_agg(
     const ObDictColumnDecoderCtx &ctx,
-    storage::ObAggCell &agg_cell)
+    storage::ObAggCellBase &agg_cell)
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;

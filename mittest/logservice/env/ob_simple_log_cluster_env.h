@@ -139,6 +139,19 @@ public:
     UNUSED(id);
     return OB_SUCCESS;
   }
+  int nonblock_get_leader(const uint64_t tenant_id,
+                          int64_t id,
+                          common::ObAddr &leader) override final
+  {
+    UNUSEDx(tenant_id, id);
+    leader = leader_;
+    return OB_SUCCESS;
+  }
+  int nonblock_renew_leader(const uint64_t tenant_id, int64_t id) override final
+  {
+    UNUSEDx(tenant_id, id);
+    return OB_SUCCESS;
+  }
 };
 
 class ObSimpleLogClusterTestEnv : public ObSimpleLogClusterTestBase
@@ -208,6 +221,7 @@ public:
   virtual void unblock_pcode(const int64_t id1, const ObRpcPacketCode &pcode);
   virtual void set_rpc_loss(const int64_t id1, const int64_t id2, const int loss_rate);
   virtual void reset_rpc_loss(const int64_t id1, const int64_t id2);
+  virtual int submit_log_with_expected_size(PalfHandleImplGuard &leader, int id, int64_t block_count);
   virtual int submit_log(PalfHandleImplGuard &leader, int count, int id);
   virtual int submit_log(PalfHandleImplGuard &leader, int count, int id, int data_len);
   virtual int submit_log(PalfHandleImplGuard &leader, int count, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array);
@@ -260,6 +274,8 @@ public:
   virtual bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id);
   int wait_until_disk_space_to(const int64_t server_id, const int64_t expect_log_disk_space);
   int update_server_log_disk(const int64_t log_disk_size);
+  int create_ls_shared_storage(const int64_t palf_id);
+  int remove_ls_shared_storage(const int64_t palf_id);
 public:
   static int64_t palf_id_;
 private:

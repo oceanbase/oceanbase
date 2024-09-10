@@ -14,6 +14,8 @@
 #define OCEANBASE_SHARE_AGGREGATE_SUM_H_
 
 #include "share/aggregate/iaggregate.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 #include <type_traits>
 namespace oceanbase
@@ -206,7 +208,7 @@ public:
     return static_cast<int64_t>(SumCalcInfo(agg_cell_len, scale));
   }
 
-  int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+  OB_INLINE int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
                   const bool is_null, const char *data, const int32_t data_len, int32_t agg_col_idx,
                   char *agg_cell) override
   {
@@ -233,6 +235,47 @@ public:
     }
     return ret;
   }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx) && rollup_not_nulls.at(agg_col_idx)) {
+      const ResultType *curr_param = reinterpret_cast<const ResultType *>(curr_agg_cell);
+      const ResultType &rollup_param = *reinterpret_cast<const ResultType *>(rollup_agg_cell);
+      if ((is_decint_vec(in_tc) && is_decint_vec(out_tc))             // sum(int64/int32) -> int128
+          || (in_tc == VEC_TC_INTEGER && out_tc == VEC_TC_INTEGER)) { // count_sum
+        ret = add_values(*curr_param, rollup_param, rollup_agg_cell, sizeof(ResultType));
+      } else {
+        SumCalcInfo calc_info = get_batch_calc_info(agg_ctx, agg_col_idx, rollup_agg_cell);
+
+        if (OB_FAIL(add_to_result(*curr_param, rollup_param, calc_info.scale_, rollup_agg_cell,
+                                  calc_info.agg_cell_len_))) {
+          SQL_LOG(WARN, "add_to_result failed", K(ret), K(*this), K(*curr_param), K(rollup_param));
+        }
+      }
+    } else if (curr_not_nulls.at(agg_col_idx)) {
+      int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+      agg_ctx.set_agg_cell(curr_agg_cell, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      rollup_not_nulls.set(agg_col_idx);
+
+      const ResultType &curr_param = *reinterpret_cast<const ResultType *>(curr_agg_cell);
+      const ResultType &rollup_param = *reinterpret_cast<const ResultType *>(rollup_agg_cell);
+    } else {
+      // do nothing
+    }
+    return ret;
+  }
+
   TO_STRING_KV("aggregate", "sum", K(in_tc), K(out_tc));
 private:
   int add_to_result(const ParamType &lparam, const ResultType &rparam, const ObScale scale,
@@ -334,7 +377,7 @@ public:
     return ret;
   }
 
-  int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+  OB_INLINE int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
                   const bool is_null, const char *data, const int32_t data_len, int32_t agg_col_idx,
                   char *agg_cell) override
   {
@@ -590,6 +633,34 @@ public:
     return ret;
   }
 
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx)) {
+      int32_t rollup_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, rollup_row);
+      ResultType *cur_cell = reinterpret_cast<ResultType *>(curr_agg_cell);
+      ResultType *rollup_cell = reinterpret_cast<ResultType *>(rollup_agg_cell);
+      ret =
+        add_values(*cur_cell, *rollup_cell, reinterpret_cast<char *>(rollup_cell), rollup_cell_len);
+      if (OB_FAIL(ret)) {
+        SQL_LOG(WARN, "do addition failed", K(ret));
+      } else {
+        rollup_not_nulls.set(agg_col_idx);
+      }
+    }
+    return ret;
+  }
+
   inline void *get_tmp_res(RuntimeContext &agg_ctx, int32_t agg_col_id, char *agg_cell) override
   {
     int32_t cell_len = agg_ctx.get_cell_len(agg_col_id, agg_cell);
@@ -679,6 +750,269 @@ private:
     }
     return ret;
   }
+};
+
+class SumVectorAggregate final: public BatchAggregateWrapper<SumVectorAggregate>
+{
+public:
+  static const constexpr VecValueTypeClass IN_TC = VEC_TC_COLLECTION;
+  static const constexpr VecValueTypeClass OUT_TC = VEC_TC_COLLECTION;
+
+public:
+  SumVectorAggregate() {}
+
+  inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+                         const bool is_null, const char *data, const int32_t data_len,
+                         int32_t agg_col_idx, char *agg_cell)
+  {
+    int ret = OB_SUCCESS;
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_idx);
+    ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
+    VectorFormat fmt = aggr_info.param_exprs_.at(0)->get_format(eval_ctx);
+    NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
+    if (OB_LIKELY(!is_null)) {
+      if (not_nulls.at(agg_col_idx)) {
+        ObString array_data(data_len, data);
+        if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
+          ObLobCommon *lob_comm = (ObLobCommon*)(data);
+          if (!lob_comm->is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "unexpected data", K(ret), K(*lob_comm));
+          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+                                                                  ObLongTextType,
+                                                                  CS_TYPE_BINARY,
+                                                                  true,
+                                                                  array_data))) {
+            SQL_LOG(WARN, "fail to get real data.", K(ret), K(array_data));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          int32_t agg_cell_len = *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *));
+          const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(agg_cell));
+          ObLobCommon *agg_lob_comm = (ObLobCommon*)(agg_data);
+          ObString agg_array_data(agg_cell_len, agg_data);
+          if (!agg_lob_comm->is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
+          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+                                                                  ObLongTextType,
+                                                                  CS_TYPE_BINARY,
+                                                                  true,
+                                                                  agg_array_data))) {
+            SQL_LOG(WARN, "fail to get real data.", K(ret), K(agg_array_data));
+          } else if (array_data.length() != agg_array_data.length()) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_LOG(WARN, "unexpect length", K(ret), K(agg_array_data), K(array_data));
+          } else {
+            // update in-place
+            int64_t length = array_data.length() / sizeof(float);
+            float *float_data = reinterpret_cast<float *>(array_data.ptr());
+            float *float_res = reinterpret_cast<float *>(agg_array_data.ptr());
+            for (int64_t i = 0; OB_SUCC(ret) && i < length; ++i) {
+              float_res[i] += float_data[i];
+              if (isinff(float_res[i]) != 0) {
+                ret = OB_OPERATE_OVERFLOW;
+                SQL_LOG(WARN, "value overflow", K(ret), K(i), K(float_data[i]), K(float_res[i]));
+              }
+            }
+          }
+        }
+      } else {
+        ObString res;
+        if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
+          char *res_ptr = nullptr;
+          if (OB_ISNULL(res_ptr = (char*)agg_ctx.allocator_.alloc(data_len))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SQL_LOG(WARN, "failed to allocator memory", K(ret));
+          } else {
+            MEMCPY(res_ptr, data, data_len);
+            res.assign(res_ptr, data_len);
+          }
+        } else if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, data_len, agg_ctx.allocator_, res, data))) {
+          SQL_LOG(WARN, "failed to set array res", K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          *reinterpret_cast<int64_t *>(agg_cell) = reinterpret_cast<int64_t>(res.ptr());
+          *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = res.length();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        not_nulls.set(agg_col_idx);
+      }
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  inline int inner_add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                            const int32_t agg_col_id, char *aggr_cell, bool is_add)
+  {
+    int ret = OB_SUCCESS;
+    VectorFormat fmt = columns.get_format();
+    NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, aggr_cell);
+    const char* param_payload = nullptr;
+    int32_t param_len = 0;
+    columns.get_payload(row_num, param_payload, param_len);
+    if (not_nulls.at(agg_col_id)) {
+      ObString array_data(param_len, param_payload);
+      if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
+        ObLobCommon *lob_comm = (ObLobCommon*)(param_payload);
+        if (!lob_comm->is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "unexpected data", K(ret), K(*lob_comm));
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+                                                                ObLongTextType,
+                                                                CS_TYPE_BINARY,
+                                                                true,
+                                                                array_data))) {
+          SQL_LOG(WARN, "fail to get real data.", K(ret), K(array_data));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        int32_t agg_cell_len = *reinterpret_cast<int32_t *>(aggr_cell + sizeof(char *));
+        const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(aggr_cell));
+        ObLobCommon *agg_lob_comm = (ObLobCommon*)(agg_data);
+        ObString agg_array_data(agg_cell_len, agg_data);
+        if (!agg_lob_comm->is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+                                                                ObLongTextType,
+                                                                CS_TYPE_BINARY,
+                                                                true,
+                                                                agg_array_data))) {
+          SQL_LOG(WARN, "fail to get real data.", K(ret), K(agg_array_data));
+        } else if (array_data.length() != agg_array_data.length()) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "unexpect length", K(ret), K(agg_array_data), K(array_data));
+        } else {
+          // update in-place
+          int64_t length = array_data.length() / sizeof(float);
+          float *float_data = reinterpret_cast<float *>(array_data.ptr());
+          float *float_res = reinterpret_cast<float *>(agg_array_data.ptr());
+          for (int64_t i = 0; OB_SUCC(ret) && i < length; ++i) {
+            is_add ? float_res[i] += float_data[i] : float_res[i] -= float_data[i];
+            if (isinff(float_res[i]) != 0) {
+              ret = OB_OPERATE_OVERFLOW;
+              SQL_LOG(WARN, "value overflow", K(ret), K(i), K(float_data[i]), K(float_res[i]));
+            }
+          }
+        }
+      }
+    } else if (is_add) {
+      ObString res;
+      if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
+        char *res_ptr = nullptr;
+        if (OB_ISNULL(res_ptr = (char*)agg_ctx.allocator_.alloc(param_len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SQL_LOG(WARN, "failed to allocator memory", K(ret));
+        } else {
+          MEMCPY(res_ptr, param_payload, param_len);
+          res.assign(res_ptr, param_len);
+        }
+      } else if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, param_len, agg_ctx.allocator_, res, param_payload))) {
+        SQL_LOG(WARN, "failed to set array res", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        *reinterpret_cast<int64_t *>(aggr_cell) = reinterpret_cast<int64_t>(res.ptr());
+        *reinterpret_cast<int32_t *>(aggr_cell + sizeof(char *)) = res.length();
+        not_nulls.set(agg_col_id);
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "unexpected null agg_ecll", K(ret), K(is_add));
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *aggr_cell, void *tmp_res, int64_t &calc_info)
+  {
+    UNUSED(tmp_res);
+    return inner_add_or_sub_row(agg_ctx, columns, row_num, agg_col_id, aggr_cell, true/*is_add*/);
+  }
+
+  template <typename ColumnFmt>
+  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                              const int32_t agg_col_id, char *agg_cell, void *tmp_res,
+                              int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    if (columns.is_null(row_num)) {
+      SQL_LOG(DEBUG, "add null row", K(ret), K(row_num));
+    } else if (OB_FAIL(
+                 add_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info))) {
+      SQL_LOG(WARN, "add row failed", K(ret));
+    } else {
+      NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
+      not_nulls.set(agg_col_id);
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  inline int sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *aggr_cell, void *tmp_res, int64_t &calc_info)
+  {
+    UNUSED(tmp_res);
+    return inner_add_or_sub_row(agg_ctx, columns, row_num, agg_col_id, aggr_cell, false/*is_add*/);
+  }
+
+  template <typename ColumnFmt>
+  OB_INLINE int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    bool is_trans = !agg_ctx.removal_info_.is_inverse_agg_;
+    if (!columns.is_null(row_num)) {
+      if (is_trans) {
+        if (OB_FAIL(add_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info))) {
+          SQL_LOG(WARN, "add row failed", K(ret));
+        }
+      } else if (OB_FAIL(
+                   sub_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info))) {
+        SQL_LOG(WARN, "sub row failed", K(ret));
+      }
+    } else {
+      if (is_trans) {
+        agg_ctx.removal_info_.null_cnt_++;
+      } else {
+        agg_ctx.removal_info_.null_cnt_--;
+      }
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  int collect_group_result(RuntimeContext &agg_ctx, const sql::ObExpr &agg_expr,
+                           const int32_t agg_col_id, const char *agg_cell,
+                           const int32_t agg_cell_len)
+  {
+    int ret = OB_SUCCESS;
+    int64_t output_idx = agg_ctx.eval_ctx_.get_batch_idx();
+    const NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
+    ObIVector *output_vec = agg_expr.get_vector(agg_ctx.eval_ctx_);
+    const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(agg_cell));
+    if (OB_LIKELY(not_nulls.at(agg_col_id))) {
+      ObString res_str(agg_cell_len, agg_data);
+      static_cast<ColumnFmt *>(output_vec)->set_string(output_idx, res_str);
+    } else {
+      static_cast<ColumnFmt *>(output_vec)->set_null(output_idx);
+    }
+    return ret;
+  }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_NOT_SUPPORTED;
+    return ret;
+  }
+
+  TO_STRING_KV("aggregate", "sum_vector");
 };
 
 } // end aggregate

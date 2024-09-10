@@ -198,9 +198,7 @@ ObSqlCtx::ObSqlCtx()
     flashback_query_expr_(nullptr),
     is_execute_call_stmt_(false),
     enable_sql_resource_manage_(false),
-    res_map_rule_id_(OB_INVALID_ID),
-    res_map_rule_param_idx_(OB_INVALID_INDEX),
-    res_map_rule_version_(0),
+    resource_map_rule_(),
     is_text_ps_mode_(false),
     first_plan_hash_(0),
     is_bulk_(false),
@@ -245,9 +243,7 @@ void ObSqlCtx::reset()
   can_reroute_sql_ = false;
   is_sensitive_ = false;
   enable_sql_resource_manage_ = false;
-  res_map_rule_id_ = OB_INVALID_ID;
-  res_map_rule_param_idx_ = OB_INVALID_INDEX;
-  res_map_rule_version_ = 0;
+  resource_map_rule_.reset();
   is_protocol_weak_read_ = false;
   first_plan_hash_ = 0;
   first_outline_data_.reset();
@@ -543,7 +539,8 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
                                                  bool with_mv,
                                                  bool with_global_index,
                                                  bool with_domain_index,
-                                                 bool with_spatial_index)
+                                                 bool with_spatial_index,
+                                                 bool with_vector_index)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -551,7 +548,7 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
   OZ (schema_guard_->get_can_read_index_array(tenant_id, table_id,
                                               index_tid_array, size, with_mv,
                                               with_global_index, with_domain_index,
-                                              with_spatial_index));
+                                              with_spatial_index, with_vector_index));
   return ret;
 }
 

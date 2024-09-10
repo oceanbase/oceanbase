@@ -33,11 +33,6 @@ class ObReqTransport;
 }
 }
 
-namespace observer
-{
-struct ObGlobalContext;
-}
-
 namespace share
 {
 namespace schema

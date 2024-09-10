@@ -58,6 +58,8 @@ public:
   static int div_intervalym_number_batch(BATCH_EVAL_FUNC_ARG_DECL);
   static int div_intervalds_number(EVAL_FUNC_ARG_DECL);
   static int div_intervalds_number_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int div_vec(EVAL_FUNC_ARG_DECL);
+  static int div_vec_batch(BATCH_EVAL_FUNC_ARG_DECL);
 
 #define DECINC_DIV_EVAL_FUNC_BASIC(L, R)                              \
   static int div_decimalint_##L##_##R(EVAL_FUNC_ARG_DECL);            \

@@ -393,6 +393,13 @@
 #define N_OR "||"
 #define N_NOT "!"
 #define N_POW "pow"
+#define N_VECTOR_L1_DISTANCE "l1_distance"
+#define N_VECTOR_L2_DISTANCE "l2_distance"
+#define N_VECTOR_INNER_PRODUCT "inner_product"
+#define N_VECTOR_COS_DISTANCE "cosine_distance"
+#define N_VECTOR_DIMS "vector_dims"
+#define N_VECTOR_NORM "vector_norm"
+#define N_VECTOR_DISTANCE "vector_distance"
 #define N_XOR "^"
 #define N_ROWEQ "row_eq"
 #define N_ROWLE "row_le"
@@ -794,6 +801,14 @@
 #define N_PART_ID "part_id"
 #define N_INNER_GET "inner_get"
 #define N_MATCH_AGAINST "match_against"
+
+#define N_VEC_VID "vec_vid"
+#define N_VEC_TYPE "vec_type"
+#define N_VEC_VECTOR "vec_vector"
+#define N_VEC_SCN "vec_scn"
+#define N_VEC_KEY "vec_key"
+#define N_VEC_DATA "vec_data"
+
 #define N_DOC_ID "doc_id"
 #define N_WORD_SEGMENT "word_segment"
 #define N_WORD_COUNT "word_count"
@@ -1096,6 +1111,8 @@
 #define N_PRIV_ST_EQUALS                    "st_equals"
 #define N_PRIV_ST_TOUCHES                   "_st_touches"
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
+#define N_ARRAY                             "array"
+#define N_ARRAY_CONTAINS                    "array_contains"
 
 // for lock function
 #define N_GET_LOCK                          "get_lock"
@@ -1161,4 +1178,5 @@
 #define N_AUDIT_LOG_FILTER_SET_USER         "audit_log_filter_set_user"
 #define N_AUDIT_LOG_FILTER_REMOVE_USER      "audit_log_filter_remove_user"
 #define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
+#define N_SPLIT_PART                        "split_part"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

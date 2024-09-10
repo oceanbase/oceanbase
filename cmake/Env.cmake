@@ -111,6 +111,8 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_LABEL_SECURITY ON)
   # SPM功能
   ob_define(OB_BUILD_SPM ON)
+  # share storage
+  ob_define(OB_BUILD_SHARED_STORAGE ON)
 
   # oralce
   ob_define(OB_BUILD_ORACLE_PARSER ON)
@@ -148,6 +150,10 @@ endif()
 
 if(OB_BUILD_LABEL_SECURITY)
   add_definitions(-DOB_BUILD_LABEL_SECURITY)
+endif()
+
+if(OB_BUILD_SHARED_STORAGE)
+  add_definitions(-DOB_BUILD_SHARED_STORAGE)
 endif()
 
 if(OB_BUILD_SPM)

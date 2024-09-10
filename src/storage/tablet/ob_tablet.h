@@ -45,6 +45,7 @@ namespace share
 {
 class ObLSID;
 struct ObTabletAutoincInterval;
+struct ObTabletReplicaChecksumItem;
 }
 
 namespace logservice
@@ -135,7 +136,7 @@ public:
   typedef common::ObSEArray<ObTableHandleV2, BASIC_MEMSTORE_CNT> ObTableHandleArray;
   typedef common::ObFixedArray<share::schema::ObColDesc, common::ObIAllocator> ColDescArray;
 public:
-  ObTablet();
+  ObTablet(const bool is_external_tablet = false);
   ObTablet(const ObTablet&) = delete;
   ObTablet &operator=(const ObTablet&) = delete;
   virtual ~ObTablet();
@@ -181,6 +182,7 @@ public:
       const int64_t snapshot_version,
       const ObCreateTabletSchema &storage_schema,
       const bool need_create_empty_major_sstable,
+      const bool micro_index_clustered,
       const bool need_generate_cs_replica_cg_array,
       ObFreezer *freezer);
   // dump/merge build new multi version tablet
@@ -188,6 +190,16 @@ public:
       common::ObArenaAllocator &allocator,
       const ObUpdateTableStoreParam &param,
       const ObTablet &old_tablet);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int init_for_shared_merge(
+      common::ObArenaAllocator &allocator,
+      const ObUpdateTableStoreParam &param,
+      const ObTablet &old_tablet,
+      int64_t &start_macro_seq);
+  bool get_gc_occupy_flag() { return gc_occupy_flag_; }
+  void set_gc_occupy_flag_true() { gc_occupy_flag_ = true; }  // only allow from false to true
+#endif
+  bool is_external_tablet() const { return is_external_tablet_; }
   // transfer build new tablet
   int init_with_migrate_param(
       common::ObArenaAllocator &allocator,
@@ -203,9 +215,10 @@ public:
   // update medium compaction info mgr and build new tablet
   int init_with_update_medium_info(
       common::ObArenaAllocator &allocator,
-      const ObTablet &old_tablet);
+      const ObTablet &old_tablet,
+      const bool clear_wait_check_flag);
 
-  // TODO(@bowen.gbw && @fengjingkun.fjk) tmp interface for force_freeze on column store, should removed later.
+  // TODO(@gaishun.gs && @fengjingkun.fjk) tmp interface for force_freeze on column store, should removed later.
   int init_with_new_snapshot_version(
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
@@ -245,7 +258,11 @@ public:
   // fetch_$member: member may exist in memory or disk, if in memory, get it directly, if in disk,
   //                read from disk then put into kv cache, and return kv cache handle for caller
   int fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const;
-  int load_macro_info(common::ObArenaAllocator &allocator, ObTabletMacroInfo *&tablet_macro_info, bool &in_memory) const;
+  int load_macro_info(
+      const int64_t ls_epoch,
+      common::ObArenaAllocator &allocator,
+      ObTabletMacroInfo *&tablet_macro_info,
+      bool &in_memory) const;
   int load_storage_schema(
       common::ObIAllocator &allocator,
       ObStorageSchema *&storage_schema) const;
@@ -356,7 +373,6 @@ public:
    */
   int get_all_tables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
   int get_all_sstables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
-  int get_tablet_size(const bool ignore_shared_block, int64_t &meta_size, int64_t &data_size);
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
   int get_ddl_kvs(common::ObIArray<ObDDLKV *> &ddl_kvs) const;
 
@@ -387,7 +403,6 @@ public:
   int get_storage_schema_for_transfer_in(
       common::ObArenaAllocator &allocator,
       ObStorageSchema &storage_schema) const;
-
   int get_restore_status(ObTabletRestoreStatus::STATUS &restore_status);
 
   // static help function
@@ -462,12 +477,13 @@ public:
   share::SCN get_mds_checkpoint_scn() const { return tablet_meta_.mds_checkpoint_scn_; }
   int64_t get_snapshot_version() const { return tablet_meta_.snapshot_version_; }
   int64_t get_multi_version_start() const { return tablet_meta_.multi_version_start_; }
+  int64_t get_transfer_seq() const { return tablet_meta_.transfer_info_.transfer_seq_; }
   int get_multi_version_start(share::SCN &scn) const;
   int get_snapshot_version(share::SCN &scn) const;
 
   //TODO huronghui.hrh: rename function for row store sstable
   const ObITableReadInfo &get_rowkey_read_info() const { return *rowkey_read_info_; }
-  const ObTabletPointerHandle &get_pointer_handle() { return pointer_hdl_; }
+  const ObTabletPointerHandle &get_pointer_handle() const;
 
   int get_meta_disk_addr(ObMetaDiskAddr &addr) const;
 
@@ -507,11 +523,10 @@ public:
       transaction::ObTransID &pending_tx_id);
   int replay_schema_version_change_log(const int64_t schema_version);
   int get_tablet_report_info(
-      const int64_t snapshot_version,
-      common::ObIArray<int64_t> &column_checksums,
-      int64_t &data_size,
-      int64_t &required_size,
-      const bool need_checksums = true);
+      const common::ObAddr &addr,
+      ObTabletReplica &tablet_replica,
+      share::ObTabletReplicaChecksumItem &tablet_checksum,
+      const bool need_checksums = true) const;
   int check_and_set_initial_state();
   int read_mds_table(
       common::ObIAllocator &allocator,
@@ -552,6 +567,11 @@ public:
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
+  int get_ls_epoch(int64_t &ls_epoch);
+  static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
+  int get_sstable_column_checksum(
+    const blocksstable::ObSSTable &sstable,
+    common::ObIArray<int64_t> &column_checksums) const;
   static int get_tablet_block_header_version(const char *buf, const int64_t len, int32_t &version);
   int get_all_minor_sstables(ObTableStoreIterator &table_store_iter) const;
   int get_sstable_read_info(
@@ -595,7 +615,9 @@ private:
       const int64_t len,
       int64_t &pos,
       ObTabletMacroInfo *&tablet_macro_info);
-  int init_aggregated_info(common::ObArenaAllocator &allocator, ObLinkedMacroBlockItemWriter &linked_writer);
+  int init_aggregated_info(
+      common::ObArenaAllocator &allocator,
+      ObLinkedMacroBlockItemWriter *linked_writer);
   void set_initial_addr();
   int check_meta_addr() const;
   static int parse_meta_addr(const ObMetaDiskAddr &addr, ObIArray<blocksstable::MacroBlockId> &meta_ids);
@@ -614,7 +636,10 @@ private:
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
   int inner_release_memtables(const share::SCN scn);
-  int calc_sstable_occupy_size(int64_t &occupy_size, int64_t &pure_backup_sstable_occupy_size);
+  int calc_sstable_occupy_size(
+    int64_t &all_sstable_occupy_size,
+    int64_t &ss_public_sstable_occupy_size,
+    int64_t &pure_backup_sstable_occupy_size);
   inline void set_space_usage_(const ObTabletSpaceUsage &space_usage) { tablet_meta_.set_space_usage_(space_usage); }
 
   int inner_init_compat_normal_tablet(
@@ -632,17 +657,12 @@ private:
   int64_t get_self_serialize_size() const;
   static int check_schema_version(const ObDDLInfoCache& ddl_info_cache, const int64_t schema_version);
   static int check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version, const int64_t schema_version);
-  int get_column_store_sstable_checksum(common::ObIArray<int64_t> &column_checksums, ObCOSSTableV2 &co_sstable);
-
-  logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle
+  logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(gaishun.gs): get log handler from tablet pointer handle
 
   int init_shared_params(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t max_saved_schema_version,
-      const int64_t max_saved_medium_scn,
-      const lib::Worker::CompatMode compat_mode,
-      ObFreezer *freezer);
+      const lib::Worker::CompatMode compat_mode);
   int build_read_info(common::ObArenaAllocator &allocator, const ObTablet *tablet = nullptr);
   int create_memtable(const int64_t schema_version,
                       const share::SCN clog_checkpoint_scn,
@@ -810,6 +830,18 @@ private:
       const bool need_tablet_attr = true) const;
   int calc_tablet_attr(ObTabletAttr &attr) const;
   int check_ready_for_read_if_need(const ObTablet &old_tablet);
+  int get_tablet_report_info_by_sstable(
+    const common::ObAddr &addr,
+    const ObTabletTableStore &table_store,
+    ObTabletReplica &tablet_replica,
+    share::ObTabletReplicaChecksumItem &tablet_checksum,
+    const bool need_checksums) const;
+  int get_tablet_report_info_by_ckm_info(
+    const common::ObAddr &addr,
+    const blocksstable::ObMajorChecksumInfo &major_ckm_info,
+    ObTabletReplica &tablet_replica,
+    share::ObTabletReplicaChecksumItem &tablet_checksum,
+    const bool need_checksums) const;
 
   // mds mvs
   int build_mds_mini_sstable_for_migration(
@@ -819,6 +851,8 @@ private:
   int build_migration_tablet_param_storage_schema(
       ObMigrationTabletParam &mig_tablet_param) const;
   int build_migration_tablet_param_last_tablet_status(
+      ObMigrationTabletParam &mig_tablet_param) const;
+    int build_migration_tablet_param_major_ckm_info(
       ObMigrationTabletParam &mig_tablet_param) const;
 
   int build_transfer_tablet_param_current_(
@@ -839,49 +873,52 @@ private:
   static const int64_t SHARED_MACRO_BUCKET_CNT = 100;
   static const int64_t MAX_PRINT_COUNT = 100;
 private:
-  int32_t version_;
-  int32_t length_;
-  volatile int64_t wash_score_;
-  ObTabletMdsData *mds_data_;
-  volatile int64_t ref_cnt_;
+  int32_t version_;                                          // size: 4B, alignment: 4B
+  int32_t length_;                                           // size: 4B, alignment: 4B
+  volatile int64_t wash_score_;                              // size: 8B, alignment: 8B
+  ObTabletMdsData *mds_data_;                                // size: 8B, alignment: 8B
+  volatile int64_t ref_cnt_;                                 // size: 8B, alignment: 8B
   ObTabletHandle next_tablet_guard_;                         // size: 56B, alignment: 8B
-  ObTabletMeta tablet_meta_;                                 // size: 248, alignment: 8B
-  ObRowkeyReadInfo *rowkey_read_info_;
+  ObTabletMeta tablet_meta_;                                 // size: 288B, alignment: 8B
+  ObRowkeyReadInfo *rowkey_read_info_;                       // size: 8B, alignment: 8B
   // in memory or disk
-  ObTabletComplexAddr<ObTabletTableStore> table_store_addr_; // size: 48B, alignment: 8B
+  ObTabletComplexAddr<ObTabletTableStore> table_store_addr_; // size: 56B, alignment: 8B
   // always in disk
-  ObTabletComplexAddr<ObStorageSchema> storage_schema_addr_; // size: 48B, alignment: 8B
-  ObTabletComplexAddr<ObTabletMacroInfo> macro_info_addr_;   // size: 48B, alignment: 8B
-  int64_t memtable_count_;
-  ObDDLKV **ddl_kvs_;
-  int64_t ddl_kv_count_;
+  ObTabletComplexAddr<ObStorageSchema> storage_schema_addr_; // size: 56B, alignment: 8B
+  ObTabletComplexAddr<ObTabletMacroInfo> macro_info_addr_;   // size: 56B, alignment: 8B
+  int64_t memtable_count_;                                   // size: 8B, alignment: 8B
+  ObDDLKV **ddl_kvs_;                                        // size: 8B, alignment: 8B
+  int64_t ddl_kv_count_;                                     // size: 8B, alignment: 8B
   ObTabletPointerHandle pointer_hdl_;                        // size: 24B, alignment: 8B
-  ObMetaDiskAddr tablet_addr_;                               // size: 40B, alignment: 8B
+  ObMetaDiskAddr tablet_addr_;                               // size: 48B, alignment: 8B 1080
   // NOTICE: these two pointers: memtable_mgr_ and log_handler_,
   // are considered as cache for tablet.
   // we keep it on tablet because we cannot get them in ObTablet::deserialize
   // through ObTabletPointerHandle.
   // may be some day will fix this issue, then the pointers have no need to exist.
   // won't persist
-  ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
-  ObArenaAllocator *allocator_;
+  storage::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];        // size: 128B, alignment: 8B
+  ObArenaAllocator *allocator_;                              // size: 8B, alignment: 8B
   mutable common::SpinRWLock memtables_lock_;                // size: 12B, alignment: 4B
-  logservice::ObLogHandler *log_handler_;
+  mutable common::SpinRWLock mds_cache_lock_;                // size: 12B, alignment: 4B
+  logservice::ObLogHandler *log_handler_;                    // size: 8B, alignment: 8B
 
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque :
   ObTablet *next_tablet_; // used in old_version_chain and tablet_gc_queue
-
-  // whether hold ref cnt
-  // when destroying tablet, only if hold_ref_cnt_ is true do we decrease meta blocks' ref cnt
-  // we need to set it to true after increasing meta blocks' ref cnt or deserializing tablet
-  bool hold_ref_cnt_;
-  bool is_inited_;
-  mutable common::SpinRWLock mds_cache_lock_;                // size: 12B, alignment: 4B
+                                                             // size: 8B, alignment: 8B
   ObTabletStatusCache tablet_status_cache_;                  // size: 24B, alignment: 8B
   ObDDLInfoCache ddl_data_cache_;                            // size: 24B, alignment: 8B
   ObTableStoreCache table_store_cache_; // no need to serialize, should be initialized after table store is initialized.
+                                                             // size: 48B, alignment: 8B
+  // whether hold ref cnt
+  // when destroying tablet, only if hold_ref_cnt_ is true do we decrease meta blocks' ref cnt
+  // we need to set it to true after increasing meta blocks' ref cnt or deserializing tablet
+  bool gc_occupy_flag_;                                      // size: 4B, alignment: 1B
+  bool hold_ref_cnt_;                                        // size: 4B, alignment: 1B
+  bool is_inited_;                                           // size: 4B, alignment: 1B
+  const bool is_external_tablet_;                                  // size: 4B, alignment: 1B
 };
 
 inline bool ObTablet::is_ls_inner_tablet() const
@@ -902,15 +939,14 @@ inline bool ObTablet::is_ls_tx_ctx_tablet() const
 inline bool ObTablet::is_valid() const
 {
   return (!is_empty_shell()
-          && pointer_hdl_.is_valid()
           && tablet_meta_.is_valid()
           && table_store_addr_.is_valid()
           && storage_schema_addr_.is_valid()
-          && nullptr != rowkey_read_info_)
+          && nullptr != rowkey_read_info_) // judgement case 1
           || (is_empty_shell()
           && table_store_addr_.addr_.is_none()
           && storage_schema_addr_.addr_.is_none()
-          && nullptr == rowkey_read_info_);
+          && nullptr == rowkey_read_info_); // judgement case 2
 }
 
 inline int ObTablet::allow_to_read_()

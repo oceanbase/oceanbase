@@ -562,7 +562,7 @@ bool ObSimpleTableSchemaV2::is_valid() const
         ret = false;
         LOG_WARN("invalid data table_id", K(ret), K(data_table_id_));
       } else if (is_index_table() && !is_normal_index() && !is_unique_index()
-          && !is_domain_index() && !is_fts_index() && !is_multivalue_index()) {
+          && !is_domain_index() && !is_vec_index() && !is_fts_index() && !is_multivalue_index()) {
         ret = false;
         LOG_WARN("table_type is not consistent with index_type",
             "table_type", static_cast<int64_t>(table_type_),
@@ -1426,6 +1426,7 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     rls_context_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    micro_index_clustered_(false),
     local_session_vars_(allocator),
     index_params_()
 {
@@ -1505,6 +1506,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       auto_increment_cache_size_ = src_schema.auto_increment_cache_size_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
+      micro_index_clustered_ = src_schema.micro_index_clustered_;
       mlog_tid_ = src_schema.mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
@@ -3420,6 +3422,7 @@ void ObTableSchema::reset()
   name_hash_array_ = NULL;
   generated_columns_.reset();
   virtual_column_cnt_ = 0;
+  micro_index_clustered_ = false;
 
   cst_cnt_ = 0;
   cst_array_capacity_ = 0;
@@ -4632,6 +4635,13 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
         LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
       }
     }
+  } else if (src_column.is_collection()) {
+    bool is_same = false;
+    if (OB_FAIL(src_column.is_same_collection_column(dst_column, is_same))) {
+      LOG_WARN("failed to check whether is same collection cols", K(ret));
+    } else {
+      is_offline = !is_same;
+    }
   }
   return ret;
 }
@@ -4877,7 +4887,7 @@ int ObTableSchema::check_alter_column_in_index(const ObColumnSchemaV2 &src_colum
         }
       }
       if (OB_SUCC(ret) && is_in_index) {
-        if (ob_is_text_tc(dst_column.get_data_type())) {
+        if (!index_table_schema->is_vec_index() && ob_is_text_tc(dst_column.get_data_type())) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, dst_column.get_column_name_str().length(),
           dst_column.get_column_name_str().ptr());
@@ -4979,6 +4989,10 @@ int ObTableSchema::check_is_exactly_same_type(const ObColumnSchemaV2 &src_column
                   is_incremental) {
           is_same = true;
         }
+      }
+    } else if (src_column.is_collection()) {
+      if (OB_FAIL(src_column.is_same_collection_column(dst_column, is_same))) {
+        LOG_WARN("failed to check whether is same collection cols", K(ret));
       }
     } else {
       if (src_column.is_string_type() || src_column.is_raw()
@@ -6801,6 +6815,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(index_params_);
   }
+  OB_UNIS_ENCODE(micro_index_clustered_);
   return ret;
 }
 
@@ -6947,6 +6962,18 @@ bool ObTableSchema::has_lob_column() const
     }
   }
   return bool_ret;
+}
+
+int64_t ObTableSchema::get_lob_columns_count() const
+{
+  int64_t lob_cols_cnt = 0;
+  for (int64_t i = 0; i < column_cnt_; ++i) {
+    ObColumnSchemaV2& col = *column_array_[i];
+    if (is_lob_storage(col.get_data_type())) {
+      lob_cols_cnt++;
+    }
+  }
+  return lob_cols_cnt;
 }
 
 OB_DEF_DESERIALIZE(ObTableSchema)
@@ -7244,6 +7271,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
       LOG_WARN("deep_copy_str failed", K(ret), K(index_params));
     }
   }
+  OB_UNIS_DECODE(micro_index_clustered_);
   return ret;
 }
 
@@ -7398,6 +7426,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(local_session_vars_);
   OB_UNIS_ADD_LEN(duplicate_read_consistency_);
   OB_UNIS_ADD_LEN(index_params_);
+  OB_UNIS_ADD_LEN(micro_index_clustered_);
   return len;
 }
 
@@ -8388,6 +8417,44 @@ int ObTableSchema::get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft
   return ret;
 }
 
+int ObTableSchema::get_vec_index_column_id(uint64_t &vec_vector_id) const
+{
+  int ret = OB_SUCCESS;
+  vec_vector_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == vec_vector_id && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_vec_vector_column()) {
+      vec_vector_id = column_schema->get_column_id();
+    }
+  }
+  if (OB_FAIL(ret) || OB_INVALID_ID == vec_vector_id) {
+    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
+  }
+  return ret;
+}
+
+int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id) const
+{
+  int ret = OB_SUCCESS;
+  vec_id_col_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == vec_id_col_id && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_vec_vid_column()) {
+      vec_id_col_id = column_schema->get_column_id();
+    }
+  }
+  if (OB_FAIL(ret) || OB_INVALID_ID == vec_id_col_id) {
+    ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
+  }
+  return ret;
+}
+
 int ObTableSchema::get_rowkey_doc_tid(uint64_t &index_table_id) const
 {
   int ret = OB_SUCCESS;
@@ -8405,6 +8472,27 @@ int ObTableSchema::get_rowkey_doc_tid(uint64_t &index_table_id) const
   if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
     ret = OB_ERR_INDEX_KEY_NOT_FOUND;
     LOG_DEBUG("not found rowkey doc index", K(ret), K(simple_index_infos));
+  }
+  return ret;
+}
+
+int ObTableSchema::get_rowkey_vid_tid(uint64_t &index_table_id) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  index_table_id = OB_INVALID_ID;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (share::schema::is_vec_rowkey_vid_type(simple_index_infos.at(i).index_type_)) {
+      index_table_id = simple_index_infos.at(i).table_id_;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
+    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
+    LOG_DEBUG("not found rowkey vid index", K(ret), K(simple_index_infos));
   }
   return ret;
 }
@@ -8477,6 +8565,30 @@ int ObTableSchema::check_has_multivalue_index(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
     } else if (index_schema->is_multivalue_index_aux()) {
       has_multivalue_index = true;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::check_has_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const ObSimpleTableSchemaV2 *index_schema = NULL;
+  const uint64_t tenant_id = get_tenant_id();
+  has_vector_index = false;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
+    } else if (index_schema->is_vec_index()) {
+      has_vector_index = true;
       break;
     }
   }
@@ -9232,6 +9344,22 @@ int ObTableSchema::get_doc_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const
     }
   }
   if (OB_INVALID_ID == doc_id_rowkey_tid) {
+    ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+  }
+  return ret;
+}
+
+int ObTableSchema::get_vec_id_rowkey_tid(uint64_t &vec_id_rowkey_tid) const
+{
+  int ret = OB_SUCCESS;
+  vec_id_rowkey_tid = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
+    if (share::schema::is_vec_vid_rowkey_type(simple_index_infos_.at(i).index_type_)) {
+      vec_id_rowkey_tid = simple_index_infos_.at(i).table_id_;
+      break;
+    }
+  }
+  if (OB_INVALID_ID == vec_id_rowkey_tid) {
     ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
   }
   return ret;

@@ -1463,13 +1463,19 @@ int ObInsertLogPlan::prepare_table_dml_info_for_ddl(const ObInsertTableInfo& tab
       //@TODO: 后续@yibo, @cangdi会重构create local index的处理
       index_dml_info->ref_table_id_ = table_item->ddl_table_id_;
     }
-    
+    bool need_all_part = index_schema->is_index_table() && !index_schema->is_global_index_table() && data_table_schema->is_heap_table();
+    if (optimizer_context_.is_online_ddl()) {
+      need_all_part = need_all_part || (index_schema->is_partitioned_table() &&
+                                        (index_schema->is_vec_delta_buffer_type() ||
+                                        index_schema->is_vec_index_id_type() ||
+                                        index_schema->is_vec_index_snapshot_data_type()));
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(get_all_rowkey_columns_for_ddl(table_info, index_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all rowkey columns for ddl" , K(ret));
       } else if (OB_FAIL(get_all_columns_for_ddl(table_info, index_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all columns for ddl" , K(ret));
-      } else if (index_schema->is_index_table() && !index_schema->is_global_index_table() && data_table_schema->is_heap_table() && 
+      } else if (need_all_part &&
                  OB_FAIL(get_all_part_columns_for_ddl(table_info, data_table_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all part columns for ddl" , K(ret));
       } else {

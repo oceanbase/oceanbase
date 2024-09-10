@@ -9,7 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#ifndef OB_SMALL_HASHSET_
+#define OB_SMALL_HASHSET_
 #include "lib/ob_define.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -39,12 +40,17 @@ public:
   int init(uint64_t capacity, int64_t tenant_id)
   {
     int ret = OB_SUCCESS;
-    alloc_.set_tenant_id(tenant_id);
-    alloc_.set_label("ObSmallHashSet");
-    if (OB_FAIL(expand(capacity))) {
-      COMMON_LOG(WARN, "failed to expand when init");
+    if (inited_) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "init twice");
     } else {
-      inited_ = true;
+      alloc_.set_tenant_id(tenant_id);
+      alloc_.set_label("ObSmallHashSet");
+      if (OB_FAIL(expand(capacity))) {
+        COMMON_LOG(WARN, "failed to expand when init");
+      } else {
+        inited_ = true;
+      }
     }
     return ret;
   }
@@ -55,7 +61,22 @@ public:
     size_ = 0;
   }
 
-  inline uint64_t size() {
+  inline void destroy() {
+    inited_ = false;
+    buckets_ = nullptr;
+    bucket_mask_ = 0;
+    capacity_ = 0;
+    size_ = 0;
+    alloc_.reset();
+  }
+
+  inline bool inited() const
+  {
+    return inited_;
+  }
+
+  inline uint64_t size() const
+  {
     return size_;
   }
 
@@ -90,7 +111,7 @@ public:
     return ret;
   }
 
-  inline bool test_hash(uint64_t hash)
+  inline bool test_hash(uint64_t hash) const
   {
     bool find = false;
     hash |= KEY_MASK;
@@ -176,3 +197,5 @@ private:
 
 } // namespace sql
 } // namespace oceanbases
+
+# endif /* OB_SMALL_HASHSET_ */

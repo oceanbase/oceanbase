@@ -128,6 +128,7 @@ public:
     {
       return begin() <= block_id && block_id < end();
     }
+    inline bool is_empty() const { return 0 == cnt_; }
     inline int64_t begin() const { return block_id_; }
     inline int64_t end() const { return block_id_ + cnt_; }
     inline int64_t payload_size() const { return raw_size_ - sizeof(Block); }
@@ -280,16 +281,38 @@ public:
     static const int AIO_BUF_CNT = 2;
   public:
     BlockReader() : store_(NULL), idx_blk_(NULL), ib_pos_(0), file_size_(0), age_(NULL),
-                    try_free_list_(NULL), blk_holder_ptr_(NULL), read_io_handle_(),
+                    try_free_list_(NULL), blk_holder_ptr_(NULL), read_io_handle_(NULL),
                     is_async_(true), aio_buf_idx_(0), aio_blk_(nullptr) {}
-    virtual ~BlockReader() { reset(); }
+    virtual ~BlockReader() {
+      reset();
+      if (read_io_handle_ != NULL) {
+        ob_free(read_io_handle_);
+        read_io_handle_ = NULL;
+      }
+    }
 
     int init(ObTempBlockStore *store, const bool async = true);
     int get_block(const int64_t block_id, const Block *&blk);
     inline int64_t get_block_cnt() const { return store_->get_block_cnt(); }
     void set_iteration_age(IterationAge *age) { age_ = age; }
     void set_blk_holder(BlockHolder *holder) { blk_holder_ptr_ = holder; }
-    tmp_file::ObTmpFileIOHandle& get_read_io_handler() { return read_io_handle_; }
+    int get_read_io_handler(tmp_file::ObTmpFileIOHandle *&read_io_handle)
+    {
+      int ret = OB_SUCCESS;
+      if (read_io_handle_ == NULL) {
+        if (OB_ISNULL(read_io_handle_ = static_cast<tmp_file::ObTmpFileIOHandle *>
+          (ob_malloc(sizeof(tmp_file::ObTmpFileIOHandle), "read_io_handle")))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SQL_ENG_LOG(WARN, "malloc memory for read_io_handle_ failed", K(ret));
+        } else {
+          read_io_handle_ = new (read_io_handle_) tmp_file::ObTmpFileIOHandle();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        read_io_handle = read_io_handle_;
+      }
+      return ret;
+    }
     inline bool is_async() const { return is_async_; }
     void reset();
     void reuse();
@@ -329,7 +352,7 @@ public:
     IterationAge inner_age_;
     // to optimize performance, record the last_extent_id to avoid do binary search every time
     // calling read.
-    tmp_file::ObTmpFileIOHandle read_io_handle_;
+    tmp_file::ObTmpFileIOHandle *read_io_handle_;
     int64_t cur_file_offset_;
     bool is_async_;
     int aio_buf_idx_;
@@ -359,6 +382,7 @@ public:
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_mem_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
   void set_mem_limit(const int64_t limit) { mem_limit_ = limit; }
+  int64_t get_mem_limit() const { return mem_limit_; }
   void set_mem_stat(ObSqlMemoryCallback *mem_stat) { mem_stat_ = mem_stat; }
   void set_callback(ObSqlMemoryCallback *callback) { mem_stat_ = callback; }
   void reset_callback()
@@ -468,6 +492,7 @@ protected:
   {
     return new_block(mem_size, blk_, strict_mem_size);
   }
+  int dump_block_if_need(const int64_t extra_size);
 
 private:
   int inner_get_block(BlockReader &reader, const int64_t block_id,
@@ -508,7 +533,6 @@ private:
   int write_file(BlockIndex &bi, void *buf, int64_t size);
   int read_file(void *buf, const int64_t size, const int64_t offset,
                 tmp_file::ObTmpFileIOHandle &handle, const bool is_async);
-  int dump_block_if_need(const int64_t extra_size);
   bool need_dump(const int64_t extra_size);
   int write_compressed_block(Block *blk, BlockIndex *bi);
   int dump_block(Block *blk, int64_t &dumped_size);
@@ -558,6 +582,7 @@ protected:
   int64_t saved_block_id_cnt_;
   int64_t dumped_block_id_cnt_;
   bool enable_dump_;
+  bool backup_enable_dump_;
   bool enable_trunc_; // if true, the read contents of tmp file we be removed from disk.
   int64_t last_trunc_offset_;
 

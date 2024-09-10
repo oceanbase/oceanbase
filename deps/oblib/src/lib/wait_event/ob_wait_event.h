@@ -42,8 +42,8 @@ WAIT_EVENT_DEF(ROW_STORE_DISK_READ, 11011, "row store disk read", "fd", "offset"
 WAIT_EVENT_DEF(MEMSTORE_MEM_PAGE_ALLOC_WAIT, 11015, "memstore memory page alloc wait", "cur_mem_hold", "sleep_interval", "cur_ts", CONFIGURATION, true, true)
 WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "fd", "offset", "size", SYSTEM_IO, false, true)
 WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "fd", "offset", "size", SYSTEM_IO, true, false)
-WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "fd", "offset", "size", SYSTEM_IO, true, false)
+WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "fd", "offset", "size", SYSTEM_IO, true, true)
+WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "fd", "offset", "size", SYSTEM_IO, true, true)
 
 // SCHEDULER 12001-12999
 WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp", "wait start timestamp", SCHEDULER, true, false)
@@ -141,10 +141,10 @@ WAIT_EVENT_DEF(TIERED_SUPER_BLOCK_LOCK_WAIT, 21007, "latch: tiered super block w
 WAIT_EVENT_DEF(TSLOG_PROCESSING_MUTEX_WAIT, 21008, "latch: tslog processing mutex wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TSLOG_CKPT_LOCK_WAIT, 21009, "tslog checkpoint lock wait", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(FILE_MANAGER_LOCK_WAIT, 21010, "file manager lock wait", "address", "", "", CONCURRENCY, true, false)
-WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_REMOTE, 21011, "tiered block write remote", "address", "", "", CONCURRENCY, true, false)
-WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_LOCAL, 21012, "tiered block write local", "address", "", "", CONCURRENCY, true, false)
-WAIT_EVENT_DEF(TIERED_BLOCK_READ_REMOTE, 21013, "tiered block read remote", "address", "", "", CONCURRENCY, true, false)
-WAIT_EVENT_DEF(TIERED_BLOCK_READ_LOCAL, 21014, "tiered block read local", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_REMOTE, 21011, "tiered block write remote", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_LOCAL, 21012, "tiered block write local", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(TIERED_BLOCK_READ_REMOTE, 21013, "tiered block read remote", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(TIERED_BLOCK_READ_LOCAL, 21014, "tiered block read local", "address", "", "", CONCURRENCY, true, true)
 
 // inner sql 30000-30099
 WAIT_EVENT_DEF(INNER_SQL_EXEC_WAIT, 30000, "exec inner sql wait", "wait inner sql class", "inner session id", "", OTHER, true, true)

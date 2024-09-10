@@ -48,6 +48,7 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     target_table_id_(OB_INVALID_ID),
     rowkey_column_num_(0),
     store_column_count_(0),
+    lob_column_cnt_(0),
     fill_cg_thread_cnt_(0),
     lob_column_idxs_(nullptr),
     datum_utils_(nullptr),

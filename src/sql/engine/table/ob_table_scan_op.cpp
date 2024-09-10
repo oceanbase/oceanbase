@@ -243,6 +243,32 @@ ObDASScanCtDef *ObTableScanCtDef::get_lookup_ctdef()
   return lookup_ctdef;
 }
 
+ObDASScanCtDef *ObTableScanCtDef::get_rowkey_vid_ctdef()
+{
+  ObDASScanCtDef *rowkey_vid_ctdef = nullptr;
+  const ObDASBaseCtDef *attach_ctdef = attach_spec_.attach_ctdef_;
+  if (OB_NOT_NULL(attach_ctdef)) {
+    /**
+     * The iter tree of das scan with vid:
+     *
+     * CASE 1: Partition Scan Tree
+     *
+     *                DOC_ID_MERGE_ITER
+     *                 /              \
+     *               /                  \
+     * DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyVid)
+     *
+     *
+     *
+     **/
+    if (DAS_OP_VID_MERGE == attach_ctdef->op_type_) {
+      OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
+      rowkey_vid_ctdef = static_cast<ObDASScanCtDef *>(attach_ctdef->children_[1]);
+    }
+  }
+  return rowkey_vid_ctdef;
+}
+
 int ObTableScanCtDef::allocate_dppr_table_loc()
 {
   int ret = OB_SUCCESS;
@@ -2197,6 +2223,19 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
   }
   if (OB_FAIL(inner_get_next_batch_for_tsc(rand_row_cnt))) {
     LOG_WARN("failed to get next batch", K(ret));
+  }
+
+  if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
+    ObEvalCtx::BatchInfoScopeGuard convert_guard(eval_ctx_);
+    convert_guard.set_batch_size(brs_.size_);
+    for (int i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+      if (brs_.skip_->at(i)) { continue; }
+      convert_guard.set_batch_idx(i);
+      if (OB_FAIL(vt_result_converter_->convert_output_row(
+            eval_ctx_, MY_CTDEF.get_das_output_exprs(), MY_SPEC.agent_vt_meta_.access_exprs_))) {
+        LOG_WARN("convert output row failed", K(ret));
+      }
+    }
   }
 
   if (OB_SUCC(ret) && enable_random_output && !brs_.end_

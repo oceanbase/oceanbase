@@ -405,7 +405,7 @@ int ObRemoteBaseExecuteP<T>::auto_end_phy_trans(bool is_rollback)
   if (trans_state_.is_start_stmt_executed() &&
       trans_state_.is_start_stmt_success()) {
     if (OB_SUCCESS != (end_ret = ObSqlTransControl::end_stmt(
-                exec_ctx_, is_rollback || OB_SUCCESS != ret))) {
+                exec_ctx_, is_rollback || OB_SUCCESS != ret, true))) {
       ret = (OB_SUCCESS == ret) ? end_ret : ret;
       LOG_WARN("fail to end stmt", K(ret), K(end_ret), K(is_rollback), K(exec_ctx_));
     }

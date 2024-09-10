@@ -16,7 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "ob_index_tree_prefetcher.h"
 #include "ob_sstable_index_filter.h"
-#include "ob_aggregated_store.h"
+#include "storage/access/ob_aggregate_base.h"
 #include "storage/access/ob_rows_info.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 
@@ -843,7 +843,7 @@ void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::
   cur_micro_data_fetch_idx_ = -1;
   micro_data_prefetch_idx_ = 0;
   row_lock_check_version_ = transaction::ObTransVersion::INVALID_TRANS_VERSION;
-  agg_row_store_ = nullptr;
+  agg_store_ = nullptr;
   prefetch_depth_ = 1;
   total_micro_data_cnt_ = 0;
   query_range_ = nullptr;
@@ -1276,6 +1276,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
           ObSSTableIndexFilter *sstable_index_filter = iter_param_->sstable_index_filter_;
           ObSampleFilterExecutor *sample_executor = sstable_->is_major_sstable() ?
               static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor()) : nullptr;
+          bool can_agg = false;
           if (access_ctx_->micro_block_handle_mgr_.reach_hold_limit()
               && micro_data_prefetch_idx_ > cur_micro_data_fetch_idx_ + 1) {
             LOG_DEBUG("micro block handle mgr has reach hold limit, stop prefetch", K(prefetch_depth),
@@ -1302,11 +1303,13 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
           } else if (block_info.is_filter_always_false()) {
             continue;
-          } else if (nullptr != agg_row_store_ && agg_row_store_->can_agg_index_info(block_info)) {
-            if (OB_FAIL(agg_row_store_->fill_index_info(block_info))) {
-              LOG_WARN("Fail to agg index info", K(ret), K(block_info), KPC(this));
+          } else if (nullptr != agg_store_ && OB_FAIL(agg_store_->can_use_index_info(block_info, can_agg))) {
+            LOG_WARN("Fail to judge can aggregate micro index", K(ret));
+          } else if (can_agg) {
+            if (OB_FAIL(agg_store_->fill_index_info(block_info, false))) {
+              LOG_WARN("Fail to agg index info", K(ret), K(block_info), KPC_(agg_store), KPC(this));
             } else {
-              LOG_DEBUG("Success to agg index info", K(ret), K(block_info), KPC(agg_row_store_));
+              LOG_DEBUG("Success to agg index info", K(ret), K(block_info), KPC_(agg_store));
               continue;
             }
           } else if (OB_FAIL(check_row_lock(block_info, is_row_lock_checked_))) {
@@ -1771,6 +1774,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
     ObIndexTreeMultiPassPrefetcher &prefetcher)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 >= level || level >= prefetcher.index_tree_height_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid prefetch level", K(ret), K(level), K(prefetcher.index_tree_height_));
@@ -1795,6 +1799,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
       ObSSTableIndexFilter *sstable_index_filter = prefetcher.iter_param_->sstable_index_filter_;
       ObSampleFilterExecutor *sample_executor = prefetcher.sstable_->is_major_sstable() ?
           static_cast<ObSampleFilterExecutor *>(prefetcher.access_ctx_->get_sample_executor()) : nullptr;
+      bool can_agg = false;
       if (OB_FAIL(parent.get_next_index_row(prefetcher.iter_param_->has_lob_column_out(),
                                             index_info,
                                             prefetcher))) {
@@ -1815,11 +1820,13 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
                                                                 prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
       } else if (index_info.is_filter_always_false()) {
-      } else if (nullptr != prefetcher.agg_row_store_ && prefetcher.agg_row_store_->can_agg_index_info(index_info)) {
-        if (OB_FAIL(prefetcher.agg_row_store_->fill_index_info(index_info))) {
-          LOG_WARN("Fail to agg index info", K(ret), KPC(this));
+      } else if (nullptr != prefetcher.agg_store_ && OB_FAIL(prefetcher.agg_store_->can_use_index_info(index_info, can_agg))) {
+        LOG_WARN("Fail to judge can aggregate index info", K(ret), KPC(prefetcher.agg_store_));
+      } else if (can_agg) {
+        if (OB_FAIL(prefetcher.agg_store_->fill_index_info(index_info, false))) {
+          LOG_WARN("Fail to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         } else {
-          LOG_DEBUG("Success to agg index info", K(ret), K(index_info), KPC(prefetcher.agg_row_store_));
+          LOG_DEBUG("Success to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         }
       } else if (OB_FAIL(prefetcher.check_row_lock(index_info, is_row_lock_checked_))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -1845,6 +1852,15 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
         } else if (prefetcher.is_multi_check()) {
           read_handle.row_state_ = ObSSTableRowState::IN_BLOCK;
         }
+#ifdef OB_BUILD_SHARED_STORAGE
+        if (OB_FAIL(ret)) {
+        } else if (prefetcher.use_multi_block_prefetch_ &&
+                   prefetcher.index_tree_height_ - 1 == level &&
+                   index_info.has_valid_shared_macro_id() &&
+                   OB_TMP_FAIL(prefetch_macro_block(index_info.get_shared_data_macro_id()))) {
+          LOG_WARN("fail to prefetch macro block", K(ret), K(level), K(index_info));
+        }
+#endif
       }
     }
   }

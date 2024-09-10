@@ -314,6 +314,76 @@ int64_t ObTabletDDLKvMgr::get_idx(const int64_t pos) const
   return pos & (MAX_DDL_KV_CNT_IN_STORAGE - 1);
 }
 
+int ObTabletDDLKvMgr::add_idempotence_checker()
+{
+  int ret = OB_SUCCESS;
+  ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+  if (macro_block_checksum_map_.created()) {
+    // do nothing
+  } else if (OB_FAIL(macro_block_checksum_map_.create(997, ObMemAttr(MTL_ID(), "idem_checker")))) {
+    LOG_WARN("create macro block checksum map failed", K(ret));
+  }
+  return ret;
+}
+
+class ChecksumChecker
+{
+public:
+  ChecksumChecker(const int64_t checksum) : checksum_(checksum) {}
+  int operator() (hash::HashMapPair<MacroBlockId, int64_t> &kv) {
+    int ret = OB_SUCCESS;
+    if (kv.second != checksum_) {
+      ret = OB_CHECKSUM_ERROR;
+      LOG_WARN("macro block checksum not equal", K(ret), K(kv), K(checksum_));
+    }
+    return ret;
+  }
+public:
+  int64_t checksum_;
+};
+
+int ObTabletDDLKvMgr::check_macro_block_idempotence(const MacroBlockId &macro_block_id, const ObDDLMacroBlockType block_type, const char *buf, const int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!macro_block_id.is_valid() || ObDDLMacroBlockType::DDL_MB_INVALID_TYPE == block_type || nullptr == buf || buf_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(macro_block_id), K(block_type), KP(buf), K(buf_size));
+  } else {
+    int64_t checksum = 0;
+    ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    if (!macro_block_checksum_map_.created()) {
+      ret = OB_TASK_EXPIRED;
+      LOG_WARN("macro block checksum map not created", K(ret), K(macro_block_checksum_map_.created()));
+    } else {
+      if (ObDDLMacroBlockType::DDL_MB_DATA_TYPE == block_type || ObDDLMacroBlockType::DDL_MB_INDEX_TYPE == block_type) {
+        const ObMacroBlockCommonHeader *common_header = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
+        if (OB_FAIL(common_header->check_integrity())) {
+          LOG_WARN("macro block common header check integrity failed", K(ret), KPC(common_header));
+        } else {
+          checksum = common_header->get_payload_checksum();
+        }
+      } else {
+        checksum = ob_crc64(buf, buf_size);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ChecksumChecker checker(checksum);
+      if (OB_FAIL(macro_block_checksum_map_.set_or_update(macro_block_id, checksum, checker))) {
+        LOG_WARN("set macro block checksum failed", K(ret), K(macro_block_id), K(checksum));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::remove_idempotence_checker()
+{
+  int ret = OB_SUCCESS;
+  ObLatchWGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+  macro_block_checksum_map_.destroy();
+  return ret;
+}
+
 int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle)
 {
   int ret = OB_SUCCESS;
@@ -336,7 +406,7 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle)
   return ret;
 }
 
-int ObTabletDDLKvMgr::get_or_create_ddl_kv(
+int ObTabletDDLKvMgr::get_or_create_shared_nothing_ddl_kv(
     const share::SCN &macro_redo_scn,
     const share::SCN &macro_redo_start_scn,
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
@@ -348,9 +418,11 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min() || !macro_redo_start_scn.is_valid_and_not_min())) {
+  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min()
+                      || !macro_redo_start_scn.is_valid_and_not_min()
+                      || !direct_load_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(macro_redo_scn), K(macro_redo_start_scn));
+    LOG_WARN("invalid argument", K(ret), K(macro_redo_scn), K(macro_redo_start_scn), K(direct_load_mgr_handle));
   } else if (OB_FAIL(direct_load_mgr_handle.get_obj()->rdlock(TRY_LOCK_TIMEOUT/*10s*/, direct_load_lock_tid))) {
     // usually use the latest start scn to allocate kv.
     LOG_WARN("lock failed", K(ret));
@@ -392,6 +464,54 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(
   }
   if (direct_load_lock_tid != 0) {
     direct_load_mgr_handle.get_obj()->unlock(direct_load_lock_tid);
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::get_or_create_shared_storage_ddl_kv(
+    const share::SCN &macro_redo_scn,
+    const share::SCN &macro_redo_start_scn,
+    const int64_t snapshot_version,
+    const uint64_t data_format_version,
+    ObDDLKVHandle &kv_handle)
+{
+  int ret = OB_SUCCESS;
+  kv_handle.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
+  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min()
+                      || !macro_redo_start_scn.is_valid_and_not_min()
+                      || snapshot_version <= 0
+                      || data_format_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(macro_redo_scn), K(macro_redo_start_scn), K(snapshot_version), K(data_format_version));
+  } else {
+    uint32_t lock_tid = 0; // try lock to avoid hang in clog callback
+    if (OB_FAIL(rdlock(TRY_LOCK_TIMEOUT, lock_tid))) {
+      LOG_WARN("failed to rdlock", K(ret), KPC(this));
+    } else {
+      try_get_ddl_kv_unlock(macro_redo_scn, kv_handle);
+    }
+    if (lock_tid != 0) {
+      unlock(lock_tid);
+    }
+  }
+  if (OB_SUCC(ret) && !kv_handle.is_valid()) {
+    uint32_t lock_tid = 0; // try lock to avoid hang in clog callback
+    if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
+      LOG_WARN("failed to wrlock", K(ret), KPC(this));
+    } else {
+      try_get_ddl_kv_unlock(macro_redo_scn, kv_handle);
+      if (kv_handle.is_valid()) {
+        // do nothing
+      } else if (OB_FAIL(alloc_ddl_kv(macro_redo_start_scn, snapshot_version, data_format_version, kv_handle))) {
+        LOG_WARN("create ddl kv failed", K(ret), K(macro_redo_start_scn), K(snapshot_version), K(data_format_version));
+      }
+    }
+    if (lock_tid != 0) {
+      unlock(lock_tid);
+    }
   }
   return ret;
 }

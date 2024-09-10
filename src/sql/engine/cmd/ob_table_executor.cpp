@@ -579,7 +579,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
   obrpc::ObCreateTableArg &create_table_arg = stmt.get_create_table_arg();
   ObString first_stmt;
   ObSelectStmt *select_stmt = stmt.get_sub_select();
-  ObTableSchema &table_schema = create_table_arg.schema_;
+  const ObTableSchema &table_schema = create_table_arg.schema_;
   ObSQLSessionInfo *my_session = ctx.get_my_session();
   uint64_t tenant_id = table_schema.get_tenant_id();
   uint64_t data_version = 0;

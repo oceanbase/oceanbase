@@ -31,7 +31,7 @@ struct ObTableAccessContext;
 struct ObRowSampleFilter;
 class ObBlockRowStore;
 class ObTableScanStoreStat;
-class ObCGAggCells;
+class ObAggGroupBase;
 }
 namespace blocksstable
 {
@@ -90,12 +90,14 @@ public:
       const int64_t row_cap,
       common::ObIArray<ObSqlDatumInfo> &datums,
       const int64_t datum_offset,
-      uint32_t *len_array);
+      uint32_t *len_array,
+      const bool init_vector_header = true);
   int get_aggregate_result(
       const int32_t col_idx,
       const int32_t *row_ids,
       const int64_t row_cap,
-      ObCGAggCells &cg_agg_cells);
+      const bool projected,
+      ObAggGroupBase &agg_group);
   int advance_to_border(
       const ObDatumRowkey &rowkey,
       int64_t &start_offset,
@@ -109,12 +111,12 @@ public:
   int read_distinct(
       const int32_t group_by_col,
       const char **cell_datas,
-      storage::ObGroupByCell &group_by_cell) const;
+      storage::ObGroupByCellBase &group_by_cell) const;
   int read_reference(
       const int32_t group_by_col,
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const;
+      storage::ObGroupByCellBase &group_by_cell) const;
   OB_INLINE void reserve_reader_memory(bool reserve)
   {
     if (nullptr != reader_) {
@@ -141,7 +143,8 @@ public:
       const char **cell_datas,
       uint32_t *len_array,
       sql::ObExprPtrIArray &exprs,
-      blocksstable::ObDatumRow *default_row);
+      blocksstable::ObDatumRow *default_row,
+      const bool need_init_vector = true);
   int64_t get_current_pos() const
   { return current_; }
   OB_INLINE int64_t get_last_pos() const

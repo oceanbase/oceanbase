@@ -15,6 +15,7 @@
 
 #include "lib/queue/ob_lighty_queue.h"
 #include "lib/thread/thread_pool.h"
+#include "lib/thread/ob_dynamic_thread_pool.h"
 #include "common/ob_queue_thread.h"
 
 namespace oceanbase
@@ -61,19 +62,23 @@ private:
   int64_t shrink_rate_;
 };
 
-class ObSimpleThreadPool
-    : public lib::ThreadPool
+template <class T = ObLightyQueue>
+class ObSimpleThreadPoolBase
+    : public ObSimpleDynamicThreadPool
 {
   static const int64_t QUEUE_WAIT_TIME = 100 * 1000;
-  static const int64_t MAX_THREAD_NUM = 256;
 public:
-  ObSimpleThreadPool();
-  virtual ~ObSimpleThreadPool();
+  ObSimpleThreadPoolBase();
+  virtual ~ObSimpleThreadPoolBase();
 
   int init(const int64_t thread_num, const int64_t task_num_limit, const char *name = "unknown", const uint64_t tenant_id = OB_SERVER_TENANT_ID);
   void destroy();
   int push(void *task);
-  int64_t get_queue_num() const { return queue_.size(); }
+  int push(ObLink *task, const int priority); // designed for ObPriorityQueue
+  virtual int64_t get_queue_num() const override
+  {
+    return queue_.size();
+  }
   int set_adaptive_strategy(const ObAdaptiveStrategy &strategy);
 private:
   virtual void handle(void *task) = 0;
@@ -88,13 +93,18 @@ protected:
 private:
   const char* name_;
   bool is_inited_;
-  ObLightyQueue queue_;
+  T queue_;
   int64_t total_thread_num_;
   int64_t active_thread_num_;
   ObAdaptiveStrategy adaptive_strategy_;
   int64_t last_adjust_ts_;
 };
+
+using ObSimpleThreadPool = ObSimpleThreadPoolBase<ObLightyQueue>;
+
 } // namespace common
 } // namespace oceanbase
+
+#include "ob_simple_thread_pool.ipp"
 
 #endif // OCEANBASE_COMMON_OB_SIMPLE_THREAD_POOL_H_

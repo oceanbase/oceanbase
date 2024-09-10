@@ -44,7 +44,12 @@ public:
   int init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
   int save(const int64_t batch_size);
   int restore() const;
-  void reset() {  }
+  void reset()
+  {
+    saved_ = false;
+    saved_size_ = 0;
+  }
+  void destroy();
   static int calc_backup_size(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx, int32_t &mem_size);
 private:
   template<VectorFormat>
@@ -58,7 +63,9 @@ private:
                                                 offsets_(nullptr), continuous_data_(nullptr),
                                                 expr_(expr), frame_nulls_(nullptr), frame_datums_(nullptr),
                                                 frame_data_(nullptr), frame_lens_(nullptr), frame_ptrs_(nullptr),
-                                                frame_offsets_(nullptr), frame_continuous_data_(nullptr) {}
+                                                frame_offsets_(nullptr), frame_continuous_data_(nullptr),
+                                                expr_attrs_(nullptr), attrs_res_(nullptr), attrs_cnt_(0) {}
+    void reset(common::ObIAllocator &alloc);
     int copy_vector_base(const ObVectorBase &vec);
     int copy_bitmap_null_base(const ObBitmapNullVectorBase &vec,
                               common::ObIAllocator &alloc,
@@ -89,6 +96,10 @@ private:
     void restore_uniform_base(const ObExpr *expr, ObUniformBase &vec,
                               bool is_const, ObEvalCtx &eval_ctx,
                               const int64_t batch_size) const;
+    int save_nested(ObIAllocator &alloc, const int64_t batch_size, ObEvalCtx *eval_ctx);
+    int save(ObIAllocator &alloc, const int64_t batch_size, ObEvalCtx *eval_ctx);
+    int restore_nested(const int64_t saved_size, ObEvalCtx *eval_ctx);
+    int restore(const int64_t saved_size, ObEvalCtx *eval_ctx);
     VectorHeader header_;
     int64_t max_row_cnt_;  //ObVectorBase
 
@@ -114,6 +125,9 @@ private:
     char **frame_ptrs_; //ObDiscreteBase
     uint32_t *frame_offsets_; //ObContinuousBase
     char *frame_continuous_data_; //ObContinuousBase
+    ObExpr **expr_attrs_;
+    ObColResultHolder *attrs_res_;
+    uint32_t attrs_cnt_;
   };
   const common::ObIArray<ObExpr *> *exprs_;
   ObEvalCtx *eval_ctx_;

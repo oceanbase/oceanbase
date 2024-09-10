@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_AGGREGATE_FIRST_ROW_H_
 
 #include "iaggregate.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -156,7 +157,12 @@ public:
     if (OB_LIKELY(not_nulls.at(agg_col_id) && agg_cell_len != INT32_MAX)) {
       const char *payload = (const char *)(*reinterpret_cast<const int64_t *>(agg_cell));
       char *res_buf = nullptr;
-      if (is_discrete_vec(vec_tc)) {
+      if (agg_expr.is_nested_expr() && !is_uniform_format(res_vec->get_format())) {
+        ObString nested_data(agg_cell_len, payload);
+        if (OB_FAIL(ObArrayExprUtils::dispatch_array_attrs(ctx, const_cast<sql::ObExpr &>(agg_expr), nested_data, output_idx))) {
+          LOG_WARN("fail to do nested expr from rows", K(ret));
+        }
+      } else if (is_discrete_vec(vec_tc)) {
         // implicit aggr expr may be shared between operators and its
         // data is shallow copied for variable-length types while do backup/restore operations.
         // Hence child op's data is unexpected modified if deep copy happened here.
@@ -169,6 +175,9 @@ public:
       }
     } else {
       res_vec->set_null(output_idx);
+      if (agg_expr.is_nested_expr() && !is_uniform_format(res_vec->get_format())) {
+        ObArrayExprUtils::set_expr_attrs_null(agg_expr, ctx, output_idx);
+      }
     }
     return ret;
   }
@@ -190,6 +199,34 @@ public:
     UNUSEDx(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
     SQL_LOG(DEBUG, "add_nullable_row do nothing");
     return OB_SUCCESS;
+  }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx)) {
+      rollup_not_nulls.set(agg_col_idx);
+    }
+    int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx) && curr_agg_cell_len != INT32_MAX)) {
+      const char *curr_payload = (const char *)(*reinterpret_cast<const int64_t *>(curr_agg_cell));
+      if (curr_agg_cell_len > 0) {
+        agg_ctx.set_agg_cell(curr_payload, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      } else {
+        agg_ctx.set_agg_cell(nullptr, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      }
+    } else {
+      agg_ctx.set_agg_cell(nullptr, INT32_MAX, agg_col_idx, rollup_agg_cell);
+    }
+    return ret;
   }
 
   TO_STRING_KV("aggregate", "first_row");

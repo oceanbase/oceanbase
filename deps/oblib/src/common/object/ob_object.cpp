@@ -1312,9 +1312,16 @@ int ObObj::build_not_strict_default_value(int16_t precision)
     case ObMediumTextType:
     case ObLongTextType:
     case ObGeometryType:
-    case ObRoaringBitmapType:{
+    case ObCollectionSQLType:{
         ObString null_str;
         set_string(data_type, null_str);
+        meta_.set_inrow();
+      }
+      break;
+    case ObRoaringBitmapType:{
+        // empty string is illegal in roaringbitmap, 0x01000 corresponding to an empty roaringbitmap
+        ObString empty_str = ObString(2, "\x01\x00");
+        set_string(data_type, empty_str);
         meta_.set_inrow();
       }
       break;

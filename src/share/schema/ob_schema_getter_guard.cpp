@@ -230,7 +230,8 @@ int ObSchemaGetterGuard::get_can_read_index_array(
     bool with_mv,
     bool with_global_index /* =true */,
     bool with_domain_index /*=true*/,
-    bool with_spatial_index /*=true*/)
+    bool with_spatial_index /*=true*/,
+    bool with_vector_index /*=true*/)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
@@ -277,6 +278,8 @@ int ObSchemaGetterGuard::get_can_read_index_array(
           // does not need domain index, skip it
         } else if (!with_spatial_index && index_schema->is_spatial_index() && is_geo_default_srid) {
           // skip spatial index when geometry column has not specific srid.
+        } else if (!with_vector_index && index_schema->is_vec_index()) {
+          // skip vector index
         } else if (index_schema->can_read_index() && index_schema->is_index_visible()) {
           index_tid_array[can_read_count++] = simple_index_infos.at(i).table_id_;
         } else {

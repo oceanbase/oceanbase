@@ -458,6 +458,11 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
     arg.load_mode_ = param_.load_mode_;
     arg.compressor_type_ = param_.compressor_type_;
     arg.online_sample_percent_ = param_.online_sample_percent_;
+    arg.exec_ctx_ = arg.session_info_->get_cur_exec_ctx();
+    if (arg.exec_ctx_ == nullptr) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("exec ctx is null", KR(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info =

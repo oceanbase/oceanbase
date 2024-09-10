@@ -8,7 +8,7 @@ function(ob_unittest case)
     add_test(${case} ${case})
     set_tests_properties(${case} PROPERTIES TIMEOUT 300)
   endif()
-  target_link_libraries(${case} PRIVATE oceanbase gtest gmock)
+  target_link_libraries(${case} PRIVATE oceanbase gtest gmock ${HYPERSCAN_LIB})
   target_include_directories(${case}
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest ${CMAKE_SOURCE_DIR}/deps/oblib/unittest)
 endfunction()

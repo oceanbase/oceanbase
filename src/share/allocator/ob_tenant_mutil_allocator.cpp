@@ -18,6 +18,9 @@
 #include "logservice/palf/fetch_log_engine.h"
 #include "logservice/palf/log_shared_task.h"
 #include "logservice/replayservice/ob_replay_status.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "log/ob_log_fast_rebuild_engine.h"         // ObLogFastRebuildEngine
+#endif
 
 namespace oceanbase
 {
@@ -37,6 +40,9 @@ ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
     PALF_FETCH_LOG_TASK_SIZE(sizeof(palf::FetchLogTask)),
     LOG_IO_FLASHBACK_TASK_SIZE(sizeof(palf::LogIOFlashbackTask)),
     LOG_IO_PURGE_THROTTLING_TASK_SIZE(sizeof(palf::LogIOPurgeThrottlingTask)),
+#ifdef OB_BUILD_SHARED_STORAGE
+    OB_FASTREBUILD_LOG_TASK_SIZE(sizeof(logservice::ObFastRebuildLogTask)),
+#endif
     LOG_FILL_CACHE_TASK_SIZE(sizeof(palf::LogFillCacheTask)),
     clog_blk_alloc_(),
     replay_log_task_blk_alloc_(REPLAY_MEM_LIMIT_THRESHOLD),
@@ -51,6 +57,9 @@ ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
     replay_log_task_alloc_(ObMemAttr(tenant_id, ObModIds::OB_LOG_REPLAY_TASK), common::OB_MALLOC_BIG_BLOCK_SIZE, replay_log_task_blk_alloc_),
     log_io_flashback_task_alloc_(LOG_IO_FLASHBACK_TASK_SIZE, ObMemAttr(tenant_id, "Flashback"), choose_blk_size(LOG_IO_FLASHBACK_TASK_SIZE), clog_blk_alloc_, this),
     log_io_purge_throttling_task_alloc_(LOG_IO_PURGE_THROTTLING_TASK_SIZE, ObMemAttr(tenant_id, "PurgeThrottle"), choose_blk_size(LOG_IO_PURGE_THROTTLING_TASK_SIZE), clog_blk_alloc_, this),
+#ifdef OB_BUILD_SHARED_STORAGE
+    palf_fast_rebuild_log_task_alloc_(OB_FASTREBUILD_LOG_TASK_SIZE, ObMemAttr(tenant_id, "FastRebuildLog"), choose_blk_size(OB_FASTREBUILD_LOG_TASK_SIZE), clog_blk_alloc_, this),
+#endif
     log_fill_cache_task_alloc_(LOG_FILL_CACHE_TASK_SIZE, ObMemAttr(tenant_id, "FillCache"), choose_blk_size(LOG_FILL_CACHE_TASK_SIZE), clog_blk_alloc_, this),
     clog_compression_buf_alloc_(ObMemAttr(tenant_id, "LogComBuf"), common::OB_MALLOC_BIG_BLOCK_SIZE, clog_compressing_blk_alloc_)
 {
@@ -85,6 +94,9 @@ void ObTenantMutilAllocator::destroy()
   log_io_purge_throttling_task_alloc_.destroy();
   palf_fetch_log_task_alloc_.destroy();
   replay_log_task_alloc_.destroy();
+#ifdef OB_BUILD_SHARED_STORAGE
+  palf_fast_rebuild_log_task_alloc_.destroy();
+#endif
   log_fill_cache_task_alloc_.destroy();
   clog_compression_buf_alloc_.destroy();
 }
@@ -115,6 +127,9 @@ void ObTenantMutilAllocator::try_purge()
   log_io_purge_throttling_task_alloc_.purge_extra_cached_block(0);
   palf_fetch_log_task_alloc_.purge_extra_cached_block(0);
   replay_log_task_alloc_.purge_extra_cached_block(0);
+#ifdef OB_BUILD_SHARED_STORAGE
+  palf_fast_rebuild_log_task_alloc_.purge_extra_cached_block(0);
+#endif
   log_fill_cache_task_alloc_.purge_extra_cached_block(0);
   clog_compression_buf_alloc_.purge_extra_cached_block(0);
 }
@@ -331,6 +346,26 @@ void ObTenantMutilAllocator::free_log_io_purge_throttling_task(palf::LogIOPurgeT
   }
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+logservice::ObFastRebuildLogTask *ObTenantMutilAllocator::alloc_palf_fast_rebuild_log_task(const int64_t palf_id, const int64_t palf_epoch)
+{
+  logservice::ObFastRebuildLogTask *ret_ptr = NULL;
+  void *ptr = palf_fast_rebuild_log_task_alloc_.alloc();
+  if (NULL != ptr) {
+    ret_ptr = new(ptr)ObFastRebuildLogTask(palf_id, palf_epoch);
+  }
+  return ret_ptr;
+}
+
+void ObTenantMutilAllocator::free_palf_fast_rebuild_log_task(logservice::ObFastRebuildLogTask *ptr)
+{
+  if (OB_LIKELY(NULL != ptr)) {
+    ptr->~ObFastRebuildLogTask();
+    palf_fast_rebuild_log_task_alloc_.free(ptr);
+  }
+}
+#endif
+
 LogFillCacheTask *ObTenantMutilAllocator::alloc_log_fill_cache_task(const int64_t palf_id, const int64_t palf_epoch)
 {
   LogFillCacheTask *ret_ptr = NULL;
@@ -341,6 +376,7 @@ LogFillCacheTask *ObTenantMutilAllocator::alloc_log_fill_cache_task(const int64_
   return ret_ptr;
 }
 
+
 void ObTenantMutilAllocator::free_log_fill_cache_task(palf::LogFillCacheTask *ptr)
 {
   if (OB_LIKELY(NULL != ptr)) {
@@ -348,7 +384,6 @@ void ObTenantMutilAllocator::free_log_fill_cache_task(palf::LogFillCacheTask *pt
     log_fill_cache_task_alloc_.free(ptr);
   }
 }
-
 
 void ObTenantMutilAllocator::set_nway(const int32_t nway)
 {

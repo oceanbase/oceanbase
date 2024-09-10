@@ -46,6 +46,10 @@ int ObAllVirtualMacroBlockMarkerStatus::init (
     marker_status_ = marker_status;
     is_end_ = false;
     start_to_read_ = true;
+    if (GCTX.is_shared_storage_mode()) {
+      // no ref_cnt in shared_storage, return a empty iter;
+      is_end_ = true;
+    }
   }
   return ret;
 }

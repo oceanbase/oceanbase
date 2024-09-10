@@ -50,6 +50,7 @@ int MdsTableBase::advance_state_to(State new_state) const
 
 int MdsTableBase::init(const ObTabletID tablet_id,
                        const share::ObLSID ls_id,
+                       const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
                        ObTabletPointer *pointer,
                        ObMdsTableMgr *p_mgr)
 {
@@ -63,6 +64,7 @@ int MdsTableBase::init(const ObTabletID tablet_id,
   } else {
     tablet_id_ = tablet_id;
     ls_id_ = ls_id;
+    last_inner_recycled_scn_ = mds_ckpt_scn_from_tablet;
     if (OB_NOT_NULL(p_mgr)) {
       mgr_handle_.set_mds_table_mgr(p_mgr);
       debug_info_.do_init_tablet_pointer_ = pointer;
@@ -192,6 +194,7 @@ int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flus
   param.generate_ts_ = ObClockGenerator::getClock();
   param.merge_type_ = compaction::ObMergeType::MDS_MINI_MERGE;
   param.merge_version_ = 0;
+  param.exec_mode_ = compaction::EXEC_MODE_LOCAL;
   if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_mds_table_merge_dag(param))) {
     if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
       MDS_LOG(WARN, "failed to schedule mds table merge dag", K(ret), K(param));

@@ -51,7 +51,9 @@ int ObAllVirtualLSInfo::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(execute(row))) {
-    SERVER_LOG(WARN, "execute fail", K(ret));
+    if (OB_ITER_END != ret) {
+      SERVER_LOG(WARN, "execute fail", KR(ret));
+    }
   }
   return ret;
 }
@@ -190,9 +192,9 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           // tx blocked
           cur_row_.cells_[i].set_int(ls_info.tx_blocked_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 16:
+        case  OB_APP_MIN_COLUMN_ID + 16:
           // required_data_disk_size
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(ls_info.required_data_disk_size_);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

@@ -26,6 +26,7 @@
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_attach_define.h"
 #include "sql/das/ob_das_ir_define.h"
+#include "sql/das/ob_das_vec_define.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
 #include "sql/das/iter/ob_das_iter.h"
@@ -167,6 +168,7 @@ public:
   }
   int allocate_dppr_table_loc();
   ObDASScanCtDef *get_lookup_ctdef();
+  ObDASScanCtDef *get_rowkey_vid_ctdef();
   TO_STRING_KV(K_(pre_query_range),
                K_(flashback_item),
                K_(bnlj_param_idxs),

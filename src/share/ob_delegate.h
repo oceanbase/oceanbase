@@ -59,4 +59,14 @@
     return delegate_obj.func_name(std::forward<Args>(args)...); \
   }
 
+#define DELEGATE_WITH_EXTRA_ARG(delegate_obj, func_name, extra_arg)                \
+  template <typename ...Args>                                                      \
+    int func_name_(Args &&...args) {                                               \
+    return delegate_obj.func_name(std::forward<Args>(args)..., extra_arg);         \
+  }                                                                                \
+  template <typename ...Args>                                                      \
+    int func_name(Args &&...args) {                                                \
+    return func_name_(extra_arg, std::forward<Args>(args)...);                     \
+  }
+
 #endif

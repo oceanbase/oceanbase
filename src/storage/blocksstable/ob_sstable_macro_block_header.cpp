@@ -66,6 +66,17 @@ int64_t ObSSTableMacroBlockHeader::to_string(char* buf, const int64_t buf_len) c
       BUF_PRINTO(column_checksum_[i]);
     }
     J_ARRAY_END();
+    J_COMMA();
+    J_NAME("column_types");
+    J_COLON();
+    J_ARRAY_START();
+    for (int64_t i = 0; i < fixed_header_.column_count_; ++i) {
+      if (0 != i) {
+        J_COMMA();
+      }
+      BUF_PRINTO(column_types_[i]);
+    }
+    J_ARRAY_END();
     J_OBJ_END();
   }
   return pos;

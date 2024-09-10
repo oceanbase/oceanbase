@@ -131,6 +131,7 @@ enum ObExprInfoFlag
   IS_ROWID_SIMPLE_COND, // rowid = const
   IS_ROWID_RANGE_COND,   // rowid belongs to a range
   IS_TABLE_ASSIGN, // update t1 set c1 = const
+  IS_ATTR_EXPR,  // collection attr expr
   IS_EXISTS,
 };
 

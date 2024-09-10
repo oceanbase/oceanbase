@@ -473,6 +473,7 @@ DEFINE_ERROR(OB_AUTOINC_CACHE_NOT_EQUAL, -4400, -1, "HY000", "Autoinc cache's au
 DEFINE_ORACLE_ERROR(OB_ERR_KILL_CLIENT_SESSION, -4401, 4401, "HY000", "Client Session need be killed", 4401, "Client Session need be killed");
 DEFINE_ERROR(OB_ERR_KILL_CLIENT_SESSION_FAILED, -4402, -1, "HY000", "Kill Client Session failed");
 DEFINE_ERROR(OB_IMPROPER_OS_PARAM, -4403, -1, "HY000", "OS params check failed, because the operating system has improper parameter configurations");
+DEFINE_ERROR(OB_IO_TIMEOUT, -4404, 4012, "HY000", "IO timeout");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2328,6 +2329,7 @@ DEFINE_ERROR_DEP(OB_ALLOCATE_TMP_FILE_PAGE_FAILED, -9124, -1, "HY000", "fail to 
 DEFINE_ERROR_DEP(OB_SS_MICRO_CACHE_DISABLED, -9125, -1, "HY000", "ss_micro_cache is disabled");
 DEFINE_ERROR_DEP(OB_SS_CACHE_REACH_MEM_LIMIT, -9126, -1, "HY000", "ss_micro_cache has reached memory limit");
 DEFINE_ERROR(OB_TABLET_STATUS_NO_NEED_TO_SPLIT, -9127, -1, "HY000", "no need to split due to current tablet status");
+
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
@@ -2758,6 +2760,15 @@ DEFINE_ERROR_EXT(OB_EXCEED_QUERY_MEM_LIMIT, -11049, -1, "HY000", "Exceed query m
 DEFINE_ERROR_EXT(OB_ODPS_ERROR, -11050, -1, "HY000", "Odps driver throw exception", "Odps driver throw exception: ExceptionMsg=%s")
 DEFINE_ERROR_EXT(OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH, -11051, -1, "HY000", "Column type mismatch between the ODPS table and the OceanBase table", "Column type mismatch between the ODPS table and the OceanBase table: OdpsColumnType=%s TableColumnType=%s")
 DEFINE_ERROR_EXT(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, -11052, -1, "HY000", "unexpected error for exteran odps table", "unexpected error for exteran odps table:%s")
+DEFINE_ERROR_DEP(OB_JNI_ERROR, -11053, -1, "HY000", "unexpected error for jni")
+DEFINE_ERROR_DEP(OB_JNI_CLASS_NOT_FOUND_ERROR, -11054, -1, "HY000", "class could not be found during jni operation")
+DEFINE_ERROR_DEP(OB_JNI_METHOD_NOT_FOUND_ERROR, -11055, -1, "HY000", "method could not be found during jni operation")
+DEFINE_ERROR_DEP(OB_JNI_ENV_ERROR, -11056, -1, "HY000", "JNI env could not be found")
+DEFINE_ERROR_DEP(OB_JNI_DELETE_REF_ERROR, -11057, -1, "HY000", "JNI env could not delete ref")
+DEFINE_ERROR_DEP(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, -11058, -1, "HY000", "JAVA_HOME could not be found")
+DEFINE_ERROR_DEP(OB_JNI_ENSURE_CAPACTIY_ERROR, -11059, -1, "HY000", "JNI cound not ensure capacity")
+DEFINE_ERROR_DEP(OB_JNI_FIELD_NOT_FOUND_ERROR, -11060, -1, "HY000", "field could not be found during jni operation")
+DEFINE_ERROR_DEP(OB_JNI_OBJECT_NOT_FOUND_ERROR, -11061, -1, "HY000", "object could not be found during jni operation")
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

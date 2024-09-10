@@ -29,6 +29,7 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/ob_storage_schema.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/io/ob_io_struct.h"
 
 
 namespace oceanbase
@@ -38,6 +39,25 @@ using namespace storage;
 using namespace blocksstable;
 using namespace share;
 using namespace share::schema;
+
+
+namespace common
+{
+
+int ObIOTuner::init()
+{
+  int ret = OB_SUCCESS;
+  is_inited_ = true;
+  return ret;
+}
+
+void ObIOTuner::run1()
+{
+ // do nothing
+}
+
+}
+
 
 namespace unittest
 {

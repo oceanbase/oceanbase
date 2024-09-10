@@ -39,6 +39,7 @@ enum ObRoutePolicyType
   // 区别在于返回给OCJ && ObProxy的反馈不同;
   UNMERGE_FOLLOWER_FIRST = 4,
   COLUMN_STORE_ONLY = 5,
+  FORCE_READONLY_ZONE = 6,
   POLICY_TYPE_MAX
 };
 

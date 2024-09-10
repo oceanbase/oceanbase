@@ -430,6 +430,13 @@ public:
                            const int64_t &autoinc_version,
                            bool &need_update_inner_table,
                            common::ObMySQLTransaction &trans);
+
+  static int calculate_idempotent_autoinc_val_for_ddl(AutoincParam *autoinc_param,
+                                                      const int64_t table_all_slice_count,
+                                                      const int64_t table_level_slice_idx,
+                                                      const int64_t slice_row_idx,
+                                                      const int64_t autoinc_range_interval,
+                                                      uint64_t &autoinc_value);
   static int calc_next_value(const uint64_t last_next_value,
                              const uint64_t offset,
                              const uint64_t increment,

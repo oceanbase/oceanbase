@@ -55,6 +55,7 @@ class ObOptStatManager;
 namespace sql
 {
 struct ObStmtPrepareResult;
+struct ObPCResourceMapRule;
 class ObSPIService;
 class ObIVirtualTableIteratorFactory;
 struct ObSqlCtx;
@@ -177,8 +178,6 @@ public:
                             ObPhysicalPlan *phy_plan,
                             ObExecContext &exec_ctx,
                             ObDMLStmt *&stmt,
-                            ObStmtNeedPrivs &stmt_need_privs,
-                            ObStmtOraNeedPrivs &stmt_ora_need_privs,
                             bool ignore_trace_event=false);
 
   //optimize stmt, generate logical_plan

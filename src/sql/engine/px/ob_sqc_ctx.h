@@ -31,6 +31,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 #include "sql/dtl/ob_dtl_msg_type.h"
 #include "sql/engine/px/datahub/components/ob_dh_opt_stats_gather.h"
+#include "sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
 
 namespace oceanbase
 {
@@ -112,6 +113,7 @@ public:
   common::ObSEArray<std::pair<int64_t, int64_t>, 1> init_channel_msg_cnts_; // <op_id, piece_cnt>
   ObSPWinFuncPXWholeMsgP sp_winfunc_whole_msg_proc_;
   ObRDWinFuncPXWholeMsgP rd_winfunc_whole_msg_proc_;
+  ObJoinFilterCountRowWholeMsgP join_filter_count_row_whole_msg_proc_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqcCtx);
 };

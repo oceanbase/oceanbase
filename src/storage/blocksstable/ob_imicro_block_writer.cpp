@@ -42,6 +42,7 @@ void ObMicroBlockDesc::reset()
   column_count_ = 0;
   max_merged_trans_version_ = 0;
   macro_id_.reset();
+  logic_micro_id_.reset();
   block_offset_ = 0;
   block_checksum_ = 0;
   row_count_delta_ = 0;

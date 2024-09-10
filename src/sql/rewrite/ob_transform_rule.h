@@ -64,8 +64,7 @@ struct MvInfo {
           db_schema_(db_schema),
           view_stmt_(view_stmt),
           select_mv_stmt_(select_mv_stmt),
-          mv_intersect_tbl_num_(mv_intersect_tbl_num),
-          has_select_priv_(false) {}
+          mv_intersect_tbl_num_(mv_intersect_tbl_num) {}
 
   TO_STRING_KV(
     K_(mv_id),
@@ -75,8 +74,7 @@ struct MvInfo {
     K_(db_schema),
     K_(view_stmt),
     K_(select_mv_stmt),
-    K_(mv_intersect_tbl_num),
-    K_(has_select_priv)
+    K_(mv_intersect_tbl_num)
   );
 
   bool operator<(const MvInfo &other) {
@@ -91,9 +89,6 @@ struct MvInfo {
   ObSelectStmt *view_stmt_;            // stmt of mv's definition
   ObSelectStmt *select_mv_stmt_;       // stmt of "SELECT * FROM mv;"
   uint64_t mv_intersect_tbl_num_;      // number of tables that appear in both mv and origin query, used for sort mv info
-  ObStmtNeedPrivs mv_need_privs_;      // privilege needed of mv
-  ObStmtOraNeedPrivs mv_ora_need_privs_; // ora privilege needed of mv
-  bool has_select_priv_;
 };
 
 struct ObTransformerCtx
@@ -132,9 +127,7 @@ struct ObTransformerCtx
     push_down_filters_(),
     in_accept_transform_(false),
     iteration_level_(0),
-    mv_stmt_gen_count_(0),
-    stmt_need_privs_(NULL),
-    stmt_ora_need_privs_(NULL)
+    mv_stmt_gen_count_(0)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -205,8 +198,6 @@ struct ObTransformerCtx
   uint64_t iteration_level_;
   ObSEArray<MvInfo, 4, common::ModulePageAllocator, true> mv_infos_; // used to perform mv rewrite
   int64_t mv_stmt_gen_count_;
-  ObStmtNeedPrivs *stmt_need_privs_;
-  ObStmtOraNeedPrivs *stmt_ora_need_privs_;
 };
 
 enum TransMethod

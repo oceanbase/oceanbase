@@ -678,9 +678,12 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid select stmt", K(select_stmt));
     } else if (!session_info_->get_ddl_info().is_ddl() &&
+               !session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility() &&
                 OB_FAIL(check_insert_select_field(*insert_stmt, *select_stmt, is_mock_))) {
       LOG_WARN("check insert select field failed", K(ret), KPC(insert_stmt), KPC(select_stmt));
-    } else if (!session_info_->get_ddl_info().is_ddl() && OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
+    } else if (!session_info_->get_ddl_info().is_ddl() &&
+               !session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility() &&
+                OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
       LOG_WARN("add session id value to select item failed", K(ret));
     } else if (OB_FAIL(add_new_sel_item_for_oracle_label_security_table(insert_stmt->get_insert_table_info(),
                                                                         label_se_columns,
@@ -1104,7 +1107,7 @@ int ObInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_re
       value_desc->set_ref_id(stmt->get_insert_table_info().table_id_, column_ref->get_column_id());
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       value_desc->set_udt_set_id(column_ref->get_udt_set_id());
-      if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
+      if ((ob_is_enumset_tc(column_ref->get_result_type().get_type()) || ob_is_collection_sql_type(column_ref->get_result_type().get_type()))
           && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
         LOG_WARN("failed to set_enum_set_values", K(*column_ref), K(ret));
       }
@@ -1301,7 +1304,9 @@ int ObInsertResolver::resolve_insert_constraint()
   if (OB_ISNULL(insert_stmt = get_insert_stmt()) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(insert_stmt), K(session_info_), K(ret));
-  } else if (session_info_->get_ddl_info().is_ddl() || insert_stmt->has_instead_of_trigger()) {
+  } else if (session_info_->get_ddl_info().is_ddl() ||
+             session_info_->get_ddl_info().is_dummy_ddl_for_inner_visibility() ||
+             insert_stmt->has_instead_of_trigger()) {
     /*do nothing*/
   } else if (OB_ISNULL(table_item = insert_stmt->get_table_item_by_id(
                        insert_stmt->get_insert_table_info().table_id_))) {

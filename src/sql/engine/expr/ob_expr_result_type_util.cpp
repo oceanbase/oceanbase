@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_res_type_map.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -848,6 +849,91 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
     }
   }
 
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
+                                              const ObExprResType &type1,
+                                              const ObExprResType &type2,
+                                              ObExprResType &calc_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else {
+    uint32_t depth = 0;
+    bool is_compatiable = false;
+    ObDataType coll_elem1_type;
+    ObDataType coll_elem2_type;
+    bool l_is_vec = false;
+    bool r_is_vec = false;
+    ObObjType element_type;
+    if (OB_FAIL(ObArrayExprUtils::check_array_type_compatibility(exec_ctx, type1.get_subschema_id(),
+                                                                  type2.get_subschema_id(), is_compatiable))) {
+      LOG_WARN("failed to check array compatibilty", K(ret));
+    } else if (!is_compatiable) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      LOG_WARN("nested type is mismatch", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type1.get_subschema_id(), coll_elem1_type, depth, l_is_vec))) {
+      LOG_WARN("failed to get array element type", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type2.get_subschema_id(), coll_elem2_type, depth, r_is_vec))) {
+      LOG_WARN("failed to get array element type", K(ret));
+    } else if (l_is_vec || r_is_vec) {
+      // cast to vec
+      l_is_vec ? calc_type.set_collection(type1.get_subschema_id()) : calc_type.set_collection(type2.get_subschema_id());
+    } else if (coll_elem1_type.get_obj_type() == coll_elem2_type.get_obj_type() &&
+               coll_elem1_type.get_obj_type() == ObVarcharType) {
+      // use subschema_id whose length is greater
+      if (coll_elem1_type.get_length() > coll_elem2_type.get_length()) {
+        calc_type.set_collection(type1.get_subschema_id());
+      } else {
+        calc_type.set_collection(type2.get_subschema_id());
+      }
+    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type.get_obj_type(), coll_elem2_type.get_obj_type(),
+                                           depth, calc_type, element_type))) {
+      LOG_WARN("failed to get array calc type", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
+                                              const ObObjType &type1,
+                                              const ObObjType &type2,
+                                              uint32_t depth,
+                                              ObExprResType &calc_type,
+                                              ObObjType &element_type)
+{
+  int ret = OB_SUCCESS;
+  ObObjType coll_calc_type = ARITH_RESULT_TYPE[type1][type2];
+  if (ob_is_int_uint(ob_obj_type_class(type1), ob_obj_type_class(type2))) {
+    coll_calc_type = ObIntType;
+  } else if (type1 == ObFloatType && type2 == ObFloatType) {
+    coll_calc_type = ObFloatType;
+  } else if (ob_is_null(type1)) {
+    coll_calc_type = type2;
+  } else if (ob_is_null(type2)) {
+    coll_calc_type = type1;
+  }
+  ObDataType elem_data;
+  uint16_t subschema_id;
+  elem_data.set_obj_type(coll_calc_type);
+  const int MAX_LEN = 256;
+  char type_name[MAX_LEN] = {0};
+  ObString type_info;
+  if (coll_calc_type == ObMaxType) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid subschema type", K(ret), K(type1), K(type2));
+  } else if (OB_FAIL(ObArrayUtil::get_type_name(elem_data, type_name, MAX_LEN, depth))) {
+    LOG_WARN("failed to convert len to string", K(ret));
+  } else if (FALSE_IT(type_info.assign_ptr(type_name, strlen(type_name)))) {
+  } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(type_info, subschema_id))) {
+    LOG_WARN("failed get subschema id", K(ret), K(type_info));
+  } else {
+    calc_type.set_collection(subschema_id);
+    element_type = coll_calc_type;
+  }
   return ret;
 }
 

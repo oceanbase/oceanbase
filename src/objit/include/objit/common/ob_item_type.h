@@ -887,6 +887,7 @@ typedef enum ObItemType
   T_FUN_SYS_GET_PATH = 1818,
   T_FUN_SYS_INNER_DOUBLE_TO_INT = 1819,
   T_FUN_SYS_INNER_DECIMAL_TO_YEAR = 1820,
+  T_FUN_SYS_SPLIT_PART = 1821,
   T_FUN_SYS_VEC_VID = 1900,   // vector index
   T_FUN_SYS_VEC_TYPE = 1901,
   T_FUN_SYS_VEC_VECTOR = 1902,
@@ -2591,6 +2592,8 @@ typedef enum ObItemType
   T_PQ_GBY_HINT = 4734,
   T_PQ_DISTINCT_HINT = 4735,
   T_DISTRIBUTE_BASIC = 4736,
+
+  T_RB_ITERATE_EXPRESSION = 4737,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

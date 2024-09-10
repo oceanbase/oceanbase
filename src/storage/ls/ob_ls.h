@@ -67,6 +67,11 @@
 #include "storage/high_availability/ob_ls_transfer_info.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "storage/ls/ob_ls_transfer_status.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_private_block_gc_task.h"
+#include "storage/shared_storage/prewarm/ob_ls_prewarm_handler.h"
+#endif
+
 
 namespace oceanbase
 {
@@ -101,6 +106,7 @@ struct ObLSVTInfo
   share::SCN tablet_change_checkpoint_scn_;
   share::SCN transfer_scn_;
   bool tx_blocked_;
+  int64_t required_data_disk_size_;
   TO_STRING_KV(K_(ls_id),
                K_(replica_type),
                K_(ls_state),
@@ -112,7 +118,8 @@ struct ObLSVTInfo
                K_(rebuild_seq),
                K_(tablet_change_checkpoint_scn),
                K_(transfer_scn),
-               K_(tx_blocked));
+               K_(tx_blocked),
+               K_(required_data_disk_size));
 };
 
 // 诊断虚表统计信息
@@ -291,6 +298,10 @@ public:
   checkpoint::ObTabletGCHandler *get_tablet_gc_handler() { return &tablet_gc_handler_; }
   ObLSMemberListService *get_member_list_service() { return &member_list_service_; }
   checkpoint::ObTabletEmptyShellHandler *get_tablet_empty_shell_handler() { return &tablet_empty_shell_handler_; }
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObLSPrivateBlockGCHandler& get_ls_private_block_gc_handler() { return ls_private_block_gc_handler_; }
+  ObSSLSPreWarmHandler& get_ls_prewarm_handler() { return ls_prewarm_handler_; }
+#endif
 
   // get ls info
   int get_ls_info(ObLSVTInfo &ls_info);
@@ -357,6 +368,9 @@ public:
   // update the ls meta of ls.
   // @param[in] ls_meta, which is used to update the ls's meta.
   int set_ls_meta(const ObLSMeta &ls_meta);
+
+  int64_t get_ls_epoch() const { return ls_epoch_; }
+  int set_ls_epoch(const int64_t ls_epoch);
   // for ls gc
   int block_tablet_transfer_in();
   int block_tx_start();
@@ -369,10 +383,10 @@ public:
   // @return OB_OP_NOT_ALLOW, if the ls is blocked state there is no ls can transfer in.
   int tablet_transfer_in(const ObTabletID &tablet_id);
 
-  // do the work after slog replay
+  // do the work after storage meta replay
   // 1) rewrite the migration status if it is failed.
   // 2) load inner tablet and start to work if it is a normal ls.
-  int finish_slog_replay();
+  int finish_storage_meta_replay();
 
   // get tablet while replaying clog
   int replay_get_tablet(const common::ObTabletID &tablet_id,
@@ -431,31 +445,43 @@ public:
   int update_ls_meta(const bool update_restore_status,
                      const ObLSMeta &src_ls_meta);
 
-  // int update_id_meta(const int64_t service_type,
-  //                    const int64_t limited_id,
-  //                    const int64_t latest_log_ts,
-  //                    const bool write_slog);
   int get_transfer_scn(share::SCN &scn);
-  DELEGATE_WITH_RET(ls_meta_, update_id_meta, int);
+  int update_id_meta(const int64_t service_type,
+                     const int64_t limited_id,
+                     const share::SCN &latest_scn,
+                     const bool write_slog)
+  {
+    return ls_meta_.update_id_meta(ls_epoch_, service_type, limited_id, latest_scn, write_slog);
+  }
   int set_ls_rebuild();
   // protect in ls lock
   // int set_gc_state(const logservice::LSGCState &gc_state);
   int set_gc_state(const logservice::LSGCState &gc_state);
   int set_gc_state(const logservice::LSGCState &gc_state, const share::SCN &offline_scn);
-  // int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
-  //                         const share::SCN &clog_checkpoint_scn,
-  //                         const bool write_slog = true);
-  DELEGATE_WITH_RET(ls_meta_, set_clog_checkpoint, int);
+  int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
+                          const share::SCN &clog_checkpoint_scn,
+                          const bool write_slog)
+  {
+    return ls_meta_.set_clog_checkpoint(ls_epoch_, clog_checkpoint_lsn, clog_checkpoint_scn, write_slog);
+  }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, share::SCN);
-  DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN &);
+  DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN);
   DELEGATE_WITH_RET(ls_meta_, get_saved_info, int);
-  // int build_saved_info();
-  DELEGATE_WITH_RET(ls_meta_, build_saved_info, int);
-  // int clear_saved_info_without_lock();
-  DELEGATE_WITH_RET(ls_meta_, clear_saved_info, int);
+  int build_saved_info()
+  {
+    return ls_meta_.build_saved_info(ls_epoch_);
+  }
+  int clear_saved_info()
+  {
+    return ls_meta_.clear_saved_info(ls_epoch_);
+  }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_rebuild_seq, int64_t);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_scn, share::SCN);
-  DELEGATE_WITH_RET(ls_meta_, set_tablet_change_checkpoint_scn, int);
+
+  int set_tablet_change_checkpoint_scn(const share::SCN &tablet_change_checkpoint_scn)
+  {
+    return ls_meta_.set_tablet_change_checkpoint_scn(ls_epoch_, tablet_change_checkpoint_scn);
+  }
   int set_restore_status(
       const share::ObLSRestoreStatus &restore_status,
       const int64_t rebuild_seq);
@@ -479,10 +505,11 @@ public:
   // @param [in] offline ts.
   // int get_offline_scn(const share::SCN &offline_scn);
   DELEGATE_WITH_RET(ls_meta_, get_offline_scn, int);
-  // update replayable point
   // @param [in] replayable point.
-  // int update_ls_replayable_point(const int64_t replayable_point);
-  DELEGATE_WITH_RET(ls_meta_, update_ls_replayable_point, int);
+  int update_ls_replayable_point(const share::SCN &replayable_point)
+  {
+    return ls_meta_.update_ls_replayable_point(ls_epoch_, replayable_point);
+  }
   // update replayable point
   // get replayable point
   // @param [in] replayable point
@@ -499,7 +526,10 @@ public:
                                          ObLSMetaPackage &meta_package,
                                          common::ObIArray<common::ObTabletID> &tablet_ids);
   DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
-  DELEGATE_WITH_RET(ls_meta_, set_rebuild_info, int);
+  int set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
+  {
+    return ls_meta_.set_rebuild_info(ls_epoch_, rebuild_info);
+  }
   DELEGATE_WITH_RET(ls_meta_, get_rebuild_info, int);
   DELEGATE_WITH_RET(ls_meta_, get_create_type, int);
   DELEGATE_WITH_RET(ls_meta_, get_store_format, ObLSStoreFormat);
@@ -966,9 +996,21 @@ public:
       bool &allow_read);
   int set_ls_allow_to_read();
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  int upload_major_compaction_tablet_meta(
+    const common::ObTabletID &tablet_id,
+    const ObUpdateTableStoreParam &param,
+    const int64_t start_macro_seq);
+
+  // write tablet_id_set to pending_free_array when ls replica remove for shared storage
+  DELEGATE_WITH_RET(ls_tablet_svr_, write_tablet_id_set_to_pending_free, int);
+#endif
+
 private:
   void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
   void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
+
+
 
 private:
   // StorageBaseUtil
@@ -1029,6 +1071,10 @@ private:
   checkpoint::ObTabletGCHandler tablet_gc_handler_;
   // for update tablet to empty shell
   checkpoint::ObTabletEmptyShellHandler tablet_empty_shell_handler_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for share storage private dir micro block gc
+  ObLSPrivateBlockGCHandler ls_private_block_gc_handler_;
+#endif
   // record reserved snapshot
   ObLSReservedSnapshotMgr reserved_snapshot_mgr_;
   ObLSResvSnapClogHandler reserved_snapshot_clog_handler_;
@@ -1037,6 +1083,10 @@ private:
   ObLSMemberListService member_list_service_;
   ObLSBlockTxService block_tx_service_;
   table::ObTenantTabletTTLMgr tablet_ttl_mgr_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for shared storage ls replica prewarm
+  ObSSLSPreWarmHandler ls_prewarm_handler_;
+#endif
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -1047,6 +1097,7 @@ private:
   int64_t state_seq_;
   uint64_t switch_epoch_;// started from 0, odd means online, even means offline
   ObLSMeta ls_meta_;
+  int64_t ls_epoch_;
   observer::ObIMetaReport *rs_reporter_;
   ObLSLock lock_;
   common::ObMultiModRefMgr<ObLSGetMod> ref_mgr_;

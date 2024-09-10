@@ -1759,7 +1759,8 @@ public:
        is_deterministic_(true),
        partition_id_calc_type_(CALC_INVALID),
        local_session_var_(),
-       local_session_var_id_(OB_INVALID_INDEX_INT64)
+       local_session_var_id_(OB_INVALID_INDEX_INT64),
+       attr_exprs_()
   {
   }
 
@@ -1783,7 +1784,8 @@ public:
        runtime_filter_type_(NOT_INIT_RUNTIME_FILTER_TYPE),
        with_null_equal_cond_(false),
        local_session_var_(&alloc),
-       local_session_var_id_(OB_INVALID_INDEX_INT64)
+       local_session_var_id_(OB_INVALID_INDEX_INT64),
+       attr_exprs_()
   {
   }
   virtual ~ObRawExpr();
@@ -1992,6 +1994,7 @@ public:
     partition_id_calc_type_ = calc_type; }
   bool is_json_expr() const;
   bool is_multiset_expr() const;
+  bool is_vector_sort_expr() const { return get_expr_type() == T_FUN_SYS_L2_DISTANCE; }
   PartitionIdCalcType get_partition_id_calc_type() const { return partition_id_calc_type_; }
   void set_may_add_interval_part(MayAddIntervalPart flag) {
     may_add_interval_part_ = flag;
@@ -2037,6 +2040,12 @@ public:
   int extract_local_session_vars_recursively(ObIArray<const ObSessionSysVar *> &var_array);
   void set_local_session_var_id(int64_t idx) { local_session_var_id_ = idx; }
   int64_t get_local_session_var_id() { return local_session_var_id_; }
+  int64_t get_attr_count() const { return attr_exprs_.count(); }
+  const ObRawExpr *get_attr_expr(int64_t index) const;
+  ObRawExpr *get_attr_expr(int64_t index);
+  common::ObIArray<ObRawExpr *> &get_attr_exprs() { return attr_exprs_; }
+  const common::ObIArray<ObRawExpr *> &get_attr_exprs() const { return attr_exprs_; }
+  int add_attr_expr(ObRawExpr *expr) { return attr_exprs_.push_back(expr); }
   int get_expr_dep_session_vars_recursively(const ObBasicSessionInfo *session,
                                             ObLocalSessionVar &dep_vars);
 
@@ -2086,6 +2095,7 @@ protected:
   bool with_null_equal_cond_;
   ObLocalSessionVar local_session_var_;
   int64_t local_session_var_id_;
+  common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> attr_exprs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExpr);
 };
@@ -2746,6 +2756,11 @@ public:
   inline bool is_default_on_null_identity_column() const { return share::schema::ObSchemaUtils::is_default_on_null_identity_column(column_flags_); }
   inline bool is_fulltext_column() const { return share::schema::ObSchemaUtils::is_fulltext_column(column_flags_); }
   inline bool is_doc_id_column() const { return share::schema::ObSchemaUtils::is_doc_id_column(column_flags_); }
+  inline bool is_vec_vid_column() const { return share::schema::ObSchemaUtils::is_vec_vid_column(column_flags_); }
+  inline bool is_vec_vector_column() const { return share::schema::ObSchemaUtils::is_vec_vector_column(column_flags_); }
+  inline bool is_vec_type_column() const { return share::schema::ObSchemaUtils::is_vec_type_column(column_flags_); }
+  inline bool is_vec_scn_column() const { return share::schema::ObSchemaUtils::is_vec_scn_column(column_flags_); }
+  inline bool is_vec_index_column() const {return share::schema::ObSchemaUtils::is_vec_index_column(column_flags_);}
   inline bool is_word_segment_column() const { return column_name_.prefix_match(OB_WORD_SEGMENT_COLUMN_NAME_PREFIX); }
   inline bool is_word_count_column() const { return column_name_.prefix_match(OB_WORD_COUNT_COLUMN_NAME_PREFIX); }
   inline bool is_spatial_generated_column() const { return share::schema::ObSchemaUtils::is_spatial_generated_column(column_flags_); }
@@ -2756,6 +2771,7 @@ public:
   inline bool is_table_part_key_column() const { return column_flags_ & TABLE_PART_KEY_COLUMN_FLAG; }
   inline bool is_table_part_key_org_column() const { return column_flags_ & TABLE_PART_KEY_COLUMN_ORG_FLAG; }
   inline bool has_table_alias_name() const { return column_flags_ & TABLE_ALIAS_NAME_FLAG; }
+  void del_column_flag(uint64_t flag) { column_flags_ &= ~flag; }
   void set_column_flags(uint64_t column_flags) { column_flags_ = column_flags; }
   void set_table_alias_name() { column_flags_ |= TABLE_ALIAS_NAME_FLAG; }
   void set_table_part_key_column() { column_flags_ |= TABLE_PART_KEY_COLUMN_FLAG; }

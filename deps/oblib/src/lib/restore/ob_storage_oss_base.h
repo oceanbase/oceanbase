@@ -62,6 +62,7 @@ int init_oss_env();
 // Thread safe guaranteed by user.
 void fin_oss_env();
 
+int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src);
 class ObStorageOssStaticVar
 {
 public:
@@ -107,8 +108,14 @@ public:
   char oss_domain_[MAX_OSS_ENDPOINT_LENGTH];
   char oss_id_[MAX_OSS_ID_LENGTH];
   char oss_key_[MAX_OSS_KEY_LENGTH];
-  int64_t delete_mode_;
+  char *oss_sts_token_;
+  // "阿里云STS服务返回的安全令牌（STS Token）的长度不固定，强烈建议您不要假设安全令牌的最大长度。"
+  // therefore, use allocator to alloc mem for sts_token dynamically
+  common::ObArenaAllocator allocator_;
+  ObStorageDeleteMode delete_mode_;
   bool is_inited_;
+
+  TO_STRING_KV(K_(is_inited), K_(delete_mode), K_(oss_domain), K_(oss_id));
 };
 
 class ObStorageOssBase
@@ -119,7 +126,6 @@ public:
 
   void reset();
   int init(const common::ObString &storage_info);
-  int reinit_oss_option();
   int init_oss_options(aos_pool_t *&aos_pool, oss_request_options_t *&oss_option);
   virtual bool is_inited();
   int get_oss_file_meta(const common::ObString &bucket, const common::ObString &object,
@@ -159,7 +165,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssWriter);
 };
 
-class ObStorageOssMultiPartWriter: public ObStorageOssBase, public ObIStorageMultiPartWriter
+class ObStorageOssMultiPartWriter: public ObStorageOssBase,
+                                   public ObIStorageMultiPartWriter,
+                                   public ObStoragePartInfoHandler
 {
 
 public:
@@ -191,6 +199,31 @@ private:
   int64_t file_length_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssMultiPartWriter);
+};
+
+class ObStorageParallelOssMultiPartWriter: public ObStorageOssBase,
+                                           public ObIStorageParallelMultipartWriter,
+                                           public ObStoragePartInfoHandler
+{
+
+public:
+  ObStorageParallelOssMultiPartWriter();
+  virtual ~ObStorageParallelOssMultiPartWriter();
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override;
+  virtual int upload_part(const char *buf, const int64_t size, const int64_t part_id) override;
+  virtual int complete() override;
+  virtual int abort() override;
+  virtual int close() override;
+  virtual bool is_opened() const override { return is_opened_; }
+
+private:
+  bool is_opened_;
+  common::ObString bucket_;
+  common::ObString object_;
+  aos_string_t upload_id_;
+  common::ObArenaAllocator allocator_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObStorageParallelOssMultiPartWriter);
 };
 
 class ObStorageOssReader: public ObStorageOssBase, public ObIStorageReader
@@ -234,6 +267,10 @@ public:
   //oss no dir
   virtual int mkdir(const common::ObString &uri);
   virtual int del_file(const common::ObString &uri);
+  virtual int batch_del_files(
+      const ObString &uri,
+      hash::ObHashMap<ObString, int64_t> &files_to_delete,
+      ObIArray<int64_t> &failed_files_idx) override;
   virtual int list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   virtual int list_files(const common::ObString &uri, ObStorageListCtxBase &list_ctx);
   virtual int del_dir(const common::ObString &uri);
@@ -256,6 +293,7 @@ private:
       const ObString &bucket, const char *full_dir_path,
       const int64_t max_ret, const char *delimiter,
       const char *next_marker, oss_list_object_params_t *&params);
+private:
   bool is_opened_;
   common::ObObjectStorageInfo *storage_info_;
 };

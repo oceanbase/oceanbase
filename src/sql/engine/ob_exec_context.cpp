@@ -108,6 +108,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     frame_cnt_(0),
     op_kit_store_(),
     convert_allocator_(nullptr),
+    mem_context_(nullptr),
+    pwj_map_(nullptr),
     group_pwj_map_(nullptr),
     calc_type_(CALC_NORMAL),
     fixed_id_(OB_INVALID_ID),
@@ -132,6 +134,11 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     dblink_snapshot_map_(),
     user_logging_ctx_(),
     is_online_stats_gathering_(false),
+    is_ddl_idempotent_auto_inc_(false),
+    table_all_slice_count_(0),
+    table_level_slice_idx_(0),
+    slice_row_idx_(0),
+    autoinc_range_interval_(0),
     lob_access_ctx_(nullptr)
 {
 }
@@ -182,6 +189,10 @@ ObExecContext::~ObExecContext()
   if (OB_LIKELY(NULL != convert_allocator_)) {
     DESTROY_CONTEXT(convert_allocator_);
     convert_allocator_ = NULL;
+  }
+  if (OB_LIKELY(NULL != mem_context_)) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
   }
   admission_addr_map_.destroy();
   if (!temp_expr_ctx_map_.created()) {
@@ -619,6 +630,32 @@ int ObExecContext::get_convert_charset_allocator(ObArenaAllocator *&allocator)
   }
   if (OB_SUCC(ret)) {
     allocator = &convert_allocator_->get_arena_allocator();
+  }
+
+  return ret;
+}
+
+int ObExecContext::get_malloc_allocator(ObIAllocator *&allocator)
+{
+  int ret = OB_SUCCESS;
+  allocator = NULL;
+  if (OB_ISNULL(mem_context_)) {
+    if (OB_ISNULL(my_session_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("session is null", K(ret));
+    } else {
+      lib::ContextParam param;
+      param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
+           .set_mem_attr(my_session_->get_effective_tenant_id(),
+                         common::ObModIds::OB_SQL_EXPR_CALC,
+                         common::ObCtxIds::DEFAULT_CTX_ID);
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+        SQL_ENG_LOG(WARN, "create entity failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    allocator = &mem_context_->get_malloc_allocator();
   }
 
   return ret;
@@ -1152,6 +1189,21 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlU
   return ret;
 }
 
+int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_reserved_subschema_id(subschema_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "unexpected subschema id", K(ret), K(subschema_id), K(lbt()));
+  } else if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for subschema mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_sqludt_meta_by_subschema_id(subschema_id, sub_meta);
+  }
+  return ret;
+}
+
 int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                               uint16_t &subschema_id,
                                               share::schema::ObSchemaGetterGuard *schema_guard)
@@ -1169,6 +1221,31 @@ int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
   return ret;
 }
 
+int ObExecContext::get_subschema_id_by_collection_elem_type(ObNestedType coll_type,
+                                                            const ObDataType &elem_type,
+                                                            uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_collection_elem_type(coll_type, elem_type, subschema_id);
+  }
+  return ret;
+}
+
+int ObExecContext::get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_type_string(type_string, subschema_id);
+  }
+  return ret;
+}
 
 int ObExecContext::get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx)
 {

@@ -30,6 +30,7 @@
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
 #include "share/table/ob_ttl_util.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -1542,7 +1543,17 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
         } else {
           sort_item.prefix_len_ = 0;
         }
-
+        if (OB_SUCC(ret)) {
+          const ObColumnSchemaV2 *column_schema = NULL;
+          if (is_oracle_mode()) { // oracle mode is not support vector column yet
+          } else if (OB_NOT_NULL(column_schema = table_schema_->get_column_schema(sort_item.column_name_))) {
+            if (ob_is_collection_sql_type(column_schema->get_data_type()) && index_keyname_ != VEC_KEY) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not support index create on vector column yet", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector column is");
+            }
+          }
+        }
         if (OB_FAIL(ret)) {
           // do nothing
         } else if (index_keyname_ == FTS_KEY) {
@@ -1556,6 +1567,11 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
             SQL_RESV_LOG(WARN, "check fts index constraint fail",K(ret),
                 K(sort_item.column_name_));
           }
+        } else if (index_keyname_ == VEC_KEY) {
+          // TODO@xiajin
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support alter table to modify vector index yet", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table to modify vector index is");
         } else { // spatial index, NOTE resolve_spatial_index_constraint() will set index_keyname
           ObSEArray<ObColumnSchemaV2 *, 8> resolved_cols;
           ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();

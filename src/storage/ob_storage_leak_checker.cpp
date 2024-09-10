@@ -37,7 +37,10 @@ int ObStorageCheckerKey::hash(uint64_t &hash_value) const
   int ret = OB_SUCCESS;
   hash_value = 0;
   if (nullptr != handle_) {
-    ret = murmurhash(&handle_, sizeof(handle_), hash_value);
+    hash_value = murmurhash(&handle_, sizeof(handle_), hash_value);
+  } else {
+    ret = OB_STATE_NOT_MATCH;
+    COMMON_LOG(WARN, "[STORAGE-CHECKER] handle is null, cannot get hash value", K(ret));
   }
   return ret;
 }
@@ -66,8 +69,7 @@ ObStorageCheckerValue::ObStorageCheckerValue(const ObStorageCheckerValue &other)
 int ObStorageCheckerValue::hash(uint64_t &hash_value) const
 {
   int ret = OB_SUCCESS;
-  hash_value = 0;
-  ret = murmurhash(bt_, sizeof(bt_), hash_value);
+  hash_value = murmurhash(bt_, sizeof(bt_), hash_value);
   return ret;
 }
 

@@ -1561,6 +1561,7 @@ class SqlKeywords:
          CURSOR_NAME
          DATA
          DATAFILE
+         DATA_DISK_SIZE
          DATE
          DATE_ADD
          DATE_SUB

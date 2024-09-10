@@ -18,6 +18,9 @@
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
+#include "share/ob_vec_index_builder_util.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -156,6 +159,12 @@ int ObCreateIndexResolver::resolve_index_column_node(
       SQL_RESV_LOG(WARN, "add session id key failed", K(ret));
     }
     bool cnt_func_index = false;
+    const bool is_vec_index = (index_keyname_ == INDEX_KEYNAME::VEC_KEY);
+    if (is_vec_index && index_column_node->num_child_ >= 2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("multi column of vector index is not support yet", K(ret), K(index_column_node->num_child_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi vector index column is");
+    }
     for (int32_t i = 0; OB_SUCC(ret) && i < index_column_node->num_child_; ++i) {
       ParseNode *col_node = index_column_node->children_[i];
       ObColumnSortItem sort_item;
@@ -184,6 +193,17 @@ int ObCreateIndexResolver::resolve_index_column_node(
           LOG_WARN("not support dynaimic create multivlaue index", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support dynaimic create multivlaue index");
         }
+        if (OB_SUCC(ret)) {
+          const ObColumnSchemaV2 *column_schema = NULL;
+          if (is_oracle_mode()) { // oracle mode is not support vector column yet
+          } else if (OB_NOT_NULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
+            if (ob_is_collection_sql_type(column_schema->get_data_type()) && index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not support index create on vector column yet", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector column is");
+            }
+          }
+        }
       }
       // 前缀索引的前缀长度
       if (OB_FAIL(ret)) {
@@ -210,6 +230,17 @@ int ObCreateIndexResolver::resolve_index_column_node(
                                                  index_keyname_value))) {
           SQL_RESV_LOG(WARN, "check fts index constraint fail",K(ret),
               K(sort_item.column_name_));
+        }
+      } else if (index_keyname_ == INDEX_KEYNAME::VEC_KEY) {
+        if (sort_item.is_func_index_) {
+          ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+          LOG_WARN("Functional index for vector index is not supported.", K(ret), K(sort_item));
+        } else if (OB_FAIL(resolve_vec_index_constraint(*tbl_schema,
+                                                        *schema_checker_,
+                                                        sort_item.column_name_,
+                                                        index_keyname_value,
+                                                        table_option_node))) {
+          SQL_RESV_LOG(WARN, "check vec index constraint fail",K(ret), K(sort_item.column_name_));
         }
       } else { // spatial index, NOTE resolve_spatial_index_constraint() will set index_keyname
         bool is_explicit_order = (NULL != col_node->children_[2]
@@ -503,7 +534,6 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     stmt_ = crt_idx_stmt;
     if_not_exist_node = parse_tree.children_[7];
   }
-
   // 将session中的信息添写到 stmt 的 arg 中
   // 包括 nls_xx_format
   if (OB_SUCC(ret)) {
@@ -653,6 +683,18 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve hints failed", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    ObCreateIndexArg &index_arg = crt_idx_stmt->get_create_index_arg();
+    if (is_vec_index(index_arg.index_type_)) {
+      index_arg.index_schema_.set_index_params(index_params_);
+      if (tbl_schema->is_view_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create vector index on view table is not supported",
+            KR(ret), K(tbl_schema->get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on view table is");
+      }
+    }
+  }
 
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
     OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
@@ -763,6 +805,21 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
         // set type to fts_index_aux first, append other fts arg later
         index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
       }
+    } else if (INDEX_KEYNAME::VEC_KEY == index_keyname_) {
+      uint64_t tenant_data_version = 0;
+      uint64_t tenant_id = session_info_->get_effective_tenant_id();
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant data version is less than 4.3.3, create vector index on existing table not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
+      } else if (global_) {
+        // TODO @lhd support global index?
+        ret = OB_NOT_SUPPORTED;
+      } else {
+        index_arg.index_type_ = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
+      }
     }
     index_arg.data_table_id_ = data_table_id_;
     index_arg.index_table_id_ = index_table_id_;
@@ -771,6 +828,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
     index_arg.index_option_.use_bloom_filter_ = use_bloom_filter_;
     index_arg.index_option_.progressive_merge_num_ = progressive_merge_num_;
     index_arg.index_option_.index_attributes_set_ = index_attributes_set_;
+    index_arg.index_option_.parser_name_ = parser_name_;
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_schema_.set_data_table_id(data_table_id_);
     index_arg.index_schema_.set_table_id(index_table_id_);
@@ -778,6 +836,9 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
     create_index_stmt->set_comment(comment_);
     create_index_stmt->set_tablespace_id(tablespace_id_);
     if (OB_FAIL(ret)) {
+    } else if (INDEX_KEYNAME::VEC_KEY == index_keyname_ &&
+               OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(allocator_, index_arg.index_type_, index_arg.index_name_, index_arg.index_name_))) {
+      LOG_WARN("generate vec parser name failed", K(ret), K(index_arg));
     } else if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
       LOG_WARN("fail to set encryption str", K(ret));
     }

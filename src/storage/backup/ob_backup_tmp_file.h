@@ -157,7 +157,7 @@ int ObBackupIndexBufferNode::get_backup_index(T &backup_index)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "failed to alloc memory", K(ret), K(need_read_size));
   } else if (FALSE_IT(io_info.buf_ = buf)) {
-  } else if (OB_FAIL(tmp_file::ObTenantTmpFileManager::get_instance().pread(io_info, read_offset_, handle))) {
+  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->pread(io_info, read_offset_, handle))) {
     OB_LOG(WARN, "failed to pread from tmp file", K(ret), K(io_info), K_(read_offset), K(need_read_size));
   } else {
     blocksstable::ObBufferReader buffer_reader(buf, need_read_size);

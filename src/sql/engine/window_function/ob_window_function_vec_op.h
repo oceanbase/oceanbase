@@ -71,7 +71,16 @@ public:
     return rd_sort_cmp(row_meta, l_row, r_row, rd_pby_sort_cnt_, rd_sort_collations_.count(),
                        cmp_ret);
   }
+
 private:
+  int rd_gen_rank_patches(RDWinFuncPXPieceMsgCtx &msg_ctx, ObEvalCtx &eval_ctx,
+                          const int64_t part_info_idx, const int64_t res_idx,
+                          const WinFuncInfo &wf_info, LastCompactRow &prev_rank_res,
+                          LastCompactRow &first_row_patch, LastCompactRow &last_row_patch) const;
+  int rd_gen_agg_patches(RDWinFuncPXPieceMsgCtx &msg_ctx, ObEvalCtx &eval_ctx,
+                         const int64_t part_info_idx, const int64_t res_idx,
+                         const WinFuncInfo &wf_info, LastCompactRow &first_row_patch,
+                         LastCompactRow &last_row_patch) const;
   DISALLOW_COPY_AND_ASSIGN(ObWindowFunctionVecSpec);
 };
 

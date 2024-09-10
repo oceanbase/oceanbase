@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_less_than.h"
 #include "sql/engine/expr/ob_expr_div.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_estimate_ndv.h"
 #include "sql/engine/user_defined_function/ob_udf_util.h"
@@ -85,6 +86,7 @@ OB_DEF_SERIALIZE(ObAggrInfo)
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ENCODE(*dll_udf_);
   }
+  OB_UNIS_ENCODE(distinct_hash_funcs_);
   return ret;
 }
 
@@ -133,6 +135,7 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
       }
     }
   }
+  OB_UNIS_DECODE(distinct_hash_funcs_);
   return ret;
 }
 
@@ -172,6 +175,7 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ADD_LEN(*dll_udf_);
   }
+  OB_UNIS_ADD_LEN(distinct_hash_funcs_);
   return len;
 }
 
@@ -251,6 +255,8 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
     LOG_WARN("fail to assign grouping_idxs_", K(ret));
   } else if (OB_FAIL(group_idxs_.assign(rhs.group_idxs_))) {
     LOG_WARN("fail to assign group_idxs_", K(ret));
+  } else if (OB_FAIL(distinct_hash_funcs_.assign(rhs.distinct_hash_funcs_))) {
+    LOG_WARN("fail to assign distinct_hash_funcs_", K(ret));
   }
   return ret;
 }
@@ -384,6 +390,7 @@ int64_t ObAggregateProcessor::AggrCell::to_string(char *buf, const int64_t buf_l
        K_(tiny_num_int),
        K_(tiny_num_uint),
        K_(is_tiny_num_used),
+       K_(need_advance_collect),
        K_(iter_result),
        KPC_(extra));
   J_OBJ_END();
@@ -411,6 +418,7 @@ int ObAggregateProcessor::ExtraResult::init_distinct_set(const uint64_t tenant_i
     ObIOEventObserver *io_event_observer)
 {
   int ret = OB_SUCCESS;
+  need_rewind_ = need_rewind;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
@@ -430,6 +438,7 @@ int ObAggregateProcessor::ExtraResult::init_distinct_set(const uint64_t tenant_i
       LOG_WARN("init distinct set failed", K(ret));
     } else {
       unique_sort_op_->set_io_event_observer(io_event_observer);
+      is_inited_ = true;
     }
   }
 
@@ -438,6 +447,405 @@ int ObAggregateProcessor::ExtraResult::init_distinct_set(const uint64_t tenant_i
       unique_sort_op_->~ObUniqueSortImpl();
       alloc_.free(unique_sort_op_);
       unique_sort_op_ = NULL;
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::ObSigResultHolder::init(const common::ObIArray<ObExpr *> &exprs,
+                                                  ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(inited_)) {
+    // do nothing
+  } else {
+    exprs_ = &exprs;
+    eval_ctx_ = &eval_ctx;
+    datums_ = static_cast<ObDatum *>(
+      eval_ctx.exec_ctx_.get_allocator().alloc(exprs.count() * sizeof(*datums_)));
+    if (OB_ISNULL(datums_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(exprs.count()));
+    }
+    inited_ = true;
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::ObSigResultHolder::save()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == datums_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    for (int64_t i = 0; i < exprs_->count(); i++) {
+      ObExpr *e = exprs_->at(i);
+      datums_[i] = e->locate_expr_datum(*eval_ctx_);
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::ObSigResultHolder::restore()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == datums_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    for (int64_t i = 0; i < exprs_->count(); i++) {
+      ObExpr *e = exprs_->at(i);
+      e->locate_expr_datum(*eval_ctx_) = datums_[i];
+    }
+  }
+  return ret;
+}
+
+void ObAggregateProcessor::HashBasedDistinctExtraResult::reuse()
+{
+  if (nullptr != hp_infras_ && hp_infras_mgr_->is_inited()) {
+    hp_infras_mgr_->free_one_hp_infras(hp_infras_);
+  }
+  flags_ = 0;
+  hp_infras_ = nullptr;
+  brs_holder_.reset();
+  ExtraResult::reuse();
+  int ret = OB_SUCCESS;
+  LOG_TRACE("extra result reuse");
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::rewind()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != hp_infras_ && need_rewind_) {
+    if (OB_FAIL(hp_infras_->rewind())) {
+      LOG_WARN("rewind iterator failed", K(ret));
+    } else {
+      got_row_ = false;
+    }
+  } else if (nullptr != unique_sort_op_ && need_rewind_) {
+    unique_sort_op_->rewind();
+  }
+  LOG_TRACE("extra result rewind");
+  return ret;
+}
+
+ObAggregateProcessor::HashBasedDistinctExtraResult::~HashBasedDistinctExtraResult()
+{
+  reuse();
+  if (nullptr != hash_values_for_batch_) {
+    alloc_.free(hash_values_for_batch_);
+    hash_values_for_batch_ = nullptr;
+  }
+  if (nullptr != my_skip_) {
+    alloc_.free(my_skip_);
+    my_skip_ = nullptr;
+  }
+  brs_holder_.destroy();
+  hp_infras_ = nullptr;
+  aggr_info_ = nullptr;
+  hp_infras_mgr_ = nullptr;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::init_my_skip(const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  void *data = nullptr;
+  if (OB_ISNULL(data = alloc_.alloc(ObBitVector::memory_size(batch_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to init bit vector", K(ret));
+  } else {
+    my_skip_ = to_bit_vector(data);
+    my_skip_->reset(batch_size);
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::init_hp_infras()
+{
+  int ret = OB_SUCCESS;
+  if (inited_hp_infras_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_FAIL(hp_infras_mgr_->init_one_hp_infras(need_rewind_, &aggr_info_->distinct_collations_,
+    &aggr_info_->distinct_cmp_funcs_, &aggr_info_->distinct_hash_funcs_, hp_infras_))) {
+    LOG_WARN("failed to init hash partition infrastructure", K(ret));
+  } else {
+    inited_hp_infras_ = true;
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::init_distinct_set(
+    const ObAggrInfo &aggr_info, const bool need_rewind,
+    HashPartInfrasMgr &hp_infras_mgr, ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  hp_infras_mgr_ = &hp_infras_mgr;
+  aggr_info_ = &aggr_info;
+  need_rewind_ = need_rewind;
+  const int64_t tenant_id = eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+  } else if (!hp_infras_mgr.is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hash part infras group not initialized", K(ret));
+  } else if (OB_FAIL(srs_holder_.init(aggr_info.param_exprs_, eval_ctx))) {
+    LOG_WARN("failed to init single result holder", K(ret));
+  } else if (eval_ctx.max_batch_size_ > 0) {
+    if (OB_ISNULL(hash_values_for_batch_
+                  = static_cast<uint64_t *> (alloc_.alloc(eval_ctx.max_batch_size_ * sizeof(uint64_t))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to init hash values for batch", K(ret), K(eval_ctx.max_batch_size_));
+    } else if (OB_FAIL(init_my_skip(eval_ctx.max_batch_size_))) {
+      LOG_WARN("failed to init my skip", K(ret), K(eval_ctx.max_batch_size_));
+    } else if (OB_FAIL(brs_holder_.init(aggr_info.param_exprs_, eval_ctx, &alloc_))) {
+      LOG_WARN("failed to init result holder", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != hash_values_for_batch_) {
+      alloc_.free(hash_values_for_batch_);
+      hash_values_for_batch_ = nullptr;
+    }
+    if (nullptr != my_skip_) {
+      alloc_.free(my_skip_);
+      my_skip_ = nullptr;
+    }
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::insert_row(
+    const common::ObIArray<ObExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  bool exists = false;
+  bool inserted = false;
+  if (!inited_hp_infras_ && OB_FAIL(init_hp_infras())) {
+    LOG_WARN("failed to init hash partition infrastructure", K(ret));
+  } else if (OB_FAIL(hp_infras_->insert_row(exprs, exists, inserted))) {
+    LOG_WARN("failed to insert row", K(ret));
+  } else {
+    LOG_DEBUG("succ to insert row", K(exists), K(inserted));
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::insert_row_for_batch(
+    const common::ObIArray<ObExpr*> &exprs,
+    const int64_t batch_size,
+    const ObBitVector *skip,
+    const int64_t start_pos)
+{
+  int ret = OB_SUCCESS;
+  ObBitVector *output_vec = nullptr;
+  if (OB_ISNULL(my_skip_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("my_skip_ is not init", K(ret), K(my_skip_));
+  } else if (start_pos > 0) {
+    my_skip_->deep_copy(*skip, batch_size);
+    for (int64_t i = 0; i < start_pos; i++) {
+      my_skip_->set(i);
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!inited_hp_infras_ && OB_FAIL(init_hp_infras())) {
+    LOG_WARN("failed to init hash partition infrastructure", K(ret));
+  } else if (OB_FAIL(hp_infras_->calc_hash_value_for_batch(exprs,
+                                                    batch_size,
+                                                    start_pos > 0 ? my_skip_ : skip,
+                                                    hash_values_for_batch_))) {
+    LOG_WARN("failed to calc hash values batch", K(ret));
+  } else if (OB_FAIL(hp_infras_->insert_row_for_batch(exprs,
+                                                      hash_values_for_batch_,
+                                                      batch_size,
+                                                      start_pos > 0 ? my_skip_ : skip,
+                                                      output_vec))) {
+    LOG_WARN("failed to insert batch rows", K(ret));
+  } else {
+    // int64_t got_rows = batch_size - output_vec->accumulate_bit_cnt(batch_size);
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::build_distinct_data(
+    const common::ObIArray<ObExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  bool exists = false;
+  bool inserted = false;
+  int64_t n_times = 0;
+  const ObChunkDatumStore::StoredRow *store_row = nullptr;
+  auto try_check_status = [&] () -> int {
+    return ((++n_times) % 1024 == 0)
+      ? THIS_WORKER.check_status()
+      : common::OB_SUCCESS;
+  };
+  while (OB_SUCC(ret)) {
+    ret = hp_infras_->get_left_next_row(store_row, exprs);
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(hp_infras_->finish_insert_row())) {
+        LOG_WARN("failed to finish to insert row", K(ret));
+      } else if (OB_FAIL(hp_infras_->close_cur_part(InputSide::LEFT))) {
+        LOG_WARN("failed to close cur part", K(ret));
+      } else {
+        LOG_TRACE("trace break out of the loop");
+        break;
+      }
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get left next row", K(ret));
+    } else if (OB_FAIL(try_check_status())) {
+      LOG_WARN("failed to check status", K(ret));
+    } else if (OB_FAIL(hp_infras_->insert_row(exprs, exists, inserted))) {
+      LOG_WARN("failed to insert row", K(ret));
+    }
+  } //end of while
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::build_distinct_data_for_batch(
+    const common::ObIArray<ObExpr*> &exprs,
+    const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t read_rows = -1;
+  int64_t n_times = 0;
+  ObBitVector *output_vec = nullptr;
+  auto try_check_status = [&] () -> int {
+    return ((++n_times) % 1024 == 0)
+      ? THIS_WORKER.check_status()
+      : common::OB_SUCCESS;
+  };
+  while (OB_SUCC(ret)) {
+    ret = hp_infras_->get_left_next_batch(exprs, batch_size, read_rows, hash_values_for_batch_);
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(hp_infras_->finish_insert_row())) {
+        LOG_WARN("failed to finish to insert row", K(ret));
+      } else if (OB_FAIL(hp_infras_->close_cur_part(InputSide::LEFT))) {
+        LOG_WARN("failed to close cur part", K(ret));
+      } else {
+        LOG_TRACE("trace break out of the loop");
+        break;
+      }
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get left next batch", K(ret));
+    } else if (OB_FAIL(try_check_status())) {
+      LOG_WARN("failed to check status", K(ret));
+    } else if (OB_FAIL(hp_infras_->insert_row_for_batch(exprs,
+                                                        hash_values_for_batch_,
+                                                        read_rows,
+                                                        nullptr,
+                                                        output_vec))) {
+      LOG_WARN("failed to insert batch rows, dump", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::get_next_unique_hash_table_row(
+    const ObChunkDatumStore::StoredRow *&store_row,
+    const common::ObIArray<ObExpr*> *exprs)
+{
+  int ret = OB_SUCCESS;
+  if (!got_row_) {
+    if (!inited_hp_infras_ && OB_FAIL(init_hp_infras())) {
+      LOG_WARN("failed to init hash partition infrastructure", K(ret));
+    } else if (OB_FAIL(hp_infras_->finish_insert_row())) {
+      LOG_WARN("failed to finish to insert row", K(ret));
+    } else if (OB_FAIL(hp_infras_->open_hash_table_part())) {
+      LOG_WARN("failed to open hash table part", K(ret));
+    } else {
+      got_row_ = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(hp_infras_->get_next_hash_table_row(store_row, exprs))) {
+    if (OB_ITER_END == ret) {
+      if (OB_FAIL(hp_infras_->end_round())) {
+        LOG_WARN("failed to end round", K(ret));
+      } else if (OB_FAIL(hp_infras_->start_round())) {
+        LOG_WARN("failed to open round", K(ret));
+      } else if (OB_FAIL(hp_infras_->get_next_partition(InputSide::LEFT))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get dumped partitions", K(ret));
+        }
+      } else if (OB_FAIL(hp_infras_->open_cur_part(InputSide::LEFT))) {
+        LOG_WARN("failed to open cur part");
+      } else if (OB_FAIL(hp_infras_->resize(
+          hp_infras_->get_cur_part_row_cnt(InputSide::LEFT)))) {
+        LOG_WARN("failed to init hash table", K(ret));
+      } else if (OB_FAIL(build_distinct_data(*exprs))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ERR_UNEXPECTED;
+        }
+        LOG_WARN("failed to build distinct data", K(ret));
+      } else if (OB_FAIL(hp_infras_->open_hash_table_part())) {
+        LOG_WARN("failed to open hash table part", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_next_unique_hash_table_row(store_row, exprs)))) {
+        LOG_WARN("failed to get next unique hash table row", K(ret));
+      }
+    } else {
+      LOG_WARN("failed to get next row in hash table", K(ret), K(got_row_), K(inited_hp_infras_));
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HashBasedDistinctExtraResult::get_next_unique_hash_table_batch(
+    const common::ObIArray<ObExpr *> &exprs,
+    const int64_t max_row_cnt,
+    int64_t &read_rows)
+{
+  int ret = OB_SUCCESS;
+  if (!got_row_) {
+    if (!inited_hp_infras_ && OB_FAIL(init_hp_infras())) {
+      LOG_WARN("failed to init hash partition infrastructure", K(ret));
+    } else if (OB_FAIL(hp_infras_->finish_insert_row())) {
+      LOG_WARN("failed to finish to insert row", K(ret));
+    } else if (OB_FAIL(hp_infras_->open_hash_table_part())) {
+      LOG_WARN("failed to open hash table part", K(ret));
+    } else {
+      got_row_ = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(hp_infras_->get_next_hash_table_batch(exprs,
+                                                           max_row_cnt,
+                                                           read_rows,
+                                                           nullptr))) {
+    if (OB_ITER_END == ret) {
+      if (OB_FAIL(hp_infras_->end_round())) {
+        LOG_WARN("failed to end round", K(ret));
+      } else if (OB_FAIL(hp_infras_->start_round())) {
+        LOG_WARN("failed to open round", K(ret));
+      } else if (OB_FAIL(hp_infras_->get_next_partition(InputSide::LEFT))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get dumped partitions", K(ret));
+        }
+      } else if (OB_FAIL(hp_infras_->open_cur_part(InputSide::LEFT))) {
+        LOG_WARN("failed to open cur part");
+      } else if (OB_FAIL(hp_infras_->resize(
+          hp_infras_->get_cur_part_row_cnt(InputSide::LEFT)))) {
+        LOG_WARN("failed to init hash table", K(ret));
+      } else if (OB_FAIL(build_distinct_data_for_batch(exprs, max_row_cnt))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ERR_UNEXPECTED;
+        }
+        LOG_WARN("failed to build distinct data", K(ret));
+      } else if (OB_FAIL(hp_infras_->open_hash_table_part())) {
+        LOG_WARN("failed to open hash table part", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_next_unique_hash_table_batch(exprs, max_row_cnt, read_rows)))) {
+        LOG_WARN("failed to get next unique hash table batch", K(ret));
+      }
+    } else {
+      LOG_WARN("failed to get next batch in hash table", K(ret));
     }
   }
   return ret;
@@ -454,6 +862,7 @@ int ObAggregateProcessor::GroupConcatExtraResult::init(const uint64_t tenant_id,
   } else {
     row_count_ = 0;
     iter_idx_ = 0;
+    need_rewind_ = need_rewind;
 
     if (aggr_info.has_order_by_) {
       if (OB_ISNULL(sort_op_ = static_cast<ObSortOpImpl *>(alloc_.alloc(sizeof(ObSortOpImpl))))) {
@@ -530,7 +939,7 @@ void ObAggregateProcessor::GroupConcatExtraResult::reuse_self()
 void ObAggregateProcessor::GroupConcatExtraResult::reuse()
 {
   reuse_self();
-  ExtraResult::reuse();
+  HashBasedDistinctExtraResult::reuse();
 }
 
 int ObAggregateProcessor::GroupConcatExtraResult::finish_add_row()
@@ -571,8 +980,7 @@ int64_t ObAggregateProcessor::GroupConcatExtraResult::to_string(char *buf,
   J_KV(K_(row_count),
        K_(iter_idx),
        K_(row_store),
-       KP_(sort_op),
-       KP_(unique_sort_op)
+       KP_(sort_op)
        );
   J_OBJ_END();
   return pos;
@@ -806,7 +1214,23 @@ int64_t ObAggregateProcessor::ExtraResult::to_string(char *buf,
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(KP_(unique_sort_op));
+  if (nullptr != unique_sort_op_) {
+    J_KV(KP_(unique_sort_op));
+  }
+  J_OBJ_END();
+  return pos;
+}
+
+int64_t ObAggregateProcessor::HashBasedDistinctExtraResult::to_string(char *buf,
+    const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(got_row));
+  J_KV(K_(need_rewind));
+  if (nullptr != hp_infras_) {
+    J_KV(KP_(hp_infras));
+  }
   J_OBJ_END();
   return pos;
 }
@@ -896,7 +1320,10 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       support_fast_single_row_agg_(false),
       op_eval_infos_(nullptr),
       op_monitor_info_(op_monitor_info),
-      need_advance_collect_(false)
+      need_advance_collect_(false),
+      distinct_count_(0),
+      hp_infras_mgr_(nullptr),
+      enable_hash_distinct_(false)
 {
 }
 
@@ -907,6 +1334,7 @@ int ObAggregateProcessor::init()
   has_distinct_ = false;
   has_order_by_ = false;
   has_group_concat_ = false;
+  distinct_count_ = 0;
   start_partial_rollup_idx_ = 0;
   end_partial_rollup_idx_ = 0;
   removal_info_.reset();
@@ -944,6 +1372,10 @@ int ObAggregateProcessor::init()
         has_extra_ |= aggr_info.has_distinct_;
         has_extra_ |= need_extra_info(aggr_info.get_expr_type());
       }
+      if (aggr_info.has_distinct_) {
+        ++distinct_count_;
+      }
+
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
         // ObAggregateProcessor::init would be invoked many times under groupby rescan
@@ -1114,9 +1546,9 @@ int ObAggregateProcessor::prepare(GroupRow &group_row)
     const ObAggrInfo &aggr_info = aggr_infos_.at(i);
     AggrCell &aggr_cell = group_row.aggr_cells_[i];
     if (aggr_info.has_distinct_) {
-      ExtraResult *ad_result = static_cast<ExtraResult *>(aggr_cell.get_extra());
+      HashBasedDistinctExtraResult *ad_result = static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra());
       //only last one add distinct
-      if (OB_ISNULL(ad_result) || OB_ISNULL(ad_result->unique_sort_op_)) {
+      if (OB_ISNULL(ad_result) || !ad_result->is_inited()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("distinct set is NULL", K(ret));
       } else if (T_FUN_TOP_FRE_HIST == aggr_info.get_expr_type()) {
@@ -1172,10 +1604,16 @@ int ObAggregateProcessor::inner_process(
       LOG_WARN("fail to eval", K(ret));
     } else {
       if (aggr_info.has_distinct_) {
-        ExtraResult *ad_result = static_cast<ExtraResult *>(aggr_cell.get_extra());
+        HashBasedDistinctExtraResult *ad_result = static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra());
         //only last one add distinct
-        if (OB_FAIL(ad_result->unique_sort_op_->add_row(aggr_info.param_exprs_))) {
-          LOG_WARN("add row to distinct set failed", K(ret));
+        if (enable_hash_distinct_) {
+          if (OB_FAIL(ad_result->insert_row(aggr_info.param_exprs_))) {
+            LOG_WARN("add row to distinct set failed", K(ret));
+          }
+        } else {
+          if (OB_FAIL(ad_result->unique_sort_op_->add_row(aggr_info.param_exprs_))) {
+            LOG_WARN("add row to distinct set failed", K(ret));
+          }
         }
       } else {
         if (is_prepare && OB_FAIL(prepare_aggr_result(*tmp_store_row_->get_store_row(),
@@ -1287,8 +1725,9 @@ int ObAggregateProcessor::collect_group_row(GroupRow *group_row,
         K(EXPR2STR(eval_ctx_, *aggr_info.expr_)));
     } else {
       if (aggr_info.has_distinct_) {
-        ExtraResult *ad_result = static_cast<ExtraResult *>(aggr_cell.get_extra());
-        if (OB_ISNULL(ad_result) || OB_ISNULL(ad_result->unique_sort_op_)) {
+        HashBasedDistinctExtraResult *ad_result = static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra());
+        if (OB_ISNULL(ad_result)
+          || !ad_result->is_inited()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("distinct set is NULL", K(ret));
         } else {
@@ -1298,22 +1737,21 @@ int ObAggregateProcessor::collect_group_row(GroupRow *group_row,
             // distinct set is sorted and iterated in rollup_process(), rewind here.
             // if partial rollup, then group_id > 0 may not sort
             //    the first partial_rolup_idx_ group need sort
-            if (OB_FAIL(ad_result->unique_sort_op_->rewind())) {
+            if (OB_FAIL(ad_result->rewind())) {
               LOG_WARN("rewind iterator failed", K(ret));
             }
-          } else {
+          } else if (!enable_hash_distinct_) {
             if (OB_FAIL(ad_result->unique_sort_op_->sort())) {
               LOG_WARN("sort failed", K(ret));
             }
           }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(process_aggr_result_from_distinct(aggr_cell, aggr_info))) {
-            LOG_WARN("aggregate distinct cell failed", K(ret));
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(process_aggr_result_from_distinct(aggr_cell, aggr_info))) {
+              LOG_WARN("aggregate distinct cell failed", K(ret));
+            }
           }
         }
       }
-
       if (OB_SUCC(ret)) {
         if (OB_FAIL(collect_aggr_result(aggr_cell, diff_expr, aggr_info, group_id, max_group_cnt))) {
           LOG_WARN("collect_aggr_result failed", K(ret));
@@ -1381,9 +1819,10 @@ int ObAggregateProcessor::inner_process_batch(
         }
       }
     } else if (aggr_info.has_distinct_) {
-      ExtraResult *ad_result = static_cast<ExtraResult *>(aggr_cell.get_extra());
+      HashBasedDistinctExtraResult *ad_result = static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra());
       //only last one add distinct
-      if (OB_ISNULL(ad_result) || OB_ISNULL(ad_result->unique_sort_op_)) {
+      if (OB_ISNULL(ad_result)
+        || !ad_result->is_inited()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("distinct set is NULL", K(ret));
       } else if (T_FUN_TOP_FRE_HIST == aggr_info.get_expr_type()) {
@@ -1392,10 +1831,10 @@ int ObAggregateProcessor::inner_process_batch(
         LOG_WARN("topk fre hist not support distinct", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "distinct on topk fre hist");
       } else if (OB_FAIL(selector.add_batch(
-          &aggr_info.param_exprs_, ad_result->unique_sort_op_, nullptr, eval_ctx_))) {
+          &aggr_info.param_exprs_, ad_result, nullptr, eval_ctx_))) {
         LOG_WARN("add row to distinct set failed", K(ret));
       } else {
-        LOG_DEBUG("batch process disticnt", K(ret), K(ad_result->unique_sort_op_));
+        LOG_DEBUG("batch process disticnt", K(ret));
       }
     }
   } // end for
@@ -1544,7 +1983,8 @@ int ObAggregateProcessor::advance_collect_result(int64_t group_id)
     AggrCell &aggr_cell = group_row->aggr_cells_[aggr_idx];
     if (aggr_cell.get_need_advance_collect()) {
       if (aggr_info.has_distinct_) {
-        if (OB_FAIL(process_distinct_batch(0, aggr_cell, aggr_info, eval_ctx_.max_batch_size_))) {
+        if (OB_FAIL(process_distinct_batch(group_id, aggr_cell, aggr_info,
+                                           eval_ctx_.max_batch_size_))) {
           LOG_WARN("aggregate distinct cell failed", K(ret));
         }
       }
@@ -1560,7 +2000,7 @@ int ObAggregateProcessor::advance_collect_result(int64_t group_id)
         }
       }
       aggr_cell.set_is_advance_evaluated();
-      aggr_cell.reuse_extra();
+      aggr_cell.reset_extra();
     }
   } // end for
   return ret;
@@ -1661,8 +2101,9 @@ int ObAggregateProcessor::process_distinct_batch(
   const int64_t max_cnt)
 {
   int ret = OB_SUCCESS;
-  ExtraResult *extra_info = aggr_cell.get_extra();
-  if (OB_ISNULL(extra_info) || OB_ISNULL(extra_info->unique_sort_op_)) {
+  HashBasedDistinctExtraResult *extra_info = static_cast<HashBasedDistinctExtraResult*>(aggr_cell.get_extra());
+  if (OB_ISNULL(extra_info)
+    || !extra_info->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("distinct set is NULL", K(ret));
   } else {
@@ -1671,19 +2112,19 @@ int ObAggregateProcessor::process_distinct_batch(
               group_id <= end_partial_rollup_idx_) {
       // Group id greater than zero in sort based group by must be rollup,
       // distinct set is sorted and iterated in rollup_process(), rewind here.
-      if (OB_FAIL(extra_info->unique_sort_op_->rewind())) {
+      if (OB_FAIL(extra_info->rewind())) {
         LOG_WARN("rewind iterator failed", K(ret));
-      } else {
-        LOG_DEBUG("debug process distinct batch", K(group_id),
-          K(start_partial_rollup_idx_), K(end_partial_rollup_idx_));
       }
+      LOG_DEBUG("debug process distinct batch", K(group_id),
+        K(start_partial_rollup_idx_), K(end_partial_rollup_idx_));
     } else {
-      if (OB_FAIL(extra_info->unique_sort_op_->sort())) {
-        LOG_WARN("sort failed", K(ret));
-      } else {
-        LOG_DEBUG("debug process distinct batch", K(group_id),
-          K(start_partial_rollup_idx_), K(end_partial_rollup_idx_));
+      if (!enable_hash_distinct_) {
+        if (OB_FAIL(extra_info->unique_sort_op_->sort())) {
+          LOG_WARN("sort failed", K(ret));
+        }
       }
+      LOG_DEBUG("debug process distinct batch", K(group_id),
+        K(start_partial_rollup_idx_), K(end_partial_rollup_idx_));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1700,16 +2141,32 @@ int ObAggregateProcessor::precompute_distinct_aggr_result(
   const int64_t max_cnt)
 {
   int ret = OB_SUCCESS;
-  ExtraResult *ad_result = static_cast<ExtraResult *>(aggr_cell.get_extra());
-  if (OB_ISNULL(ad_result) || OB_ISNULL(ad_result->unique_sort_op_)) {
+  HashBasedDistinctExtraResult *ad_result = static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra());
+  if (OB_ISNULL(ad_result)
+    || !ad_result->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("distinct set is NULL", K(ret));
+  } else if (enable_hash_distinct_
+    && OB_FAIL(ad_result->brs_holder_.save(max_cnt))) {
+    // Hash base distinct fetch data from the hash table by batch and fill in the value to expr
+    // so backup restore is needed here
+    LOG_WARN("backup datum failed", K(ret));
   } else {
     bool is_first = true;
     while (OB_SUCC(ret)) {
       const ObChunkDatumStore::StoredRow *stored_row = NULL;
       int64_t read_rows = 0;
-      if (OB_FAIL(ad_result->unique_sort_op_->get_next_batch(
+      if (enable_hash_distinct_
+        && OB_FAIL(ad_result->get_next_unique_hash_table_batch(
+          aggr_info.param_exprs_, max_cnt, read_rows))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get row from distinct set failed", K(ret));
+        }
+        break;
+      } else if (!enable_hash_distinct_
+        && OB_FAIL(ad_result->unique_sort_op_->get_next_batch(
           aggr_info.param_exprs_, max_cnt, read_rows))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -1731,6 +2188,11 @@ int ObAggregateProcessor::precompute_distinct_aggr_result(
           LOG_WARN("failed to calculate aggr cell", K(ret));
         }
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (enable_hash_distinct_
+      && OB_FAIL(ad_result->brs_holder_.restore())) {
+      LOG_WARN("restore datum failed", K(ret));
     }
     LOG_DEBUG("debug precompute distinct");
   }
@@ -1862,15 +2324,27 @@ int ObAggregateProcessor::process_aggr_result_from_distinct(
   const ObAggrInfo &aggr_info)
 {
   int ret = OB_SUCCESS;
-  ExtraResult *ad_result = static_cast<ExtraResult *>(aggr_cell.get_extra());
-  if (OB_ISNULL(ad_result) || OB_ISNULL(ad_result->unique_sort_op_)) {
+  HashBasedDistinctExtraResult *ad_result = static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra());
+  if (OB_ISNULL(ad_result) || !ad_result->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("distinct set is NULL", K(ret));
+  } else if (enable_hash_distinct_
+    && OB_FAIL(ad_result->srs_holder_.save())) {
+    LOG_WARN("backup datum failed", K(ret));
   } else {
     bool is_first = true;
     while (OB_SUCC(ret)) {
       const ObChunkDatumStore::StoredRow *stored_row = NULL;
-      if (OB_FAIL(ad_result->unique_sort_op_->get_next_stored_row(stored_row))) {
+      if (enable_hash_distinct_
+       && OB_FAIL(ad_result->get_next_unique_hash_table_row(stored_row, &aggr_info.param_exprs_))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get row from distinct set failed", K(ret));
+        }
+        break;
+      } else if (!enable_hash_distinct_
+        && OB_FAIL(ad_result->unique_sort_op_->get_next_stored_row(stored_row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -1896,6 +2370,11 @@ int ObAggregateProcessor::process_aggr_result_from_distinct(
         OX(LOG_DEBUG("succ iter prepare/process aggr result", K(stored_row), K(aggr_cell)));
       }
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (enable_hash_distinct_
+    && OB_FAIL(ad_result->srs_holder_.restore())) {
+    LOG_WARN("restore datum failed", K(ret));
   }
   return ret;
 }
@@ -2102,11 +2581,12 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         aggr_cell.set_need_advance_collect();
         if (NULL == aggr_cell.get_extra()) {
           void *tmp_buf = NULL;
-          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(ExtraResult)))) {
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(HashBasedDistinctExtraResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_, op_monitor_info_);
+            ExtraResult *result =
+              new (tmp_buf) HashBasedDistinctExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
           }
         }
@@ -2121,13 +2601,21 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
           // only groups with group id greater than zero need to rewind.
           // The groupid of hash groupby also is greater then 0, then need rewind ???
           const bool need_rewind = (in_window_func_ || group_id > 0);
-          if (OB_FAIL(aggr_cell.get_extra()->init_distinct_set(
-              eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
-              aggr_info,
-              eval_ctx_,
-              need_rewind,
-              io_event_observer_))) {
-            LOG_WARN("init_distinct_set failed", K(ret));
+          if (enable_hash_distinct_) {
+            if (OB_ISNULL(hp_infras_mgr_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("hash part infras group should not be null", K(ret));
+            } else if (OB_FAIL(static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra())
+                                 ->init_distinct_set(aggr_info, need_rewind, *hp_infras_mgr_,
+                                                     eval_ctx_))) {
+              LOG_WARN("init_distinct_set failed", K(ret));
+            }
+          } else {
+            if (OB_FAIL(aggr_cell.get_extra()->init_distinct_set(
+                  eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(), aggr_info,
+                  eval_ctx_, need_rewind, io_event_observer_))) {
+              LOG_WARN("init_distinct_set failed", K(ret));
+            }
           }
         }
       }
@@ -2307,11 +2795,11 @@ int ObAggregateProcessor::fill_group_row(GroupRow *new_group_row,
         aggr_cell.set_need_advance_collect();
         if (NULL == aggr_cell.get_extra()) {
           void *tmp_buf = NULL;
-          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(ExtraResult)))) {
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(HashBasedDistinctExtraResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_, op_monitor_info_);
+            ExtraResult *result = new (tmp_buf) HashBasedDistinctExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
           }
         }
@@ -2326,13 +2814,26 @@ int ObAggregateProcessor::fill_group_row(GroupRow *new_group_row,
           // only groups with group id greater than zero need to rewind.
           // The groupid of hash groupby also is greater then 0, then need rewind ???
           const bool need_rewind = (in_window_func_ || group_id > 0);
-          if (OB_FAIL(aggr_cell.get_extra()->init_distinct_set(
-              eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
-              aggr_info,
-              eval_ctx_,
-              need_rewind,
-              io_event_observer_))) {
-            LOG_WARN("init_distinct_set failed", K(ret));
+          if (enable_hash_distinct_) {
+            if (OB_ISNULL(hp_infras_mgr_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("hash part infras group should not be null", K(ret));
+            } else if (OB_FAIL(static_cast<HashBasedDistinctExtraResult*>(
+                      aggr_cell.get_extra())->init_distinct_set(aggr_info,
+                                                                need_rewind,
+                                                                *hp_infras_mgr_,
+                                                                eval_ctx_))) {
+              LOG_WARN("init_distinct_set failed", K(ret));
+            }
+          } else {
+            if (OB_FAIL(static_cast<ExtraResult*>(aggr_cell.get_extra())->init_distinct_set(
+                eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                aggr_info,
+                eval_ctx_,
+                need_rewind,
+                io_event_observer_))) {
+              LOG_WARN("init_distinct_set failed", K(ret));
+            }
           }
         }
       }
@@ -2452,7 +2953,7 @@ int ObAggregateProcessor::rollup_base_process(
       }
     } else {
       if (aggr_info.has_distinct_) {
-        if (OB_FAIL(rollup_distinct(aggr_cell, rollup_cell))) {
+        if(OB_FAIL(rollup_distinct(aggr_info, aggr_cell, rollup_cell))) {
           LOG_WARN("failed to rollup aggregation results", K(ret));
         }
       } else {
@@ -2770,35 +3271,67 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
   return ret;
 }
 
-int ObAggregateProcessor::rollup_distinct(AggrCell &aggr_cell, AggrCell &rollup_cell)
+int ObAggregateProcessor::rollup_distinct(const ObAggrInfo &aggr_info,
+    AggrCell &aggr_cell, AggrCell &rollup_cell)
 {
   int ret = OB_SUCCESS;
-  ExtraResult *ad_result = static_cast<ExtraResult *>(aggr_cell.get_extra());
-  ExtraResult *rollup_result = static_cast<ExtraResult *>(rollup_cell.get_extra());
+  HashBasedDistinctExtraResult *ad_result = static_cast<HashBasedDistinctExtraResult *>(aggr_cell.get_extra());
+  HashBasedDistinctExtraResult *rollup_result = static_cast<HashBasedDistinctExtraResult *>(rollup_cell.get_extra());
   if (OB_ISNULL(ad_result)
-      || OB_ISNULL(ad_result->unique_sort_op_)
+      || !ad_result->is_inited()
       || OB_ISNULL(rollup_result)
-      || OB_ISNULL(rollup_result->unique_sort_op_)) {
+      || !rollup_result->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("distinct set is NULL", K(ret));
-  } else if (OB_FAIL(ad_result->unique_sort_op_->sort())) {
+  } else if (!enable_hash_distinct_
+    && OB_FAIL(ad_result->unique_sort_op_->sort())) {
     LOG_WARN("sort failed", K(ret));
+  } else if (enable_hash_distinct_ && eval_ctx_.max_batch_size_ <= 0
+    && OB_FAIL(ad_result->srs_holder_.save())) {
+    LOG_WARN("backup datum failed", K(ret));
+  } else if (enable_hash_distinct_ && eval_ctx_.max_batch_size_ > 0
+    && OB_FAIL(ad_result->brs_holder_.save(eval_ctx_.max_batch_size_))) {
+    LOG_WARN("backup datum failed", K(ret));
   } else {
     while (OB_SUCC(ret)) {
       const ObChunkDatumStore::StoredRow *stored_row = NULL;
-      if (OB_FAIL(ad_result->unique_sort_op_->get_next_stored_row(stored_row))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("get row from distinct set failed", K(ret));
+      if (enable_hash_distinct_) {
+        if (OB_FAIL(ad_result->get_next_unique_hash_table_row(stored_row, &aggr_info.param_exprs_))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("get row from distinct set failed", K(ret));
+          }
+          break;
+        } else if (OB_ISNULL(stored_row) || OB_ISNULL(stored_row->cells())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("stored_row is NULL", KP(stored_row), K(ret));
+        } else if (OB_FAIL(rollup_result->insert_row(aggr_info.param_exprs_))) {
+          LOG_WARN("add_row failed", K(ret));
         }
-        break;
-      } else if (OB_ISNULL(stored_row) || OB_ISNULL(stored_row->cells())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("stored_row is NULL", KP(stored_row), K(ret));
-      } else if (OB_FAIL(rollup_result->unique_sort_op_->add_stored_row(*stored_row))) {
-        LOG_WARN("add_row failed", K(ret));
+      } else {
+        if (OB_FAIL(ad_result->unique_sort_op_->get_next_stored_row(stored_row))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("get row from distinct set failed", K(ret));
+          }
+          break;
+        } else if (OB_ISNULL(stored_row) || OB_ISNULL(stored_row->cells())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("stored_row is NULL", KP(stored_row), K(ret));
+        } else if (OB_FAIL(rollup_result->unique_sort_op_->add_stored_row(*stored_row))) {
+          LOG_WARN("add_row failed", K(ret));
+        }
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (enable_hash_distinct_ && eval_ctx_.max_batch_size_ <= 0
+      && OB_FAIL(ad_result->srs_holder_.restore())) {
+      LOG_WARN("restore datum failed", K(ret));
+    } else if (enable_hash_distinct_ && eval_ctx_.max_batch_size_ > 0
+      && OB_FAIL(ad_result->brs_holder_.restore())) {
+      LOG_WARN("restore datum failed", K(ret));
     }
   }
   return ret;
@@ -2953,7 +3486,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
               }
             }
           }
-          if (OB_SUCC(ret) && aggr_info.separator_expr_ != NULL && !aggr_info.separator_expr_->is_const_expr()) {
+          if (OB_SUCC(ret) && aggr_info.separator_expr_ != NULL) {
             ObDatum *separator_result = NULL;
             if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
               ret = OB_ERR_UNEXPECTED;
@@ -4914,7 +5447,8 @@ int ObAggregateProcessor::prepare_add_calc(
       break;
     }
     case ObFloatTC:
-    case ObDoubleTC: {
+    case ObDoubleTC:
+    case ObCollectionSQLTC: {
       ret = clone_aggr_cell(aggr_cell, first_value, false);
       break;
     }
@@ -5094,6 +5628,14 @@ int ObAggregateProcessor::add_calc(
       }
       break;
     }
+    case ObCollectionSQLTC: {
+      if (result_datum.is_null()) {
+        ret = clone_aggr_cell(aggr_cell, iter_value, false);
+      } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_))) {
+        LOG_WARN("failed to add vector", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(column_tc), K(ret));
@@ -5258,6 +5800,14 @@ int ObAggregateProcessor::sub_calc(
       }
       break;
     }
+    case ObCollectionSQLTC: {
+      if (result_datum.is_null()) {
+        ret = clone_aggr_cell(aggr_cell, iter_value, false);
+      } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_, true /*negative*/))) {
+        LOG_WARN("failed to sub vector", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(column_tc), K(ret));
@@ -5341,17 +5891,28 @@ int ObAggregateProcessor::init_group_extra_aggr_info(
 
 int ObAggregateProcessor::ObBatchRowsSlice::add_batch(
   const ObIArray<ObExpr *> *param_exprs,
-  ObSortOpImpl *unique_sort_op,
+  ExtraResult *ad_result,
   GroupConcatExtraResult *extra_info,
   ObEvalCtx &eval_ctx
 ) const
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(unique_sort_op)) {
+  if (OB_NOT_NULL(ad_result)) {
     int64_t stored_rows_count = 0;
-    if (OB_FAIL(unique_sort_op->add_batch(
-        *param_exprs, *brs_->skip_, end_pos_, begin_pos_, &stored_rows_count))) {
-      LOG_WARN("failed to add batch", K(ret));
+    HashBasedDistinctExtraResult *extra_result = static_cast<HashBasedDistinctExtraResult *>(ad_result);
+    if (!extra_result->is_inited()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("distinct set is NULL", K(ret));
+    } else if (nullptr != extra_result->unique_sort_op_) {
+      if (OB_FAIL(extra_result->unique_sort_op_->add_batch(
+          *param_exprs, *brs_->skip_, end_pos_, begin_pos_, &stored_rows_count))) {
+        LOG_WARN("failed to add batch", K(ret));
+      }
+    } else {
+      if (OB_FAIL(extra_result->insert_row_for_batch(
+          *param_exprs, end_pos_, brs_->skip_, begin_pos_))) {
+        LOG_WARN("failed to add batch", K(ret));
+      }
     }
   } else if (OB_NOT_NULL(extra_info->sort_op_)) {
     int64_t stored_rows_count = 0;
@@ -5394,16 +5955,27 @@ int ObAggregateProcessor::ObBatchRowsSlice::add_batch(
 
 int ObAggregateProcessor::ObSelector::add_batch(
   const ObIArray<ObExpr *> *param_exprs,
-  ObSortOpImpl *unique_sort_op,
+  ExtraResult *ad_result,
   GroupConcatExtraResult *extra_info,
   ObEvalCtx &eval_ctx
 ) const
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(unique_sort_op)) {
-    if (OB_FAIL(unique_sort_op->add_batch(
-        *param_exprs, *brs_->skip_, brs_->size_, selector_array_, count_))) {
-      LOG_WARN("failed to add batch", K(ret));
+  if (OB_NOT_NULL(ad_result)) {
+    HashBasedDistinctExtraResult *extra_result = static_cast<HashBasedDistinctExtraResult *>(ad_result);
+    if (!extra_result->is_inited()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("distinct set is NULL", K(ret));
+    } else if (nullptr != extra_result->unique_sort_op_) {
+      if (OB_FAIL(extra_result->unique_sort_op_->add_batch(
+          *param_exprs, *brs_->skip_, brs_->size_, selector_array_, count_))) {
+        LOG_WARN("failed to add batch", K(ret));
+      }
+    } else {
+      if (OB_FAIL(extra_result->insert_row_for_batch(
+          *param_exprs, brs_->size_, brs_->skip_))) {
+        LOG_WARN("failed to add batch", K(ret));
+      }
     }
   } else if (OB_NOT_NULL(extra_info->sort_op_)) {
     if (OB_FAIL(extra_info->sort_op_->add_batch(
@@ -5768,6 +6340,21 @@ int ObAggregateProcessor::add_calc_batch(
       } else if (OB_FAIL(ctx->add_batch_func[T::DECIMAL_INT_BATCH_FUNC_IDX](
           result_datum, this, aggr_cell, src, &selector, scale))) {
         LOG_WARN("fail to add batch decimal int", K(ret));
+      }
+      break;
+    }
+    case ObCollectionSQLTC: {
+      uint16_t i = 0; // row num in a batch
+      for (uint16_t it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
+        i = selector.get_batch_index(it);
+        if (src.at(i)->is_null()) {
+          continue;
+        }
+        if (result_datum.is_null()) {
+          ret = clone_aggr_cell(aggr_cell, *src.at(i), false);
+        } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, *src.at(i), aggr_alloc_))) {
+          LOG_WARN("failed to add vector", K(ret));
+        }
       }
       break;
     }
@@ -8432,7 +9019,7 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
       } else {
         // get obj
         uint64_t val = 0;
-        bool null_val = false;
+        bool is_null_val = false;
         if (!inited_tmp_obj
             && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -8441,7 +9028,7 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
         } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
           LOG_WARN("failed to convert datum to obj", K(ret));
         } else if (tmp_obj->is_null()) {
-          null_val = true;
+          is_null_val = true;
         } else if (tmp_obj->is_unsigned_integer()) {
           val = tmp_obj->get_uint64();
         } else if (tmp_obj->is_signed_integer())  {
@@ -8460,7 +9047,7 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
           ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
           LOG_WARN("invalid data type for roaringbitmap build agg");
         }
-        if (OB_FAIL(ret) || null_val) {
+        if (OB_FAIL(ret) || is_null_val) {
         } else if (OB_ISNULL(rb) && OB_ISNULL(rb = OB_NEWx(ObRoaringBitmap, &tmp_alloc, (&tmp_alloc)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
@@ -8522,13 +9109,16 @@ int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
     bool inited_tmp_obj = false;
     ObObj *tmp_obj = NULL;
     ObRoaringBitmap *rb = NULL;
+    bool calc_finished = false;
 
-    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+    while (OB_SUCC(ret) && !calc_finished && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(storted_row));
       } else {
         ObString tmp_bin;
+        ObString tmp_rb_bin;
+        bool is_null_obj = false;
         // get obj
         if (!inited_tmp_obj
             && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
@@ -8538,27 +9128,38 @@ int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
         } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
           LOG_WARN("failed to convert datum to obj", K(ret));
         } else if (tmp_obj->is_null()) {
-          // do noting for null
-        } else if (!(tmp_obj->is_roaringbitmap()
-                      || tmp_obj->is_roaringbitmap()
-                      || tmp_obj->is_hex_string())) {
+          is_null_obj = true;
+        } else if (!(tmp_obj->is_roaringbitmap() || tmp_obj->is_hex_string())) {
           ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
           LOG_WARN("invalid data type for roaringbitmap agg");
         } else if (OB_FALSE_IT(tmp_bin = tmp_obj->get_string())) {
         } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, *tmp_obj, tmp_bin))) {
           LOG_WARN("failed to get real data.", K(ret), K(tmp_bin));
+        } else if (!tmp_obj->is_roaringbitmap()) {
+          if (OB_FAIL(ObRbUtils::build_binary(tmp_alloc, tmp_bin, tmp_rb_bin))) {
+            LOG_WARN("failed to build roaringbitmap from binary", K(ret), K(tmp_bin));
+          }
+        } else {
+          tmp_rb_bin = tmp_bin;
+        }
+
+        if (OB_FAIL(ret) || is_null_obj) {
         } else if (OB_ISNULL(rb)) {
-          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_bin, rb))) {
+          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_rb_bin, rb))) {
             LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+          } else if (calc_op == ObRbOperation::AND && rb->get_cardinality() == 0) {
+            calc_finished = true;
           }
         } else {
           ObRoaringBitmap *tmp_rb = NULL;
-          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_bin, tmp_rb))){
+          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_rb_bin, tmp_rb))){
             LOG_WARN("failed to deserialize roaringbitmap", K(ret));
-          } else if (OB_FAIL(rb->value_calc(tmp_rb, calc_op))) {
+          } else if (OB_FAIL(ObRbUtils::calc_inplace(rb, tmp_rb, calc_op))) {
             LOG_WARN("failed to calculate roaringbitmap", K(ret));
-          } else if (OB_FALSE_IT(ObRbUtils::rb_destroy(tmp_rb))) {
+          } else if (calc_op == ObRbOperation::AND && rb->get_cardinality() == 0) {
+            calc_finished = true;
           }
+          ObRbUtils::rb_destroy(tmp_rb);
         }
       }
     }//end of while
@@ -8784,6 +9385,21 @@ void ObAggregateProcessor::check_mysql_decimal_int_overflow(ObDatum &datum)
     datum.set_decimal_int(max_available_val, sizeof(int512_t));
     ret = OB_SUCCESS; // reset ret to SUCCESS, just log user warnings
   }
+}
+
+bool ObAggregateProcessor::has_listagg_non_const_separator() const
+{
+  bool has_it = false;
+  if (lib::is_oracle_mode()) {
+    for (int64_t i = 0; !has_it && i < aggr_infos_.count(); ++i) {
+      if (aggr_infos_.at(i).get_expr_type() == T_FUN_GROUP_CONCAT &&
+          aggr_infos_.at(i).separator_expr_ != NULL &&
+          !aggr_infos_.at(i).separator_expr_->is_const_expr()) {
+        has_it = true;
+      }
+    }
+  }
+  return has_it;
 }
 
 template<typename RES_T, typename ARG_T>

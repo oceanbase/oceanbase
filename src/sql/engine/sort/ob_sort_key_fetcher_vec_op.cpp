@@ -37,7 +37,7 @@ void ObSortKeyFetcher::reset()
   }
 }
 
-int ObSortKeyFetcher::init_sk_col_result_list(const int64_t sk_cnt, const int64_t batch_size)
+int ObSortKeyFetcher::init_sk_col_result_list(const int64_t sk_cnt, const int64_t batch_size, int64_t &init_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sk_col_res_list_ = static_cast<SortKeyColResult *>(
@@ -47,6 +47,7 @@ int ObSortKeyFetcher::init_sk_col_result_list(const int64_t sk_cnt, const int64_
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sk_cnt; i++) {
       SortKeyColResult *sk_col_res = new (&sk_col_res_list_[i]) SortKeyColResult(allocator_);
+      ++init_cnt;
       if (OB_FAIL(sk_col_res->init(batch_size))) {
         SQL_ENG_LOG(WARN, "failed to init sort key column result", K(ret), K(batch_size));
       }
@@ -62,7 +63,8 @@ int ObSortKeyFetcher::init(const common::ObIArray<ObExpr *> &sk_exprs,
   int ret = OB_SUCCESS;
   max_batch_size_ = batch_size;
   int64_t sort_key_cnt = sort_collations.count();
-  if (OB_FAIL(init_sk_col_result_list(sort_key_cnt, batch_size))) {
+  int64_t init_cnt = 0;
+  if (OB_FAIL(init_sk_col_result_list(sort_key_cnt, batch_size, init_cnt))) {
     SQL_ENG_LOG(WARN, "failed to init sort key column result list", K(ret), K(batch_size));
   } else if (OB_FAIL(sk_vec_ptrs_.init(sort_key_cnt))) {
     SQL_ENG_LOG(WARN, "failed to init sort key vector ptrs", K(ret));
@@ -71,10 +73,21 @@ int ObSortKeyFetcher::init(const common::ObIArray<ObExpr *> &sk_exprs,
       const ObSortFieldCollation &sort_collation = sort_collations.at(i);
       const ObExpr *e = sk_exprs.at(sort_collation.field_idx_);
       ObIVector *vec = e->get_vector(eval_ctx);
-      if (OB_FAIL(sk_vec_ptrs_.push_back(vec))) {
+      if (e->is_nested_expr()) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_ENG_LOG(WARN, "nested expr is not supported", K(ret));
+      } else if (OB_FAIL(sk_vec_ptrs_.push_back(vec))) {
         SQL_ENG_LOG(WARN, "failed to add expr vector", K(ret));
       }
     }
+  }
+  // free memory
+  if (OB_FAIL(ret) && nullptr != sk_col_res_list_) {
+    for (int64_t i = 0; i < init_cnt; ++i) {
+      sk_col_res_list_[i].reset();
+    }
+    allocator_.free(sk_col_res_list_);
+    sk_col_res_list_ = nullptr;
   }
   return ret;
 }

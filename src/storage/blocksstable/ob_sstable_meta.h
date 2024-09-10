@@ -21,7 +21,7 @@
 #include "share/scn.h"
 #include "storage/tablet/ob_table_store_util.h"
 #include "storage/blocksstable/ob_table_flag.h"
-
+#include "storage/blocksstable/ob_column_checksum_struct.h"
 namespace oceanbase
 {
 namespace storage
@@ -31,6 +31,7 @@ struct ObTabletCreateSSTableParam;
 }
 namespace blocksstable
 {
+
 class ObTxContext final
 {
 public:
@@ -148,7 +149,7 @@ public:
       K(ddl_scn_), K(filled_tx_scn_),
       K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag));
+      K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag), K_(root_macro_seq));
 
 public:
   int32_t version_;
@@ -190,7 +191,7 @@ public:
   storage::ObTableBackupFlag table_backup_flag_;  //cannot add backup flag to ObSSTableMetaChecker
                                                   //quick restore with rebuild replace major will has same key sstable
   storage::ObTableSharedFlag table_shared_flag_;
-  int64_t root_macro_seq_; // placeholder, will be used after palf branch merged
+  int64_t root_macro_seq_;
   //Add new variable need consider ObSSTableMetaChecker
 };
 
@@ -199,7 +200,9 @@ class ObSSTableMeta final
 public:
   ObSSTableMeta();
   ~ObSSTableMeta();
-  int init(const storage::ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
+  int init(
+      const storage::ObTabletCreateSSTableParam &param,
+      common::ObArenaAllocator &allocator);
   int fill_cg_sstables(common::ObArenaAllocator &allocator, const common::ObIArray<ObITable *> &cg_tables);
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_; }
@@ -211,8 +214,8 @@ public:
   }
   OB_INLINE ObSSTableBasicMeta &get_basic_meta() { return basic_meta_; }
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
-  OB_INLINE int64_t get_col_checksum_cnt() const { return column_checksum_count_; }
-  OB_INLINE int64_t *get_col_checksum() const { return column_checksums_; }
+  OB_INLINE int64_t get_col_checksum_cnt() const { return column_ckm_struct_.count_; }
+  OB_INLINE int64_t *get_col_checksum() const { return column_ckm_struct_.column_checksums_; }
   OB_INLINE int64_t get_tx_id_count() const { return tx_ctx_.get_count(); }
   OB_INLINE int64_t get_tx_ids(const int64_t idx) const { return tx_ctx_.get_tx_id(idx); }
   OB_INLINE int64_t get_data_checksum() const { return basic_meta_.data_checksum_; }
@@ -305,15 +308,12 @@ public:
       const int64_t buf_len,
       int64_t &pos,
       ObSSTableMeta *&dest) const;
-  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
+  TO_STRING_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
   int init_data_index_tree_info(
       const storage::ObTabletCreateSSTableParam &param,
-      common::ObArenaAllocator &allocator);
-  int prepare_column_checksum(
-      const common::ObIArray<int64_t> &column_checksums,
       common::ObArenaAllocator &allocator);
   int prepare_tx_context(
     const ObTxContext::ObTxDesc &tx_desc,
@@ -333,8 +333,7 @@ private:
   ObRootBlockInfo data_root_info_;
   ObSSTableMacroInfo macro_info_;
   ObSSTableArray cg_sstables_;
-  int64_t *column_checksums_;
-  int64_t column_checksum_count_;
+  ObColumnCkmStruct column_ckm_struct_;
   ObTxContext tx_ctx_;
   // The following fields don't to persist
   bool is_inited_;
@@ -349,6 +348,10 @@ public:
   bool is_valid() const;
   void reset();
   int assign(const ObMigrationSSTableParam &param);
+  bool is_empty_sstable() const;
+  bool is_shared_sstable() const;
+  bool is_shared_macro_blocks_sstable() const;
+  bool is_only_shared_macro_blocks_sstable() const;
   int get_merge_res(blocksstable::ObSSTableMergeRes &res) const;
   TO_STRING_KV(K_(basic_meta),
                K(column_checksums_.count()),
@@ -423,6 +426,13 @@ private:
       const int64_t new_column_count);
 };
 
+class ObSSTableMetaCompactUtil
+{
+public:
+  static int fix_filled_tx_scn_value_for_compact(
+      const ObITable::TableKey &table_key,
+      share::SCN &filled_tx_scn);
+};
 
 } // namespace blocksstable
 } // namespace oceanbase

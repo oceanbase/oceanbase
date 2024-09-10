@@ -19,6 +19,7 @@
 #include "share/vector/ob_uniform_vector.h"
 #include "share/vector/ob_discrete_vector.h"
 #include "share/ob_define.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -27,7 +28,93 @@ using namespace common;
 namespace sql
 {
 
-int ObTempColumnStore::ColumnBlock::calc_rows_size(const IVectorPtrs &vectors,
+int ObTempColumnStore::ColumnBlock::calc_nested_size(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
+                                                     const ObArray<ObLength> &lengths, const int64_t size,
+                                                     int64_t &batch_mem_size)
+{
+  int ret = OB_SUCCESS;
+  ObIVector *vec = expr.get_vector(ctx);
+  const VectorFormat format = vec->get_format();
+  if (is_uniform_format(format) && OB_FAIL(distribute_uniform_nested_batch(expr, ctx, selector, format, size))) {
+    SQL_LOG(WARN, "Failed to add batch nested attrs", K(ret), K(format), K(size));
+  }
+  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
+    ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
+    const VectorFormat format = vec->get_format();
+    switch (format) {
+      case VEC_FIXED:
+        batch_mem_size += calc_size(static_cast<const ObFixedLengthBase*>(vec), selector, size);
+        break;
+      case VEC_DISCRETE:
+        batch_mem_size += calc_size(static_cast<const ObDiscreteBase*>(vec), selector, size);
+        break;
+      case VEC_CONTINUOUS:
+        batch_mem_size += calc_size(static_cast<const ObContinuousBase*>(vec), selector, size);
+        break;
+      case VEC_UNIFORM:
+        batch_mem_size += calc_size<false>(static_cast<const ObUniformBase*>(vec), selector, size, UNFIXED_LENGTH);
+        break;
+      case VEC_UNIFORM_CONST:
+        batch_mem_size += calc_size<true>(static_cast<const ObUniformBase*>(vec), selector, size, UNFIXED_LENGTH);
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", K(ret), K(size));
+      }
+  }
+  return ret;
+}
+
+int ObTempColumnStore::ColumnBlock::distribute_uniform_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
+                                                                    const VectorFormat format, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(expr.attrs_[i]->init_vector(ctx, i == 0 ? VEC_FIXED : format, size))) {
+      SQL_LOG(WARN, "Failed to init vector", K(ret), K(i), K(format), K(size));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObArrayExprUtils::batch_dispatch_array_attrs(ctx, expr, 0, size, selector))) {
+    SQL_LOG(WARN, "Failed to dispatch nested attrs", K(ret), K(format), K(size));
+  }
+  return ret;
+}
+
+int ObTempColumnStore::ColumnBlock::add_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
+                                                     const int64_t size, char *head, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
+    ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
+    const VectorFormat format = vec->get_format();
+    switch (format) {
+      case VEC_FIXED:
+        ret = to_buf(static_cast<const ObFixedLengthBase*>(vec), selector, size, head, pos);
+        break;
+      case VEC_DISCRETE:
+        ret = to_buf(static_cast<const ObDiscreteBase*>(vec), selector, size, head, pos);
+        break;
+      case VEC_CONTINUOUS:
+        ret = to_buf(static_cast<const ObContinuousBase*>(vec), selector, size, head, pos);
+        break;
+      case VEC_UNIFORM:
+        ret = to_buf<false>(static_cast<const ObUniformBase*>(vec), selector, size, UNFIXED_LENGTH, head, pos);
+        break;
+      case VEC_UNIFORM_CONST:
+        ret = to_buf<true>(static_cast<const ObUniformBase*>(vec), selector, size, UNFIXED_LENGTH, head, pos);
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", K(ret), K(format));
+    }
+  }
+  return ret;
+}
+
+int ObTempColumnStore::ColumnBlock::calc_rows_size(ObEvalCtx &ctx,
+                                                   const ObExprPtrIArray &exprs,
+                                                   const IVectorPtrs &vectors,
                                                    const uint16_t *selector,
                                                    const ObArray<ObLength> &lengths,
                                                    const int64_t size,
@@ -38,32 +125,40 @@ int ObTempColumnStore::ColumnBlock::calc_rows_size(const IVectorPtrs &vectors,
   for (int64_t i = 0; OB_SUCC(ret) && i < vectors.count(); ++i) {
     const ObIVector *vec = vectors.at(i);
     const VectorFormat format = vec->get_format();
-    switch (format) {
-    case VEC_FIXED:
-      batch_mem_size += calc_size(static_cast<const ObFixedLengthBase*>(vec), selector, size);
-      break;
-    case VEC_DISCRETE:
-      batch_mem_size += calc_size(static_cast<const ObDiscreteBase*>(vec), selector, size);
-      break;
-    case VEC_CONTINUOUS:
-      batch_mem_size += calc_size(static_cast<const ObContinuousBase*>(vec), selector, size);
-      break;
-    case VEC_UNIFORM:
-      batch_mem_size += calc_size<false>(static_cast<const ObUniformBase*>(vec),
-                                         selector, size, lengths[i]);
-      break;
-    case VEC_UNIFORM_CONST:
-      batch_mem_size += calc_size<true>(static_cast<const ObUniformBase*>(vec),
-                                        selector, size, lengths[i]);
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
+    if (exprs.at(i)->is_nested_expr()) {
+      if (OB_FAIL(ColumnBlock::calc_nested_size(*exprs.at(i), ctx, selector, lengths, size, batch_mem_size))) {
+        LOG_WARN("calc nested expr size failed", K(ret), K(size));
+      }
+    } else {
+      switch (format) {
+      case VEC_FIXED:
+        batch_mem_size += calc_size(static_cast<const ObFixedLengthBase*>(vec), selector, size);
+        break;
+      case VEC_DISCRETE:
+        batch_mem_size += calc_size(static_cast<const ObDiscreteBase*>(vec), selector, size);
+        break;
+      case VEC_CONTINUOUS:
+        batch_mem_size += calc_size(static_cast<const ObContinuousBase*>(vec), selector, size);
+        break;
+      case VEC_UNIFORM:
+        batch_mem_size += calc_size<false>(static_cast<const ObUniformBase*>(vec),
+                                          selector, size, lengths[i]);
+        break;
+      case VEC_UNIFORM_CONST:
+        batch_mem_size += calc_size<true>(static_cast<const ObUniformBase*>(vec),
+                                          selector, size, lengths[i]);
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+      }
     }
   }
   return ret;
 }
 
-int ObTempColumnStore::ColumnBlock::add_batch(ShrinkBuffer &buf,
+int ObTempColumnStore::ColumnBlock::add_batch(ObEvalCtx &ctx,
+                                              const ObExprPtrIArray &exprs,
+                                              ShrinkBuffer &buf,
                                               const IVectorPtrs &vectors,
                                               const uint16_t *selector,
                                               const ObArray<ObLength> &lengths,
@@ -83,26 +178,32 @@ int ObTempColumnStore::ColumnBlock::add_batch(ShrinkBuffer &buf,
       const ObIVector *vec = vectors.at(i);
       const VectorFormat format = vec->get_format();
       vec_offsets[i] = pos;
-      switch (format) {
-      case VEC_FIXED:
-        ret = to_buf(static_cast<const ObFixedLengthBase*>(vec), selector, size, head, pos);
-        break;
-      case VEC_DISCRETE:
-        ret = to_buf(static_cast<const ObDiscreteBase*>(vec), selector, size, head, pos);
-        break;
-      case VEC_CONTINUOUS:
-        ret = to_buf(static_cast<const ObContinuousBase*>(vec), selector, size, head, pos);
-        break;
-      case VEC_UNIFORM:
-        ret = to_buf<false>(static_cast<const ObUniformBase*>(vec), selector, size, lengths[i],
-                             head, pos);
-        break;
-      case VEC_UNIFORM_CONST:
-        ret = to_buf<true>(static_cast<const ObUniformBase*>(vec), selector, size, lengths[i],
-                           head, pos);
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
+      if (exprs.at(i)->is_nested_expr()) {
+        if (OB_FAIL(ColumnBlock::add_nested_batch(*exprs.at(i), ctx, selector, size, head, pos))) {
+          LOG_WARN("calc nested expr size failed", K(ret), K(size));
+        }
+      } else {
+        switch (format) {
+        case VEC_FIXED:
+          ret = to_buf(static_cast<const ObFixedLengthBase*>(vec), selector, size, head, pos);
+          break;
+        case VEC_DISCRETE:
+          ret = to_buf(static_cast<const ObDiscreteBase*>(vec), selector, size, head, pos);
+          break;
+        case VEC_CONTINUOUS:
+          ret = to_buf(static_cast<const ObContinuousBase*>(vec), selector, size, head, pos);
+          break;
+        case VEC_UNIFORM:
+          ret = to_buf<false>(static_cast<const ObUniformBase*>(vec), selector, size, lengths[i],
+                              head, pos);
+          break;
+        case VEC_UNIFORM_CONST:
+          ret = to_buf<true>(static_cast<const ObUniformBase*>(vec), selector, size, lengths[i],
+                            head, pos);
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+        }
       }
     }
     vec_offsets[vectors.count()] = pos; // last offset, the size of vector
@@ -118,7 +219,33 @@ int ObTempColumnStore::ColumnBlock::add_batch(ShrinkBuffer &buf,
   return ret;
 }
 
-int ObTempColumnStore::ColumnBlock::get_next_batch(const IVectorPtrs &vectors,
+int ObTempColumnStore::ColumnBlock::get_nested_batch(ObExpr &expr, ObEvalCtx &ctx, char *buf, int64_t &pos, const int64_t size) const
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
+    ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
+    const VectorFormat format = vec->get_format();
+    switch (format) {
+      case VEC_FIXED:
+        ret = from_buf(buf, pos, size, static_cast<ObFixedLengthBase*>(vec));
+        break;
+      case VEC_CONTINUOUS:
+        ret = from_buf(buf, pos, size, static_cast<ObContinuousBase*>(vec));
+        break;
+      case VEC_UNIFORM:
+        static_cast<UniformFormat *>(vec)->set_all_null(size);
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", K(ret), K(format), K(i), K(expr.attrs_cnt_));
+    }
+  }
+
+  return ret;
+}
+
+int ObTempColumnStore::ColumnBlock::get_next_batch(const ObExprPtrIArray &exprs,
+                                                   ObEvalCtx &ctx,const IVectorPtrs &vectors,
                                                    const ObArray<ObLength> &lengths,
                                                    const int32_t start_read_pos,
                                                    int32_t &batch_rows,
@@ -130,10 +257,14 @@ int ObTempColumnStore::ColumnBlock::get_next_batch(const IVectorPtrs &vectors,
   const int32_t *vec_offsets = reinterpret_cast<int32_t *>(buf + sizeof(int32_t));
   for (int64_t i = 0; OB_SUCC(ret) && i < vectors.count(); ++i) {
     ObIVector *vec = vectors.at(i);
+    int64_t pos = vec_offsets[i];
     if (NULL == vec || (VEC_UNIFORM_CONST == vec->get_format())) {
       // if vector is null or uniform const, skip read vector
+    } else if (exprs.at(i)->is_nested_expr()) {
+      if (OB_FAIL(ColumnBlock::get_nested_batch(*exprs.at(i), ctx, buf, pos, size))) {
+        LOG_WARN("calc nested expr size failed", K(ret), K(size));
+      }
     } else {
-      int64_t pos = vec_offsets[i];
       const VectorFormat format = vec->get_format();
       switch (format) {
       case VEC_FIXED:
@@ -187,7 +318,7 @@ int ObTempColumnStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ensure_read_vectors(exprs, ctx, max_rows))) {
     LOG_WARN("fail to ensure read vectors", K(ret));
-  } else if (OB_FAIL(cur_blk_->get_next_batch(*vectors_, column_store_->batch_ctx_->lengths_,
+  } else if (OB_FAIL(cur_blk_->get_next_batch(exprs, ctx, *vectors_, column_store_->batch_ctx_->lengths_,
                                               read_pos_, batch_rows, batch_pos))) {
     LOG_WARN("fail to get next batch from column block", K(ret));
   } else if (OB_UNLIKELY(has_rest_row_in_batch())) {
@@ -418,7 +549,7 @@ int ObTempColumnStore::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEval
     }
     int64_t batch_mem_size = 0;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ColumnBlock::calc_rows_size(batch_ctx_->vectors_,
+    } else if (OB_FAIL(ColumnBlock::calc_rows_size(ctx, exprs, batch_ctx_->vectors_,
                                                    selector,
                                                    batch_ctx_->lengths_,
                                                    size,
@@ -426,8 +557,8 @@ int ObTempColumnStore::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEval
       LOG_WARN("fail to calc rows size", K(ret));
     } else if (OB_FAIL(ensure_write_blk(batch_mem_size))) {
       LOG_WARN("ensure write block failed", K(ret));
-    } else if (OB_FAIL(cur_blk_->add_batch(blk_buf_, batch_ctx_->vectors_, selector,
-                                           batch_ctx_->lengths_, size, batch_mem_size))) {
+    } else if (OB_FAIL(cur_blk_->add_batch(ctx, exprs, blk_buf_, batch_ctx_->vectors_, selector, batch_ctx_->lengths_,
+                                           size, batch_mem_size))) {
       LOG_WARN("fail to add batch to column store", K(ret));
     } else {
       block_id_cnt_ += size;

@@ -418,6 +418,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushIlogCache);
         break;
       }
+      case T_FLUSH_SS_MICRO_CACHE: {
+        REGISTER_STMT_RESOLVER(FlushSSMicroCache);
+        break;
+      }
       case T_FLUSH_DAG_WARNINGS: {
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
@@ -513,6 +517,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_ALTER_SYSTEM_SET_PARAMETER: {
         REGISTER_STMT_RESOLVER(SetConfig);
+        break;
+      }
+      case T_CHANGE_EXTERNAL_STORAGE_DEST: {
+        REGISTER_STMT_RESOLVER(ChangeExternalStorageDest);
         break;
       }
       case T_ALTER_SYSTEM_SETTP: {
@@ -825,6 +833,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_ADMIN_ZONE: {
         REGISTER_STMT_RESOLVER(AdminZone);
+        break;
+      }
+      case T_ADMIN_STORAGE: {
+        REGISTER_STMT_RESOLVER(AdminStorage);
         break;
       }
       case T_ALTER_SYSTEM_SET: {

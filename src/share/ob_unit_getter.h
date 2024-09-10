@@ -72,7 +72,8 @@ public:
              lib::Worker::CompatMode compat_mode,
              const int64_t create_timestamp,
              const bool has_memstore,
-             const bool is_remove);
+             const bool is_remove,
+             const int64_t hidden_sys_data_disk_config_size);
 
     int divide_meta_tenant(ObTenantConfig& meta_tenant_config);
 
@@ -82,14 +83,16 @@ public:
 
     TO_STRING_KV(K_(tenant_id), K_(unit_id), K_(has_memstore),
                  "unit_status", get_unit_status_str(unit_status_),
-                 K_(config), K_(mode), K_(create_timestamp), K_(is_removed));
+                 K_(config), K_(mode), K_(create_timestamp), K_(is_removed),
+                 K_(hidden_sys_data_disk_config_size));
 
     bool is_valid() const
     {
       return tenant_id_ != common::OB_INVALID_TENANT_ID &&
           unit_id_ != common::OB_INVALID_ID && 
           unit_status_ != UNIT_ERROR_STAT &&
-          config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID;
+          config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID &&
+          hidden_sys_data_disk_config_size_ >= 0;
     }
 
     uint64_t tenant_id_;

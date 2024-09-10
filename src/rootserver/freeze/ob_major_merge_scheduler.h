@@ -63,7 +63,7 @@ class ObMajorMergeScheduler : public ObFreezeReentrantThread
 {
 public:
   ObMajorMergeScheduler(const uint64_t tenant_id);
-  virtual ~ObMajorMergeScheduler() {}
+  virtual ~ObMajorMergeScheduler();
 
   int init(const bool is_primary_service,
            ObMajorMergeInfoManager &merge_info_mgr,
@@ -103,7 +103,7 @@ private:
   int update_merge_status(
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch);
-  int handle_merge_progress(const compaction::ObMergeProgress &progress,
+  int handle_merge_progress(const compaction::ObBasicMergeProgress &progress,
                             const share::SCN &global_broadcast_scn,
                             const int64_t expected_epoch);
   int try_update_global_merged_scn(const int64_t expected_epoch);
@@ -135,7 +135,7 @@ private:
   common::ObServerConfig *config_;
   ObTenantAllZoneMergeStrategy merge_strategy_;
   common::ObMySQLProxy *sql_proxy_;
-  ObMajorMergeProgressChecker progress_checker_;
+  ObBasicMergeProgressChecker *progress_checker_;
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeScheduler);
 };
 

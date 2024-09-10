@@ -24,6 +24,7 @@
 #include "ob_micro_block_header.h"
 #include "ob_micro_block_checksum_helper.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -43,6 +44,7 @@ struct ObMicroBlockDesc
   int64_t max_merged_trans_version_;
   // <macro_id_, block_offset_> used for index
   MacroBlockId macro_id_;
+  ObLogicMicroBlockId logic_micro_id_;
   int64_t block_offset_;
   int64_t block_checksum_;
   int32_t row_count_delta_;
@@ -73,6 +75,7 @@ struct ObMicroBlockDesc
       K_(column_count),
       K_(max_merged_trans_version),
       K_(macro_id),
+      K_(logic_micro_id),
       K_(block_offset),
       K_(block_checksum),
       K_(row_count_delta),

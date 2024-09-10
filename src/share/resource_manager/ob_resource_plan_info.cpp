@@ -21,6 +21,9 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
 {
   ObString ret_name;
   switch (function_type) {
+    case share::ObFunctionType::DEFAULT_FUNCTION:
+      ret_name = "DEFAULT_FUNCTION";
+      break;
     case ObFunctionType::PRIO_COMPACTION_HIGH:
       ret_name = ObString("COMPACTION_HIGH");
       break;
@@ -45,8 +48,17 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_DDL_HIGH:
       ret_name = ObString("DDL_HIGH");
       break;
-    case ObFunctionType::PRIO_OTHER_BACKGROUND:
-      ret_name = ObString("OTHER_BACKGROUND");
+    case ObFunctionType::PRIO_SERVER_BACKGROUND_LOW:
+      ret_name = ObString("SERVER_BACKGROUND_LOW");
+      break;
+    case ObFunctionType::PRIO_CLOG_LOW:
+      ret_name = ObString("CLOG_LOW");
+      break;
+    case ObFunctionType::PRIO_CLOG_MID:
+      ret_name = ObString("CLOG_MID");
+      break;
+    case ObFunctionType::PRIO_CLOG_HIGH:
+      ret_name = ObString("CLOG_HIGH");
       break;
     default:
       ret_name = ObString("OTHER_GROUPS");
@@ -64,6 +76,8 @@ int ObPlanDirective::assign(const ObPlanDirective &other)
   min_iops_ = other.min_iops_;
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
+  max_net_bandwidth_ = other.max_net_bandwidth_;
+  net_bandwidth_weight_ = other.net_bandwidth_weight_;
   group_id_ = other.group_id_;
   ret = group_name_.assign(other.group_name_);
   return ret;

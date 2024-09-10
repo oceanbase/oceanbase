@@ -381,6 +381,10 @@ public:
       const ObRowKeysInfo *row_keys_info,
       const int64_t rowkey_begin_idx,
       const int64_t rowkey_end_idx);
+  // Only used for macro block reuse in clustered index tree.
+  int open(
+      const MacroBlockId &macro_id,
+      const ObMicroBlockData &idx_block_data);
   int get_next(
       ObMicroIndexInfo &idx_block_row,
       const bool is_multi_check = false,

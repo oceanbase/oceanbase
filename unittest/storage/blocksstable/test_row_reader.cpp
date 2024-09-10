@@ -372,39 +372,6 @@ void TestNewRowReader::check_read_datums(const char* buf, const int64_t buf_len,
     ASSERT_TRUE(reader_row.storage_datums_[j] == writer_row.storage_datums_[j]);
   }
 }
-/*
-void TestNewRowReader::check_write_with_update_idx(const ObDatumRow &writer_row)
-{
-  int ret = OB_SUCCESS;
-  ObArray<int64_t> update_idx;
-  int rowkey_cnt[] = {1, 5, 19, 35};
-
-  for (int j = 0; j < ARRAYSIZEOF(rowkey_cnt) && rowkey_cnt[j] < writer_row.count_; ++j){
-    int i = rowkey_cnt[j];
-    update_idx.reset();
-    while (i < writer_row.count_) {
-      if (!writer_row.storage_datums_[i].is_nop()) {
-        update_idx.push_back(i);
-        i += 2;
-      } else {
-        i++;
-      }
-    }
-
-    ObRowWriter row_writer;
-    char *buf = nullptr;
-    int64_t len = 0;
-    ret = row_writer.write(rowkey_cnt[j], writer_row, &update_idx, buf, len);
-    ASSERT_EQ(ret, OB_SUCCESS);
-    ObDatumRow datum_row;
-    ASSERT_EQ(OB_SUCCESS, datum_row.init(allocator_, writer_row.count_));
-    check_read_datum_row(buf, len, datum_row, rowkey_cnt[j], &update_idx);
-
-    allocator_.free(buf);
-    buf = nullptr;
-  }
-}
-*/
 
 void TestNewRowReader::append_col(ObDatumRow &row, int64_t col_cnt)
 {

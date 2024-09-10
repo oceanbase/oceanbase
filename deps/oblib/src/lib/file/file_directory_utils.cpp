@@ -417,8 +417,13 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
   DIR *dir = NULL;
   struct dirent *entry;
   if (NULL == (dir = opendir(path))) {
-    ret = OB_ERR_SYS;
-    LIB_LOG(WARN, "opendir failed", K(path));
+    if (ENOENT != errno) {
+      ret = OB_FILE_NOT_OPENED;
+      LIB_LOG(WARN, "fail to open dir", K(ret), K(path));
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
+      LIB_LOG(WARN, "dir does not exist", K(ret), K(path));
+    }
   } else {
     char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
     while ((entry = readdir(dir)) != NULL && OB_SUCC(ret)) {
@@ -437,8 +442,6 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
         // delete normal file
       } else if (false == is_dir && OB_FAIL(FileDirectoryUtils::delete_file(current_file_path))) {
         LIB_LOG(WARN, "delete_file failed", K(ret), K(current_file_path));
-      } else {
-        LIB_LOG(INFO, "delete_directory_rec success", K(path));
       }
     }
   }

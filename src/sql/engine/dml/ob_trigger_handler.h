@@ -67,7 +67,8 @@ public:
                                              pl::ObProcType type)
   {
     bool is_trg_routine = false;
-    if (schema::ObTriggerInfo::is_trigger_body_package_id(package_id) && pl::ObProcType::PACKAGE_PROCEDURE == type) {
+    if (schema::ObTriggerInfo::is_trigger_body_package_id(package_id)
+        && (pl::ObProcType::PACKAGE_PROCEDURE == type || pl::ObProcType::PACKAGE_FUNCTION == type)) {
       if (lib::is_oracle_mode()) {
         is_trg_routine = (routine_id >= ROUTINE_IDX_CALC_WHEN && routine_id <= ROUTINE_IDX_AFTER_STMT);
       } else {

@@ -130,6 +130,16 @@ public:
   int32_t file_id_;
 };
 
+class ObFlushSSMicroCacheStmt : public ObSystemCmdStmt
+{
+public:
+  ObFlushSSMicroCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_SS_MICRO_CACHE) {}
+  virtual ~ObFlushSSMicroCacheStmt() {}
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_name));
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
+};
+
 class ObFlushDagWarningsStmt : public ObSystemCmdStmt
 {
 public:
@@ -219,6 +229,60 @@ public:
   const obrpc::ObAdminZoneArg &get_arg() const { return arg_; }
 private:
   obrpc::ObAdminZoneArg arg_;
+};
+
+class ObAdminStorageStmt : public ObSystemCmdStmt
+{
+public:
+  ObAdminStorageStmt()
+      : ObSystemCmdStmt(stmt::T_ADMIN_STORAGE),
+        arg_()
+  {
+  }
+
+  ObAdminStorageStmt(common::ObIAllocator *name_pool)
+      : ObSystemCmdStmt(name_pool, stmt::T_ADMIN_STORAGE),
+        arg_()
+  {
+  }
+
+  virtual ~ObAdminStorageStmt() {}
+
+  inline const common::ObString get_path() const { return arg_.path_.str(); }
+  inline int set_path(const common::ObString &path) { return arg_.path_.assign(path); }
+  inline const common::ObString get_accessinfo() const { return arg_.access_info_.str(); }
+  inline int set_accessinfo(const common::ObString &access_info) { return arg_.access_info_.assign(access_info); }
+  inline const common::ObString get_attribute() const { return arg_.attribute_.str(); }
+  inline int set_attribute(const common::ObString &attribute) { return arg_.attribute_.assign(attribute); }
+  inline const common::ObZone &get_zone() const { return arg_.zone_; }
+  inline void set_zone(const common::ObZone &zone) { arg_.zone_ = zone; }
+  inline const common::ObRegion &get_region() const { return arg_.region_; }
+  inline void set_region(const common::ObRegion &region) { arg_.region_ = region; }
+  inline const share::ObScopeType::TYPE &get_scope_type() const { return arg_.scope_type_; }
+  inline void set_scope_type(const share::ObScopeType::TYPE &scope_type) { arg_.scope_type_ = scope_type; }
+  inline const share::ObStorageUsedType::TYPE &get_storage_use_type() const { return arg_.use_for_; }
+  inline void set_storage_use_type(const share::ObStorageUsedType::TYPE &use_for) { arg_.use_for_ = use_for; }
+  inline const bool &get_force_type() const { return arg_.force_type_; }
+  inline void set_force_type(const bool &force_type) { arg_.force_type_ = force_type; }
+  inline const bool &get_wait_type() const { return arg_.wait_type_; }
+  inline void set_wait_type(const bool &wait_type) { arg_.wait_type_ = wait_type; }
+  inline obrpc::ObAdminStorageArg::AdminStorageOp get_op() const { return arg_.op_; }
+  inline void set_op(const obrpc::ObAdminStorageArg::AdminStorageOp op) { arg_.op_ = op; }
+  inline int set_alter_accessinfo_option() {
+    return arg_.alter_storage_options_.add_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ACCESS_INFO);
+  }
+  inline bool has_alter_accessinfo_option() {
+    return arg_.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ACCESS_INFO);
+  }
+  inline int set_alter_attribute_option() {
+    return arg_.alter_storage_options_.add_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ATTRIBUTE);
+  }
+  inline bool has_alter_attribute_option() {
+    return arg_.alter_storage_options_.has_member(obrpc::ObAdminStorageArg::ALTER_STORAGE_ATTRIBUTE);
+  }
+  const obrpc::ObAdminStorageArg &get_arg() const { return arg_; }
+private:
+  obrpc::ObAdminStorageArg arg_;
 };
 
 class ObSwitchReplicaRoleStmt : public ObSystemCmdStmt
@@ -372,6 +436,19 @@ public:
 
   obrpc::ObAdminSetConfigArg &get_rpc_arg() { return rpc_arg_; }
   
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminSetConfigArg rpc_arg_;
+};
+
+class ObChangeExternalStorageDestStmt : public ObSystemCmdStmt
+{
+public:
+  ObChangeExternalStorageDestStmt() : ObSystemCmdStmt(stmt::T_CHANGE_EXTERNAL_STORAGE_DEST) {}
+  virtual ~ObChangeExternalStorageDestStmt() {}
+
+  obrpc::ObAdminSetConfigArg &get_rpc_arg() { return rpc_arg_; }
+
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 private:
   obrpc::ObAdminSetConfigArg rpc_arg_;

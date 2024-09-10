@@ -285,17 +285,26 @@ int GenFetchTaskFunctor::generate_log_fetch_task_(const ObLSID &id,
 {
   int ret = OB_SUCCESS;
   ObArchiveLogFetchTask *tmp_task = NULL;
-  palf::PalfHandleGuard palf_handle;
   share::SCN scn;
+  ObLSService *ls_service = MTL(ObLSService*);
+  ObLSHandle ls_handle;
+  ObLS *ls = NULL;
+  ObLogHandler *log_handler = NULL;
   task = NULL;
 
-  if (OB_ISNULL(tmp_task = archive_fetcher_->alloc_log_fetch_task())) {
+  if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "ls_service is NULL", K(ret), K(id), KP(ls_service));
+  } else if (OB_ISNULL(tmp_task = archive_fetcher_->alloc_log_fetch_task())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     ARCHIVE_LOG(WARN, "alloc log fetch task failed", K(ret), K(id));
-  } else if (OB_FAIL(log_service_->open_palf(id, palf_handle))) {
-    ARCHIVE_LOG(WARN, "open_palf failed", K(id));
-  } else if (OB_FAIL(palf_handle.locate_by_lsn_coarsely(start_lsn, scn))) {
-    ARCHIVE_LOG(WARN, "locate by lsn failed", K(id), K(start_lsn));
+  } else if (OB_FAIL(ls_service->get_ls(id, ls_handle, ObLSGetMod::ARCHIVE_MOD))) {
+    ARCHIVE_LOG(WARN, "get_ls failed", K(ret), K(id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "ls or log_handle is NULL", K(ret), K(id), KP(ls), KP(log_handler));
+  } else if (OB_FAIL(log_handler->locate_by_lsn_coarsely(start_lsn, scn))) {
+    ARCHIVE_LOG(WARN, "locate_by_lsn_coarsely failed", K(ret), K(id), KP(ls), KP(log_handler));
   } else if (OB_FAIL(tmp_task->init(tenant_id_, id, station, scn, start_lsn, end_lsn))) {
     ARCHIVE_LOG(WARN, "log fetch task init failed", K(ret), K(id), K(station));
   } else {

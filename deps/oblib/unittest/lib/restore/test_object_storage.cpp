@@ -29,6 +29,7 @@ public:
   virtual bool need_get_file_size() const { return true; }
 
   std::set<std::string> object_names_;
+  std::vector<std::string> object_list_;
   const int64_t expect_file_size_;
 };
 
@@ -44,6 +45,7 @@ int TestObjectStorageListOp::func(const dirent *entry)
   }
   std::string tmp(entry->d_name);
   object_names_.emplace(std::move(tmp));
+  object_list_.push_back(entry->d_name);
   return ret;
 }
 
@@ -467,7 +469,7 @@ TEST_F(TestObjectStorage, test_check_storage_obj_meta)
 
       int64_t file_length = -1;
       if (info_base.get_type() == ObStorageType::OB_STORAGE_S3) {
-        ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.get_file_length(uri, false/*is_adaptive*/, file_length));
+        ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.get_file_length(uri, false/*is_adaptive*/, file_length));
       } else {
         ASSERT_EQ(OB_SUCCESS, util.get_file_length(uri, false/*is_adaptive*/, file_length));
         ASSERT_EQ(strlen(content), file_length);
@@ -778,7 +780,7 @@ TEST_F(TestObjectStorage, test_append_rw)
       ASSERT_EQ(OB_INVALID_ARGUMENT, appender.pwrite("1", 1, -1));
 
       ObStorageAdaptiveReader reader;
-      ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, reader.open(uri, &info_base));
+      ASSERT_EQ(OB_OBJECT_NOT_EXIST, reader.open(uri, &info_base));
     }
 
     {
@@ -1156,6 +1158,37 @@ TEST_F(TestObjectStorage, test_append_rw)
   }
 }
 
+// 写入一个模拟追加写文件，包含一个format文件和500个数据文件，共501个子文件
+int write_appendable_object(const char *obj_name, ObObjectStorageInfo &storage_info)
+{
+  int ret = OB_SUCCESS;
+  ObStorageUtil util;
+  char uri_buf[OB_MAX_URI_LENGTH] = { 0 };
+  if (OB_ISNULL(obj_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "obj_name is name", K(ret), K(obj_name), K(storage_info));
+  } else if (OB_FAIL(util.open(&storage_info))) {
+    OB_LOG(WARN, "fail to open util", K(ret), K(obj_name), K(storage_info));
+  } else if (OB_FAIL(util.mkdir(obj_name))) {
+    OB_LOG(WARN, "fail to mkdir", K(ret), K(obj_name), K(storage_info));
+  } else if (OB_FAIL(construct_fragment_full_name(obj_name, OB_S3_APPENDABLE_FORMAT_META,
+                                                  uri_buf, sizeof(uri_buf)))) {
+    OB_LOG(WARN, "fail to construct format meta name", K(ret), K(obj_name), K(storage_info));
+  } else if (OB_FAIL(util.write_single_file(uri_buf, OB_S3_APPENDABLE_FORMAT_CONTENT_V1,
+                                            strlen(OB_S3_APPENDABLE_FORMAT_CONTENT_V1)))) {
+    OB_LOG(WARN, "fail to write format meta file", K(ret), K(obj_name), K(storage_info));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < 500; i++) {
+      if (OB_FAIL(construct_fragment_full_name(obj_name, i, i + 1, uri_buf, sizeof(uri_buf)))) {
+        OB_LOG(WARN, "fail to construct fragment name", K(ret), K(i), K(obj_name), K(storage_info));
+      } else if (OB_FAIL(util.write_single_file(uri_buf, "a", 1))) {
+        OB_LOG(WARN, "fail to write fragment", K(ret), K(obj_name), K(storage_info));
+      }
+    }
+  }
+  return ret;
+}
+
 TEST_F(TestObjectStorage, test_cross_testing)
 {
   char * a = NULL;
@@ -1459,7 +1492,7 @@ TEST_F(TestObjectStorage, test_util_is_tagging)
     ASSERT_FALSE(is_tagging);
 
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     tmp_info_base.reset();
     util.close();
 
@@ -1469,7 +1502,7 @@ TEST_F(TestObjectStorage, test_util_is_tagging)
 
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_info_base));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
 
     is_tagging = true;
@@ -1490,7 +1523,7 @@ TEST_F(TestObjectStorage, test_util_is_tagging)
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_info_base));
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     util.close();
   }
 }

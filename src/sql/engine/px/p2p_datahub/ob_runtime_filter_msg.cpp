@@ -23,6 +23,7 @@
 #include "share/detect/ob_detect_manager_utils.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+#include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -40,7 +41,8 @@ OB_DEF_SERIALIZE(ObRFBloomFilterMsg)
               next_peer_addrs_,
               expect_first_phase_count_,
               piece_size_,
-              use_rich_format_);
+              use_rich_format_,
+              use_hash_join_seed_);
   return ret;
 }
 
@@ -57,7 +59,8 @@ OB_DEF_DESERIALIZE(ObRFBloomFilterMsg)
               next_peer_addrs_,
               expect_first_phase_count_,
               piece_size_,
-              use_rich_format_);
+              use_rich_format_,
+              use_hash_join_seed_);
   return ret;
 }
 
@@ -71,7 +74,8 @@ OB_DEF_SERIALIZE_SIZE(ObRFBloomFilterMsg)
               next_peer_addrs_,
               expect_first_phase_count_,
               piece_size_,
-              use_rich_format_);
+              use_rich_format_,
+              use_hash_join_seed_);
   return len;
 }
 
@@ -324,7 +328,7 @@ int ObRFBloomFilterMsg::process_first_phase_recieve_count(
   int ret = OB_SUCCESS;
   CK(msg.get_msg_receive_expect_cnt() > 0 && msg_receive_expect_cnt_ > 0);
   int64_t begin_idx = msg.bloom_filter_.get_begin_idx();
-  // msg_receive_cur_cnt_ is msg total cnt, msg_receive_expect_cnt_ equals to sqc_count * peice_count
+  // msg_receive_cur_cnt_ is msg total cnt, msg_receive_expect_cnt_ equals to sqc_count * piece_count
   int64_t received_cnt = ATOMIC_AAF(&msg_receive_cur_cnt_, 1);
   if (received_cnt > msg_receive_expect_cnt_) {
     ret = OB_INVALID_ARGUMENT;
@@ -337,7 +341,7 @@ int ObRFBloomFilterMsg::process_first_phase_recieve_count(
     bool find = false;
     for (int i = 0; OB_SUCC(ret) && i < receive_count_array_.count(); ++i) {
       if (begin_idx == receive_count_array_.at(i).begin_idx_) {
-        // receive count of a specific peice msg, expect_first_phase_count_ equals to sqc count
+        // receive count of a specific piece msg, expect_first_phase_count_ equals to sqc count
         int64_t cur_count = ATOMIC_AAF(&receive_count_array_.at(i).reciv_count_, 1);
         first_phase_end = (cur_count == expect_first_phase_count_);
         find = true;
@@ -436,6 +440,7 @@ int ObRFBloomFilterMsg::assign(const ObP2PDatahubMsgBase &msg)
   expect_first_phase_count_ = other_msg.expect_first_phase_count_;
   piece_size_ = other_msg.piece_size_;
   use_rich_format_ = other_msg.use_rich_format_;
+  use_hash_join_seed_ = other_msg.use_hash_join_seed_;
   if (OB_FAIL(ObP2PDatahubMsgBase::assign(msg))) {
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(next_peer_addrs_.assign(other_msg.next_peer_addrs_))) {
@@ -465,6 +470,7 @@ int ObRFBloomFilterMsg::shadow_copy(const ObRFBloomFilterMsg &other_msg)
   expect_first_phase_count_ = other_msg.expect_first_phase_count_;
   piece_size_ = other_msg.piece_size_;
   use_rich_format_ = other_msg.use_rich_format_;
+  use_hash_join_seed_ = other_msg.use_hash_join_seed_;
   if (OB_FAIL(ObP2PDatahubMsgBase::assign(other_msg))) {
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(bloom_filter_.init(&other_msg.bloom_filter_))) {
@@ -536,6 +542,19 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
+  if (use_hash_join_seed_) {
+    // hash value explained in:
+    //        hash join            simd block bloom filter
+    //  10001111....1011010         10001111....1011010
+    //  ||_______63_______|          |___32___||__32___|
+    //  |     hash               _______|_______   |-->locate block
+    //  |                        |    |    |    |
+    // is match                  8bit 8bit 8bit 8bit -> split to 4 byte
+    //                           |    |    |    |
+    //                           6bit 6bit 6bit 6bit -> each low 6bit are used, high 2 bit is useless
+    // the highest bit of hash values is not used in bloom filter
+    hash_val = ObHashJoinVecOp::HASH_SEED;
+  }
   ObDatum *datum = nullptr;
   ObHashFunc hash_func;
   if (OB_UNLIKELY(is_empty_)) {
@@ -814,6 +833,20 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
   int64_t filter_count = 0;
   bool is_match = true;
   uint64_t seed = ObExprJoinFilter::JOIN_FILTER_SEED;
+  if (use_hash_join_seed_) {
+    // hash value explained in:
+    //        hash join            simd block bloom filter
+    //  10001111....1011010         10001111....1011010
+    //  ||_______63_______|          |___32___||__32___|
+    //  |     hash               _______|_______   |-->locate block
+    //  |                        |    |    |    |
+    // is match                  8bit 8bit 8bit 8bit -> split to 4 byte
+    //                           |    |    |    |
+    //                           6bit 6bit 6bit 6bit -> each low 6bit are used, high 2 bit is useless
+    // the highest bit of hash values is not used in bloom filter
+    seed = ObHashJoinVecOp::HASH_SEED;
+  }
+
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   uint64_t *hash_values = filter_ctx.right_hash_vals_;
 
@@ -895,6 +928,18 @@ int ObRFBloomFilterMsg::insert_partition_bloom_filter(ArgVec *arg_vec,
     } else if (is_empty_) {
       is_empty_ = false;
     }
+  }
+  return ret;
+}
+
+int ObRFBloomFilterMsg::insert_bloom_filter_with_hash_values(
+    const ObBatchRows *child_brs,
+    uint64_t *batch_hash_values)
+{
+  int ret = OB_SUCCESS;
+  EvalBound bound(child_brs->size_, child_brs->all_rows_active_);
+  if (OB_FAIL(bloom_filter_.put_batch(batch_hash_values, bound, *child_brs->skip_, is_empty_))) {
+    LOG_WARN("failed to push hash value to px bloom filter");
   }
   return ret;
 }
@@ -1002,7 +1047,6 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
-  CK(OB_NOT_NULL(filter_idx_) && OB_NOT_NULL(create_finish_));
   int64_t cur_idx = 0;
   ObRFBloomFilterMsg msg;
   ObPxP2pDhMsgCB msg_cb(GCTX.self_addr(),
@@ -1013,7 +1057,7 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
   ObPxP2PDatahubArg arg;
 
   arg.msg_ = &msg;
-  while (!*create_finish_ && need_send_msg_ && OB_SUCC(ret)) {
+  while (!create_finish_ && need_send_msg_ && OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail to check status", K(ret));
     }
@@ -1024,12 +1068,9 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
     // when drain_exch, not need to send msg
   } else if (OB_FAIL(msg.shadow_copy(*this))) {
     LOG_WARN("fail to shadow copy second phase msg", K(ret));
-  } else if (OB_ISNULL(create_finish_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected create finish ptr", K(ret));
   } else {
-    while (*filter_idx_ <  filter_indexes_.count() && OB_SUCC(ret)) {
-      cur_idx = ATOMIC_FAA(filter_idx_, 1);
+    while (filter_idx_ < filter_indexes_.count() && OB_SUCC(ret)) {
+      cur_idx = ATOMIC_FAA(&filter_idx_, 1);
       if (cur_idx < filter_indexes_.count()) {
         msg.next_peer_addrs_.reuse();
         const BloomFilterIndex &addr_filter_idx = filter_indexes_.at(cur_idx);
@@ -1124,7 +1165,7 @@ int ObRFBloomFilterMsg::generate_filter_indexes(
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(filter_indexes_.prepare_allocate(tmp_filter_indexes.count()))) {
-    LOG_WARN("failed to prepare_allocate filter_indexes_");
+    LOG_WARN("failed to prepare_allocate filter_indexes_", K(tmp_filter_indexes.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_filter_indexes.count(); ++i) {
       filter_indexes_.at(i).channel_ids_.set_allocator(&allocator_);
@@ -1279,7 +1320,7 @@ int ObRFRangeFilterMsg::get_min(ObCmpFunc &func, ObDatum &l, ObDatum &r, int64_t
   // the lower bound l, with ptr==NULL and null_==true, should not be covered by a.
   //
   // the reason we remove the OB_ISNULL(l.ptr_) condition is that when l is a empty char with l.ptr=0x0 and
-  // l.len=0 and null_=false, it should not be corver by r directly
+  // l.len=0 and null_=false, it should not be covered by r directly
   if (is_empty_) {
     if (OB_FAIL(dynamic_copy_cell(r, l, cell_size))) {
       LOG_WARN("fail to deep copy datum");
@@ -1303,7 +1344,7 @@ int ObRFRangeFilterMsg::prepare_query_range()
   } else if (is_empty_) {
     // make empty range
     if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range_))) {
-      LOG_WARN("faild to fill_empty_query_range");
+      LOG_WARN("failed to fill_empty_query_range");
     } else {
       is_query_range_ready_ = true;
     }
@@ -1882,7 +1923,7 @@ int ObRFInFilterMsg::ObRFInFilterNode::hash(uint64_t &hash_ret) const
 // the ObRFInFilterNode stores in ObRFInFilter always be the datum of build table,
 // while the other node can be the build table(during insert or merge process)
 // or the probe table(during filter process),
-// so the compare process relys on the other node, always using other's cmp_func_.
+// so the compare process relies on the other node, always using other's cmp_func_.
 bool ObRFInFilterMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &other) const
 {
   int cmp_ret = 0;
@@ -1990,11 +2031,11 @@ int ObRFInFilterMsg::reuse()
 
 void ObRFInFilterMsg::check_finish_receive()
 {
-  if (ATOMIC_LOAD(&is_active_)) {
-    if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+  if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+    if (ATOMIC_LOAD(&is_active_)) {
       (void)after_process();
-      is_ready_ = true;
     }
+    is_ready_ = true;
   }
 }
 
@@ -2093,11 +2134,11 @@ int ObRFInFilterMsg::prepare_storage_white_filter_data(ObDynamicFilterExecutor &
 {
   int ret = OB_SUCCESS;
   int col_idx = dynamic_filter.get_col_idx();
-  if (is_empty_) {
-    dynamic_filter.set_filter_action(DynamicFilterAction::FILTER_ALL);
-    is_data_prepared = true;
-  } else if (!is_active_) {
+  if (!is_active_) {
     dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
+    is_data_prepared = true;
+  } else if (is_empty_) {
+    dynamic_filter.set_filter_action(DynamicFilterAction::FILTER_ALL);
     is_data_prepared = true;
   } else {
     for (int64_t i = 0; i < serial_rows_.count() && OB_SUCC(ret); ++i) {
@@ -2145,7 +2186,7 @@ int ObRFInFilterMsg::prepare_query_ranges()
     // make empty range
     ObNewRange query_range;
     if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range))) {
-      LOG_WARN("faild to fill_empty_query_range");
+      LOG_WARN("failed to fill_empty_query_range");
     } else if (OB_FAIL(query_range_.push_back(query_range))) {
       LOG_WARN("failed to push back query_range");
     } else {
@@ -2153,7 +2194,7 @@ int ObRFInFilterMsg::prepare_query_ranges()
     }
   } else if (query_range_info_.prefix_col_idxs_.count() == col_cnt_) {
     // col count matches, the hashmap make sure all rows in the filter are different
-    // so not need to dedupcate
+    // so not need to deduplicate
     ret = process_query_ranges_without_deduplicate();
   } else {
     // prefix col less than index column, need do deduplicate

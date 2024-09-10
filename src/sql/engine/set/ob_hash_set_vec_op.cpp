@@ -152,7 +152,9 @@ int ObHashSetVecOp::build_hash_table_from_left_batch(bool from_child, const int6
       } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(
                         static_cast<const ObHashSetVecSpec &>
                             (get_spec()).set_exprs_,
-                        *left_brs,
+                        *left_brs->skip_,
+                        left_brs->size_,
+                        false /* all_rows_active */,
                         hash_values_for_batch_))) {
         LOG_WARN("failed to calc hash value for batch", K(ret));
       } else if (OB_FAIL(hp_infras_.insert_row_for_batch(static_cast<const ObHashSetVecSpec &>

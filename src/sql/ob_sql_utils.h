@@ -60,6 +60,11 @@ typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 struct ObExprConstraint;
 typedef common::ObSEArray<common::ObSpatialMBR, 1> ObMbrFilterArray;
 class ObSelectStmt;
+class ObConstRawExpr;
+class ObColumnRefRawExpr;
+struct ObPCResourceMapRule;
+class ObResolverParams;
+class ObGlobalHint;
 
 struct EstimatedPartition {
   common::ObAddr addr_;
@@ -661,6 +666,34 @@ public:
   static int split_remote_object_storage_url(common::ObString &url, share::ObBackupStorageInfo &storage_info);
   static bool is_external_files_on_local_disk(const common::ObString &url);
   static int check_location_access_priv(const common::ObString &location, ObSQLSessionInfo *session);
+  static int check_sql_map_expected_resource_group(const ObSqlCtx &context,
+                                            const ObResultSet &result,
+                                            const ObResolverParams *resolve_ctx,
+                                            const ObStmt *stmt,
+                                            ObPCResourceMapRule &resource_map_rule);
+
+  static int check_hint_for_resource_group(uint64_t tenant_id,
+                                    const ObGlobalHint &global_hint,
+                                    ObPCResourceMapRule &resource_map_rule,
+                                    uint64_t &group_id);
+
+  static int check_column_equal_conditions_for_resource_group(const ObResolverParams *resolve_ctx,
+                                                       const ObStmt *stmt,
+                                                       ObPCResourceMapRule &resource_map_rule,
+                                                       uint64_t &group_id);
+
+  static int recursive_check_equal_condition(const ObResolverParams *resolve_ctx,
+                                      const ObStmt *stmt,
+                                      const ObRawExpr &expr,
+                                      ObPCResourceMapRule &resource_map_rule,
+                                      uint64_t &group_id);
+
+  static int check_column_with_res_mapping_rule(const ObResolverParams *resolve_ctx,
+                                                const ObStmt *stmt,
+                                                const ObColumnRefRawExpr *col_expr,
+                                                const ObConstRawExpr *const_expr,
+                                                ObPCResourceMapRule &resource_map_rule,
+                                                uint64_t &group_id);
 
 #ifdef OB_BUILD_SPM
   static int handle_plan_baseline(const ObAuditRecordData &audit_record,

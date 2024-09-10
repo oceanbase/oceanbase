@@ -115,21 +115,29 @@ private:
   ObCgInfo group_infos_[OBCG_MAXNUM];
 };
 
-struct OBGroupIOInfo final
+struct ObGroupIOInfo final
 {
 public:
-  OBGroupIOInfo()
-  : min_percent_(0),
+  ObGroupIOInfo()
+  : group_name_(nullptr),
+    min_percent_(0),
     max_percent_(100),
-    weight_percent_(0)
+    weight_percent_(0),
+    max_net_bandwidth_percent_(100),
+    net_bandwidth_weight_percent_(0)
   {}
-  int init(const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent);
+  int init(const char *name,
+           const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent,
+           const int64_t max_net_bandwidth_percent, const int64_t net_bandwidth_weight_percent);
   void reset();
   bool is_valid() const;
 public:
+  const char *group_name_;
   uint64_t min_percent_;
   uint64_t max_percent_;
   uint64_t weight_percent_;
+  uint64_t max_net_bandwidth_percent_;
+  uint64_t net_bandwidth_weight_percent_;
 };
 
 class ObCgroupCtrl
@@ -172,8 +180,8 @@ public:
   int get_throttled_time(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   // 设定指定租户cgroup组的iops，直接更新到租户io_config
   int set_group_iops(const uint64_t tenant_id,
-                     const uint64_t group_id,
-                     const OBGroupIOInfo &group_io);
+                     const int64_t group_id,
+                     const ObGroupIOInfo &group_io);
   // 删除正在使用的plan反应到IO层：重置所有IOPS
   int reset_all_group_iops(const uint64_t tenant_id);
   // 删除directive反应到IO层：重置IOPS
@@ -211,8 +219,8 @@ private:
 
 private:
   friend class oceanbase::share::ObTenantBase;
-  friend int oceanbase::lib::SET_GROUP_ID(uint64_t group_id);
-  int add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT);
+  friend int oceanbase::lib::SET_GROUP_ID(uint64_t group_id, bool is_background);
+  int add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const bool is_background = false);
   int init_cgroup_root_dir_(const char *cgroup_path);
   static int init_dir_(const char *curr_dir);
   static int init_full_dir_(const char *curr_path);

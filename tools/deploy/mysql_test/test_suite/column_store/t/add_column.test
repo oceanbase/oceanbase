@@ -137,11 +137,11 @@ alter system flush plan cache;
 sleep 1;
 --enable_query_log
 
-select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+select count(c2), min(c2), max(c2), sum_opnsize(c2), approx_count_distinct(c2) from t3 where c1 < 256;
 
 alter system set _rowsets_enabled = false;
 alter system flush plan cache;
-select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+select count(c2), min(c2), max(c2), sum_opnsize(c2), approx_count_distinct(c2) from t3 where c1 < 256;
 
 --disable_query_log
 SET sql_mode = '';
@@ -149,7 +149,7 @@ alter system flush plan cache;
 sleep 1;
 --enable_query_log
 
-select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+select count(c2), min(c2), max(c2), sum_opnsize(c2), approx_count_distinct(c2) from t3 where c1 < 256;
 
 alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc

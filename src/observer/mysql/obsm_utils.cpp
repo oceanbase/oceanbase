@@ -378,8 +378,7 @@ int ObSMUtils::cell_str(
         }
         break;
       }
-      case ObUserDefinedSQLTC:
-      case ObCollectionSQLTC: {
+      case ObUserDefinedSQLTC: {
         if (obj.get_udt_subschema_id() == 0) { // xml
           ret = ObMySQLUtil::sql_utd_cell_str(MTL_ID(), buf, len, obj.get_string(), pos);
         } else if (type == MYSQL_PROTOCOL_TYPE::TEXT) { // common sql udt text protocal
@@ -389,6 +388,10 @@ int ObSMUtils::cell_str(
           ret = OB_NOT_IMPLEMENT;
           OB_LOG(WARN, "UDTSQLType binary protocal not implemented", K(ret));
         }
+        break;
+      }
+      case ObCollectionSQLTC: {
+        ret = ObMySQLUtil::varchar_cell_str(buf, len, obj.get_string(), is_oracle_raw, pos);
         break;
       }
       case ObDecimalIntTC: {

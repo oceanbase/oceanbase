@@ -41,6 +41,7 @@
 #include "share/ob_ls_id.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "storage/ob_file_system_router.h"
+#include "share/backup/ob_backup_struct.h"
 #include "share/ls/ob_ls_creator.h"//ObLSCreator
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
 #include "share/ob_all_server_tracer.h"
@@ -58,6 +59,10 @@
 #include "rootserver/ob_root_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "close_modules/tde_security/share/ob_master_key_getter.h"
+#endif
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/object_storage/ob_device_connectivity.h"
+#include "storage/shared_storage/ob_ss_format_util.h"
 #endif
 
 namespace oceanbase
@@ -149,10 +154,21 @@ int ObBaseBootstrap::check_bootstrap_rs_list(
   if (rs_list.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rs_list size must larger than 0", K(ret));
-  } else {
-    if (OB_FAIL(check_multiple_zone_deployment_rslist(rs_list))) {
-      LOG_WARN("fail to check multiple zone deployment rslist", K(ret));
+  } else if (OB_FAIL(check_multiple_zone_deployment_rslist(rs_list))) {
+    LOG_WARN("fail to check multiple zone deployment rslist", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    // In shared_storage_mode, for now, we need the cluster to have only one single REGION.
+    // This constraint will be canceled in later version.
+    const ObRegion &the_only_region = rs_list[0].region_;
+    for (int64_t i = 1; i < rs_list_.count(); ++i) {
+      if (the_only_region != rs_list_[i].region_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("In shared storage mode, more than one REGION is not supported yet.", KR(ret), K(rs_list));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one region in shared-storage mode");
+      }
     }
+#endif
   }
   //BOOTSTRAP_CHECK_SUCCESS();
   return ret;
@@ -249,8 +265,10 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   } else if (OB_FAIL(check_all_server_bootstrap_mode_match(match))) {
     LOG_WARN("fail to check all server bootstrap mode match", KR(ret));
   } else if (!match) {
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_OP_NOT_ALLOW;
     LOG_WARN("cannot do bootstrap with different bootstrap mode on servers", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "startup mode not match, bootstrap");
+    // TODO(cangming.zl): add case
   } else if (OB_FAIL(check_is_all_server_empty(is_empty))) {
     LOG_WARN("failed to check bootstrap stat", KR(ret));
   } else if (!is_empty) {
@@ -258,6 +276,10 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("cannot do bootstrap on not empty server", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_root_key())) {
     LOG_WARN("fail to notify sys tenant root key", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(check_and_notify_shared_storage_info())) {
+    LOG_WARN("fail to notify shared-storage info", KR(ret));
+#endif
   } else if (OB_FAIL(notify_sys_tenant_server_unit_resource())) {
     LOG_WARN("fail to notify sys tenant server unit resource", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_config_())) {
@@ -276,6 +298,78 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+/*
+ * Parse and check the validity of shared_storage info.
+ * Check connectivity and whether ss-format file exist.
+ * Then write the ss-format file and notify rs-list nodes with shared_storage info.
+ */
+int ObPreBootstrap::check_and_notify_shared_storage_info()
+{
+  int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+    // do nothing in shared_nothing mode
+  } else {
+    const ObString &shared_storage_info_str = arg_.shared_storage_info_;
+    ObAdminStorageArg shared_storage_infos;
+    ObBackupDest storage_dest;
+    ObDeviceConnectivityCheckManager device_conn_check_mgr;
+    if (OB_UNLIKELY(shared_storage_info_str.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_infos is empty in SS mode", KR(ret), K(arg_));
+    } else if (OB_FAIL(ObStorageDestCheck::parse_shared_storage_info(shared_storage_info_str,
+                  shared_storage_infos, storage_dest))) {
+      LOG_WARN("failed to parse shared_storage_infos", KR(ret), K(shared_storage_infos));
+    } else if (OB_UNLIKELY(!shared_storage_infos.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_infos is invalid", KR(ret), K(shared_storage_infos));
+    }
+    // Check storage-dest connectivity
+    if (FAILEDx(device_conn_check_mgr.check_device_connectivity(storage_dest))) {
+      LOG_WARN("fail to check device connectivity", KR(ret), K(storage_dest));
+    }
+    // Check and write the ss-format file to prevent from write conflict with another cluster
+    //   in same shared-storage directory
+    bool is_ss_format_exist = false;
+    ObSSFormat ss_format;
+    if (FAILEDx(ObSSFormatUtil::is_exist_ss_format(storage_dest, is_ss_format_exist))) {
+      LOG_WARN("fail to judge ss_format exist", KR(ret), K(storage_dest), K(is_ss_format_exist));
+    } else if (OB_UNLIKELY(is_ss_format_exist)) {
+      ret = OB_FILE_ALREADY_EXIST;
+      LOG_ERROR("ss_format file already exist, shared storage must use new path"
+                "as the object storage path", KR(ret), K(is_ss_format_exist), K(storage_dest));
+      LOG_USER_ERROR(OB_ENTRY_EXIST, "ss_format file already exist,"
+                    "shared storage must use new path as the object storage path");
+    } else if (OB_FAIL(ss_format.init(CLUSTER_CURRENT_VERSION, ObTimeUtility::fast_current_time()))) {
+      LOG_WARN("fail to init ss_format", KR(ret), K(CLUSTER_CURRENT_VERSION));
+    } else if (OB_FAIL(ObSSFormatUtil::write_ss_format(storage_dest, ss_format))) {
+      LOG_ERROR("fail to write ss_format file", KR(ret), K(storage_dest), K(ss_format));
+    }
+    // Notify rs_list nodes with shared-storage info
+    if (OB_SUCC(ret)) {
+      ObNotifySharedStorageInfoArg rpc_arg;
+      ObNotifySharedStorageInfoResult rpc_result;
+      // NOTICE: For now, shared-storage info in bootstrap only include one storage-dest and used for all zones.
+      //         Its zone and region are not specified and need to be assigned from rs_list.
+      for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+        shared_storage_infos.zone_ = rs_list_[i].zone_;
+        shared_storage_infos.region_ = rs_list_[i].region_;
+        if (OB_FAIL(rpc_arg.init(shared_storage_infos))) {
+          LOG_WARN("fail to init rpc_arg", KR(ret), K(shared_storage_infos));
+        } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+                                      .notify_shared_storage_info(rpc_arg, rpc_result))) {
+          LOG_WARN("fail to send rpc notify_shared_stoarge_info", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+        } else if (OB_FAIL(rpc_result.get_ret())) {
+          LOG_WARN("notfiy_shared_storage_info via rpc failed", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+        }
+      }
+    }
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+#endif
 
 int ObPreBootstrap::notify_sys_tenant_root_key()
 {
@@ -452,11 +546,12 @@ int ObPreBootstrap::check_all_server_bootstrap_mode_match(
   match = true;
   Bool is_match(false);
 
+  ObCheckDeploymentModeArg arg;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", K(ret));
+  } else if (OB_FAIL(arg.init(GCTX.startup_mode_))) {
+    LOG_WARN("fail to init arg", KR(ret));
   } else {
-    ObCheckDeploymentModeArg arg;
-    arg.single_zone_deployment_on_ = OB_FILE_SYSTEM_ROUTER.is_single_zone_deployment_on();
     for (int64_t i = 0; OB_SUCC(ret) && match && i < rs_list_.count(); ++i) {
       if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_).check_deployment_mode_match(
               arg, is_match))) {
@@ -481,18 +576,24 @@ int ObPreBootstrap::check_is_all_server_empty(bool &is_empty)
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else {
-    ObCheckServerEmptyArg arg(ObCheckServerEmptyArg::BOOTSTRAP,
-                              DATA_CURRENT_VERSION);
+    ObCheckServerEmptyArg arg;
+    const ObCheckServerEmptyArg::Mode mode = ObCheckServerEmptyArg::BOOTSTRAP;
+    const uint64_t data_version = DATA_CURRENT_VERSION;
     for (int64_t i = 0; OB_SUCC(ret) && is_empty && i < rs_list_.count(); ++i) {
       int64_t rpc_timeout = obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
+      uint64_t server_id = OB_INIT_SERVER_ID + i;
       if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
         rpc_timeout = max(rpc_timeout, THIS_WORKER.get_timeout_remain());
       }
-      if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+      // arg.server_id_ will be set if server is empty and mode is BOOTSTRAP.
+      if (OB_FAIL(arg.init(mode, data_version, server_id))) {
+        LOG_WARN("failed to init ObCheckServerEmptyArg", KR(ret), K(mode), K(data_version),
+            K(server_id));
+      } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
                             .timeout(rpc_timeout)
-                            .is_empty_server(arg, is_server_empty))) {
+                            .check_server_empty(arg, is_server_empty))) {
         LOG_WARN("failed to check if server is empty",
-            "server", rs_list_[i].server_, K(rpc_timeout), K(ret));
+            "server", rs_list_[i].server_, K(rpc_timeout), K(arg), K(ret));
       } else if (!is_server_empty) {
         // don't need to set ret
         LOG_WARN("server is not empty", "server", rs_list_[i].server_);
@@ -620,6 +721,12 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
     }
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("refresh_schema");
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (FAILEDx(write_shared_storage_args())) {
+    LOG_WARN("failed to init write shared storage args", KR(ret));
+  } else {}
+#endif
 
   if (FAILEDx(add_servers_in_rs_list(server_zone_op_service))) {
     LOG_WARN("fail to add servers in rs_list_", KR(ret));
@@ -1156,6 +1263,8 @@ int ObBootstrap::add_servers_in_rs_list(rootserver::ObServerZoneOpService &serve
         FLOG_INFO("add servers in rs_list_ in version < 4.2", KR(ret), K(server), K(zone));
       }
     } else {
+      // Attention: DO keep the order of this rs_list_ the same with that of ObPrepareBootstrap,
+      //   otherwise server_ids allocated here will mismatch those notified during prepare-bootstrap stage.
       for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
         servers.reuse();
         const ObAddr &server = rs_list_.at(i).server_;
@@ -1645,7 +1754,15 @@ int ObBootstrap::init_multiple_zone_deployment_table(
       }
 
       if (OB_SUCC(ret)) {
-        zone_info.storage_type_.value_ = ObZoneInfo::STORAGE_TYPE_LOCAL;
+        ObZoneInfo::StorageType storage_type = GCTX.is_shared_storage_mode() ?
+                                               ObZoneInfo::STORAGE_TYPE_SHARED_STORAGE :
+                                               ObZoneInfo::STORAGE_TYPE_LOCAL;
+        if (OB_FAIL(zone_info.storage_type_.info_.assign(
+                ObString(ObZoneInfo::get_storage_type_str(storage_type))))) {
+          LOG_WARN("fail to assign zone storage_type str", KR(ret));
+        } else {
+          zone_info.storage_type_.value_ = storage_type;
+        }
       }
 
       if (OB_SUCC(ret)) {
@@ -1689,6 +1806,66 @@ int ObBootstrap::init_all_zone_table()
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObBootstrap::write_shared_storage_args()
+{
+  int ret = OB_SUCCESS;
+  ObAdminStorageArg shared_storage_args;
+  if (GCTX.is_shared_storage_mode()) {
+    const ObString &shared_storage_info = arg_.shared_storage_info_;
+    if (shared_storage_info.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_info is empty", KR(ret), K(arg_));
+    } else if (OB_FAIL(ObStorageDestCheck::parse_shared_storage_info(shared_storage_info,
+            shared_storage_args))) {
+      LOG_WARN("failed to parse shared_storage_info", KR(ret), K(shared_storage_args));
+    } else if (OB_UNLIKELY(!shared_storage_args.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shared_storage_args is invalid", KR(ret), K(shared_storage_args));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+        const ObZone &zone = rs_list_.at(i).zone_;
+        const ObRegion &region = rs_list_.at(i).region_;
+        if (OB_FAIL(write_shared_storage_args_for_zone(zone, region, shared_storage_args))) {
+          LOG_WARN("failed to write shared storage args for zone", KR(ret), K(zone), K(shared_storage_args));
+        } else {}
+      }
+    }
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::write_shared_storage_args_for_zone(const ObZone &zone, const ObRegion &region,
+    const obrpc::ObAdminStorageArg &storage_args)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObAdminStorageArg full_args;
+  ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
+  if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_service_ is NULL", KR(ret), KP(GCTX.root_service_));
+  } else if (OB_UNLIKELY(zone.is_empty() || region.is_empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty zone or region", KR(ret), K(zone), K(region));
+  } else if (OB_UNLIKELY(!storage_args.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage_args is invalid", KR(ret), K(storage_args));
+  } else if (OB_FAIL(full_args.assign(storage_args))) {
+    LOG_WARN("failed to assign full_args", KR(ret), K(zone), K(region), K(storage_args));
+  } else {
+    full_args.zone_ = zone;
+    full_args.region_ = region;
+    if (OB_FAIL(GCTX.root_service_->add_storage(full_args))) {
+      LOG_WARN("failed to add storage", KR(ret), K(full_args));
+    } else {
+      FLOG_INFO("add storage succeed", KR(ret), K(zone), K(storage_args));
+    }
+  }
+  return ret;
+}
+#endif
 
 template<typename SCHEMA>
 int ObBootstrap::set_replica_options(SCHEMA &schema)

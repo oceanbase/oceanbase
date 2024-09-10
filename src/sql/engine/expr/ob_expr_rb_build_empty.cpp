@@ -52,18 +52,12 @@ int ObExprRbBuildEmpty::eval_rb_build_empty(const ObExpr &expr,
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
-
   ObString rb_bin;
-  ObRoaringBitmap *rb_empty;
-  if (OB_ISNULL(rb_empty = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
-  } else if (OB_FAIL(ObRbUtils::rb_serialize(tmp_allocator, rb_bin, rb_empty))) {
-    LOG_WARN("failed to serialize empty roaringbitmap", K(ret));
+  if (OB_FAIL(ObRbUtils::build_empty_binary(tmp_allocator, rb_bin))) {
+    LOG_WARN("fail to build empty rb binary", K(ret));
   } else if (OB_FAIL(ObRbExprHelper::pack_rb_res(expr, ctx, res, rb_bin))) {
     LOG_WARN("fail to pack roaringbitmap res", K(ret));
   }
-  ObRbUtils::rb_destroy(rb_empty);
   return ret;
 }
 

@@ -506,10 +506,15 @@ public:
   bool is_rich_format() const { return enable_rich_format_; }
 
   int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta);
   bool is_subschema_ctx_inited();
   int get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                  uint16_t &subschema_id,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
+  int get_subschema_id_by_collection_elem_type(ObNestedType coll_type,
+                                               const ObDataType &elem_type,
+                                               uint16_t &subschema_id);
+  int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id);
   int build_subschema_by_fields(const ColumnsFieldIArray *fields,
                                 share::schema::ObSchemaGetterGuard *schema_guard);
   int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);

@@ -278,19 +278,19 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
-       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil)
+       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil), rowset=8
       limit(1), offset(nil)
   1 - output([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
-       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil)
+       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil), rowset=8
       group(nil), agg_func([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
        [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)])
   2 - output([ANONYMOUS_VIEW1.c0], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3], [ANONYMOUS_VIEW1.c4], [ANONYMOUS_VIEW1.c5], [ANONYMOUS_VIEW1.c6],
-       [ANONYMOUS_VIEW1.c7]), filter(nil)
+       [ANONYMOUS_VIEW1.c7]), filter(nil), rowset=8
       access([ANONYMOUS_VIEW1.c0], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3], [ANONYMOUS_VIEW1.c4], [ANONYMOUS_VIEW1.c5], [ANONYMOUS_VIEW1.c6],
        [ANONYMOUS_VIEW1.c7])
-  3 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil)
+  3 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil), rowset=8
       distinct([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7])
-  4 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil)
+  4 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil), rowset=8
       access([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t111_var.__pk_increment]), range(MIN ; MAX)always true

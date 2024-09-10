@@ -120,7 +120,9 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("trace_id", //column_name
+    ObObj trace_id_default;
+    trace_id_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("trace_id", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -130,8 +132,10 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
       OB_MAX_TRACE_ID_BUFFER_SIZE, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
+      true, //is_nullable
+      false, //is_autoincrement
+      trace_id_default,
+      trace_id_default); //default_value
   }
 
   if (OB_SUCC(ret)) {
@@ -150,7 +154,7 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("bytes", //column_name
+    ADD_COLUMN_SCHEMA("data_bytes", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -195,7 +199,7 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("cached_page_num", //column_name
+    ADD_COLUMN_SCHEMA("cached_data_page_num", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -210,7 +214,7 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("write_back_page_num", //column_name
+    ADD_COLUMN_SCHEMA("write_back_data_page_num", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -225,7 +229,7 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("flushed_page_num", //column_name
+    ADD_COLUMN_SCHEMA("flushed_data_page_num", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -376,6 +380,130 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("file_ptr", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      20, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj file_label_default;
+    file_label_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("file_label", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      16, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      file_label_default,
+      file_label_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("meta_tree_epoch", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("meta_tree_levels", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("meta_bytes", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("cached_meta_page_num", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("write_back_meta_page_num", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("page_flush_cnt", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);
@@ -392,6 +520,7 @@ int ObInnerTableSchema::all_virtual_temp_file_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;

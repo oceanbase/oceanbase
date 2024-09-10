@@ -32,7 +32,7 @@ ObFTSGroupArray::ObFTSGroupArray()
 
 bool ObFTSGroupArray::need_check_fts() const
 {
-  return VERIFY_FTS_CHECKSUM && count() > 0;
+  return count() > 0;
 }
 
 } // namespace rootserver

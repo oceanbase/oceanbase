@@ -289,6 +289,8 @@ int ObRawExpr::assign(const ObRawExpr &other)
         LOG_WARN("failed to assign enum set values", K(ret));
       } else if (OB_FAIL(local_session_var_.assign(other.local_session_var_))) {
         LOG_WARN("fail to assign local session vars", K(ret));
+      } else if (OB_FAIL(attr_exprs_.assign(other.attr_exprs_))) {
+        LOG_WARN("failed to assign exprs", K(ret));
       }
     }
   }
@@ -921,6 +923,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_SEQ_NEXTVAL == type_
       || T_FUN_SYS_AUTOINC_NEXTVAL == type_
       || T_FUN_SYS_DOC_ID == type_
+      || T_FUN_SYS_VEC_VID == type_
       || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == type_
       || T_FUN_SYS_ROWNUM == type_
       || T_FUN_SYS_ROWKEY_TO_ROWID == type_
@@ -1147,6 +1150,24 @@ int ObRawExpr::has_exec_param(bool &bool_ret) const
     }
   }
   return ret;
+}
+
+const ObRawExpr *ObRawExpr::get_attr_expr(int64_t index) const
+{
+  const ObRawExpr *expr = NULL;
+  if (index >= 0 && index < attr_exprs_.count()) {
+    expr = attr_exprs_.at(index);
+  }
+  return expr;
+}
+
+ObRawExpr *ObRawExpr::get_attr_expr(int64_t index)
+{
+  if (index >= 0 && index < attr_exprs_.count()) {
+    return attr_exprs_.at(index);
+  } else {
+    return USELESS_POINTER;
+  }
 }
 
 ////////////////////////////////////////////////////////////////
@@ -3094,7 +3115,7 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
   } else if (with_null_equal_cond()) {
     // <=> join is not allowed to pushdown as white filter
     bool_ret = false;
-  } else if (RANGE == runtime_filter_type_ /*|| IN == runtime_filter_type_*/) {
+  } else if (RANGE == runtime_filter_type_) {
     for (int i = 0; i < exprs_.count(); ++i) {
       if (T_REF_COLUMN != exprs_.at(i)->get_expr_type()) {
         bool_ret = false;
@@ -3109,6 +3130,13 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
     // for now, storage pushdown filter can not process both a < 10 and a is null in one filter
     // so disable white topn runtime filter
     // LOG_TRACE("[TopN Filter] push topn filter as white filter");
+    bool_ret = false;
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0 && IN == runtime_filter_type_) {
+    if (exprs_.count() != 1) {
+      bool_ret = false;
+    } else if(T_REF_COLUMN != exprs_.at(0)->get_expr_type()) {
+      bool_ret = false;
+    }
     bool_ret = false;
   } else {
     bool_ret = false;

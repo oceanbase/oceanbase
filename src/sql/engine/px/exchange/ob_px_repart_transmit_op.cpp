@@ -177,7 +177,8 @@ int ObPxRepartTransmitOp::do_transmit()
                                                       MY_SPEC.dist_exprs_,
                                                       &MY_SPEC.sort_cmp_funs_,
                                                       &MY_SPEC.sort_collations_,
-                                                      MY_SPEC.repartition_type_);
+                                                      MY_SPEC.repartition_type_,
+                                                      MY_SPEC.ddl_slice_id_expr_);
           if (OB_FAIL(dynamic_sample())) {
             LOG_WARN("fail to do dynamic sample", K(ret));
           } else if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::SM_REPART_RANGE>(range_slice_calc))) {

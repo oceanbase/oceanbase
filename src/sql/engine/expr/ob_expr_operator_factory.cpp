@@ -440,6 +440,14 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_array.h"
+#include "sql/engine/expr/ob_expr_vec_vid.h"
+#include "sql/engine/expr/ob_expr_vec_type.h"
+#include "sql/engine/expr/ob_expr_vec_vector.h"
+#include "sql/engine/expr/ob_expr_vec_scn.h"
+#include "sql/engine/expr/ob_expr_vec_key.h"
+#include "sql/engine/expr/ob_expr_vec_data.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 #include "sql/engine/expr/ob_expr_rb_build_empty.h"
 #include "sql/engine/expr/ob_expr_rb_is_empty.h"
@@ -450,6 +458,7 @@
 #include "sql/engine/expr/ob_expr_rb_calc.h"
 #include "sql/engine/expr/ob_expr_rb_to_string.h"
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
+#include "sql/engine/expr/ob_expr_array_contains.h"
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
@@ -457,6 +466,7 @@
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
+#include "sql/engine/expr/ob_expr_split_part.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1096,6 +1106,21 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTAsMVTGeom);
     REG_OP(ObExprPrivSTMakeValid);
     REG_OP(ObExprCurrentRole);
+    REG_OP(ObExprArray);
+    /* vector index */
+    REG_OP(ObExprVecVid);
+    REG_OP(ObExprVecType);
+    REG_OP(ObExprVecVector);
+    REG_OP(ObExprVecScn);
+    REG_OP(ObExprVecKey);
+    REG_OP(ObExprVecData);
+    REG_OP(ObExprVectorL2Distance);
+    REG_OP(ObExprVectorCosineDistance);
+    REG_OP(ObExprVectorIPDistance);
+    REG_OP(ObExprVectorL1Distance);
+    REG_OP(ObExprVectorDims);
+    REG_OP(ObExprVectorNorm);
+    REG_OP(ObExprVectorDistance);
     REG_OP(ObExprInnerTableOptionPrinter);
     REG_OP(ObExprInnerTableSequenceGetter);
     REG_OP(ObExprRbBuildEmpty);
@@ -1120,6 +1145,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbToString);
     REG_OP(ObExprRbFromString);
     REG_OP(ObExprGetPath);
+    REG_OP(ObExprArrayContains);
     REG_OP(ObExprDecodeTraceId);
     REG_OP(ObExprAuditLogSetFilter);
     REG_OP(ObExprAuditLogRemoveFilter);
@@ -1129,6 +1155,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm3);
     REG_OP(ObExprSm4Encrypt);
     REG_OP(ObExprSm4Decrypt);
+    REG_OP(ObExprSplitPart);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1457,6 +1484,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSdoRelate);
   REG_OP_ORCL(ObExprGetPath);
   REG_OP_ORCL(ObExprDecodeTraceId);
+  REG_OP_ORCL(ObExprSplitPart);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)
@@ -1572,6 +1600,18 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       // don't alias "power" to "pow" in oracle mode, because oracle has no
       // "pow" function.
       alias_name = ObString::make_string(N_POW);
+    } else if (0 == origin_name.case_compare("VEC_VID")) {
+      alias_name = ObString::make_string(N_VEC_VID);
+    } else if (0 == origin_name.case_compare("VEC_TYPE")) {
+      alias_name = ObString::make_string(N_VEC_TYPE);
+    } else if (0 == origin_name.case_compare("VEC_VECTOR")) {
+      alias_name = ObString::make_string(N_VEC_VECTOR);
+    } else if (0 == origin_name.case_compare("VEC_SCN")) {
+      alias_name = ObString::make_string(N_VEC_SCN);
+    } else if (0 == origin_name.case_compare("VEC_KEY")) {
+      alias_name = ObString::make_string(N_VEC_KEY);
+    } else if (0 == origin_name.case_compare("VEC_DATA")) {
+      alias_name = ObString::make_string(N_VEC_DATA);
     } else if (0 == origin_name.case_compare("DOC_ID")) {
       alias_name = ObString::make_string(N_DOC_ID);
     } else if (0 == origin_name.case_compare("ws")) {

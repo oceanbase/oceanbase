@@ -58,18 +58,20 @@ int ObCGIterParamPool::get_iter_param(
 int ObCGIterParamPool::get_iter_param(
     const int32_t cg_idx,
     const ObTableIterParam &row_param,
-    const common::ObIArray<sql::ObExpr*> &exprs,
+    const common::ObIArray<sql::ObExpr*> &output_exprs,
     ObTableIterParam *&iter_param,
-    const bool is_aggregate)
+    const common::ObIArray<sql::ObExpr*> *agg_exprs)
 {
   int ret = OB_SUCCESS;
   iter_param = nullptr;
+  const bool is_aggregate = nullptr != agg_exprs;
   if (OB_UNLIKELY(0 > cg_idx || !row_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(cg_idx), K(row_param));
+    LOG_WARN("Invalid argument", K(ret), K(cg_idx), K(row_param), KP(agg_exprs));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < iter_params_.count(); ++i) {
       ObTableIterParam* tmp_param = iter_params_.at(i);
+      const common::ObIArray<sql::ObExpr*> &exprs = is_aggregate ? *agg_exprs : output_exprs;
       if (OB_ISNULL(tmp_param)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null iter param", K(ret));
@@ -81,7 +83,7 @@ int ObCGIterParamPool::get_iter_param(
     }
   }
   if (OB_FAIL(ret) || OB_NOT_NULL(iter_param)) {
-  } else if (OB_FAIL(new_iter_param(cg_idx, row_param, exprs, iter_param, is_aggregate))) {
+  } else if (OB_FAIL(new_iter_param(cg_idx, row_param, output_exprs, iter_param, agg_exprs))) {
     LOG_WARN("Fail to new cg iter param", K(ret));
   }
   return ret;
@@ -102,29 +104,29 @@ int ObCGIterParamPool::put_iter_param(ObTableIterParam *iter_param)
 int ObCGIterParamPool::new_iter_param(
     const int32_t cg_idx,
     const ObTableIterParam &row_param,
-    const common::ObIArray<sql::ObExpr*> &exprs,
+    const common::ObIArray<sql::ObExpr*> &output_exprs,
     ObTableIterParam *&iter_param,
-    const bool is_aggregate)
+    const common::ObIArray<sql::ObExpr*> *agg_exprs)
 {
   int ret = OB_SUCCESS;
   iter_param = nullptr;
   if (OB_UNLIKELY(0 > cg_idx || !row_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(cg_idx), K(row_param));
+    LOG_WARN("Invalid argument", K(ret), K(cg_idx), K(row_param), KP(agg_exprs));
   } else if (OB_ISNULL(iter_param = OB_NEWx(ObTableIterParam, (&alloc_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to alloc new iter param", K(ret), K(cg_idx));
   } else if (is_virtual_cg(cg_idx)) {
-    if (OB_FAIL(fill_virtual_cg_iter_param(row_param, cg_idx, exprs, *iter_param))) {
-      LOG_WARN("Fail to fill dummy cg iter param", K(ret));
+    if (OB_FAIL(fill_virtual_cg_iter_param(row_param, cg_idx, output_exprs, *iter_param, agg_exprs))) {
+      LOG_WARN("Fail to fill dummy cg iter param", K(ret), K(row_param), K(cg_idx), K(output_exprs), KPC(agg_exprs));
     }
-  } else if (OB_FAIL(fill_cg_iter_param(row_param, cg_idx, exprs, *iter_param))) {
-    STORAGE_LOG(WARN, "Failed to mock cg iter param", K(ret), K(row_param), K(cg_idx), K(exprs));
+  } else if (OB_FAIL(fill_cg_iter_param(row_param, cg_idx, output_exprs, *iter_param, agg_exprs))) {
+    LOG_WARN("Failed to mock cg iter param", K(ret), K(row_param), K(cg_idx), K(output_exprs), KPC(agg_exprs));
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(put_iter_param(iter_param))) {
       LOG_WARN("Fail to put iter param", K(ret));
-    } else if (!is_aggregate) {
+    } else if (nullptr == agg_exprs) {
       iter_param->disable_pd_aggregate();
     }
   } else if (nullptr != iter_param) {
@@ -137,20 +139,18 @@ int ObCGIterParamPool::new_iter_param(
 int ObCGIterParamPool::fill_cg_iter_param(
     const ObTableIterParam &row_param,
     const int32_t cg_idx,
-    const common::ObIArray<sql::ObExpr*> &exprs,
-    ObTableIterParam &cg_param)
+    const common::ObIArray<sql::ObExpr*> &output_exprs,
+    ObTableIterParam &cg_param,
+    const common::ObIArray<sql::ObExpr*> *agg_exprs)
 {
   int ret = OB_SUCCESS;
-
-  sql::ExprFixedArray *output_exprs = nullptr;
+  sql::ExprFixedArray *param_output_exprs = nullptr;
+  sql::ExprFixedArray *param_agg_exprs = nullptr;
   ColumnsIndex *out_cols_project = nullptr;
-  if (OB_ISNULL(output_exprs = OB_NEWx(sql::ExprFixedArray, (&alloc_), alloc_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to alloc output exprs", K(ret));
-  } else if (OB_FAIL(output_exprs->init(exprs.count()))) {
-    LOG_WARN("Fail to init output exprs", K(ret));
-  } else if (OB_FAIL(output_exprs->assign(exprs))) {
-    LOG_WARN("Fail to assign exprs", K(ret));
+  if (OB_FAIL(copy_param_exprs(output_exprs, param_output_exprs))) {
+    LOG_WARN("Failed to copy output exprs", K(ret), K(output_exprs));
+  } else if (nullptr != agg_exprs && OB_FAIL(copy_param_exprs(*agg_exprs, param_agg_exprs))) {
+    LOG_WARN("Failed to copy aggregate exprs", K(ret), KPC(agg_exprs));
   } else if (OB_ISNULL(out_cols_project = OB_NEWx(ColumnsIndex, (&alloc_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to alloc out cols projector", K(ret));
@@ -160,58 +160,64 @@ int ObCGIterParamPool::fill_cg_iter_param(
     LOG_WARN("Fail to push back out cols project", K(ret));
   }
   if (OB_FAIL(ret)) {
-    if (nullptr != output_exprs) {
-      output_exprs->reset();
-      alloc_.free(output_exprs);
-      output_exprs = nullptr;
-    }
-    if (nullptr != out_cols_project) {
-      out_cols_project->reset();
-      alloc_.free(out_cols_project);
-      out_cols_project = nullptr;
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(generate_for_column_store(row_param, output_exprs, out_cols_project, cg_idx, cg_param))) {
+    OB_DELETE(ColumnsIndex, "unused", out_cols_project);
+  } else if (OB_FAIL(generate_for_column_store(row_param, param_output_exprs, param_agg_exprs, out_cols_project, cg_idx, cg_param))) {
     LOG_WARN("Fail to generate cg iter param", K(ret));
   }
+  return ret;
+}
 
+int ObCGIterParamPool::copy_param_exprs(
+  const common::ObIArray<sql::ObExpr*> &exprs,
+  sql::ExprFixedArray *&param_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(param_exprs = OB_NEWx(sql::ExprFixedArray, (&alloc_), alloc_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to alloc output exprs", K(ret));
+  } else if (OB_FAIL(param_exprs->init(exprs.count()))) {
+    LOG_WARN("Fail to init output exprs", K(ret));
+  } else if (OB_FAIL(param_exprs->assign(exprs))) {
+    LOG_WARN("Fail to assign exprs", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    OB_DELETE(ObFixedArray, "unused", param_exprs);
+  }
   return ret;
 }
 
 int ObCGIterParamPool::fill_virtual_cg_iter_param(
     const ObTableIterParam &row_param,
     const int32_t cg_idx,
-    const common::ObIArray<sql::ObExpr*> &exprs,
-    ObTableIterParam &cg_param)
+    const common::ObIArray<sql::ObExpr*> &output_exprs,
+    ObTableIterParam &cg_param,
+    const common::ObIArray<sql::ObExpr*> *agg_exprs)
 {
   int ret = OB_SUCCESS;
-  sql::ExprFixedArray *output_exprs = nullptr;
-  if (OB_ISNULL(output_exprs = OB_NEWx(sql::ExprFixedArray, (&alloc_), alloc_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to alloc output exprs", K(ret));
-  } else if (OB_FAIL(output_exprs->init(exprs.count()))) {
-    LOG_WARN("Fail to init output exprs", K(ret));
-  } else if (OB_FAIL(output_exprs->assign(exprs))) {
-    LOG_WARN("Fail to assign exprs", K(ret));
+  sql::ExprFixedArray *param_output_exprs = nullptr;
+  sql::ExprFixedArray *param_agg_exprs = nullptr;
+  if (OB_FAIL(copy_param_exprs(output_exprs, param_output_exprs))) {
+    LOG_WARN("Failed to copy output exprs", K(ret), K(output_exprs));
+  } else if (nullptr != agg_exprs && OB_FAIL(copy_param_exprs(*agg_exprs, param_agg_exprs))) {
+    LOG_WARN("Failed to copy aggregate exprs", K(ret), KPC(agg_exprs));
   } else {
     cg_param.cg_idx_ = cg_idx;
-    cg_param.output_exprs_ = output_exprs;
+    cg_param.output_exprs_ = param_output_exprs;
+    if (nullptr != agg_exprs) {
+      cg_param.aggregate_exprs_ = param_agg_exprs;
+    }
     cg_param.op_ = row_param.op_;
     cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
     cg_param.table_scan_opt_ = row_param.table_scan_opt_;
     cg_param.tablet_handle_ = row_param.tablet_handle_;
-  }
-  if (OB_FAIL(ret) && nullptr != output_exprs) {
-    output_exprs->reset();
-    alloc_.free(output_exprs);
+    cg_param.vectorized_enabled_ = row_param.vectorized_enabled_;
   }
   return ret;
 }
 
 int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_param,
-                                                 const sql::ExprFixedArray *exprs,
+                                                 const sql::ExprFixedArray *output_exprs,
+                                                 const sql::ExprFixedArray *agg_exprs,
                                                  const ObIArray<int32_t> *out_cols_project,
                                                  const int32_t cg_idx,
                                                  ObTableIterParam &cg_param)
@@ -254,8 +260,8 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
       cg_param.pushdown_filter_ = nullptr;
       cg_param.op_ = row_param.op_;
       cg_param.sstable_index_filter_ = nullptr;
-      cg_param.output_exprs_ = exprs;
-      cg_param.aggregate_exprs_ = nullptr;
+      cg_param.output_exprs_ = output_exprs;
+      cg_param.aggregate_exprs_ = agg_exprs;
       cg_param.output_sel_mask_ = nullptr;
       cg_param.is_multi_version_minor_merge_ = row_param.is_multi_version_minor_merge_;
       cg_param.need_scn_ = row_param.need_scn_;

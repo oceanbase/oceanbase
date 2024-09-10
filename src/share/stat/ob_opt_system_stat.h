@@ -208,7 +208,7 @@ public:
   void reset();
   static OptSystemIoBenchmark& get_instance();
 
-  int run_benchmark(ObIAllocator &allocator);
+  int run_benchmark(ObIAllocator &allocator, const uint64_t tenant_id);
 
 private:
   int64_t disk_seq_read_speed_;

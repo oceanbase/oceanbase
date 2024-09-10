@@ -408,6 +408,7 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
+      micro_index_clustered_ = src_schema.micro_index_clustered_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -542,6 +543,9 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
   }
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.kv_attributes_, kv_attributes_))) {
     LOG_WARN("Fail to deep copy ttl definition string", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.index_params_, index_params_))) {
+    LOG_WARN("Fail to deep copy vector index param string", K(ret));
   }
 
   return ret;

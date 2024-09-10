@@ -18,14 +18,13 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_iarray.h"
-#include "storage/ob_sstable_struct.h"
 
 namespace oceanbase
 {
 namespace compaction
 {
 class ObPartitionMergeProgress;
-
+struct ObSSTableMergeHistory;
 // 32 B
 struct ObCompactionHistogramBucket final
 {
@@ -234,7 +233,7 @@ public:
   void clear_compaction_dag_status();
 
   int analyze_merge_info(
-    const ObSSTableMergeInfo &merge_info,
+    const ObSSTableMergeHistory &merge_history,
     const share::ObDagType::ObDagTypeEnum type,
     const int64_t cost_time);
 

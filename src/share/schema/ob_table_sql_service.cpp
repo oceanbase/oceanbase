@@ -34,6 +34,8 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/ob_sql_utils.h"
 #include "share/ob_time_utility2.h"
+#include "share/ob_vec_index_builder_util.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -1958,6 +1960,10 @@ int ObTableSqlService::add_table(
   uint64_t tenant_data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_3_3_0 && table.is_vec_index()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.3, vector index is not supported", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
   } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && table.is_spatial_index()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
@@ -2454,7 +2460,6 @@ int ObTableSqlService::create_table(ObTableSchema &table,
   int64_t end_usec = 0;
   int64_t cost_usec = 0;
   const uint64_t tenant_id = table.get_tenant_id();
-
   if (!table.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid create table argument, ", K(table));
@@ -3000,6 +3005,10 @@ int ObTableSqlService::gen_table_dml(
              && OB_UNLIKELY(0 != table.get_auto_increment_cache_size())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("auto increment cache size not support before 4.2.3", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_3_3_0
+      && !table.get_index_params().empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("index params setting is not support in version less than 433");
   } else {
   if (data_version < DATA_VERSION_4_2_1_0
       && (!table.get_ttl_definition().empty() || !table.get_kv_attributes().empty())) {
@@ -3012,6 +3021,7 @@ int ObTableSqlService::gen_table_dml(
     LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
+    ObString empty_str("");
     const ObPartitionOption &part_option = table.get_part_option();
     const ObPartitionOption &sub_part_option = table.get_sub_part_option();
     const char *expire_info = table.get_expire_info().length() <= 0 ?
@@ -3031,6 +3041,7 @@ int ObTableSqlService::gen_table_dml(
         "" : table.get_ttl_definition().ptr();
     const char *kv_attributes = table.get_kv_attributes().empty() ?
         "" : table.get_kv_attributes().ptr();
+    ObString index_params = table.get_index_params().empty() ? empty_str : table.get_index_params();
     ObString local_session_var;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
     if (OB_FAIL(check_table_options(table))) {
@@ -3041,6 +3052,9 @@ int ObTableSqlService::gen_table_dml(
                K(table));
     } else if (OB_FAIL(check_column_store_valid(table, data_version))) {
       LOG_WARN("fail to check column store valid", KR(ret), K(table), K(data_version));
+    } else if (data_version < DATA_VERSION_4_3_3_0 && table.get_micro_index_clustered()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't set micro_index_clustered in current version", KR(ret), K(table));
     } else if (table.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
                && OB_FAIL(table.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
       LOG_WARN("fail to gen local session var str", K(ret));
@@ -3156,6 +3170,10 @@ int ObTableSqlService::gen_table_dml(
         || (data_version >= DATA_VERSION_4_3_2_1 &&
             OB_FAIL(dml.add_column("external_properties", ObHexEscapeSqlStr(table.get_external_properties()))))
         || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("index_params", ObHexEscapeSqlStr(index_params))))
+        || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("micro_index_clustered", table.get_micro_index_clustered())))
+        || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
         ) {
       LOG_WARN("add column failed", K(ret));
@@ -3197,8 +3215,12 @@ int ObTableSqlService::gen_table_options_dml(
       && (table.get_auto_increment_cache_size() != 0)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("table auto_increment_cache_size not support before 4.2.3", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_3_3_0 && (!table.get_index_params().empty())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("index params setting is not support before 433", K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
+    ObString empty_str("");
     const ObPartitionOption &part_option = table.get_part_option();
     const ObPartitionOption &sub_part_option = table.get_sub_part_option();
     const char *table_name = table.get_table_name_str().length() <= 0 ?
@@ -3218,6 +3240,7 @@ int ObTableSqlService::gen_table_options_dml(
         "" : table.get_ttl_definition().ptr();
     const char *kv_attributes = table.get_kv_attributes().length() <= 0 ?
         "" : table.get_kv_attributes().ptr();
+    ObString index_params = table.get_index_params().empty() ? empty_str : table.get_index_params();
 
     if (OB_FAIL(check_table_options(table))) {
       LOG_WARN("fail to check table option", K(ret), K(table));
@@ -3307,6 +3330,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
         || ((data_version >= DATA_VERSION_4_3_2_0 || (data_version < DATA_VERSION_4_3_0_0 && data_version >= MOCK_DATA_VERSION_4_2_3_0))
             && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
+        || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("index_params", ObHexEscapeSqlStr(index_params))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -4229,6 +4254,10 @@ int ObTableSqlService::gen_column_dml(
   } else if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(
                column.get_tenant_id(), column.get_table_id(), compat_mode))) {
       LOG_WARN("fail to get tenant mode", K(ret), K(column));
+  } else if (tenant_data_version < DATA_VERSION_4_3_3_0 && column.is_collection()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.3, array type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, array");
   } else if ((tenant_data_version < DATA_VERSION_4_2_2_0
              || (tenant_data_version >= DATA_VERSION_4_3_0_0 && tenant_data_version < DATA_VERSION_4_3_1_0)) &&
              column.is_geometry() && compat_mode ==lib::Worker::CompatMode::ORACLE) {
@@ -4332,7 +4361,7 @@ int ObTableSqlService::gen_column_dml(
       cur_default_value.reset();
     }
     ObString bin_extended_type_info;
-    if (OB_SUCC(ret) && column.is_enum_or_set()) {
+    if (OB_SUCC(ret) && (column.is_enum_or_set() || column.is_collection())) {
       int64_t pos = 0;
       extended_type_info_buf = static_cast<char *>(allocator.alloc(OB_MAX_VARBINARY_LENGTH));
       if (OB_ISNULL(extended_type_info_buf)) {

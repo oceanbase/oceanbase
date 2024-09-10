@@ -124,7 +124,7 @@ public:
       ObTabletMergeCtx &ctx,
       ObSSTable *&merged_sstable);
   void fake_freeze_info();
-
+  void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
 public:
   ObStoreCtx store_ctx_;
   ObTabletMergeExecuteDag merge_dag_;
@@ -141,7 +141,7 @@ void TestMultiVersionMerge::SetUpTestCase()
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  MTL(ObTenantTabletScheduler*)->resume_major_merge();
+  MERGE_SCHEDULER_PTR->resume_major_merge();
 
   // create tablet
   share::schema::ObTableSchema table_schema;
@@ -252,6 +252,16 @@ void TestMultiVersionMerge::build_sstable(
   bool tmp_bool = false; // placeholder
   ASSERT_EQ(OB_SUCCESS, ctx.merge_info_.create_sstable(ctx, ctx.merged_table_handle_, tmp_bool));
   ASSERT_EQ(OB_SUCCESS, ctx.merged_table_handle_.get_sstable(merged_sstable));
+}
+
+void TestMultiVersionMerge::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
+{
+  ObLSID ls_id(ls_id_);
+  ObTabletID tablet_id(tablet_id_);
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
 }
 
 TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtered)
@@ -513,15 +523,9 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 1; i++) {
@@ -728,15 +732,9 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 1; i++) {
@@ -852,16 +850,9 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 1; i++) {
@@ -1107,15 +1098,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 4; i++) {
@@ -1272,15 +1257,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 5; i++) {
@@ -1437,15 +1416,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 5; i++) {
@@ -1682,15 +1655,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 4; i++) {
@@ -1892,15 +1859,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   trans_version_range.multi_version_start_ = 50;
   trans_version_range.base_version_ = 1;
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 4; i++) {
@@ -2016,15 +1977,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 4; i++) {
@@ -2419,15 +2374,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i < 3; i++) {
@@ -2645,15 +2594,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i < 3; i++) {
@@ -2889,15 +2832,9 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i <= 4; i++) {
@@ -2977,7 +2914,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   const char *micro_data[3];
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag \n"
-      "0        var0  -10       0        2       2     EXIST   N    \n"
+      "0        var0  -10      0        2       2     EXIST   N    \n"
       "1        var1  -30     -11      1       15    EXIST   N    \n"
       "2        var2  -20     -11      2       15    EXIST   N    \n";
 
@@ -2997,7 +2934,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   scn_range.start_scn_.set_min();
   scn_range.end_scn_.convert_for_tx(30);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
-  reset_writer(snapshot_version);
+  reset_writer(snapshot_version, MAJOR_MERGE);
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 2);
   prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
@@ -3117,15 +3054,9 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i < 3; i++) {
@@ -3239,15 +3170,9 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row2)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i < 3; i++) {
@@ -3355,15 +3280,9 @@ TEST_F(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
-  ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);
+  get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   ObTxData *tx_data = new ObTxData();
@@ -3379,6 +3298,7 @@ TEST_F(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
   transaction::ObUndoAction undo_action(ObTxSEQ(9, 0), ObTxSEQ(1, 0));
   tx_data->add_undo_action(tx_table, undo_action);
   ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
+  tx_data->~ObTxData();
   delete tx_data;
 
   ObVersionRange trans_version_range;
@@ -3415,6 +3335,113 @@ TEST_F(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
+  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+}
+
+TEST_F(TestMultiVersionMerge, check_shadow_row_fuse)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[2];
+  micro_data[0] =
+      "bigint   var   bigint   bigint   bigint bigint dml           flag    multi_version_row_flag trans_id\n"
+      "0        var1  -8       0        NOP      1    T_DML_UPDATE  EXIST   LF        trans_id_0\n";
+
+  micro_data[1] =
+      "bigint   var   bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag trans_id\n"
+      "2        var1  MIN      -9       2       2     T_DML_INSERT EXIST   U         trans_id_1\n"
+      "2        var1  -6       0        3       2     T_DML_UPDATE EXIST   N         trans_id_0\n"
+      "2        var1  MAGIC    MAGIC    NOP     NOP   T_DML_INSERT EXIST   LG        trans_id_0\n";
+
+  int schema_rowkey_cnt = 2;
+
+  int64_t snapshot_version = 10;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(10);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1);
+  prepare_one_macro(&micro_data[1], 1);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint   bigint   bigint bigint  dml          flag    multi_version_row_flag\n"
+      "2        var1  -10       0        NOP     12    T_DML_UPDATE EXIST   LF\n";
+
+  snapshot_version = 20;
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(20);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObTxTable *tx_table = nullptr;
+  ObTxTableGuard tx_table_guard;
+  get_tx_table_guard(tx_table_guard);
+  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
+
+  ObTxData *tx_data = new ObTxData();
+  ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
+  transaction::ObTransID tx_id = 1;
+
+  // fill in data
+  tx_data->tx_id_ = tx_id;
+  tx_data->commit_version_.convert_for_tx(INT64_MAX);
+  tx_data->start_scn_.convert_for_tx(1);
+  tx_data->end_scn_.convert_for_tx(50);
+  tx_data->state_ = ObTxData::ABORT;
+  ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
+  tx_data->~ObTxData();
+  delete tx_data;
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 7;
+  trans_version_range.base_version_ = 1;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor mrege
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint   bigint  bigint  flag    multi_version_row_flag\n"
+      "0        var1  -8       0        NOP      1      EXIST   LF\n"
+      "2        var1  -10      MIN      3        12     EXIST   SCF\n"
+      "2        var1  -10      0        NOP      12     EXIST   N\n"
+      "2        var1  -6       0        3        2      EXIST   CL\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_EQ(OB_SUCCESS, clear_tx_data());
   scanner->~ObStoreRowIterator();
   handle1.reset();

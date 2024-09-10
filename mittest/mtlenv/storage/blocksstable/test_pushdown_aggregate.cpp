@@ -142,6 +142,7 @@ void TestPushdownAggregate::prepare_schema()
   table_schema_.set_compress_func_name("none");
   table_schema_.set_row_store_type(row_store_type_);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
   index_schema_.reset();
 
@@ -831,7 +832,7 @@ TEST_F(TestPushdownAggregate, test_copy_output_rows)
 
   ObIArray<ObAggCell*> &agg_cell = group_by_cell.get_agg_cells();
   ASSERT_EQ(6, group_by_cell.get_agg_cells().count());
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.copy_output_rows(SQL_BATCH_SIZE));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.copy_output_rows(SQL_BATCH_SIZE, access_param_.iter_param_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_distinct_cnt());
 
   for (int64_t agg_idx = 1; agg_idx < 6; ++agg_idx) {

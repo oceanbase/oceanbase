@@ -43,13 +43,14 @@ ObBackupIndexStoreParam::ObBackupIndexStoreParam()
       is_tenant_level_(false),
       backup_data_type_(),
       turn_id_(),
-      retry_id_()
+      retry_id_(),
+      dest_id_()
 {}
 
 bool ObBackupIndexStoreParam::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && backup_set_id_ > 0 && backup_data_type_.is_valid() && turn_id_ > 0 &&
-         retry_id_ >= 0;
+         retry_id_ >= 0 && dest_id_ > 0;
 }
 
 /* ObIBackupIndexStore */
@@ -64,6 +65,7 @@ ObIBackupIndexStore::ObIBackupIndexStore()
       ls_id_(0),
       turn_id_(-1),
       retry_id_(-1),
+      mod_(),
       backup_set_desc_(),
       backup_data_type_(),
       index_kv_cache_(NULL),
@@ -85,7 +87,13 @@ int ObIBackupIndexStore::pread_file_(const common::ObString &path, const share::
   } else if (OB_UNLIKELY(read_size <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("read data len is zero", K(path));
-  } else if (OB_FAIL(util.read_part_file(path, storage_info, buf, read_size, offset, real_read_size))) {
+  } else if (OB_FAIL(util.read_part_file(path,
+                                         storage_info,
+                                         buf,
+                                         read_size,
+                                         offset,
+                                         real_read_size,
+                                         mod_))) {
     LOG_WARN("failed to pread file", K(ret), K(path), K(offset), K(read_size));
   } else if (OB_UNLIKELY(real_read_size != read_size)) {
     ret = OB_ERR_UNEXPECTED;
@@ -267,7 +275,8 @@ int ObIBackupIndexStore::put_block_to_cache_(const ObBackupFileType &backup_file
 }
 
 int ObIBackupIndexStore::read_file_trailer_(
-    const common::ObString &path, const share::ObBackupStorageInfo *storage_info)
+    const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
+    const common::ObStorageIdMod &mod)
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter io_util;
@@ -279,7 +288,7 @@ int ObIBackupIndexStore::read_file_trailer_(
   if (OB_FAIL(io_util.is_exist(path, storage_info, exist))) {
     LOG_WARN("failed to check file exist", K(ret), K(path), KP(storage_info));
   } else if (OB_UNLIKELY(!exist)) {
-    ret = OB_BACKUP_FILE_NOT_EXIST;
+    ret = OB_OBJECT_NOT_EXIST;
     LOG_WARN("index file do not exist", K(ret), K(path));
   } else if (OB_FAIL(io_util.get_file_length(path, storage_info, file_length))) {
     LOG_WARN("failed to get file length", K(ret), K(path), KP(storage_info));
@@ -290,7 +299,7 @@ int ObIBackupIndexStore::read_file_trailer_(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(trailer_len));
   } else if (OB_FAIL(pread_file_(path, storage_info, file_length - trailer_len, trailer_len, buf))) {
-    LOG_WARN("failed to pread file", K(ret), K(path), KP(storage_info), K(file_length), K(trailer_len));
+    LOG_WARN("failed to pread file", K(ret), K(path), KP(storage_info), K(mod), K(file_length), K(trailer_len));
   } else {
     ObBufferReader buffer_reader(buf, trailer_len);
     const ObBackupMultiLevelIndexTrailer *trailer = NULL;
@@ -364,9 +373,11 @@ int ObBackupMetaIndexStore::init(const ObBackupRestoreMode &mode, const ObBackup
     backup_data_type_ = param.backup_data_type_;
     index_kv_cache_ = &index_kv_cache;
     is_sec_meta_ = is_sec_meta;
+    mod_.storage_id_ = param.dest_id_;
+    mod_.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
     if (OB_FAIL(get_backup_file_path(backup_path))) {
       LOG_WARN("failed to get backup file path", K(ret));
-    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info()))) {
+    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info(), mod_))) {
       LOG_WARN("failed to read file trailer", K(ret), K(backup_path), K(backup_dest_.get_storage_info()));
     } else {
       is_inited_ = true;
@@ -616,9 +627,11 @@ int ObBackupMacroBlockIndexStore::init(const ObBackupRestoreMode &mode, const Ob
     backup_set_desc_ = backup_set_desc;
     backup_data_type_ = param.backup_data_type_;
     index_kv_cache_ = &index_kv_cache;
+    mod_.storage_id_ = param.dest_id_;
+    mod_.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
     if (OB_FAIL(get_backup_file_path(backup_path))) {
       LOG_WARN("failed to get backup file path", K(ret));
-    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info()))) {
+    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info(), mod_))) {
       LOG_WARN("failed to read file trailer", K(ret), K(backup_path), K(backup_dest_.get_storage_info()));
     } else {
       is_inited_ = true;
@@ -652,9 +665,11 @@ int ObBackupMacroBlockIndexStore::init(const ObBackupRestoreMode &mode, const Ob
     backup_set_desc_ = backup_set_desc;
     backup_data_type_ = param.backup_data_type_;
     index_kv_cache_ = &index_kv_cache;
+    mod_.storage_id_ = param.dest_id_;
+    mod_.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
     if (OB_FAIL(get_backup_file_path(backup_path))) {
       LOG_WARN("failed to get backup file path", K(ret));
-    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info()))) {
+    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info(), mod_))) {
       LOG_WARN("failed to read file trailer", K(ret), K(backup_path));
     } else {
       is_inited_ = true;
@@ -934,6 +949,7 @@ int ObBackupMacroBlockIndexStore::get_macro_block_index_(const blocksstable::ObL
     LOG_WARN("failed to get macro block backup path", K(ret), K(range_index));
   } else if (OB_FAIL(ObIBackupIndexIterator::read_backup_index_block_(backup_path,
                  backup_dest_.get_storage_info(),
+                 mod_,
                  range_index.offset_,
                  range_index.length_,
                  allocator,
@@ -1040,9 +1056,11 @@ int ObRestoreMetaIndexStore::init(const ObBackupRestoreMode &mode, const ObBacku
     index_kv_cache_ = &index_kv_cache;
     is_sec_meta_ = is_sec_meta;
     data_version_ = data_version;
+    mod_.storage_id_ = param.dest_id_;
+    mod_.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
     if (OB_FAIL(get_backup_file_path(backup_path))) {
       LOG_WARN("failed to get backup file path", K(ret));
-    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info()))) {
+    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info(), mod_))) {
       LOG_WARN("failed to read file trailer", K(ret), K(backup_path), K(backup_dest_.get_storage_info()));
     } else {
       is_inited_ = true;
@@ -1488,10 +1506,12 @@ int ObBackupOrderedMacroBlockIndexStore::init(const ObBackupRestoreMode &mode, c
     backup_set_desc_ = backup_set_desc;
     backup_data_type_ = param.backup_data_type_;
     index_kv_cache_ = &index_kv_cache;
+    mod_.storage_id_ = param.dest_id_;
+    mod_.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
     ObBackupPath backup_path;
     if (OB_FAIL(get_backup_file_path(backup_path))) {
       LOG_WARN("failed to get backup file path", K(ret));
-    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info()))) {
+    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info(), mod_))) {
       LOG_WARN("failed to read file trailer", K(ret), K(backup_path), K(backup_dest_.get_storage_info()));
     } else {
       is_inited_ = true;

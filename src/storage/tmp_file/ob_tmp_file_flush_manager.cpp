@@ -59,7 +59,7 @@ int ObTmpFileFlushManager::alloc_flush_task(ObTmpFileFlushTask *&flush_task)
   int ret = OB_SUCCESS;
   flush_task = nullptr;
 
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   void *task_buf = nullptr;
   if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileFlushTask)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -428,7 +428,7 @@ int ObTmpFileFlushManager::inner_fill_block_buf_(
     const bool flush_tail)
 {
   int ret = OB_SUCCESS;
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   bool fail_too_many = false;
 
   ObArray<ObTmpFileBatchFlushContext::ObTmpFileFlushFailRecord> &flush_failed_array = flush_ctx_.get_flush_failed_array();
@@ -1033,6 +1033,38 @@ int ObTmpFileFlushManager::reset_flush_ctx_for_file_(const ObSharedNothingTmpFil
     }
   }
   return ret;
+}
+
+void ObTmpFileFlushManager::try_remove_unused_file_flush_ctx()
+{
+  int ret = OB_SUCCESS;
+
+  ObArray<int64_t> deleted_fd_arr;
+  ObTmpFileBatchFlushContext::ObTmpFileFlushCtxHash& file_ctx_hash = flush_ctx_.get_file_ctx_hash();
+  for (ObTmpFileBatchFlushContext::ObTmpFileFlushCtxHash::iterator iter = file_ctx_hash.begin();
+       OB_SUCC(ret) && iter != file_ctx_hash.end();
+       ++iter) {
+    int64_t fd = iter->first;
+    ObTmpFileSingleFlushContext &file_flush_ctx = iter->second;
+    ObSharedNothingTmpFile *file = file_flush_ctx.file_handle_.get();
+    if (OB_ISNULL(file)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "file is nullptr", KR(ret), K(fd), K(file_flush_ctx));
+    } else if (file->is_deleting()) {
+      STORAGE_LOG(INFO, "the file is deleting, delete unused file flush ctx",
+          KR(ret), K(fd), K(file_flush_ctx));
+      if (OB_FAIL(deleted_fd_arr.push_back(fd))) {
+        STORAGE_LOG(WARN, "fail to deleted_fd_arr.push_back", KR(ret), K(fd), K(file_flush_ctx));
+      }
+    }
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < deleted_fd_arr.count(); ++i) {
+    if (OB_TMP_FAIL(flush_ctx_.get_file_ctx_hash().erase_refactored(deleted_fd_arr[i]))) {
+      STORAGE_LOG(ERROR, "fail to erase file ctx from hash", KR(tmp_ret), K(deleted_fd_arr[i]));
+    }
+  }
 }
 
 }  // end namespace tmp_file

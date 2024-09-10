@@ -37,6 +37,7 @@ ObAllVirtualTabletSSTableMacroInfo::MacroInfo::MacroInfo()
     original_size_(0),
     data_size_(0),
     data_zsize_(0),
+    macro_block_id_(),
     store_range_(),
     row_count_(0),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
@@ -186,25 +187,27 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
     MacroInfo &info)
 {
   int ret = OB_SUCCESS;
-  ObMacroBlockHandle macro_handle;
-  ObMacroBlockReadInfo macro_read_info;
+  ObStorageObjectHandle macro_handle;
+  ObStorageObjectReadInfo macro_read_info;
   macro_read_info.macro_block_id_ = macro_id;
+  macro_read_info.io_desc_.set_mode(ObIOMode::READ);
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   macro_read_info.offset_ = 0;
-  macro_read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  macro_read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   macro_read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-  macro_handle.reset();
+  macro_read_info.mtl_tenant_id_ = MTL_ID();
+
   if (OB_ISNULL(io_buf_) && OB_ISNULL(io_buf_ =
-      reinterpret_cast<char*>(allocator_->alloc(OB_SERVER_BLOCK_MGR.get_macro_block_size())))) {
+      reinterpret_cast<char*>(allocator_->alloc(OB_STORAGE_OBJECT_MGR.get_macro_block_size())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    int64_t io_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    int64_t io_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(io_size));
   } else {
     macro_read_info.buf_ = io_buf_;
     if (OB_UNLIKELY(!macro_id.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       SERVER_LOG(WARN, "invalid argument", K(ret), K(macro_id));
-    } else if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle))) {
+    } else if (OB_FAIL(ObObjectManager::read_object(macro_read_info, macro_handle))) {
       SERVER_LOG(WARN, "fail to read macro block", K(ret), K(macro_read_info));
     } else {
       ObMacroBlockCommonHeader common_header;
@@ -224,7 +227,16 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
       } else {
         info.data_seq_ = macro_header.fixed_header_.data_seq_;
         info.macro_logic_version_ = macro_header.fixed_header_.logical_version_;
-        info.macro_block_index_ = macro_id.block_index();
+        if (macro_id.is_id_mode_local()) {
+          info.macro_block_index_ = macro_id.block_index();
+        } else if (macro_id.is_id_mode_backup()) {
+          info.macro_block_index_ = macro_id.third_id();
+        } else if (macro_id.is_shared_data_or_meta()) {
+          info.macro_block_index_ = macro_id.third_id();
+        } else if (macro_id.is_private_data_or_meta()) {
+          info.macro_block_index_ = macro_id.fourth_id();
+        }
+        info.macro_block_id_ = macro_id;
         info.row_count_ = macro_header.fixed_header_.row_count_;
         info.original_size_ = macro_header.fixed_header_.occupy_size_;
         info.data_size_ = macro_header.fixed_header_.occupy_size_;
@@ -275,7 +287,16 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
     ObDataMacroBlockMeta *macro_meta = macro_desc.macro_meta_;
     info.data_seq_ = macro_meta->get_logic_id().data_seq_.macro_data_seq_;
     info.macro_logic_version_ = macro_meta->get_logic_id().logic_version_;
-    info.macro_block_index_ = macro_desc.macro_block_id_.block_index();
+    if (macro_desc.macro_block_id_.is_id_mode_local()) {
+      info.macro_block_index_ = macro_desc.macro_block_id_.block_index();
+    } else if (macro_desc.macro_block_id_.is_id_mode_backup()) {
+      info.macro_block_index_ = macro_desc.macro_block_id_.third_id();
+    } else if (macro_desc.macro_block_id_.is_shared_data_or_meta()) {
+      info.macro_block_index_ = macro_desc.macro_block_id_.third_id();
+    } else if (macro_desc.macro_block_id_.is_private_data_or_meta()) {
+      info.macro_block_index_ = macro_desc.macro_block_id_.fourth_id();
+    }
+    info.macro_block_id_ = macro_desc.macro_block_id_;
     info.row_count_ = macro_desc.row_count_;
     info.original_size_ = macro_meta->val_.original_size_;
     info.data_size_ = macro_meta->val_.data_size_;
@@ -435,15 +456,28 @@ int ObAllVirtualTabletSSTableMacroInfo::gen_row(
       case BLOCK_TYPE: {
         //block type
         blocksstable::ObMacroDataSeq macro_data_seq(macro_info.data_seq_);
-        if (macro_data_seq.is_data_block()) {
-          cur_row_.cells_[i].set_varchar(ObString::make_string("data_block"));
-        } else if (macro_data_seq.is_index_block()) {
-          cur_row_.cells_[i].set_varchar(ObString::make_string("index_block"));
-        } else if (macro_data_seq.is_meta_block()) {
-          cur_row_.cells_[i].set_varchar(ObString::make_string("meta_block"));
+        if (GCTX.is_shared_storage_mode()) {
+          // Shared Storage
+          if (macro_info.macro_block_id_.is_data()) {
+            cur_row_.cells_[i].set_varchar(ObString::make_string("data_block"));
+          } else if (macro_info.macro_block_id_.is_meta()) {
+            cur_row_.cells_[i].set_varchar(ObString::make_string("meta_block"));
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "unexpected block type, ", K(ret), K(macro_data_seq), K(macro_info));
+          }
         } else {
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "unexpected block type, ", K(ret), K(macro_data_seq));
+          // Shared Nothing
+          if (macro_data_seq.is_data_block()) {
+            cur_row_.cells_[i].set_varchar(ObString::make_string("data_block"));
+          } else if (macro_data_seq.is_index_block()) {
+            cur_row_.cells_[i].set_varchar(ObString::make_string("index_block"));
+          } else if (macro_data_seq.is_meta_block()) {
+            cur_row_.cells_[i].set_varchar(ObString::make_string("meta_block"));
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "unexpected block type, ", K(ret), K(macro_data_seq));
+          }
         }
         break;
       }

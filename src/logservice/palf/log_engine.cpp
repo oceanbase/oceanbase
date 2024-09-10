@@ -362,7 +362,7 @@ int LogEngine::submit_handle_submit_task()
     PALF_LOG(ERROR, "log_shared_queue_th_ is NULL", K(ret), KPC(this));
   } else if (OB_FAIL(generate_handle_submit_task_(handle_submit_task))) {
     PALF_LOG(ERROR, "generate_flush_log_task failed", K(ret), KPC(this));
-  } else if (OB_FAIL(log_shared_queue_th_->push_task(handle_submit_task))) {
+  } else if (OB_FAIL(log_shared_queue_th_->push_submit_log_task(handle_submit_task))) {
     if (OB_IN_STOP_STATE == ret) {
       if (REACH_TIME_INTERVAL(100 * 1000)) {
         PALF_LOG(WARN, "push task failed", K(ret), KPC(this), KPC(handle_submit_task));
@@ -607,6 +607,8 @@ int LogEngine::submit_fill_cache_task(const LSN &lsn, const int64_t size)
   } else if (OB_ISNULL(log_shared_queue_th_)) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "log_shared_queue_th_ is NULL", K(ret), KPC(this));
+  } else if (false == enable_fill_cache_functor_.is_valid() || false == enable_fill_cache_functor_()) {
+    // not allowed to fill cache
   } else if (OB_FAIL(generate_fill_cache_task_(lsn, size, fill_cache_task))) {
     PALF_LOG(WARN, "generate fill cache task failed", K(ret), K(lsn), K(size));
   } else if (OB_FAIL(log_shared_queue_th_->push_task(fill_cache_task))) {
@@ -615,7 +617,7 @@ int LogEngine::submit_fill_cache_task(const LSN &lsn, const int64_t size)
         PALF_LOG(WARN, "push task failed", K(ret), KPC(this), KPC(fill_cache_task));
       }
     } else {
-      PALF_LOG(ERROR, "push task failed", K(ret), KPC(this), KPC(fill_cache_task));
+      PALF_LOG(WARN, "push task failed", K(ret), KPC(this), KPC(fill_cache_task));
     }
   } else {
     PALF_LOG(TRACE, "log_shared_queue_th_->push_task success", K(ret), KPC(this));
@@ -690,10 +692,10 @@ int LogEngine::read_group_entry_header(const LSN &lsn, LogGroupEntryHeader &log_
   const int64_t in_read_size = MAX_LOG_HEADER_SIZE;
   ReadBufGuard read_buf_guard("LogEngine", in_read_size);
   ReadBuf &read_buf = read_buf_guard.read_buf_;
-  LogIOContext io_ctx(LogIOUser::DEFAULT);
-  io_ctx.set_allow_filling_cache(false);
   int64_t out_read_size = 0;
   int64_t pos = 0;
+  LogIOContext io_ctx(MTL_ID(), palf_id_, LogIOUser::META_INFO);
+  CONSUMER_GROUP_FUNC_GUARD(io_ctx.get_function_type());
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -998,12 +1000,10 @@ int LogEngine::raw_read(const LSN &lsn,
                         const int64_t in_read_size,
                         const bool need_read_block_header,
                         ReadBuf &read_buf,
-                        int64_t &out_read_size)
+                        int64_t &out_read_size,
+                        palf::LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
-  LogIOContext io_ctx(LogIOUser::DEFAULT);
-  // TODO modify @zjf225077
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret), K_(palf_id), K_(is_inited));
@@ -1075,11 +1075,13 @@ int LogEngine::append_meta(const char *buf, const int64_t buf_len)
   return ret;
 }
 
-int LogEngine::update_log_snapshot_meta_for_flashback(const LogInfo &log_info)
+int LogEngine::update_log_snapshot_meta_for_flashback(const LogInfo &log_info,
+                                                      const LSN &log_info_tail_lsn)
 {
   int ret = OB_SUCCESS;
   LogSnapshotMeta snapshot_meta = log_meta_.get_log_snapshot_meta();
   snapshot_meta.prev_log_info_ = log_info;
+  snapshot_meta.prev_log_tail_lsn_ = log_info_tail_lsn;
   if (OB_FAIL(log_meta_.update_log_snapshot_meta(snapshot_meta))) {
     PALF_LOG(WARN, "update_log_snapshot_meta failed", K(ret), KPC(this), K(log_info), K(snapshot_meta));
   } else if (OB_FAIL(append_log_meta_(log_meta_))) {
@@ -1442,7 +1444,9 @@ int LogEngine::construct_log_meta_(const LSN &lsn, block_id_t &expected_next_blo
   ReadBufGuard guard("LogEngine", buf_len);
   ReadBuf &read_buf = guard.read_buf_;
   LogMetaEntry meta_entry;
-  LogIOContext io_ctx(LogIOUser::RESTART);
+  LogIOContext io_ctx(MTL_ID(), palf_id_, LogIOUser::RESTART);
+  CONSUMER_GROUP_FUNC_GUARD(io_ctx.get_function_type());
+
   if (false == lsn.is_valid()) {
     PALF_LOG(INFO, "there is no meta entry, maybe create palf failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (!read_buf.is_valid()) {
@@ -1715,9 +1719,12 @@ int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
     LogGroupEntryHeader &last_group_entry_header)
 {
   int ret = OB_SUCCESS;
-  const LSN base_lsn = log_meta_.get_log_snapshot_meta().base_lsn_;
-  const LogInfo prev_log_info = log_meta_.get_log_snapshot_meta().prev_log_info_;
-  const bool prev_log_info_is_valid = prev_log_info.is_valid();
+  const LogSnapshotMeta &log_snapshot_meta = log_meta_.get_log_snapshot_meta();
+  const LSN base_lsn = log_snapshot_meta.base_lsn_;
+  LogInfo prev_log_info;
+  LSN prev_log_tail_lsn;
+  const bool prev_log_info_is_valid =
+    (OB_SUCCESS == log_snapshot_meta.get_prev_log_info(base_lsn, prev_log_info, prev_log_tail_lsn) ? true : false);
   // 'expected_next_block_id': ethier it's the empty block or not exist.
   block_id_t base_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
@@ -1805,13 +1812,14 @@ int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
         PALF_LOG(WARN, "the max committed end lsn is smaller than or equal to base_lsn,"
             " there is a rebuild operation before restart, and we will use prev_log_info"
             " to construct PalfBaseInfo", K_(palf_id), K(base_lsn), K(last_group_entry_header),
-            K(prev_log_info));
+            K(log_snapshot_meta));
         last_group_entry_header.reset();
       }
     }
   }
   PALF_LOG(INFO, "try_clear_up_holes_and_check_storage_integrity_ finish", K(ret), K_(palf_id), K(min_block_id),
-           K(max_block_id), K(base_block_id), K(expected_next_block_id), K(prev_log_info));
+           K(max_block_id), K(base_block_id), K(expected_next_block_id), K(prev_log_info), K(log_snapshot_meta),
+           K(prev_log_info_is_valid));
   return ret;
 }
 
@@ -1870,6 +1878,17 @@ void LogEngine::reset_min_block_info_()
   min_block_min_scn_.reset();
   min_block_max_scn_.reset();
   min_block_info_cache_version_++;
+}
+
+void LogEngine::set_enable_fill_cache_functor(const EnableFillCacheFunctor &functor)
+{
+  int ret = OB_SUCCESS;
+  if (!functor.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "EnableFillCacheFunctor is not valid", K(ret), K(functor));
+  } else {
+    enable_fill_cache_functor_ = functor;
+  }
 }
 
 LogNetService& LogEngine::get_net_service()

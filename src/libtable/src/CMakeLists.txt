@@ -10,7 +10,7 @@ ob_set_subtarget(obtable_base_object_list common
 
 ob_add_new_object_target(obtable_base_objects obtable_base_object_list)
 
-target_link_libraries(obtable_base_objects PUBLIC oceanbase)
+target_link_libraries(obtable_base_objects PUBLIC oceanbase ${HYPERSCAN_LIB})
 
 add_library(obtable
   SHARED

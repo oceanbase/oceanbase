@@ -363,6 +363,9 @@ public:
         SQL_ENG_LOG(WARN, "NULL datums or count mismatch", K(ret),
                     KPC(store_row_), K(exprs.count()));
       } else {
+        if (saved_) {
+          reuse();
+        }
         ObDatum *datum = nullptr;
         ObDatum *cells = store_row_->cells();
         for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {

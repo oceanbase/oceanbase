@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
+#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
@@ -44,14 +45,14 @@ int ObLinkedMacroBlockReader::init(const MacroBlockId &entry_block, const ObMemA
   } else if (OB_FAIL(get_meta_blocks(entry_block))) {
     LOG_WARN("fail to get meta blocks", K(ret));
   } else if (OB_ISNULL(io_buf_[0] =
-      reinterpret_cast<char*>(allocator_.alloc(OB_SERVER_BLOCK_MGR.get_macro_block_size())))) {
+      reinterpret_cast<char*>(allocator_.alloc(OB_STORAGE_OBJECT_MGR.get_macro_block_size())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    int64_t io_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    int64_t io_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(io_size));
   } else if (OB_ISNULL(io_buf_[1] =
-      reinterpret_cast<char*>(allocator_.alloc(OB_SERVER_BLOCK_MGR.get_macro_block_size())))) {
+      reinterpret_cast<char*>(allocator_.alloc(OB_STORAGE_OBJECT_MGR.get_macro_block_size())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    int64_t io_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    int64_t io_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(io_size));
   } else if (OB_FAIL(prefetch_block())) {
     LOG_WARN("fail to prefetch block", K(ret));
@@ -65,14 +66,16 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
 {
   int ret = OB_SUCCESS;
   ObMacroBlockCommonHeader common_header;
-  ObMacroBlockReadInfo read_info;
+  ObStorageObjectReadInfo read_info;
   read_info.offset_ = 0;
-  read_info.size_ = sizeof(ObMacroBlockCommonHeader) + sizeof(ObLinkedMacroBlockHeader);
+  read_info.size_ = 4096; //make sure include ObMacroBlockCommonHeader and ObLinkedMacroBlockHeader
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
+  read_info.mtl_tenant_id_ = MTL_ID();
+
   if (entry_block.second_id() >= 0) {
     read_info.macro_block_id_ = entry_block;
     int64_t handle_pos = 0;
@@ -83,7 +86,7 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
     } else {
-      if (OB_FAIL(ObBlockManager::async_read_block(read_info, handles_[handle_pos]))) {
+      if (OB_FAIL(ObObjectManager::async_read_object(read_info, handles_[handle_pos]))) {
         LOG_WARN("fail to async read block", K(ret));
       } else {
         while (OB_SUCC(ret)) {
@@ -99,7 +102,7 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
               handle_pos = 1 - handle_pos;
               read_info.macro_block_id_ = previous_block_id;
               handles_[handle_pos].reset();
-              if (OB_FAIL(ObBlockManager::async_read_block(read_info, handles_[handle_pos]))) {
+              if (OB_FAIL(ObObjectManager::async_read_object(read_info, handles_[handle_pos]))) {
                 LOG_WARN("fail to async read block", K(ret), K(previous_block_id));
               }
             } else {
@@ -123,18 +126,19 @@ int ObLinkedMacroBlockReader::prefetch_block()
   if (prefetch_macro_block_idx_ < 0) {
     ret = OB_SUCCESS;
   } else {
-    ObMacroBlockReadInfo read_info;
+    ObStorageObjectReadInfo read_info;
     read_info.offset_ = 0;
-    read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
     read_info.macro_block_id_ = macros_handle_.at(prefetch_macro_block_idx_);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+    read_info.mtl_tenant_id_ = MTL_ID();
     handles_[handle_pos_].reset();
     read_info.buf_ = io_buf_[handle_pos_];
-    if (OB_FAIL(ObBlockManager::async_read_block(read_info, handles_[handle_pos_]))) {
+    if (OB_FAIL(ObObjectManager::async_read_object(read_info, handles_[handle_pos_]))) {
       LOG_WARN("fail to async read block", K(ret), K(read_info));
     } else {
       handle_pos_ = 1 - handle_pos_;
@@ -167,10 +171,10 @@ int ObLinkedMacroBlockReader::iter_read_block(char *&buf, int64_t &buf_len, Macr
   return ret;
 }
 
-int ObLinkedMacroBlockReader::pread_block(const ObMetaDiskAddr &addr, ObMacroBlockHandle &handler, char *item_buf)
+int ObLinkedMacroBlockReader::pread_block(const ObMetaDiskAddr &addr, ObStorageObjectHandle &handler, char *item_buf)
 {
   int ret = OB_SUCCESS;
-  ObMacroBlockReadInfo read_info;
+  ObStorageObjectReadInfo read_info;
   handler.reset();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
@@ -178,9 +182,10 @@ int ObLinkedMacroBlockReader::pread_block(const ObMetaDiskAddr &addr, ObMacroBlo
   read_info.buf_ = item_buf;
   read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
+  read_info.mtl_tenant_id_ = MTL_ID();
   if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
     LOG_WARN("fail to get block address", K(ret), K(addr));
-  } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, handler))) {
+  } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, handler))) {
     LOG_WARN("fail to async read block", K(ret), K(read_info));
   } else if (OB_FAIL(handler.wait())) {
     LOG_WARN("fail to wait io finish", K(ret), K(read_info));
@@ -189,13 +194,13 @@ int ObLinkedMacroBlockReader::pread_block(const ObMetaDiskAddr &addr, ObMacroBlo
 }
 
 int ObLinkedMacroBlockReader::read_block_by_id(
-  const MacroBlockId &block_id, ObMacroBlockHandle &handler, char *io_buf)
+  const MacroBlockId &block_id, ObStorageObjectHandle &handler, char *io_buf)
 {
   int ret = OB_SUCCESS;
 
-  ObMacroBlockReadInfo read_info;
+  ObStorageObjectReadInfo read_info;
   read_info.offset_ = 0;
-  read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
@@ -203,8 +208,9 @@ int ObLinkedMacroBlockReader::read_block_by_id(
   read_info.macro_block_id_ = block_id;
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   read_info.buf_ = io_buf;
+  read_info.mtl_tenant_id_ = MTL_ID();
   handler.reset();
-  if (OB_FAIL(ObBlockManager::async_read_block(read_info, handler))) {
+  if (OB_FAIL(ObObjectManager::async_read_object(read_info, handler))) {
     LOG_WARN("fail to async read block", K(ret), K(read_info));
   } else if (OB_FAIL(handler.wait())) {
     LOG_WARN("fail to wait io finish", K(ret));
@@ -278,8 +284,9 @@ int ObLinkedMacroBlockReader::get_previous_block_id(
 //================== ObLinkedMacroBlockItemReader =============================
 
 ObLinkedMacroBlockItemReader::ObLinkedMacroBlockItemReader()
-  : is_inited_(false), common_header_(nullptr), linked_header_(nullptr), block_reader_(),
-    buf_(nullptr), buf_pos_(0), buf_len_(0), allocator_()
+  : is_inited_(false), common_header_(nullptr), linked_header_(), block_reader_(),
+    buf_(nullptr), buf_pos_(0), buf_len_(0), first_item_offset_in_block_(0),
+    allocator_()
 {
 }
 
@@ -340,62 +347,65 @@ int ObLinkedMacroBlockItemReader::read_item_block()
     // record the macro block that the buf belongs to,
     // if it is a big buf for a large item, only record the first block
     buf_block_id_ = tmp_block_id;
-    char *buf = buf_;
     buf_pos_ = 0;
-    common_header_ = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
-    buf += sizeof(ObMacroBlockCommonHeader);
+    common_header_ = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf_);
     buf_pos_ += sizeof(ObMacroBlockCommonHeader);
-    linked_header_ = reinterpret_cast<const ObLinkedMacroBlockHeader *>(buf);
-    buf += sizeof(ObLinkedMacroBlockHeader);
-    buf_pos_ += sizeof(ObLinkedMacroBlockHeader);
-    buf_len_ = sizeof(ObMacroBlockCommonHeader) + common_header_->get_payload_size();
-
-    int64_t item_count = linked_header_->item_count_;
-    int64_t buf_len = 0;
-    int64_t copy_buf_pos = 0;
-    int64_t data_len = 0;
-    if (0 == item_count) {
-      // when current item's size is larger than 2M bytes, we must keep read
-      // macro block until it reaches condition 1 == item_count_ namely the end
-      // block of current item.
-      allocator_.reuse();
-      ObLinkedMacroBlockItemHeader *item_header =
-        reinterpret_cast<ObLinkedMacroBlockItemHeader *>(buf_ + buf_pos_);
-      const int64_t item_size = item_header->payload_size_;
-      const int64_t request_size = item_size + sizeof(ObLinkedMacroBlockItemHeader);
-      char *big_buf = nullptr;
-      if (OB_ISNULL(big_buf = static_cast<char *>(allocator_.alloc(request_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory", K(ret), K(item_size));
-      } else {
-        data_len = common_header_->get_payload_size() - sizeof(ObLinkedMacroBlockHeader);
-        MEMCPY(big_buf, buf_ + buf_pos_, data_len);
-        buf_ = big_buf;
-        copy_buf_pos += data_len;
-      }
-      while (OB_SUCC(ret) && 0 == item_count) {
-        if (OB_FAIL(block_reader_.iter_read_block(buf, buf_len, tmp_block_id))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("fail to read block", K(ret));
-          } else {
-            ret = OB_SUCCESS;
-            break;
-          }
+    if (OB_FAIL(linked_header_.deserialize(buf_, buf_len_, buf_pos_))) {
+      LOG_WARN("fail to deserialize ObLinkedMacroBlockHeader", K(ret));
+    } else {
+      first_item_offset_in_block_ = buf_pos_;
+      buf_len_ = sizeof(ObMacroBlockCommonHeader) + common_header_->get_payload_size();
+      int64_t item_count = linked_header_.item_count_;
+      int64_t copy_buf_pos = 0;
+      int64_t data_len = 0;
+      if (0 == item_count) {
+        // when current item's size is larger than 2M bytes, we must keep read
+        // macro block until it reaches condition 1 == item_count_ namely the end
+        // block of current item.
+        allocator_.reuse();
+        ObLinkedMacroBlockItemHeader *item_header =
+            reinterpret_cast<ObLinkedMacroBlockItemHeader *>(buf_ + buf_pos_);
+        const int64_t item_size = item_header->payload_size_;
+        const int64_t request_size = item_size + sizeof(ObLinkedMacroBlockItemHeader);
+        char *big_buf = nullptr;
+        if (OB_ISNULL(big_buf = static_cast<char *>(allocator_.alloc(request_size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(item_size));
         } else {
-          common_header_ = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
-          buf += sizeof(ObMacroBlockCommonHeader);
-          linked_header_ = reinterpret_cast<const ObLinkedMacroBlockHeader *>(buf);
-          buf += sizeof(ObLinkedMacroBlockHeader);
-          data_len = common_header_->get_payload_size() - sizeof(ObLinkedMacroBlockHeader);
-          MEMCPY(buf_ + copy_buf_pos, buf, data_len);
+          data_len = buf_len_- buf_pos_;
+          MEMCPY(big_buf, buf_ + buf_pos_, data_len);
+          buf_ = big_buf;
           copy_buf_pos += data_len;
-          item_count = linked_header_->item_count_;
         }
-      }
+        char *buf = nullptr;
+        int64_t buf_len = 0;
+        while (OB_SUCC(ret) && 0 == item_count) {
+          if (OB_FAIL(block_reader_.iter_read_block(buf, buf_len, tmp_block_id))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to read block", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else {
+            int64_t pos = 0;
+            common_header_ = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
+            pos += sizeof(ObMacroBlockCommonHeader);
+            if (OB_FAIL(linked_header_.deserialize(buf, buf_len, pos))) {
+              LOG_WARN("fail to deserialize ObLinkedMacroBlockHeader", K(ret));
+            } else {
+              data_len = sizeof(ObMacroBlockCommonHeader) + common_header_->get_payload_size() - pos;
+              MEMCPY(buf_ + copy_buf_pos, buf + pos, data_len);
+              copy_buf_pos += data_len;
+              item_count = linked_header_.item_count_;
+            }
+          }
+        }
 
-      if (OB_SUCC(ret)) {
-        buf_pos_ = 0;
-        buf_len_ = request_size;
+        if (OB_SUCC(ret)) {
+          buf_pos_ = 0;
+          buf_len_ = request_size;
+        }
       }
     }
   }
@@ -407,7 +417,7 @@ int ObLinkedMacroBlockItemReader::parse_item(
 {
   int ret = OB_SUCCESS;
   ObLinkedMacroBlockItemHeader *item_header =
-    reinterpret_cast<ObLinkedMacroBlockItemHeader *>(buf_ + buf_pos_);
+      reinterpret_cast<ObLinkedMacroBlockItemHeader *>(buf_ + buf_pos_);
   if (OB_UNLIKELY(!item_header->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_WARN("item header is invalid", K(ret));
@@ -415,7 +425,7 @@ int ObLinkedMacroBlockItemReader::parse_item(
     const int64_t size = item_header->payload_size_ + sizeof(ObLinkedMacroBlockItemHeader);
     int64_t offset = 0;
     if (OB_UNLIKELY(0 == buf_pos_)) {  // represent a big buf for a large item
-      offset = sizeof(ObMacroBlockCommonHeader) + sizeof(ObLinkedMacroBlockHeader);
+      offset = first_item_offset_in_block_;
     } else {
       offset = buf_pos_;
     }
@@ -457,8 +467,8 @@ int ObLinkedMacroBlockItemReader::read_item(const ObIArray<MacroBlockId> &block_
     LOG_WARN("disk addr is invalid", K(ret), K(addr));
   } else {
     // item not cross the boundary of macro block
-    if (OB_LIKELY(addr.offset() + addr.size() <= OB_SERVER_BLOCK_MGR.get_macro_block_size())) {
-      blocksstable::ObMacroBlockHandle handler;
+    if (OB_LIKELY(addr.offset() + addr.size() <=OB_STORAGE_OBJECT_MGR.get_macro_block_size())) {
+      blocksstable::ObStorageObjectHandle handler;
       if (OB_FAIL(ObLinkedMacroBlockReader::pread_block(addr, handler, item_buf))) {
         LOG_WARN("failed to pread block", K(ret), K(addr));
       } else {
@@ -520,18 +530,19 @@ int ObLinkedMacroBlockItemReader::read_large_item(const ObIArray<MacroBlockId> &
   LOG_INFO("reading item cross the block boundary is inefficient", K(addr));
 
   int ret = OB_SUCCESS;
-  ObMacroBlockHandle handler;
+  ObStorageObjectHandle handler;
   MacroBlockId block_id;
   int64_t offset = 0;
   int64_t size = 0;
   common::ObArenaAllocator allocator("LMBIR_IO");
   char *io_buf = nullptr;
+  const int64_t buf_len = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
+  int64_t pos = 0;
   if (OB_FAIL(addr.get_block_addr(block_id, offset, size))) {
     LOG_WARN("fail to get block address", K(ret), K(addr));
-  } else if (OB_ISNULL(io_buf =
-      reinterpret_cast<char*>(allocator.alloc(OB_SERVER_BLOCK_MGR.get_macro_block_size())))) {
+  } else if (OB_ISNULL(io_buf = reinterpret_cast<char*>(allocator.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    int64_t block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    int64_t block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(block_size));
   } else if (OB_FAIL(ObLinkedMacroBlockReader::read_block_by_id(block_id, handler, io_buf))) {
     LOG_WARN("fail to read block by id", K(ret));
@@ -539,63 +550,63 @@ int ObLinkedMacroBlockItemReader::read_large_item(const ObIArray<MacroBlockId> &
     // item_buf not include the item header
     item_buf_len = size - sizeof(ObLinkedMacroBlockItemHeader);
     const char *buf = handler.get_buffer();
-    const ObMacroBlockCommonHeader *common_header =
-      reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
-    buf += sizeof(ObMacroBlockCommonHeader);
-    const ObLinkedMacroBlockHeader *linked_header =
-      reinterpret_cast<const ObLinkedMacroBlockHeader *>(buf);
-    buf += sizeof(ObLinkedMacroBlockHeader);
-    const ObLinkedMacroBlockItemHeader *item_header =
-      reinterpret_cast<const ObLinkedMacroBlockItemHeader *>(buf);
-    buf += sizeof(ObLinkedMacroBlockItemHeader);
+    const ObMacroBlockCommonHeader *common_header = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
+    pos += sizeof(ObMacroBlockCommonHeader);
 
-    int64_t data_len = common_header->get_payload_size() - sizeof(ObLinkedMacroBlockHeader) -
-      sizeof(ObLinkedMacroBlockItemHeader);
-    int64_t item_count = linked_header->item_count_;
-    int64_t copy_item_buf_pos = 0;
-    int64_t left_item_buf_len = item_buf_len;
-
-    if (OB_UNLIKELY(0 != item_count)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("first item count of large item must be zero", K(ret), K(item_count));
-    } else if (OB_UNLIKELY(item_header->payload_size_ != item_buf_len)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("item_buf_len mismatch with header payload_size", K(ret), KPC(item_header),
-        K(item_buf_len));
-    } else if (OB_UNLIKELY(data_len > left_item_buf_len)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("data len too large", K(ret), K(data_len), K(left_item_buf_len));
+    ObLinkedMacroBlockHeader linked_header;
+    if (OB_FAIL(linked_header.deserialize(buf, buf_len, pos))) {
+      LOG_WARN("fail to deserialize ObLinkedMacroBlockHeader", K(ret));
     } else {
-      MEMCPY(item_buf, buf, data_len);
-      copy_item_buf_pos += data_len;
-      left_item_buf_len -= data_len;
-      // when item's size is larger than 2M bytes, we must keep read macro block
-      // until it reaches condition 1 == item_count_ namely the end block of
-      // current item.
-      MacroBlockId next_block_id;
-      while (OB_SUCC(ret) && 0 == item_count) {
-        if (OB_FAIL(get_next_block_id(block_list, block_id, next_block_id))) {
-          LOG_WARN("fail to get next block id", K(ret));
-        } else if (OB_FAIL(ObLinkedMacroBlockReader::read_block_by_id(next_block_id,
-                                                                      handler, io_buf))) {
-          LOG_WARN("fail to read block by id", K(ret));
-        } else {
-          buf = handler.get_buffer();
-          common_header = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
-          buf += sizeof(ObMacroBlockCommonHeader);
-          linked_header = reinterpret_cast<const ObLinkedMacroBlockHeader *>(buf);
-          buf += sizeof(ObLinkedMacroBlockHeader);
-          data_len = common_header->get_payload_size() - sizeof(ObLinkedMacroBlockHeader);
+      const ObLinkedMacroBlockItemHeader *item_header =
+          reinterpret_cast<const ObLinkedMacroBlockItemHeader *>(buf + pos);
+      pos += sizeof(ObLinkedMacroBlockItemHeader);
+      int64_t data_len = sizeof(ObMacroBlockCommonHeader) + common_header->get_payload_size() - pos;
+      int64_t item_count = linked_header.item_count_;
+      int64_t copy_item_buf_pos = 0;
+      int64_t left_item_buf_len = item_buf_len;
 
-          if (OB_UNLIKELY(data_len > left_item_buf_len)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("data len too large", K(ret), K(data_len), K(left_item_buf_len));
+      if (OB_UNLIKELY(0 != item_count)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("first item count of large item must be zero", K(ret), K(item_count));
+      } else if (OB_UNLIKELY(item_header->payload_size_ != item_buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("item_buf_len mismatch with header payload_size", K(ret), KPC(item_header),
+          K(item_buf_len));
+      } else if (OB_UNLIKELY(data_len > left_item_buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data len too large", K(ret), K(data_len), K(left_item_buf_len));
+      } else {
+        MEMCPY(item_buf, buf + pos, data_len);
+        copy_item_buf_pos += data_len;
+        left_item_buf_len -= data_len;
+        // when item's size is larger than 2M bytes, we must keep read macro block
+        // until it reaches condition 1 == item_count_ namely the end block of
+        // current item.
+        MacroBlockId next_block_id;
+        while (OB_SUCC(ret) && 0 == item_count) {
+          if (OB_FAIL(get_next_block_id(block_list, block_id, next_block_id))) {
+            LOG_WARN("fail to get next block id", K(ret));
+          } else if (OB_FAIL(ObLinkedMacroBlockReader::read_block_by_id(next_block_id,
+                                                                        handler, io_buf))) {
+            LOG_WARN("fail to read block by id", K(ret));
           } else {
-            MEMCPY(item_buf + copy_item_buf_pos, buf, data_len);
-            copy_item_buf_pos += data_len;
-            left_item_buf_len -= data_len;
-            item_count = linked_header->item_count_;
-            block_id = next_block_id;
+            pos = 0;
+            buf = handler.get_buffer();
+            common_header = reinterpret_cast<const ObMacroBlockCommonHeader *>(buf);
+            pos += sizeof(ObMacroBlockCommonHeader);
+            if (OB_FAIL(linked_header.deserialize(buf, buf_len, pos))) {
+              LOG_WARN("fail to deserialize ObLinkedMacroBlockHeader", K(ret));
+            } else if (OB_UNLIKELY((data_len = sizeof(ObMacroBlockCommonHeader) + common_header->get_payload_size() - pos)
+                > left_item_buf_len)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("data len too large", K(ret), K(data_len), K(left_item_buf_len));
+            } else {
+              MEMCPY(item_buf + copy_item_buf_pos, buf + pos, data_len);
+              copy_item_buf_pos += data_len;
+              left_item_buf_len -= data_len;
+              item_count = linked_header.item_count_;
+              block_id = next_block_id;
+            }
           }
         }
       }
@@ -608,11 +619,12 @@ void ObLinkedMacroBlockItemReader::reset()
 {
   is_inited_ = false;
   common_header_ = nullptr;
-  linked_header_ = nullptr;
+  linked_header_.reset();
   block_reader_.reset();
   buf_ = nullptr;
   buf_pos_ = 0;
   buf_len_ = 0;
+  first_item_offset_in_block_ = 0;
   allocator_.reset();
 }
 

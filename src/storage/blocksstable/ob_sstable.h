@@ -33,6 +33,7 @@ struct ObTabletCreateSSTableParam;
 class ObStoreRowIterator;
 class ObSSTableRowLockMultiChecker;
 class ObRowState;
+struct ObSSTableLinkBlockWriteInfo;
 }
 namespace blocksstable
 {
@@ -64,7 +65,6 @@ public:
   ObStorageMetaHandle handle_;
   const ObSSTableMeta *meta_;
 };
-
 
 // TODO(@chengji) remove duplicate meta on ObSSTableMeta
 struct ObSSTableMetaCache
@@ -131,7 +131,9 @@ public:
   virtual int64_t dec_ref() override;
   virtual int64_t get_ref() const override;
 
-  virtual int init(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator *allocator);
+  virtual int init(
+      const ObTabletCreateSSTableParam &param,
+      common::ObArenaAllocator *allocator);
   static int copy_from_old_sstable(const ObSSTable &old_sstable, common::ObArenaAllocator &allocator, ObSSTable *&sstable);
   void reset();
 
@@ -190,7 +192,7 @@ public:
       const bool is_reverse_scan = false,
       const int64_t sample_step = 0) const;
   int bf_may_contain_rowkey(const ObDatumRowkey &rowkey, bool &contain);
-
+  int fill_column_ckm_array(ObIArray<int64_t> &column_checksums) const;
   // For transaction
   int check_row_locked(
       const ObTableIterParam &param,
@@ -245,20 +247,27 @@ public:
   OB_INLINE int64_t get_data_macro_block_count() const { return meta_cache_.data_macro_block_count_; }
   OB_INLINE int64_t get_macro_offset() const { return meta_cache_.nested_offset_; }
   OB_INLINE int64_t get_macro_read_size() const { return meta_cache_.nested_size_; }
+#define CHECK_META_STATUS                                                      \
+  if (OB_UNLIKELY(ObSSTableMetaCache::NORMAL != meta_cache_.status_)) {        \
+    COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "sstable meta cache not valid",   \
+                   K(meta_cache_), KPC(this));                                 \
+  }
 
-  #define GET_SSTABLE_META_DEFINE_FUNC(var_type, var_name)                  \
+#define GET_SSTABLE_META_DEFINE_FUNC(var_type, var_name)                    \
     var_type get_##var_name() const {                                       \
       var_type val = meta_cache_. var_name##_;                              \
-      if (OB_UNLIKELY(ObSSTableMetaCache::NORMAL != meta_cache_.status_)) { \
-        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED,                            \
-            "sstable meta cache not valid", K(meta_cache_), KPC(this));     \
-      }                                                                     \
+      CHECK_META_STATUS                                                     \
       return val;                                                           \
     }
-
+  #define VIRTUAL_GET_SSTABLE_META_DEFINE_FUNC(var_type, var_name) \
+    virtual var_type get_##var_name() const {                               \
+      var_type val = meta_cache_. var_name##_;                              \
+      CHECK_META_STATUS                                                     \
+      return val;                                                           \
+    }
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, row_count);
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, occupy_size);
-  GET_SSTABLE_META_DEFINE_FUNC(int64_t, data_checksum);
+  VIRTUAL_GET_SSTABLE_META_DEFINE_FUNC(int64_t, data_checksum); // virtual for COSSTable
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, total_macro_block_count);
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, total_use_old_macro_block_count);
   OB_INLINE bool is_small_sstable() const
@@ -276,6 +285,13 @@ public:
   virtual void dec_macro_ref() const;
   OB_INLINE bool is_valid() const { return valid_for_reading_; }
   OB_INLINE bool is_loaded() const { return nullptr != meta_; }
+  int persist_linked_block_if_need(
+      ObArenaAllocator &allocator,
+      const ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
+      int64_t &macro_start_seq,
+      ObSharedObjectsWriteCtx &linked_block_write_ctx);
   int get_meta(ObSSTableMetaHandle &meta_handle, common::ObSafeArenaAllocator *allocator = nullptr) const;
   // load sstable meta bypass. Lifetime is guaranteed by allocator, which should cover this sstable
   int bypass_load_meta(common::ObArenaAllocator &allocator);
@@ -306,6 +322,13 @@ public:
       ObIAllocator &allocator,
       ObDatumRange &cs_range);
 
+  /*
+   * Attention! this func will update TableKey::snapshot_version_ & ObSSTableBasicMeta::root_macro_seq_
+   * only call this func for update skip major tablet
+  */
+  int modify_snapshot_and_seq(
+    const int64_t new_major_snapshot,
+    const int64_t new_root_macro_seq);
 public:
   int dump2text(
       const char *dir_name,
@@ -355,7 +378,9 @@ protected:
       const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
       ObTableAccessContext &access_context,
       ObStoreRowIterator *&iter);
-  int init_sstable_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator *allocator);
+    int init_sstable_meta(
+        const ObTabletCreateSSTableParam &param,
+        common::ObArenaAllocator *allocator);
   int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
   int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_fixed_struct(const char *buf, const int64_t data_len, int64_t &pos);

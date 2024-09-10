@@ -57,7 +57,7 @@ public:
   virtual ~ObBlockRowStore();
   virtual void reset();
   virtual void reuse();
-  virtual int init(const ObTableAccessParam &param);
+  virtual int init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask = nullptr);
   int open(ObTableIterParam &iter_param);
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_disabled() const { return disabled_; }
@@ -79,7 +79,9 @@ public:
   { return pd_filter_info_.filter_; }
   virtual bool is_end() const { return false; }
   virtual bool is_empty() const { return true; }
-  VIRTUAL_TO_STRING_KV(K_(is_inited),  K_(can_blockscan), K_(filter_applied), K_(disabled), K_(is_aggregated_in_prefetch));
+  OB_INLINE bool is_vec2() const { return is_vec2_; } // need to remove after statistical info pushdown support vec 2.0
+  VIRTUAL_TO_STRING_KV(K_(is_inited),  K_(can_blockscan), K_(filter_applied),
+      K_(disabled), K_(is_aggregated_in_prefetch), K_(is_vec2));
 protected:
   int filter_micro_block(
       const int64_t row_count,
@@ -87,6 +89,7 @@ protected:
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter);
   bool is_inited_;
+  bool is_vec2_; // need to remove after statistical info pushdown support vec 2.0
   sql::PushdownFilterInfo pd_filter_info_;
   ObTableAccessContext &context_;
   const ObTableIterParam *iter_param_;
@@ -95,6 +98,7 @@ private:
   bool filter_applied_;
   bool disabled_;
   bool is_aggregated_in_prefetch_;
+
 };
 
 }

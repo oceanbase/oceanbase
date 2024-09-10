@@ -15,6 +15,9 @@
 
 #include "ob_storage_info.h"
 #include "ob_storage.h"
+#include "share/backup/ob_backup_struct.h"
+#include "share/object_storage/ob_object_storage_struct.h"
+#include "lib/utility/utility.h"
 
 namespace oceanbase
 {
@@ -35,7 +38,7 @@ const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
 
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
-  : delete_mode_(ObIStorageUtil::DELETE),
+  : delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE),
     device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
 {
@@ -43,6 +46,8 @@ ObObjectStorageInfo::ObObjectStorageInfo()
   access_id_[0] = '\0';
   access_key_[0] = '\0';
   extension_[0] = '\0';
+  max_iops_ = 0;
+  max_bandwidth_ = 0;
 }
 
 ObObjectStorageInfo::~ObObjectStorageInfo()
@@ -52,13 +57,15 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 
 void ObObjectStorageInfo::reset()
 {
-  delete_mode_ = ObIStorageUtil::DELETE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
   checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
   extension_[0] = '\0';
+  max_iops_ = 0;
+  max_bandwidth_ = 0;
 }
 
 bool ObObjectStorageInfo::is_valid() const
@@ -75,6 +82,8 @@ int64_t ObObjectStorageInfo::hash() const
   hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
   hash_value = murmurhash(access_key_, static_cast<int32_t>(strlen(access_key_)), hash_value);
   hash_value = murmurhash(extension_, static_cast<int32_t>(strlen(extension_)), hash_value);
+  hash_value = murmurhash(&max_iops_, static_cast<int32_t>(sizeof(max_iops_)), hash_value);
+  hash_value = murmurhash(&max_bandwidth_, static_cast<int32_t>(sizeof(max_bandwidth_)), hash_value);
   return hash_value;
 }
 
@@ -85,12 +94,39 @@ bool ObObjectStorageInfo::operator ==(const ObObjectStorageInfo &storage_info) c
       && (0 == STRCMP(endpoint_, storage_info.endpoint_))
       && (0 == STRCMP(access_id_, storage_info.access_id_))
       && (0 == STRCMP(access_key_, storage_info.access_key_))
-      && (0 == STRCMP(extension_, storage_info.extension_));
+      && (0 == STRCMP(extension_, storage_info.extension_))
+      && max_iops_ == storage_info.max_iops_
+      && max_bandwidth_ == storage_info.max_bandwidth_;
 }
 
 bool ObObjectStorageInfo::operator !=(const ObObjectStorageInfo &storage_info) const
 {
   return !(*this == storage_info);
+}
+
+bool ObObjectStorageInfo::is_access_info_equal(const ObObjectStorageInfo &storage_info) const
+{
+  return (0 == STRCMP(access_id_, storage_info.access_id_)) &&
+         (0 == STRCMP(access_key_, storage_info.access_key_));
+}
+
+int ObObjectStorageInfo::reset_access_id_and_access_key(
+    const char *access_id, const char *access_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(access_id)) {
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH, pos, "%s%s", ACCESS_ID, access_id))) {
+      LOG_WARN("failed to databuff printf", K(ret), KCSTRING(access_id));
+    }
+  }
+  if (OB_NOT_NULL(access_key)) {
+    int64_t pos = 0;
+    if (FAILEDx(databuff_printf(access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH, pos, "%s%s", ACCESS_KEY, access_key))) {
+      LOG_WARN("failed to databuff printf", K(ret), KCSTRING(access_key));
+    }
+  }
+  return ret;
 }
 
 const char *ObObjectStorageInfo::get_type_str() const
@@ -204,6 +240,36 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         if (OB_FAIL(set_storage_info_field_(token, access_key_, sizeof(access_key_)))) {
           LOG_WARN("failed to set access key", K(ret));
         }
+      } else if (0 == strncmp(MAX_IOPS, token, strlen(MAX_IOPS))) {
+        int64_t value = 0;
+        char buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+        int64_t pos = 0;
+        if (OB_FAIL(databuff_printf(buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, pos, "%s", token))) {
+          LOG_WARN("failed to databuff printf", K(ret));
+        } else if (1 == sscanf(buf, "max_iops=%ld", &value)) {
+          max_iops_ = value;
+          LOG_INFO("set max iops", K(ret), K(value));
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("failed to set max iops", K(ret), K(value));
+        }
+      } else if (0 == strncmp(MAX_BANDWIDTH, token, strlen(MAX_BANDWIDTH))) {
+        int64_t value = 0;
+        char buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+        int64_t pos = 0;
+        if (OB_FAIL(databuff_printf(buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, pos, "%s", token))) {
+          LOG_WARN("failed to databuff printf", K(ret));
+        } else {
+          bool is_valid = false;
+          value = parse_config_capacity(buf + strlen(MAX_BANDWIDTH), is_valid, true /*check_unit*/);
+          if (!is_valid) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("convert failed", K(ret), K(buf));
+          } else {
+            max_bandwidth_ = value;
+            LOG_INFO("parse bandwidth value", K(buf), K(value));
+          }
+        }
       } else if (OB_STORAGE_FILE != device_type_ && 0 == strncmp(APPID, token, strlen(APPID))) {
         has_needed_extension = (OB_STORAGE_COS == device_type_);
         if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
@@ -243,9 +309,9 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(delete_mode));
   } else if (0 == strcmp(delete_mode, "delete")) {
-    delete_mode_ = ObIStorageUtil::DELETE;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   } else {
-    delete_mode_ = ObIStorageUtil::TAGGING;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
   }
   return ret;
 }
@@ -337,7 +403,8 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
   MEMCPY(access_id_, storage_info.access_id_, sizeof(access_id_));
   MEMCPY(access_key_, storage_info.access_key_, sizeof(access_key_));
   MEMCPY(extension_, storage_info.extension_, sizeof(extension_));
-
+  max_iops_ = storage_info.max_iops_;
+  max_bandwidth_ = storage_info.max_bandwidth_;
   return ret;
 }
 
@@ -371,6 +438,36 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   }
 
   return ret;
+}
+
+// Note: delete_mode_ redundantly stores a copy in extension. thus, device map key
+// includes extension_ is enough, and has no need to include delete_mode_.
+int ObObjectStorageInfo::get_device_map_key_str(char *key_str, const int64_t len) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage info not init", K(ret));
+  } else if (OB_ISNULL(key_str) || (len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), KP(key_str), K(len));
+  } else if (OB_FAIL(databuff_printf(key_str, len, "%u&%u&%s&%s&%s&%s",
+             static_cast<uint32_t>(device_type_), static_cast<uint32_t>(checksum_type_),
+             endpoint_, access_id_, access_key_, extension_))) {
+    LOG_WARN("failed to set key str", K(ret), K_(device_type), K_(checksum_type), K_(extension));
+  }
+  return ret;
+}
+
+// Note: device map key does not include delete_mode_. thus, device map key len does not include
+// delete_mode_ len too.
+int64_t ObObjectStorageInfo::get_device_map_key_len() const
+{
+  // ObStorageType and ObStorageChecksumType are uint8_t, but static_cast to uint32_t in get_device_map_key_str.
+  // therefore, ObStorageType and ObStorageChecksumType each occupies up to 10 characters.
+  // 10(one ObStorageType) + 10(one ObStorageChecksumType) + 5(five '&') + 1(one '\0') = 26.
+  // reserve some free space, increase 26 to 30.
+  return (STRLEN(endpoint_) + STRLEN(access_id_) + STRLEN(access_key_) + STRLEN(extension_) + 30);
 }
 
 int ObObjectStorageInfo::get_access_key_(char *key_buf, const int64_t key_buf_len) const

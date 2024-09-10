@@ -4343,7 +4343,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_PARTITION_WISE);
       }
       if (LOG_TABLE_SCAN == get_type()) {
-        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan()) {
+        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() || static_cast<ObLogTableScan*>(this)->is_vec_idx_scan()) {
           gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
         }
         if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
@@ -4743,10 +4743,12 @@ int ObLogicalOperator::allocate_material_node_above()
     2. Don't allocate another material node behind a material node
     3. Don't allocate a material node above a trasnsmit node
   */
-  if (log_op_def::LOG_MATERIAL == type_ ||
-      (NULL != get_parent() && log_op_def::LOG_MATERIAL == get_parent()->type_) ||
-      (log_op_def::LOG_EXCHANGE == get_type() &&
-       static_cast<ObLogExchange*>(this)->is_producer())) {
+  if (log_op_def::LOG_MATERIAL == type_
+      || (NULL != get_parent() && log_op_def::LOG_MATERIAL == get_parent()->type_)
+      || (log_op_def::LOG_EXCHANGE == get_type()
+          && static_cast<ObLogExchange *>(this)->is_producer())
+      || (LOG_JOIN_FILTER == get_type()
+          && static_cast<ObLogJoinFilter *>(this)->use_realistic_runtime_bloom_filter_size())) {
     /*do nothing*/
   } else if (NULL != get_parent()) {
     // If current node is a leaf node, allocate a material node between current and its parent
@@ -4794,6 +4796,9 @@ int ObLogicalOperator::allocate_monitoring_dump_node_above(uint64_t flags, uint6
   } else if (LOG_EXCHANGE == get_type() &&
              (static_cast<ObLogExchange*>(this)->is_producer() ||
              (static_cast<ObLogExchange*>(this)->is_consumer() && static_cast<ObLogExchange*>(this)->get_is_remote()))) {
+    // Do nothing.
+  } else if (LOG_JOIN_FILTER == get_type()
+             && static_cast<ObLogJoinFilter *>(this)->use_realistic_runtime_bloom_filter_size()) {
     // Do nothing.
   } else {
     ObLogicalOperator *log_op = NULL;
@@ -5581,13 +5586,24 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
   ObLogJoinFilter *join_filter_use = NULL;
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
   CK(LOG_JOIN == get_type());
+  DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
+  bool enable_bloom_filter = get_plan()->get_optimizer_context().enable_bloom_filter();
+  bool can_join_filter_material = false;
+  int64_t valied_join_filter_count = 0;
+  int64_t extra_hash_count = 1; // at least one for hash join
+  bool realistic_runtime_bloom_filter_size = !GCONF._preset_runtime_bloom_filter_size;
+  if (realistic_runtime_bloom_filter_size && enable_bloom_filter
+      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
+    can_join_filter_material = true;
+  }
   if (OB_SUCC(ret)) {
-    DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
       bool right_has_exchange = false;
       bool right_has_px_coord = false;
       filter_create = NULL;
       filter_use = NULL;
+      join_filter_create = nullptr;
+      join_filter_use = nullptr;
       const JoinFilterInfo &info = infos.at(i);
       ObLogicalOperator *node = NULL;
       if (!info.can_use_join_filter_) {
@@ -5644,6 +5660,12 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           } else {
             join_filter_create->set_is_shared_join_filter();
             join_filter_use->set_is_shared_join_filter();
+            int64_t max_wait_time_ms = 0;
+            if (OB_FAIL(calc_rf_max_wait_time(node, info.filter_table_id_, max_wait_time_ms))) {
+              LOG_WARN("failed to calc_rf_max_wait_time");
+            } else {
+              join_filter_use->set_rf_max_wait_time(max_wait_time_ms);
+            }
           }
 
           if (OB_FAIL(ret)) {
@@ -5683,7 +5705,101 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           ObLogTableScan *scan = static_cast<ObLogTableScan*>(node);
           scan->set_use_column_store(info.use_column_store_);
         }
+
+        if (OB_SUCC(ret) && can_join_filter_material) {
+          valied_join_filter_count++;
+          join_filter_create->get_jf_material_control_info().enable_material_ = true;
+          if (join_filter_create->get_join_exprs().count()
+              != static_cast<ObLogJoin *>(this)->get_equal_join_conditions().count()) {
+            // if hash key is different, need to calculate new hash value
+            extra_hash_count++;
+          } else {
+            // if hash key is same, reuse hash join's hash value
+            join_filter_create->get_jf_material_control_info().hash_id_ = 0;
+          }
+        }
       }
+    }
+  }
+
+  if (OB_SUCC(ret) && can_join_filter_material && valied_join_filter_count > 0
+      && OB_NOT_NULL(join_filter_create)) {
+    /* for plan like below
+                        Hash Join
+                        /
+               Join Filter Create (A, Material Controller)
+                      /
+            Join Filter Create (B)
+                    /
+          Join Filter Create (C)
+      Only the top join filter create op (A) has the responsibility to material data and calculate
+      hash value, join filter create op (B) join filter create op (C) is controled by
+      join filter create op (A).
+
+      During exection, only the join filter create op A will store the row, B and C will read the
+      store to build join filter.
+
+      The format of the materialed row:
+                    extra                                          data
+      hash(for hash join) hash(for A) hash(for B) hash(for C)   c1  c2  c3
+    */
+
+    join_filter_create->get_jf_material_control_info().is_controller_ = true;
+    join_filter_create->get_jf_material_control_info().extra_hash_count_ = extra_hash_count;
+    join_filter_create->get_jf_material_control_info().join_filter_count_ = valied_join_filter_count;
+    join_filter_create->get_jf_material_control_info().each_sqc_has_full_data_ =
+        DIST_BC2HOST_NONE == join_dist_algo;
+
+    ObLogJoin *hash_join = static_cast<ObLogJoin *>(this);
+    hash_join->get_jf_material_control_info() = join_filter_create->get_jf_material_control_info();
+    hash_join->get_jf_material_control_info().hash_id_ = 0;
+
+    if (extra_hash_count > 1) {
+      ObLogicalOperator *cur_op = hash_join;
+      ObLogJoinFilter *cur_join_filter_create_op = nullptr;
+      int64_t hash_id = 1;
+      while (LOG_JOIN_FILTER == cur_op->get_child(first_child)->get_type()) {
+        cur_op = cur_op->get_child(first_child);
+        cur_join_filter_create_op = static_cast<ObLogJoinFilter *>(cur_op);
+        if (cur_join_filter_create_op->get_jf_material_control_info().hash_id_ == 0) {
+          // already reuse hash join's hash value, skip
+          continue;
+        } else {
+          cur_join_filter_create_op->get_jf_material_control_info().hash_id_ = hash_id;
+          hash_id++;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::calc_rf_max_wait_time(const ObLogicalOperator *node, uint64_t table_id,
+                                             int64_t &max_wait_time_ms)
+{
+  int ret = OB_SUCCESS;
+  static constexpr int64_t net_work_speed = 100 * 1000L; // Byte per ms, i.e 100MB/s
+  static constexpr int64_t max_wait_time_ms_upper_limit = INT64_MAX >> 10; // in case of overflow
+  double tsc_output_rows = 0;
+  double totol_probe_table_size = 0;
+  ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session is null", K(ret));
+  } else if (table_id != OB_INVALID_ID && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
+    max_wait_time_ms = 10; // at least 10ms
+    const OptTableMetas &table_metas = get_plan()->get_basic_table_metas();
+    const OptTableMeta *table_meta = nullptr;
+    if (OB_ISNULL(table_meta = table_metas.get_table_meta_by_table_id(table_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_meta unexpected null", K(table_id));
+    } else if (FALSE_IT(tsc_output_rows = table_meta->get_rows())) {
+    } else {
+      totol_probe_table_size = node->get_width() * tsc_output_rows; // Unit: Byte
+      max_wait_time_ms = std::max((int64_t)(totol_probe_table_size / net_work_speed), max_wait_time_ms);
+      max_wait_time_ms = std::min(max_wait_time_ms_upper_limit, max_wait_time_ms);// in case of overflow
+      LOG_TRACE("print calc max wait ms", K(node->get_width()), K(tsc_output_rows),
+                K(totol_probe_table_size), K(max_wait_time_ms));
     }
   }
   return ret;

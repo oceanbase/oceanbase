@@ -83,6 +83,21 @@ int64_t ObMergeProgress::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int64_t ObLSMergeProgress::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(ls_total_cnt), K_(ls_merging_cnt), K_(ls_verified_cnt), K_(ls_refreshed_cnt));
+    J_OBJ_END();
+  }
+  return pos;
+}
+#endif
+
+
 /**
  * -------------------------------------------------------------------ObTabletLSPairCache-------------------------------------------------------------------
  */
@@ -266,6 +281,24 @@ int ObTabletLSPairCache::get_tablet_ls_pairs(
   return ret;
 }
 
+int ObTabletLSPairCache::get_tablet_ls_id(
+  const uint64_t table_id,
+  const ObTabletID tablet_id,
+  share::ObLSID &ls_id) const
+{
+  int ret = OB_SUCCESS;
+  if (is_sys_tenant(tenant_id_) || is_sys_table(table_id)) {
+    ls_id = ObLSID(ObLSID::SYS_LS_ID);
+  } else if (OB_FAIL(map_.get_refactored(tablet_id, ls_id))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ITEM_NOT_MATCH;
+    } else {
+      LOG_WARN("failed to get ls id", KR(ret), K(table_id), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
 /**
  * -------------------------------------------------------------------ObUncompactInfo-------------------------------------------------------------------
  */
@@ -285,6 +318,7 @@ void ObUncompactInfo::reset()
   SpinWLockGuard w_guard(diagnose_rw_lock_);
   tablets_.reuse();
   table_ids_.reuse();
+  skip_verify_tables_.reuse();
 }
 
 void ObUncompactInfo::add_table(const uint64_t table_id)
@@ -293,6 +327,16 @@ void ObUncompactInfo::add_table(const uint64_t table_id)
   SpinWLockGuard w_guard(diagnose_rw_lock_);
   if (table_ids_.count() < DEBUG_INFO_CNT
       && OB_FAIL(table_ids_.push_back(table_id))) {
+    LOG_WARN("fail to push_back", KR(ret), K(table_id));
+  }
+}
+
+void ObUncompactInfo::add_skip_verify_table(const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  // no need lock, just print log, not show in virtual_table
+  if (skip_verify_tables_.count() < SKIP_VERIFY_TABLE_CNT
+      && OB_FAIL(skip_verify_tables_.push_back(table_id))) {
     LOG_WARN("fail to push_back", KR(ret), K(table_id));
   }
 }

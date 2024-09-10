@@ -215,9 +215,9 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch(const int64_t batch_size,
         finish_turn = true;
       } else if (OB_FAIL(child_->get_next_batch(batch_size, child_brs))) {
         LOG_WARN("failed to get next batch from child op", K(ret), K(is_block));
-      } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(MY_SPEC.distinct_exprs_,
-                                                              *child_brs,
-                                                              hash_values_for_batch_))) {
+      } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(
+                   MY_SPEC.distinct_exprs_, *child_brs->skip_, child_brs->size_,
+                   child_brs->all_rows_active_, hash_values_for_batch_))) {
         LOG_WARN("failed to calc hash values batch for child", K(ret));
       } else {
         //child_op_is_end_ means last batch data is return, finish_turn means no data to process
@@ -332,9 +332,9 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch_by_pass(const int64_t bat
       finish_turn = true;
     } else if (OB_FAIL(child_->get_next_batch(batch_size, child_brs))) {
       LOG_WARN("failed to get next batch from child op", K(ret));
-    } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(MY_SPEC.distinct_exprs_,
-                                                            *child_brs,
-                                                            hash_values_for_batch_))) {
+    } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(
+                 MY_SPEC.distinct_exprs_, *child_brs->skip_, child_brs->size_,
+                 child_brs->all_rows_active_, hash_values_for_batch_))) {
       LOG_WARN("failed to calc hash values batch for child", K(ret));
     } else {
       int64_t add_cnt = (child_brs->size_

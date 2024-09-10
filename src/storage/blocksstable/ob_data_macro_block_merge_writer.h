@@ -23,6 +23,9 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+
+class ObSSTablePrivateObjectCleaner;
+
 class ObDataMacroBlockMergeWriter : public ObMacroBlockWriter
 {
 public:
@@ -31,12 +34,18 @@ public:
   virtual void reset() override;
   virtual int open(
       const ObDataStoreDesc &data_store_desc,
-      const ObMacroDataSeq &start_seq,
+      const int64_t parallel_idx,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      ObSSTablePrivateObjectCleaner &object_cleaner,
       ObIMacroBlockFlushCallback *callback = nullptr,
+      ObIMacroBlockValidator *validator = nullptr,
       ObIODevice *device_handle = nullptr) override;
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr) override;
   virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr) override;
-  virtual int append_macro_block(const ObMacroBlockDesc &macro_desc) override;
+  virtual int append_macro_block(
+      const ObMacroBlockDesc &macro_desc,
+      const ObMicroBlockData *micro_block_data) override;
 protected:
   virtual int build_micro_block() override;
   virtual int try_switch_macro_block() override;

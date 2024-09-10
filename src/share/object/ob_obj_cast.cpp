@@ -33,6 +33,8 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/expr/ob_array_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
@@ -9556,6 +9558,45 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+static int string_collection(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (in.is_null()) {
+    out.set_null();
+  } else {
+    const uint16_t dst_subschema_id = out.get_meta().get_subschema_id();
+    ObSubSchemaValue dst_meta;
+    if (OB_ISNULL(params.exec_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec ctx is null", K(ret), K(lbt()));
+    } else if (OB_FAIL(params.exec_ctx_->get_sqludt_meta_by_subschema_id(dst_subschema_id, dst_meta))) {
+      LOG_WARN("Failed to get subshcema_meta_info", K(ret), K(dst_subschema_id));
+    } else {
+      ObString in_str = in.get_string();
+      ObIAllocator &temp_allocator = *params.allocator_v2_;
+      ObIArrayType *arr_dst = NULL;
+      ObString res_str;
+      const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
+      ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
+      if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
+        LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+      } else if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+        LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+      } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
+        LOG_WARN("check array validty failed", K(ret), K(dst_coll_info));
+        if (ret == OB_ERR_INVALID_VECTOR_DIM) {
+          LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_dst->size());
+        }
+      } else if (OB_FAIL(ObArrayExprUtils::set_array_obj_res(arr_dst, &params, &out))) {
+        LOG_WARN("get array binary string failed", K(ret), K(dst_coll_info));
+      }
+    }
+  }
+
+  return ret;
+}
+
 static int pl_extend_geometry(const ObObjType expect_type, ObObjCastParams &params,
                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -10785,7 +10826,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_identity,/*geometry*/
     cast_not_expected,/*udt, mysql mode does not have udt*/
     cast_identity,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_identity,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_identity,/*roaringbitmap*/
@@ -10818,7 +10859,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     int_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     int_decimalint,/*decimal int*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -10851,7 +10892,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     uint_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     uint_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -10884,7 +10925,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     float_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     float_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -10917,7 +10958,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     double_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     double_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -10950,7 +10991,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     number_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     number_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -10983,7 +11024,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     datetime_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     datetime_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11016,7 +11057,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     date_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     date_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11049,7 +11090,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     time_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     time_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11082,7 +11123,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     year_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     year_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11115,7 +11156,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     string_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    string_collection,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     string_roaringbitmap,/*roaringbitmap*/
@@ -11148,7 +11189,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     pl_extend_sql_udt,/*udt*/
     cast_not_support,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11181,7 +11222,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     unknown_other,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11214,7 +11255,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     text_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    string_collection,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     string_roaringbitmap,/*roaringbitmap*/
@@ -11247,7 +11288,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     bit_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     bit_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11280,7 +11321,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11313,7 +11354,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_inner_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11478,7 +11519,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     lob_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     lob_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11511,7 +11552,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     json_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     json_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11544,7 +11585,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     geometry_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     geometry_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
@@ -11610,39 +11651,39 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     decimalint_geometry,/*geometry*/
     cast_not_expected, /*udt*/
     decimalint_decimalint,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/
   },
   {
     /*collection-> xxx*/
-    cast_not_expected,/*null*/
-    cast_not_expected,/*int*/
-    cast_not_expected,/*uint*/
-    cast_not_expected,/*float*/
-    cast_not_expected,/*double*/
-    cast_not_expected,/*number*/
-    cast_not_expected,/*datetime*/
-    cast_not_expected,/*date*/
-    cast_not_expected,/*time*/
-    cast_not_expected,/*year*/
-    cast_not_expected,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
-    cast_not_expected,/*text*/
-    cast_not_expected,/*bit*/
+    cast_not_support,/*null*/
+    cast_not_support,/*int*/
+    cast_not_support,/*uint*/
+    cast_not_support,/*float*/
+    cast_not_support,/*double*/
+    cast_not_support,/*number*/
+    cast_not_support,/*datetime*/
+    cast_not_support,/*date*/
+    cast_not_support,/*time*/
+    cast_not_support,/*year*/
+    cast_not_support,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    cast_not_support,/*text*/
+    cast_not_support,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    cast_not_expected,/*otimestamp*/
-    cast_not_expected,/*raw*/
+    cast_not_support,/*otimestamp*/
+    cast_not_support,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
-    cast_not_expected,/*geometry*/
+    cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
     cast_not_expected, /*udt*/
-    cast_not_expected,/*decimalint*/
+    cast_not_support,/*decimalint*/
     cast_not_expected,/*collection*/
     cast_not_expected,/*mysql date*/
     cast_not_expected,/*mysql datetime*/

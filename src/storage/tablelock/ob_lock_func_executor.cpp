@@ -1082,10 +1082,10 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
 
         OZ (ObTableLockDetector::remove_detect_info_from_inner_table(
                session, LOCK_OBJECT, arg, need_remove_from_lock_table));
+        OX (release_cnt = 1);  // if release sucessfully, set release_cnt to 1
         if (OB_SUCC(ret) && need_remove_from_lock_table) {
           OZ (unlock_obj_(tx_desc, tx_param, arg));
           OZ (remove_session_record_(stack_ctx, client_session_id, client_session_create_ts));
-          OX (release_cnt = 1);
         } else if (OB_EMPTY_RESULT == ret) {
           if (OB_TMP_FAIL(check_lock_exist_(stack_ctx, lock_id, lock_id_existed))) {
             LOG_WARN("check lock_id existed failed", K(tmp_ret), K(lock_id));
