@@ -67,6 +67,7 @@ int ObDBMSSchedJobExecutor::init_session(
   ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
+  ObPrivSet db_priv_set = OB_PRIV_SET_EMPTY;
   ObArenaAllocator *allocator = NULL;
   const bool print_info_log = true;
   const bool is_sys_tenant = true;
@@ -99,7 +100,16 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.set_database_id(database_id));
   OZ (session.set_user(
     user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
+  OX (session.set_priv_user_id(user_info->get_user_id()));
   OX (session.set_user_priv_set(user_info->get_priv_set()));
+  OZ (schema_guard.get_db_priv_set(tenant_id, user_info->get_user_id(), database_name, db_priv_set));
+  OX (session.set_db_priv_set(db_priv_set));
+  OX (session.get_enable_role_array().reuse());
+  for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); ++i) {
+    if (user_info->get_disable_option(user_info->get_role_id_option_array().at(i)) == 0) {
+      OZ (session.get_enable_role_array().push_back(user_info->get_role_id_array().at(i)));
+    }
+  }
   OX (session.set_shadow(true));
   return ret;
 }
@@ -120,7 +130,7 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
   OZ (schema_service_->get_tenant_schema_guard(job_info.get_tenant_id(), schema_guard));
   OZ (schema_guard.get_tenant_info(job_info.get_tenant_id(), tenant_info));
   OZ (schema_guard.get_user_info(
-    job_info.get_tenant_id(), job_info.get_lowner(), user_infos));
+    job_info.get_tenant_id(), job_info.get_powner(), user_infos));
   OZ (schema_guard.get_database_schema(
     job_info.get_tenant_id(), job_info.get_cowner(), database_schema));
   if (OB_SUCC(ret) &&

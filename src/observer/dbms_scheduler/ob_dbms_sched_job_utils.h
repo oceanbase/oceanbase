@@ -141,6 +141,7 @@ public:
 
   common::ObString &get_what() { return what_; }
   common::ObString &get_exec_env() { return exec_env_; }
+  common::ObString &get_powner() { return powner_; }
   common::ObString &get_lowner() { return lowner_; }
   common::ObString &get_cowner() { return cowner_; }
   common::ObString &get_zone() { return field1_; }
