@@ -422,8 +422,13 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())
-          || ob_is_geometry(dst_type.get_type())) {
+      if (ob_is_enumset_tc(type1.get_type()) && ob_is_string_or_lob_type(dst_type.get_type())) {
+        type.set_collation_type(type1.get_collation_type());
+        type.set_collation_level(CS_LEVEL_IMPLICIT);
+        type.set_length(type1.get_length());
+      } else if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type())
+                                         || ob_is_json(dst_type.get_type())
+                                         || ob_is_geometry(dst_type.get_type())) {
         type.set_collation_level(dst_type.get_collation_level());
         int32_t len = dst_type.get_length();
         int16_t length_semantics = ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
@@ -542,15 +547,19 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         sql_xml_type.set_sql_udt(ObXMLSqlType);
         type1.set_calc_meta(sql_xml_type.get_obj_meta());
       } else {
-        bool need_warp = false;
+        bool need_wrap = false;
         if (ob_is_enumset_tc(type1.get_type())) {
           // For enum/set type, need to check whether warp to string is required.
-          if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(type1.get_type(), type1.get_calc_type(),
-                                                          false, need_warp))) {
+          if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(type1, type1.get_calc_type(),
+                                                          false, need_wrap))) {
             LOG_WARN("need_wrap_to_string failed", K(ret), K(type1));
+          } else if (!need_wrap) {
+            // need_wrap is false, set calc_type to type1 itself.
+            type1.set_calc_meta(type1.get_obj_meta());
+            type1.set_calc_accuracy(type1.get_calc_accuracy());
           }
-        } else if (OB_LIKELY(need_warp)) {
-          // need_warp is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
+        } else if (OB_LIKELY(need_wrap)) {
+          // need_wrap is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
           // to string in ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr) later.
         } else {
           if (ob_is_geometry_tc(dst_type.get_type())) {
@@ -567,7 +576,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           }
 
           if (OB_SUCC(ret)) {
-            // need_warp is false, set calc_type to type1 itself.
+            // need_wrap is false, set calc_type to type1 itself.
             type1.set_calc_meta(type1.get_obj_meta());
           }
         }

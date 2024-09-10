@@ -806,6 +806,7 @@ public:
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  sql_plan_management_mode_(0),
+                                 enable_enum_set_subschema_(false),
                                  session_(session)
     {
     }
@@ -831,6 +832,7 @@ public:
     int64_t get_query_record_size_limit() const { return _query_record_size_limit_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
+    bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -856,6 +858,7 @@ public:
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
     int64_t sql_plan_management_mode_;
+    bool enable_enum_set_subschema_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1518,6 +1521,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sql_plan_management_mode();
+  }
+  bool is_enable_enum_set_with_subschema()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_enum_set_subschema();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

@@ -33,6 +33,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
@@ -6745,6 +6746,74 @@ static int bit_geometry(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static bool is_enum_set_with_subschema(const ObObj &in)
+{
+  return in.get_scale() == ObEnumSetMeta::MetaState::READY;
+}
+
+static OB_INLINE int common_enumset_string(const ObObj &in,
+                                           ObObjCastParams &params,
+                                           ObTextStringResult &text_result)
+{
+  int ret = OB_SUCCESS;
+  const ObEnumSetMeta *meta = NULL;
+  const ObObjType in_type = in.get_type();
+  if (0 == in.get_uint64()) {
+    // empty string, do nothing
+  } else {
+    const uint16_t subschema_id = in.get_meta().get_subschema_id();
+    if (OB_ISNULL(params.exec_ctx_)) {
+      ret = OB_ERR_UNDEFINED;
+      LOG_WARN("exec ctx is null", K(ret));
+    } else if (OB_FAIL(params.exec_ctx_->get_enumset_meta_by_subschema_id(subschema_id, meta))) {
+      LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+    } else if (OB_ISNULL(meta) || OB_ISNULL(meta->get_str_values())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get meta", K(ret));
+    } else if (ObEnumType == in_type) {
+      ret = ObExprEnumToStr::inner_to_str(in.get_uint64(), *meta->get_str_values(), text_result);
+    } else if (ObSetType == in_type) {
+      ret = ObExprSetToStr::inner_to_str(in.get_collation_type(), in.get_uint64(),
+                                          *meta->get_str_values(), text_result);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr type", K(ret), K(in_type));
+    }
+  }
+
+  return ret;
+}
+
+static int enumset_enumset(const ObExpectType &expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObEnumSetTC != ob_obj_type_class(expect_type.get_type()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (expect_type.get_type() == ObEnumType &&
+        OB_FAIL(string_enum(expect_type, params, temp_obj, out))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    } else if (expect_type.get_type() == ObSetType &&
+        OB_FAIL(string_set(expect_type, params, temp_obj, out))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // enum -> XXX
 /*//来自同一个enum 列的obj转换使用应该使用该接口，来自不同enum列的转换使用enumsetinner_enum
@@ -6925,8 +6994,8 @@ ObCastEnumOrSetFunc OB_CAST_ENUM_OR_SET[ObMaxTC][2] =
   },
   {
     /*enumset tc -> enum_or_set*/
-    cast_not_expected_enum_set,/*enum*/
-    cast_not_expected_enum_set,/*set*/
+    enumset_enumset,/*enum*/
+    enumset_enumset,/*set*/
   },
   {
     /*enumset_inner tc -> enum_or_set*/
@@ -7085,6 +7154,84 @@ static int enumset_number(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int enumset_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                            const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_datetime(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+static int enumset_date(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_date(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+static int enumset_time(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_time(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
 static int enumset_year(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -7102,6 +7249,63 @@ static int enumset_year(const ObObjType expect_type, ObObjCastParams &params,
     return ret;
   }
 
+static int enumset_string(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObStringTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(expect_type, false, params.allocator_v2_);
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else {
+      ObString es_str;
+      text_result.get_result_buffer(es_str);
+      out.set_string(expect_type, es_str);
+      if (OB_SUCC(ret)) {
+        res_length = static_cast<ObLength>(out.get_string_len());
+        out.set_collation_type(params.dest_collation_);
+      }
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int enumset_text(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObTextTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_text(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
 static int enumset_bit(const ObObjType expect_type, ObObjCastParams &params,
                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -7118,6 +7322,59 @@ static int enumset_bit(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     SET_RES_BIT(out);
     SET_RES_ACCURACY(static_cast<ObPrecision>(bit_len), DEFAULT_SCALE_FOR_BIT, DEFAULT_LENGTH_FOR_NUMERIC);
+  }
+  return ret;
+}
+
+static int enumset_lob(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObLobTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_lob(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+
+static int enumset_json(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!is_enum_set_with_subschema(in)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cast", K(ret), K(in));
+  } else if (OB_UNLIKELY(ObEnumSetTC != in.get_type_class()
+                  || ObJsonTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObTextStringResult text_result(ObVarcharType, false, params.allocator_v2_);
+    ObString es_str;
+    ObObj temp_obj;
+    if (OB_FAIL(common_enumset_string(in, params, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (OB_FAIL(string_json(expect_type, params, temp_obj, out, cast_mode))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
   }
   return ret;
 }
@@ -10152,14 +10409,14 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     enumset_float,/*float*/
     enumset_double,/*double*/
     enumset_number,/*number*/
-    cast_not_expected,/*datetime*/
-    cast_not_expected,/*date*/
-    cast_not_expected,/*time*/
+    enumset_datetime,/*datetime*/
+    enumset_date,/*date*/
+    enumset_time,/*time*/
     enumset_year,/*year*/
-    cast_not_expected,/*string*/
+    enumset_string,/*string*/
     cast_not_support,/*extend*/
     cast_not_support,/*unknown*/
-    cast_not_expected,/*text*/
+    enumset_text,/*text*/
     enumset_bit,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
@@ -10167,9 +10424,9 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
-    cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
-    cast_not_expected,/*geometry*/
+    enumset_lob,/*lob*/
+    enumset_json,/*json*/
+    cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_not_expected,/*collection*/

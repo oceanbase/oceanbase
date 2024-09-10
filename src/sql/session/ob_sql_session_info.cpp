@@ -3052,6 +3052,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       px_join_skew_minfreq_ = tenant_config->_px_join_skew_minfreq;
       sql_plan_management_mode_ = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
         tenant_config->sql_plan_management_mode.get_value_string());
+      enable_enum_set_subschema_ = tenant_config->_enable_enum_set_subschema;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }

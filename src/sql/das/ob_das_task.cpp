@@ -85,6 +85,31 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   OB_UNIS_ENCODE(session_id_);
   OB_UNIS_ENCODE(plan_id_);
   OB_UNIS_ENCODE(plan_hash_);
+  //Serializing the reference relationship between ctdefs and rtdefs.
+  for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ENCODE(ctdef->children_cnt_); // default cnt is zero
+    for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+      OB_UNIS_ENCODE(child_ctdef);
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < rtdefs_.count(); ++i) {
+    ObDASBaseRtDef *rtdef = rtdefs_.at(i);
+    OB_UNIS_ENCODE(rtdef->ctdef_);
+    OB_UNIS_ENCODE(rtdef->children_cnt_); // default cnt is zero
+    for (int j = 0; OB_SUCC(ret) && j < rtdef->children_cnt_; ++j) {
+      ObDASBaseRtDef *child_rtdef = rtdef->children_[j];
+      OB_UNIS_ENCODE(child_rtdef);
+    }
+  }
+  if (need_subschema_ctx_) {
+    if (OB_NOT_NULL(exec_ctx_->get_physical_plan_ctx()->get_phy_plan())) {
+      OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_phy_plan()->get_subschema_ctx());
+    } else {
+      OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+    }
+  }
   return ret;
 }
 
@@ -189,6 +214,27 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   OB_UNIS_DECODE(session_id_);
   OB_UNIS_DECODE(plan_id_);
   OB_UNIS_DECODE(plan_hash_);
+  //rebuilding the reference relationship between ctdefs and rtdefs after deserialization.
+  for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+    ObDASBaseCtDef *ctdef = const_cast<ObDASBaseCtDef*>(ctdefs_.at(i));
+    OB_UNIS_DECODE(ctdef->children_cnt_);
+    for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = nullptr;
+      OB_UNIS_DECODE(child_ctdef); // unused, just placement
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < rtdefs_.count(); ++i) {
+    ObDASBaseRtDef *rtdef = rtdefs_.at(i);
+    OB_UNIS_DECODE(rtdef->ctdef_);
+    OB_UNIS_DECODE(rtdef->children_cnt_);
+    for (int j = 0; OB_SUCC(ret) && j < rtdef->children_cnt_; ++j) {
+      ObDASBaseRtDef *child_rtdef = nullptr;
+      OB_UNIS_DECODE(child_rtdef); // unused, just placement
+    }
+  }
+  if (need_subschema_ctx_) {
+    OB_UNIS_DECODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+  }
   return ret;
 }
 
@@ -228,6 +274,32 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   OB_UNIS_ADD_LEN(session_id_);
   OB_UNIS_ADD_LEN(plan_id_);
   OB_UNIS_ADD_LEN(plan_hash_);
+
+  //Serializing the reference relationship between ctdefs and rtdefs.
+  for (int i = 0; i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ADD_LEN(ctdef->children_cnt_); // default cnt is zero
+    for (int j = 0; j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+      OB_UNIS_ADD_LEN(child_ctdef);
+    }
+  }
+  for (int i = 0; i < rtdefs_.count(); ++i) {
+    ObDASBaseRtDef *rtdef = rtdefs_.at(i);
+    OB_UNIS_ADD_LEN(rtdef->ctdef_);
+    OB_UNIS_ADD_LEN(rtdef->children_cnt_); // default cnt is zero
+    for (int j = 0; j < rtdef->children_cnt_; ++j) {
+      ObDASBaseRtDef *child_rtdef = rtdef->children_[j];
+      OB_UNIS_ADD_LEN(child_rtdef);
+    }
+  }
+  if (need_subschema_ctx_) {
+    if (OB_NOT_NULL(exec_ctx_->get_physical_plan_ctx()->get_phy_plan())) {
+      OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_phy_plan()->get_subschema_ctx());
+    } else {
+      OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+    }
+  }
   return len;
 }
 

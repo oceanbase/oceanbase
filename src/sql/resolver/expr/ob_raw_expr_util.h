@@ -855,8 +855,14 @@ public:
   //extract from const value
   static int extract_int_value(const ObRawExpr *expr, int64_t &val);
   //used for enum set type
-  static int need_wrap_to_string(common::ObObjType param_type, common::ObObjType calc_type,
+  static int need_wrap_to_string(const ObExprResType &src_res_type, common::ObObjType calc_type,
                                  const bool is_same_type_need, bool &need_wrap);
+  static int extract_enum_set_collation(const ObExprResType &src_res_type,
+                                        const sql::ObSQLSessionInfo *session,
+                                        ObObjMeta &obj_meta);
+  static int extract_enum_set_meta(const ObExprResType &src_res_type,
+                                   const sql::ObSQLSessionInfo *session,
+                                   const ObEnumSetMeta *&meta);
   static bool contain_id(const common::ObIArray<uint64_t> &ids, const uint64_t target);
   static int clear_exprs_flag(const common::ObIArray<ObRawExpr*> &exprs, ObExprInfoFlag flag);
 
@@ -1202,6 +1208,12 @@ public:
                                            const ObSQLMode sql_mode,
                                            ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
+private:
+  static int need_extra_cast_for_enumset(const ObExprResType &src_type,
+                                         const ObExprResType &dst_type,
+                                         const ObSQLSessionInfo *session_info,
+                                         ObExprResType &extra_type,
+                                         bool &need_extra_cast);
 
 private :
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,

@@ -267,21 +267,12 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       type.set_result_flag(NOT_NULL_FLAG | NOT_NULL_WRITE_FLAG);
     }
 
-    bool enumset_to_varchar = false;
-    //here will wrap type_to_str if necessary
-    if (OB_SUCC(ret) && ob_is_enumset_tc(types[4].get_type())) {
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[types[0].get_type()]];
-      if (OB_UNLIKELY(ObMaxType == calc_type)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_ENG_LOG(WARN, "invalid type of parameter ", K(types[4]), K(types), K(ret));
-      } else if (ObVarcharType == calc_type) {
-        enumset_to_varchar = true;
-        types[4].set_calc_type(calc_type);
-        types[4].set_calc_collation_type(coll_type);
-        types[4].set_calc_collation_level(CS_LEVEL_IMPLICIT);
-        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra());
-      }
+    bool wrap_to_str = false;
+    if (OB_SUCC(ret) && OB_FAIL(calc_enum_set_result_type(type, types, coll_type, type_ctx,
+                                                          wrap_to_str))) {
+      LOG_WARN("fail to calc enum set result type", K(ret));
     }
+
     // for table modify in oracle mode, we ignore charset convert failed
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
       type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_CHARSET_CONVERT_IGNORE_ERR);
@@ -293,7 +284,7 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       LOG_WARN("failed to check valid implicit convert", K(ret));
     }
 
-    if (OB_SUCC(ret) && !enumset_to_varchar) {
+    if (OB_SUCC(ret) && !wrap_to_str) {
       //cast type when type not same.
       const ObObjTypeClass value_tc = ob_obj_type_class(types[4].get_type());
       const ObObjTypeClass type_tc = ob_obj_type_class(types[0].get_type());
@@ -316,7 +307,70 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         }
       }
     }
-    LOG_DEBUG("finish calc_result_typeN", K(type), K(types[4]), K(types[0]), K(enumset_to_varchar));
+    LOG_DEBUG("finish calc_result_typeN", K(type), K(types[4]), K(types[0]), K(wrap_to_str));
+  }
+  return ret;
+}
+
+int ObExprColumnConv::calc_enum_set_result_type(ObExprResType &type,
+                                                ObExprResType *types,
+                                                ObCollationType coll_type,
+                                                ObExprTypeCtx &type_ctx,
+                                                bool &wrap_to_str) const
+{
+  int ret = OB_SUCCESS;
+  // here will wrap type_to_str if necessary
+  // for enum set type with subschema, it can directly execute any type of cast,
+  // so there is no need to wrap type_to_str.
+  if (ob_is_enumset_tc(types[4].get_type())) {
+    ObObjType calc_type = get_enumset_calc_type(types[0].get_type(), 4);
+    // When the types are inconsistent or it doesn't support enum/set type with subschema,
+    // new cast expression is required.
+    const bool support_enum_set_type_subschema = is_enum_set_with_subschema_arg(4);
+    bool need_add_cast = type.get_type() != types[4].get_type() || !support_enum_set_type_subschema;
+    // keep old behavior use session collation
+    coll_type = support_enum_set_type_subschema ? types[1].get_collation_type() : coll_type;
+    if (OB_UNLIKELY(ObMaxType == calc_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "invalid type of parameter ", K(types[4]), K(types), K(ret));
+    } else if (ob_is_string_type(calc_type) && need_add_cast) {
+      wrap_to_str = true;
+    } else if (!need_add_cast && ob_is_enum_or_set_type(type.get_type())) {
+      wrap_to_str = true; // set wrap to str to true first
+      // the src and dst types are the same, and both are enum/set. we need to check the
+      // subschema id of the expr result type.
+      const ObRawExpr *conv_expr = get_raw_expr();
+      const ObRawExpr *enumset_expr = NULL;
+      const ObEnumSetMeta *src_meta = NULL;
+      const ObExecContext *exec_ctx = NULL;
+      if (OB_ISNULL(conv_expr) || OB_ISNULL(enumset_expr = conv_expr->get_param_expr(4))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("raw expr or child expr is null", K(ret), KP(conv_expr));
+      } else if (OB_ISNULL(exec_ctx = type_ctx.get_session()->get_cur_exec_ctx())) {
+      } else if (OB_UNLIKELY(!enumset_expr->is_enum_set_with_subschema())) {
+        // skip check enum/set expr with old behavior
+      } else if (OB_UNLIKELY(conv_expr->get_enum_set_values().empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("str values for enum set expr is empty", K(ret));
+      } else if (OB_FAIL(exec_ctx->get_enumset_meta_by_subschema_id(
+                          enumset_expr->get_subschema_id(), src_meta))) {
+        LOG_WARN("failed to meta from exec_ctx", K(ret), K(enumset_expr->get_subschema_id()));
+      } else if (OB_ISNULL(src_meta)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("src meta is unexpected", K(ret), KP(src_meta));
+      } else if (src_meta->is_same(src_meta->get_obj_meta(), conv_expr->get_enum_set_values())) {
+        // set wrap to str to false, it will be checked in `ObRawExprWrapEnumSet`
+        wrap_to_str = false;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (wrap_to_str) {
+        types[4].set_calc_type(calc_type);
+        types[4].set_calc_collation_type(coll_type);
+        types[4].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra());
+      }
+    }
   }
   return ret;
 }

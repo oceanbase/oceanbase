@@ -1965,15 +1965,29 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               column_meta.set_type(ObLongTextType);
             }
             column.set_meta_type(column_meta);
-            if (column.is_enum_or_set()) {
-              if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
-                LOG_WARN("set enum or set info failed", K(ret), K(*expr));
-              }
-            }
             column.set_charset_type(table_schema.get_charset_type());
             column.set_collation_type(expr->get_collation_type());
             column.set_accuracy(expr->get_accuracy());
             column.set_zero_fill(expr->get_result_flag() & ZEROFILL_FLAG);
+            if (column.is_enum_or_set()) {
+              if (expr->is_enum_set_with_subschema()) {
+                const ObEnumSetMeta *enum_set_meta = NULL;
+                if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(expr->get_result_type(),
+                                                                  session_info_,
+                                                                  enum_set_meta))) {
+                  LOG_WARN("fail to extrac enum set mete", K(ret));
+                } else if (OB_FAIL(column.set_extended_type_info(*enum_set_meta->get_str_values()))) {
+                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                } else {
+                  column.set_collation_type(enum_set_meta->get_collation_type());
+                  column.set_data_scale(SCALE_UNKNOWN_YET);
+                }
+              } else {
+                if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
+                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                }
+              }
+            }
             if (lib::is_mysql_mode() && ob_is_number_tc(expr->get_result_type().get_type())) {
               // TODO@zuojiao.hzj: add decimal int type here
               int16_t ori_scale = expr->get_accuracy().get_scale();

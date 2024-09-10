@@ -38,6 +38,8 @@
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_user_type.h"
+#include "lib/enumset/ob_enum_set_meta.h"
+#include "sql/engine/expr/ob_expr_type_to_str.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif
@@ -1627,6 +1629,42 @@ static int common_string_lob(const ObExpr &expr,
   return ret;
 }
 
+int get_enumset_meta(sql::ObEvalCtx &ctx, const ObObjMeta &obj_meta, const ObEnumSetMeta *&meta) {
+  int ret = OB_SUCCESS;
+  const uint16_t subschema_id = obj_meta.get_subschema_id();
+  if (OB_FAIL(ctx.exec_ctx_.get_enumset_meta_by_subschema_id(subschema_id, meta))) {
+    LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+  } else if (OB_ISNULL(meta) || OB_UNLIKELY(!meta->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get meta", K(ret));
+  }
+  return ret;
+}
+
+static OB_INLINE int common_enumset_string(const ObExpr &enumset_expr,
+                                           const uint64_t in_val,
+                                           ObEvalCtx &ctx,
+                                           ObTextStringResult &text_result)
+{
+  int ret = OB_SUCCESS;
+  const ObEnumSetMeta *meta = NULL;
+  const ObObjType in_type = enumset_expr.datum_meta_.type_;
+  if (0 == in_val) {
+    // empty string, do nothing
+  } else if (OB_FAIL(get_enumset_meta(ctx, enumset_expr.obj_meta_, meta))) {
+    LOG_WARN("fail to get enumset meta", K(ret));
+  } else if (ObEnumType == in_type) {
+    ret = ObExprEnumToStr::inner_to_str(in_val, *meta->get_str_values(), text_result);
+  } else if (ObSetType == in_type) {
+    ret = ObExprSetToStr::inner_to_str(enumset_expr.datum_meta_.cs_type_, in_val,
+                                       *meta->get_str_values(), text_result);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expr type", K(ret), K(in_type));
+  }
+  return ret;
+}
+
 static int get_text_full_data(const sql::ObExpr &expr,
                               sql::ObEvalCtx &ctx,
                               ObIAllocator *allocator,
@@ -3069,12 +3107,12 @@ CAST_FUNC_NAME(string, lob)
 }
 
 static int common_string_json(const ObExpr &expr,
+                              const ObObjType in_type,
                               const ObString &in_str,
                               ObEvalCtx &ctx,
                               ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObObjType in_type = expr.args_[0]->datum_meta_.type_;
   ObObjType out_type = ObLongTextType;
   ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
   ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
@@ -3101,7 +3139,8 @@ static int common_string_json(const ObExpr &expr,
         j_text.assign_ptr(in_str.ptr(), in_str.length());
       }
       bool is_enumset_to_str = ((expr.args_[0]->type_ == T_FUN_SET_TO_STR)
-                                || (expr.args_[0]->type_ == T_FUN_ENUM_TO_STR));
+                                || (expr.args_[0]->type_ == T_FUN_ENUM_TO_STR)
+                                || ob_is_enum_or_set_type(expr.args_[0]->datum_meta_.type_));
       ObIJsonBase *j_base = NULL;
       ObJsonOpaque j_opaque(j_text, in_type);
       ObJsonString j_string(j_text.ptr(), j_text.length());
@@ -3205,7 +3244,7 @@ CAST_FUNC_NAME(string, json)
                   &ctx.exec_ctx_))) {
         LOG_WARN("fail to get real data.", K(ret), K(in_str));
       } else {
-        ret = common_string_json(expr, in_str, ctx, res_datum);
+        ret = common_string_json(expr, expr.args_[0]->datum_meta_.type_, in_str, ctx, res_datum);
       }
     }
   }
@@ -5912,6 +5951,139 @@ CAST_FUNC_NAME(enumset, bit)
   return ret;
 }
 
+CAST_FUNC_NAME(enumset, datetime)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObExpr &enumset_expr = *expr.args_[0];
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringResult text_result(ObVarcharType, false, &temp_allocator);
+    ObString es_str;
+    if (OB_FAIL(common_enumset_string(enumset_expr, in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (OB_FAIL(common_string_datetime(expr, es_str, ctx, res_datum))) {
+      LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(enumset, date)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObExpr &enumset_expr = *expr.args_[0];
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringResult text_result(ObVarcharType, false, &temp_allocator);
+    ObString es_str;
+    if (OB_FAIL(common_enumset_string(enumset_expr, in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (OB_FAIL(common_string_date(expr, es_str, res_datum))) {
+      LOG_WARN("common_string_date failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(enumset, time)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObExpr &enumset_expr = *expr.args_[0];
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringResult text_result(ObVarcharType, false, &temp_allocator);
+    ObString es_str;
+    if (OB_FAIL(common_enumset_string(enumset_expr, in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (OB_FAIL(common_string_time(expr, es_str, res_datum))) {
+      LOG_WARN("common_string_time failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(enumset, string)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+    if (OB_FAIL(common_enumset_string(*expr.args_[0], in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else {
+      text_result.set_result();
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(enumset, text)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObExpr &enumset_expr = *expr.args_[0];
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringResult text_result(ObVarcharType, false, &temp_allocator);
+    ObString es_str;
+    if (OB_FAIL(common_enumset_string(enumset_expr, in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (OB_FAIL(common_string_text(expr, es_str, ctx, NULL, res_datum))) {
+      LOG_WARN("common_string_text failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(enumset, lob)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObExpr &enumset_expr = *expr.args_[0];
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringResult text_result(ObVarcharType, false, &temp_allocator);
+    ObString es_str;
+    if (OB_FAIL(common_enumset_string(enumset_expr, in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (OB_FAIL(common_string_lob(expr, es_str, ctx, NULL, res_datum))) {
+      LOG_WARN("common_string_lob failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(enumset, json)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObExpr &enumset_expr = *expr.args_[0];
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringResult text_result(ObVarcharType, false, &temp_allocator);
+    ObString es_str;
+    if (OB_FAIL(common_enumset_string(enumset_expr, in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+        &temp_allocator, ObVarcharType, false, es_str, &ctx.exec_ctx_))) {
+      LOG_WARN("fail to get real data.", K(ret), K(es_str));
+    } else if (OB_FAIL(common_string_json(expr, ObVarcharType, es_str, ctx, res_datum))) {
+      LOG_WARN("common_string_json failed", K(ret), K(es_str));
+    }
+  }
+  return ret;
+}
+
+
+
 CAST_FUNC_NAME(enumset_inner, int)
 {
   EVAL_ARG() {
@@ -6585,7 +6757,7 @@ CAST_FUNC_NAME(raw, json)
   EVAL_ARG()
   {
     ObString in_str(child_res->len_, child_res->ptr_);
-    ret = common_string_json(expr, in_str, ctx, res_datum);
+    ret = common_string_json(expr, expr.args_[0]->datum_meta_.type_, in_str, ctx, res_datum);
   }
   return ret;
 }
@@ -6973,7 +7145,7 @@ CAST_FUNC_NAME(lob, json)
   {
     const ObLobLocator &lob_locator = child_res->get_lob_locator();
     ObString in_str(lob_locator.payload_size_, lob_locator.get_payload_ptr());
-    OZ(common_string_json(expr, in_str, ctx, res_datum));
+    OZ(common_string_json(expr, expr.args_[0]->datum_meta_.type_, in_str, ctx, res_datum));
   }
   return ret;
 }
@@ -7938,7 +8110,8 @@ CAST_FUNC_NAME(geometry, json)
       if (expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
         ret = OB_ERR_INVALID_JSON_CHARSET;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_CHARSET);
-      } else if (OB_FAIL(common_string_json(expr, in_str, ctx, res_datum))) {
+      } else if (OB_FAIL(common_string_json(expr, expr.args_[0]->datum_meta_.type_, in_str, ctx,
+                                            res_datum))) {
         LOG_WARN("fail to cast string to json", K(ret));
       }
     } else {
@@ -8931,7 +9104,7 @@ int string_to_enum(ObIAllocator &alloc,
                    uint64_t &output_value)
 {
   int ret = OB_SUCCESS;
-  const ObCollationType cs_type = expr.obj_meta_.get_collation_type();
+  const ObCollationType cs_type = expr.datum_meta_.cs_type_;
   uint64_t value = 0;
   int32_t pos = 0;
   ObString in_str;
@@ -9017,7 +9190,7 @@ int string_to_set(ObIAllocator &alloc,
   int ret = OB_SUCCESS;
   uint64_t value = 0;
   ObString in_str;
-  const ObCollationType cs_type = expr.obj_meta_.get_collation_type();
+  const ObCollationType cs_type = expr.datum_meta_.cs_type_;
   OZ(ObCharset::charset_convert(alloc, orig_in_str, in_cs_type, cs_type, in_str));
   if (OB_FAIL(ret)) {
   } else if (in_str.empty()) {
@@ -9355,6 +9528,38 @@ CAST_ENUMSET_FUNC_NAME(bit, set)
   return ret;
 }
 
+CAST_FUNC_NAME(enumset, enumset)
+{
+  EVAL_ARG() {
+    const uint64_t in_val = child_res->get_enumset();
+    ObExpr &enumset_expr = *expr.args_[0];
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringResult text_result(ObVarcharType, false, &temp_allocator);
+    ObString es_str;
+    const ObEnumSetMeta *meta = NULL;
+    if (OB_FAIL(common_enumset_string(enumset_expr, in_val, ctx, text_result))) {
+      LOG_WARN("common_enumset_string failed", K(ret), K(in_val));
+    } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
+    } else if (OB_FAIL(get_enumset_meta(ctx, expr.obj_meta_, meta))) {
+      LOG_WARN("fail to get enumset meta", K(ret));
+    } else {
+      int warning = 0;
+      uint64_t value = 0;
+      const ObCastMode cast_mode = expr.extra_;
+      if (ObEnumType == expr.datum_meta_.type_) {
+        ret = string_to_enum(temp_allocator, es_str, expr.args_[0]->datum_meta_.cs_type_,
+                             *meta->get_str_values(), cast_mode, expr, warning, value);
+        SET_RES_ENUM(value);
+      } else {
+        ret = string_to_set(temp_allocator, es_str, expr.args_[0]->datum_meta_.cs_type_,
+                             *meta->get_str_values(), cast_mode, expr, warning, value);
+        SET_RES_SET(value);
+      }
+    }
+  }
+  return ret;
+}
 // exclude varchar/char type
 int anytype_anytype_explicit(const sql::ObExpr &expr,
                              sql::ObEvalCtx &ctx,
@@ -12466,24 +12671,24 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     enumset_float, // /*float*/
     enumset_double, // /*double*/
     enumset_number, // /*number*/
-    cast_not_expected,/*datetime*/
-    cast_not_expected,/*date*/
-    cast_not_expected,/*time*/
+    enumset_datetime,/*datetime*/
+    enumset_date,/*date*/
+    enumset_time,/*time*/
     enumset_year, // /*year*/
-    cast_not_expected,/*string*/
+    enumset_string,/*string*/
     cast_not_support,/*extend*/
     cast_not_support,/*unknown*/
-    cast_not_expected,/*text*/
+    enumset_text,/*text*/
     enumset_bit, // /*bit*/
-    cast_not_expected,/*enumset*/
+    enumset_enumset, /*enumset*/
     cast_not_expected,/*enumset_inner*/
     cast_not_support,/*otimestamp*/
     cast_inconsistent_types,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
-    cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
-    cast_not_expected,/*geometry*/
+    enumset_lob,/*lob*/
+    enumset_json,/*json*/
+    cast_not_support,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint, place_holder*/
     cast_not_expected,/*collection, not implemented in mysql mode*/

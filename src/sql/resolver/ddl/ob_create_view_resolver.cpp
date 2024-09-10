@@ -1323,15 +1323,27 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
             column_meta.set_type(ObLongTextType);
           }
           column.set_meta_type(column_meta);
+          column.set_accuracy(expr->get_accuracy());
           if (column.is_enum_or_set()) {
-            OZ(column.set_extended_type_info(expr->get_enum_set_values()), *expr);
+            const ObEnumSetMeta *enum_set_meta = nullptr;
+            if (expr->is_enum_set_with_subschema()) {
+              if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(expr->get_result_type(),
+                                                                &session_info,
+                                                                enum_set_meta))) {
+                LOG_WARN("fail to extract enum set meta", K(ret), K(*expr));
+              } else {
+                column.set_meta_type(enum_set_meta->get_obj_meta());
+                column.set_data_scale(-1);
+                OZ(column.set_extended_type_info(*enum_set_meta->get_str_values()), *expr);
+              }
+            } else {
+              OZ(column.set_extended_type_info(expr->get_enum_set_values()), *expr);
+            }
           }
           if (column_meta.is_xml_sql_type()) {
             column.set_sub_data_type(T_OBJ_XML);
           }
           column.set_charset_type(table_schema.get_charset_type());
-          column.set_collation_type(expr->get_collation_type());
-          column.set_accuracy(expr->get_accuracy());
           column.set_zero_fill(expr->get_result_type().has_result_flag(ZEROFILL_FLAG));
         }
         OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));

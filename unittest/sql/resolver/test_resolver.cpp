@@ -340,7 +340,8 @@ void TestResolver::do_join_order_test()
                                                      table_id,
                                                      *idx_schema,
                                                      index_keys,
-                                                     ordering);
+                                                     ordering,
+                                                     &session_info_);
         ASSERT_EQ(ret, OB_SUCCESS);
         std::string idx_name_with_column;
         get_index_name(idx_name_with_column, *idx_schema);

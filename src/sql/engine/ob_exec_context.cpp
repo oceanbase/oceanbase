@@ -1072,6 +1072,22 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlU
   return ret;
 }
 
+int ObExecContext::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                                    const ObEnumSetMeta *&meta) const
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_reserved_subschema_id(subschema_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "reserved subschema id not used in enumset meta", K(ret), K(lbt()));
+  } else if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for subschema mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_enumset_meta_by_subschema_id(subschema_id, meta);
+  }
+  return ret;
+}
+
 int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                               uint16_t &subschema_id,
                                               share::schema::ObSchemaGetterGuard *schema_guard)
@@ -1089,6 +1105,42 @@ int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
   return ret;
 }
 
+bool ObExecContext::support_enum_set_type_subschema(ObSQLSessionInfo &session)
+{
+  // Considering compatibility, enumset subschema is only supported in versions 4_2_5 and above.
+  bool bret = true;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_0) {
+    bret = false;
+  } else {
+    // tenant configuration Control
+    if (!session.is_enable_enum_set_with_subschema()) {
+      bret = false;
+    }
+    // hint control
+    if (OB_NOT_NULL(stmt_factory_) && OB_NOT_NULL(stmt_factory_->get_query_ctx())) {
+      stmt_factory_->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
+          ObOptParamHint::ENABLE_ENUM_SET_SUBSCHEMA, bret);
+    }
+  }
+  return bret;
+}
+
+int ObExecContext::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                                 const ObIArray<common::ObString> &type_info,
+                                                 uint16_t &subschema_id,
+                                                 share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    schema_guard = OB_ISNULL(schema_guard) ? get_sql_ctx()->schema_guard_ : schema_guard;
+    ret = phy_plan_ctx_->get_subschema_id_by_type_info(obj_meta, type_info, subschema_id,
+                                                       schema_guard);
+  }
+  return ret;
+}
 
 int ObExecContext::get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx)
 {

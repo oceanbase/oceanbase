@@ -201,7 +201,8 @@ int ObExprToType::calc_result_type_for_column(ObExprResType &type,
     type.set_accuracy(ObAccuracy::MAX_ACCURACY2[get_compatibility_mode()][expect_type_]);
 
     if (ob_is_enumset_tc(type1.get_type())) {
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[expect_type_]];
+      // There is no need to check whether it is enumset with subschema
+      ObObjType calc_type = get_enumset_calc_type(expect_type_, OB_INVALID_INDEX);
       if (OB_UNLIKELY(ObMaxType == calc_type)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "invalid type of parameter ", K(expect_type_), K(ret));

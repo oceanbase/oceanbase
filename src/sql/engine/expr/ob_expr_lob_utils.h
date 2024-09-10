@@ -38,7 +38,7 @@ public:
 
   TO_STRING_KV(KP_(expr), KP_(ctx), KPC_(res_datum));
 
-  int init(int64_t res_len, ObIAllocator *allocator = NULL);
+  int init(int64_t res_len, ObIAllocator *allocator = NULL) override;
   int init_with_batch_idx(int64_t res_len, int64_t batch_idx);
   void set_result();
   void set_result_null();
@@ -62,7 +62,7 @@ public:
   ~ObTextStringObObjResult(){};
 
   TO_STRING_KV(KP_(params), KP_(res_obj));
-  int init(int64_t res_len, ObIAllocator *allocator = NULL);
+  int init(int64_t res_len, ObIAllocator *allocator = NULL) override;
   void set_result();
 
 private:

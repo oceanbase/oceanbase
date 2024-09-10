@@ -821,7 +821,7 @@ int ObExprOperator::aggregate_charsets_for_string_result(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -839,7 +839,7 @@ int ObExprOperator::aggregate_charsets_for_string_result(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -857,7 +857,7 @@ int ObExprOperator::aggregate_charsets_for_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -876,7 +876,7 @@ int ObExprOperator::aggregate_charsets_for_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type.get_calc_meta(), types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type.get_calc_meta(), types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -895,7 +895,7 @@ int ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -914,7 +914,7 @@ int ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -924,9 +924,9 @@ int ObExprOperator::aggregate_charsets(
   const ObObjMeta *types,
   int64_t param_num,
   uint32_t flags,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  return aggregate_collations(type, types, param_num, flags, conn_coll_type);
+  return aggregate_collations(type, types, param_num, flags, type_ctx.get_coll_type());
 }
 
 int ObExprOperator::aggregate_charsets(
@@ -934,7 +934,7 @@ int ObExprOperator::aggregate_charsets(
   const ObExprResType *types,
   int64_t param_num,
   uint32_t flags,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(types),
@@ -946,20 +946,30 @@ int ObExprOperator::aggregate_charsets(
     for (int i = 0; OB_SUCC(ret) && i < param_num; ++i) {
       coll.reset();
       // issue:49962420 The xml type calls get_collation_type() to return the result of binary, here is set to utf8
+      coll.set_collation_level(types[i].get_collation_level());
       if (type.is_string_type() && types[i].is_xml_sql_type()) {
         coll.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN);
+      } else if (types[i].is_enum_set_with_subschema()) {
+        ObObjMeta obj_meta;
+        if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(types[i], type_ctx.get_session(),
+                                                               obj_meta))) {
+          LOG_WARN("fail to extract enum set cs type", K(ret));
+        } else {
+          coll.set_collation(obj_meta);
+        }
       } else {
         coll.set_collation_type(types[i].get_collation_type());
       }
-      coll.set_collation_level(types[i].get_collation_level());
-      ret = coll_types.push_back(coll);
+      if (OB_SUCC(ret)) {
+        ret = coll_types.push_back(coll);
+      }
     } // end for
 
     OZ (aggregate_charsets(type,
                            &coll_types.at(0),
                            param_num,
                            flags,
-                           conn_coll_type));
+                           type_ctx));
   }
   return ret;
 }
@@ -1227,9 +1237,9 @@ int ObExprOperator::aggregate_result_type_for_case(
       if (OB_FAIL(aggregate_numeric_accuracy_for_merge(type, types, param_num, is_oracle_mode))) {
         LOG_WARN("fail to aggregate numeric accuracy", K(ret));
       }
-    } else if (OB_FAIL(aggregate_result_type_for_merge(type, types, param_num,
-        is_oracle_mode, type_ctx, need_merge_type, skip_null,
-        is_called_in_sql))) {
+    // the collation of case_expr has been restored
+    } else if (OB_FAIL(aggregate_result_type_for_merge(type, types, param_num, is_oracle_mode,
+                          type_ctx, need_merge_type, skip_null, is_called_in_sql))) {
       LOG_WARN("fail to aggregate result type", K(ret));
     } else if (ObFloatType == type.get_type() && !is_oracle_mode) {
       type.set_type(ObDoubleType);
@@ -1262,6 +1272,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
     const ObLengthSemantics default_length_semantics = ((OB_NOT_NULL(type_ctx.get_session())) ?
                                                        type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
 
+    bool has_new_enum_set_type = types[0].is_enum_set_with_subschema();
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; ++i) {
       if (OB_FAIL(ObExprResultTypeUtil::get_merge_result_type(res_type,
                                                               res_type,
@@ -1270,6 +1281,8 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (OB_UNLIKELY(ObMaxType == res_type)) {
         ret = OB_INVALID_ARGUMENT; // not compatible input
         LOG_WARN("invalid argument. wrong type for merge", K(i), K(types[i].get_type()), K(ret));
+      } else if (types[i].is_enum_set_with_subschema()) {
+        has_new_enum_set_type = true;
       }
     }
 
@@ -1280,8 +1293,32 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_temporal_type(res_type) || ob_is_otimestamp_type(res_type)) {
         ret = aggregate_temporal_accuracy_for_merge(type, types, param_num);
       } else if (ob_is_string_or_lob_type(res_type)) {
-        if (OB_FAIL(aggregate_charsets_for_string_result(type, types, param_num, type_ctx))) {
-        } else if (OB_FAIL(aggregate_max_length_for_string_result(type, types, param_num,
+        const ObExprResType *new_types = types;
+        const ObSQLSessionInfo *session_info = type_ctx.get_session();
+        if (has_new_enum_set_type && session_info != NULL) {
+          ObSEArray<ObExprResType, 2> restored_types;
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+            if (OB_FAIL(restored_types.push_back(types[i]))) {
+              LOG_WARN("fail to push back types", K(ret));
+            } else if (types[i].is_enum_set_with_subschema()) {
+              ObObjMeta obj_meta;
+              if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(types[i], session_info,
+                                                                     obj_meta))) {
+                LOG_WARN("fail to extract enum set cs type", K(ret));
+              } else {
+                restored_types[i].set_collation(obj_meta);
+                restored_types[i].reset_enum_set_meta_state();
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            new_types = &restored_types.at(0);
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(aggregate_charsets_for_string_result(type, new_types, param_num,
+                           type_ctx))) {
+        } else if (OB_FAIL(aggregate_max_length_for_string_result(type, new_types, param_num,
             is_oracle_mode, default_length_semantics, need_merge_type, skip_null,
             is_called_in_sql))) {
         } else {/*do nothing*/}
@@ -1669,35 +1706,66 @@ int ObExprDFMConvertCtx::parse_format(const ObString &format_str,
 ObExprFindIntCachedValue::~ObExprFindIntCachedValue() {
 }
 
-ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
+ObObjType ObExprOperator::enumset_calc_types_[2 /*use_subschema*/][ObMaxTC] =
 {
-  ObUInt64Type,/*ObNullTC*/
-  ObUInt64Type,/*ObIntTC*/
-  ObUInt64Type,/*ObUIntTC*/
-  ObUInt64Type,/*ObFloatTC*/
-  ObUInt64Type,/*ObDoubleTC*/
-  ObUInt64Type,/*ObNumberTC*/
-  ObVarcharType,/*ObDateTimeTC*/
-  ObVarcharType,/*ObDateTC*/
-  ObVarcharType,/*ObTimeTC*/
-  ObUInt64Type,/*ObYearTC*/
-  ObVarcharType,/*ObStringTC*/
-  ObMaxType,/*ObExtendTC*/
-  ObMaxType,/*ObUnknownTC*/
-  ObVarcharType,/*ObTextTC*/
-  ObUInt64Type,/*ObBitTC*/
-  ObVarcharType,/*ObEnumSetTC*/
-  ObVarcharType,/*ObEnumSetInnerTC*/
-  ObVarcharType, /*ObOTimestampTC*/
-  ObNullType, /*ObRawTC*/
-  ObVarcharType, /*ObInternalTC*/
-  ObVarcharType, /*ObRowIDTC*/
-  ObMaxType, /*ObLobTC*/
-  ObVarcharType, /*ObJsonTC*/
-  ObVarcharType, /*ObGeometryTC*/
-  ObNullType, /*UDT*/
-  ObUInt64Type, /*ObDecimalIntTC*/
-  ObNullType, /*COLLECTION*/
+  {
+    ObUInt64Type,/*ObNullTC*/
+    ObUInt64Type,/*ObIntTC*/
+    ObUInt64Type,/*ObUIntTC*/
+    ObUInt64Type,/*ObFloatTC*/
+    ObUInt64Type,/*ObDoubleTC*/
+    ObUInt64Type,/*ObNumberTC*/
+    ObVarcharType,/*ObDateTimeTC*/
+    ObVarcharType,/*ObDateTC*/
+    ObVarcharType,/*ObTimeTC*/
+    ObUInt64Type,/*ObYearTC*/
+    ObVarcharType,/*ObStringTC*/
+    ObMaxType,/*ObExtendTC*/
+    ObMaxType,/*ObUnknownTC*/
+    ObVarcharType,/*ObTextTC*/
+    ObUInt64Type,/*ObBitTC*/
+    ObVarcharType,/*ObEnumSetTC*/
+    ObVarcharType,/*ObEnumSetInnerTC*/
+    ObVarcharType, /*ObOTimestampTC*/
+    ObNullType, /*ObRawTC*/
+    ObVarcharType, /*ObInternalTC*/
+    ObVarcharType, /*ObRowIDTC*/
+    ObMaxType, /*ObLobTC*/
+    ObVarcharType, /*ObJsonTC*/
+    ObVarcharType, /*ObGeometryTC*/
+    ObNullType, /*UDT*/
+    ObUInt64Type, /*ObDecimalIntTC*/
+    ObNullType, /*COLLECTION*/
+  },
+  {
+    ObUInt64Type,/*ObNullTC*/
+    ObUInt64Type,/*ObIntTC*/
+    ObUInt64Type,/*ObUIntTC*/
+    ObUInt64Type,/*ObFloatTC*/
+    ObUInt64Type,/*ObDoubleTC*/
+    ObUInt64Type,/*ObNumberTC*/
+    ObDateTimeType,/*ObDateTimeTC*/
+    ObDateType,/*ObDateTC*/
+    ObTimeType,/*ObTimeTC*/
+    ObUInt64Type,/*ObYearTC*/
+    ObVarcharType,/*ObStringTC*/
+    ObMaxType,/*ObExtendTC*/
+    ObMaxType,/*ObUnknownTC*/
+    ObVarcharType,/*ObTextTC*/
+    ObUInt64Type,/*ObBitTC*/
+    ObVarcharType,/*ObEnumSetTC*/
+    ObVarcharType,/*ObEnumSetInnerTC*/
+    ObVarcharType, /*ObOTimestampTC*/
+    ObNullType, /*ObRawTC*/
+    ObVarcharType, /*ObInternalTC*/
+    ObVarcharType, /*ObRowIDTC*/
+    ObMaxType, /*ObLobTC*/
+    ObJsonType, /*ObJsonTC*/
+    ObVarcharType, /*ObGeometryTC*/
+    ObNullType, /*UDT*/
+    ObUInt64Type, /*ObDecimalIntTC*/
+    ObNullType, /*COLLECTION*/
+  },
 };
 ////////////////////////////////////////////////////////////////
 
@@ -2386,6 +2454,34 @@ int ObExprOperator::add_local_var_to_expr(ObSysVarClassType var_type,
     }
   }
   return ret;
+}
+
+bool ObExprOperator::is_enum_set_with_subschema_arg(const int64_t arg_idx) const
+{
+  bool bret = false;
+  const ObRawExpr *arg_expr = NULL;
+  if (arg_idx >= 0 && OB_NOT_NULL(raw_expr_) && arg_idx < raw_expr_->get_param_count()
+        && OB_NOT_NULL(arg_expr = raw_expr_->get_param_expr(arg_idx))
+        && arg_expr->is_enum_set_with_subschema()) {
+    bret = true;
+  }
+  return bret;
+}
+
+ObObjType ObExprOperator::get_enumset_calc_type(const ObObjType expected_type,
+                                                const int64_t arg_idx) const
+{
+  ObObjType calc_type = ObMaxType;
+  if (is_enum_set_with_subschema_arg(arg_idx)) {
+    calc_type = enumset_calc_types_[1 /*use subschema*/][OBJ_TYPE_TO_CLASS[expected_type]];
+    // set calc type to dst type direct, otherwise multiple casts may occur.
+    if (ob_is_string_type(expected_type)) {
+      calc_type = expected_type;
+    }
+  } else {
+    calc_type = enumset_calc_types_[0 /*for compatibility*/][OBJ_TYPE_TO_CLASS[expected_type]];
+  }
+  return calc_type;
 }
 
 OB_SERIALIZE_MEMBER(ObIterExprOperator, expr_id_, expr_type_);
@@ -4336,6 +4432,26 @@ void ObStringExprOperator::calc_temporal_format_result_length(ObExprResType &typ
     type.set_length(default_text_length);
   }
 }
+int ObStringExprOperator::extract_enum_set_collation_for_args(const ObExprResType &text,
+                                                              const ObExprResType &pattern,
+                                                              ObExprTypeCtx &type_ctx,
+                                                              ObObjMeta *real_types)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && text.is_enum_set_with_subschema()) {
+    if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(text, type_ctx.get_session(),
+                                                            real_types[0]))) {
+      LOG_WARN("fail to extract enum set collation", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && pattern.is_enum_set_with_subschema()) {
+    if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(pattern, type_ctx.get_session(),
+                                                            real_types[1]))) {
+      LOG_WARN("fail to extract enum set collation", K(ret));
+    }
+  }
+  return ret;
+}
 
 ObObjType ObStringExprOperator::get_result_type_mysql(int64_t char_length) const
 {
@@ -5182,18 +5298,16 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
     }
   }
 
-  if (OB_SUCC(ret)) {
-    ObObjType dest_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_calc_type()]];
-    if (OB_UNLIKELY(ObMaxType == dest_type)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(WARN, "invalid type", K(type), K(ret));
-    } else if (ObVarcharType == dest_type) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
-        if (ob_is_enumset_tc(types_stack[i].get_type())) {
-          types_stack[i].set_calc_type(dest_type);
-        }
-      }
-    } else {/*do nothing*/}
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+    if (ob_is_enumset_tc(types_stack[i].get_type())) {
+      ObObjType dest_type = get_enumset_calc_type(type.get_calc_type(), i);
+      if (OB_UNLIKELY(ObMaxType == dest_type)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_ENG_LOG(WARN, "invalid type", K(type), K(ret));
+      } else if (ob_is_string_type(dest_type)) {
+        types_stack[i].set_calc_type(dest_type);
+      } else {/*do nothing*/}
+    }
   }
   return ret;
 }

@@ -41,6 +41,7 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
+#include "lib/enumset/ob_enum_set_meta.h"
 
 namespace oceanbase
 {
@@ -4210,26 +4211,30 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
                     need_extra_cast_for_dst_type);
 
     // extra cast expr: cast non-utf8 to utf8
+    ObExprResType extra_type;
     ObSysFunRawExpr *extra_cast = NULL;
     if (need_extra_cast_for_src_type) {
-      ObExprResType src_type_utf8;
-      OZ(setup_extra_cast_utf8_type(src_type, src_type_utf8));
-      OZ(create_real_cast_expr(expr_factory, src_expr, src_type_utf8, extra_cast, session));
+      OZ(setup_extra_cast_utf8_type(src_type, extra_type));
+      OZ(create_real_cast_expr(expr_factory, src_expr, extra_type, extra_cast, session));
       OZ(create_real_cast_expr(expr_factory, extra_cast, dst_type, func_expr, session));
     } else if (need_extra_cast_for_dst_type) {
-      ObExprResType dst_type_utf8;
-      OZ(setup_extra_cast_utf8_type(dst_type, dst_type_utf8));
-      OZ(create_real_cast_expr(expr_factory, src_expr, dst_type_utf8, extra_cast, session));
+      OZ(setup_extra_cast_utf8_type(dst_type, extra_type));
+      OZ(create_real_cast_expr(expr_factory, src_expr, extra_type, extra_cast, session));
       OZ(create_real_cast_expr(expr_factory, extra_cast, dst_type, func_expr, session));
     } else if (src_type.get_type() == ObExtendType
                && src_type.get_udt_id() == T_OBJ_XML
                && dst_type.is_character_type()
                && src_expr->is_called_in_sql()) {
       // pl xmltype -> sql xmltype -> char type is supported only in sql scenario
-      ObExprResType sql_udt_type;
-      sql_udt_type.set_sql_udt(ObXMLSqlType); // set subschema id
-      sql_udt_type.set_udt_id(T_OBJ_XML);
-      OZ(create_real_cast_expr(expr_factory, src_expr, sql_udt_type, extra_cast, session));
+      extra_type.set_sql_udt(ObXMLSqlType); // set subschema id
+      extra_type.set_udt_id(T_OBJ_XML);
+      OZ(create_real_cast_expr(expr_factory, src_expr, extra_type, extra_cast, session));
+      OZ(create_real_cast_expr(expr_factory, extra_cast, dst_type, func_expr, session));
+    } else if (OB_FAIL(need_extra_cast_for_enumset(src_type, dst_type, session, extra_type,
+                                                   need_extra_cast_for_src_type))) {
+      LOG_WARN("fail to check need extra for enumset", K(ret), K(src_type), K(dst_type));
+    } else if (need_extra_cast_for_src_type) {
+      OZ(create_real_cast_expr(expr_factory, src_expr, extra_type, extra_cast, session));
       OZ(create_real_cast_expr(expr_factory, extra_cast, dst_type, func_expr, session));
     } else {
       OZ(create_real_cast_expr(expr_factory, src_expr, dst_type, func_expr, session));
@@ -4606,7 +4611,7 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
       LOG_ERROR("allocate expr operator failed", K(ret));
     } else {
       out_expr->set_func_name(ObString::make_string(func_name));
-      if (ob_is_large_text(dst_type)) {
+      if (ob_is_large_text(dst_type) || dst_type == ObCharType) {
         out_expr->set_extra(static_cast<uint64_t>(dst_type));
       } else {
         out_expr->set_extra(0);
@@ -4616,8 +4621,13 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
     ObConstRawExpr *col_accuracy_expr = NULL;
     if (OB_SUCC(ret)) {
       ObString str_col_accuracy;
-      if (OB_FAIL(build_const_string_expr(expr_factory, ObVarcharType, str_col_accuracy,
-                                          src_expr->get_collation_type(), col_accuracy_expr))) {
+      ObObjMeta obj_meta;
+      if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(src_expr->get_result_type(),
+                                                             session_info,
+                                                             obj_meta))) {
+        LOG_WARN("fail to extract enum set cs type", K(ret));
+      } else if (OB_FAIL(build_const_string_expr(expr_factory, ObVarcharType, str_col_accuracy,
+                                                 obj_meta.get_collation_type(), col_accuracy_expr))) {
         LOG_WARN("fail to build type expr", K(ret));
       } else if (OB_ISNULL(col_accuracy_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -4626,6 +4636,7 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
         col_accuracy_expr->set_collation_type(src_expr->get_collation_type());
         col_accuracy_expr->set_collation_level(src_expr->get_collation_level());
         col_accuracy_expr->set_accuracy(src_expr->get_accuracy());
+        col_accuracy_expr->set_scale(SCALE_UNKNOWN_YET);
       }
     }
 
@@ -4987,15 +4998,27 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
   }
   CK(session_info);
   if (OB_SUCC(ret)) {
-    if (col_ref.is_fulltext_column() || col_ref.is_spatial_generated_column()) {
+    ObObjMeta obj_meta = col_ref.get_result_meta();
+    ObAccuracy accuracy = col_ref.get_accuracy();
+    if (col_ref.is_enum_set_with_subschema()) {
+      if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(col_ref.get_result_type(),
+                                                             session_info,
+                                                             obj_meta))) {
+        LOG_WARN("fail to extract enum set cs type", K(ret));
+      } else {
+        accuracy.set_scale(SCALE_UNKNOWN_YET);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (col_ref.is_fulltext_column() || col_ref.is_spatial_generated_column()) {
       // 全文列不会破坏约束性，且数据不会存储，跳过强转
       // 空间索引列是虚拟列，跳过强转
     } else if (OB_FAIL(build_column_conv_expr(session_info,
                                               expr_factory,
                                               col_ref.get_data_type(),
-                                              col_ref.get_collation_type(),
+                                              obj_meta.get_collation_type(),
                                               // accuracy used as udt id for udt columns
-                                              col_ref.get_accuracy().get_accuracy(),
+                                              accuracy.get_accuracy(),
                                               !col_ref.is_not_null_for_write(),
                                               &column_conv_info,
                                               &col_ref.get_enum_set_values(),
@@ -6731,6 +6754,8 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
   if (OB_SUCC(ret) && column_schema.is_enum_or_set()) {
     if (OB_FAIL(column_expr.set_enum_set_values(column_schema.get_extended_type_info()))) {
       LOG_WARN("failed to set enum set values", K(ret));
+    } else {
+      column_expr.reset_enum_set_meta_state();
     }
   }
   if (OB_SUCC(ret) && column_schema.is_xmltype()) {
@@ -6847,11 +6872,14 @@ int ObRawExprUtils::extract_int_value(const ObRawExpr *expr, int64_t &val)
   return ret;
 }
 
-int ObRawExprUtils::need_wrap_to_string(ObObjType param_type, ObObjType calc_type, const bool is_same_type_need, bool &need_wrap)
+int ObRawExprUtils::need_wrap_to_string(const ObExprResType &src_res_type,
+                                        ObObjType calc_type,
+                                        const bool is_same_type_need, bool &need_wrap)
 {
   //TODO(yaoying.yyy):这个函数需要在case中覆盖 且ObExtendType 和ObUnknownType
   int ret = OB_SUCCESS;
   need_wrap = false;
+  ObObjType param_type = src_res_type.get_type();
   if (!ob_is_enumset_tc(param_type)) {
     //输入参数不是enum 类型 则不需要转换
   } else if (param_type == calc_type && (!is_same_type_need)) {
@@ -6904,7 +6932,8 @@ int ObRawExprUtils::need_wrap_to_string(ObObjType param_type, ObObjType calc_typ
       case ObIntervalYMType:
       case ObNVarchar2Type:
       case ObNCharType: {
-        need_wrap = true;
+        // use the generic cast expr to process the enumset cast.
+        need_wrap = !src_res_type.is_enum_set_with_subschema();
         break;
       }
       default : {
@@ -6915,6 +6944,48 @@ int ObRawExprUtils::need_wrap_to_string(ObObjType param_type, ObObjType calc_typ
   }
   LOG_DEBUG("finish need_wrap_to_string", K(need_wrap), K(param_type),
             K(calc_type), K(ret), K(lbt()));
+  return ret;
+}
+
+int ObRawExprUtils::extract_enum_set_collation(const ObExprResType &src_res_type,
+                                               const sql::ObSQLSessionInfo *session,
+                                               ObObjMeta &obj_meta)
+{
+  int ret = OB_SUCCESS;
+  obj_meta = src_res_type.get_obj_meta();
+  const ObEnumSetMeta *meta = NULL;
+  if (OB_FAIL(extract_enum_set_meta(src_res_type, session, meta))) {
+    LOG_WARN("fail to extrac enum set meta", K(ret));
+  } else if (OB_NOT_NULL(meta)) {
+    obj_meta = meta->get_obj_meta();
+  }
+  return ret;
+}
+
+int ObRawExprUtils::extract_enum_set_meta(const ObExprResType &src_res_type,
+                                          const sql::ObSQLSessionInfo *session,
+                                          const ObEnumSetMeta *&meta)
+{
+  int ret = OB_SUCCESS;
+  meta = NULL;
+  if (src_res_type.is_enum_set_with_subschema()) {
+    if (OB_ISNULL(session) || OB_ISNULL(session->get_cur_exec_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null", K(ret), KP(session), KP(session->get_cur_exec_ctx()));
+    } else {
+      const ObEnumSetMeta *enum_set_meta = NULL;
+      const uint16_t subschema_id = src_res_type.get_subschema_id();
+      if (OB_FAIL(session->get_cur_exec_ctx()->get_enumset_meta_by_subschema_id(subschema_id,
+                                                                                enum_set_meta))) {
+        LOG_WARN("fail to get enum set meta", K(ret), K(subschema_id));
+      } else if (OB_ISNULL(enum_set_meta)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get meta", K(ret), K(subschema_id));
+      } else {
+        meta = enum_set_meta;
+      }
+    }
+  }
   return ret;
 }
 
@@ -7815,7 +7886,10 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
       }
     }
   } else if (ob_is_enumset_tc(out_type)) {
-    //no need add cast, will add column_conv later
+    // no need add cast, will add column_conv later
+    // currently, only the column convert expr's dst type will be enum/set. there is enough meta
+    // information in column_conv to do type conversion, so we keep no cast in both the old and
+    // new behaviors here.
     need_cast = false;
   } else if ((ob_is_xml_sql_type(in_type, src_type.get_subschema_id()) || ob_is_xml_pl_type(in_type, src_type.get_udt_id())) &&
               ob_is_blob(out_type, out_cs_type)) {
@@ -7823,7 +7897,7 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
     // there are cases cannot skip cast expr, and xmltype cast to clob is not support and cast func will check:
     // case: select xmlserialize(content xmltype_var as clob) || xmltype_var from t;
     need_cast = false;
-  } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(in_type, out_type,
+  } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(src_type, out_type,
                                                          is_same_need, need_wrap))) {
     LOG_WARN("failed to check_need_wrap_to_string", K(ret));
   } else if (need_wrap) {
@@ -7870,6 +7944,8 @@ int ObRawExprUtils::create_real_cast_expr(ObRawExprFactory &expr_factory,
       }
       if (OB_FAIL(func_expr->add_param_expr(dst_expr))) {
         LOG_WARN("add dest type expr failed", K(ret));
+      } else {
+        func_expr->set_result_type(dst_type);
       }
       LOG_DEBUG("create_cast_expr debug", K(ret), K(*src_expr), K(dst_type),
                                           K(*func_expr), K(lbt()));
@@ -9212,5 +9288,32 @@ int ObRawExprUtils::check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &c
   }
   return ret;
 }
+
+int ObRawExprUtils::need_extra_cast_for_enumset(const ObExprResType &src_type,
+                                                const ObExprResType &dst_type,
+                                                const ObSQLSessionInfo *session_info,
+                                                ObExprResType &extra_type,
+                                                bool &need_extra_cast)
+{
+  int ret = OB_SUCCESS;
+  need_extra_cast = false;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (src_type.is_enum_set_with_subschema() &&
+      dst_type.is_string_or_lob_locator_type()) {
+    ObObjMeta param_obj_meta;
+    if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(src_type, session_info, param_obj_meta))) {
+      LOG_WARN("fail to extract enum set cs type", K(ret));
+    } else if (param_obj_meta.get_collation_type() != dst_type.get_collation_type()) {
+      need_extra_cast = true;
+      extra_type = dst_type;
+      extra_type.set_collation(param_obj_meta);
+      extra_type.set_length(src_type.get_length());
+    }
+  }
+  return ret;
+}
+
 }
 }

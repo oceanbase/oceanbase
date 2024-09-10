@@ -5069,6 +5069,8 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(
                                                            real_ref_expr,
                                                            exec_param))) {
       LOG_WARN("failed to get exec param expr", K(ret));
+    } else if (OB_FAIL(exec_param->formalize(session_info_))) {
+      LOG_WARN("fail to formalize exec param", K(ret));
     } else {
       /// succeed to resolve the correlated column, do the replace here
       real_ref_expr = exec_param;

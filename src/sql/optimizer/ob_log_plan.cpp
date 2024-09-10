@@ -13441,7 +13441,7 @@ int ObLogPlan::generate_column_expr(ObRawExprFactory &expr_factory,
     column_item.expr_ = rowkey;
     if (OB_FAIL(rowkey->add_relation_id(stmt->get_table_bit_index(table_id)))) {
       LOG_WARN("add relation id to expr failed", K(ret));
-    } else if (OB_FAIL(rowkey->formalize(NULL))) {
+    } else if (OB_FAIL(rowkey->formalize(optimizer_context_.get_session_info()))) {
       LOG_WARN("formalize rowkey failed", K(ret));
     } else if (OB_FAIL(rowkey->pull_relation_id())) {
       LOG_WARN("failed to pullup relation ids", K(ret));

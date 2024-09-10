@@ -344,15 +344,21 @@ struct ObDASBaseCtDef
   OB_UNIS_VERSION_PV();
 public:
   ObDASOpType op_type_;
+  ObDASBaseCtDef **children_;
+  uint32_t children_cnt_;
 
   virtual ~ObDASBaseCtDef() = default;
-  VIRTUAL_TO_STRING_KV(K_(op_type));
+  VIRTUAL_TO_STRING_KV(K_(op_type), K_(children_cnt));
+
   virtual bool has_expr() const { return false; }
   virtual bool has_pdfilter_or_calc_expr() const { return false; }
   virtual bool has_pl_udf() const { return false; }
+
 protected:
   ObDASBaseCtDef(ObDASOpType op_type)
-    : op_type_(op_type)
+    : op_type_(op_type),
+      children_(nullptr),
+      children_cnt_(0)
   { }
 };
 
@@ -363,16 +369,22 @@ struct ObDASBaseRtDef
   OB_UNIS_VERSION_PV();
 public:
   ObDASOpType op_type_;
+  const ObDASBaseCtDef *ctdef_;
   ObEvalCtx *eval_ctx_; //nullptr in DML DAS Op
   ObDASTableLoc *table_loc_;
+  ObDASBaseRtDef **children_;
+  uint32_t children_cnt_;
 
   virtual ~ObDASBaseRtDef() = default;
-  VIRTUAL_TO_STRING_KV(K_(op_type));
+  VIRTUAL_TO_STRING_KV(K_(op_type), K_(children_cnt));
 protected:
   ObDASBaseRtDef(ObDASOpType op_type)
     : op_type_(op_type),
+      ctdef_(nullptr),
       eval_ctx_(NULL),
-      table_loc_(nullptr)
+      table_loc_(nullptr),
+      children_(nullptr),
+      children_cnt_(0)
   { }
 };
 typedef common::ObFixedArray<const ObDASBaseCtDef*, common::ObIAllocator> DASCtDefFixedArray;

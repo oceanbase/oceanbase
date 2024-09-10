@@ -162,19 +162,20 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cast basic session to sql session failed", K(ret));
     } else if (type1_is_enumset || type2_is_enumset) {
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
+      ObObjType calc_type = get_enumset_calc_type(type.get_type(), OB_INVALID_INDEX);
       if (OB_UNLIKELY(ObMaxType == calc_type)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "invalid type of parameter ", K(type1), K(type2), K(ret));
       } else if (ObVarcharType == calc_type) {
         if (type1_is_enumset) {
-          type1.set_calc_type(calc_type);
-          type1.set_calc_collation_type(ObCharset::get_system_collation());
+          type1.set_calc_type(get_enumset_calc_type(type.get_type(), 0));
+          type1.set_calc_collation_type(type.get_collation_type());
         } else {
           set_calc_type(type, type1);
         }
         if (type2_is_enumset) {
-          type2.set_calc_type(calc_type);
+          type2.set_calc_type(get_enumset_calc_type(type.get_type(), 1));
+          type2.set_calc_collation_type(type.get_collation_type());
         } else {
           set_calc_type(type, type2);
         }

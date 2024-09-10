@@ -734,6 +734,7 @@ int ObSPIService::cast_enum_set_to_string(ObExecContext &ctx,
   OX (result_type.set_meta(src.get_meta()));
   OX (result_type.set_accuracy(src.get_accuracy()));
   OX (c_expr->set_result_type(result_type));
+  OX (c_expr->mark_enum_set_skip_build_subschema());
   OZ (ObRawExprUtils::create_type_to_str_expr(*expr_factory, c_expr, out_expr, session_info, true));
   CK (OB_NOT_NULL(out_expr));
   OZ (ObSPIService::spi_calc_raw_expr(session_info, &(ctx.get_allocator()), out_expr, &result));
@@ -7532,6 +7533,16 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
         OX (result_type.set_accuracy(current_type.at(i).get_accuracy()));
       } else {
         OX (result_type.set_accuracy(result_types[i].get_accuracy()));
+        if (OB_SUCC(ret) && result_type.is_enum_set_with_subschema()) {
+          ObObjMeta org_obj_meta;
+          if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(result_type,
+                                                                ctx->exec_ctx_->get_my_session(),
+                                                                org_obj_meta))) {
+            LOG_WARN("fail to extrac enum set meta", K(ret));
+          } else {
+            result_type.set_collation(org_obj_meta);
+          }
+        }
       }
       if (OB_SUCC(ret) && (result_type.is_blob() || result_type.is_blob_locator() || obj.is_blob() || obj.is_blob_locator())
           && lib::is_oracle_mode()) {

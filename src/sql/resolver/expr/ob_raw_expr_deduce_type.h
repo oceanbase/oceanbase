@@ -139,6 +139,7 @@ private:
                                           const bool keep_type);
   int add_group_aggr_implicit_cast(ObAggFunRawExpr &expr, const ObCastMode& cast_mode);
   int adjust_cast_as_signed_unsigned(ObSysFunRawExpr &expr);
+  int build_subschema_for_enum_set_type(ObRawExpr &expr);
 private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;

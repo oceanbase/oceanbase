@@ -286,6 +286,16 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       if (ob_is_bit_tc(result_meta.get_type())) {
         rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.length_semantics_);
       }
+      if (OB_SUCC(ret) && ob_is_enumset_tc(result_meta.get_type())) {
+        ObObjMeta org_obj_meta;
+        if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(raw_expr->get_result_type(),
+                                                               op_cg_ctx_.session_,
+                                                               org_obj_meta))) {
+          LOG_WARN("fail to extract enum set cs type", K(ret));
+        } else {
+          rt_expr->datum_meta_.cs_type_ = org_obj_meta.get_collation_type();
+        }
+      }
       // init max_length_
       rt_expr->max_length_ = raw_expr->get_result_type().get_length();
       // init obj_datum_map_
