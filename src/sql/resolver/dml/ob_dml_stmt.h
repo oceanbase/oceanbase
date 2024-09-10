@@ -373,6 +373,7 @@ struct TableItem
   {
     return synonym_name_.empty() ? database_name_ : synonym_db_name_;
   }
+  // only can be used in resolve phase
   const TableItem &get_base_table_item() const
   {
     return (is_generated_table() || is_temp_table()) && view_base_item_ != NULL
@@ -419,8 +420,8 @@ struct TableItem
   //在hierarchical query, 记录由当前table_item mock出来的table_item的table id
   uint64_t mock_id_;
   const ParseNode* node_;
-  // base table item for updatable view
-  const TableItem *view_base_item_; // seems to be useful only in the resolve phase
+  // base table item for updatable view, can not access after the resolve phase
+  const TableItem *view_base_item_;
   ObRawExpr *flashback_query_expr_;
   FlashBackQueryType flashback_query_type_;
   ObRawExpr *function_table_expr_;
