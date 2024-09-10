@@ -209,6 +209,11 @@ public:
                                 ObGeoConstParamCache* const_param_cache,
                                 const ObSrsItem *srs,
                                 ObArenaAllocator& temp_allocator, bool& res);
+  static int process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, 
+                                    ObEvalCtx &ctx, ObIAllocator &allocator, 
+                                    ObGeometry *&geo1, ObGeometry *&geo2, 
+                                    bool &is_null_res, const ObSrsItem *&srs, 
+                                    const char *func_name);
 private:
   static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor);
   static int init_box_by_geo(ObGeometry &geo, ObIAllocator &allocator, ObGeogBox *&box_ptr);
