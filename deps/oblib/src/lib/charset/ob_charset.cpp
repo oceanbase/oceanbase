@@ -3785,7 +3785,8 @@ int ObCharset::init_charset_info_coll_info(ObCharsetInfo *cs, ObCharsetLoader& l
             charset_handler->init(cs, &loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to init charset handler", K(ret));
-  } else if (OB_NOT_NULL(coll_handler->init) && OB_FAIL(coll_handler->init(cs, &loader))) {
+  } else if (OB_NOT_NULL(coll_handler->init) && OB_NOT_NULL(cs->tailoring) && coll_handler->init(cs, &loader)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to init collation", K(ret));
   }
   return ret;

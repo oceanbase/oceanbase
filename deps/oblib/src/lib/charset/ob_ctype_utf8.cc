@@ -956,7 +956,7 @@ ObCharsetHandler ob_charset_utf8mb4_handler=
   ob_max_bytes_charpos_mb,
   ob_well_formed_len_utf8mb4,
   ob_lengthsp_8bit,
-  ob_mb_wc_utf8mb4,
+  ob_mb_wc_utf8mb4_thunk,
   ob_wc_mb_utf8mb4,
   ob_mb_ctype_mb,
   ob_caseup_utf8mb4,
