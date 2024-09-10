@@ -52,7 +52,7 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_lock_owner_id", "max used lock owner id"},
   { "ob_max_used_rewrite_rule_version", "max used rewrite rule version"},
   { "ob_max_used_ttl_task_id", "max used ttl task id"},
-  /* the following id_type will be changed to ob_max_used_object_id and won't be persisted. */
+  /* OB_MAX_USED_TABLE_ID_TYPE ~ OB_MAX_USED_RLS_CONTEXT_ID_TYPE ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
   { "ob_max_used_table_id", "max used table id"},
   { "ob_max_used_database_id", "max used database id"},
   { "ob_max_used_user_id", "max used user id"},
@@ -82,7 +82,10 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_rls_policy_id", "max used ddl rls policy id"},
   { "ob_max_used_rls_group_id", "max used ddl rls group id"},
   { "ob_max_used_rls_context_id", "max used ddl rls context id"},
-  { "ob_max_used_service_name_id", "max used service name id"}
+  /* the following ObMaxIdType will be persisted. */
+  { "ob_max_used_service_name_id", "max used service name id"},
+  { "ob_max_used_storage_id", "max used storage id"},
+  { "ob_max_used_storage_op_id", "max used storage op id"}
 };
 
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
@@ -115,6 +118,8 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_RESOURCE_POOL_ID_TYPE:
     case OB_MAX_USED_SERVER_ID_TYPE:
     case OB_MAX_USED_DDL_TASK_ID_TYPE:
+    case OB_MAX_USED_STORAGE_ID_TYPE:
+    case OB_MAX_USED_STORAGE_OP_ID_TYPE:
     case OB_MAX_USED_UNIT_GROUP_ID_TYPE:
     case OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE:
     case OB_MAX_USED_EXTENDED_ROWID_TABLE_TABLET_ID_TYPE:
@@ -311,6 +316,8 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
         case OB_MAX_USED_RESOURCE_POOL_ID_TYPE:
         case OB_MAX_USED_SERVER_ID_TYPE:
         case OB_MAX_USED_DDL_TASK_ID_TYPE:
+        case OB_MAX_USED_STORAGE_ID_TYPE:
+        case OB_MAX_USED_STORAGE_OP_ID_TYPE:
         case OB_MAX_USED_UNIT_GROUP_ID_TYPE:
         case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
         case OB_MAX_USED_LS_ID_TYPE:

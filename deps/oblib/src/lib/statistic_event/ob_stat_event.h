@@ -506,6 +506,9 @@ STAT_EVENT_ADD_DEF(HBASEAPI_CHECK_DELETE_ROW, "hbase check_delete row count", Ob
 STAT_EVENT_ADD_DEF(HBASEAPI_HYBRID_COUNT, "hbase hybrid count", ObStatClassIds::TABLEAPI, 191022, true, true, true)
 STAT_EVENT_ADD_DEF(HBASEAPI_HYBRID_TIME, "hbase hybrid time", ObStatClassIds::TABLEAPI, 191023, true, true, true)
 STAT_EVENT_ADD_DEF(HBASEAPI_HYBRID_ROW, "hbase hybrid row count", ObStatClassIds::TABLEAPI, 191024, true, true, true)
+STAT_EVENT_ADD_DEF(HBASEAPI_CHECK_MUTATE_COUNT, "hbase check_mutate count", ObStatClassIds::TABLEAPI, 191025, true, true, true)
+STAT_EVENT_ADD_DEF(HBASEAPI_CHECK_MUTATE_TIME, "hbase check_mutate time", ObStatClassIds::TABLEAPI, 191026, true, true, true)
+STAT_EVENT_ADD_DEF(HBASEAPI_CHECK_MUTATE_ROW, "hbase check_mutate row count", ObStatClassIds::TABLEAPI, 191027, true, true, true)
 
 // -- table increment 1911xx
 STAT_EVENT_ADD_DEF(TABLEAPI_INCREMENT_COUNT, "single increment execute count", ObStatClassIds::TABLEAPI, 191101, true, true, true)

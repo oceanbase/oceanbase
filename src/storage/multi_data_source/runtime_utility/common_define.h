@@ -65,7 +65,7 @@ enum class FowEachRowAction {
   COUNT_NODES_BEFLOW_FLUSH_SCN,
   CALCULATE_REC_SCN,
   RECYCLE,
-  RESET,
+  REMOVE,
 };
 
 enum class ScanRowOrder {

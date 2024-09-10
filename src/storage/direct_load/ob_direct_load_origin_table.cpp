@@ -322,6 +322,9 @@ int ObDirectLoadOriginTableScanner::init_table_access_param()
                                                           schema_param_,
                                                           &col_ids_))) {
       LOG_WARN("fail to init merge param", KR(ret));
+    } else if (GCTX.is_shared_storage_mode()) {
+      table_access_param_.iter_param_.table_scan_opt_.io_read_batch_size_ = 1024L * 1024L * 2L; // 2M
+      table_access_param_.iter_param_.table_scan_opt_.io_read_gap_size_ = 0;
     }
   }
   return ret;

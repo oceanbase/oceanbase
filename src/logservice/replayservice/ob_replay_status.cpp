@@ -16,6 +16,7 @@
 #include "logservice/palf/palf_env.h"
 #include "lib/stat/ob_session_stat.h"
 #include "share/ob_errno.h"
+#include "logservice/ob_log_service.h"
 
 namespace oceanbase
 {
@@ -95,17 +96,19 @@ bool ObReplayServiceTask::need_replay_immediately() const
 //---------------ObReplayServiceSubmitTask---------------//
 int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
                                     const SCN &base_scn,
-                                    PalfHandle *palf_handle,
+                                    const share::ObLSID &id,
                                     ObReplayStatus *replay_status)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   share::ObLSID ls_id;
-  if (OB_ISNULL(replay_status) || OB_ISNULL(palf_handle)) {
+  if (OB_ISNULL(replay_status)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(type_), K(ret), K(replay_status), K(palf_handle));
-  } else if (OB_FAIL(palf_handle->seek(base_lsn, iterator_))) {
-    CLOG_LOG(WARN, "seek iterator failed", KR(ret), K(type_), K(palf_handle), K(base_lsn));
+    CLOG_LOG(WARN, "invalid argument", K(type_), K(ret), K(replay_status));
+  } else if (OB_FAIL(seek_log_iterator(id, base_lsn, iterator_))) {
+    CLOG_LOG(WARN, "seek iterator failed", KR(ret), K(type_), K(id), K(base_lsn));
+  } else if (OB_FAIL(iterator_.set_io_context(palf::LogIOContext(MTL_ID(), ls_id.id(), palf::LogIOUser::REPLAY)))) {
+    CLOG_LOG(WARN, "iterator set_io_context failed", KR(ret), K(id));
   } else if (OB_UNLIKELY(!base_scn.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "base_scn is invalid", K(type_), K(base_lsn), K(base_scn), KR(ret));
@@ -118,8 +121,6 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
     base_lsn_ = base_lsn;
     base_scn_ = base_scn;
     type_ = ObReplayServiceTaskType::SUBMIT_LOG_TASK;
-    iterator_.set_palf_id(ls_id.id());
-    iterator_.set_type(palf::LogIOUser::REPLAY);
     if (OB_SUCCESS != (tmp_ret = iterator_.next())) {
       // 在没有写入的情况下有可能已经到达边界
       CLOG_LOG(WARN, "iterator next failed", K(iterator_), K(tmp_ret));
@@ -284,7 +285,8 @@ int ObReplayServiceSubmitTask::next_log(const SCN &replayable_point,
   return ret;
 }
 
-int ObReplayServiceSubmitTask::reset_iterator(PalfHandle &palf_handle, const LSN &begin_lsn)
+int ObReplayServiceSubmitTask::reset_iterator(const share::ObLSID &id,
+                                              const LSN &begin_lsn)
 {
   int ret = OB_SUCCESS;
   /*
@@ -302,7 +304,7 @@ int ObReplayServiceSubmitTask::reset_iterator(PalfHandle &palf_handle, const LSN
   replay_service_->switch_to_follower(ls_id, end_lsn) is 100 while next_to_submit_lsn_ is 150.
   */
   next_to_submit_lsn_ = std::max(next_to_submit_lsn_, begin_lsn);
-  if (OB_FAIL(palf_handle.seek(next_to_submit_lsn_, iterator_))) {
+  if (OB_FAIL(seek_log_iterator(id, next_to_submit_lsn_, iterator_))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "seek interator failed", K(type_), K(begin_lsn), K(ret));
   } else if (OB_FAIL(iterator_.next())) {
@@ -708,7 +710,7 @@ int ObReplayStatus::enable_(const LSN &base_lsn, const SCN &base_scn)
     //针对reuse场景的防御检查
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "remain pending task when enable replay status", K(ret), KPC(this));
-  } else if (OB_FAIL(submit_log_task_.init(base_lsn, base_scn, &palf_handle_, this))) {
+  } else if (OB_FAIL(submit_log_task_.init(base_lsn, base_scn, ls_id_, this))) {
     CLOG_LOG(WARN, "failed to init submit_log_task", K(ret), K(&palf_handle_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < REPLAY_TASK_QUEUE_SIZE; ++i) {
@@ -841,7 +843,7 @@ void ObReplayStatus::switch_to_follower(const palf::LSN &begin_lsn)
     if (!is_enabled_) {
       // do nothing
     } else {
-      (void)submit_log_task_.reset_iterator(palf_handle_, begin_lsn);
+      (void)submit_log_task_.reset_iterator(ls_id_, begin_lsn);
     }
   } while (0);
   do {
@@ -1056,31 +1058,43 @@ int ObReplayStatus::get_min_unreplayed_log_info(LSN &lsn,
   return ret;
 }
 
-int ObReplayStatus::get_replay_process(int64_t &replayed_log_size,
+int ObReplayStatus::get_replay_process(int64_t &submitted_log_size,
+                                       int64_t &unsubmitted_log_size,
+                                       int64_t &replayed_log_size,
                                        int64_t &unreplayed_log_size)
 {
   int ret = OB_SUCCESS;
   LSN base_lsn;
   LSN min_unreplayed_lsn;
+  LSN next_to_submit_lsn;
+  SCN next_to_submit_scn;
   LSN committed_end_lsn;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "replay status is not inited", K(ret));
   } else if (!is_enabled_) {
+    submitted_log_size = 0;
+    unsubmitted_log_size = 0;
     replayed_log_size = 0;
     unreplayed_log_size = 0;
     CLOG_LOG(INFO, "replay status is not enabled", KPC(this));
   } else if (OB_FAIL(submit_log_task_.get_base_lsn(base_lsn))) {
     CLOG_LOG(WARN, "get_base_lsn failed", K(ret), KPC(this));
+  } else if (OB_FAIL(submit_log_task_.get_next_to_submit_log_info(next_to_submit_lsn, next_to_submit_scn))) {
+    CLOG_LOG(WARN, "get_next_to_submit_log_info failed", K(ret), KPC(this));
   } else if (OB_FAIL(get_min_unreplayed_lsn(min_unreplayed_lsn))) {
     CLOG_LOG(WARN, "get_min_unreplayed_lsn failed", K(ret), KPC(this));
   } else if (!need_submit_log()) {
+    submitted_log_size = next_to_submit_lsn.val_ - base_lsn.val_;
+    unsubmitted_log_size = 0;
     replayed_log_size = min_unreplayed_lsn.val_ - base_lsn.val_;
     unreplayed_log_size = 0;
     CLOG_LOG(INFO, "replay status is not follower", K(min_unreplayed_lsn), K(base_lsn), KPC(this));
   } else if (OB_FAIL(palf_handle_.get_end_lsn(committed_end_lsn))) {
     CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
   } else {
+    submitted_log_size = next_to_submit_lsn.val_ - base_lsn.val_;
+    unsubmitted_log_size = committed_end_lsn.val_ - base_lsn.val_;
     replayed_log_size = min_unreplayed_lsn.val_ - base_lsn.val_;
     unreplayed_log_size = committed_end_lsn.val_ - min_unreplayed_lsn.val_;
     if (replayed_log_size < 0 || unreplayed_log_size < 0) {

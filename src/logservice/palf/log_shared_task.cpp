@@ -117,8 +117,8 @@ int LogFillCacheTask::do_task(IPalfEnvImpl *palf_env_impl)
   } else if (palf_epoch != palf_epoch_) {
     ret = OB_STATE_NOT_MATCH;
     PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_epoch), KPC(this));
-  //} else if (OB_FAIL(guard.get_palf_handle_impl()->fill_cache_when_slide(begin_lsn_, size_))) {
-   PALF_LOG(WARN, "failed to fill committed logs to cold cache", K(ret), K(palf_id_), K(begin_lsn_), K(size_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->fill_cache_when_slide(begin_lsn_, size_))) {
+    PALF_LOG(WARN, "failed to fill committed logs to cold cache", K(ret), K(palf_id_), K(begin_lsn_), K(size_));
   } else {
     PALF_LOG(TRACE, "fill committed logs to cold cache successfully", K(palf_id_), K(begin_lsn_), K(size_));
   }

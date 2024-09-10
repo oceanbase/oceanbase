@@ -173,8 +173,12 @@ int ObLogMinerFileManager::write_config(const ObLogMinerArgs &args)
     } else {
       ObBackupIoAdapter utils;
       ObString config_file_uri_str(sizeof(config_file_uri), config_file_uri_len, config_file_uri);
+      // get dest_id from __all_log_restore_source is difficult,
+      // so set dest_id of restore as OB_INVALID_ID
+      const uint64_t dest_id = OB_INVALID_ID;
+      common::ObStorageIdMod mod(dest_id, ObStorageUsedMod::STORAGE_USED_ARCHIVE);
       if OB_FAIL(utils.write_single_file(config_file_uri_str, output_dest_.get_storage_info(),
-          config_file_data_buf, arg_size)) {
+          config_file_data_buf, arg_size, mod)) {
         LOG_ERROR("failed to write config file to dest", K(config_file_uri_str), K(output_dest_), K(arg_size));
       }
     }
@@ -212,8 +216,12 @@ int ObLogMinerFileManager::write_checkpoint(const ObLogMinerCheckpoint &ckpt)
       // TODO: remove meta from meta_index according to max_file_id when writing checkpoint
       ObBackupIoAdapter utils;
       ObString ckpt_file_uri_str(sizeof(checkpoint_file_uri), checkpoint_file_uri_len, checkpoint_file_uri);
+      // get dest_id from __all_log_restore_source is difficult,
+      // so set dest_id of restore as OB_INVALID_ID
+      const uint64_t dest_id = OB_INVALID_ID;
+      common::ObStorageIdMod mod(dest_id, ObStorageUsedMod::STORAGE_USED_ARCHIVE);
       if (OB_FAIL(utils.write_single_file(ckpt_file_uri_str, output_dest_.get_storage_info(),
-          ckpt_buf, ckpt_size))) {
+          ckpt_buf, ckpt_size, mod))) {
         LOG_ERROR("failed to write config file to dest", K(checkpoint_file_uri), K(output_dest_), K(ckpt_size));
       } else if (OB_FAIL(update_last_write_ckpt_(ckpt))) {
         LOG_ERROR("update last write ckpt failed", K(ckpt), K(last_write_ckpt_));
@@ -483,10 +491,16 @@ int ObLogMinerFileManager::append_file_(const ObString &uri,
   ObIOFd fd;
   ObIODevice *device_handle = nullptr;
   int64_t write_size = 0;
+
+  // get dest_id from __all_log_restore_source is difficult,
+  // so set dest_id of restore as OB_INVALID_ID
+  const uint64_t dest_id = OB_INVALID_ID;
+  common::ObStorageIdMod mod(dest_id, ObStorageUsedMod::STORAGE_USED_ARCHIVE);
+
   if (nullptr == data || 0 == data_len) {
     // do nothing
   } else if (OB_FAIL(utils.open_with_access_type(device_handle, fd, output_dest_.get_storage_info(),
-      uri, common::OB_STORAGE_ACCESS_RANDOMWRITER))) {
+      uri, common::OB_STORAGE_ACCESS_RANDOMWRITER, mod))) {
     LOG_ERROR("failed to open device", K(uri), K(output_dest_), K(uri));
   } else if (OB_FAIL(device_handle->pwrite(fd, offset, data_len, data, write_size))) {
     LOG_ERROR("failed to write data into file", K(uri), K(output_dest_),
@@ -537,6 +551,11 @@ int ObLogMinerFileManager::write_meta_(const int64_t file_id, const ObLogMinerFi
   int64_t pos = 0;
   char *buf = static_cast<char*>(alloc.alloc(buf_len + 1));
 
+  // get dest_id from __all_log_restore_source is difficult,
+  // so set dest_id of restore as OB_INVALID_ID
+  const uint64_t dest_id = OB_INVALID_ID;
+  common::ObStorageIdMod mod(dest_id, ObStorageUsedMod::STORAGE_USED_ARCHIVE);
+
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate memory to file meta data buffer", K(buf_len), K(buf));
@@ -545,7 +564,7 @@ int ObLogMinerFileManager::write_meta_(const int64_t file_id, const ObLogMinerFi
   } else if (OB_FAIL(meta_file_uri_(file_id, meta_uri, sizeof(meta_uri), uri_len))) {
     LOG_ERROR("failed to get meta_file uri", K(file_id), K(uri_len));
   } else if (OB_FAIL(utils.write_single_file(meta_uri,
-      output_dest_.get_storage_info(), buf, buf_len))) {
+      output_dest_.get_storage_info(), buf, buf_len, mod))) {
     LOG_ERROR("failed to write meta file", K(meta), K(file_id), K(meta_uri), K(buf_len));
   }
 

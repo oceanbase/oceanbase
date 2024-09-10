@@ -562,6 +562,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool storage_estimation_enabled = false;
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
+  bool push_join_pred_into_view_enabled = true;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
@@ -622,6 +623,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get opt param nlj batching enable", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_SPF_BATCH_RESCAN, enable_spf_batch_rescan))) {
     LOG_WARN("failed to get opt param enable spf batch rescan", K(ret));
+  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::_PUSH_JOIN_PREDICATE, push_join_pred_into_view_enabled))) {
+    LOG_WARN("fail to check rowsets enabled", K(ret));
   } else {
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
@@ -638,6 +641,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
     ctx_.set_nlj_batching_enabled(enable_use_batch_nlj);
     ctx_.set_enable_spf_batch_rescan(enable_spf_batch_rescan);
+    ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
     if (!hash_join_enabled
         && !optimizer_sortmerge_join_enabled
         && !nested_loop_join_enabled) {

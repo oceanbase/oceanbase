@@ -45,30 +45,10 @@ int LogColdCache::allow_filling_cache_(LogIteratorInfo *iterator_info, bool &ena
   enable_fill_cache = true;
   return ret;
 }
-int FillCacheFsCb::update_end_lsn(int64_t id,
-                                  const palf::LSN &end_lsn,
-                                  const share::SCN &end_scn,
-                                  const int64_t proposal_id)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(id);
-  UNUSED(end_scn);
-  UNUSED(proposal_id);
-  PalfOptions options;
-  // if (IS_NOT_INIT) {
-  //   ret = OB_NOT_INIT;
-  //   PALF_LOG(WARN, "FillCacheFsCb is not inited", K(ret));
-  // } else if (!state_mgr_->is_leader_active()) {
-  //   // // don't submit fill cache task
-  // } else {
-  //   LSN begin_lsn = end_lsn - log_size;
-  //   log_engine_->submit_fill_cache_task(begin_lsn, log_size);
-  // }
-  return ret;
-}
 }
 namespace unittest
 {
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 class TestObSimpleLogCache : public ObSimpleLogClusterTestEnv
 {
 public:
@@ -84,14 +64,16 @@ public:
   }
   void destroy() {}
   using ObSimpleLogClusterTestEnv::read_log;
-  int read_log(PalfHandleImplGuard &leader, PalfBufferIterator &iterator)
+  int read_log(PalfHandleImplGuard &leader, PalfBufferIterator &iterator, LogIOUser user)
   {
-    return read_log(leader, LSN(PALF_INITIAL_LSN_VAL), iterator);
+    return read_log(leader, LSN(PALF_INITIAL_LSN_VAL), iterator, user);
   }
-  int read_log(PalfHandleImplGuard &leader, LSN read_lsn, PalfBufferIterator &iterator)
+  int read_log(PalfHandleImplGuard &leader, LSN read_lsn, PalfBufferIterator &iterator, LogIOUser user)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_buffer_iterator(read_lsn, iterator))) {
+    } else if (OB_FAIL(iterator.set_io_context(palf::LogIOContext(MTL_ID(), id_, user)))) {
+      PALF_LOG(WARN, "set_io_context failed", K(read_lsn), K(user));
     } else {
       while (OB_SUCCESS == ret) {
         const char *buf;
@@ -138,11 +120,16 @@ TEST_F(TestObSimpleLogCache, read)
   const LSN max_lsn = leader.get_palf_handle_impl()->get_max_lsn();
   EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, max_lsn));
   PALF_LOG(INFO, "first to read log");
-  EXPECT_EQ(OB_ITER_END, read_log(leader));
 
-  PALF_LOG(INFO, "start to hit cache");
-  LSN read_lsn(lsn_array[2]);
-  EXPECT_EQ(OB_ITER_END, read_log(leader));
+  PalfBufferIterator iterator1;
+  EXPECT_EQ(OB_ITER_END, read_log(leader, iterator1, LogIOUser::FETCHLOG));
+  EXPECT_EQ(false, iterator1.io_ctx_.iterator_info_.allow_filling_cache_);
+  EXPECT_EQ(0, iterator1.io_ctx_.iterator_info_.cold_cache_stat_.hit_cnt_);
+
+  PalfBufferIterator iterator2;
+  EXPECT_EQ(OB_ITER_END, read_log(leader, iterator2, LogIOUser::CDC));
+  EXPECT_EQ(true, iterator2.io_ctx_.iterator_info_.allow_filling_cache_);
+  EXPECT_NE(0, iterator2.io_ctx_.iterator_info_.cold_cache_stat_.hit_cnt_);
 
   OB_LOG_KV_CACHE.destroy();
 }
@@ -210,7 +197,8 @@ TEST_F(TestObSimpleLogCache, raw_read)
   int64_t out_read_size = 0;
   char *read_buf = reinterpret_cast<char*>(mtl_malloc_align(
     LOG_DIO_ALIGN_SIZE, in_read_size, "mittest"));
-  EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->raw_read(aligned_lsn, read_buf, in_read_size, out_read_size));
+  LogIOContext ctx;
+  EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->raw_read(aligned_lsn, read_buf, in_read_size, out_read_size, ctx));
 
   if (OB_NOT_NULL(read_buf)) {
     mtl_free_align(read_buf);
@@ -218,8 +206,7 @@ TEST_F(TestObSimpleLogCache, raw_read)
   OB_LOG_KV_CACHE.destroy();
 }
 
-// enable in 4.4
-TEST_F(TestObSimpleLogCache, DISABLED_fill_cache_when_slide)
+TEST_F(TestObSimpleLogCache, fill_cache_when_slide)
 {
   disable_hot_cache_ = false;
   SET_CASE_LOG_FILE(TEST_NAME, "fill_cache_when_slide");
@@ -241,15 +228,15 @@ TEST_F(TestObSimpleLogCache, DISABLED_fill_cache_when_slide)
     const LSN max_lsn = leader.get_palf_handle_impl()->get_max_lsn();
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, max_lsn));
 
-    PalfBufferIterator iterator(leader.palf_id_);
+    PalfBufferIterator iterator;
     PALF_LOG(INFO, "start to read log");
-    EXPECT_EQ(OB_ITER_END, read_log(leader, iterator));
+    EXPECT_EQ(OB_ITER_END, read_log(leader, iterator, LogIOUser::CDC));
     // all hit cache, no read disk
     EXPECT_EQ(0, iterator.io_ctx_.iterator_info_.cold_cache_stat_.miss_cnt_);
   }
 
   {
-    PALF_LOG(INFO, "test exceptional situations", K(id));
+    PALF_LOG(INFO, "test exceptional situations: miss hot cache", K(id));
     // miss hot cache when committed logs slide, unable to fill cold cache
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 5000, 30 * 1024, id, lsn_array, scn_array));
     PALF_LOG(INFO, "reset hot cache", K(id));
@@ -261,13 +248,14 @@ TEST_F(TestObSimpleLogCache, DISABLED_fill_cache_when_slide)
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->locate_by_lsn_coarsely(failed_aligned_lsn, result_scn));
     LSN read_lsn;
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->locate_by_scn_coarsely(result_scn, read_lsn));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
 
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->log_engine_.log_storage_.log_cache_->hot_cache_.init(id, leader.get_palf_handle_impl()));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 5000, 30 * 1024, id, lsn_array, scn_array));
 
-    PalfBufferIterator iterator(leader.palf_id_);
+    PalfBufferIterator iterator;
 
-    EXPECT_EQ(OB_ITER_END, read_log(leader, read_lsn, iterator));
+    EXPECT_EQ(OB_ITER_END, read_log(leader, read_lsn, iterator, LogIOUser::CDC));
     // miss, have to read disk at lease once
     EXPECT_LT(0, iterator.io_ctx_.iterator_info_.cold_cache_stat_.miss_cnt_);
   }

@@ -57,6 +57,7 @@
 #include "observer/table_load/resource/ob_table_load_resource_processor.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_processor.h"
 #include "share/wr/ob_wr_snapshot_rpc_processor.h"
+#include "observer/net/ob_shared_storage_net_throt_rpc_processor.h"
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -175,6 +176,14 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObStorageWakeupTransferServiceP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObFetchLSMemberAndLearnerListP);
   RPC_PROCESSOR(ObAdminUnlockMemberListP, gctx_);
+
+  // migrate warmup
+#ifdef OB_BUILD_SHARED_STORAGE
+  RPC_PROCESSOR(ObFetchMicroBlockKeysP);
+  RPC_PROCESSOR(ObFetchMicroBlockP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObGetMicroBlockCacheSizeP);
+  RPC_PROCESSOR(ObGetMigrationCacheJobInfoP);
+#endif
 }
 
 void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
@@ -318,10 +327,18 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObWrSyncUserSubmitSnapshotTaskP, gctx_);
   RPC_PROCESSOR(ObWrSyncUserModifySettingsTaskP, gctx_);
 
+  // share storage net throt
+  RPC_PROCESSOR(ObSharedStorageNetThrotRegisterP, gctx_);
+  RPC_PROCESSOR(ObSharedStorageNetThrotPredictP, gctx_);
+  RPC_PROCESSOR(ObSharedStorageNetThrotSetP, gctx_);
+
   // kill client session
   RPC_PROCESSOR(ObKillClientSessionP, gctx_);
   // client session create time
   RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
+
+  RPC_PROCESSOR(ObRpcChangeExternalStorageDestP, gctx_);
+
   // limit calculator
   RPC_PROCESSOR(ObResourceLimitCalculatorP, gctx_);
 

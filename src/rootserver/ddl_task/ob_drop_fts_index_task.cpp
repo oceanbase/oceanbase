@@ -235,16 +235,6 @@ int64_t ObDropFTSIndexTask::get_serialize_param_size() const
        + fts_doc_word_.get_serialize_size();
 }
 
-void ObDropFTSIndexTask::flt_set_task_span_tag() const
-{
-  // TODO: @hanxuan, add me for tracing.
-}
-
-void ObDropFTSIndexTask::flt_set_status_span_tag() const
-{
-  // TODO: @hanxuan, add me for tracing.
-}
-
 int ObDropFTSIndexTask::check_switch_succ()
 {
   int ret = OB_SUCCESS;

@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <new>
 #include <pthread.h>
+#include <type_traits>
 #include "lib/hash/ob_hashutils.h"
 #include "lib/hash/ob_hashtable.h"
 #include "lib/hash/ob_serialization.h"
@@ -191,10 +192,14 @@ public:
     return ret;
   };
   // flag: 0 shows that do not cover existing object
-  inline _value_type *get(_key_type &key)
+  inline _value_type *get(const _key_type &key)
   {
-    const _value_type *ret = get(const_cast<const _key_type&>(key));
-    return const_cast<_value_type*>(ret);
+    // we can not add const for T by T* directly.
+    // and T is too long compare to decltype.
+    // and auto is forbidden, otherwise const auto &const_me = *this is better.
+    // so we have to define PointerOfConstMe.
+    using PointerOfConstMe = typename std::add_pointer<typename std::add_const<typename std::remove_pointer<decltype(this)>::type>::type>::type;
+    return const_cast<_value_type*>(reinterpret_cast<PointerOfConstMe>(this)->get(key));
   }
   template <typename _callback = void>
   int set_refactored(const _key_type &key, const _value_type &value, int flag = 0,

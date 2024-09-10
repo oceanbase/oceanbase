@@ -122,6 +122,18 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
       if (OB_FAIL(ObResolverUtils::resolve_generated_column_info(col_def, allocator,
           root_expr_type, columns_names))) {
         LOG_WARN("get generated column expr failed", K(ret));
+      } else if (T_FUN_SYS_VEC_VID == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_VID_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_TYPE == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_TYPE_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_VECTOR == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_VECTOR_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_SCN == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_SCN_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_KEY == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_KEY_COLUMN_FLAG);
+      } else if (T_FUN_SYS_VEC_DATA == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_DATA_COLUMN_FLAG);
       } else if (T_FUN_SYS_WORD_SEGMENT == root_expr_type) {
         column.add_column_flag(GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG);
       } else if (T_FUN_SYS_WORD_COUNT == root_expr_type) {
@@ -140,7 +152,6 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
         LOG_DEBUG("succ to resolve_generated_column_info", K(col_def), K(root_expr_type), K(columns_names), K(table_schema));
       }
     }
-
     // TODO: materialized view
     if (OB_SUCC(ret) && resolve_dependencies && !column.is_doc_id_column() && (table_schema.is_table()
                                                 || table_schema.is_tmp_table())) {
@@ -223,6 +234,47 @@ bool ObSchemaUtils::is_cte_generated_column(uint64_t flag)
 bool ObSchemaUtils::is_default_expr_v2_column(uint64_t flag)
 {
   return flag & DEFAULT_EXPR_V2_COLUMN_FLAG;
+}
+
+/* vector index */
+bool ObSchemaUtils::is_vec_index_column(const uint64_t flag)
+{
+  return is_vec_vid_column(flag)
+      || is_vec_type_column(flag)
+      || is_vec_vector_column(flag)
+      || is_vec_scn_column(flag)
+      || is_vec_key_column(flag)
+      || is_vec_data_column(flag);
+}
+
+bool ObSchemaUtils::is_vec_vid_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_VID_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_type_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_TYPE_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_vector_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_VECTOR_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_scn_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_SCN_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_key_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_KEY_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_data_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_DATA_COLUMN_FLAG;
 }
 
 bool ObSchemaUtils::is_fulltext_column(const uint64_t flag)

@@ -39,8 +39,7 @@ protected:
   virtual int prepare_index_tree() override;
   virtual void free_schema() override;
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
-  virtual int update_tablet(const blocksstable::ObSSTable &sstable,
-                            ObTabletHandle &new_tablet_handle) override;
+  virtual int update_tablet(ObTabletHandle &new_tablet_handle) override;
 };
 
 class ObTabletCrossLSMdsMinorMergeCtx : public compaction::ObTabletMergeCtx
@@ -53,7 +52,7 @@ public:
   virtual int prepare_index_tree() override;
   virtual void free_schema() override;
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
-  virtual int update_tablet(const blocksstable::ObSSTable &sstable, ObTabletHandle &new_tablet_handle) override;
+  virtual int update_tablet(ObTabletHandle &new_tablet_handle) override;
 
   int prepare_merge_tables(const common::ObIArray<ObTableHandleV2> &table_handle_array);
 private:

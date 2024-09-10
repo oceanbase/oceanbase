@@ -13,7 +13,7 @@
 #ifndef OB_STORAGE_BLOCKSSTABLE_DATUM_ROWKEY_H
 #define OB_STORAGE_BLOCKSSTABLE_DATUM_ROWKEY_H
 
-#include "ob_datum_row.h"
+#include "ob_storage_datum.h"
 #include "lib/utility/ob_print_kv.h"
 //to be removed
 #include "common/rowkey/ob_store_rowkey.h"
@@ -27,6 +27,7 @@ struct ObDatumRange;
 class ObRowkeyVector;
 struct ObDiscreteDatumRowkey;
 struct ObCommonDatumRowkey;
+struct ObDatumRow;
 
 struct ObDatumRowkey
 {
@@ -123,6 +124,10 @@ public:
   int convert_store_rowkey(const ObDatumRowkey &datum_rowkey,
                            const common::ObIArray<share::schema::ObColDesc> &col_descs,
                            common::ObStoreRowkey &rowkey);
+  int prepare_datum_rowkey(const ObDatumRow &datum_row,
+                           const int key_datum_cnt,
+                           const ObIArray<share::schema::ObColDesc> &col_descs,
+                           ObDatumRowkey &datum_rowkey);
   int reserve(const int64_t rowkey_cnt);
   OB_INLINE ObStorageDatum *get_datums() { return datum_buffer_.get_datums(); }
   OB_INLINE int64_t get_capacity() const { return datum_buffer_.get_capacity(); }

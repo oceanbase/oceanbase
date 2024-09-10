@@ -628,6 +628,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                                         column_type_str_len_,
                                         column_schema->get_data_type(),
                                         column_schema->get_collation_type(),
+                                        column_schema->get_extended_type_info(),
                                         column_schema->get_geo_type()))) {
               SERVER_LOG(WARN,"fail to get data type str",K(ret), K(column_schema->get_data_type()));
             } else {
@@ -1078,10 +1079,18 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
               ObString type_str(strlen(column_type_str_), column_type_str_);
               geo_sub_type = ObGeoTypeUtil::get_geo_type_by_name(type_str);
             }
+            ObArray<ObString> extend_type_info;
+            if (ob_is_collection_sql_type(column_attributes.result_type_.get_type())) {
+              ObString type_str(strlen(column_type_str_), column_type_str_);
+              if (OB_FAIL(extend_type_info.push_back(type_str))) {
+                SERVER_LOG(WARN, "fail to push to array", K(ret));
+              }
+            }
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
-            if (OB_ISNULL(table_schema_) ||
-                OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
+            if (OB_FAIL(ret)) {
+            } else if (OB_ISNULL(table_schema_) ||
+                       OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
               ret = OB_ERR_UNEXPECTED;
               SERVER_LOG(WARN, "table or column schema is null", KR(ret), KP(table_schema_), KP(tmp_column_schema));
             } else if (FALSE_IT(column_type = tmp_column_schema->get_meta_type().get_type())) {
@@ -1089,6 +1098,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
                                         column_type_str_len_,
                                         column_attributes.result_type_.get_type(),
                                         ObCharset::get_default_collation(ObCharset::get_default_charset()),
+                                        extend_type_info,
                                         geo_sub_type))) {
               SERVER_LOG(WARN,"fail to get data type str",K(ret), K(column_attributes.type_));
             } else {

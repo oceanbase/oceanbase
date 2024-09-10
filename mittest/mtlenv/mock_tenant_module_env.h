@@ -48,6 +48,8 @@
 #include "sql/ob_sql.h"
 #include "storage/blocksstable/ob_log_file_spec.h"
 #include "storage/blocksstable/ob_decode_resource_pool.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_tablet_diagnose.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
@@ -75,7 +77,7 @@
 #include "storage/ob_file_system_router.h"
 #include "storage/access/ob_table_scan_iterator.h"
 #include "storage/lob/ob_lob_manager.h"
-#include "ob_mittest_utils.h"
+#include "mittest/ob_mittest_utils.h"
 #include "storage/mock_disk_usage_report.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "storage/ob_relative_table.h"
@@ -91,12 +93,24 @@
 #include "logservice/palf/log_define.h"
 #include "storage/access/ob_empty_read_bucket.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "sensitive_test/object_storage/object_storage_authorization_info.h"
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#include "storage/shared_storage/ob_file_manager.h"
+#include "storage/shared_storage/ob_dir_manager.h"
+#include "storage/shared_storage/ob_ss_micro_cache.h"
+#include "storage/shared_storage/prewarm/ob_ss_micro_cache_prewarm_service.h"
+#include "share/ob_master_key_getter.h"
+#endif
+#include "share/object_storage/ob_device_config_mgr.h"
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_session_pool.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
+#include "observer/ob_startup_accel_task_handler.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/memtable/ob_lock_wait_mgr.h"
+#include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 
 namespace oceanbase
 {
@@ -296,13 +310,11 @@ std::string _executeShellCommand(std::string command)
   return result;
 }
 
-common::ObIODevice* get_device_inner()
+common::ObIODevice* get_device_inner(const common::ObString &storage_type_prefix)
 {
   int ret = OB_SUCCESS;
   common::ObIODevice* device = NULL;
-  common::ObString storage_info(OB_LOCAL_PREFIX);
-  //for the local and nfs, storage_prefix and storage info are same
-  if(OB_FAIL(common::ObDeviceManager::get_instance().get_device(storage_info, storage_info, device))) {
+  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
     STORAGE_LOG(WARN, "get_device_inner", K(ret));
   }
   return device;
@@ -346,7 +358,10 @@ public:
   bool is_inited() const { return inited_; }
 
 public:
-  static int init_slogger_mgr(const char *log_dir);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int encrypt_access_key(const char *access_key, char *encrypt_key, int64_t length) const;
+  int init_device_config();
+#endif
 
 public:
   static const int64_t TENANT_WORKER_COUNT = 5;
@@ -398,6 +413,7 @@ private:
   share::ObTenantSwitchGuard guard_;
 
   common::ObSimpleMemLimitGetter getter_;
+  observer::ObStartupAccelTaskHandler startup_accel_handler_;
 
   bool inited_;
   bool destroyed_;
@@ -440,10 +456,20 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
       2, // min_cpu
       4L << 30, // memory_size
       4L << 30, // log_disk_size
+      GCTX.is_shared_storage_mode() ?
+        (4L << 30) : ObUnitResource::DEFAULT_DATA_DISK_SIZE,    // data_disk_size
       10000, // max_iops
       10000, // min_iops,
-      0 /*iops_weight*/);
-
+      0, //iops_weight
+      INT64_MAX, // max_net_bandwidth
+      0  /*net_bandwidth_weight*/);
+  int64_t hidden_sys_data_disk_config_size = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if ((OB_SYS_TENANT_ID == tenant_id) &&
+      GCTX.is_shared_storage_mode()) {  // only sys_tenant_unit_meta record hidden_sys_data_disk_config_size value
+    hidden_sys_data_disk_config_size = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
+  }
+#endif
   if (OB_FAIL(unit_config.init(unit_config_id, name, ur))) {
     STORAGE_LOG(WARN, "fail to init unit config unit", KR(ret), K(unit_config_id), K(name), K(ur));
   } else if (OB_FAIL(unit.init(tenant_id,
@@ -453,7 +479,8 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
                         lib::Worker::CompatMode::MYSQL,
                         create_timestamp,
                         has_memstore,
-                        false /*is_removed*/))) {
+                        false /*is_removed*/,
+                        hidden_sys_data_disk_config_size))) {
     STORAGE_LOG(WARN, "fail to init tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     STORAGE_LOG(WARN, "fail to build tenant meta", K(ret), K(tenant_id));
@@ -502,6 +529,10 @@ int MockTenantModuleEnv::prepare_io()
   ObIODOpts iod_opts;
   iod_opts.opts_ = iod_opt_array;
   int64_t macro_block_count = 5 * 1024;
+  if (GCTX.is_shared_storage_mode()) {
+    // In shared storage mode, total_data_disk_size set to 20GB, because hidden_sys has data_disk_size in shared storage mode
+    macro_block_count = 10 * 1024;
+  }
   int64_t macro_block_size = 64 * 1024;
   char* data_dir = (char*)env_dir_.c_str();
   char file_dir[OB_MAX_FILE_NAME_LENGTH];
@@ -513,6 +544,8 @@ int MockTenantModuleEnv::prepare_io()
     STORAGE_LOG(WARN, "failed to gen clog dir", K(ret));
   } else if (OB_FAIL(databuff_printf(slog_dir, OB_MAX_FILE_NAME_LENGTH, "%s/slog/", data_dir))) {
     STORAGE_LOG(WARN, "failed to gen slog dir", K(ret));
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
   }
 
   storage_env_.data_dir_ = data_dir;
@@ -522,8 +555,23 @@ int MockTenantModuleEnv::prepare_io()
   storage_env_.data_disk_size_ = macro_block_count * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
   storage_env_.data_disk_percentage_ = 0;
   storage_env_.log_disk_size_ = 20 * 1024 * 1024 * 1024ll;
-  share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice*>(get_device_inner());
-  THE_IO_DEVICE = local_device;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    common::ObString storage_type_prefix(OB_LOCAL_CACHE_PREFIX);
+    storage::ObLocalCacheDevice *local_cache_device = static_cast<storage::ObLocalCacheDevice*>(
+                                                      get_device_inner(storage_type_prefix));
+    // for use LOCAL_DEVICE_INSTANCE in share storage mode
+    ObIODeviceWrapper::get_instance().set_local_cache_device(local_cache_device);
+  } else {
+#endif
+    common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
+    share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice*>(get_device_inner(storage_type_prefix));
+    THE_IO_DEVICE = local_device;
+    // for unifying init/add_device_channel/destroy local_device and local_cache_device code below
+    ObIODeviceWrapper::get_instance().set_local_device(local_device);
+#ifdef OB_BUILD_SHARED_STORAGE
+  }
+#endif
   iod_opt_array[0].set("data_dir", storage_env_.data_dir_);
   iod_opt_array[1].set("sstable_dir", storage_env_.sstable_dir_);
   iod_opt_array[2].set("block_size", storage_env_.default_block_size_);
@@ -539,14 +587,14 @@ int MockTenantModuleEnv::prepare_io()
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
-    STORAGE_LOG(WARN, "fail to init io device", K(ret), K_(storage_env));
   } else if (OB_FAIL(ObIOManager::get_instance().init())) {
     STORAGE_LOG(WARN, "fail to init io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE,
-        async_io_thread_count,
-        sync_io_thread_count,
-        max_io_depth))) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.init(iod_opts))) {
+    STORAGE_LOG(WARN, "fail to init io device", K(ret), K_(storage_env));
+  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(&LOCAL_DEVICE_INSTANCE,
+                                                                    async_io_thread_count,
+                                                                    sync_io_thread_count,
+                                                                    max_io_depth))) {
     STORAGE_LOG(WARN, "add device channel failed", K(ret));
   } else if (OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
     SERVER_LOG(ERROR, "init log pool fail", K(ret));
@@ -570,6 +618,8 @@ void MockTenantModuleEnv::init_gctx_gconf()
   GCONF.mysql_port = mysql_port_;
   GCONF.self_addr_ = self_addr_;
   GCONF.__min_full_resource_pool_memory = 2 * 1024 * 1024 * 1024ul;
+  GCONF.observer_id = 1;
+  GCONF.cluster_id = 1;
   GCTX.self_addr_seq_.set_addr(self_addr_);
   GCTX.location_service_ = &location_service_;
   GCTX.batch_rpc_ = &batch_rpc_;
@@ -591,24 +641,103 @@ void MockTenantModuleEnv::init_gctx_gconf()
   GCTX.disk_reporter_ = &mock_disk_reporter_;
   GCTX.bandwidth_throttle_ = &bandwidth_throttle_;
   GCTX.log_block_mgr_ = &log_block_mgr_;
+  GCTX.startup_accel_handler_ = &startup_accel_handler_;
 }
 
-int MockTenantModuleEnv::init_slogger_mgr(const char *log_dir)
+#ifdef OB_BUILD_SHARED_STORAGE
+int MockTenantModuleEnv::encrypt_access_key(
+    const char *access_key,
+    char *encrypt_key,
+    int64_t length) const
 {
   int ret = OB_SUCCESS;
-
-  const int64_t MAX_FILE_SIZE = 256 * 1024 * 1024;
-  blocksstable::ObLogFileSpec log_file_spec;
-  log_file_spec.retry_write_policy_ = "normal";
-  log_file_spec.log_create_policy_ = "normal";
-  log_file_spec.log_write_policy_ = "truncate";
-  if (OB_FAIL(SLOGGERMGR.init(log_dir, log_dir, MAX_FILE_SIZE, log_file_spec))) {
-    STORAGE_LOG(WARN, "fail to init SLOGGERMGR", K(ret));
+  char encrypted_key[OB_MAX_BACKUP_ENCRYPTKEY_LENGTH] = { 0 };
+  char serialize_buf[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
+  int64_t serialize_pos = 0;
+  int64_t key_len = 0;
+  if (OB_ISNULL(access_key) || OB_ISNULL(encrypt_key) || OB_UNLIKELY(length <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(access_key), KP(encrypt_key), K(length));
+  } else if (OB_UNLIKELY(0 == strlen(access_key))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "access_key is empty, shouldn't encrypt", K(ret));
+  } else if (OB_UNLIKELY(0 != strncmp(ACCESS_KEY, access_key, strlen(ACCESS_KEY)))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "parameter is not access_key", K(ret));
+  } else if (OB_FAIL(ObEncryptionUtil::encrypt_sys_data(OB_SYS_TENANT_ID,
+      access_key + strlen(ACCESS_KEY), strlen(access_key) - strlen(ACCESS_KEY),
+      encrypted_key, OB_MAX_BACKUP_ENCRYPTKEY_LENGTH, key_len))) {
+    STORAGE_LOG(WARN, "failed to encrypt authorization key", K(ret));
+  } else if (OB_FAIL(hex_print(encrypted_key, key_len, serialize_buf, sizeof(serialize_buf), serialize_pos))) {
+    STORAGE_LOG(WARN, "failed to serialize encrypted key", K(ret), K(encrypted_key));
+  } else if (OB_UNLIKELY((serialize_pos >= sizeof(serialize_buf)) || (serialize_pos >= length))) {
+    ret = OB_SIZE_OVERFLOW;
+    STORAGE_LOG(WARN, "encode error", K(ret), K(serialize_pos), K(sizeof(serialize_buf)), K(length));
+  } else if (FALSE_IT(serialize_buf[serialize_pos] = '\0')) {
+  } else if (OB_FAIL(databuff_printf(encrypt_key, length, "%s%s", ENCRYPT_KEY, serialize_buf))) {
+    STORAGE_LOG(WARN, "failed to get encrypted key", K(ret), K(serialize_buf));
   }
-
   return ret;
 }
 
+int MockTenantModuleEnv::init_device_config()
+{
+  int ret = OB_SUCCESS;
+  const int64_t cur_time_ns = ObTimeUtility::current_time_ns();
+  char access_key_buf[OB_MAX_BACKUP_ACCESSKEY_LENGTH] = { 0 };
+  char encrypt_key_buf[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
+  char object_storage_root_path[common::MAX_PATH_SIZE] = { 0 };
+  if (OB_FAIL(share::ObMasterKeyGetter::instance().init(NULL))) {
+    CLOG_LOG(WARN, "init ObMasterKeyGetter failed");
+  } else if (OB_FAIL(share::ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
+                                                      obrpc::RootKeyType::DEFAULT, ObString()))) {
+    CLOG_LOG(WARN, "set_root_key failed");
+  } else if (OB_FAIL(databuff_printf(access_key_buf, sizeof(access_key_buf),
+      "%s%s", ACCESS_KEY, unittest::S3_SK))) {
+    STORAGE_LOG(WARN, "fail to databuff printf", K(ret));
+  } else if (OB_FAIL(encrypt_access_key(access_key_buf, encrypt_key_buf, sizeof(encrypt_key_buf)))) {
+    STORAGE_LOG(WARN, "fail to encrypt access key", K(ret));
+  } else if (OB_FAIL(databuff_printf(object_storage_root_path, sizeof(object_storage_root_path),
+                     "%s/%lu", unittest::S3_BUCKET, cur_time_ns))) {
+    STORAGE_LOG(WARN, "fail to databuff printf", K(ret));
+  } else if (OB_FAIL(OB_DIR_MGR.set_object_storage_root_dir(object_storage_root_path))) {
+    STORAGE_LOG(WARN, "fail to set object storage root dir", K(ret), K(object_storage_root_path));
+  } else if (OB_FAIL(OB_DEVICE_CONF_MGR.init(sstable_dir_.c_str()))) {
+    STORAGE_LOG(WARN, "fail to init device config", K(ret));
+  } else if (OB_FAIL(OB_DEVICE_CONF_MGR.load_configs())) {
+    STORAGE_LOG(WARN, "fail to load device configs", KR(ret));
+  } else {
+    ObDeviceConfig device_config;
+    STRCPY(device_config.used_for_, ObStorageUsedType::get_str(ObStorageUsedType::USED_TYPE_ALL));
+    if (OB_FAIL(databuff_printf(device_config.path_, sizeof(device_config.path_),
+                "%s/%lu", unittest::S3_BUCKET, cur_time_ns))) {
+      STORAGE_LOG(WARN, "fail to databuff printf", KR(ret));
+    } else if (OB_FAIL(databuff_printf(device_config.endpoint_, sizeof(device_config.endpoint_),
+                "%s%s", HOST, unittest::S3_ENDPOINT))) {
+      STORAGE_LOG(WARN, "fail to databuff printf", KR(ret));
+    } else if (OB_FAIL(databuff_printf(device_config.access_info_, sizeof(device_config.access_info_),
+                "%s%s&%s", ACCESS_ID, unittest::S3_AK, encrypt_key_buf))) {
+      STORAGE_LOG(WARN, "fail to databuff printf", KR(ret));
+    } else if (OB_FAIL(databuff_printf(device_config.extension_,
+               sizeof(device_config.extension_), "%s%s", REGION, unittest::S3_REGION))) {
+      STORAGE_LOG(WARN, "fail to databuff printf", KR(ret));
+    } else {
+      STRCPY(device_config.state_, ObZoneStorageState::get_str(ObZoneStorageState::ADDED));
+      device_config.create_timestamp_ = common::ObTimeUtility::fast_current_time();
+      device_config.last_check_timestamp_ = common::ObTimeUtility::fast_current_time();
+      device_config.op_id_ = 1;
+      device_config.sub_op_id_ = 2;
+      device_config.storage_id_ = 3;
+      device_config.max_iops_ = 0;
+      device_config.max_bandwidth_ = 0;
+      if (OB_FAIL(OB_DEVICE_CONF_MGR.add_device_config(device_config))) {
+        STORAGE_LOG(WARN, "fail to add device config", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int MockTenantModuleEnv::init_before_start_mtl()
 {
@@ -629,12 +758,16 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, 2 * 1024 * 1024))) {
-    STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(TMA_MGR_INSTANCE.init())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_instance().init(env_dir_.c_str(), env_dir_.c_str(), 1, env_dir_.c_str(), self_addr_))) {
+  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_instance().init(env_dir_.c_str()))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(init_device_config())) {
+    STORAGE_LOG(WARN, "fail to init device config", K(ret));
+#endif
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.init(GCTX.is_shared_storage_mode(), 2*1024*1024UL))) {
+    STORAGE_LOG(WARN, "fail to init server object manager", K(ret));
   } else if (OB_FAIL(net_frame_.init())) {
     STORAGE_LOG(WARN, "net", "ss", _executeShellCommand("ss -antlp").c_str());
     STORAGE_LOG(WARN, "fail to init env", K(ret));
@@ -646,9 +779,9 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::BRPC, batch_rpc_))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(init_slogger_mgr(slog_dir_.c_str()))) {
-    STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().init())) {
+  } else if (OB_FAIL(startup_accel_handler_.init(observer::SERVER_ACCEL))) {
+    STORAGE_LOG(WARN, "init server startup task handler failed", KR(ret));
+  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(GCTX.is_shared_storage_mode()))) {
     STORAGE_LOG(ERROR, "init server checkpoint slog handler fail", K(ret));
   } else if (OB_FAIL(multi_tenant_.init(self_addr_, nullptr, false))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
@@ -659,10 +792,14 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(oceanbase::palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
     STORAGE_LOG(WARN, "init tmp block cache failed", KR(ret));
-  } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
-    STORAGE_LOG(WARN, "init tmp page cache failed", KR(ret));
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1))) {
+    STORAGE_LOG(WARN, "init sn tmp page cache failed", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(blocksstable::ObTmpPageCache::get_instance().init("ss_tmp_page_cache", 1))) {
+    STORAGE_LOG(WARN, "init ss tmp page cache failed", KR(ret));
+#endif
   } else if (OB_SUCCESS != (ret = bandwidth_throttle_.init(1024 * 1024 * 60))) {
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
@@ -676,6 +813,7 @@ int MockTenantModuleEnv::init_before_start_mtl()
     cgroup_ctrl_.init();
     ObTsMgr::get_instance_inner() = &ts_mgr_;
     GCTX.sql_proxy_ = &sql_proxy_;
+    ObRunningModeConfig::instance().mini_mode_ = true; // make startup_accel_handler_ use only one thread
   }
   return ret;
 }
@@ -696,12 +834,11 @@ int MockTenantModuleEnv::init()
     } else {
       oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
       MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
-      MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
-      MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
       MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, share::ObSharedMemAllocMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, common::ObRbMemMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTransService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTimestampService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -717,7 +854,8 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, compaction::ObTenantMediumChecker::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, observer::ObTabletTableUpdater::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, share::ObTenantDagScheduler::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-      MTL_BIND2(mtl_new_default, ObTenantCheckpointSlogHandler::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObTenantStorageMetaService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, coordinator::ObLeaderCoordinator::mtl_init, coordinator::ObLeaderCoordinator::mtl_start, coordinator::ObLeaderCoordinator::mtl_stop, coordinator::ObLeaderCoordinator::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, coordinator::ObFailureDetector::mtl_init, coordinator::ObFailureDetector::mtl_start, coordinator::ObFailureDetector::mtl_stop, coordinator::ObFailureDetector::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, compaction::ObDiagnoseTabletMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -742,8 +880,18 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObTenantDirectLoadMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObEmptyReadBucket::mtl_init, nullptr, nullptr, nullptr, ObEmptyReadBucket::mtl_destroy);
       MTL_BIND2(mtl_new_default, ObRebuildService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode()) {
+        MTL_BIND2(mtl_new_default, ObTenantDiskSpaceManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObTenantFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSMicroCachePrewarmService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSMicroCache::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      }
+#else
+#endif
       MTL_BIND2(mtl_new_default, table::ObHTableLockMgr::mtl_init, nullptr, nullptr, nullptr, table::ObHTableLockMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(ObTenantFTPluginMgr::mtl_new, mtl_init_default, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -754,11 +902,15 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
     }
     if (OB_FAIL(ret)) {
-
     } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
       STORAGE_LOG(ERROR, "reload memory config failed", K(ret));
     } else if (OB_FAIL(start_())) {
       STORAGE_LOG(ERROR, "mock env start failed", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (GCTX.is_shared_storage_mode() &&
+               OB_FAIL(OB_SERVER_DISK_SPACE_MGR.reload_config(config_))) {
+      STORAGE_LOG(ERROR, "reload data disk size config failed", K(ret));
+#endif
     } else {
       inited_ = true;
     }
@@ -779,20 +931,32 @@ int MockTenantModuleEnv::start_()
 
   if (OB_FAIL(log_block_mgr_.start(storage_env_.log_disk_size_))) {
     SERVER_LOG(ERROR, "log pool start failed", KR(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0))) {
-    STORAGE_LOG(WARN, "fail to start block manager", K(ret));
-  } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().mock_start())) {
-    STORAGE_LOG(ERROR, "server checkpoint slog handler mock start fail", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(0/*reserved_size*/))) {
+    STORAGE_LOG(WARN, "fail to start object manager", K(ret));
+  } else if (OB_FAIL(startup_accel_handler_.start())) {
+    STORAGE_LOG(WARN, "fail to start server startup task handler", KR(ret));
+  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.start())) {
+    STORAGE_LOG(ERROR, "server storage meta service fail", K(ret));
   } else if (OB_FAIL(multi_tenant_.create_hidden_sys_tenant())) {
     STORAGE_LOG(WARN, "fail to create hidden sys tenant", K(ret));
   } else if (OB_FAIL(construct_default_tenant_meta(tenant_id, meta))) {
     STORAGE_LOG(WARN, "fail to construct_default_tenant_meta", K(ret));
   } else if (OB_FAIL(multi_tenant_.convert_hidden_to_real_sys_tenant(meta.unit_))) {
     STORAGE_LOG(WARN, "fail to create_real_sys_tenant", K(ret));
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (OB_FAIL(ret)) {
+  } else if (GCTX.is_shared_storage_mode()) {
+    int64_t data_disk_size = meta.unit_.config_.data_disk_size();
+    if (is_sys_tenant(tenant_id)) { // real_sys_tenant's data_disk_size = sys_unit_config + hidden_sys_data_disk_size
+      data_disk_size += OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
+    }
+    if (OB_FAIL(multi_tenant_.update_tenant_data_disk_size(tenant_id, data_disk_size))) {
+      STORAGE_LOG(WARN, "fail to update tenant data disk size", K(ret), K(tenant_id), K(data_disk_size));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(multi_tenant_.get_tenant(tenant_id, tenant))) {
     STORAGE_LOG(WARN, "fail to get tenant", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant->acquire_more_worker(TENANT_WORKER_COUNT, succ_num))) {
@@ -824,13 +988,6 @@ int MockTenantModuleEnv::start_()
       }
     }
   }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(MTL(ObStorageLogger*)->start_log(meta.super_block_.replay_start_point_))) {
-      STORAGE_LOG(WARN, "tenant start_log failed", K(ret), K(tenant_id));
-    }
-  }
-
   return ret;
 }
 
@@ -850,17 +1007,17 @@ void MockTenantModuleEnv::destroy()
   // 释放租户上下文
   guard_.release();
 
+  startup_accel_handler_.destroy();
 
   multi_tenant_.stop();
   multi_tenant_.wait();
   multi_tenant_.destroy();
   ObKVGlobalCache::get_instance().destroy();
-  ObServerCheckpointSlogHandler::get_instance().destroy();
-  SLOGGERMGR.destroy();
+  SERVER_STORAGE_META_SERVICE.destroy();
 
-  OB_SERVER_BLOCK_MGR.stop();
-  OB_SERVER_BLOCK_MGR.wait();
-  OB_SERVER_BLOCK_MGR.destroy();
+  OB_STORAGE_OBJECT_MGR.stop();
+  OB_STORAGE_OBJECT_MGR.wait();
+  OB_STORAGE_OBJECT_MGR.destroy();
 
   ObTsMgr::get_instance().stop();
   ObTsMgr::get_instance().wait();
@@ -870,16 +1027,25 @@ void MockTenantModuleEnv::destroy()
   net_frame_.stop();
   net_frame_.wait();
   net_frame_.destroy();
-  tmp_file::ObTmpBlockCache::get_instance().destroy();
-  tmp_file::ObTmpPageCache::get_instance().destroy();
+  if (!GCTX.is_shared_storage_mode()) {
+    tmp_file::ObTmpBlockCache::get_instance().destroy();
+    tmp_file::ObTmpPageCache::get_instance().destroy();
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else {
+    blocksstable::ObTmpPageCache::get_instance().destroy();
+  }
+#endif
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
   TG_DESTROY(lib::TGDefIDs::ServerGTimer);
 
-  if (OB_NOT_NULL(THE_IO_DEVICE)) {
-    THE_IO_DEVICE->destroy();
-  }
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  share::ObMasterKeyGetter::instance().stop();
+  share::ObMasterKeyGetter::instance().wait();
+  share::ObMasterKeyGetter::instance().reset();
+  OB_DEVICE_CONF_MGR.destroy();
+#endif
 
   destroyed_ = true;
 

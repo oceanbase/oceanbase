@@ -169,8 +169,11 @@ void ObFailureDetector::detect_failure()
   detect_palf_disk_full_();
   // schema refreshed check
   detect_schema_not_refreshed_();
-  // data disk full check
-  detect_data_disk_full_();
+  // shared_storage mode does not need data disk full check
+  if (!GCTX.is_shared_storage_mode()) {
+    // data disk full check
+    detect_data_disk_full_();
+  }
 }
 
 int ObFailureDetector::add_failure_event(const FailureEvent &event)
@@ -488,7 +491,7 @@ void ObFailureDetector::detect_data_disk_full_()
   FailureEvent data_disk_full_event(FailureType::RESOURCE_NOT_ENOUGH, FailureModule::STORAGE, FailureLevel::NOTICE);
   if (OB_FAIL(data_disk_full_event.set_info("data disk almost full event"))) {
     COORDINATOR_LOG(ERROR, "data_disk_full_event set_info failed", K(ret));
-  } else if (OB_FAIL(THE_IO_DEVICE->check_write_limited()) &&
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_write_limited()) &&
              OB_SERVER_OUTOF_DISK_SPACE != ret) {
     COORDINATOR_LOG(WARN, "check space full failed", K(ret));
   } else if (OB_SERVER_OUTOF_DISK_SPACE == ret) {

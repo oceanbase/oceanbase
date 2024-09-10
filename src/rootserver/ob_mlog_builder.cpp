@@ -588,6 +588,8 @@ int ObMLogBuilder::generate_mlog_schema(
       LOG_WARN("failed to set table columns", KR(ret));
     } else if (OB_FAIL(set_table_options(create_mlog_arg, base_table_schema, mlog_schema))) {
       LOG_WARN("failed to set table options", KR(ret));
+    } else {
+      mlog_schema.set_micro_index_clustered(base_table_schema.get_micro_index_clustered());
     }
   }
 

@@ -25,7 +25,6 @@
 #include "lib/utility/ob_defer.h"
 #include "objit/ob_llvm_symbolizer.h"
 #include "observer/ob_server.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server_utils.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_tenant_mgr.h"

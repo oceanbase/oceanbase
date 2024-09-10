@@ -43,6 +43,7 @@ public:
   int64_t start_ts_;
   int64_t finish_ts_;
   int64_t rebuild_seq_;
+  ObStorageHASrcInfo chosen_src_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -51,7 +52,8 @@ public:
       K_(task_id),
       K_(start_ts),
       K_(finish_ts),
-      K_(rebuild_seq));
+      K_(rebuild_seq),
+      K_(chosen_src));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSCompleteMigrationCtx);
 };
@@ -64,11 +66,14 @@ public:
   virtual bool is_valid() const override;
   void reset();
 
-  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq));
+  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq), K_(chosen_src));
   ObMigrationOpArg arg_;
   share::ObTaskId task_id_;
   int32_t result_;
   int64_t rebuild_seq_;
+  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
+  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHASrcInfo chosen_src_;
 };
 
 class ObLSCompleteMigrationDagNet: public share::ObIDagNet
@@ -89,6 +94,8 @@ public:
 
   ObLSCompleteMigrationCtx *get_ctx() { return &ctx_; }
   const share::ObLSID &get_ls_id() const { return ctx_.arg_.ls_id_; }
+  obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return svr_rpc_proxy_; }
+  storage::ObStorageRpc *get_storage_rpc() { return storage_rpc_; }
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(ctx));
 private:
   int start_running_for_migration_();
@@ -105,6 +112,8 @@ private:
 private:
   bool is_inited_;
   ObLSCompleteMigrationCtx ctx_;
+  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
+  storage::ObStorageRpc *storage_rpc_;
   DISALLOW_COPY_AND_ASSIGN(ObLSCompleteMigrationDagNet);
 };
 
@@ -146,6 +155,9 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObInitialCompleteMigrationTask"), KP(this), KPC(ctx_));
 private:
+#ifdef OB_BUILD_SHARED_STORAGE
+  int generate_migration_dags_after_ss_mode_();
+#endif
   int generate_migration_dags_();
   int record_server_event_();
 private:
@@ -155,28 +167,28 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInitialCompleteMigrationTask);
 };
 
-class ObStartCompleteMigrationDag : public ObCompleteMigrationDag
+class ObWaitDataReadyDag : public ObCompleteMigrationDag
 {
 public:
-  ObStartCompleteMigrationDag();
-  virtual ~ObStartCompleteMigrationDag();
+  ObWaitDataReadyDag();
+  virtual ~ObWaitDataReadyDag();
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   int init(share::ObIDagNet *dag_net);
   INHERIT_TO_STRING_KV("ObCompleteMigrationDag", ObCompleteMigrationDag, KP(this));
 protected:
   bool is_inited_;
-  DISALLOW_COPY_AND_ASSIGN(ObStartCompleteMigrationDag);
+  DISALLOW_COPY_AND_ASSIGN(ObWaitDataReadyDag);
 };
 
-class ObStartCompleteMigrationTask : public share::ObITask
+class ObWaitDataReadyTask : public share::ObITask
 {
 public:
-  ObStartCompleteMigrationTask();
-  virtual ~ObStartCompleteMigrationTask();
+  ObWaitDataReadyTask();
+  virtual ~ObWaitDataReadyTask();
   int init();
   virtual int process() override;
-  VIRTUAL_TO_STRING_KV(K("ObStartCompleteMigrationTask"), KP(this), KPC(ctx_));
+  VIRTUAL_TO_STRING_KV(K("ObWaitDataReadyTask"), KP(this), KPC(ctx_));
 private:
   int get_wait_timeout_(int64_t &timeout);
   int wait_log_sync_();
@@ -228,7 +240,7 @@ private:
   ObLSCompleteMigrationCtx *ctx_;
   palf::LSN log_sync_lsn_;
   share::SCN max_minor_end_scn_;
-  DISALLOW_COPY_AND_ASSIGN(ObStartCompleteMigrationTask);
+  DISALLOW_COPY_AND_ASSIGN(ObWaitDataReadyTask);
 };
 
 class ObFinishCompleteMigrationDag : public ObCompleteMigrationDag

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_defs.h"

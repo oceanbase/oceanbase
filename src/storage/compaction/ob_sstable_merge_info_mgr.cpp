@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_merge_info_mgr.h"
 #include "lib/utility/ob_print_utils.h"
-#include "storage/ob_sstable_struct.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "share/config/ob_server_config.h"
 #include "observer/omt/ob_multi_tenant.h"
@@ -22,6 +22,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace compaction;
 namespace storage
 {
 /**
@@ -55,12 +56,12 @@ int64_t ObTenantSSTableMergeInfoMgr::cal_max()
 
 int ObTenantSSTableMergeInfoMgr::get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
       compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
-      ObSSTableMergeInfo &info, char *buf, const int64_t buf_len)
+      ObSSTableMergeHistory &merge_history, char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(major_iter.get_next(&info, buf, buf_len))) {
+  if (OB_FAIL(major_iter.get_next(&merge_history, buf, buf_len))) {
     if (OB_ITER_END == ret) {
-      if (OB_FAIL(minor_iter.get_next(&info, buf, buf_len))) {
+      if (OB_FAIL(minor_iter.get_next(&merge_history, buf, buf_len))) {
         if (OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "failed to get next minor sstable merge info", K(ret));
         }
@@ -172,22 +173,22 @@ int ObTenantSSTableMergeInfoMgr::size()
   return size;
 }
 
-int ObTenantSSTableMergeInfoMgr::add_sstable_merge_info(ObSSTableMergeInfo &input_info)
+int ObTenantSSTableMergeInfoMgr::add_sstable_merge_info(ObSSTableMergeHistory &merge_history)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTenantSSTableMergeInfoMgr is not initialized", K(ret));
-  } else if (OB_UNLIKELY(!input_info.is_valid())) {
+  } else if (OB_UNLIKELY(!merge_history.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(input_info));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(merge_history));
   } else {
     compaction::ObIDiagnoseInfoMgr *info_pool = &minor_info_pool_;
-    if (input_info.is_major_merge_type()) {
+    if (merge_history.is_major_merge_type()) {
       info_pool = &major_info_pool_;
     }
-    if (OB_FAIL(info_pool->alloc_and_add(0, &input_info))) {
-      STORAGE_LOG(WARN, "failed to add sstable merge info", K(ret), K(input_info));
+    if (OB_FAIL(info_pool->alloc_and_add(0, &merge_history))) {
+      STORAGE_LOG(WARN, "failed to add sstable merge info", K(ret), K(merge_history));
     }
   }
   return ret;

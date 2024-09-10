@@ -90,7 +90,7 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   ObSharedMacroBlockMgr *shared_blk_mgr = MTL(ObSharedMacroBlockMgr*);
   ObArenaAllocator allocator;
-  ObSSTableIndexBuilder *sstable_index_builder = OB_NEW(ObSSTableIndexBuilder, "SSTableIdx");
+  ObSSTableIndexBuilder *sstable_index_builder = OB_NEW(ObSSTableIndexBuilder, "SSTableIdx",false /*not need writer buffer*/);
   ObIndexBlockRebuilder *index_block_rebuilder = OB_NEW(ObIndexBlockRebuilder, "IdxRebuilder");
   ObSSTable sstable;
 

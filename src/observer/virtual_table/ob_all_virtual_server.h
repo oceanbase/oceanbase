@@ -43,7 +43,7 @@ class ObAllVirtualServer : public common::ObVirtualTableScannerIterator
     SSL_CERT_EXPIRED_TIME,
     MEMORY_LIMIT,
     DATA_DISK_ALLOCATED,
-    DATA_DISK_ASSIGNED    // not used, only as placeholder
+    DATA_DISK_ASSIGNED
   };
 
 public:

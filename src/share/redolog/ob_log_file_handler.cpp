@@ -250,6 +250,7 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
       ObIOInfo io_info;
       io_info.tenant_id_ = tenant_id_;
       io_info.fd_ = io_fd;
+      io_info.fd_.device_handle_ = THE_IO_DEVICE;
       io_info.offset_ = offset + read_sz;
       io_info.size_ = size - read_sz;
       io_info.flag_.set_mode(ObIOMode::READ);
@@ -338,6 +339,7 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
       io_info.flag_.set_write();
       io_info.tenant_id_ = tenant_id_;
       io_info.fd_ = io_fd_;
+      io_info.fd_.device_handle_ = THE_IO_DEVICE;
       io_info.offset_ = offset;
       io_info.size_ = size;
       io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());

@@ -73,6 +73,16 @@ public:
 
   int alloc_execution_context_id(int64_t &context_id);
 
+  int alloc_slice_id(int64_t &slice_id);
+  int get_agent_exec_context(
+      const int64_t context_id,
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const ObDirectLoadType &type,
+      ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+      share::SCN &start_scn,
+      int64_t &execution_id);
+
   // create tablet direct lob manager for data tablet, and
   // create lob meta tablet manager inner on need.
   // Actually,
@@ -93,54 +103,17 @@ public:
       const ObTabletDirectLoadInsertParam &param);
 
   // to start the direct load, write start log in actually.
-  // @param [in] is_full_direct_load.
+  // @param [in] type.
   // @param [in] ls_id.
   // @param [in] tablet_id, the commit version for the full direct load,
   int open_tablet_direct_load(
-      const bool is_full_direct_load,
+      const ObDirectLoadType &type,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
-      const int64_t context_id,
-      share::SCN &start_scn,
-      ObTabletDirectLoadMgrHandle &handle);
-
-  // create sstable slice writer for direct load.
-  // @param [in] slice_info.is_full_direct_load_.
-  // @param [in] slice_info.is_lob_tablet_slice_, to decide create slice writer for data tablet or lob meta tablet.
-  // @param [in] slice_info.tablet_id_, is always the data tablet id rather than lob meta tablet id.
-  // @param [in] start_seq, start sequence of macro block, decide the logical id.
-  // @param [out] slice_info.slice_id, to identify the created slice writer.
-  int open_sstable_slice(
-      const blocksstable::ObMacroDataSeq &start_seq,
-      ObDirectLoadSliceInfo &slice_info);
-
-  // fill data row into macro block directly for data tablet.
-  int fill_sstable_slice(
-      const ObDirectLoadSliceInfo &slice_info,
-      ObIStoreRowIterator *iter,
-      int64_t &affected_rows,
-      ObInsertMonitor *insert_monitor = NULL);
-
-  // fill lob meta data into macro block directly.
-  // @param [in] slice_info, contains is_full_direct_load, data_tablet_id, lob slice id.
-  // @param [in] cs_type, collation type of the lob column.
-  // @param [in] lob_id.
-  // @param [out] datum, to fill the lob column in the data row.
-  int fill_lob_sstable_slice(
-      ObIAllocator &allocator,
-      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
-      share::ObTabletCacheInterval &pk_interval,
-      const ObArray<int64_t> &lob_column_idxs,
-      const ObArray<common::ObObjMeta> &col_types,
-      blocksstable::ObDatumRow &datum_row);
-  // flush macro block, close and destroy slice writer.
-  int close_sstable_slice(
-      const ObDirectLoadSliceInfo &slice_info,
-      ObInsertMonitor *insert_monitor,
-      blocksstable::ObMacroDataSeq &next_seq);
+      const int64_t context_id);
 
   // end direct load due to commit or abort.
-  // @param [in] is_full_direct_load.
+  // @param [in] type.
   // @param [in] tablet_id.
   // @param [in] need_commit, to decide whether to create sstable.
   //             need_commit = true when commit, and need_commit = false when abort.
@@ -148,7 +121,7 @@ public:
   // @param [in] task_id, table_id, execution_id, for ddl report checksum.
   int close_tablet_direct_load(
       const int64_t context_id,
-      const bool is_full_direct_load,
+      const ObDirectLoadType &type,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const bool need_commit,
@@ -170,40 +143,45 @@ public:
       const ObTabletID &tablet_id,
       share::ObTabletCacheInterval &interval);
   int get_tablet_mgr(
-      const ObTabletID &tablet_id,
-      const bool is_full_direct_load,
+      const ObTabletDirectLoadMgrKey &key,
       ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
+  // TODO YIREN, adapt the interface to the shared-storage and shared-nothing mode.
   int get_tablet_mgr_and_check_major(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const bool is_full_direct_load,
       ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
       bool &is_major_sstable_exist);
-  // for direct load rescan
-  int calc_range(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const int64_t thread_cnt,
-      const bool is_full_direct_load);
-  int fill_column_group(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const bool is_full_direct_load,
-      const int64_t thread_cnt,
-      const int64_t thread_id);
-  int cancel(
-      const int64_t context_id,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const bool is_full_direct_load);
   int gc_tablet_direct_load();
   // remove tablet direct load mgr from hashmap,
   // for full direct load, it will be called when physical major generates,
   // for incremental direct load, it will be called in close_tablet_direct_load
   // @param [in] context_id to match ObTabletDirectLoadMgr, avoid an old task remove a new ObTabletDirectLoadMgr
   //             only take effect when !mgr_key.is_full_direct_load_ and context_id > 0
-  int remove_tablet_direct_load(const ObTabletDirectLoadMgrKey &mgr_key, int64_t context_id = 0);
+  int remove_tablet_direct_load(const ObTabletDirectLoadMgrKey &mgr_key);
   ObIAllocator &get_allocator() { return allocator_; }
+private:
+  int check_and_process_finished_tablet(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      ObIStoreRowIterator *row_iter = nullptr,
+      const int64_t task_id = 0,
+      const int64_t table_id = common::OB_INVALID_ID,
+      const int64_t execution_id = -1);
+  int close_tablet_direct_load_for_sn(
+      const int64_t context_id,
+      const ObDirectLoadType &type,
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const bool need_commit,
+      const int64_t task_id = 0,
+      const int64_t table_id = common::OB_INVALID_ID,
+      const int64_t execution_id = -1);
+  int close_tablet_direct_load_for_ss(
+      const int64_t context_id,
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const bool need_commit);
 private:
   struct GetGcCandidateOp final {
   public:
@@ -216,28 +194,23 @@ private:
     ObIArray<std::pair<share::ObLSID, ObTabletDirectLoadMgrKey>> &candidate_mgrs_;
   };
 
-  int try_create_tablet_direct_load_mgr(
-      const int64_t context_id,
-      const int64_t execution_id,
+  int alloc_tablet_direct_load_mgr(
+      ObIAllocator &allocator,
+      const ObTabletDirectLoadMgrKey &mgr_key,
+      ObTabletDirectLoadMgr *&direct_load_mgr);
+  int try_create_tablet_direct_load_mgr_nolock(
       const bool major_sstable_exist,
       ObIAllocator &allocator,
       const ObTabletDirectLoadMgrKey &mgr_key,
-      const bool is_lob_tablet,
       ObTabletDirectLoadMgrHandle &handle);
   int get_tablet_mgr_no_lock(
       const ObTabletDirectLoadMgrKey &mgr_key,
       ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
-  int check_and_process_finished_tablet(
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      ObIStoreRowIterator *row_iter = nullptr,
-      const int64_t task_id = 0,
-      const int64_t table_id = common::OB_INVALID_ID,
-      const int64_t execution_id = -1);
   int get_tablet_exec_context_with_rlock(
       const ObTabletDirectLoadExecContextId &exec_id,
       ObTabletDirectLoadExecContext &exec_context);
-  int remove_tablet_direct_load_nolock(const ObTabletDirectLoadMgrKey &mgr_key, int64_t context_id = 0);
+  int remove_tablet_direct_load_nolock(
+      const ObTabletDirectLoadMgrKey &mgr_key);
   // to generate unique slice id for slice writer, putting here is just to
   // simplify the logic of the tablet_direct_load_mgr.
   int64_t generate_slice_id();
@@ -263,6 +236,23 @@ private:
 DISALLOW_COPY_AND_ASSIGN(ObTenantDirectLoadMgr);
 };
 
+struct ObSSTableIndexItem final
+{
+public:
+  ObSSTableIndexItem()
+    : allocator_(nullptr),
+      index_builder_(nullptr),
+      data_desc_(nullptr)
+  {}
+  ~ObSSTableIndexItem();
+  void reset();
+  bool is_valid () const;
+  TO_STRING_KV(KP_(allocator), KP_(index_builder), KPC_(data_desc));
+public:
+  ObIAllocator *allocator_;
+  blocksstable::ObSSTableIndexBuilder *index_builder_;
+  blocksstable::ObWholeDataStoreDesc *data_desc_;
+};
 
 struct ObTabletDirectLoadBuildCtx final
 {
@@ -315,6 +305,7 @@ public:
   common::ObArray<ObOptColumnStat*> column_stat_array_; // online column stat result.
   common::ObArray<ObDirectLoadSliceWriter *> sorted_slice_writers_;
   common::ObArray<AggregatedCGInfo> sorted_slices_idx_; //for cg_aggregation
+  common::ObArray<ObSSTableIndexItem> cg_index_builders_;
   bool is_task_end_; // to avoid write commit log/freeze in memory index sstable again.
   int64_t task_finish_count_; // reach the parallel slice cnt, means the tablet data finished.
   int64_t task_total_cnt_; // parallelism of the PX.
@@ -353,14 +344,6 @@ public:
       const share::SCN &start_scn,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
-  virtual int fill_lob_sstable_slice(
-      ObIAllocator &allocator,
-      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
-      const share::SCN &start_scn,
-      share::ObTabletCacheInterval &pk_interval,
-      const ObArray<int64_t> &lob_column_idxs,
-      const ObArray<common::ObObjMeta> &col_types,
-      blocksstable::ObDatumRow &datum_row);
   // for delete lob in incremental direct load only
   virtual int fill_lob_meta_sstable_slice(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
@@ -375,6 +358,8 @@ public:
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
 
+  virtual int update_max_lob_id(const int64_t lob_id) { UNUSED(lob_id); return common::OB_SUCCESS; }
+
   // for ref_cnt
   void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   int cancel();
@@ -382,7 +367,6 @@ public:
   int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
 
   // some utils.
-  virtual int64_t get_context_id() const { return 0; }
   virtual share::SCN get_start_scn() = 0;
   virtual share::SCN get_commit_scn(const ObTabletMeta &tablet_meta) = 0;
   inline const ObITable::TableKey &get_table_key() const { return table_key_; }
@@ -395,20 +379,25 @@ public:
   inline ObTabletID get_lob_meta_tablet_id() {
     return lob_mgr_handle_.is_valid() ? lob_mgr_handle_.get_obj()->get_tablet_id() : ObTabletID();
   }
+  ObTabletDirectLoadMgrHandle &get_lob_mgr_handle() { return lob_mgr_handle_; }
   inline int64_t get_ddl_task_id() const { return sqc_build_ctx_.build_param_.runtime_only_param_.task_id_; }
   // virtual int get_online_stat_collect_result();
 
   virtual int wrlock(const int64_t timeout_us, uint32_t &lock_tid);
   virtual int rdlock(const int64_t timeout_us, uint32_t &lock_tid);
   virtual void unlock(const uint32_t lock_tid);
-  int prepare_index_builder_if_need(const ObTableSchema &table_schema);
-  virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const share::SCN &start_scn);
-  int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
+  virtual int prepare_index_builder_if_need(const ObTableSchema &table_schema);
+  virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const int64_t context_id, const share::SCN &start_scn);
+  virtual int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
   virtual int notify_all();
   virtual int calc_range(const int64_t thread_cnt);
   int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
+  bool is_schema_item_ready() { return is_schema_item_ready_; }
+  bool get_micro_index_clustered() { return micro_index_clustered_; }
   int prepare_storage_schema(ObTabletHandle &tablet_handle);
+  int64_t get_task_cnt() { return task_cnt_; }
+  int64_t get_cg_cnt() {return cg_cnt_; }
   // init column store related parameters when open in leader
   int init_column_store_params(
       const ObLSHandle &ls_handle,
@@ -425,11 +414,18 @@ public:
   bool is_originally_column_store_data_direct_load() const { return is_data_direct_load(direct_load_type_) && !need_process_cs_replica_; }
 
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt),
-               K_(direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group), K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs));
+               K_(direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group),K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs),
+               K_(task_cnt), K_(cg_cnt), K_(micro_index_clustered));
 
-private:
+protected:
   int prepare_schema_item_on_demand(const uint64_t table_id,
                                     const int64_t parallel);
+  int prepare_schema_item_for_vec_idx_data(
+      const uint64_t tenant_id,
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema *table_schema,
+      const ObTableSchema *&data_table_schema);
+
   void calc_cg_idx(const int64_t thread_cnt, const int64_t thread_id, int64_t &strat_idx, int64_t &end_idx);
   int fill_aggregated_column_group(
       const int64_t start_idx,
@@ -472,6 +468,9 @@ protected:
   ObArray<common::ObObjMeta> lob_col_types_;
   ObTableSchemaItem schema_item_;
   int64_t dir_id_;
+  int64_t task_cnt_;
+  int64_t cg_cnt_;
+  bool micro_index_clustered_;
 };
 
 class ObTabletFullDirectLoadMgr final : public ObTabletDirectLoadMgr
@@ -553,7 +552,7 @@ DISALLOW_COPY_AND_ASSIGN(ObTabletFullDirectLoadMgr);
 class ObTabletIncDirectLoadMgr final : public ObTabletDirectLoadMgr
 {
 public:
-  ObTabletIncDirectLoadMgr(int64_t context_id);
+  ObTabletIncDirectLoadMgr();
   ~ObTabletIncDirectLoadMgr();
 
   // called by creator only
@@ -562,7 +561,6 @@ public:
   int open(const int64_t current_execution_id, share::SCN &start_scn) override final;
   int close(const int64_t current_execution_id, const share::SCN &start_scn) override final;
 
-  int64_t get_context_id() const override { return context_id_; }
   share::SCN get_start_scn() override { return start_scn_; }
   // unused, for full direct load only
   share::SCN get_commit_scn(const ObTabletMeta &tablet_meta) override
@@ -576,7 +574,6 @@ private:
   int commit(const int64_t execution_id, const share::SCN &commit_scn);
 
 private:
-  int64_t context_id_;
   share::SCN start_scn_;
   bool is_closed_;
 DISALLOW_COPY_AND_ASSIGN(ObTabletIncDirectLoadMgr);

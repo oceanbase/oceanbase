@@ -525,6 +525,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
   is_strict_defensive_check_ = GCONF.enable_strict_defensive_check();
   is_enable_px_fast_reclaim_ = GCONF._enable_px_fast_reclaim;
   bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
+  realistic_runtime_bloom_filter_size_ = !GCONF._preset_runtime_bloom_filter_size;
 
   // For Tenant configs
   // tenant config use tenant_config to get configs
@@ -539,6 +540,8 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_spf_batch_rescan_ = tenant_config->_enable_spf_batch_rescan;
     enable_var_assign_use_das_ = tenant_config->_enable_var_assign_use_das;
     enable_das_keep_order_ = tenant_config->_enable_das_keep_order;
+    enable_hyperscan_regexp_engine_ =
+        (0 == ObString::make_string("Hyperscan").case_compare(tenant_config->_regex_engine.str()));
   }
 
   return ret;
@@ -597,6 +600,12 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d,", bloom_filter_ratio_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(bloom_filter_ratio_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_hyperscan_regexp_engine_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_hyperscan_regexp_engine_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d", realistic_runtime_bloom_filter_size_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(realistic_runtime_bloom_filter_size_));
   } else {
     // do nothing
   }

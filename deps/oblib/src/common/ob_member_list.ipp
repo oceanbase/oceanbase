@@ -155,6 +155,12 @@ int64_t ObMemberListBase<MAX_MEMBER_NUM>::get_member_number() const
 }
 
 template <int64_t MAX_MEMBER_NUM>
+bool ObMemberListBase<MAX_MEMBER_NUM>::is_empty() const
+{
+  return (0 == member_number_);
+}
+
+template <int64_t MAX_MEMBER_NUM>
 uint64_t ObMemberListBase<MAX_MEMBER_NUM>::hash() const
 {
   uint64_t hash_val = 0;

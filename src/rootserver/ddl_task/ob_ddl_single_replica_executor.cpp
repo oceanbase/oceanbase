@@ -246,7 +246,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
   return ret;
 }
 
-int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
+int ObDDLSingleReplicaExecutor::check_build_end(const bool need_checksum, bool &is_end, int64_t &ret_code)
 {
   int ret = OB_SUCCESS;
   is_end = false;
@@ -269,12 +269,14 @@ int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
         succ_cnt +=  ObPartitionBuildStat::BUILD_SUCCEED == build_infos.at(i).stat_;
         need_schedule |= build_infos.at(i).need_schedule();
       }
-      if (OB_SUCC(ret) && build_infos.count() == succ_cnt) {
+      if (OB_SUCC(ret) && build_infos.count() == succ_cnt && need_checksum) {
         if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(
               dest_tenant_id_, dest_table_id_, execution_id_, task_id_))) {
           LOG_WARN("fail to check sstable checksum_report_finish",
             K(ret), K(dest_tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
         }
+      }
+      if (OB_SUCC(ret) && build_infos.count() == succ_cnt) {
         is_end = true;
         ret_code = ret;
       }

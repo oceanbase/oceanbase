@@ -33,7 +33,6 @@ public:
   virtual ~TestMediumInfoReader() = default;
 };
 
-
 TEST_F(TestMediumInfoReader, read_multi_medium_info_from_minor)
 {
   int ret = OB_SUCCESS;

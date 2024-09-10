@@ -78,12 +78,6 @@ share::SCN MOCK_MAX_CONSEQUENT_CALLBACKED_SCN;
 namespace mds
 {
 
-int MdsTableBase::get_ls_max_consequent_callbacked_scn_(share::SCN &max_consequent_callbacked_scn) const
-{
-  max_consequent_callbacked_scn = MOCK_MAX_CONSEQUENT_CALLBACKED_SCN;
-  return OB_SUCCESS;
-}
-
 int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flushing_scn)
 {
   return OB_SUCCESS;
@@ -139,7 +133,7 @@ int construct_tested_mds_table(MdsTableHandle &handle) {
   for (int i = 0; i < 7; ++i) {
     v_ctx.push_back(new MdsCtx(MdsWriter(transaction::ObTransID(i))));
   }
-  if (OB_FAIL(handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), (ObTabletPointer*)0x111))) {
+  if (OB_FAIL(handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111))) {
   } else if (OB_FAIL(handle.set<ExampleUserData1>(1, *v_ctx[0]))) {
   } else if (FALSE_IT(v_ctx[0]->on_redo(mock_scn(50)))) {
   } else if (FALSE_IT(v_ctx[0]->on_commit(mock_scn(100), mock_scn(100)))) {
@@ -242,6 +236,48 @@ TEST_F(TestMdsTableFlush, normal_flush) {
   ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));
   OCCAM_LOG(INFO, "print rec scn", K(rec_scn));
   ASSERT_EQ(mock_scn(500), rec_scn);// 没变化
+}
+
+TEST_F(TestMdsTableFlush, flush_scn_decline1) {
+  MdsTableHandle handle;
+  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  MdsCtx ctx1(MdsWriter(transaction::ObTransID(1)));
+  handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx1);
+  ctx1.on_redo(mock_scn(10));
+  ctx1.on_commit(mock_scn(20), mock_scn(20));
+  MdsCtx ctx2(MdsWriter(transaction::ObTransID(2)));
+  handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx2);
+  ctx2.on_redo(mock_scn(19));
+  ctx2.on_commit(mock_scn(30), mock_scn(30));
+  MdsCtx ctx3(MdsWriter(transaction::ObTransID(3)));
+  handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx3);
+  ctx3.on_redo(mock_scn(29));
+  ctx3.on_commit(mock_scn(40), mock_scn(40));
+  ASSERT_EQ(OB_SUCCESS, handle.flush(mock_scn(1000), mock_scn(35)));// finally will be 9
+  share::SCN rec_scn;
+  ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));
+  ASSERT_EQ(mock_scn(10), rec_scn);
+}
+
+TEST_F(TestMdsTableFlush, flush_scn_decline2) {
+  MdsTableHandle handle;
+  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  MdsCtx ctx1(MdsWriter(transaction::ObTransID(1)));
+  handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx1);
+  ctx1.on_redo(mock_scn(10));
+  ctx1.on_commit(mock_scn(20), mock_scn(20));
+  MdsCtx ctx2(MdsWriter(transaction::ObTransID(2)));
+  handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(2), ExampleUserData1(2), ctx2);// another row
+  ctx2.on_redo(mock_scn(19));
+  ctx2.on_commit(mock_scn(30), mock_scn(30));
+  MdsCtx ctx3(MdsWriter(transaction::ObTransID(3)));
+  handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx3);
+  ctx3.on_redo(mock_scn(29));
+  ctx3.on_commit(mock_scn(40), mock_scn(40));
+  ASSERT_EQ(OB_SUCCESS, handle.flush(mock_scn(1000), mock_scn(35)));// finally will be 9
+  share::SCN rec_scn;
+  ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));
+  ASSERT_EQ(mock_scn(10), rec_scn);
 }
 
 }

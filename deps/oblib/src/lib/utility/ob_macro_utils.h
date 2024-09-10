@@ -29,7 +29,7 @@
                    _130, _131, _132, _133, _134, _135, _136, _137, _138, _139, \
                    _140, ...) _140
 
-// These two macros do same work that select the 110th argument from
+// These two macros do same work that select the 120th argument from
 // argument list.
 #define SELECT140(...) SELECT140_(__VA_ARGS__)
 

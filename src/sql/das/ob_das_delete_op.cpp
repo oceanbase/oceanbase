@@ -49,7 +49,16 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator>::write_rows(cons
 {
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
-  if (ctdef.table_param_.get_data_table().is_mlog_table()
+  if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_vector_delta_buffer() &&
+                  !ctdef.is_access_mlog_as_master_table_)) {
+    // for vector delta buffer, only do insert when DML with main table
+    if (OB_FAIL(as->insert_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
+                                ctdef.column_ids_, &iter, affected_rows))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("insert rows to access service failed", K(ret), K(ls_id), K(tablet_id));
+      }
+    }
+  } else if (ctdef.table_param_.get_data_table().is_mlog_table()
       && !ctdef.is_access_mlog_as_master_table_) {
     ObDASMLogDMLIterator mlog_iter(tablet_id, dml_param_, &iter, DAS_OP_TABLE_DELETE);
     if (OB_FAIL(as->insert_rows(ls_id,

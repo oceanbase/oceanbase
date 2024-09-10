@@ -269,6 +269,7 @@ constexpr int OB_AUTOINC_CACHE_NOT_EQUAL = -4400;
 constexpr int OB_ERR_KILL_CLIENT_SESSION = -4401;
 constexpr int OB_ERR_KILL_CLIENT_SESSION_FAILED = -4402;
 constexpr int OB_IMPROPER_OS_PARAM = -4403;
+constexpr int OB_IO_TIMEOUT = -4404;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1868,6 +1869,8 @@ constexpr int OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST = -9779;
 constexpr int OB_ERR_EVENT_RECURSION_FORBIDDEN = -9780;
 constexpr int OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR = -9781;
 constexpr int OB_ERR_INVALID_CHARACTER = -9782;
+constexpr int OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE = -9783;
+constexpr int OB_ERR_CURSOR_ATTR_APPLY = -9784;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -2287,6 +2290,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_KILL_CLIENT_SESSION__USER_ERROR_MSG "Client Session need be killed"
 #define OB_ERR_KILL_CLIENT_SESSION_FAILED__USER_ERROR_MSG "Kill Client Session failed"
 #define OB_IMPROPER_OS_PARAM__USER_ERROR_MSG "OS params check failed, because the operating system has improper parameter configurations"
+#define OB_IO_TIMEOUT__USER_ERROR_MSG "IO timeout"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -4171,6 +4175,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_EVENT_RECURSION_FORBIDDEN__USER_ERROR_MSG "Recursion of EVENT DDL statements is forbidden when body is present"
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__USER_ERROR_MSG "Table has no partition for value"
 #define OB_ERR_INVALID_CHARACTER__USER_ERROR_MSG "invalid character"
+#define OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE__USER_ERROR_MSG "cannot ENABLE ON QUERY COMPUTATION for the materialized view `%s`.`%s`"
+#define OB_ERR_CURSOR_ATTR_APPLY__USER_ERROR_MSG "cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4242,6 +4248,15 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ODPS_ERROR__USER_ERROR_MSG "Odps driver throw exception: ExceptionMsg=%s"
 #define OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH__USER_ERROR_MSG "Column type mismatch between the ODPS table and the OceanBase table: OdpsColumnType=%s TableColumnType=%s"
 #define OB_EXTERNAL_ODPS_UNEXPECTED_ERROR__USER_ERROR_MSG "unexpected error for exteran odps table:%s"
+#define OB_JNI_ERROR__USER_ERROR_MSG "unexpected error for jni"
+#define OB_JNI_CLASS_NOT_FOUND_ERROR__USER_ERROR_MSG "class could not be found during jni operation"
+#define OB_JNI_METHOD_NOT_FOUND_ERROR__USER_ERROR_MSG "method could not be found during jni operation"
+#define OB_JNI_ENV_ERROR__USER_ERROR_MSG "JNI env could not be found"
+#define OB_JNI_DELETE_REF_ERROR__USER_ERROR_MSG "JNI env could not delete ref"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__USER_ERROR_MSG "JAVA_HOME could not be found"
+#define OB_JNI_ENSURE_CAPACTIY_ERROR__USER_ERROR_MSG "JNI cound not ensure capacity"
+#define OB_JNI_FIELD_NOT_FOUND_ERROR__USER_ERROR_MSG "field could not be found during jni operation"
+#define OB_JNI_OBJECT_NOT_FOUND_ERROR__USER_ERROR_MSG "object could not be found during jni operation"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4981,6 +4996,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_KILL_CLIENT_SESSION_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4402, Kill Client Session failed"
 #define OB_IMPROPER_OS_PARAM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations"
 #define OB_IMPROPER_OS_PARAM__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations"
+#define OB_IO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4404, IO timeout"
+#define OB_IO_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4404, IO timeout"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -8749,6 +8766,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__OBE_USER_ERROR_MSG "OBE-14400: inserted partition key does not map to any partition"
 #define OB_ERR_INVALID_CHARACTER__ORA_USER_ERROR_MSG "ORA-00911: invalid character"
 #define OB_ERR_INVALID_CHARACTER__OBE_USER_ERROR_MSG "OBE-00911: invalid character"
+#define OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE__ORA_USER_ERROR_MSG "ORA-32361: cannot ENABLE ON QUERY COMPUTATION for the materialized view %s.%s"
+#define OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE__OBE_USER_ERROR_MSG "OBE-32361: cannot ENABLE ON QUERY COMPUTATION for the materialized view %s.%s"
+#define OB_ERR_CURSOR_ATTR_APPLY__ORA_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
+#define OB_ERR_CURSOR_ATTR_APPLY__OBE_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -8891,6 +8912,24 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11051, Column type mismatch between the ODPS table and the OceanBase table: OdpsColumnType=%s TableColumnType=%s"
 #define OB_EXTERNAL_ODPS_UNEXPECTED_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11052, unexpected error for exteran odps table:%s"
 #define OB_EXTERNAL_ODPS_UNEXPECTED_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11052, unexpected error for exteran odps table:%s"
+#define OB_JNI_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11053, unexpected error for jni"
+#define OB_JNI_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11053, unexpected error for jni"
+#define OB_JNI_CLASS_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11054, class could not be found during jni operation"
+#define OB_JNI_CLASS_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11054, class could not be found during jni operation"
+#define OB_JNI_METHOD_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11055, method could not be found during jni operation"
+#define OB_JNI_METHOD_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11055, method could not be found during jni operation"
+#define OB_JNI_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11056, JNI env could not be found"
+#define OB_JNI_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11056, JNI env could not be found"
+#define OB_JNI_DELETE_REF_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11057, JNI env could not delete ref"
+#define OB_JNI_DELETE_REF_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11057, JNI env could not delete ref"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11058, JAVA_HOME could not be found"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11058, JAVA_HOME could not be found"
+#define OB_JNI_ENSURE_CAPACTIY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11059, JNI cound not ensure capacity"
+#define OB_JNI_ENSURE_CAPACTIY_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11059, JNI cound not ensure capacity"
+#define OB_JNI_FIELD_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11060, field could not be found during jni operation"
+#define OB_JNI_FIELD_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11060, field could not be found during jni operation"
+#define OB_JNI_OBJECT_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11061, object could not be found during jni operation"
+#define OB_JNI_OBJECT_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11061, object could not be found during jni operation"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -8910,7 +8949,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2326];
+extern int g_all_ob_errnos[2338];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

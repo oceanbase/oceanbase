@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_index_block_micro_iterator.h"
+#include "share/ob_server_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
 namespace oceanbase
@@ -66,7 +67,7 @@ int ObMacroBlockDataIterator::init(
     LOG_ERROR("Invalid common header", K(ret), K(common_header));
   } else if (OB_UNLIKELY(!common_header.is_sstable_data_block())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Macro block type not supported for data iterator", K(ret));
+    LOG_WARN("Macro block type not supported for data iterator", K(ret), K(common_header));
   } else if (OB_FAIL(macro_header.deserialize(macro_block_buf, macro_block_buf_size, read_pos))) {
     LOG_WARN("fail to deserialize macro block header", K(ret), K(macro_header));
   } else {
@@ -176,25 +177,35 @@ int ObIndexBlockMicroIterator::init(
   } else if (OB_FAIL(check_range_include_rowkey_array(range_, endkeys, table_read_info.get_datum_utils()))) {
     STORAGE_LOG(WARN, "Failed to check range include rowkey", K(ret), K(range_), K(endkeys));
   } else {
-    ObMacroBlockReadInfo read_info;
-    read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-    read_info.macro_block_id_ = macro_desc.macro_block_id_;
-    read_info.offset_ = sstable->get_macro_offset();
+    ObStorageObjectReadInfo read_info;
+    read_info.offset_ = sstable->get_macro_offset();;
     read_info.size_ = sstable->get_macro_read_size();
+    read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
+    read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+    read_info.macro_block_id_ = macro_desc.macro_block_id_;
+    read_info.mtl_tenant_id_ = MTL_ID();
+
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator_.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret));
-    } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle_))) {
+    } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle_))) {
       LOG_WARN("async read block failed, ", K(ret), K(read_info), K(macro_desc));
     } else if (OB_FAIL(macro_handle_.wait())) {
       LOG_WARN("io wait failed", K(ret), K(macro_desc), K(read_info));
-    } else if (OB_ISNULL(macro_handle_.get_buffer())) {
+    } else if (OB_ISNULL(macro_handle_.get_buffer())
+        // shared-nothing mode write one large block file which consists of 2MB blocks.
+        // shared-storage mode write independent files which are 4KB alignment.
+        // cannot check read size in shared-storage mode.
+        // e.g., in shared-storage mode, one 100KB macro file, but try read 2MB, real-read-size is 100KB.
+        || (!GCTX.is_shared_storage_mode() && OB_UNLIKELY(macro_handle_.get_data_size() != read_info.size_))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("buf is null", K(ret), K(macro_desc), KP(macro_handle_.get_buffer()),
-          K(read_info.size_));
+      LOG_WARN("buf is null or buf size is too small, ",
+          K(ret), K(macro_desc), KP(macro_handle_.get_buffer()),
+          "is_shared_storage_mode", GCTX.is_shared_storage_mode(),
+          K(macro_handle_.get_data_size()), K(read_info.size_));
     } else if (OB_FAIL(data_iter_.init(
         macro_handle_.get_buffer(),
         macro_handle_.get_data_size(),

@@ -481,7 +481,7 @@ ObStorageMetaCache::ObStorageMetaIOCallback::ObStorageMetaIOCallback(
     ObStorageMetaValueHandle &handle,
     const ObTablet *tablet,
     common::ObSafeArenaAllocator *arena_allocator)
-  : ObSharedBlockIOCallback(io_allocator, key.get_meta_addr()),
+  : ObSharedObjectIOCallback(io_allocator, key.get_meta_addr(), common::ObIOCallbackType::STORAGE_META_CALLBACK),
     meta_type_(type),
     key_(key),
     handle_(handle),
@@ -527,7 +527,7 @@ int64_t ObStorageMetaCache::ObStorageMetaIOCallback::size() const
 
 bool ObStorageMetaCache::ObStorageMetaIOCallback::is_valid() const
 {
-  return ObSharedBlockIOCallback::is_valid() && key_.is_valid() && handle_.is_valid();
+  return ObSharedObjectIOCallback::is_valid() && key_.is_valid() && handle_.is_valid();
 }
 
 int ObStorageMetaCache::get_meta(
@@ -700,14 +700,15 @@ int ObStorageMetaCache::read_io(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("the meta disk address type hasn't be supported", K(ret), K(meta_addr), K(callback));
   } else {
-    ObSharedBlockReadInfo read_info;
+    ObSharedObjectReadInfo read_info;
     read_info.addr_ = meta_addr;
     read_info.io_callback_ = &callback;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+    read_info.ls_epoch_ = 0; /* ls_epoch for share storage */
     handle.phy_addr_ = meta_addr;
-    if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, handle.io_handle_))) {
+    if (OB_FAIL(ObSharedObjectReaderWriter::async_read(read_info, handle.io_handle_))) {
       LOG_WARN("fail to async read", K(ret), K(read_info));
     }
   }

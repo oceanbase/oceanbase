@@ -28,6 +28,88 @@ namespace oceanbase
 {
 namespace tmp_file
 {
+
+int ObSNTmpFileInfo::init(
+    const ObCurTraceId::TraceId &trace_id,
+    const uint64_t tenant_id,
+    const int64_t dir_id,
+    const int64_t fd,
+    const int64_t file_size,
+    const int64_t truncated_offset,
+    const bool is_deleting,
+    const int64_t cached_page_num,
+    const int64_t write_back_data_page_num,
+    const int64_t flushed_data_page_num,
+    const int64_t ref_cnt,
+    const int64_t write_req_cnt,
+    const int64_t unaligned_write_req_cnt,
+    const int64_t read_req_cnt,
+    const int64_t unaligned_read_req_cnt,
+    const int64_t total_read_size,
+    const int64_t last_access_ts,
+    const int64_t last_modify_ts,
+    const int64_t birth_ts,
+    const void* const tmp_file_ptr,
+    const char* const label)
+{
+  int ret = OB_SUCCESS;
+  trace_id_ = trace_id;
+  tenant_id_ = tenant_id;
+  dir_id_ = dir_id;
+  fd_ = fd;
+  file_size_ = file_size;
+  truncated_offset_ = truncated_offset;
+  is_deleting_ = is_deleting;
+  cached_data_page_num_ = cached_page_num;
+  write_back_data_page_num_ = write_back_data_page_num;
+  flushed_data_page_num_ = flushed_data_page_num;
+  ref_cnt_ = ref_cnt;
+  write_req_cnt_ = write_req_cnt;
+  unaligned_write_req_cnt_ = unaligned_write_req_cnt;
+  read_req_cnt_ = read_req_cnt;
+  unaligned_read_req_cnt_ = unaligned_read_req_cnt;
+  total_read_size_ = total_read_size;
+  last_access_ts_ = last_access_ts;
+  last_modify_ts_ = last_modify_ts;
+  birth_ts_ = birth_ts;
+  tmp_file_ptr_ = tmp_file_ptr;
+  if (NULL != label) {
+    label_.assign_strive(label);
+  }
+  return ret;
+}
+
+void ObSNTmpFileInfo::reset()
+{
+  trace_id_.reset();
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
+  fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
+  file_size_ = 0;
+  truncated_offset_ = 0;
+  is_deleting_ = false;
+  cached_data_page_num_ = 0;
+  write_back_data_page_num_ = 0;
+  flushed_data_page_num_ = 0;
+  ref_cnt_ = 0;
+  write_req_cnt_ = 0;
+  unaligned_write_req_cnt_ = 0;
+  read_req_cnt_ = 0;
+  unaligned_read_req_cnt_ = 0;
+  total_read_size_ = 0;
+  last_access_ts_ = -1;
+  last_modify_ts_ = -1;
+  birth_ts_ = -1;
+  tmp_file_ptr_ = nullptr;
+  label_.reset();
+  meta_tree_epoch_ = 0;
+  meta_tree_level_cnt_ = 0;
+  meta_size_ = 0;
+  cached_meta_page_num_ = 0;
+  write_back_meta_page_num_ = 0;
+  all_type_page_flush_cnt_ = 0;
+}
+
 ObTmpFileHandle::ObTmpFileHandle(ObSharedNothingTmpFile *tmp_file)
   : ptr_(tmp_file)
 {
@@ -188,7 +270,17 @@ ObSharedNothingTmpFile::ObSharedNothingTmpFile()
       last_page_lock_(common::ObLatchIds::TMP_FILE_LOCK),
       multi_write_lock_(common::ObLatchIds::TMP_FILE_LOCK),
       truncate_lock_(common::ObLatchIds::TMP_FILE_LOCK),
-      inner_flush_ctx_()
+      inner_flush_ctx_(),
+      trace_id_(),
+      write_req_cnt_(0),
+      unaligned_write_req_cnt_(0),
+      read_req_cnt_(0),
+      unaligned_read_req_cnt_(0),
+      total_read_size_(0),
+      last_access_ts_(-1),
+      last_modify_ts_(-1),
+      birth_ts_(-1),
+      label_()
 {
 }
 
@@ -202,7 +294,8 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
                                  ObIAllocator *callback_allocator,
                                  ObIAllocator *wbp_index_cache_allocator,
                                  ObIAllocator *wbp_index_cache_bkt_allocator,
-                                 ObTmpFilePageCacheController *pc_ctrl)
+                                 ObTmpFilePageCacheController *pc_ctrl,
+                                 const char* label)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -233,6 +326,18 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
     tenant_id_ = tenant_id;
     dir_id_ = dir_id;
     fd_ = fd;
+    ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
+    if (nullptr != cur_trace_id) {
+      trace_id_ = *cur_trace_id;
+    } else {
+      trace_id_.init(GCONF.self_addr_);
+    }
+    last_access_ts_ = ObTimeUtility::current_time();
+    last_modify_ts_ = ObTimeUtility::current_time();
+    birth_ts_ = ObTimeUtility::current_time();
+    if (NULL != label) {
+      label_.assign_strive(label);
+    }
   }
 
   LOG_INFO("tmp file init over", KR(ret), K(fd), K(dir_id));
@@ -243,6 +348,7 @@ int ObSharedNothingTmpFile::destroy()
 {
   int ret = OB_SUCCESS;
   int64_t fd_backup = fd_;
+  int64_t free_cnt = 0;
 
   LOG_INFO("tmp file destroy start", KR(ret), K(fd_), KPC(this));
 
@@ -256,10 +362,14 @@ int ObSharedNothingTmpFile::destroy()
       } else if (OB_FAIL(wbp_->free_page(fd_, cur_page_id, ObTmpFilePageUniqKey(begin_page_virtual_id_), next_page_id))) {
         LOG_WARN("fail to free page", KR(ret), K(fd_), K(cur_page_id), K(begin_page_virtual_id_));
       } else {
+        free_cnt++;
         cur_page_id = next_page_id;
         begin_page_virtual_id_ += 1;
       }
     }
+  }
+  if (OB_SUCC(ret) && cached_page_nums_ != free_cnt) {
+    LOG_ERROR("tmp file destroy, cached_page_nums_ and free_cnt are not equal", KR(ret), K(fd_), K(free_cnt), KPC(this));
   }
 
   LOG_INFO("tmp file destroy, free wbp page phase over", KR(ret), K(fd_), KPC(this));
@@ -314,6 +424,18 @@ void ObSharedNothingTmpFile::reset()
   data_eviction_node_.unlink();
   meta_eviction_node_.unlink();
   inner_flush_ctx_.reset();
+  /******for virtual table begin******/
+  trace_id_.reset();
+  write_req_cnt_ = 0;
+  unaligned_write_req_cnt_ = 0;
+  read_req_cnt_ = 0;
+  unaligned_read_req_cnt_ = 0;
+  total_read_size_ = 0;
+  last_access_ts_ = -1;
+  last_modify_ts_ = -1;
+  birth_ts_ = -1;
+  label_.reset();
+  /******for virtual table end******/
 }
 
 bool ObSharedNothingTmpFile::is_deleting()
@@ -359,6 +481,10 @@ int ObSharedNothingTmpFile::aio_pread(ObTmpFileIOCtx &io_ctx)
     common::TCRWLock::RLockGuard guard(meta_lock_);
     if (io_ctx.get_read_offset_in_file() < 0) {
       io_ctx.set_read_offset_in_file(read_offset_);
+    }
+    if (0 != io_ctx.get_read_offset_in_file() % ObTmpFileGlobal::PAGE_SIZE
+        || 0 != io_ctx.get_todo_size() % ObTmpFileGlobal::PAGE_SIZE) {
+      io_ctx.set_is_unaligned_read(true);
     }
 
     LOG_DEBUG("start to inner read tmp file", K(fd_), K(io_ctx.get_read_offset_in_file()),
@@ -702,6 +828,12 @@ int ObSharedNothingTmpFile::collect_pages_in_block_(const int64_t block_index,
     if (OB_SUCC(ObTmpPageCache::get_instance().get_page(key, p_handle))) {
       if (OB_FAIL(page_value_handles.push_back(p_handle))) {
         LOG_WARN("fail to push back", KR(ret), K(fd_), K(key));
+
+        // if fail to push back, we will treat this page as uncached page.
+        ret = OB_SUCCESS;
+        if (OB_FAIL(bitmap.set_bitmap(page_idx_in_block, false))) {
+          LOG_WARN("fail to set bitmap", KR(ret), K(fd_), K(key));
+        }
       } else if (OB_FAIL(bitmap.set_bitmap(page_idx_in_block, true))) {
         LOG_WARN("fail to set bitmap", KR(ret), K(fd_), K(key));
       }
@@ -898,6 +1030,8 @@ int ObSharedNothingTmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else {
+    bool is_unaligned_write = 0 != file_size_ % ObTmpFileGlobal::PAGE_SIZE
+                  || 0 != io_ctx.get_todo_size() % ObTmpFileGlobal::PAGE_SIZE;
     while (OB_SUCC(ret) && io_ctx.get_todo_size() > 0) {
       if (OB_FAIL(inner_write_(io_ctx))) {
         if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
@@ -915,6 +1049,13 @@ int ObSharedNothingTmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
         }
       }
     } // end while
+    if (OB_SUCC(ret)) {
+      write_req_cnt_++;
+      if (is_unaligned_write) {
+        unaligned_write_req_cnt_++;
+      }
+      last_modify_ts_ = ObTimeUtility::current_time();
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -981,6 +1122,7 @@ int ObSharedNothingTmpFile::load_disk_tail_page_and_rewrite_(ObTmpFileIOCtx &io_
   uint32_t new_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
   ObSharedNothingTmpFileDataItem data_item;
   bool block_meta_tree_flushing = false;
+  bool has_update_file_meta = false;
 
   if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID == begin_page_virtual_id)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1069,6 +1211,7 @@ int ObSharedNothingTmpFile::load_disk_tail_page_and_rewrite_(ObTmpFileIOCtx &io_
       begin_page_id_ = new_page_id;
       begin_page_virtual_id_ = begin_page_virtual_id;
       end_page_id_ = new_page_id;
+      has_update_file_meta = true;
     }
 
     if (FAILEDx(insert_or_update_data_flush_node_())) {
@@ -1080,10 +1223,26 @@ int ObSharedNothingTmpFile::load_disk_tail_page_and_rewrite_(ObTmpFileIOCtx &io_
     LOG_DEBUG("load_disk_tail_page_and_rewrite_ end", KR(ret), K(fd_), K(end_page_id_), KPC(this));
   }
 
-  if (OB_FAIL(ret) && block_meta_tree_flushing) {
+  if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(meta_tree_.finish_write_tail(data_item, false /*release_tail_in_disk*/))) {
-      LOG_WARN("fail to modify items after tail load", KR(tmp_ret), K(fd_));
+    if (block_meta_tree_flushing) {
+      if (OB_TMP_FAIL(meta_tree_.finish_write_tail(data_item, false /*release_tail_in_disk*/))) {
+        LOG_WARN("fail to modify items after tail load", KR(tmp_ret), K(fd_));
+      }
+    }
+
+    uint32_t unused_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
+    if (new_page_id != ObTmpFileGlobal::INVALID_PAGE_ID) {
+      if (OB_TMP_FAIL(wbp_->free_page(fd_, new_page_id, ObTmpFilePageUniqKey(begin_page_virtual_id), unused_page_id))) {
+        LOG_WARN("fail to free page", KR(tmp_ret), K(fd_), K(new_page_id));
+      } else if (has_update_file_meta) {
+        cached_page_nums_ = 0;
+        file_size_ -= need_write_size;
+        begin_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+        begin_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
+        end_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+        page_idx_cache_.reset();
+      }
     }
   }
   return ret;
@@ -1153,6 +1312,11 @@ int ObSharedNothingTmpFile::append_write_memory_tail_page_(ObTmpFileIOCtx &io_ct
         // for the last page, if the status of flushed_page_id_ page is not cached,
         // we will treat this page as a non-flushed page
         flushed_data_page_num_--;
+        if (0 == flushed_data_page_num_) {
+          LOG_INFO("flushed_page_id_ has been written", KPC(this));
+          flushed_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+          flushed_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
+        }
       } else if (is_write_back) {
         write_back_data_page_num_--;
       }
@@ -1194,6 +1358,7 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
   bool is_alloc_failed = false;
   int64_t write_size = 0;
   ObArray<uint32_t> page_entry_idxs;
+  bool has_update_file_meta = false;
 
   // write pages
   if (OB_UNLIKELY(!io_ctx.is_valid())) {
@@ -1227,6 +1392,9 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
     const int64_t end_page_virtual_id = cached_page_nums_ == 0 ?
                                         ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID :
                                         get_page_virtual_id_from_offset_(file_size_, true /*is_open_interval*/);
+    const int64_t old_begin_page_id = begin_page_id_;
+    const int64_t old_begin_page_virtual_id_ = begin_page_virtual_id_;
+    const int64_t old_end_page_id = end_page_id_;
     if (OB_UNLIKELY(is_deleting_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("file is deleting", KR(ret), K(fd_));
@@ -1249,21 +1417,17 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
           OB_FAIL(wbp_->link_page(fd_, page_entry_idxs.at(0), end_page_id_, ObTmpFilePageUniqKey(end_page_virtual_id)))) {
         LOG_WARN("fail to link page", KR(ret), K(fd_), K(page_entry_idxs.at(0)),
                  K(end_page_id_), K(end_page_virtual_id));
-      } else if (FALSE_IT(end_page_id_ = page_entry_idxs.at(page_entry_idxs.count() - 1))) {
       } else {
         if (ObTmpFileGlobal::INVALID_PAGE_ID == begin_page_id_) {
           begin_page_id_ = page_entry_idxs.at(0);
           begin_page_virtual_id_ = get_page_virtual_id_from_offset_(file_size_, false /*is_open_interval*/);
         }
+        end_page_id_ = page_entry_idxs.at(page_entry_idxs.count() - 1);
         file_size_ += write_size;
         cached_page_nums_ += page_entry_idxs.count();
+        has_update_file_meta = true;
       }
 
-      for (int64_t i = 0; i < page_entry_idxs.count() && OB_SUCC(ret); i++) {
-        if (OB_FAIL(page_idx_cache_.push(page_entry_idxs[i]))) {
-          LOG_WARN("fail to push page idx array", KR(ret), K(fd_));
-        }
-      } // TODO: we can ignore page_idx_cache_ allocate memory fail to continue writing in the future.
       if (FAILEDx(insert_or_update_data_flush_node_())) {
         LOG_WARN("fail to insert or update data flush list", KR(ret), K(fd_), KPC(this));
       }
@@ -1278,6 +1442,20 @@ int ObSharedNothingTmpFile::inner_write_continuous_pages_(ObTmpFileIOCtx &io_ctx
           LOG_WARN("fail to free page", KR(tmp_ret), K(fd_), K(i), K(free_page_virtual_id), K(page_entry_idxs[i]));
         } else {
           free_page_virtual_id += 1;
+        }
+      }
+      if (has_update_file_meta) {
+        begin_page_id_ = old_begin_page_id;
+        begin_page_virtual_id_ = old_begin_page_virtual_id_;
+        end_page_id_ = old_end_page_id;
+        cached_page_nums_ -= page_entry_idxs.count();
+        file_size_ -= write_size;
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      for (int64_t i = 0; i < page_entry_idxs.count() && OB_LIKELY(tmp_ret == OB_SUCCESS); i++) {
+        if (OB_TMP_FAIL(page_idx_cache_.push(page_entry_idxs[i]))) {
+          LOG_WARN("fail to push page idx array", KR(tmp_ret), K(fd_));
         }
       }
     }
@@ -1594,6 +1772,7 @@ int ObSharedNothingTmpFile::truncate(const int64_t truncate_offset)
       LOG_WARN("fail to truncate data page", KR(ret), K(fd_), K(truncate_offset), KPC(this));
     } else {
       truncated_offset_ = truncate_offset;
+      last_modify_ts_ = ObTimeUtility::current_time();
     }
   }
 
@@ -1815,6 +1994,39 @@ int64_t ObSharedNothingTmpFile::cal_wbp_begin_offset_() const
 
   return res;
 }
+
+void ObSharedNothingTmpFile::set_read_stats_vars(const bool is_unaligned_read, const int64_t read_size)
+{
+  common::TCRWLock::WLockGuard guard(meta_lock_);
+  read_req_cnt_++;
+  if (is_unaligned_read) {
+    unaligned_read_req_cnt_++;
+  }
+  total_read_size_ += read_size;
+  last_access_ts_ = ObTimeUtility::current_time();
+}
+
+int ObSharedNothingTmpFile::copy_info_for_virtual_table(ObSNTmpFileInfo &tmp_file_info)
+{
+  int ret = OB_SUCCESS;
+  common::TCRWLock::RLockGuardWithTimeout lock_guard(meta_lock_, 100 * 1000L, ret);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tmp_file_info.init(trace_id_, tenant_id_,
+                                        dir_id_, fd_, file_size_,
+                                        truncated_offset_, is_deleting_,
+                                        cached_page_nums_, write_back_data_page_num_,
+                                        flushed_data_page_num_, ref_cnt_,
+                                        write_req_cnt_, unaligned_write_req_cnt_,
+                                        read_req_cnt_, unaligned_read_req_cnt_,
+                                        total_read_size_, last_access_ts_,
+                                        last_modify_ts_, birth_ts_,
+                                        this, label_.ptr()))) {
+    LOG_WARN("fail to init tmp_file_info", KR(ret), KPC(this));
+  } else if (OB_FAIL(meta_tree_.copy_info(tmp_file_info))) {
+    LOG_WARN("fail to copy tree info", KR(ret), KPC(this));
+  }
+  return ret;
+};
 
 int ObSharedNothingTmpFile::remove_flush_node(const bool is_meta)
 {
@@ -2366,13 +2578,13 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
   uint32_t cur_page_id = copy_begin_page_id;
   int64_t cur_page_virtual_id = copy_begin_page_virtual_id;
 
-  if (OB_ISNULL(buf) || OB_UNLIKELY(OB_SERVER_BLOCK_MGR.get_macro_block_size() <= write_offset)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(inner_flush_ctx_.data_flush_infos_.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
   }
-  while (OB_SUCC(ret) && cur_page_id != copy_end_page_id && write_offset < OB_SERVER_BLOCK_MGR.get_macro_block_size()) {
+  while (OB_SUCC(ret) && cur_page_id != copy_end_page_id && write_offset < OB_STORAGE_OBJECT_MGR.get_macro_object_size()) {
     if (need_flush_tail && cur_page_id == end_page_id_ && file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0) {
       if (OB_SUCC(last_page_lock_.trylock())) {
         has_last_page_lock = true;
@@ -2490,7 +2702,7 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush sequence not match", KR(ret), K(flush_sequence), K(inner_flush_ctx_.flush_seq_),
              K(flush_task), KPC(this));
-  } else if (OB_ISNULL(buf) || OB_UNLIKELY(OB_SERVER_BLOCK_MGR.get_macro_block_size() <= write_offset)) {
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(flush_infos_.push_back(InnerFlushInfo()))) {
@@ -2566,7 +2778,7 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
     data_item.physical_page_id_ = info.flush_data_page_disk_begin_id_;
     data_item.physical_page_num_ = info.flush_data_page_num_;
     data_item.virtual_page_id_ = info.flush_virtual_page_id_;
-    ObArray<ObSharedNothingTmpFileDataItem> data_items;
+    ObSEArray<ObSharedNothingTmpFileDataItem, 1> data_items;
 
     if (OB_FAIL(data_items.push_back(data_item))) {
       LOG_WARN("fail to push back data item", KR(ret), K(info), K(block_index), KPC(this));

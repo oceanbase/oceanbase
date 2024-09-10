@@ -769,7 +769,6 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
 
   // first half multi scan, second half multi get
   ranges.reuse();
-  test_allocator.reuse();
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     ObDatumRowkey tmp_rowkey;
     mget_ranges[i].border_flag_.set_inclusive_start();
@@ -824,7 +823,6 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
 
   // first half multi get, second half multi scan
   ranges.reuse();
-  test_allocator.reuse();
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     ObDatumRowkey tmp_rowkey;
     mget_ranges[i].border_flag_.set_inclusive_start();
@@ -883,7 +881,6 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
 
   // first one multi get, others multi scan
   ranges.reuse();
-  test_allocator.reuse();
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     ObDatumRowkey tmp_rowkey;
     mget_ranges[i].border_flag_.set_inclusive_start();
@@ -938,7 +935,6 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
 
   // first one multi scan, others multi get
   ranges.reuse();
-  test_allocator.reuse();
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     ObDatumRowkey tmp_rowkey;
     mget_ranges[i].border_flag_.set_inclusive_start();
@@ -994,7 +990,6 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   // multi scan not exist row
   STORAGE_LOG(DEBUG, "multi_scan_not_exist_row");
   ranges.reuse();
-  test_allocator.reuse();
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     ObDatumRowkey tmp_rowkey;
     mget_ranges[i].border_flag_.set_inclusive_start();

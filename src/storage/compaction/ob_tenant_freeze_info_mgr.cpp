@@ -32,10 +32,11 @@
 #include "share/ob_zone_merge_table_operator.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -49,13 +50,13 @@ using common::hash::ObHashSet;
 namespace storage
 {
 const char *ObStorageSnapshotInfo::ObSnapShotTypeStr[] = {
-    "SNAPSHOT_UNDO_RETENTION",
+    "UNDO_RETENTION",
     "SNAPSHOT_FOR_TX",
-    "SNAPSHOT_FOR_MAJOR_FREEZE_TS",
+    "MAJOR_FREEZE_TS",
     "MULTI_VERSION_START_ON_TABLET",
     "SNAPSHOT_ON_TABLET",
-    "SNAPSHOT_FOR_LS_RESERVED",
-    "SNAPSHOT_FOR_MIN_MEDIUM"
+    "LS_RESERVED",
+    "MIN_MEDIUM"
 };
 
 ObStorageSnapshotInfo::ObStorageSnapshotInfo()
@@ -276,7 +277,7 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version(
   if (OB_FAIL(ret)) {
     STORAGE_LOG(WARN, "get_lock failed", KR(ret));
   } else if (OB_FAIL(get_freeze_info_behind_snapshot_version_(snapshot_version, freeze_info))) {
-    STORAGE_LOG(WARN, "failed to get_freeze_info_behind_snapshot_version", KR(ret));
+    STORAGE_LOG(WARN, "failed to get freeze info behind snapshot version", KR(ret), K(snapshot_version));
   }
   return ret;
 }
@@ -541,11 +542,11 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
   } else if (OB_FAIL(ObZoneMergeTableOperator::load_zone_merge_info(*GCTX.sql_proxy_, tenant_id, zone_merge_info))) {
     LOG_WARN("fail to load zone merge info", KR(ret), K(zone_merge_info));
   } else {
-    compaction::ObTenantTabletScheduler *scheduler = MTL(compaction::ObTenantTabletScheduler *);
-    scheduler->set_inner_table_merged_scn(global_merge_info.last_merged_scn_.get_scn().get_val_for_tx()); // set merged version
+    // set merged version
+    MERGE_SCHEDULER_PTR->set_inner_table_merged_scn(global_merge_info.last_merged_scn_.get_scn().get_val_for_tx());
     mgr_.set_global_broadcast_scn(global_merge_info.global_broadcast_scn_.get_scn());
     if (global_merge_info.suspend_merging_.get_value()) { // suspend_merge
-      scheduler->stop_major_merge();
+      MERGE_SCHEDULER_PTR->stop_major_merge();
       LOG_INFO("schedule zone to stop major merge", K(tenant_id), K(zone_merge_info), K(global_merge_info));
     } else {
       if (check_tenant_status_) {
@@ -562,12 +563,12 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
         }
       }
       if (!check_tenant_status_) {
-        scheduler->resume_major_merge();
-        const int64_t scheduler_frozen_version = scheduler->get_frozen_version();
-        if (zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx() > scheduler_frozen_version) {
+        MERGE_SCHEDULER_PTR->resume_major_merge();
+        const int64_t cur_broadcast_version = MERGE_SCHEDULER_PTR->get_frozen_version();
+        if (zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx() > cur_broadcast_version) {
           FLOG_INFO("try to schedule merge", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn",
-            zone_merge_info.broadcast_scn_, K(scheduler_frozen_version));
-          if (OB_FAIL(scheduler->schedule_merge(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
+            zone_merge_info.broadcast_scn_, K(cur_broadcast_version));
+          if (OB_FAIL(MERGE_SCHEDULER_PTR->schedule_merge(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
             LOG_WARN("fail to schedule merge", K(ret), K(zone_merge_info));
           }
         }
@@ -657,7 +658,7 @@ int ObTenantFreezeInfoMgr::inner_update_info(
 void ObTenantFreezeInfoMgr::ReloadTask::runTimerTask()
 {
   int tmp_ret = OB_SUCCESS;
-  if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+  if (!SERVER_STORAGE_META_SERVICE.is_started()) {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /* 10s */)) {
       LOG_WARN_RET(tmp_ret, "slog replay hasn't finished, this task can't start");
     }
@@ -675,7 +676,7 @@ void ObTenantFreezeInfoMgr::UpdateLSResvSnapshotTask::runTimerTask()
 {
   int tmp_ret = OB_SUCCESS;
   uint64_t compat_version = 0;
-  if (OB_TMP_FAIL(MTL(ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
+  if (OB_TMP_FAIL(MTL(compaction::ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
     LOG_WARN_RET(tmp_ret, "failed to get min data version", KR(tmp_ret));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
     // do nothing, should not update reserved snapshot

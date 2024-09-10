@@ -568,9 +568,7 @@ int ObUnitTableOperator::get_unit_configs(common::ObIArray<ObUnitConfig> &config
     ObTimeoutCtx ctx;
     if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
-    } else if (OB_FAIL(sql.append_fmt("select unit_config_id, name, "
-        "max_cpu, min_cpu, memory_size, log_disk_size, "
-        "max_iops, min_iops, iops_weight from %s ", OB_ALL_UNIT_CONFIG_TNAME))) {
+    } else if (OB_FAIL(sql.append_fmt("select * from %s ", OB_ALL_UNIT_CONFIG_TNAME))) {
       LOG_WARN("append_fmt failed", K(ret));
     } else if (OB_FAIL(read_unit_configs(sql, configs))) {
       LOG_WARN("read_unit_configs failed", K(sql), K(ret));
@@ -594,9 +592,7 @@ int ObUnitTableOperator::get_unit_configs(const common::ObIArray<uint64_t> &conf
     ObTimeoutCtx ctx;
     if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
-    } else if (OB_FAIL(sql.append_fmt("select unit_config_id, name, "
-        "max_cpu, min_cpu, memory_size, log_disk_size, "
-        "max_iops, min_iops, iops_weight from %s "
+    } else if (OB_FAIL(sql.append_fmt("select * from %s "
         "where unit_config_id in (", OB_ALL_UNIT_CONFIG_TNAME))) {
       LOG_WARN("append_fmt failed", K(ret));
     } else {
@@ -670,15 +666,36 @@ int ObUnitTableOperator::update_unit_config(common::ObISQLClient &client,
   } else {
     ObDMLSqlSplicer dml;
     ObString unit_name(config.name().size(), config.name().ptr());
-    if (OB_FAIL(dml.add_pk_column("unit_config_id", config.unit_config_id()))
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+      LOG_WARN("failed to get sys tenant min data version", KR(ret));
+    } else if (data_version < DATA_VERSION_4_3_3_0
+               && ObUnitResource::DEFAULT_DATA_DISK_SIZE != config.data_disk_size()) {
+      // during upgrade, should be default value 0.
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("during upgrade, data_disk_size is expected to be 0", KR(ret), K(config));
+    } else if (data_version < DATA_VERSION_4_3_3_0
+               && (ObUnitResource::DEFAULT_NET_BANDWIDTH != config.max_net_bandwidth()
+                   || ObUnitResource::DEFAULT_NET_BANDWIDTH_WEIGHT != config.net_bandwidth_weight())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("max_net_bandwidth_ and net_bandwidth_weight_ are expected to be default value",
+               KR(ret), K(config));
+    } else if (
+        OB_FAIL(dml.add_pk_column("unit_config_id", config.unit_config_id()))
         || OB_FAIL(dml.add_column("name", ObHexEscapeSqlStr(unit_name)))
         || OB_FAIL(dml.add_column("max_cpu", config.max_cpu()))
         || OB_FAIL(dml.add_column("min_cpu", config.min_cpu()))
         || OB_FAIL(dml.add_column("memory_size", config.memory_size()))
         || OB_FAIL(dml.add_column("log_disk_size", config.log_disk_size()))
+        || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("data_disk_size", config.data_disk_size())))
         || OB_FAIL(dml.add_column("max_iops", config.max_iops()))
         || OB_FAIL(dml.add_column("min_iops", config.min_iops()))
         || OB_FAIL(dml.add_column("iops_weight", config.iops_weight()))
+        || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("max_net_bandwidth", config.max_net_bandwidth())))
+        || (data_version >= DATA_VERSION_4_3_3_0
+            && OB_FAIL(dml.add_column("net_bandwidth_weight", config.net_bandwidth_weight())))
         || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", KR(ret), K(config), K(unit_name));
     } else {
@@ -1053,9 +1070,12 @@ int ObUnitTableOperator::read_unit_config(const ObMySQLResult &result,
   double min_cpu = 0;
   int64_t memory_size = 0;
   int64_t log_disk_size = 0;
+  int64_t data_disk_size = 0;
   int64_t max_iops = 0;
   int64_t min_iops = 0;
   int64_t iops_weight = ObUnitResource::INVALID_IOPS_WEIGHT;
+  int64_t max_net_bandwidth = ObUnitResource::INVALID_NET_BANDWIDTH;
+  int64_t net_bandwidth_weight = ObUnitResource::INVALID_NET_BANDWIDTH_WEIGHT;
 
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -1069,9 +1089,20 @@ int ObUnitTableOperator::read_unit_config(const ObMySQLResult &result,
     EXTRACT_DOUBLE_FIELD_MYSQL(result, "min_cpu", min_cpu, double);
     EXTRACT_INT_FIELD_MYSQL(result, "memory_size", memory_size, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "log_disk_size", log_disk_size, int64_t);
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "data_disk_size", data_disk_size, int64_t,
+      false/*skip_null_error*/, true/*skip_column_error*/, ObUnitResource::DEFAULT_DATA_DISK_SIZE);
     EXTRACT_INT_FIELD_MYSQL(result, "max_iops", max_iops, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "min_iops", min_iops, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "iops_weight", iops_weight, int64_t);
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "max_net_bandwidth", max_net_bandwidth, int64_t,
+      false/*skip_null_error*/, true/*skip_column_error*/, ObUnitResource::DEFAULT_NET_BANDWIDTH);
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "net_bandwidth_weight", net_bandwidth_weight, int64_t,
+      false/*skip_null_error*/, true/*skip_column_error*/, ObUnitResource::DEFAULT_NET_BANDWIDTH_WEIGHT);
+
+    if (-1 == data_disk_size) {
+      // for compatability, lower version default value may be -1. Set as 0.
+      data_disk_size = 0;
+    }
 
     if (OB_SUCCESS == ret) {
       const ObUnitResource ur(
@@ -1079,9 +1110,12 @@ int ObUnitTableOperator::read_unit_config(const ObMySQLResult &result,
           min_cpu,
           memory_size,
           log_disk_size,
+          data_disk_size,
           max_iops,
           min_iops,
-          iops_weight);
+          iops_weight,
+          max_net_bandwidth,
+          net_bandwidth_weight);
 
       if (OB_FAIL(unit_config.init(unit_config_id, name, ur))) {
         LOG_WARN("init unit config fail", KR(ret), K(unit_config_id), K(name), K(ur));

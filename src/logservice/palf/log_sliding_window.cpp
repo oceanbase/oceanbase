@@ -2226,7 +2226,8 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       log_task->lock();
       log_begin_lsn = log_task->get_begin_lsn();
       const SCN log_max_scn = log_task->get_max_scn();
-      log_end_lsn = log_begin_lsn + LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
+      const int64_t log_size = LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
+      log_end_lsn = log_begin_lsn + log_size;
       log_task_header = log_task->get_header_info();
       const int64_t log_proposal_id = log_task->get_proposal_id();
       const int64_t log_accum_checksum = log_task->get_accum_checksum();
@@ -2291,10 +2292,11 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
           }
         }
 
-        // update last_slide_lsn_
+        // update last_slide_lsn_ and submit fill cache task
         if (OB_SUCC(ret)) {
           (void) try_update_last_slide_log_info_(log_id, log_max_scn, log_begin_lsn, log_end_lsn, \
               log_proposal_id, log_accum_checksum);
+          (void) log_engine_->submit_fill_cache_task(log_begin_lsn, log_size);
         }
 
         MEM_BARRIER();  // ensure last_slide_log_info_ has been updated before fetch log streamingly
@@ -2901,7 +2903,7 @@ bool LogSlidingWindow::is_allow_rebuild() const
   // Caller holds palf_handle_impl's rlock.
   bool bool_ret = false;
   if (IS_INIT) {
-    bool_ret = !is_truncating_;
+    bool_ret = !is_truncating_ && !is_rebuilding_;
   }
   return bool_ret;
 }

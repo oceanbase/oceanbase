@@ -62,6 +62,9 @@ private:
                        storage::ObLSHandle &ls_handle,
                        logservice::ObLogHandler *&log_handler) const;
   int change_access_mode_(const LogChangeAccessModeCmd &req);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int handle_acquire_log_rebuild_info_msg_(const LogAcquireRebuildInfoMsg &req);
+#endif
 };
 
 class ConfigChangeCmdHandler{

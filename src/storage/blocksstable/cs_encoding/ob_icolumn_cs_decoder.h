@@ -29,6 +29,7 @@ namespace storage
 {
 class ObAggCell;
 class ObGroupByCell;
+class ObAggCellBase;
 }
 namespace blocksstable
 {
@@ -95,7 +96,7 @@ public:
       const ObColumnCSDecoderCtx &ctx,
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObAggCell &agg_cell) const
+      storage::ObAggCellBase &agg_cell) const
   {
     UNUSEDx(ctx, row_ids, row_cap, agg_cell);
     return common::OB_NOT_SUPPORTED;
@@ -115,7 +116,7 @@ public:
 
   virtual int read_distinct(
       const ObColumnCSDecoderCtx &ctx,
-      storage::ObGroupByCell &group_by_cell)  const
+      storage::ObGroupByCellBase &group_by_cell)  const
   {
     UNUSEDx(ctx, group_by_cell);
     return OB_NOT_SUPPORTED;
@@ -125,7 +126,7 @@ public:
       const ObColumnCSDecoderCtx &ctx,
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const
+      storage::ObGroupByCellBase &group_by_cell) const
   {
     UNUSEDx(ctx, row_ids, row_cap, group_by_cell);
     return OB_NOT_SUPPORTED;

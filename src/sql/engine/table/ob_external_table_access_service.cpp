@@ -22,7 +22,11 @@
 #include "share/ob_device_manager.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
+//#include "sql/engine/table/ob_orc_table_row_iter.h"
 
 namespace oceanbase
 {
@@ -36,6 +40,8 @@ using namespace share;
 namespace sql
 {
 
+static constexpr uint64_t OB_STORAGE_ID_EXTERNAL = 2001;
+
 ObExternalDataAccessDriver::~ObExternalDataAccessDriver() {
   close();
   if (OB_NOT_NULL(device_handle_)) {
@@ -46,8 +52,10 @@ ObExternalDataAccessDriver::~ObExternalDataAccessDriver() {
 void ObExternalDataAccessDriver::close()
 {
   if (OB_NOT_NULL(device_handle_) && fd_.is_valid()) {
-    device_handle_->close(fd_);
-    fd_.reset();
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObBackupIoAdapter::close_device_and_fd(device_handle_, fd_))) {
+      LOG_WARN("fail to close device and fd", KR(ret), K_(fd), KP_(device_handle));
+    }
   }
 }
 
@@ -81,26 +89,20 @@ int ObExternalDataAccessDriver::get_file_sizes(const ObString &location,
 int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file_size)
 {
   int ret = OB_SUCCESS;
+  file_size = -1;
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  ObString url_cstring;
+  ObArenaAllocator allocator;
 
-  ObBackupIoAdapter util;
+  if (OB_FAIL(ob_write_string(allocator, url, url_cstring, true/*c_style*/))) {
+    LOG_WARN("fail to copy string", KR(ret), K(url));
+  } else if (OB_FAIL(ObBackupIoAdapter::get_file_length(url_cstring, &access_info_, file_size))) {
+    LOG_WARN("fail to get file length", KR(ret), K(url_cstring), K_(access_info));
+  }
 
-  if (OB_ISNULL(device_handle_)) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObIODFileStat statbuf;
-    int temp_ret = device_handle_->stat(to_cstring(url), statbuf);
-    if (OB_SUCCESS != temp_ret) {
-      file_size = -1;
-      if (OB_BACKUP_FILE_NOT_EXIST == temp_ret
-          || OB_IO_ERROR == temp_ret) {
-        file_size = -1;
-      } else {
-        ret = temp_ret;
-      }
-      LOG_WARN("fail to get file length", K(temp_ret), K(url));
-    } else {
-      file_size = statbuf.size_;
-    }
+  if (OB_OBJECT_NOT_EXIST == ret || OB_IO_ERROR == ret) {
+    file_size = -1;
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -108,10 +110,13 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
 int ObExternalDataAccessDriver::open(const char *url)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(device_handle_)) {
-    ret = OB_NOT_INIT;
-  } else {
-    ret = device_handle_->open(url, -1, 0, fd_, &iod_opts_);
+  if (OB_UNLIKELY(is_opened())) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("Data Access Driver has been opened", KR(ret), K(url));
+  } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(
+      device_handle_, fd_, &access_info_, url, OB_STORAGE_ACCESS_READER,
+      ObStorageIdMod(OB_STORAGE_ID_EXTERNAL, ObStorageUsedMod::STORAGE_USED_EXTERNAL)))) {
+    LOG_WARN("fail to open Data Access Driver", KR(ret), K_(access_info), K(url));
   }
   return ret;
 }
@@ -119,10 +124,17 @@ int ObExternalDataAccessDriver::open(const char *url)
 int ObExternalDataAccessDriver::pread(void *buf, const int64_t count, const int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(device_handle_)) {
-    ret = OB_NOT_INIT;
+  ObIOHandle io_handle;
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  if (OB_FAIL(ObBackupIoAdapter::async_pread(*device_handle_, fd_,
+      static_cast<char *>(buf), offset, count, io_handle))) {
+    LOG_WARN("fail to async pread", KR(ret),
+        KP_(device_handle), K_(fd), KP(buf), K(offset), K(count));
+  } else if (OB_FAIL(io_handle.wait())) {
+    LOG_WARN("fail to wait pread result", KR(ret),
+        KP_(device_handle), K_(fd), KP(buf), K(offset), K(count));
   } else {
-    ret = device_handle_->pread(fd_, offset, count, buf, read_size);
+    read_size = io_handle.get_data_size();
   }
   return ret;
 }
@@ -223,7 +235,7 @@ public:
         if (target.empty()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("empty dir or name", K(full_path), K(origin_path_));
-        } else if (OB_FAIL(ob_write_string(allocator_, target, tmp_file))) {
+        } else if (OB_FAIL(ob_write_string(allocator_, target, tmp_file, true/*c_style*/))) {
           OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
         } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
           OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
@@ -255,36 +267,40 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
   const int64_t MAX_VISIT_COUNT = 100000;
   ObExprRegexContext regexp_ctx;
   ObExternalPathFilter filter(regexp_ctx, allocator);
+  ObString path_cstring;
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
 
-  if (OB_ISNULL(device_handle_)) {
+  if (OB_UNLIKELY(!access_info_.is_valid())) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObExternalDataAccessDriver not init", K(ret));
+    LOG_WARN("ObExternalDataAccessDriver not init", KR(ret), K_(access_info));
   } else if (!pattern.empty() && OB_FAIL(filter.init(pattern, regexp_vars))) {
     LOG_WARN("fail to init filter", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, path, path_cstring, true/*c_style*/))) {
+    LOG_WARN("fail to copy string", KR(ret), K(path));
   } else if (get_storage_type() == OB_STORAGE_FILE) {
     ObSEArray<ObString, 4> file_dirs;
     bool is_dir = false;
     ObString path_without_prifix;
-    path_without_prifix = path;
+    path_without_prifix = path_cstring;
     path_without_prifix += strlen(OB_FILE_PREFIX);
 
-    OZ (FileDirectoryUtils::is_directory(to_cstring(path_without_prifix), is_dir));
+    OZ (FileDirectoryUtils::is_directory(path_without_prifix.ptr(), is_dir));
     if (!is_dir) {
       LOG_WARN("external location is not a directory", K(path_without_prifix));
     } else {
-      OZ (file_dirs.push_back(path));
+      OZ (file_dirs.push_back(path_cstring));
     }
     ObArray<int64_t> useless_size;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
-      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path, NULL, allocator);
-      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path,
+      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path_cstring, NULL, allocator);
+      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path_cstring,
                                                pattern.empty() ? NULL : &filter, allocator);
       dir_op.set_dir_flag();
-      if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dir), file_op))) {
-        LOG_WARN("scan dir failed", K(ret));
-      } else if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dir), dir_op))) {
-        LOG_WARN("scan dir failed", K(ret));
+      if (OB_FAIL(ObBackupIoAdapter::list_files(file_dir, &access_info_, file_op))) {
+        LOG_WARN("fail to list files", KR(ret), K(file_dir), K_(access_info));
+      } else if (OB_FAIL(ObBackupIoAdapter::list_directories(file_dir, &access_info_, dir_op))) {
+        LOG_WARN("fail to list dirs", KR(ret), K(file_dir), K_(access_info));
       } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("too many files and dirs to visit", K(ret));
@@ -292,8 +308,8 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     }
   } else {
     ObExternalFileListArrayOpWithFilter file_op(file_urls, file_sizes, pattern.empty() ? NULL : &filter, allocator);
-    if (OB_FAIL(device_handle_->scan_dir(to_cstring(path), file_op))) {
-      LOG_WARN("scan dir failed", K(ret));
+    if (OB_FAIL(ObBackupIoAdapter::list_files(path_cstring, &access_info_, file_op))) {
+      LOG_WARN("fail to list files", KR(ret), K(path_cstring), K_(access_info));
     }
   }
   return ret;
@@ -307,9 +323,6 @@ int ObExternalDataAccessDriver::init(const ObString &location, const ObString &a
   ObString location_cstr;
   ObString access_info_cstr;
   ObBackupIoAdapter util;
-
-  iod_opts_.opts_ = opts_;
-  iod_opts_.opt_cnt_ = 0;
 
   if (OB_FAIL(get_storage_type_from_path(location, device_type))) {
     LOG_WARN("fail to resove storage type", K(ret));
@@ -325,8 +338,6 @@ int ObExternalDataAccessDriver::init(const ObString &location, const ObString &a
   }
 
   OZ (access_info_.set(device_type, access_info_cstr.ptr()));
-  OZ (util.get_and_init_device(device_handle_, &access_info_, location_cstr));
-  OZ (util.set_access_type(&iod_opts_, false, 1));
 
   return ret;
 }
@@ -558,12 +569,31 @@ int ObExternalTableAccessService::table_scan(
         LOG_WARN("alloc memory failed", K(ret));
       }
       break;
-
     case ObExternalFileFormat::PARQUET_FORMAT:
       if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       }
+      break;
+    case ObExternalFileFormat::ODPS_FORMAT:
+#ifdef OB_BUILD_CPP_ODPS
+      if (OB_ISNULL(row_iter = OB_NEWx(ObODPSTableRowIterator, (scan_param.allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+      LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
+      break;
+    case ObExternalFileFormat::ORC_FORMAT:
+      // if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
+      //   ret = OB_ALLOCATE_MEMORY_FAILED;
+      //   LOG_WARN("alloc memory failed", K(ret));
+      // }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -594,7 +624,17 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
     switch (param.external_file_format_.format_type_) {
       case ObExternalFileFormat::CSV_FORMAT:
       case ObExternalFileFormat::PARQUET_FORMAT:
+      case ObExternalFileFormat::ORC_FORMAT:
         result->reset();
+        break;
+      case ObExternalFileFormat::ODPS_FORMAT:
+#ifdef OB_BUILD_CPP_ODPS
+        result->reset();
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+        LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -771,6 +811,13 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     }
   }
+  for (int i = 0; i < scan_param_->key_ranges_.count(); ++i) {
+    int64_t start = 0;
+    int64_t step = 0;
+    int64_t part_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+    const ObString &file_url = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
+    int64_t file_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
+  }
   return ret;
 }
 
@@ -840,7 +887,7 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(scan_param_->index_id_), K(scan_param_->tenant_id_));
-  } else if (table_schema->is_partitioned_table() && table_schema->is_user_specified_partition_for_external_table()) {
+  } else if (table_schema->is_partitioned_table() && (table_schema->is_user_specified_partition_for_external_table() || table_schema->is_odps_external_table())) {
     if (OB_FAIL(table_schema->get_partition_by_part_id(part_id, CHECK_PARTITION_MODE_NORMAL, partition))) {
       LOG_WARN("get partition failed", K(ret), K(part_id));
     } else if (OB_ISNULL(partition) || OB_UNLIKELY(partition->get_list_row_values().count() != 1)
@@ -1119,7 +1166,6 @@ int ObCSVTableRowIterator::get_next_row()
       column_expr->set_evaluated_flag(eval_ctx);
     }
   }
-
   return ret;
 }
 
@@ -1260,7 +1306,6 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   }
 
   count = returned_row_cnt;
-
   return ret;
 }
 

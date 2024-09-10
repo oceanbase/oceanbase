@@ -38,7 +38,7 @@ namespace oceanbase
 namespace lib
 {
 
-int SET_GROUP_ID(uint64_t group_id)
+int SET_GROUP_ID(uint64_t group_id, bool is_background)
 {
   int ret = OB_SUCCESS;
 
@@ -47,7 +47,7 @@ int SET_GROUP_ID(uint64_t group_id)
   THIS_WORKER.set_group_id_(group_id);
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_)
-      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id))) {
+      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id, is_background))) {
     LOG_WARN("add self to cgroup fail", K(ret), K(MTL_ID()), K(group_id));
   }
   return ret;
@@ -77,25 +77,37 @@ static const char *CPU_STAT_FILE = "cpu.stat";
 static const char *CGROUP_PROCS_FILE = "cgroup.procs";
 
 //集成IO参数
-int OBGroupIOInfo::init(int64_t min_percent, int64_t max_percent, int64_t weight_percent)
+int ObGroupIOInfo::init(const char *name, const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent,
+                        const int64_t max_net_bandwidth_percent, const int64_t net_bandwidth_weight_percent)
 {
   int ret = OB_SUCCESS;
   if (min_percent < 0 || min_percent > 100 ||
       max_percent < 0 || max_percent > 100 ||
       weight_percent < 0 || weight_percent > 100 ||
-      min_percent > max_percent) {
+      min_percent > max_percent ||
+      max_net_bandwidth_percent < 0 || max_net_bandwidth_percent > 100 ||
+      net_bandwidth_weight_percent < 0 || net_bandwidth_weight_percent > 100) {
     ret = OB_INVALID_CONFIG;
-    LOG_WARN("invalid io config", K(ret), K(min_percent), K(max_percent), K(weight_percent));
+    LOG_WARN("invalid io config", K(ret), K(min_percent), K(max_percent), K(weight_percent),
+                                 K(max_net_bandwidth_percent), K(net_bandwidth_weight_percent));
   } else {
+    group_name_ = name;
     min_percent_ = min_percent;
     max_percent_ = max_percent;
     weight_percent_ = weight_percent;
+    max_net_bandwidth_percent_ = max_net_bandwidth_percent;
+    net_bandwidth_weight_percent_ = net_bandwidth_weight_percent;
   }
   return ret;
 }
-bool OBGroupIOInfo::is_valid() const
+bool ObGroupIOInfo::is_valid() const
 {
-  return min_percent_ >= 0 && max_percent_ >= min_percent_ && max_percent_ <= 100 && weight_percent_ >= 0 && weight_percent_ <= 100;
+  return min_percent_ >= 0 && min_percent_ <= 100 &&
+         max_percent_ >= min_percent_ &&
+         max_percent_ >= 0 && max_percent_ <= 100 &&
+         weight_percent_ >= 0 && weight_percent_ <= 100 &&
+         max_net_bandwidth_percent_ >= 0 && max_net_bandwidth_percent_ <= 100 &&
+         net_bandwidth_weight_percent_ >= 0 && net_bandwidth_weight_percent_ <= 100;
 }
 
 bool ObCgroupCtrl::is_valid_group_name(ObString &group_name)
@@ -176,13 +188,17 @@ int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
   return ret;
 }
 
-int ObCgroupCtrl::remove_dir_(const char *curr_dir)
+int ObCgroupCtrl::remove_dir_(const char *curr_dir, bool is_delete_group)
 {
   int ret = OB_SUCCESS;
   char group_task_path[PATH_BUFSIZE];
-  char parent_task_path[PATH_BUFSIZE];
+  char target_task_path[PATH_BUFSIZE];
   snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
-  snprintf(parent_task_path, PATH_BUFSIZE, "%s/../tasks", curr_dir);
+  if (is_delete_group) {
+    snprintf(target_task_path, PATH_BUFSIZE, "%s/../tasks", curr_dir);
+  } else {
+    snprintf(target_task_path, PATH_BUFSIZE, "%s/../OBCG_DEFAULT/tasks", curr_dir);
+  }
   FILE* group_task_file = nullptr;
   if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
     ret = OB_IO_ERROR;
@@ -191,8 +207,8 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
     char tid_buf[VALUE_BUFSIZE];
     int tmp_ret = OB_SUCCESS;
     while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
-      if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(parent_task_path, tid_buf))) {
-        LOG_WARN("remove tenant task failed", K(tmp_ret), K(parent_task_path));
+      if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
+        LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
       }
     }
     fclose(group_task_file);
@@ -266,13 +282,18 @@ int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *
 int ObCgroupCtrl::remove_cgroup(const uint64_t tenant_id, uint64_t group_id, const char *base_path)
 {
   int ret = OB_SUCCESS;
-  char tenant_path[PATH_BUFSIZE];
-  if (OB_FAIL(get_group_path(tenant_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
+  char group_path[PATH_BUFSIZE];
+  if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(recursion_remove_group_(tenant_path))) {
-    LOG_WARN("remove cgroup directory failed", K(ret), K(tenant_path), K(tenant_id));
+  } else if (is_valid_group(group_id)) {
+    ret = remove_dir_(group_path, true /* is_delete_group */);
   } else {
-    LOG_INFO("remove cgroup directory success", K(tenant_path), K(tenant_id));
+    ret = recursion_remove_group_(group_path);
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("remove cgroup directory failed", K(ret), K(group_path), K(tenant_id));
+  } else {
+    LOG_INFO("remove cgroup directory success", K(group_path), K(tenant_id));
   }
   return ret;
 }
@@ -388,24 +409,13 @@ int ObCgroupCtrl::get_group_path(
   return ret;
 }
 
-int ObCgroupCtrl::add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id)
+int ObCgroupCtrl::add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id, const bool is_background)
 {
   int ret = OB_SUCCESS;
   if (is_valid()) {
-    ResourceGroupType group_type = ResourceGroupType::INVALID_GROUP;
-    if (is_user_group(group_id) &&
-        OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_type_by_id(tenant_id, group_id, group_type))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("get group type by id failed", K(ret), K(tenant_id), K(group_id), K(group_type));
-      }
-    }
 
     const char *base_path =
-        (GCONF.enable_global_background_resource_isolation && ResourceGroupType::FUNCTION_GROUP == group_type)
-            ? BACKGROUND_CGROUP
-            : "";
+        (GCONF.enable_global_background_resource_isolation && is_background) ? BACKGROUND_CGROUP : "";
     char group_path[PATH_BUFSIZE];
     char tid_value[VALUE_BUFSIZE + 1];
 
@@ -775,8 +785,8 @@ int ObCgroupCtrl::get_throttled_time(const uint64_t tenant_id, int64_t &throttle
 }
 
 int ObCgroupCtrl::set_group_iops(const uint64_t tenant_id,
-                                 const uint64_t group_id,
-                                 const OBGroupIOInfo &group_io)
+                                 const int64_t group_id,
+                                 const ObGroupIOInfo &group_io)
 {
   int ret = OB_SUCCESS;
 
@@ -787,9 +797,12 @@ int ObCgroupCtrl::set_group_iops(const uint64_t tenant_id,
   } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
     LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_holder.get_ptr()->modify_io_config(group_id,
+                                                               group_io.group_name_,
                                                                group_io.min_percent_,
                                                                group_io.max_percent_,
-                                                               group_io.weight_percent_))) {
+                                                               group_io.weight_percent_,
+                                                               group_io.max_net_bandwidth_percent_,
+                                                               group_io.net_bandwidth_weight_percent_))) {
     LOG_WARN("modify consumer group iops failed", K(ret), K(group_id), K(tenant_id), K(group_id));
   }
   return ret;

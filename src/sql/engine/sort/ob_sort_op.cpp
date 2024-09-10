@@ -519,6 +519,10 @@ int ObSortOp::inner_get_next_row()
       if (OB_ITER_END != ret) {
         LOG_WARN("get next row failed");
       } else {
+        if (ctx_.get_my_session()->get_ddl_info().is_ddl() && ret_row_count_ != sort_row_count_) {
+          ret = OB_CHECKSUM_ERROR;
+          LOG_WARN("output row count not match", K(ret), K(sort_row_count_), K(ret_row_count_));
+        }
         iter_end_ = true;
         reset();
       }
@@ -572,6 +576,10 @@ int ObSortOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else {
       ret_row_count_ += brs_.size_;
       if (brs_.end_) {
+        if (ctx_.get_my_session()->get_ddl_info().is_ddl() && ret_row_count_ != sort_row_count_) {
+          ret = OB_CHECKSUM_ERROR;
+          LOG_WARN("output row count not match", K(ret), K(sort_row_count_), K(ret_row_count_));
+        }
         LOG_DEBUG("finish ObSortOp::inner_get_next_batch",
                   K(MY_SPEC.output_), K(brs_), K(ret_row_count_));
       }

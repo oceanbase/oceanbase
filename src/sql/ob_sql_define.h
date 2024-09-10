@@ -690,7 +690,8 @@ static bool is_fixed_length(ObObjType type) {
       || ObGeometryTC == tc
       || ObUserDefinedSQLTC == tc
       || ObDecimalIntTC == tc
-      || ObRoaringBitmapTC == tc) {
+      || ObRoaringBitmapTC == tc
+      || ObCollectionSQLTC == tc) {
     is_fixed = false;
   }
   return is_fixed;

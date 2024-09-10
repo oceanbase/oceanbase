@@ -82,6 +82,7 @@ struct ObKVCacheInst
   ObLfFIFOAllocator node_allocator_;
   ObKVCacheStatus status_;
   bool is_delete_;
+  bool is_block_cache_;
   int64_t ref_cnt_;
   ObTenantMBListHandle mb_list_handle_; // list of tenant mbs
   ObKVCacheInst()
@@ -90,6 +91,7 @@ struct ObKVCacheInst
       node_allocator_(),
       status_(),
       is_delete_(false),
+      is_block_cache_(false),
       ref_cnt_(0),
       mb_list_handle_() { MEMSET(handles_, 0, sizeof(handles_)); }
   bool can_destroy() const ;
@@ -99,6 +101,7 @@ struct ObKVCacheInst
     node_allocator_.destroy();
     status_.reset();
     is_delete_ = false;
+    is_block_cache_ = false;
     ref_cnt_ = 0;
     mb_list_handle_.reset();
     MEMSET(handles_, 0, sizeof(handles_));
@@ -112,7 +115,7 @@ struct ObKVCacheInst
   inline int64_t get_memory_limit_pct() { return status_.get_memory_limit_pct(); }
   common::ObDLink *get_mb_list() { return mb_list_handle_.get_head(); }
 
-  TO_STRING_KV(K_(cache_id), K_(tenant_id), K_(is_delete), K_(status), K_(ref_cnt));
+  TO_STRING_KV(K_(cache_id), K_(tenant_id), K_(is_delete), K_(status), K_(is_block_cache), K_(ref_cnt));
 };
 
 class ObKVCacheInstHandle

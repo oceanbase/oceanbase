@@ -95,6 +95,65 @@ struct ObRawFilterMonotonicity
                K_(mono),
                K_(assist_exprs));
 };
+struct ObVectorIndexInfo
+{
+  ObVectorIndexInfo()
+  : sort_key_(),
+    topk_limit_expr_(nullptr),
+    topk_offset_expr_(nullptr),
+    target_vec_column_(nullptr),
+    vec_id_column_(nullptr),
+    delta_vid_column_(),
+    delta_type_column_(),
+    delta_vector_column_(),
+    index_id_scn_column_(),
+    index_id_vid_column_(),
+    index_id_type_column_(),
+    index_id_vector_column_(),
+    snapshot_key_column_(),
+    snapshot_data_column_(),
+    delta_buffer_tid_(OB_INVALID_ID),
+    index_id_tid_(OB_INVALID_ID),
+    index_snapshot_data_tid_(OB_INVALID_ID),
+    main_table_tid_(OB_INVALID_ID)
+  { }
+  ~ObVectorIndexInfo() {}
+
+  TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr),
+              KPC_(vec_id_column), KPC_(delta_vid_column), KPC_(delta_type_column),
+              KPC_(delta_vector_column), KPC_(index_id_scn_column), KPC_(index_id_vid_column),
+              KPC_(index_id_type_column), KPC_(index_id_vector_column),
+              KPC_(snapshot_key_column), KPC_(snapshot_data_column),
+              K_(delta_buffer_tid), K_(index_id_tid), K_(index_snapshot_data_tid),
+              K_(main_table_tid));
+  bool need_sort() const { return sort_key_.expr_ != nullptr; }
+
+  // topn infos
+  OrderItem sort_key_;
+  ObRawExpr *topk_limit_expr_;
+  ObRawExpr *topk_offset_expr_;
+  // table col access expr
+  ObColumnRefRawExpr *target_vec_column_;
+
+  ObColumnRefRawExpr *vec_id_column_;
+
+  // column of delta_buffer_table
+  ObColumnRefRawExpr *delta_vid_column_;
+  ObColumnRefRawExpr *delta_type_column_;
+  ObColumnRefRawExpr *delta_vector_column_;
+  // column of index_id_table
+  ObColumnRefRawExpr *index_id_scn_column_;
+  ObColumnRefRawExpr *index_id_vid_column_;
+  ObColumnRefRawExpr *index_id_type_column_;
+  ObColumnRefRawExpr *index_id_vector_column_;
+  // column of index_snapshot_data_table
+  ObColumnRefRawExpr *snapshot_key_column_;
+  ObColumnRefRawExpr *snapshot_data_column_;
+  uint64_t delta_buffer_tid_;
+  uint64_t index_id_tid_;
+  uint64_t index_snapshot_data_tid_;
+  uint64_t main_table_tid_;
+};
 
 class ObLogTableScan : public ObLogicalOperator
 {
@@ -155,8 +214,11 @@ public:
         use_column_store_(false),
         doc_id_table_id_(common::OB_INVALID_ID),
         text_retrieval_info_(),
+        vector_index_info_(),
         das_keep_ordering_(false),
-        filter_monotonicity_()
+        filter_monotonicity_(),
+        is_tsc_with_vid_(false),
+        rowkey_vid_tid_(common::OB_INVALID_ID)
   {
   }
 
@@ -567,15 +629,19 @@ public:
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
+  inline bool is_tsc_with_vid() const { return is_tsc_with_vid_; }
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
   inline ObTextRetrievalInfo &get_text_retrieval_info() { return text_retrieval_info_; }
   inline const ObTextRetrievalInfo &get_text_retrieval_info() const { return text_retrieval_info_; }
   int prepare_text_retrieval_dep_exprs();
+  int prepare_vector_access_exprs();
   inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; }
-  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() ; }
+  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_vec_idx_scan(); }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
+  inline uint64_t get_rowkey_vid_table_id() const { return rowkey_vid_tid_; }
+  inline const common::ObIArray<ObRawExpr *> &get_rowkey_vid_exprs() const { return rowkey_vid_exprs_; }
   virtual int get_card_without_filter(double &card) override;
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
   inline int has_exec_param(bool &bool_ret) const
@@ -583,10 +649,14 @@ public:
     return est_cost_info_ == NULL ? common::OB_SUCCESS : est_cost_info_->has_exec_param(bool_ret);
   }
   void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
+  inline bool is_vec_idx_scan() const { return is_index_scan() && vector_index_info_.delta_buffer_tid_ != OB_INVALID_ID; }
+  inline ObVectorIndexInfo &get_vector_index_info() { return vector_index_info_; }
+  inline const ObVectorIndexInfo &get_vector_index_info() const { return vector_index_info_; }
 
   inline bool das_need_keep_ordering() const { return das_keep_ordering_; }
 
   int check_das_need_keep_ordering();
+  int check_das_need_scan_with_vid();
 
   const ObIArray<ObRawFilterMonotonicity>& get_filter_monotonicity() const
   { return filter_monotonicity_; }
@@ -610,13 +680,16 @@ private: // member functions
   int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
   int allocate_lookup_trans_info_expr();
   int allocate_group_id_expr();
-  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs);
+  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
   int extract_text_retrieval_access_expr(ObIArray<ObRawExpr *> &exprs);
+  int extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs);
   int get_text_retrieval_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
+  int prepare_rowkey_vid_dep_exprs();
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -728,13 +801,21 @@ protected: // memeber variables
 
   share::schema::ObTableType table_type_;
   bool use_column_store_;
-  uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext and JSON multi-value index
+  uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext, JSON multi-value and vector index
   ObTextRetrievalInfo text_retrieval_info_;
+  ObVectorIndexInfo vector_index_info_;
 
   ObPxRFStaticInfo px_rf_info_;
   bool das_keep_ordering_;
   typedef common::ObSEArray<ObRawFilterMonotonicity, 4, common::ModulePageAllocator, true> FilterMonotonicity;
   FilterMonotonicity filter_monotonicity_;
+
+  // begin for table scan with vid
+  bool is_tsc_with_vid_;
+  uint64_t rowkey_vid_tid_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_vid_exprs_;
+  // end for table scan with vid
+
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

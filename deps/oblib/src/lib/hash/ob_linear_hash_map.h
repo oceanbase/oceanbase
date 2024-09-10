@@ -316,6 +316,7 @@ public:
     virtual ~BlurredIterator() {}
     int next(Key &key, Value &value);
     void rewind();
+    void rewind_randomly();
   private:
     ObLinearHashMap *map_;
     uint64_t bkt_idx_;
@@ -865,6 +866,20 @@ void ObLinearHashMap<Key, Value, MemMgrTag>::BlurredIterator::rewind()
 {
   bkt_idx_ = 0;
   key_idx_ = 0;
+}
+
+template <typename Key, typename Value, typename MemMgrTag>
+void ObLinearHashMap<Key, Value, MemMgrTag>::BlurredIterator::rewind_randomly()
+{
+  bkt_idx_ = 0;
+  key_idx_ = 0;
+  int64_t seed = (ObTimeUtility::current_time() & 0xFFFFFFFF);
+  if (NULL != map_) {
+    const uint64_t bkt_cnt = map_->get_bkt_cnt();
+    if (bkt_cnt > 1) {
+      bkt_idx_ = seed % bkt_cnt;
+    }
+  }
 }
 
 // Public functions.

@@ -69,21 +69,14 @@ int ObExprRbBuildVarbinary::eval_rb_build_varbinary(const ObExpr &expr,
   ObExpr *rb_arg = expr.args_[0];
   bool is_null_result = false;
   bool is_rb_null = false;
-  ObString rb_bin = nullptr;
-  ObString res_rb_bin = nullptr;
+  ObString rb_bin;
+  ObString res_rb_bin;
 
   if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb_arg, rb_bin, is_rb_null))) {
     LOG_WARN("fail to get input roaringbitmap", K(ret));
   } else if (is_rb_null || rb_bin == nullptr) {
-    is_null_result = true;
-  } else if (OB_FAIL(ObRbUtils::build_binary(tmp_allocator, rb_bin, res_rb_bin))) {
-    LOG_WARN("failed to build rb binary", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (is_null_result) {
     res.set_null();
-  } else if (OB_FAIL(ObRbExprHelper::pack_rb_res(expr, ctx, res, res_rb_bin))) {
+  } else if (OB_FAIL(ObRbExprHelper::pack_rb_res(expr, ctx, res, rb_bin))) {
     LOG_WARN("fail to pack roaringbitmap res", K(ret));
   }
 

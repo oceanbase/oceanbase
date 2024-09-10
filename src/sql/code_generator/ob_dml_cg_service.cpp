@@ -868,6 +868,7 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
   bool is_heap_table = false;
+  bool need_vec_vid_merge_iter = false;
   // When the partition key is a virtual generated column,
   // the table with the primary key needs to be replaced,
   // and the table without the primary key does not need to be replaced
@@ -881,6 +882,9 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
     LOG_WARN("fail to generate data_table rowkey_expr", K(ret), K(rowkey_exprs));
   } else if (OB_FAIL(generate_scan_ctdef(op, index_dml_info, conflict_checker_ctdef.das_scan_ctdef_))) {
     LOG_WARN("fail to generate das_scan_ctdef", K(ret));
+  } else if (OB_FAIL(generate_scan_with_vec_vid_ctdef_if_need(op, index_dml_info,
+          conflict_checker_ctdef.das_scan_ctdef_,conflict_checker_ctdef.attach_spec_))) {
+    LOG_WARN("fail to generate scan with doc id ctdef if need", K(ret));
   } else if (OB_FAIL(generate_constraint_infos(op,
                                                index_dml_info,
                                                conflict_checker_ctdef.cst_ctdefs_))) {
@@ -1016,14 +1020,25 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
   return ret;
 }
 
-int ObDmlCgService::generate_access_exprs(const common::ObIArray<ObColumnRefRawExpr*> &columns,
-                               common::ObIArray<ObRawExpr*> &access_exprs)
+int ObDmlCgService::generate_access_exprs(
+    const common::ObIArray<ObColumnRefRawExpr*> &columns,
+    const ObLogicalOperator &op,
+    const bool need_vec_vid,
+    const uint64_t vec_vid_col_id,
+    common::ObIArray<ObRawExpr*> &access_exprs,
+    common::ObIArray<ObRawExpr*> &vec_vid_expr)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+    uint64_t base_cid = OB_INVALID_ID;
     ObRawExpr *expr = columns.at(i);
-    if (expr->is_column_ref_expr() &&
-      static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
+    if (OB_FAIL(get_column_ref_base_cid(op, columns.at(i), base_cid))) {
+      LOG_WARN("get base column id failed", K(ret), K(i), K(columns.at(i)));
+    } else if (need_vec_vid && vec_vid_col_id == base_cid) {
+      if (OB_FAIL(add_var_to_array_no_dup(vec_vid_expr, expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
       // do nothing.
     } else {
       if (OB_FAIL(add_var_to_array_no_dup(access_exprs, expr))) {
@@ -1041,12 +1056,17 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> access_exprs;
   ObSEArray<ObRawExpr*, 16> dep_exprs;
+  ObSEArray<ObRawExpr*, 1> vec_vid_raw_expr;
+  ObSEArray<ObExpr *, 1> vec_vid_expr;
+  ObSEArray<uint64_t, 16> tsc_col_ids;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
+  bool need_vec_vid = false;
   uint64_t ref_table_id = index_dml_info.ref_table_id_;
   // 主表的index_tid_和ref_table_id_都是一样的
   scan_ctdef.ref_table_id_ = ref_table_id;
   const uint64_t tenant_id = MTL_ID();
+  uint64_t vec_vid_col_id = OB_INVALID_ID;
   if (OB_ISNULL(op.get_plan()) ||
       OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
       OB_ISNULL(schema_guard->get_schema_guard())) {
@@ -1054,15 +1074,21 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
     LOG_ERROR("get unexpected null", K(schema_guard), K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_FAIL(check_need_vec_vid_merge_iter(op, ref_table_id, need_vec_vid))) {
+    LOG_WARN("fail to check need vec vid merge iter", K(ret), K(ref_table_id));
   } else if (OB_FAIL(schema_guard->get_schema_guard()->get_schema_version(
       TABLE_SCHEMA, tenant_id, ref_table_id, scan_ctdef.schema_version_))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K(ref_table_id));
-  } else if (OB_FAIL(generate_access_exprs(index_dml_info.column_exprs_, access_exprs))) {
+  } else if (need_vec_vid && OB_FAIL(table_schema->get_vec_index_vid_col_id(vec_vid_col_id))) {
+    LOG_WARN("fail to get vec vid column id", K(ret), KPC(table_schema));
+  } else if (OB_FAIL(generate_access_exprs(index_dml_info.column_exprs_, op, need_vec_vid, vec_vid_col_id, access_exprs, vec_vid_raw_expr))) {
     LOG_WARN("fail to generate access exprs ", K(ret));
   } else if (OB_FAIL(cg_.generate_rt_exprs(access_exprs,
                                            scan_ctdef.pd_expr_spec_.access_exprs_))) {
     LOG_WARN("fail to generate rt exprs ", K(ret));
-  } else if (OB_FAIL(scan_ctdef.access_column_ids_.init(index_dml_info.column_exprs_.count()))) {
+  } else if (OB_FAIL(cg_.generate_rt_exprs(vec_vid_raw_expr, vec_vid_expr))) {
+    LOG_WARN("fail to generate doc id rt exprs", K(ret), K(vec_vid_raw_expr));
+  } else if (OB_FAIL(scan_ctdef.access_column_ids_.init(access_exprs.count()))) {
     LOG_WARN("fail to init output_column_ids_ ", K(ret));
   } else {
     ARRAY_FOREACH(index_dml_info.column_exprs_, i) {
@@ -1071,10 +1097,16 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
       if (OB_ISNULL(item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column item", K(i), K(item));
-      } else if (item->is_virtual_generated_column() && !item->is_xml_column()) {
+      } else if (item->is_virtual_generated_column() && !item->is_xml_column() && !item->is_vec_vid_column()) {
         // do nothing.
       } else if (OB_FAIL(get_column_ref_base_cid(op, item, base_cid))) {
         LOG_WARN("get base column id failed", K(ret), K(item));
+      } else if (OB_FAIL(tsc_col_ids.push_back(base_cid))) {
+        LOG_WARN("fail to push back column id", K(ret));
+      } else if (vec_vid_col_id == base_cid) {
+        if (need_vec_vid) {
+          scan_ctdef.vec_vid_idx_ = tsc_col_ids.count() - 1;
+        }
       } else if (OB_FAIL(scan_ctdef.access_column_ids_.push_back(base_cid))) {
         LOG_WARN("fail to add column id", K(ret));
       }
@@ -1092,7 +1124,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
                                                op.get_type(),
                                                false))) {
       LOG_WARN("generate calc exprs failed", K(ret));
-    } else if (OB_FAIL(cg_.tsc_cg_service_.generate_das_result_output(scan_ctdef.access_column_ids_,
+    } else if (OB_FAIL(cg_.tsc_cg_service_.generate_das_result_output(tsc_col_ids,
+                                                                      vec_vid_expr,
                                                                       scan_ctdef,
                                                                       nullptr))) {
       LOG_WARN("generate das result output failed", K(ret));
@@ -1270,6 +1303,50 @@ int ObDmlCgService::add_geo_col_projector(const ObIArray<ExprType*> &cur_row,
                 K(column_idx), KPC(cur_row.at(column_idx)));
     } else {
       row_projector.at(proj_idx) = projector_idx;
+    }
+  }
+  return ret;
+}
+
+template<typename ExprType>
+int ObDmlCgService::add_vec_idx_col_projector(const ObIArray<ExprType*> &cur_row,
+                                              const ObIArray<ObRawExpr*> &full_row,
+                                              const ObIArray<uint64_t> &dml_column_ids,
+                                              ObDASDMLBaseCtDef &das_ctdef,
+                                              IntFixedArray &row_projector)
+{
+  int ret = OB_SUCCESS;
+  // for vec vid, need to set new_row to VEC_VID expr
+  int64_t column_idx = OB_INVALID_INDEX;
+  int64_t projector_idx = OB_INVALID_INDEX;
+  int64_t pre_projector_idx = OB_INVALID_INDEX;
+  uint64_t vid_cid = das_ctdef.table_param_.get_data_table().get_vec_id_col_id();
+  if (vid_cid != OB_INVALID_ID) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < full_row.count(); ++i) {
+      if (full_row.at(i)->get_expr_type() == T_FUN_SYS_VEC_VID) {
+        projector_idx = i;
+        break;
+      }
+    }
+    if (projector_idx == OB_INVALID_INDEX) {
+      // do nothing, only update primary key will not change vid, maybe not exist
+    } else if (has_exist_in_array(dml_column_ids, vid_cid, &column_idx)) {
+      ObRawExpr *column_expr = cur_row.at(column_idx);
+      if (!has_exist_in_array(full_row, column_expr, &pre_projector_idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("row column not found in full row columns", K(ret),
+                  K(column_idx), KPC(cur_row.at(column_idx)));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < row_projector.count(); ++i) {
+          if (row_projector.at(i) == pre_projector_idx) {
+            // replace vid col ref to VEC_VID for new row
+            row_projector.at(i) = projector_idx;
+            LOG_DEBUG("succeed do replace col ref to vec_vid expr for new row", K(i), K(pre_projector_idx),
+                      K(projector_idx), K(vid_cid), K(full_row));
+            break;
+          }
+        }
+      }
     }
   }
   return ret;
@@ -1875,6 +1952,8 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
   int ret = OB_SUCCESS;
   IntFixedArray &old_row_projector = das_ctdef.old_row_projector_;
   IntFixedArray &new_row_projector = das_ctdef.new_row_projector_;
+  bool is_vec_vid_index = das_ctdef.table_param_.get_data_table().is_vector_index()
+                          && das_ctdef.op_type_ == DAS_OP_TABLE_UPDATE;
   bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index();
   uint8_t extra_geo = (is_spatial_index) ? 1 : 0;
   //generate old row projector
@@ -1957,6 +2036,10 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
                                          das_ctdef, new_row_projector))) {
         LOG_WARN("add geo column projector failed", K(ret));
     }
+    if (OB_SUCC(ret) && is_vec_vid_index &&
+        OB_FAIL(add_vec_idx_col_projector(new_row, full_row, dml_column_ids, das_ctdef, new_row_projector))) {
+      LOG_WARN("add vec idx column for new projector failed", K(ret));
+    }
   }
 
   LOG_TRACE("print dml_column_ids", K(dml_column_ids), K(storage_column_ids),
@@ -2034,6 +2117,7 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
   das_dml_ctdef.index_tid_ = index_tid;
   das_dml_ctdef.is_ignore_ = op.is_ignore();
   das_dml_ctdef.is_batch_stmt_ = op.get_plan()->get_optimizer_context().is_batched_multi_stmt();
+  das_dml_ctdef.is_access_vidx_as_master_table_ = false;
   ObSQLSessionInfo *session = nullptr;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   if (OB_FAIL(convert_dml_column_info(index_tid, false, das_dml_ctdef))) {
@@ -2078,6 +2162,11 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
     }
   }
 #endif
+  if (OB_FAIL(ret)) {
+  } else if (das_dml_ctdef.table_param_.get_data_table().is_vector_index() &&
+             0 == index_dml_info.related_index_ids_.count()) {
+    das_dml_ctdef.is_access_vidx_as_master_table_ = true;
+  }
   return ret;
 }
 
@@ -3979,5 +4068,185 @@ int ObDmlCgService::init_encrypt_table_meta_(
   return ret;
 }
 #endif
+
+int ObDmlCgService::check_need_vec_vid_merge_iter(
+    ObLogicalOperator &op,
+    const uint64_t ref_table_id,
+    bool &need_vec_vid_merge_iter)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *log_plan = op.get_plan();
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  const ObDelUpdStmt *dml_stmt = nullptr;
+  need_vec_vid_merge_iter = false;
+  if (OB_ISNULL(log_plan) ||
+      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), ref_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ref_table_id), K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_schema));
+  } else if (OB_FAIL(table_schema->check_has_vector_index(*schema_guard, need_vec_vid_merge_iter))) {
+    LOG_WARN("fail to check has fts index", K(ret), KPC(table_schema));
+  } else if (need_vec_vid_merge_iter) {
+    LOG_TRACE("has fts index, need doc id merge iter", K(ret), K(ref_table_id));
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_scan_with_vec_vid_ctdef_if_need(
+    ObLogInsert &op,
+    const IndexDMLInfo &index_dml_info,
+    ObDASScanCtDef &scan_ctdef,
+    ObDASAttachSpec &attach_spec)
+{
+  int ret = OB_SUCCESS;
+  bool need_vec_vid_merge_iter = false;
+  ObArray<ObExpr*> result_outputs;
+  ObDASVIdMergeCtDef *vec_vid_merge_ctdef = nullptr;
+  ObDASScanCtDef *rowkey_vid_scan_ctdef = nullptr;
+  if (OB_FAIL(check_need_vec_vid_merge_iter(op, index_dml_info.ref_table_id_, need_vec_vid_merge_iter))) {
+    LOG_WARN("fail to check need vec vid merge iter", K(ret));
+  } else if (!need_vec_vid_merge_iter) {
+    // just skip, nothing to do
+  } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_VID_MERGE, cg_.phy_plan_->get_allocator(),
+          vec_vid_merge_ctdef))) {
+    LOG_WARN("fail to allocate to vec vid merge ctdef", K(ret));
+  } else if (OB_ISNULL(vec_vid_merge_ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &cg_.phy_plan_->get_allocator(), 2))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate vec vid merge ctdef child array memory", K(ret));
+  } else if (OB_FAIL(generate_rowkey_vid_ctdef(op, index_dml_info, attach_spec, rowkey_vid_scan_ctdef))) {
+    LOG_WARN("fail to generate rowkey vid ctdef", K(ret));
+  } else if (OB_FAIL(result_outputs.assign(scan_ctdef.result_output_))) {
+    LOG_WARN("construct aux lookup ctdef failed", K(ret));
+  } else if (OB_UNLIKELY(result_outputs.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, result outputs is nullptr", K(ret));
+  } else {
+    vec_vid_merge_ctdef->children_cnt_ = 2;
+    vec_vid_merge_ctdef->children_[0] = &scan_ctdef;
+    vec_vid_merge_ctdef->children_[1] = rowkey_vid_scan_ctdef;
+    if (OB_FAIL(vec_vid_merge_ctdef->result_output_.assign(result_outputs))) {
+      LOG_WARN("fail to assign result output", K(ret));
+    } else {
+      attach_spec.attach_ctdef_ = static_cast<ObDASBaseCtDef *>(vec_vid_merge_ctdef);
+    }
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_rowkey_vid_ctdef(
+    ObLogInsert &op,
+    const IndexDMLInfo &index_dml_info,
+    ObDASAttachSpec &attach_spec,
+    ObDASScanCtDef *&rowkey_vid_scan_ctdef)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *data_schema = nullptr;
+  const ObTableSchema *rowkey_vid_schema = nullptr;
+  ObDASScanCtDef *scan_ctdef = nullptr;
+  ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
+  ObDASTableLocMeta *loc_meta = nullptr;
+  uint64_t rowkey_vid_tid = OB_INVALID_ID;
+
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, schema guard is nullptr", K(ret), KP(cg_.opt_ctx_));
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_dml_info.ref_table_id_, data_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(index_dml_info.ref_table_id_));
+  } else if (OB_ISNULL(data_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get data table schema", K(ret));
+  } else if (OB_FAIL(data_schema->get_rowkey_vid_tid(rowkey_vid_tid))) {
+    LOG_WARN("failed to get rowkey vid tid", K(ret), KPC(data_schema));
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_dml_info.ref_table_id_,
+                                                    rowkey_vid_tid,
+                                                    op.get_stmt(),
+                                                    rowkey_vid_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(rowkey_vid_tid));
+  } else if (OB_ISNULL(rowkey_vid_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get rowkey vid schema", K(ret), K(rowkey_vid_tid));
+  } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_TABLE_SCAN, cg_.phy_plan_->get_allocator(), scan_ctdef))) {
+    LOG_WARN("alloc das ctdef failed", K(ret));
+  } else if (OB_FAIL(generate_rowkey_vid_access_expr(index_dml_info.column_exprs_,
+                                                     *rowkey_vid_schema,
+                                                     scan_ctdef))) {
+    LOG_WARN("fail to generate rowkey doc access expr", K(ret), K(index_dml_info));
+  } else if (OB_ISNULL(loc_meta = OB_NEWx(ObDASTableLocMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator()))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate rowkey doc scan location meta failed", K(ret));
+  } else {
+    scan_ctdef->ref_table_id_ = rowkey_vid_tid;
+    loc_meta->table_loc_id_ = index_dml_info.loc_table_id_;
+    loc_meta->ref_table_id_ = rowkey_vid_tid;
+    loc_meta->select_leader_ = 1;
+    loc_meta->is_dup_table_ = (ObDuplicateScope::DUPLICATE_SCOPE_NONE != rowkey_vid_schema->get_duplicate_scope());
+    loc_meta->unuse_related_pruning_ = (OB_PHY_PLAN_DISTRIBUTED == cg_.opt_ctx_->get_phy_plan_type()
+                                       && !cg_.opt_ctx_->get_root_stmt()->is_insert_stmt());
+    loc_meta->is_external_table_ = rowkey_vid_schema->is_external_table();
+    loc_meta->is_external_files_on_disk_ =
+        ObSQLUtils::is_external_files_on_local_disk(rowkey_vid_schema->get_external_file_location());
+    scan_ctdef->table_param_.get_enable_lob_locator_v2()
+        = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
+    scan_ctdef->schema_version_ = rowkey_vid_schema->get_schema_version();
+    ObSEArray<ObExpr *, 1> vid_id_expr;
+    if (OB_FAIL(attach_spec.attach_loc_metas_.push_back(loc_meta))) {
+      LOG_WARN("store scan loc meta failed", K(ret));
+    } else if (OB_FAIL(scan_ctdef->table_param_.convert(*rowkey_vid_schema, scan_ctdef->access_column_ids_,
+            scan_ctdef->pd_expr_spec_.pd_storage_flag_))) {
+      LOG_WARN("fail to convert table param", K(ret));
+    } else if (OB_FAIL(cg_.tsc_cg_service_.generate_das_result_output(scan_ctdef->access_column_ids_,
+                                                                      vid_id_expr,
+                                                                      *scan_ctdef,
+                                                                      nullptr))) {
+      LOG_WARN("fail to generate das result output", K(ret));
+    } else {
+      rowkey_vid_scan_ctdef = scan_ctdef;
+    }
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_rowkey_vid_access_expr(
+    const common::ObIArray<ObColumnRefRawExpr *> &columns,
+    const ObTableSchema &rowkey_vid,
+    ObDASScanCtDef *ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 16> access_exprs;
+  ObArray<uint64_t> rowkey_vid_column_ids;
+  if (OB_ISNULL(ctdef) || OB_UNLIKELY(columns.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(ctdef), K(columns));
+  } else if (OB_FAIL(rowkey_vid.get_column_ids(rowkey_vid_column_ids))) {
+    LOG_WARN("fail to get column ids from rowkey doc", K(ret), K(rowkey_vid));
+  } else if (OB_FAIL(ctdef->access_column_ids_.init(rowkey_vid_column_ids.count()))) {
+    LOG_WARN("fail to init output_column_ids_ ", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+      ObColumnRefRawExpr *expr = columns.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, expr is nullptr", K(ret), K(i), K(columns));
+      } else if (has_exist_in_array(rowkey_vid_column_ids, expr->get_column_id())) {
+        if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr *>(expr)))) {
+          LOG_WARN("failed to add param expr", K(ret));
+        } else if (OB_FAIL(ctdef->access_column_ids_.push_back(expr->get_column_id()))) {
+          LOG_WARN("fail to push back column id", K(ret));
+        }
+      }
+    }
+    if (FAILEDx(cg_.generate_rt_exprs(access_exprs, ctdef->pd_expr_spec_.access_exprs_))) {
+      LOG_WARN("fail to generate rt exprs", K(ret));
+    }
+  }
+  LOG_TRACE("generate rowkey vid access expr", K(ret), K(access_exprs), K(rowkey_vid_column_ids), K(columns));
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

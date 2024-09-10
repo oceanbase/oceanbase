@@ -566,9 +566,9 @@ int64_t ObTmpWriteBufferPool::get_memory_limit()
     } else if (0 == tenant_config->_temporary_file_io_area_size) {
       memory_limit = 0;
     } else {
-      memory_limit = common::upper_align(
-          lib::get_tenant_memory_limit(MTL_ID()) * tenant_config->_temporary_file_io_area_size / 100,
-          WBP_BLOCK_SIZE);
+      int64_t config_memory_limit =
+        lib::get_tenant_memory_limit(MTL_ID()) * tenant_config->_temporary_file_io_area_size / 100;
+      memory_limit = ((config_memory_limit + WBP_BLOCK_SIZE - 1) / WBP_BLOCK_SIZE) * WBP_BLOCK_SIZE;
     }
     ATOMIC_STORE(&wbp_memory_limit_, memory_limit);
     ATOMIC_STORE(&last_access_tenant_config_ts_, common::ObClockGenerator::getClock());
@@ -590,7 +590,7 @@ int64_t ObTmpWriteBufferPool::get_swap_size()
   int64_t low_watermark_bytes = (double)LOW_WATERMARK_PECENTAGE / 100 * memory_limit;
   int64_t used_bytes = used_page_num * ObTmpFileGlobal::PAGE_SIZE;
 
-  const int64_t MACRO_BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t MACRO_BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
 
   int64_t swap_size = 0;
   if (used_bytes > high_watermark_bytes) {
@@ -918,6 +918,19 @@ int64_t ObTmpWriteBufferPool::get_dirty_page_percentage()
   return max_page_num == 0 ? 0 : dirty_page_num * 100 / max_page_num;
 }
 
+int64_t ObTmpWriteBufferPool::get_cannot_be_evicted_page_percentage()
+{
+  int64_t max_page_num = get_max_page_num();
+
+  int64_t dirty_page_num = ATOMIC_LOAD(&dirty_page_num_);
+
+  int64_t write_back_data_num = ATOMIC_LOAD(&write_back_data_cnt_);
+  int64_t write_back_meta_num = ATOMIC_LOAD(&write_back_meta_cnt_);
+  int64_t total_write_back_num = write_back_data_num + write_back_meta_num;
+
+  return max_page_num == 0 ? 0 : (dirty_page_num + total_write_back_num) * 100 / max_page_num;
+}
+
 int64_t ObTmpWriteBufferPool::get_dirty_page_num()
 {
   return ATOMIC_LOAD(&dirty_page_num_);
@@ -946,6 +959,17 @@ int64_t ObTmpWriteBufferPool::get_max_data_page_num()
 int64_t ObTmpWriteBufferPool::get_meta_page_num()
 {
   return ATOMIC_LOAD(&meta_page_cnt_);
+}
+
+int64_t ObTmpWriteBufferPool::get_free_data_page_num()
+{
+  int64_t data_page_cnt = ATOMIC_LOAD(&data_page_cnt_);
+  int64_t meta_page_cnt = ATOMIC_LOAD(&meta_page_cnt_);
+
+  int64_t total_free_page_cnt = get_max_page_num() - data_page_cnt - meta_page_cnt;
+  int64_t data_free_page_cnt = get_max_data_page_num() - data_page_cnt;
+
+  return MIN(total_free_page_cnt, data_free_page_cnt);
 }
 
 bool ObTmpWriteBufferPool::has_free_page_(PageEntryType type)

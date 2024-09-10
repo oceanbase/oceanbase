@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "observer/omt/ob_tenant_node_balancer.h"
+#include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase
 {
@@ -41,7 +42,7 @@ public:
     ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id_);
     ObUnitInfoGetter::ObTenantConfig unit_config;
     unit_config.mode_ = lib::Worker::CompatMode::MYSQL;
-    unit_config.tenant_id_ = 0;
+    unit_config.tenant_id_ = tenant_id_;
     TenantUnits units;
     ASSERT_EQ(OB_SUCCESS, units.push_back(unit_config));
 
@@ -52,7 +53,6 @@ public:
     ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
 
     ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-    ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id_));
     ASSERT_EQ(OB_SUCCESS, ma->set_tenant_limit(tenant_id_, 1LL << 30));
   }
   void TearDown()
@@ -70,10 +70,22 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestSSTableMergeInfoMgr);
 };
 
+void init_merge_history(ObSSTableMergeHistory &merge_info)
+{
+  merge_info.static_info_.ls_id_ = 1;
+  merge_info.static_info_.tablet_id_ = 3;
+  merge_info.static_info_.compaction_scn_ = 100;
+  merge_info.static_info_.merge_type_ = ObMergeType::MINOR_MERGE;
+  merge_info.static_info_.exec_mode_ = EXEC_MODE_LOCAL;
+  merge_info.running_info_.merge_start_time_ = ObTimeUtility::fast_current_time();
+  merge_info.running_info_.merge_finish_time_ = ObTimeUtility::fast_current_time();
+  merge_info.running_info_.dag_id_.init(GCTX.self_addr());
+}
+
 TEST_F(TestSSTableMergeInfoMgr, normal)
 {
   int ret = OB_SUCCESS;
-  ObSSTableMergeInfo merge_info;
+  ObSSTableMergeHistory merge_info;
   compaction::ObDiagnoseInfoParam<2, 0> info_param;
   info_param.type_.suspect_type_ = ObSuspectInfoType::SUSPECT_MEMTABLE_CANT_MINOR_MERGE;
   info_param.struct_type_ = compaction::ObInfoParamStructType::SUSPECT_INFO_PARAM;
@@ -81,6 +93,7 @@ TEST_F(TestSSTableMergeInfoMgr, normal)
 
   ObTenantSSTableMergeInfoMgr *merge_info_mgr = MTL(ObTenantSSTableMergeInfoMgr*);
   ASSERT_TRUE(nullptr != merge_info_mgr);
+  MTL(ObTenantSSTableMergeInfoMgr*)->destroy();
   //not init
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_NE(OB_SUCCESS, ret);
@@ -90,13 +103,11 @@ TEST_F(TestSSTableMergeInfoMgr, normal)
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  merge_info.ls_id_ = 1;
-  merge_info.tablet_id_ = 2;
-  merge_info.compaction_scn_ = 100;
+  init_merge_history(merge_info);
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  merge_info.tablet_id_ = 3;
+  merge_info.static_info_.tablet_id_ = 3;
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -111,30 +122,26 @@ TEST_F(TestSSTableMergeInfoMgr, iterator)
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->init(MERGE_INFO_PAGE_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObSSTableMergeInfo merge_info;
+  ObSSTableMergeHistory merge_info;
   compaction::ObDiagnoseInfoParam<2, 0> info_param;
   info_param.type_.suspect_type_ = ObSuspectInfoType::SUSPECT_MEMTABLE_CANT_MINOR_MERGE;
   info_param.struct_type_ = compaction::ObInfoParamStructType::SUSPECT_INFO_PARAM;
   merge_info.info_param_ = &info_param;
 
-  const uint64_t tenant_id = 1001;
-  merge_info.ls_id_ = 1;
-  merge_info.tablet_id_ = 3;
-  merge_info.compaction_scn_ = 100;
-  merge_info.merge_type_ = ObMergeType::MINOR_MERGE;
+  init_merge_history(merge_info);
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  merge_info.tablet_id_ = 4;
+  merge_info.static_info_.tablet_id_ = 4;
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  merge_info.tablet_id_ = 1;
-  merge_info.merge_type_ = ObMergeType::MAJOR_MERGE;
+  merge_info.static_info_.tablet_id_ = 1;
+  merge_info.static_info_.merge_type_ = ObMergeType::MAJOR_MERGE;
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  merge_info.tablet_id_ = 2;
+  merge_info.static_info_.tablet_id_ = 2;
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -144,14 +151,14 @@ TEST_F(TestSSTableMergeInfoMgr, iterator)
   compaction::ObIDiagnoseInfoMgr::Iterator minor_iterator;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_iterator, minor_iterator));
 
-  ObSSTableMergeInfo read_info;
+  ObSSTableMergeHistory read_info;
   char comment[common::OB_COMPACTION_EVENT_STR_LENGTH];
   int i = 1;
   while (OB_SUCC(ret)) {
     if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)))) {
       ASSERT_EQ(OB_ITER_END, ret);
     } else {
-      ASSERT_EQ(ObTabletID(i), read_info.tablet_id_);
+      ASSERT_EQ(ObTabletID(i), read_info.static_info_.tablet_id_);
       ++i;
     }
   }
@@ -162,25 +169,37 @@ TEST_F(TestSSTableMergeInfoMgr, iterator)
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_iterator1, minor_iterator1));
   i = 1;
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator1, minor_iterator1, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i++));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == MAJOR_MERGE);
+  ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(i++));
+  ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == MAJOR_MERGE);
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator1, minor_iterator1, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i++));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == MAJOR_MERGE);
+  ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(i++));
+  ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == MAJOR_MERGE);
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator1, minor_iterator1, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i++));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == MINOR_MERGE);
+  ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(i++));
+  ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == MINOR_MERGE);
 
   compaction::ObIDiagnoseInfoMgr::Iterator major_iterator2;
   compaction::ObIDiagnoseInfoMgr::Iterator minor_iterator2;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_iterator2, minor_iterator2));
   i = 1;
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator2, minor_iterator2, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i++));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == MAJOR_MERGE);
+  ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(i++));
+  ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == MAJOR_MERGE);
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator2, minor_iterator2, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i++));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == MAJOR_MERGE);
+  ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(i++));
+  ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == MAJOR_MERGE);
+}
+
+void add_merge_info(
+  const int64_t tablet_id,
+  const ObMergeType merge_type)
+{
+  ObSSTableMergeHistory merge_info;
+  init_merge_history(merge_info);
+  merge_info.static_info_.tablet_id_ = ObTabletID(tablet_id);
+  merge_info.static_info_.compaction_scn_ = 100;
+  merge_info.static_info_.merge_type_ = merge_type;
+  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info));
 }
 
 TEST_F(TestSSTableMergeInfoMgr, resize)
@@ -192,28 +211,25 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->init(MERGE_INFO_PAGE_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObSSTableMergeInfo merge_info;
+  ObSSTableMergeHistory merge_info;
   compaction::ObDiagnoseInfoParam<2, 0> info_param;
   info_param.type_.suspect_type_ = ObSuspectInfoType::SUSPECT_MEMTABLE_CANT_MINOR_MERGE;
   info_param.struct_type_ = compaction::ObInfoParamStructType::SUSPECT_INFO_PARAM;
   merge_info.info_param_ = &info_param;
+#define ADD_MAJOR_MERGE_INFO(tablet_id) \
+  add_merge_info(tablet_id, ObMergeType::MAJOR_MERGE)
+#define ADD_MINOR_MERGE_INFO(tablet_id) \
+  add_merge_info(tablet_id, ObMergeType::MINOR_MERGE)
 
-  const uint64_t tenant_id = 1001;
-  merge_info.ls_id_ = 1;
-  merge_info.compaction_scn_ = 100;
-  merge_info.merge_type_ = ObMergeType::MINOR_MERGE;
   const int64_t max_cnt = 20;
   int i = 0;
   for (i = 0; i < max_cnt; ++i) {
-    merge_info.tablet_id_ = 1+i;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info));
+    ADD_MAJOR_MERGE_INFO(i + 1);
   }
   ASSERT_EQ(max_cnt, MTL(ObTenantSSTableMergeInfoMgr*)->size());
 
-  merge_info.merge_type_ = ObMergeType::MAJOR_MERGE;
   for (i = 0; i < max_cnt; ++i) {
-    merge_info.tablet_id_ = 1+i;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info));
+    ADD_MINOR_MERGE_INFO(i + 1);
   }
   ASSERT_EQ(2 * max_cnt, MTL(ObTenantSSTableMergeInfoMgr*)->size());
 
@@ -221,105 +237,46 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
   compaction::ObIDiagnoseInfoMgr::Iterator minor_iterator;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_iterator, minor_iterator));
 
-  ObSSTableMergeInfo read_info;
+  ObSSTableMergeHistory read_info;
   char comment[common::OB_COMPACTION_EVENT_STR_LENGTH];
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(1));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MAJOR_MERGE);
+  ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(1));
+  ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == ObMergeType::MAJOR_MERGE);
 
-  // every info is 880 bytes, each page contains 8 info, 20 infos are in 3 pages (8 8 4)
-  // after set_max, major pool has 1 page, minor pool has 3 page
-  // major pool left 3 info (3 * 880 < 8192 * 0.4)
-  // minor pool don't need to purge
-  ret = MTL(ObTenantSSTableMergeInfoMgr*)->set_max(4 * MERGE_INFO_PAGE_SIZE);
+  const int64_t MEMORY_SIZE = 4 * MERGE_INFO_PAGE_SIZE;
+  ret = MTL(ObTenantSSTableMergeInfoMgr*)->set_max(MEMORY_SIZE);
+  // after set max size, major pool need purge under GC_LOW_PERCENTAGE, minor pool should not purge
+
+  const int64_t minor_pool_size = MEMORY_SIZE * ObTenantSSTableMergeInfoMgr::MINOR_MEMORY_PERCENTAGE / 100;
+  const int64_t major_pool_size = MEMORY_SIZE * (100 - ObTenantSSTableMergeInfoMgr::MINOR_MEMORY_PERCENTAGE) / 100;
+  const int64_t after_purge_major_pool_size = ObIDiagnoseInfoMgr::GC_LOW_PERCENTAGE / 100.0 * major_pool_size;
+  int64_t minor_item_cnt = MIN(minor_pool_size / sizeof(ObSSTableMergeHistory), max_cnt);
+  int64_t major_item_cnt_after_purge = MIN(after_purge_major_pool_size / sizeof(ObSSTableMergeHistory), max_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(3 + 20, MTL(ObTenantSSTableMergeInfoMgr*)->size());
-
-  i = 18;
-  while (i <= 20 && OB_SUCC(ret)) {
+  ASSERT_EQ(minor_item_cnt + major_item_cnt_after_purge, MTL(ObTenantSSTableMergeInfoMgr*)->size());
+  int64_t read_idx = 0;
+  // read major merge info from {max_cnt-major_item_cnt_after_purge..max_cnt}
+  int64_t tablet_start_idx = max_cnt - major_item_cnt_after_purge + 1;
+  while (read_idx < major_item_cnt_after_purge && OB_SUCC(ret)) {
     if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)))) {
       ASSERT_EQ(OB_ITER_END, ret);
     } else {
-      ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i));
-      ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MAJOR_MERGE);
-      ++i;
+      ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(tablet_start_idx + read_idx));
+      ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == ObMergeType::MAJOR_MERGE);
+      ++read_idx;
     }
   }
-  i = 1;
-  while (i <= 20 && OB_SUCC(ret)) {
+  // read minor merge info from {1..max_cnt}
+  read_idx = 0;
+  while (read_idx < minor_item_cnt && OB_SUCC(ret)) {
     if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)))) {
       ASSERT_EQ(OB_ITER_END, ret);
     } else {
-      ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i));
-      ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MINOR_MERGE);
-      ++i;
+      ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(read_idx + 1));
+      ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == ObMergeType::MINOR_MERGE);
+      ++read_idx;
     }
   }
-
-  merge_info.merge_type_ = ObMergeType::MAJOR_MERGE;
-  // before add , major pool has one page which contains 4 info (1 purged, 3 valid)
-  for (i = 1; i <= 10; ++i) {
-    merge_info.tablet_id_ = max_cnt+i;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info));
-  }
-  ASSERT_EQ(6 + 20, MTL(ObTenantSSTableMergeInfoMgr*)->size());
-
-  major_iterator.reset();
-  minor_iterator.reset();
-  ret = MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_iterator, minor_iterator);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // let the iter in the major merge info pool iter_end
-  i = 25;
-  while (i <= 30 && OB_SUCC(ret)) {
-    if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)))) {
-      ASSERT_EQ(OB_ITER_END, ret);
-    } else {
-      ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i));
-      ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MAJOR_MERGE);
-      ++i;
-    }
-  }
-  ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(1));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MINOR_MERGE);
-
-  compaction::ObIDiagnoseInfoMgr::Iterator major_iterator1;
-  compaction::ObIDiagnoseInfoMgr::Iterator minor_iterator1;
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_iterator1, minor_iterator1));
-  i = 25;
-  while (i <= 30 && OB_SUCC(ret)) {
-    if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator1, minor_iterator1, read_info, comment, sizeof(comment)))) {
-      ASSERT_EQ(OB_ITER_END, ret);
-    } else {
-      ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(i));
-      ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MAJOR_MERGE);
-      ++i;
-    }
-  }
-
-  // after set_max, major pool has 1 page, minor pool has 2 pages
-  // major pool don't need to purge (5)
-  // minor pool left 6 info (6 * 912 < 16384 * 0.4) (3 4)
-  ret = MTL(ObTenantSSTableMergeInfoMgr*)->set_max(2 * MERGE_INFO_PAGE_SIZE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(6 + 6, MTL(ObTenantSSTableMergeInfoMgr*)->size());
-
-  merge_info.merge_type_ = ObMergeType::MAJOR_MERGE;
-  merge_info.tablet_id_ = 31;
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info));
-
-  // the iterator will not get the new major merge info because it is in the iter_end
-  // but it can continue to get the info in minor merge info pool
-  ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)));
-  COMMON_LOG(INFO, "print read info", K(read_info));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(15));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MINOR_MERGE);
-
-  ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator1, minor_iterator1, read_info, comment, sizeof(comment)));
-  COMMON_LOG(INFO, "print read info", K(read_info));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(31));
-  ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MAJOR_MERGE);
 }
 
 }  // end namespace unittest
@@ -329,7 +286,8 @@ int main(int argc, char **argv)
 {
   system("rm -f test_sstable_merge_info_mgr.log*");
   OB_LOGGER.set_file_name("test_sstable_merge_info_mgr.log");
-  OB_LOGGER.set_log_level("DEBUG");
+  //OB_LOGGER.set_log_level("DEBUG");
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

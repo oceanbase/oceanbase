@@ -35,9 +35,10 @@
 
 namespace oceanbase
 {
+const char *shared_storage_info __attribute__((weak)) = NULL;
+
 namespace observer
 {
-
 uint32_t get_local_addr(const char *dev_name)
 {
   int fd, intrface;
@@ -78,11 +79,13 @@ uint32_t get_local_addr(const char *dev_name)
 ObSimpleServer::ObSimpleServer(const std::string &env_prefix,
                                const char *log_disk_size,
                                const char *memory_limit,
+                               const char *datafile_size,
                                ObServer &server,
                                const std::string &dir_prefix)
   : server_(server),
     log_disk_size_(log_disk_size),
     memory_limit_(memory_limit),
+    datafile_size_(datafile_size),
     data_dir_(dir_prefix),
     run_dir_(env_prefix)
 {
@@ -135,7 +138,7 @@ int ObSimpleServer::simple_init()
   opts.rs_list_ = rs_list_.c_str();
   // NOTE: memory_limit must keep same with log_disk_size
   optstr_ = std::string();
-  optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=10G,stack_size=512K";
+  optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=" + std::string(datafile_size_) +",stack_size=512K";
   opts.optstr_ = optstr_.c_str();
   //opts.devname_ = "eth0";
   opts.use_ipv6_ = false;
@@ -203,6 +206,7 @@ int ObSimpleServer::simple_init()
   }
 
   ObPLogWriterCfg log_cfg;
+
   ret = server_.init(opts, log_cfg);
   if (OB_FAIL(ret)) {
     return ret;
@@ -366,6 +370,12 @@ int ObSimpleServer::bootstrap()
     obrpc::ObBootstrapArg arg;
     arg.cluster_role_ = common::PRIMARY_CLUSTER;
     arg.server_list_.push_back(server_info);
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (NULL != shared_storage_info) {
+      ObString shared_storage_info_str(strlen(shared_storage_info), shared_storage_info);
+      arg.shared_storage_info_ = shared_storage_info_str;
+    }
+#endif
     if (OB_FAIL(srv_proxy.bootstrap(arg))) {
       SERVER_LOG(WARN, "bootstrap failed", K(arg), K(ret));
     }

@@ -35,7 +35,8 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
     common::ObIAllocator &allocator,
-    const blocksstable::ObDmlFlag dml_flag)
+    const blocksstable::ObDmlFlag dml_flag,
+    bool is_need_row_datum_utils)
   : store_ctx_(store_ctx),
     dml_param_(dml_param),
     allocator_(allocator),
@@ -44,10 +45,18 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     col_map_(nullptr),
     col_descs_(nullptr),
     column_ids_(nullptr),
-    tbl_row_(),
+    datum_row_(),
+    cmp_funcs_(),
     is_old_row_valid_for_lob_(false),
+    is_need_check_old_row_(is_need_row_datum_utils),
+    is_udf_(false),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_RELATIVE_TABLE),
+    is_need_row_datum_utils_(is_need_row_datum_utils),
     is_inited_(false)
+{
+}
+
+ObDMLRunningCtx::~ObDMLRunningCtx()
 {
 }
 
@@ -89,6 +98,10 @@ int ObDMLRunningCtx::init(
     LOG_WARN("failed to get relative table", K(ret), K(dml_param_));
   } else if (NULL != column_ids && OB_FAIL(prepare_column_info(*column_ids))) {
     LOG_WARN("fail to get column descriptions and column map", K(ret), K(*column_ids));
+  } else if (is_need_check_old_row_ && OB_FAIL(check_need_old_row_legitimacy())) {
+    LOG_WARN("fail to get flag of checking old row legitimacy", K(ret));
+  } else if (is_need_check_old_row_ && OB_FAIL(init_cmp_funcs())) {
+    LOG_WARN("fail to init compare functions", K(ret));
   } else {
     store_ctx_.mvcc_acc_ctx_.mem_ctx_->set_table_version(dml_param_.schema_version_);
     store_ctx_.table_version_ = dml_param_.schema_version_;
@@ -156,6 +169,101 @@ int ObDMLRunningCtx::prepare_column_info(const common::ObIArray<uint64_t> &colum
       LOG_WARN("col desc is empty", K(ret));
     } else if (ObDmlFlag::DF_UPDATE == dml_flag_) {
       col_map_ = &(dml_param_.table_param_->get_col_map());
+    }
+  }
+  return ret;
+}
+
+int ObDMLRunningCtx::check_need_old_row_legitimacy()
+{
+  int ret = OB_SUCCESS;
+  // TODO(jingxing): setting this to true
+  if (OB_FAIL(relative_table_.has_udf_column(is_need_check_old_row_))) {
+    LOG_WARN("check has udf column failed", K(ret));
+  } else if (is_need_check_old_row_) {
+    is_udf_ = true;
+    ObTableStoreIterator &table_iter = *relative_table_.tablet_iter_.table_iter();
+    while (OB_SUCC(ret) && !is_need_check_old_row_) {
+      ObITable *table_ptr = nullptr;
+      if (OB_FAIL(table_iter.get_next(table_ptr))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next table failed", K(ret));
+        }
+      } else if (OB_ISNULL(table_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, table ptr must not be nullptr", K(ret));
+      } else {
+        is_need_check_old_row_ = table_ptr->is_major_sstable();
+      }
+    }
+  } else if (dml_param_.is_batch_stmt_ && !relative_table_.is_index_table()) {
+    //batch stmt execution dependency defensive check to check
+    //if the same row was modified multiple times
+    is_need_check_old_row_ = true;
+    ret = OB_E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
+    // no need to check old row, just for bmsql performance optimization
+    // TODO yuchen.ywc
+    if (OB_SUCCESS != ret) {
+      LOG_INFO("error sim when current statement is batch update", K(ret), K_(is_udf));
+      is_need_check_old_row_ = false;
+      ret = OB_SUCCESS;
+    }
+  } else if (GCONF.enable_defensive_check()) {
+    is_need_check_old_row_ = true;
+    if (relative_table_.is_index_table() && !relative_table_.can_read_index()) {
+      //index can not be read during building index, so does not check old index row
+      is_need_check_old_row_ = false;
+    }
+    if (ObDmlFlag::DF_LOCK == dml_flag_) {
+      is_need_check_old_row_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObDMLRunningCtx::init_cmp_funcs()
+{
+  int ret = OB_SUCCESS;
+  const common::ObIArray<share::schema::ObColDesc> &col_descs = dml_param_.table_param_->get_col_descs();
+  int64_t column_cnt = col_descs.count();
+  if (OB_UNLIKELY(column_cnt < 0 || column_cnt > OB_ROW_MAX_COLUMNS_COUNT)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to init compare functions", K(ret), K(column_cnt), K(col_descs));
+  } else if (OB_FAIL(cmp_funcs_.init(column_cnt, allocator_))) {
+    STORAGE_LOG(WARN, "Failed to reserve cmp func array", K(ret));
+  } else {
+    bool is_oracle_mode = lib::is_oracle_mode();
+    ObCmpFunc cmp_func;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); i++) {
+      const share::schema::ObColDesc &col_desc = col_descs.at(i);
+      //TODO @hanhui support desc rowkey
+      bool is_ascending = true || col_desc.col_order_ == ObOrderType::ASC;
+      bool has_lob_header = is_lob_storage(col_desc.col_type_.get_type());
+      ObPrecision precision = PRECISION_UNKNOWN_YET;
+      if (col_desc.col_type_.is_decimal_int()) {
+        precision = col_desc.col_type_.get_stored_precision();
+        OB_ASSERT(precision != PRECISION_UNKNOWN_YET);
+      }
+      sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_desc.col_type_.get_type(),
+                                                                        col_desc.col_type_.get_collation_type(),
+                                                                        col_desc.col_type_.get_scale(),
+                                                                        is_oracle_mode,
+                                                                        has_lob_header,
+                                                                        precision);
+      if (OB_UNLIKELY(nullptr == basic_funcs || nullptr == basic_funcs->null_last_cmp_)) {
+        ret = OB_ERR_SYS;
+        STORAGE_LOG(ERROR, "Unexpected null basic funcs", K(ret), K(col_desc));
+      } else {
+        if (is_ascending) {
+          cmp_func.cmp_func_ = is_oracle_mode ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
+          if (OB_FAIL(cmp_funcs_.push_back(ObStorageDatumCmpFunc(cmp_func)))) {
+            STORAGE_LOG(WARN, "Failed to push back cmp func", K(ret), K(i), K(col_desc));
+          }
+        } else {
+          ret = OB_ERR_SYS;
+          STORAGE_LOG(WARN, "Unsupported desc column order", K(ret), K(col_desc), K(i));
+        }
+      }
     }
   }
   return ret;

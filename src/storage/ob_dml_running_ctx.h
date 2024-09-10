@@ -47,8 +47,9 @@ public:
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
     common::ObIAllocator &allocator,
-    const blocksstable::ObDmlFlag dml_flag);
-  ~ObDMLRunningCtx() {}
+    const blocksstable::ObDmlFlag dml_flag,
+    bool is_need_row_datum_utils = false);
+  ~ObDMLRunningCtx();
 
   int init(
       const common::ObIArray<uint64_t> *column_ids,
@@ -65,6 +66,8 @@ private:
       const share::schema::ObTableSchemaParam &schema,
       ObTabletHandle &tablet_handle,
       const share::SCN &read_snapshot);
+  int check_need_old_row_legitimacy();
+  int init_cmp_funcs();
   int check_schema_version(share::schema::ObMultiVersionSchemaService &schema_service,
                            const uint64_t tenant_id,
                            const uint64_t table_id,
@@ -86,11 +89,15 @@ public:
   const share::schema::ColumnMap *col_map_;
   const ObColDescIArray *col_descs_;
   const common::ObIArray<uint64_t> *column_ids_;
-  ObStoreRow tbl_row_;
+  blocksstable::ObDatumRow datum_row_;
+  blocksstable::ObStoreCmpFuncs cmp_funcs_;
   bool is_old_row_valid_for_lob_;
+  bool is_need_check_old_row_;
+  bool is_udf_;
 
 private:
   share::schema::ObSchemaGetterGuard schema_guard_;
+  bool is_need_row_datum_utils_;
   bool is_inited_;
 };
 } // namespace storage

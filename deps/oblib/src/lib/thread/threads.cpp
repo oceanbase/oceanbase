@@ -166,7 +166,7 @@ int Threads::start()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Threads::start tenant ctx not match", KP(expect_wrapper), KP(run_wrapper_));
     ob_abort();
-  } else {
+  } else if (n_threads_ > 0) {
     threads_ = reinterpret_cast<Thread**>(
       ob_malloc(sizeof (Thread*) * n_threads_, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
     if (threads_ == nullptr) {

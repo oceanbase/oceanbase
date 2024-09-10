@@ -224,7 +224,7 @@ int ObFragmentWriterV2<T>::open(const int64_t buf_size, const int64_t expire_tim
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObFragmentWriter has already been inited", K(ret));
-  } else if (buf_size < OB_SERVER_BLOCK_MGR.get_macro_block_size()
+  } else if (buf_size <OB_STORAGE_OBJECT_MGR.get_macro_block_size()
       || buf_size % DIO_ALIGN_SIZE != 0
       || expire_timestamp < 0
       || common::OB_INVALID_ID == tenant_id) {
@@ -232,7 +232,7 @@ int ObFragmentWriterV2<T>::open(const int64_t buf_size, const int64_t expire_tim
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(buf_size), K(expire_timestamp));
   } else {
     dir_id_ = dir_id;
-    const int64_t align_buf_size = common::lower_align(buf_size, OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    const int64_t align_buf_size = common::lower_align(buf_size,OB_STORAGE_OBJECT_MGR.get_macro_block_size());
     if (NULL == (buf_ = static_cast<char *>(allocator_.alloc(align_buf_size)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to allocate buffer", K(ret), K(align_buf_size));
@@ -520,7 +520,7 @@ int ObFragmentReaderV2<T>::init(const int64_t fd, const int64_t dir_id, const in
       dir_id_ = dir_id;
       tenant_id_ = tenant_id;
       is_first_prefetch_ = true;
-      buf_size_ = common::lower_align(buf_size, OB_SERVER_BLOCK_MGR.get_macro_block_size());
+      buf_size_ = common::lower_align(buf_size,OB_STORAGE_OBJECT_MGR.get_macro_block_size());
       is_inited_ = true;
     }
   }
@@ -1767,7 +1767,7 @@ int ObExternalSort<T, Compare>::init(
     const uint64_t tenant_id, Compare *compare)
 {
   int ret = common::OB_SUCCESS;
-  int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObExternalSort has already been inited", K(ret));

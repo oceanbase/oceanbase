@@ -131,7 +131,6 @@ public:
     WRITE_SQL_BY_CONN(connection, "set GLOBAL ob_query_timeout = 10000000000");
     WRITE_SQL_BY_CONN(connection, "alter system set enable_early_lock_release = False;");
     WRITE_SQL_BY_CONN(connection, "alter system set undo_retention = 1800;");
-    WRITE_SQL_BY_CONN(connection, "alter system set partition_balance_schedule_interval = '10s';");
     sleep(5);
   }
 
@@ -213,6 +212,7 @@ public:
     MTL_SWITCH(tenant_id) {
       TRANS_LOG(INFO, "worker to do partition_balance");
       auto b_svr = MTL(rootserver::ObTenantBalanceService*);
+      b_svr->stop();
       b_svr->reset();
       int64_t job_cnt = 0;
       int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
@@ -409,6 +409,22 @@ TEST_F(ObTransferBetweenRollbackTo, transfer_between_rollback_to)
     }
   }
   ASSERT_EQ(loc1, loc2);
+
+  while (true) {
+    int64_t transfer_task_count = 0;
+    if (OB_FAIL(SSH::g_select_int64(tenant_id, "select count(*) as val from __all_transfer_task", transfer_task_count))) {
+      TRANS_LOG(WARN, "fail to wait for transfer task");
+    } else if (transfer_task_count == 0) {
+      fprintf(stdout, "succeed wait for balancer v2\n");
+      break;
+    } else if (ObTimeUtility::current_time() - begin_time > 300 * 1000 * 1000) {
+      fprintf(stdout, "ERROR: fail to wait for balancer\n");
+      break;
+    } else {
+      fprintf(stdout, "wait for balancer v2\n");
+      ob_usleep(200 * 1000);
+    }
+  }
 
   usleep(1000 * 1000);
 

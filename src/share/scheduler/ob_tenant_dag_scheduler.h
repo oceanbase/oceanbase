@@ -23,6 +23,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "share/scheduler/ob_diagnose_config.h"
+#include "share/resource_manager/ob_resource_plan_info.h"
 #include "share/ob_table_range.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
 
@@ -35,11 +36,9 @@ struct ObDiagnoseTabletCompProgress;
 class ObMergeDagHash;
 class ObTabletMergeExecuteDag;
 struct ObTabletMergeDagParam;
-class ObCompactionDiagnoseMgr;
 class ObTabletMergeDag;
 struct ObIBasicInfoParam;
 class ObCompactionMemoryContext;
-struct ObCompactionDagStatus;
 }
 namespace share
 {
@@ -226,7 +225,15 @@ public:
     TASK_TYPE_START_REBUILD_TABLET_TASK = 70,
     TASK_TYPE_TABLET_REBUILD_TASK = 71,
     TASK_TYPE_FINISH_REBUILD_TABLET_TASK = 72,
-    TASK_TYPE_CHECK_CONVERT_TABLET = 73,
+    TASK_TYPE_REFRESH_SSTABLES = 73,
+    TASK_TYPE_VERIFY_CKM = 74,
+    TASK_TYPE_WRITE_META_LIST = 75,
+    TASK_TYPE_MIGRATION_WARMUP = 76,
+    TASK_TYPE_UPDATE_SKIP_MAJOR_TABLET = 77,
+    TASK_TYPE_WRITE_SHARED_MAJOR_META_LIST = 78,
+    TASK_TYPE_CHECK_CONVERT_TABLET = 79,
+    TASK_TYPE_VECTOR_INDEX_MEMDATA_SYNC = 80,
+    TASK_TYPE_DELETE_LOB_META_ROW = 81,
     TASK_TYPE_MAX,
   };
 
@@ -387,15 +394,17 @@ public:
       diagnose_type = ObDiagnoseTabletType::TYPE_MINI_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MERGE_EXECUTE == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MINOR_MERGE;
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_REFRESH_SSTABLES == type) {
+      diagnose_type = ObDiagnoseTabletType::TYPE_S2_REFRESH;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MAJOR_MERGE <= type
-        && ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_FINISH >= type) {
+            && ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_FINISH >= type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MEDIUM_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_TX_TABLE_MERGE == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_TX_TABLE_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MDS_MINI_MERGE;
-    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_BATCH_FREEZE_TABLETS == type) {
-      diagnose_type = ObDiagnoseTabletType::TYPE_BATCH_FREEZE;
+    } else if (is_batch_exec_dag(type)) {
+      diagnose_type = ObDiagnoseTabletType::TYPE_BATCH_EXECUTE;
     }
     return diagnose_type;
   }
@@ -730,7 +739,7 @@ public:
   void run1() override;
   int yield();
   void set_task(ObITask *task);
-  void set_function_type(const uint8_t function_type) { function_type_ = function_type; }
+  void set_function_type(const ObFunctionType function_type) { function_type_ = function_type; }
   bool need_wake_up() const;
   ObITask *get_task() const { return task_; }
   DagWorkerStatus get_status() { return status_; }
@@ -755,7 +764,7 @@ private:
   DagWorkerStatus status_;
   int64_t check_period_;
   int64_t last_check_time_;
-  uint8_t function_type_;
+  ObFunctionType function_type_;
   int tg_id_;
   bool hold_by_compaction_dag_;
   bool is_inited_;
@@ -852,6 +861,27 @@ private:
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];  // lock by dag_net_map_lock_
 };
 
+class ObReclaimUtil
+{
+
+public:
+  ObReclaimUtil()
+    : total_periodic_running_worker_cnt_(0),
+      check_worker_loop_times_(0)
+  {}
+  ~ObReclaimUtil(){}
+  int64_t compute_expected_reclaim_worker_cnt(
+    const int64_t total_running_task_cnt,
+    const int64_t free_worker_cnt,
+    const int64_t total_worker_cnt);
+  void reset();
+
+public:
+  int64_t total_periodic_running_worker_cnt_;
+  int64_t check_worker_loop_times_;
+  static const int64_t CHECK_USING_WOKRER_INTERVAL = 60 * 1000L* 1000L; // 1min
+};
+
 class ObDagPrioScheduler
 {
 public:
@@ -922,7 +952,7 @@ public:
   int diagnose_minor_exe_dag(
     const compaction::ObMergeDagHash &merge_dag_info,
     compaction::ObDiagnoseTabletCompProgress &progress);
-  int diagnose_all_dags();
+  int diagnose_compaction_dags();
   int get_complement_data_dag_progress(const ObIDag &dag,
     int64_t &row_scanned,
     int64_t &row_inserted);
@@ -954,7 +984,7 @@ private:
            is_minor_compaction_dag(dag_type) ||
            ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type; // add co prepare dag to rank list first
   }
-  OB_INLINE bool is_rank_dag_prio() const
+  OB_INLINE bool is_compaction_dag_prio() const
   {
     return ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority_
         || ObDagPrio::DAG_PRIO_COMPACTION_MID == priority_
@@ -1144,7 +1174,7 @@ public:
       common::ObIArray<compaction::ObDiagnoseTabletCompProgress> &progress_list,
       ObDagId &dag_net_id,
       int64_t &start_time);
-  int diagnose_all_dags();
+  int diagnose_all_compaction_dags();
   int get_compaction_dag_count(int64_t dag_count);
   void get_suggestion_reason(const int64_t priority, int64_t &reason);
 
@@ -1203,7 +1233,6 @@ private:
   int64_t loop_waiting_dag_list_period_;  // only set in init/destroy
   int64_t total_worker_cnt_; // lock by scheduler_sync_
   int64_t work_thread_num_; // lock by scheduler_sync_
-  int64_t default_work_thread_num_; // only set in init/destroy
   int64_t total_running_task_cnt_;  // atomic value
   int64_t scheduled_task_cnt_; // atomic value // interval scheduled task count
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX]; // just for showing // atomic value
@@ -1212,6 +1241,7 @@ private:
   int64_t scheduled_dag_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled dag count
   int64_t scheduled_task_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled task count
   int64_t scheduled_data_size_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled data size
+  ObReclaimUtil reclaim_util_;  // util to help adaptively reclaim worker
   common::ObThreadCond scheduler_sync_;  // Make sure the lock is inside if there are nested locks
   lib::MemoryContext mem_context_;
   lib::MemoryContext ha_mem_context_;
@@ -1243,6 +1273,8 @@ int ObIDag::alloc_task(T *&task)
       if (!task_list_.add_last(ntask)) {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Failed to add task", K(task), K_(id));
+        ntask->~T();
+        allocator_->free(ntask);
       }
     }
     if (OB_SUCC(ret)) {
@@ -1431,19 +1463,6 @@ int ObTenantDagScheduler::create_and_add_dag(
   return ret;
 }
 
-inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
-{
-  return ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type ||
-         ObDagType::DAG_TYPE_CO_MERGE_SCHEDULE == dag_type ||
-         ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE == dag_type ||
-         ObDagType::DAG_TYPE_CO_MERGE_FINISH == dag_type ||
-         ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type ||
-         ObDagType::DAG_TYPE_MINI_MERGE == dag_type ||
-         ObDagType::DAG_TYPE_MERGE_EXECUTE == dag_type ||
-         ObDagType::DAG_TYPE_TX_TABLE_MERGE == dag_type ||
-         ObDagType::DAG_TYPE_MDS_MINI_MERGE == dag_type ||
-         ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == dag_type;
-}
 
 inline bool is_ha_backfill_dag(const ObDagType::ObDagTypeEnum dag_type)
 {

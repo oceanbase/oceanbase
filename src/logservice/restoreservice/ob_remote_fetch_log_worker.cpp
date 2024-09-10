@@ -307,6 +307,8 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
           task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool(),
           &log_ext_handler_, DEFAULT_BUF_SIZE))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), KPC(task));
+  } else if (OB_FAIL(task->iter_.set_io_context(palf::LogIOContext(tenant_id_, task->id_.id(), palf::LogIOUser::RESTORE)))) {
+    LOG_WARN("set_io_context failed", K(ret), K_(tenant_id), KPC(task));
   } else if (!need_fetch_log_(task->id_)) {
     LOG_TRACE("no need fetch log", KPC(task));
   } else if (OB_FAIL(task->iter_.pre_read(empty))) {

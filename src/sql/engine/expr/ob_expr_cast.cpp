@@ -352,7 +352,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
                                                              type1.get_collation_level(),
                                                              cs_level))) {
     LOG_WARN("failed to get collation level", K(ret));
-  } else if (FALSE_IT(dst_type.set_collation_level(cs_level))) {
+  } else if (!dst_type.is_collection_sql_type() && FALSE_IT(dst_type.set_collation_level(cs_level))) {
   } else if (OB_FAIL(adjust_udt_cast_type(type1, dst_type, type_ctx))) {
      LOG_WARN("adjust udt cast sub type failed", K(ret));
   } else if (OB_UNLIKELY(!cast_supported(type1.get_type(), type1.get_collation_type(),
@@ -654,6 +654,11 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
                || ob_is_user_defined_sql_type(obj_type)
                || ob_is_collection_sql_type(obj_type)) {
       dst_type.set_udt_id(param_type2.get_udt_id());
+      if (ob_is_collection_sql_type(obj_type)) {
+        // recover subschema id
+        dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
+        dst_type.set_collation_level(static_cast<ObCollationLevel>(parse_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX]));
+      }
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else if (ob_is_geometry(obj_type)) {
@@ -815,9 +820,15 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
     uint16_t subschema_id = ObMaxSystemUDTSqlType;
 
     if (!ObObjUDTUtil::ob_is_supported_sql_udt(dst_type.get_udt_id())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unsupported udt type for sql udt", K(ret), K(src_type), K(dst_type),
-               K(dst_type.get_udt_id()), K(src_type.get_udt_id()));
+      // maybe is array type, check subschema id validity
+      subschema_id = dst_type.get_subschema_id();
+      ObSubSchemaValue sub_meta;
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("need ctx to get subschema mapping", K(ret), K(src_type), K(dst_type), KP(session));
+      } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, sub_meta))) {
+        LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+      }
     } else if (udt_type_id == T_OBJ_XML) {
       subschema_id = 0;
     } else if (OB_ISNULL(exec_ctx)) {

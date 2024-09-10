@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_datum_rowkey_vector.h"
+#include "ob_imicro_block_reader.h"
 
 namespace oceanbase
 {

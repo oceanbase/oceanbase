@@ -17,7 +17,7 @@
 
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/ob_sstable_struct.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "observer/omt/ob_tenant_node_balancer.h"
 
 namespace oceanbase

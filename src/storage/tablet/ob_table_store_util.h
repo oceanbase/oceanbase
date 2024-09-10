@@ -21,7 +21,10 @@ namespace share
 {
 class SCN;
 }
-
+namespace blocksstable
+{
+class ObSSTable;
+}
 namespace storage
 {
 class ObTabletTableStore;

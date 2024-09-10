@@ -23,6 +23,8 @@ namespace palf
 {
 class IPalfEnvImpl;
 class LogSharedTask;
+class LogHandleSubmitTask;
+class LogFillCacheTask;
 
 class LogSharedQueueTh : public lib::TGTaskHandler
 {
@@ -35,6 +37,7 @@ public:
   int stop();
   int wait();
   void destroy();
+  int push_submit_log_task(LogHandleSubmitTask *task);
   int push_task(LogSharedTask *task);
   virtual void handle(void *task);
   int get_tg_id() const;
@@ -45,7 +48,8 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(LogSharedQueueTh);
 private:
-  int tg_id_;
+  int submit_log_tg_id_;
+  int shared_tg_id_;
   IPalfEnvImpl *palf_env_impl_;
   bool is_inited_;
 };

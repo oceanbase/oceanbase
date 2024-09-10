@@ -29,6 +29,8 @@
 #include "share/backup/ob_archive_path.h"
 #include "share/ob_upgrade_utils.h"
 #include "share/ob_unit_table_operator.h"
+#include "share/ob_max_id_fetcher.h"
+#include "share/backup/ob_backup_connectivity.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -586,7 +588,7 @@ int ObRestoreUtil::fill_encrypt_info_(
   } else if (OB_FAIL(util.is_exist(dest.get_root_path(), dest.get_storage_info(), is_exist))) {
     LOG_WARN("failed to check file is exists", K(ret));
   } else if (OB_UNLIKELY(!is_exist)) {
-    ret = OB_BACKUP_FILE_NOT_EXIST;
+    ret = OB_OBJECT_NOT_EXIST;
     LOG_WARN("kms backup file is not exist", K(ret));
   } else if (OB_FAIL(job.set_kms_dest(kms_dest_str))) {
     LOG_WARN("failed to copy kms dest", K(ret), K(arg));
@@ -1692,11 +1694,11 @@ int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &b
 int ObRestoreUtil::check_backup_set_compatible_(const share::ObRestoreType &restore_type, const share::ObBackupSetFileDesc &backup_file_desc)
 {
   int ret = OB_SUCCESS;
-  if (restore_type.is_quick_restore() && backup_file_desc.is_backup_set_not_support_quick_restore()) {
-    // old compatible backup set cannot lauch quick restore
+  if (restore_type.is_quick_restore() && backup_file_desc.is_not_allow_quick_restore()) {
+    // old compatible backup set and shared storage mode cannot lauch quick restore
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("quick restore from old compatible backup set is not allowed", K(ret), "compatible", backup_file_desc.backup_compatible_);
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "quick restore from old compatible backup set is");
+    LOG_WARN("quick restore is not allowed", K(ret), "compatible", backup_file_desc.backup_compatible_);
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "quick restore is");
   }
   return ret;
 }
@@ -2217,6 +2219,179 @@ int ObRestoreFailureChecker::check_dir_empty_(
     LOG_WARN("fail to init store", K(ret), K(backup_path));
   } else {
     LOG_INFO("is empty dir", K(backup_path), K(is_empty));
+  }
+  return ret;
+}
+
+/* ObRestoreStorageInfoFiller */
+
+ObRestoreStorageInfoFiller::ObRestoreStorageInfoFiller()
+  : is_inited_(false),
+    tenant_id_(OB_INVALID_ID),
+    is_restore_using_complement_log_(false),
+    job_(),
+    backup_set_list_(),
+    backup_piece_list_(),
+    sql_proxy_(NULL)
+{
+}
+
+ObRestoreStorageInfoFiller::~ObRestoreStorageInfoFiller()
+{
+}
+
+int ObRestoreStorageInfoFiller::init(
+    const uint64_t tenant_id,
+    const share::ObPhysicalRestoreJob &job,
+    common::ObISQLClient &sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("restore storage info init twice", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !job.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(tenant_id), K(job));
+  } else if (OB_FAIL(job_.assign(job))) {
+    LOG_WARN("failed to assign job", K(ret), K(job));
+  } else {
+    tenant_id_ = tenant_id;
+    is_restore_using_complement_log_ = job.get_using_complement_log();
+    sql_proxy_ = &sql_proxy;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObRestoreStorageInfoFiller::fill_backup_storage_info()
+{
+  int ret = OB_SUCCESS;
+  int64_t data_dest_id = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("restore storage info filler not init", K(ret));
+  } else if (OB_FAIL(do_with_backup_set_list_(data_dest_id))) {
+    LOG_WARN("failed to do with backup set list", K(ret));
+  } else if (OB_FAIL(do_with_backup_piece_list_(data_dest_id))) {
+    LOG_WARN("failed to do with backup set list", K(ret));
+  }
+  return ret;
+}
+
+int ObRestoreStorageInfoFiller::get_next_dest_id_(int64_t &dest_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t id = OB_INVALID_ID;
+  const int64_t initial = 1L;
+  const ObMaxIdType type = OB_MAX_USED_STORAGE_ID_TYPE;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("gctx sql proxy should not be null", K(ret));
+  } else {
+    ObMaxIdFetcher max_id_fetcher(*GCTX.sql_proxy_);
+    if (OB_FAIL(max_id_fetcher.fetch_new_max_id(gen_meta_tenant_id(tenant_id_),
+                                                type,
+                                                id,
+                                                initial))) {
+      LOG_WARN("failed to fetch new max id", K(ret), K_(tenant_id));
+    } else {
+      dest_id = static_cast<int64_t>(id);
+    }
+  }
+  return ret;
+}
+
+int ObRestoreStorageInfoFiller::insert_backup_storage_info_for_set_(
+    const share::ObBackupSetPath &backup_set_path,
+    const int64_t dest_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_iops = 0;
+  int64_t max_bandwidth = 0;
+  ObBackupDest backup_set_dest;
+  const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::TYPE::DEST_TYPE_RESTORE_DATA;
+  if (OB_FAIL(backup_set_dest.set(backup_set_path.str()))) {
+    LOG_WARN("failed to set backup set dest", K(ret), K(backup_set_path));
+  } else {
+    max_iops = backup_set_dest.get_storage_info()->max_iops_;
+    max_bandwidth = backup_set_dest.get_storage_info()->max_bandwidth_;
+    if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(*sql_proxy_,
+                                                                        tenant_id_,
+                                                                        backup_set_dest,
+                                                                        backup_dest_type,
+                                                                        dest_id,
+                                                                        max_iops,
+                                                                        max_bandwidth))) {
+      LOG_WARN("failed to insert backup storage info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreStorageInfoFiller::insert_backup_storage_info_for_piece_(
+    const ObRestoreLogPieceBriefInfo &backup_piece_info,
+    const int64_t dest_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_iops = 0;
+  int64_t max_bandwidth = 0;
+  ObBackupDest backup_piece_dest;
+  const ObBackupPiecePath &backup_piece_path = backup_piece_info.piece_path_;
+  const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::TYPE::DEST_TYPE_RESTORE_LOG;
+  if (OB_FAIL(backup_piece_dest.set(backup_piece_path.str()))) {
+    LOG_WARN("failed to set backup set dest", K(ret), K(backup_piece_info));
+  } else {
+    max_iops = backup_piece_dest.get_storage_info()->max_iops_;
+    max_bandwidth = backup_piece_dest.get_storage_info()->max_bandwidth_;
+    if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(*sql_proxy_,
+                                                                        tenant_id_,
+                                                                        backup_piece_dest,
+                                                                        backup_dest_type,
+                                                                        dest_id,
+                                                                        max_iops,
+                                                                        max_bandwidth))) {
+      LOG_WARN("failed to insert backup storage info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreStorageInfoFiller::do_with_backup_set_list_(int64_t &data_dest_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_next_dest_id_(data_dest_id))) {
+    LOG_WARN("failed to get next dest id", K(ret));
+  }
+  const common::ObSArray<share::ObBackupSetPath> &backup_set_list = job_.get_multi_restore_path_list().get_backup_set_path_list();
+  ARRAY_FOREACH_X(backup_set_list, idx, cnt, OB_SUCC(ret)) {
+    const ObBackupSetPath &backup_set_path = backup_set_list.at(idx);
+    if (OB_FAIL(insert_backup_storage_info_for_set_(backup_set_path, data_dest_id))) {
+      LOG_WARN("failed to insert backup storage info", K(ret), K(backup_set_path), K(data_dest_id));
+    } else {
+      LOG_INFO("insert backup storage info", K(backup_set_path), K(data_dest_id));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreStorageInfoFiller::do_with_backup_piece_list_(const int64_t data_dest_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t dest_id = 0;
+  if (is_restore_using_complement_log_) {
+    dest_id = data_dest_id;
+  } else {
+    if (OB_FAIL(get_next_dest_id_(dest_id))) {
+      LOG_WARN("failed to get next dest id", K(ret));
+    }
+  }
+  ARRAY_FOREACH_X(backup_piece_list_, idx, cnt, OB_SUCC(ret)) {
+    const ObRestoreLogPieceBriefInfo &piece_info = backup_piece_list_.at(idx);
+    if (OB_FAIL(insert_backup_storage_info_for_piece_(piece_info, dest_id))) {
+      LOG_WARN("failed to insert backup storage info", K(ret), K(piece_info), K(dest_id));
+    } else {
+      LOG_INFO("insert backup storage info", K(piece_info), K(data_dest_id));
+    }
   }
   return ret;
 }

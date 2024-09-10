@@ -236,6 +236,12 @@ private:
                             uint32_t proj_idx,
                             ObDASDMLBaseCtDef &das_ctdef,
                             IntFixedArray &row_projector);
+  template<typename ExprType>
+  int add_vec_idx_col_projector(const ObIArray<ExprType*> &cur_row,
+                                const ObIArray<ObRawExpr*> &full_row,
+                                const ObIArray<uint64_t> &dml_column_ids,
+                                ObDASDMLBaseCtDef &das_ctdef,
+                                IntFixedArray &row_projector);
   int fill_multivalue_extra_info_on_table_param(
                             share::schema::ObSchemaGetterGuard *guard,
                             const ObTableSchema *index_schema,
@@ -388,7 +394,25 @@ private:
                                  const common::ObIArray<ObRawExpr*> &new_row,
                                  DASInsCtDefArray &ins_ctdefs);
   int generate_access_exprs(const common::ObIArray<ObColumnRefRawExpr*> &columns,
-                               common::ObIArray<ObRawExpr*> &access_exprs);
+                            const ObLogicalOperator &op,
+                            const bool need_vec_vid,
+                            const uint64_t vec_vid_col_id,
+                            common::ObIArray<ObRawExpr*> &access_exprs,
+                            common::ObIArray<ObRawExpr*> &vec_vid_expr);
+  int generate_scan_with_vec_vid_ctdef_if_need(ObLogInsert &op,
+                                              const IndexDMLInfo &index_dml_info,
+                                              ObDASScanCtDef &scan_ctdef,
+                                              ObDASAttachSpec &attach_spec);
+  int generate_rowkey_vid_ctdef(ObLogInsert &op,
+                                const IndexDMLInfo &index_dml_info,
+                                ObDASAttachSpec &attach_spec,
+                                ObDASScanCtDef *&rowkey_vid_scan_ctdef);
+  int generate_rowkey_vid_access_expr(const common::ObIArray<ObColumnRefRawExpr *> &columns,
+                                      const ObTableSchema &rowkey_vid,
+                                      ObDASScanCtDef *ctdef);
+  int check_need_vec_vid_merge_iter(ObLogicalOperator &op,
+                                   const uint64_t ref_table_id,
+                                   bool &need_vec_vid_merge_iter);
 private:
   int need_fire_update_event(const ObTableSchema &table_schema,
                             const ObString &update_events,

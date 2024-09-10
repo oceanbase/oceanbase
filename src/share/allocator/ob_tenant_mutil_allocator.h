@@ -38,6 +38,9 @@ class LogFillCacheTask;
 namespace logservice
 {
 class ObLogReplayTask;
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObFastRebuildLogTask;
+#endif
 }
 namespace common
 {
@@ -76,6 +79,10 @@ public:
   virtual void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr) = 0;
   virtual palf::LogIOPurgeThrottlingTask *alloc_log_io_purge_throttling_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_purge_throttling_task(palf::LogIOPurgeThrottlingTask *ptr) = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  virtual logservice::ObFastRebuildLogTask *alloc_palf_fast_rebuild_log_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
+  virtual void free_palf_fast_rebuild_log_task(logservice::ObFastRebuildLogTask *ptr) = 0;
+#endif
   virtual palf::LogFillCacheTask *alloc_log_fill_cache_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_fill_cache_task(palf::LogFillCacheTask *ptr) = 0;
   virtual void *alloc_append_compression_buf(const int64_t size) = 0;
@@ -153,6 +160,10 @@ public:
   void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr);
   palf::LogIOPurgeThrottlingTask *alloc_log_io_purge_throttling_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_purge_throttling_task(palf::LogIOPurgeThrottlingTask *ptr);
+#ifdef OB_BUILD_SHARED_STORAGE
+  logservice::ObFastRebuildLogTask *alloc_palf_fast_rebuild_log_task(const int64_t palf_id, const int64_t palf_epoch);
+  void free_palf_fast_rebuild_log_task(logservice::ObFastRebuildLogTask *ptr);
+#endif
   palf::LogFillCacheTask *alloc_log_fill_cache_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_fill_cache_task(palf::LogFillCacheTask *ptr);
 
@@ -175,6 +186,9 @@ private:
   const int PALF_FETCH_LOG_TASK_SIZE;
   const int LOG_IO_FLASHBACK_TASK_SIZE;
   const int LOG_IO_PURGE_THROTTLING_TASK_SIZE;
+#ifdef OB_BUILD_SHARED_STORAGE
+  const int OB_FASTREBUILD_LOG_TASK_SIZE;
+#endif
   const int LOG_FILL_CACHE_TASK_SIZE;
   ObBlockAllocMgr clog_blk_alloc_;
   ObBlockAllocMgr replay_log_task_blk_alloc_;
@@ -189,6 +203,9 @@ private:
   ObVSliceAlloc replay_log_task_alloc_;
   ObSliceAlloc log_io_flashback_task_alloc_;
   ObSliceAlloc log_io_purge_throttling_task_alloc_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSliceAlloc palf_fast_rebuild_log_task_alloc_;
+#endif
   ObSliceAlloc log_fill_cache_task_alloc_;
   ObVSliceAlloc clog_compression_buf_alloc_;
 };

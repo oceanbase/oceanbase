@@ -207,7 +207,7 @@ public:
   virtual ~TestLSRestoreHandler() = default;
   static void SetUpTestCase()
   {
-    ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
   }
   static void TearDownTestCase()
   {

@@ -648,7 +648,9 @@ ObDDLIncRedoLogWriterCallback::ObDDLIncRedoLogWriterCallback()
     data_format_version_(0),
     direct_load_type_(DIRECT_LOAD_INVALID),
     tx_desc_(nullptr),
-    trans_id_()
+    trans_id_(),
+    parallel_cnt_(0),
+    cg_cnt_(0)
 {
 }
 
@@ -667,7 +669,9 @@ int ObDDLIncRedoLogWriterCallback::init(
     const uint64_t data_format_version,
     const ObDirectLoadType direct_load_type,
     ObTxDesc *tx_desc,
-    const ObTransID &trans_id)
+    const ObTransID &trans_id,
+    const int64_t parallel_cnt,
+    const int64_t cg_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -690,6 +694,8 @@ int ObDDLIncRedoLogWriterCallback::init(
     direct_load_type_ = direct_load_type;
     tx_desc_ = tx_desc;
     trans_id_ = trans_id;
+    parallel_cnt_ =  parallel_cnt;
+    cg_cnt_ = cg_cnt;
     is_inited_ = true;
   }
 
@@ -709,11 +715,13 @@ void ObDDLIncRedoLogWriterCallback::reset()
   data_format_version_ = 0;
   direct_load_type_ = DIRECT_LOAD_INVALID;
   tx_desc_ = nullptr;
+  parallel_cnt_ = 0;
+  cg_cnt_ = 0;
   trans_id_.reset();
 }
 
 int ObDDLIncRedoLogWriterCallback::write(
-    ObMacroBlockHandle &macro_handle,
+    const ObStorageObjectHandle &macro_handle,
     const ObLogicMacroBlockId &logic_id,
     char *buf,
     const int64_t buf_len,
@@ -726,8 +734,6 @@ int ObDDLIncRedoLogWriterCallback::write(
   } else if (OB_UNLIKELY(!macro_handle.is_valid() || !logic_id.is_valid() || nullptr == buf || row_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(macro_handle), K(logic_id), KP(buf), K(row_count));
-  } else if (OB_FAIL(macro_handle.wait())) {
-    STORAGE_LOG(WARN, "macro block writer fail to wait io finish", K(ret));
   } else {
     macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.table_key_ = table_key_;
@@ -738,6 +744,10 @@ int ObDDLIncRedoLogWriterCallback::write(
     redo_info_.data_format_version_ = data_format_version_;
     redo_info_.type_ = direct_load_type_;
     redo_info_.trans_id_ = trans_id_;
+    redo_info_.macro_block_id_ = MacroBlockId::mock_valid_macro_id();
+    redo_info_.macro_block_id_.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+    redo_info_.parallel_cnt_ = parallel_cnt_;
+    redo_info_.cg_cnt_ = cg_cnt_;
     redo_info_.with_cs_replica_ = false; // TODO(chengkong): placeholder for column store replica feature
     redo_info_.parallel_cnt_ = 0; // TODO @zhuoran.zzr, place holder for shared storage
     redo_info_.cg_cnt_ = 0;

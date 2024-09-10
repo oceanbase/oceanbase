@@ -31,7 +31,6 @@ OB_SERIALIZE_MEMBER((ObDASIRScanCtDef, ObDASAttachCtDef),
                     estimated_total_doc_cnt_);
 
 OB_SERIALIZE_MEMBER(ObDASIRScanRtDef);
-
 OB_SERIALIZE_MEMBER((ObDASIRAuxLookupCtDef, ObDASAttachCtDef),
                     relevance_proj_col_);
 

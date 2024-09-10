@@ -145,6 +145,7 @@ int ObDailyMajorFreezeLauncher::try_launch_major_freeze()
         do {
           ObMajorFreezeParam param;
           param.transport_ = GCTX.net_frame_->get_req_transport();
+          param.freeze_reason_ = MF_DAILY_MERGE;
           if (OB_FAIL(param.add_freeze_info(tenant_id_))) {
             LOG_WARN("fail to push_back", KR(ret), K_(tenant_id));
           } else if (OB_FAIL(ObMajorFreezeHelper::major_freeze(param))) {

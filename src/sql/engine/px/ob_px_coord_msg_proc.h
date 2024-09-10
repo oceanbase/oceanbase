@@ -41,6 +41,9 @@ class SPWinFuncPXPieceMsg;
 class SPWinFuncPXWholeMsg;
 class RDWinFuncPXPieceMsg;
 class RDWinFuncPXWholeMsg;
+class ObJoinFilterCountRowPieceMsg;
+class ObJoinFilterCountRowWholeMsg;
+
 // 抽象出本接口类的目的是为了 MsgProc 和 ObPxCoord 解耦
 class ObIPxCoordMsgProc
 {
@@ -61,6 +64,7 @@ public:
   virtual int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt) = 0;
   virtual int on_piece_msg(ObExecContext &ctx, const SPWinFuncPXPieceMsg &pkt) = 0;
   virtual int on_piece_msg(ObExecContext &ctx, const RDWinFuncPXPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObJoinFilterCountRowPieceMsg &pkt) = 0;
 };
 
 class ObIPxSubCoordMsgProc
@@ -94,6 +98,8 @@ public:
       const SPWinFuncPXWholeMsg &pkt) const = 0;
   virtual int on_whole_msg(
       const RDWinFuncPXWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObJoinFilterCountRowWholeMsg &pkt) const = 0;
   // SQC 被中断
   virtual int on_interrupted(const ObInterruptCode &ic) const = 0;
 };
@@ -134,6 +140,8 @@ public:
       const SPWinFuncPXWholeMsg &pkt) const;
    virtual int on_whole_msg(
       const RDWinFuncPXWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObJoinFilterCountRowWholeMsg &pkt) const;
  private:
    ObSqcCtx &sqc_ctx_;
 };

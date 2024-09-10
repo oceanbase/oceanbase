@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/join/hash_join/ob_hash_join_struct.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -29,6 +30,13 @@ int ObHJStoredRow::convert_one_row_to_exprs(const ExprFixedArray &exprs,
     ObExpr *expr = exprs.at(i);
     if (OB_UNLIKELY(expr->is_const_expr())) {
       continue;
+    } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx))) {
+      if (OB_FAIL(ObArrayExprUtils::nested_expr_from_rows(*expr, eval_ctx, row_meta,
+            reinterpret_cast<const ObCompactRow **>(&row), 1, i, &batch_idx))) {
+        LOG_WARN("fail to do nested expr from rows", K(ret));
+      } else {
+        exprs.at(i)->set_evaluated_projected(eval_ctx);
+      }
     } else {
       ObIVector *vec = expr->get_vector(eval_ctx);
       if (OB_FAIL(vec->from_row(row_meta, row, batch_idx, i))) {
@@ -54,7 +62,15 @@ int ObHJStoredRow::attach_rows(const ObExprPtrIArray &exprs,
       ObExpr *expr = exprs.at(col_idx);
       if (OB_FAIL(expr->init_vector_default(ctx, selector[size - 1] + 1))) {
         LOG_WARN("fail to init vector", K(ret));
-      } else {
+      } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(ctx))) {
+        if (OB_FAIL(ObArrayExprUtils::nested_expr_from_rows(*expr, ctx, row_meta,
+              reinterpret_cast<const ObCompactRow **>(srows), size, col_idx,
+              reinterpret_cast<const int64_t *>(selector)))) {
+          LOG_WARN("fail to do nested expr from rows", K(ret));
+        } else {
+          expr->set_evaluated_projected(ctx);
+        }
+    } else {
         ObIVector *vec = expr->get_vector(ctx);
         if (VEC_UNIFORM_CONST != vec->get_format()) {
           ret = vec->from_rows(row_meta,

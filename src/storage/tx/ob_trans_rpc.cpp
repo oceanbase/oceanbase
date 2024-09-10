@@ -30,7 +30,8 @@ using namespace share;
 namespace obrpc
 {
 OB_SERIALIZE_MEMBER(ObTransRpcResult, status_, send_timestamp_, private_data_);
-OB_SERIALIZE_MEMBER(ObTxRpcRollbackSPResult, status_, send_timestamp_, addr_, born_epoch_, ignore_, downstream_parts_);
+OB_SERIALIZE_MEMBER(ObTxRpcRollbackSPResult, status_, send_timestamp_, addr_,
+                    born_epoch_, ignore_, downstream_parts_, output_transfer_epoch_);
 
 bool need_refresh_location_cache_(const int ret)
 {
@@ -79,8 +80,14 @@ int handle_sp_rollback_resp(const share::ObLSID &receiver_ls_id,
     return OB_SUCCESS;
   }
   return MTL(ObTransService *)->handle_sp_rollback_resp(receiver_ls_id,
-                  epoch, tx_id, status, request_id, result.born_epoch_, result.addr_,
-                  result.downstream_parts_);
+                                                        epoch,
+                                                        tx_id,
+                                                        status,
+                                                        request_id,
+                                                        result.born_epoch_,
+                                                        result.addr_,
+                                                        result.output_transfer_epoch_,
+                                                        result.downstream_parts_);
 }
 
 void ObTransRpcResult::reset()

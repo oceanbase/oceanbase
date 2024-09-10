@@ -300,6 +300,12 @@ int ObLSDDLLogHandler::replay(const void *buffer,
         ret = replay_ddl_start_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
+      #ifdef OB_BUILD_SHARED_STORAGE
+      case ObDDLClogType::DDL_FINISH_LOG: {
+        ret = replay_ddl_finish_log_(log_buf, buf_size, tmp_pos, log_scn);
+        break;
+      }
+      #endif
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Unknown ddl log type", K(ddl_header.get_ddl_clog_type()), K(ret));
@@ -369,7 +375,7 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
       LOG_WARN("error sys", K(ret), K(MTL_ID()));
     } else {
       while (OB_SUCC(ret)) {
-        bool has_ddl_kv = false;
+        ObArray<ObDDLKVHandle> ddl_kvs_handle;
         ObDDLKvMgrHandle ddl_kv_mgr_handle;
         ObTabletDirectLoadMgrHandle direct_load_mgr_hdl;
         bool is_major_sstable_exist = false;
@@ -384,36 +390,48 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
         } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
           tmp_ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid ddl kv mgr handle", K(tmp_ret), K(ddl_kv_mgr_handle));
-        } else if (OB_TMP_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
-          LOG_WARN("failed to check ddl kv", K(tmp_ret));
-        } else if (!has_ddl_kv) {
-        } else if (OB_TMP_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
+        } else if (OB_TMP_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddl_kvs_handle))) {
+          LOG_WARN("get freezed ddl kv failed", K(tmp_ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
+        } else if (ddl_kvs_handle.empty()) {
+          LOG_TRACE("empty ddl kv", "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
+      #ifdef OB_BUILD_SHARED_STORAGE
+        } else if (ObDDLUtil::use_idempotent_mode(ddl_kvs_handle.at(0).get_obj()->get_data_format_version())) {
+          DEBUG_SYNC(BEFORE_DDL_CHECKPOINT);
+          if (OB_TMP_FAIL(ObTabletDDLUtil::schedule_ddl_minor_merge_on_demand(true/*need_freeze*/, ls_->get_ls_id(), ddl_kv_mgr_handle))) {
+            LOG_WARN("schdule ddl minor merge failed", K(tmp_ret), "ls_id", ls_->get_ls_id(), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
+          }
+      #endif
+        } else {
+          bool is_major_sstable_exist = false;
+          ObTabletDirectLoadMgrHandle direct_load_mgr_hdl;
+          if (OB_TMP_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
                 ls_->get_ls_id(),
                 ddl_kv_mgr_handle.get_obj()->get_tablet_id(),
                 true/* is_full_direct_load */,
                 direct_load_mgr_hdl,
                 is_major_sstable_exist))) {
-          if (OB_ENTRY_NOT_EXIST == tmp_ret && is_major_sstable_exist) {
-            LOG_WARN("major sstable already exist, ddl kv may leak", K(tmp_ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
+            if (OB_ENTRY_NOT_EXIST == tmp_ret && is_major_sstable_exist) {
+              LOG_WARN("major sstable already exist, ddl kv may leak", K(tmp_ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
+            } else {
+              LOG_WARN("get tablet direct load mgr failed", K(tmp_ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id(), K(is_major_sstable_exist));
+            }
           } else {
-            LOG_WARN("get tablet direct load mgr failed", K(tmp_ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id(), K(is_major_sstable_exist));
-          }
-        } else {
-          DEBUG_SYNC(BEFORE_DDL_CHECKPOINT);
-          ObDDLTableMergeDagParam param;
-          param.ls_id_               = ls_->get_ls_id();
-          param.tablet_id_           = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
-          param.start_scn_           = direct_load_mgr_hdl.get_full_obj()->get_start_scn();
-          param.rec_scn_             = rec_scn;
-          param.direct_load_type_    = direct_load_mgr_hdl.get_full_obj()->get_direct_load_type();
-          param.is_commit_           = false;
-          param.data_format_version_ = direct_load_mgr_hdl.get_full_obj()->get_data_format_version();
-          param.snapshot_version_    = direct_load_mgr_hdl.get_full_obj()->get_table_key().get_snapshot_version();
-          LOG_INFO("schedule ddl merge dag", K(param));
-          if (OB_TMP_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
-            LOG_WARN("try to freeze ddl kv failed", K(tmp_ret), K(param));
-          } else if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
-            LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ", K(tmp_ret), K(param));
+            DEBUG_SYNC(BEFORE_DDL_CHECKPOINT);
+            ObDDLTableMergeDagParam param;
+            param.ls_id_               = ls_->get_ls_id();
+            param.tablet_id_           = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
+            param.start_scn_           = direct_load_mgr_hdl.get_full_obj()->get_start_scn();
+            param.rec_scn_             = rec_scn;
+            param.direct_load_type_    = direct_load_mgr_hdl.get_full_obj()->get_direct_load_type();
+            param.is_commit_           = false;
+            param.data_format_version_ = direct_load_mgr_hdl.get_full_obj()->get_data_format_version();
+            param.snapshot_version_    = direct_load_mgr_hdl.get_full_obj()->get_table_key().get_snapshot_version();
+            LOG_INFO("schedule ddl merge dag", K(param));
+            if (OB_TMP_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
+              LOG_WARN("try to freeze ddl kv failed", K(tmp_ret), K(param));
+            } else if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+              LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ", K(tmp_ret), K(param));
+            }
           }
         }
       }
@@ -507,6 +525,25 @@ int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
   }
   return ret;
 }
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLSDDLLogHandler::replay_ddl_finish_log_(const char *log_buf,
+                                              const int64_t buf_size,
+                                              int64_t pos,
+                                              const SCN &log_scn)
+{
+  int ret = OB_SUCCESS;
+  ObDDLFinishLog log;
+  if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
+    LOG_WARN("fail to deserialize ddl finish log", K(ret));
+  } else if (OB_FAIL(ddl_log_replayer_.replay_finish(log, log_scn))) {
+    if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
+      LOG_WARN("fail to replay ddl finish log", K(ret), K(log));
+      ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObLSDDLLogHandler::replay_ddl_tablet_schema_version_change_log_(const char *log_buf,
                                                                     const int64_t buf_size,

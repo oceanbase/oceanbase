@@ -108,67 +108,45 @@ int LogHotCache::read(const LSN &read_begin_lsn,
   return ret;
 }
 
-// ==================== FillCacheFsCb =========================
-FillCacheFsCb::FillCacheFsCb() : palf_env_impl_(NULL), state_mgr_(NULL), log_engine_(NULL), is_inited_(false)
-{}
+// ==================== EnableFillCacheFunctor =========================
+EnableFillCacheFunctor::EnableFillCacheFunctor() : palf_env_impl_(NULL), state_mgr_(NULL) {}
 
-FillCacheFsCb::~FillCacheFsCb()
-{
-  destroy();
-}
+EnableFillCacheFunctor::EnableFillCacheFunctor(IPalfEnvImpl *palf_env_impl, LogStateMgr *state_mgr) : palf_env_impl_(palf_env_impl), state_mgr_(state_mgr) {}
 
-int FillCacheFsCb::init(IPalfEnvImpl *palf_env_impl, LogStateMgr *state_mgr, LogEngine *log_engine)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    PALF_LOG(WARN, "FillCacheFsCb has been inited!", K(ret));
-  } else if (OB_ISNULL(palf_env_impl) || OB_ISNULL(log_engine)) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument!");
-  } else {
-    palf_env_impl_ = palf_env_impl;
-    state_mgr_ = state_mgr;
-    log_engine_ = log_engine;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-void FillCacheFsCb::destroy()
+EnableFillCacheFunctor::~EnableFillCacheFunctor()
 {
   palf_env_impl_ = NULL;
   state_mgr_ = NULL;
-  log_engine_ = NULL;
-  is_inited_ = false;
 }
 
-int FillCacheFsCb::update_end_lsn(int64_t id,
-                                  const palf::LSN &end_lsn,
-                                  const share::SCN &end_scn,
-                                  const int64_t proposal_id)
+EnableFillCacheFunctor& EnableFillCacheFunctor::operator=(const EnableFillCacheFunctor &functor)
 {
-  int ret = OB_SUCCESS;
-  UNUSED(id);
-  UNUSED(end_scn);
-  UNUSED(proposal_id);
+  if (&functor != this) {
+    this->palf_env_impl_ = functor.palf_env_impl_;
+    this->state_mgr_ = functor.state_mgr_;
+  }
+  return *this;
+}
 
+bool EnableFillCacheFunctor::operator()() const
+{
+  bool bool_ret = false;
+  int ret = OB_SUCCESS;
   PalfOptions options;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "FillCacheFsCb is not inited", K(ret));
-  } else if (!state_mgr_->is_leader_active()) {
+  if (!state_mgr_->is_leader_active()) {
     // don't submit fill cache task when it isn't a leader
   } else if (OB_FAIL(palf_env_impl_->get_options(options))) {
-    PALF_LOG(WARN, "get options failed", K(ret));
-  } else if (!options.enable_log_cache_) {
-    // don't submit fill cache task when it isn't allowed
+    PALF_LOG(WARN, "get_options failed", K(ret));
   } else {
-    // it will be enable in 4.4
-    //LSN begin_lsn = end_lsn - log_size;
-    //log_engine_->submit_fill_cache_task(begin_lsn, log_size);
+    // don't submit fill cache task when it isn't allowed
+    bool_ret = options.enable_log_cache_;
   }
-  return ret;
+  return bool_ret;
+}
+
+bool EnableFillCacheFunctor::is_valid() const
+{
+  return OB_NOT_NULL(palf_env_impl_) && OB_NOT_NULL(state_mgr_);
 }
 
 //============================================= LogCacheUtils ==========================

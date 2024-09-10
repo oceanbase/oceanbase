@@ -41,6 +41,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "share/backup/ob_backup_connectivity.h"
 
 namespace oceanbase
 {
@@ -422,7 +423,7 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     }
   } else if (!is_sys_ready) { // sys job not in WAIT_RETSTORE_TENANT_FINISH  state
     ret = OB_EAGAIN;
-  } else if (share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(
+  } else if (share::ObBackupSetFileDesc::is_allow_quick_restore(
               static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible()))
              && OB_FAIL(update_tenant_restore_data_mode_to_remote_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to REMOTE", K(ret), K_(tenant_id));
@@ -430,6 +431,8 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to restore root key", K(ret));
   } else if (OB_FAIL(restore_keystore(job_info))) {
     LOG_WARN("fail to restore keystore", K(ret), K(job_info));
+  } else if (OB_FAIL(fill_backup_storage_info_(job_info))) {
+    LOG_WARN("fail to fill backup storage info", K(ret), K(job_info));
   } else if (OB_FAIL(fill_restore_statistics(job_info))) {
     LOG_WARN("fail to fill restore statistics", K(ret), K(job_info));
   }
@@ -661,7 +664,7 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (job_info.get_restore_type().is_full_restore()
-             && share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(
+             && share::ObBackupSetFileDesc::is_allow_quick_restore(
                 static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible()))
              && OB_FAIL(update_tenant_restore_data_mode_to_normal_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to NORMAL", K(ret), K_(tenant_id));
@@ -726,6 +729,8 @@ int ObRestoreScheduler::tenant_restore_finish(const ObPhysicalRestoreJob &job_in
     LOG_WARN("failed to get user tenant restory info", KR(ret), K(job_info));
   } else if (restore_tenant_exist && OB_FAIL(reset_restore_concurrency_(job_info.get_tenant_id(), job_info))) {
     LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
+  } else if (restore_tenant_exist && OB_FAIL(remove_backup_storage_info_(job_info))) {
+    LOG_WARN("failed to reset backup storage info", K(ret), K(job_info));
   } else if (share::PHYSICAL_RESTORE_SUCCESS == job_info.get_status()) {
     //restore success
   } else {
@@ -1587,6 +1592,22 @@ int ObRestoreScheduler::update_restore_concurrency_(const common::ObString &tena
   return ret;
 }
 
+int ObRestoreScheduler::fill_backup_storage_info_(const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  ObRestoreStorageInfoFiller filler;
+  if (OB_FAIL(filler.init(tenant_id_,
+                          job_info,
+                          *sql_proxy_))) {
+    LOG_WARN("failed to init filler", K(ret));
+  } else if (OB_FAIL(filler.fill_backup_storage_info())) {
+    LOG_WARN("failed to fill backup storage info", K(ret));
+  } else {
+    LOG_INFO("fill backup storage info", K(job_info));
+  }
+  return ret;
+}
+
 int ObRestoreScheduler::stat_restore_progress_(
     common::ObISQLClient &proxy,
     const share::ObPhysicalRestoreJob &job_info,
@@ -1727,6 +1748,20 @@ int ObRestoreScheduler::update_tenant_restore_data_mode_to_normal_(const uint64_
   int ret = OB_SUCCESS;
   if (OB_FAIL(update_tenant_restore_data_mode_(tenant_id, NORMAL_RESTORE_DATA_MODE))) {
     LOG_WARN("fail to update tenant restore data mode to NORMAL", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::remove_backup_storage_info_(const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = job_info.get_tenant_id();
+  if (OB_FAIL(share::ObBackupStorageInfoOperator::remove_backup_storage_info(
+      *sql_proxy_, tenant_id, ObBackupDestType::DEST_TYPE_RESTORE_DATA))) {
+    LOG_WARN("failed to remove backup storage info", K(ret), K(job_info));
+  } else if (OB_FAIL(share::ObBackupStorageInfoOperator::remove_backup_storage_info(
+      *sql_proxy_, tenant_id, ObBackupDestType::DEST_TYPE_RESTORE_LOG))) {
+    LOG_WARN("failed to remove backup storage info", K(ret), K(job_info));
   }
   return ret;
 }

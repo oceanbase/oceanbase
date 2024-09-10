@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_ENGINE_JOIN_OB_JOIN_VEC_OP_
 
 #include "sql/engine/ob_operator.h"
+#include "share/vector/ob_fixed_length_vector.h"
 
 namespace oceanbase
 {
@@ -56,6 +57,7 @@ public:
   inline bool need_right_join() const;
 
   int calc_other_conds(bool &is_match);
+  int batch_calc_other_conds(ObBatchRows &brs);
 
   const ObJoinVecSpec &get_spec() const
   { return static_cast<const ObJoinVecSpec &>(spec_); }

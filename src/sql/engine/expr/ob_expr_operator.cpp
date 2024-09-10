@@ -35,6 +35,7 @@
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "share/vector/expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -1366,6 +1367,10 @@ int ObExprOperator::aggregate_result_type_for_merge(
         if (OB_FAIL(aggregate_user_defined_sql_type(type, types, param_num))) {
           LOG_WARN("aggregate_user_defined_sql_type fail", K(ret));
         }
+      } else if (ob_is_collection_sql_type(res_type)) {
+        if (OB_FAIL(aggregate_collection_sql_type(type, types, param_num))) {
+          LOG_WARN("aggregate_collection_sql_type fail", K(ret));
+        }
       }
     }
     LOG_DEBUG("merged type is", K(type), K(is_oracle_mode));
@@ -1706,6 +1711,28 @@ int ObExprOperator::aggregate_user_defined_sql_type(
         found = true;
         type.set_subschema_id(types[i].get_subschema_id());
         type.set_udt_id(types[i].get_udt_id());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprOperator::aggregate_collection_sql_type(
+    ObExprResType &type,
+    const ObExprResType *types,
+    int64_t param_num)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(types) || OB_UNLIKELY(param_num < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("types is null or param_num is wrong", K(types), K(param_num), K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; ! found && i < param_num && OB_SUCC(ret); ++i) {
+      if (ob_is_collection_sql_type(types[i].get_type())) {
+        found = true;
+        // choose the first collection subschema id now
+        type.set_subschema_id(types[i].get_subschema_id());
       }
     }
   }
@@ -2301,6 +2328,11 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
       ret = OB_ERR_INVALID_XML_DATATYPE;
     }
     LOG_WARN("incorrect cmp type with xml arguments", K(type1), K(type2), K(type_), K(ret));
+  } else if ((type1.is_collection_sql_type() || type2.is_collection_sql_type())
+             && !(type_ == T_OP_EQ
+                  || type_ == T_OP_NE)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("Incorrect cmp type with collection arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
                                                             type1.get_type(),
                                                             type2.get_type()))) {
@@ -2336,6 +2368,16 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
       }
     } else if (ObRawType == cmp_type) {
       type.get_calc_meta().set_collation_type(CS_TYPE_BINARY);
+    } else if (ob_is_collection_sql_type(cmp_type)) {
+      if (type1.is_collection_sql_type() && !type2.is_collection_sql_type()) {
+        type.get_calc_meta().set_subschema_id(type1.get_subschema_id());
+      } else if (!type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
+        type.get_calc_meta().set_subschema_id(type2.get_subschema_id());
+      } else if (type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
+        if (type1.get_subschema_id() == type2.get_subschema_id()) {
+          type.get_calc_meta().set_subschema_id(type1.get_subschema_id());
+        }
+      }
     }
     LOG_DEBUG("calc cmp type", K(type1), K(type2), K(type.get_calc_meta()), K(lbt()));
   }
@@ -2627,6 +2669,29 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
         ObAccuracy calc_acc(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
         type1.set_calc_accuracy(calc_acc);
         type2.set_calc_accuracy(calc_acc);
+      }
+    } else if (ob_is_collection_sql_type(cmp_type.get_calc_type())) {
+      if (type1.is_collection_sql_type() && !type2.is_collection_sql_type()) {
+        type1.set_calc_meta(type1);
+        type2.set_calc_meta(type1);
+      } else if (!type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
+        type1.set_calc_meta(type2);
+        type2.set_calc_meta(type2);
+      } else if (type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
+        if (type1.get_subschema_id() != type2.get_subschema_id()) {
+          ObExprResType coll_calc_type = type;
+          ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+          ObExecContext *exec_ctx = session->get_cur_exec_ctx();
+          if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
+            LOG_WARN("failed to check array compatibilty", K(ret));
+          } else {
+            type1.set_calc_meta(coll_calc_type);
+            type2.set_calc_meta(coll_calc_type);
+          }
+        } else {
+          type1.set_calc_meta(type2);
+          type2.set_calc_meta(type2);
+        }
       }
     }
   }

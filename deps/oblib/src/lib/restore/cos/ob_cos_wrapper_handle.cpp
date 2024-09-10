@@ -69,7 +69,7 @@ static void ob_cos_free(void *opaque, void *address)
 /*--------------------------------ObCosWrapperHandle-----------------------------------*/
 ObCosWrapperHandle::ObCosWrapperHandle()
   : is_inited_(false), handle_(nullptr), cos_account_(), allocator_(),
-    delete_mode_(ObIStorageUtil::DELETE)
+    delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE)
 {}
 
 int ObCosWrapperHandle::init(const ObObjectStorageInfo *storage_info)
@@ -99,7 +99,7 @@ void ObCosWrapperHandle::reset()
 {
   destroy_cos_handle();
   is_inited_ = false;
-  delete_mode_ = ObIStorageUtil::DELETE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
 }
 
 int create_cos_handle(
@@ -134,6 +134,28 @@ int ObCosWrapperHandle::create_cos_handle(const bool check_md5)
   } else if (OB_FAIL(common::create_cos_handle(allocator_, cos_account_, check_md5, handle_))) {
     OB_LOG(WARN, "failed to create cos handle", K(ret));
   }
+  return ret;
+}
+
+int ObCosWrapperHandle::create_tmp_cos_handle(
+    ObCosMemAllocator &allocator,
+    const bool check_md5,
+    qcloud_cos::ObCosWrapper::Handle *&handle)
+{
+  int ret = OB_SUCCESS;
+  handle = nullptr;
+  qcloud_cos::OB_COS_customMem cos_mem = {ob_cos_malloc, ob_cos_free, &allocator};
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "handle is not inited", K(ret));
+  } else if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account_,
+                                                                 check_md5, &handle))) {
+    OB_LOG(WARN, "failed to create tmp cos handle", K(ret));
+  } else if (OB_ISNULL(handle)) {
+    ret = OB_COS_ERROR;
+    OB_LOG(WARN, "create tmp handle succeed, but returned handle is null", K(ret));
+  }
+
   return ret;
 }
 
@@ -200,6 +222,7 @@ int ObCosWrapperHandle::build_bucket_and_object_name(const ObString &uri)
             OB_LOG(WARN, "fail to deep copy bucket", K(uri), K(bucket_start), K(bucket_length), K(ret));
           } else {
             bucket_name_.assign_ptr(bucket_name_buff, strlen(bucket_name_buff) + 1);// must include '\0'
+            bucket_name_str_buf_.assign_ptr(bucket_name_buff, strlen(bucket_name_buff) + 1);
           }
           break;
         }
@@ -213,11 +236,15 @@ int ObCosWrapperHandle::build_bucket_and_object_name(const ObString &uri)
   }
 
   // parse the object name
+  // It is impossible to find bucket_end + 1 > uri.length() here.
   if (OB_SUCC(ret)) {
-    if (bucket_end + 1 >= uri.length()) {
+    if (bucket_end + 1 > uri.length()) {
       ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "object name is NULL", K(uri), K(ret));
-    } else {
+      OB_LOG(WARN, "uri is invalid", K(uri), K(ret), K(bucket_end), K(uri.length()));
+    } else if (bucket_end + 1 == uri.length()) {
+      // When bucket_end + 1 == uri.length(), it means no object is given in the uri.
+    } else if (bucket_end + 1 < uri.length()) {
+      // We only allocate memory to object when bucket_end + 1 < uri.length()
       object_start = bucket_end + 1;
       ObString::obstr_size_t object_length = uri.length() - object_start;
       //must end with '\0'
@@ -225,6 +252,7 @@ int ObCosWrapperHandle::build_bucket_and_object_name(const ObString &uri)
         OB_LOG(WARN, "fail to deep copy object", K(uri), K(object_start), K(object_length), K(ret));
       } else {
         object_name_.assign_ptr(object_name_buff, strlen(object_name_buff) + 1);//must include '\0'
+        object_name_str_buf_.assign_ptr(object_name_buff, strlen(object_name_buff) + 1);
       }
     }
   }
@@ -243,9 +271,9 @@ int ObCosWrapperHandle::set_delete_mode(const char *parameter)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid args", K(ret), KP(parameter));
   } else if (0 == strcmp(parameter, "delete")) {
-    delete_mode_ = ObIStorageUtil::DELETE;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   } else if (0 == strcmp(parameter, "tagging")) {
-    delete_mode_ = ObIStorageUtil::TAGGING;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(parameter));

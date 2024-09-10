@@ -72,6 +72,52 @@ int ObFixedLengthVector<ValueType, BasicOp>::no_null_cmp(VECTOR_NOT_NULL_COMPARE
   return VecOpUtil::Op::cmp(expr.obj_meta_, this->get_payload(row_idx1), this->get_length(row_idx1), this->get_payload(row_idx2), this->get_length(row_idx2), cmp_ret);
 }
 
+template<typename ValueType, typename BasicOp>
+int ObFixedLengthVector<ValueType, BasicOp>::null_first_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const
+{
+  int ret = OB_SUCCESS;
+  cmp_ret = 0;
+  uint16_t start_idx = bound.start();
+  uint16_t end_idx = bound.end();
+  for (int64_t row_idx = start_idx; OB_SUCC(ret) && 0 == cmp_ret && row_idx < end_idx; row_idx++) {
+    if (skip.at(row_idx)) {
+      continue;
+    } else if (OB_FAIL(null_first_cmp(expr, row_idx, r_null, r_v, r_len, cmp_ret))) {
+      LOG_WARN("failed to compare", K(ret));
+    } else if (0 != cmp_ret) {
+      diff_row_idx = row_idx;
+      break;
+    }
+  }
+  if (0 == cmp_ret) {
+    diff_row_idx = end_idx;
+  }
+  return ret;
+}
+
+template<typename ValueType, typename BasicOp>
+int ObFixedLengthVector<ValueType, BasicOp>::null_last_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const
+{
+  int ret = OB_SUCCESS;
+  cmp_ret = 0;
+  uint16_t start_idx = bound.start();
+  uint16_t end_idx = bound.end();
+  for (int64_t row_idx = start_idx; OB_SUCC(ret) && 0 == cmp_ret && row_idx < end_idx; row_idx++) {
+    if (skip.at(row_idx)) {
+      continue;
+    } else if (OB_FAIL(null_last_cmp(expr, row_idx, r_null, r_v, r_len, cmp_ret))) {
+      LOG_WARN("failed to compare", K(ret));
+    } else if (0 != cmp_ret) {
+      diff_row_idx = row_idx;
+      break;
+    }
+  }
+  if (0 == cmp_ret) {
+    diff_row_idx = end_idx;
+  }
+  return ret;
+}
+
 template class ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>>;
 template class ObFixedLengthVector<uint64_t, VectorBasicOp<VEC_TC_UINTEGER>>;
 template class ObFixedLengthVector<float, VectorBasicOp<VEC_TC_FLOAT>>;

@@ -1217,7 +1217,10 @@ DEFINE_GET_SERIALIZE_SIZE(LogModeMeta)
   return size;
 }
 
-LogSnapshotMeta::LogSnapshotMeta() : version_(-1), base_lsn_(), prev_log_info_()
+constexpr int64_t LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION = 1;
+constexpr int64_t LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION_V2 = 2;
+
+LogSnapshotMeta::LogSnapshotMeta() : version_(-1), base_lsn_(), prev_log_info_(), prev_log_tail_lsn_()
 {}
 
 LogSnapshotMeta::~LogSnapshotMeta()
@@ -1225,52 +1228,66 @@ LogSnapshotMeta::~LogSnapshotMeta()
   reset();
 }
 
-int LogSnapshotMeta::generate(const LSN &lsn)
+int LogSnapshotMeta::generate(const LSN &lsn,
+                              const LogInfo &prev_log_info,
+                              const LSN &prev_log_tail_lsn)
 {
   int ret = OB_SUCCESS;
   if (false == lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    version_ = LOG_SNAPSHOT_META_VERSION;
+    version_ = get_version_();
     base_lsn_ = lsn;
-    prev_log_info_.reset();
-  }
-  return ret;
-}
-
-int LogSnapshotMeta::generate(const LSN &lsn, const LogInfo &prev_log_info)
-{
-  int ret = OB_SUCCESS;
-  if (false == lsn.is_valid() || false == prev_log_info.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    version_ = LOG_SNAPSHOT_META_VERSION;
-    base_lsn_ = lsn;
-    prev_log_info_ = prev_log_info;
+    if (LOG_SNAPSHOT_META_VERSION_V2 == version_) {
+      prev_log_info_ = prev_log_info;
+      prev_log_tail_lsn_ = prev_log_tail_lsn;
+    } else if (prev_log_tail_lsn != lsn) {
+      prev_log_info_.reset();
+      prev_log_tail_lsn_.reset();
+    } else {
+      prev_log_info_ = prev_log_info;
+      prev_log_tail_lsn_.reset();
+    }
   }
   return ret;
 }
 
 bool LogSnapshotMeta::is_valid() const
 {
-  return true == base_lsn_.is_valid() && LOG_SNAPSHOT_META_VERSION == version_;
+  return true == base_lsn_.is_valid();
 }
 
 void LogSnapshotMeta::reset()
 {
   base_lsn_.reset();
   prev_log_info_.reset();
+  prev_log_tail_lsn_.reset();
   version_ = -1;
 }
 
-int LogSnapshotMeta::get_prev_log_info(LogInfo &log_info) const
+int LogSnapshotMeta::get_prev_log_info(const LSN &curr_lsn,
+                                       LogInfo &log_info,
+                                       LSN &tail_lsn) const
 {
   int ret = OB_SUCCESS;
   log_info.reset();
-  if (!prev_log_info_.is_valid()) {
-    ret = OB_ENTRY_NOT_EXIST;
+  tail_lsn.reset();
+  if (LOG_SNAPSHOT_META_VERSION == version_) {
+    if (!prev_log_info_.is_valid() || curr_lsn != base_lsn_) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      log_info = prev_log_info_;
+    }
+  } else if (LOG_SNAPSHOT_META_VERSION_V2 == version_) {
+    if (!prev_log_info_.is_valid() || curr_lsn != prev_log_tail_lsn_) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      log_info = prev_log_info_;
+      tail_lsn = prev_log_tail_lsn_;
+    }
   } else {
-    log_info = prev_log_info_;
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "unexpected error, version is invalid", KPC(this), K(curr_lsn));
   }
   return ret;
 }
@@ -1280,6 +1297,7 @@ void LogSnapshotMeta::operator=(const LogSnapshotMeta &log_snapshot_meta)
   this->version_ = log_snapshot_meta.version_;
   this->base_lsn_ = log_snapshot_meta.base_lsn_;
   this->prev_log_info_ = log_snapshot_meta.prev_log_info_;
+  this->prev_log_tail_lsn_ = log_snapshot_meta.prev_log_tail_lsn_;
 }
 
 DEFINE_SERIALIZE(LogSnapshotMeta)
@@ -1292,6 +1310,9 @@ DEFINE_SERIALIZE(LogSnapshotMeta)
              OB_FAIL(base_lsn_.serialize(buf, buf_len, new_pos)) ||
              OB_FAIL(prev_log_info_.serialize(buf, buf_len, new_pos))) {
     PALF_LOG(ERROR, "LogSnapshotMeta serialize failed", K(ret), K(new_pos));
+  } else if (LOG_SNAPSHOT_META_VERSION_V2 == version_
+             && OB_FAIL(prev_log_tail_lsn_.serialize(buf, buf_len, new_pos))) {
+    PALF_LOG(ERROR, "serialize prev_log_tail_lsn_ failed", K(ret), K(new_pos));
   } else {
     PALF_LOG(TRACE, "LogSnapshotMeta serialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
     pos = new_pos;
@@ -1309,6 +1330,9 @@ DEFINE_DESERIALIZE(LogSnapshotMeta)
              OB_FAIL(base_lsn_.deserialize(buf, data_len, new_pos)) ||
              OB_FAIL(prev_log_info_.deserialize(buf, data_len, new_pos))) {
     PALF_LOG(ERROR, "LogSnapshotMeta deserialize failed", K(ret), K(new_pos));
+  } else if (LOG_SNAPSHOT_META_VERSION_V2 == version_
+             && OB_FAIL(prev_log_tail_lsn_.deserialize(buf, data_len, new_pos))) {
+    PALF_LOG(ERROR, "deserialize prev_log_tail_lsn_ failed", K(ret), K(new_pos));
   } else {
     PALF_LOG(TRACE, "LogSnapshotMeta deserialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
     pos = new_pos;
@@ -1322,7 +1346,25 @@ DEFINE_GET_SERIALIZE_SIZE(LogSnapshotMeta)
   size += serialization::encoded_length_i64(version_);
   size += base_lsn_.get_serialize_size();
   size += prev_log_info_.get_serialize_size();
+  if (LOG_SNAPSHOT_META_VERSION_V2 == version_) {
+    size += prev_log_tail_lsn_.get_serialize_size();
+  }
   return size;
+}
+
+int64_t LogSnapshotMeta::get_version_() const
+{
+  int ret = OB_SUCCESS;
+  uint64_t min_data_version = DATA_VERSION_4_3_3_0;
+  int64_t version = LOG_SNAPSHOT_META_VERSION;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    PALF_LOG(WARN, "GET_MIN_DATA_VERSION failed", KR(ret));
+  } else if (min_data_version >= DATA_VERSION_4_3_3_0) {
+    version = LOG_SNAPSHOT_META_VERSION_V2;
+  } else {
+    version = LOG_SNAPSHOT_META_VERSION;
+  }
+  return version;
 }
 
 int LogReplicaPropertyMeta::generate(const bool allow_vote, const LogReplicaType replica_type)

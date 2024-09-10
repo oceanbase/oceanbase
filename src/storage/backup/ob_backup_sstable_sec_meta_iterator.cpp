@@ -29,7 +29,12 @@ namespace backup {
 ObBackupSSTableSecMetaIterator::ObBackupSSTableSecMetaIterator()
     : is_inited_(false), output_idx_(-1), tablet_id_(),
       table_key_(), allocator_(), table_handle_(),
-      datum_range_(), sec_meta_iterator_() {}
+      datum_range_(), sec_meta_iterator_(), mod_()
+{
+  // TODO:yangyi.yyy, adapt mod
+  mod_.storage_id_ = 1;
+  mod_.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+}
 
 ObBackupSSTableSecMetaIterator::~ObBackupSSTableSecMetaIterator() {}
 
@@ -160,9 +165,11 @@ int ObBackupSSTableSecMetaIterator::read_backup_sstable_metas_(
     common::ObIArray<ObBackupSSTableMeta> &sstable_meta_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(
-          backup_path.get_obstr(), backup_dest.get_storage_info(), meta_index,
-          sstable_meta_array))) {
+  if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(backup_path.get_obstr(),
+                                                        backup_dest.get_storage_info(),
+                                                        mod_,
+                                                        meta_index,
+                                                        sstable_meta_array))) {
     LOG_WARN("failed to read tablet meta", K(ret), K(backup_path),
              K(meta_index));
   }

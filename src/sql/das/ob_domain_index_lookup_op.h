@@ -19,7 +19,6 @@ namespace oceanbase
 {
 namespace sql
 {
-
 class ObDomainRowkeyComp {
 public:
   ObDomainRowkeyComp(int &sort_ret) : result_code_(sort_ret) {}
@@ -106,7 +105,7 @@ protected:
   storage::ObTableScanParam doc_id_scan_param_;
   const ObDASScanCtDef *doc_id_lookup_ctdef_;
   ObDASScanRtDef *doc_id_lookup_rtdef_;
-  ObTabletID doc_id_idx_tablet_id_;
+  ObTabletID doc_id_idx_tablet_id_; // for vector index, it is vec_id_index_tablet_id
   ObExpr *doc_id_expr_;
   ObObj doc_id_key_obj_;
 
@@ -178,7 +177,6 @@ private:
   ObRowkey aux_last_rowkey_;
   bool is_inited_;
 };
-
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DOMAIN_INDEX_LOOKUP_OP_H_ */

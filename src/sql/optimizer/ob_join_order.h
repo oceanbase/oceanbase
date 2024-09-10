@@ -1347,6 +1347,14 @@ struct NullAwareAntiJoinInfo {
                                   uint64_t ref_table_id,
                                   uint64_t &inv_idx_tid);
 
+    int get_vector_inv_index_tid(ObSqlSchemaGuard *schema_guard,
+                                 ObRawExpr *vector_expr,
+                                 const uint64_t table_id,
+                                 const uint64_t ref_table_id,
+                                 const bool has_aggr,
+                                 bool &vector_index_match,
+                                 ObIArray<uint64_t> &valid_index_ids);
+
     inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
 
     int param_funct_table_expr(ObRawExpr* &function_table_expr,

@@ -269,12 +269,13 @@ int ObIMvccCtx::register_ext_info_commit_cb(
     const blocksstable::ObDmlFlag dml_flag,
     transaction::ObTxDesc *tx_desc,
     transaction::ObTxSEQ &parent_seq_no,
-    ObObj &index_data,
+    blocksstable::ObStorageDatum &index_data,
+    ObObjType &type,
     ObObj &ext_info_data)
 {
   int ret = OB_SUCCESS;
   storage::ObExtInfoCbRegister cb_register;
-  if (OB_FAIL(cb_register.register_cb(this, timeout, dml_flag, tx_desc, parent_seq_no, index_data, ext_info_data))) {
+  if (OB_FAIL(cb_register.register_cb(this, timeout, dml_flag, tx_desc, parent_seq_no, index_data, type, ext_info_data))) {
     TRANS_LOG(ERROR, "register ext info callback failed", K(ret), K(cb_register), K(*this));
   }
   return ret;

@@ -154,6 +154,7 @@ int ObInnerTableSchema::all_acquired_snapshot_aux_lob_meta_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_ACQUIRED_SNAPSHOT_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_ACQUIRED_SNAPSHOT_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -289,6 +290,7 @@ int ObInnerTableSchema::all_constraint_aux_lob_meta_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_CONSTRAINT_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_CONSTRAINT_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -424,6 +426,7 @@ int ObInnerTableSchema::all_constraint_history_aux_lob_meta_schema(ObTableSchema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_CONSTRAINT_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_CONSTRAINT_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -559,6 +562,7 @@ int ObInnerTableSchema::all_ori_schema_version_aux_lob_meta_schema(ObTableSchema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_ORI_SCHEMA_VERSION_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_ORI_SCHEMA_VERSION_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -694,6 +698,7 @@ int ObInnerTableSchema::all_func_aux_lob_meta_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_FUNC_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_FUNC_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -829,6 +834,7 @@ int ObInnerTableSchema::all_func_history_aux_lob_meta_schema(ObTableSchema &tabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_FUNC_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_FUNC_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -964,6 +970,7 @@ int ObInnerTableSchema::all_temp_table_aux_lob_meta_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TEMP_TABLE_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TEMP_TABLE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1099,6 +1106,7 @@ int ObInnerTableSchema::all_sequence_object_aux_lob_meta_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_SEQUENCE_OBJECT_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_SEQUENCE_OBJECT_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1234,6 +1242,7 @@ int ObInnerTableSchema::all_sequence_object_history_aux_lob_meta_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_SEQUENCE_OBJECT_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_SEQUENCE_OBJECT_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1369,6 +1378,7 @@ int ObInnerTableSchema::all_sequence_value_aux_lob_meta_schema(ObTableSchema &ta
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_SEQUENCE_VALUE_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_SEQUENCE_VALUE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1504,6 +1514,7 @@ int ObInnerTableSchema::all_freeze_schema_version_aux_lob_meta_schema(ObTableSch
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_FREEZE_SCHEMA_VERSION_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_FREEZE_SCHEMA_VERSION_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1639,6 +1650,7 @@ int ObInnerTableSchema::all_type_aux_lob_meta_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TYPE_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TYPE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1774,6 +1786,7 @@ int ObInnerTableSchema::all_type_history_aux_lob_meta_schema(ObTableSchema &tabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TYPE_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TYPE_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -1909,6 +1922,7 @@ int ObInnerTableSchema::all_type_attr_aux_lob_meta_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TYPE_ATTR_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TYPE_ATTR_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2044,6 +2058,7 @@ int ObInnerTableSchema::all_type_attr_history_aux_lob_meta_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TYPE_ATTR_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TYPE_ATTR_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2179,6 +2194,7 @@ int ObInnerTableSchema::all_coll_type_aux_lob_meta_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_COLL_TYPE_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_COLL_TYPE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2314,6 +2330,7 @@ int ObInnerTableSchema::all_coll_type_history_aux_lob_meta_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_COLL_TYPE_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_COLL_TYPE_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2449,6 +2466,7 @@ int ObInnerTableSchema::all_weak_read_service_aux_lob_meta_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_WEAK_READ_SERVICE_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_WEAK_READ_SERVICE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2584,6 +2602,7 @@ int ObInnerTableSchema::all_dblink_aux_lob_meta_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_DBLINK_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_DBLINK_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2719,6 +2738,7 @@ int ObInnerTableSchema::all_dblink_history_aux_lob_meta_schema(ObTableSchema &ta
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_DBLINK_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_DBLINK_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2854,6 +2874,7 @@ int ObInnerTableSchema::all_tenant_role_grantee_map_aux_lob_meta_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_ROLE_GRANTEE_MAP_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_ROLE_GRANTEE_MAP_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -2989,6 +3010,7 @@ int ObInnerTableSchema::all_tenant_role_grantee_map_history_aux_lob_meta_schema(
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -3124,6 +3146,7 @@ int ObInnerTableSchema::all_tenant_keystore_aux_lob_meta_schema(ObTableSchema &t
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_KEYSTORE_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_KEYSTORE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -3259,6 +3282,7 @@ int ObInnerTableSchema::all_tenant_keystore_history_aux_lob_meta_schema(ObTableS
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_KEYSTORE_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_KEYSTORE_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -3394,6 +3418,7 @@ int ObInnerTableSchema::all_tenant_ols_policy_aux_lob_meta_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_POLICY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_POLICY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -3529,6 +3554,7 @@ int ObInnerTableSchema::all_tenant_ols_policy_history_aux_lob_meta_schema(ObTabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_POLICY_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_POLICY_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -3664,6 +3690,7 @@ int ObInnerTableSchema::all_tenant_ols_component_aux_lob_meta_schema(ObTableSche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_COMPONENT_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_COMPONENT_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -3799,6 +3826,7 @@ int ObInnerTableSchema::all_tenant_ols_component_history_aux_lob_meta_schema(ObT
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_COMPONENT_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_COMPONENT_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -3934,6 +3962,7 @@ int ObInnerTableSchema::all_tenant_ols_label_aux_lob_meta_schema(ObTableSchema &
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_LABEL_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_LABEL_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -4069,6 +4098,7 @@ int ObInnerTableSchema::all_tenant_ols_label_history_aux_lob_meta_schema(ObTable
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_LABEL_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_LABEL_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -4204,6 +4234,7 @@ int ObInnerTableSchema::all_tenant_ols_user_level_aux_lob_meta_schema(ObTableSch
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_USER_LEVEL_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_USER_LEVEL_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -4339,6 +4370,7 @@ int ObInnerTableSchema::all_tenant_ols_user_level_history_aux_lob_meta_schema(Ob
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_OLS_USER_LEVEL_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_OLS_USER_LEVEL_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -4474,6 +4506,7 @@ int ObInnerTableSchema::all_tenant_tablespace_aux_lob_meta_schema(ObTableSchema 
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TABLESPACE_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TABLESPACE_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -4609,6 +4642,7 @@ int ObInnerTableSchema::all_tenant_tablespace_history_aux_lob_meta_schema(ObTabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_TABLESPACE_HISTORY_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_TABLESPACE_HISTORY_TID);
 
   table_schema.set_max_used_column_id(column_id);
@@ -4744,6 +4778,7 @@ int ObInnerTableSchema::all_tenant_user_failed_login_stat_aux_lob_meta_schema(Ob
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_USER_FAILED_LOGIN_STAT_AUX_LOB_META_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_data_table_id(OB_ALL_TENANT_USER_FAILED_LOGIN_STAT_TID);
 
   table_schema.set_max_used_column_id(column_id);

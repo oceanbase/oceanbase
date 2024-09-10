@@ -35,6 +35,7 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &vector_fixed_msg_writer_;
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_row_msg_writer_.set_row_meta(meta_);
         msg_writer_ = &vector_row_msg_writer_;
       } else if (DtlWriterType::VECTOR_WRITER == msg_writer_map[px_row.get_data_type()]) {
         //TODO : support local channel shuffle in vector mode
@@ -412,8 +413,9 @@ int ObDtlChanAgent::send_last_buffer(ObDtlLinkedBuffer *&last_buffer)
       } else {
         last_buffer->size() = size;
         last_buffer->pos() = pos;
-        ObDtlLinkedBuffer::assign(*last_buffer, buf);
-        if (OB_FAIL(ch->send_buffer(buf))) {
+        if (OB_FAIL(ObDtlLinkedBuffer::assign(*last_buffer, buf))) {
+          LOG_WARN("failed to assign buffer", K(ret));
+        } else if (OB_FAIL(ch->send_buffer(buf))) {
           LOG_WARN("failed to send buffer", K(ret));
         }
         if (nullptr != buf) {

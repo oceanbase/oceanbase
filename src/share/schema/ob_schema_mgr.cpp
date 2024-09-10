@@ -2692,7 +2692,7 @@ int ObSchemaMgr::add_table(
                    "table_name", new_table_schema->get_table_name());
         }
       } else if (new_table_schema->is_index_table()) { // index is in recyclebin
-        const bool is_built_in_index = new_table_schema->is_built_in_fts_index();
+        const bool is_built_in_index = new_table_schema->is_built_in_index();
         IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
         if (new_table_schema->is_in_recyclebin()) {
           ObIndexSchemaHashWrapper index_name_wrapper(new_table_schema->get_tenant_id(),
@@ -3430,7 +3430,7 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
           ret = OB_HASH_NOT_EXIST != hash_ret ? hash_ret : ret;
         }
       } else if (schema_to_del->is_index_table()) {
-        const bool is_built_in_index = schema_to_del->is_built_in_fts_index();
+        const bool is_built_in_index = schema_to_del->is_built_in_index();
         IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
         if (schema_to_del->is_in_recyclebin()) { // index is in recyclebin
           ObIndexSchemaHashWrapper index_schema_wrapper(schema_to_del->get_tenant_id(),
@@ -4735,7 +4735,7 @@ int ObSchemaMgr::deal_with_change_table_state(const ObSimpleTableSchemaV2 &old_t
     // non-hidden table to hidden table
     if (old_table_schema.is_index_table()) {
       bool is_oracle_mode = false;
-      const bool is_built_in_index = old_table_schema.is_built_in_fts_index();
+      const bool is_built_in_index = old_table_schema.is_built_in_index();
       IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
       if (OB_FAIL(old_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
         LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
@@ -4835,7 +4835,7 @@ int ObSchemaMgr::deal_with_table_rename(
                K(new_table_name));
       bool is_system_table = false;
       if (old_table_schema.is_index_table()) {
-        const bool is_built_in_index = old_table_schema.is_built_in_fts_index();
+        const bool is_built_in_index = old_table_schema.is_built_in_index();
         bool is_oracle_mode = false;
         IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
         if (OB_FAIL(old_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -5028,7 +5028,7 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
             LOG_TRACE("index is", "table_id", table_schema->get_table_id(),
                       "database_id", table_schema->get_database_id(),
                       "table_name", table_schema->get_table_name_str());
-            const bool is_built_in_index = table_schema->is_built_in_fts_index();
+            const bool is_built_in_index = table_schema->is_built_in_index();
             IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
             // oracle mode and index is not in recyclebin
             if (table_schema->is_in_recyclebin()) {

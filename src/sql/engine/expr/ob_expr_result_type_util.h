@@ -222,6 +222,16 @@ public:
     return get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
                                ObArithResultTypeMap::OP::MOD);
   }
+  static int get_array_calc_type(ObExecContext *exec_ctx,
+                                 const ObExprResType &type1,
+                                 const ObExprResType &type2,
+                                 ObExprResType &calc_type);
+  static int get_array_calc_type(ObExecContext *exec_ctx,
+                                 const ObObjType &type1,
+                                 const ObObjType &type2,
+                                 uint32_t depth,
+                                 ObExprResType &calc_type,
+                                 ObObjType &element_type);
 };
 
 

@@ -391,8 +391,8 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
     for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
       retry_cnt++;
       if (OB_FAIL(inner_lock_for_read(tx_data, tx_cc_ctx))) {
-        if (OB_UNLIKELY(observer::SS_STOPPING == GCTX.status_) ||
-            OB_UNLIKELY(observer::SS_STOPPED == GCTX.status_)) {
+        if (OB_UNLIKELY(ObServiceStatus::SS_STOPPING == GCTX.status_) ||
+            OB_UNLIKELY(ObServiceStatus::SS_STOPPED == GCTX.status_)) {
           // rewrite ret
           ret = OB_SERVER_IS_STOPPING;
           TRANS_LOG(WARN, "observer is stopped", K(ret));

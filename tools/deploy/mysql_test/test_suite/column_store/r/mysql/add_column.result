@@ -181,17 +181,17 @@ count(*)	count(a)	min(a)	max(a)	sum(a)	count(b)	min(b)	max(b)	count(c)	min(c)	ma
 select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
 count(*)	count(c1)	min(c1)	max(c1)	sum(c1)	count(c2)	min(c2)	max(c2)
 250	250	0	498	39900	100	300300300300300	498498498498498
-select count(c2), min(c2), max(c2) from t3 where c1 < 256;
-count(c2)	min(c2)	max(c2)
-16384	中文                                                          	中文                                                          
+select count(c2), min(c2), max(c2), sum_opnsize(c2), approx_count_distinct(c2) from t3 where c1 < 256;
+count(c2)	min(c2)	max(c2)	sum_opnsize(c2)	approx_count_distinct(c2)
+16384	中文                                                          	中文                                                          	1245184	1
 alter system set _rowsets_enabled = false;
 alter system flush plan cache;
-select count(c2), min(c2), max(c2) from t3 where c1 < 256;
-count(c2)	min(c2)	max(c2)
-16384	中文                                                          	中文                                                          
-select count(c2), min(c2), max(c2) from t3 where c1 < 256;
-count(c2)	min(c2)	max(c2)
-16384	中文	中文
+select count(c2), min(c2), max(c2), sum_opnsize(c2), approx_count_distinct(c2) from t3 where c1 < 256;
+count(c2)	min(c2)	max(c2)	sum_opnsize(c2)	approx_count_distinct(c2)
+16384	中文                                                          	中文                                                          	1245184	1
+select count(c2), min(c2), max(c2), sum_opnsize(c2), approx_count_distinct(c2) from t3 where c1 < 256;
+count(c2)	min(c2)	max(c2)	sum_opnsize(c2)	approx_count_distinct(c2)
+16384	中文	中文	294912	1
 alter system major freeze;
 alter table t2 add column c4 bigint default 10, add column c5 bigint unsigned default 20;
 alter table t2 add column c6 bigint default null;

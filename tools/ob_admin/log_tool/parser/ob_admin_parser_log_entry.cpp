@@ -30,7 +30,7 @@
 #endif
 #include "logservice/data_dictionary/ob_data_dict_iterator.h"     // ObDataDictIterator
 #include "share/scn.h"
-
+#include "share/vector_index/ob_plugin_vector_index_scheduler.h"
 
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
@@ -627,6 +627,20 @@ int ObAdminParserLogEntry::parse_dup_table_log_()
   return ret;
 }
 
+int ObAdminParserLogEntry::parse_vector_index_log_()
+{
+  int ret = OB_SUCCESS;
+  ObVectorIndexTabletIDArray tmp_tablet_id_array_;
+  ObVectorIndexTableIDArray tmp_table_id_array_;
+  ObVectorIndexSyncLog vector_index_log(tmp_tablet_id_array_, tmp_table_id_array_);
+  if (OB_FAIL(vector_index_log.deserialize(buf_, buf_len_, pos_))) {
+    TRANS_LOG(WARN, "desrialize vector_index_log error", K(ret), KP(buf_), K(buf_len_), K(pos_));
+  } else {
+    fprintf(stdout, " ###<VectorIndexLog>: %s\n", to_cstring(vector_index_log));
+  }
+  return ret;
+}
+
 int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBaseHeader &header)
 {
   int ret = OB_SUCCESS;
@@ -707,6 +721,10 @@ int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBa
       }
       case oceanbase::logservice::ObLogBaseType::DUP_TABLE_LOG_BASE_TYPE: {
         ret = parse_dup_table_log_();
+        break;
+      }
+      case oceanbase::logservice::ObLogBaseType::VEC_INDEX_LOG_BASE_TYPE: {
+        ret = parse_vector_index_log_();
         break;
       }
 

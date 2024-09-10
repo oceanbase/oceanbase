@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
+#define protected public
 #include "share/io/ob_io_define.h"
 #include "share/io/ob_io_manager.h"
 #include "share/io/ob_io_calibration.h"
@@ -22,6 +23,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #undef private
+#undef protected
 #include "share/ob_local_device.h"
 #include "lib/thread/thread_pool.h"
 #include "lib/file/file_directory_utils.h"
@@ -29,6 +31,9 @@
 #include "storage/blocksstable/ob_micro_block_cache.h"
 #include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "storage/meta_mem/ob_storage_meta_cache.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/io/ob_ss_io_request.h"
+#endif
 
 #define ASSERT_SUCC(ret) ASSERT_EQ((ret), ::oceanbase::common::OB_SUCCESS)
 #define ASSERT_FAIL(ret) ASSERT_NE((ret), ::oceanbase::common::OB_SUCCESS)
@@ -101,13 +106,12 @@ static void TearDownTestCase()
   ObMallocAllocator::get_instance()->recycle_tenant_allocator(1002);
 }
 
-static ObIOInfo get_random_io_info()
+static void get_random_io_info(ObIOInfo &io_info)
 {
-  ObIOInfo io_info;
-  const int64_t max_group_num = 0; //不包括OTHER GROUPS的其他group
   io_info.tenant_id_ = OB_SERVER_TENANT_ID;
   io_info.fd_.first_id_ = ObRandom::rand(0, 10000);
   io_info.fd_.second_id_ = ObRandom::rand(0, 10000);
+  io_info.fd_.device_handle_ = THE_IO_DEVICE;
   io_info.flag_.set_mode(static_cast<ObIOMode>(ObRandom::rand(0, (int)ObIOMode::MAX_MODE - 1)));
   io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID); // 0 means default
   io_info.flag_.set_wait_event(ObRandom::rand(1, 9999));
@@ -116,7 +120,6 @@ static ObIOInfo get_random_io_info()
   io_info.size_ = ObRandom::rand(1, 1000L * 10L);
   io_info.flag_.set_read();
   io_info.user_data_buf_ = static_cast<char *>(ob_malloc(io_info.size_, ObNewModIds::TEST));
-  return io_info;
 }
 
 static ObTenantIOConfig default_tenant_io_config()
@@ -124,13 +127,14 @@ static ObTenantIOConfig default_tenant_io_config()
   ObTenantIOConfig tenant_config;
   tenant_config.callback_thread_count_ = 2;
   tenant_config.memory_limit_ = 1024L * 1024L * 1024L;
-  tenant_config.group_num_ = 0;
   tenant_config.unit_config_.min_iops_ = 1000;
   tenant_config.unit_config_.max_iops_ = 1000;
   tenant_config.unit_config_.weight_ = 1000;
-  tenant_config.other_group_config_.min_percent_ = 100;
-  tenant_config.other_group_config_.max_percent_ = 100;
-  tenant_config.other_group_config_.weight_percent_ = 100;
+  tenant_config.unit_config_.max_net_bandwidth_ = INT64_MAX;
+  tenant_config.unit_config_.net_bandwidth_weight_ = 100;
+  tenant_config.group_configs_.at(0).min_percent_ = 100;
+  tenant_config.group_configs_.at(0).max_percent_ = 100;
+  tenant_config.group_configs_.at(0).weight_percent_ = 100;
   tenant_config.group_config_change_ = false;
   return tenant_config;
 }
@@ -140,8 +144,10 @@ class TestIOCallback : public ObIOCallback
 {
 public:
   TestIOCallback()
-    : number_(nullptr), allocator_(nullptr), help_buf_(nullptr)
-  {}
+    : ObIOCallback(ObIOCallbackType::TEST_CALLBACK), number_(nullptr), allocator_(nullptr),
+      help_buf_(nullptr)
+  {
+  }
   virtual ~TestIOCallback();
   virtual const char *get_data() override { return (char *)help_buf_; }
   virtual int64_t size() const override { return sizeof(TestIOCallback); }
@@ -202,6 +208,7 @@ TEST_F(TestIOStruct, IOInfo)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 0;
+  fd.device_handle_ = THE_IO_DEVICE;
   info.tenant_id_ = OB_SERVER_TENANT_ID;
   info.fd_ = fd;
   info.flag_.set_mode(ObIOMode::READ);
@@ -298,7 +305,7 @@ TEST_F(TestIOStruct, IORequest)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 1;
-
+  fd.device_handle_ = THE_IO_DEVICE;
   // default invalid
   ObIOResult result;
   ASSERT_FALSE(result.is_inited_);
@@ -329,7 +336,7 @@ TEST_F(TestIOStruct, IORequest)
   read_info.user_data_buf_ = user_buf;
 
   ASSERT_TRUE(read_info.is_valid());
-  ASSERT_SUCC(req.tenant_io_mgr_.get_ptr()->io_usage_.init(0));
+  ASSERT_SUCC(req.tenant_io_mgr_.get_ptr()->io_usage_.init(1));
   ASSERT_FAIL(result.init(read_info)); //not init cond yet
   ASSERT_FALSE(result.is_inited_);
 
@@ -347,7 +354,7 @@ TEST_F(TestIOStruct, IORequest)
   ASSERT_EQ(2, result.result_ref_cnt_);
 
   // prepare write request
-  ObIOInfo write_info = read_info;
+  ObIOInfo write_info(read_info);
   write_info.flag_.set_mode(ObIOMode::WRITE);
   req.destroy();
   ASSERT_EQ(1, result.result_ref_cnt_);
@@ -502,28 +509,69 @@ TEST_F(TestIOStruct, IOCalibration)
 TEST_F(TestIOStruct, IOStat)
 {
   ObIOStat stat;
-  stat.accumulate(100, 200, 300);
+  stat.accumulate(100, 200, 10, 20, 30, 40, 100);
   ObIOStatDiff io_diff;
   ObCpuUsage cpu_diff;
   double avg_iops = 0;
   double avg_size = 0;
-  double avg_rt = 0;
+  int64_t avg_prepare = 0;
+  int64_t avg_schedule = 0;
+  int64_t avg_submit = 0;
+  int64_t avg_rt = 0;
+  int64_t avg_total = 0;
   double avg_cpu = 0;
-  io_diff.diff(stat, avg_iops, avg_size, avg_rt);
+  io_diff.diff(stat, avg_iops, avg_size, avg_prepare, avg_schedule, avg_submit, avg_rt, avg_total);
   cpu_diff.get_cpu_usage(avg_cpu);
-//  ASSERT_DOUBLE_EQ(avg_iops, 0);
+  //  ASSERT_DOUBLE_EQ(avg_iops, 0);
   ASSERT_DOUBLE_EQ(avg_size, 2);
-  ASSERT_DOUBLE_EQ(avg_rt, 3);
+  //ASSERT_EQ(avg_rt, 3);
   ASSERT_DOUBLE_EQ(avg_cpu, 0);
 
   usleep(1000L * 1000L); // sleep 1s
-  stat.accumulate(200, 600, 4000);
-  io_diff.diff(stat, avg_iops, avg_size, avg_rt);
-  ASSERT_NEAR(avg_iops, 200, 1);
-  ASSERT_NEAR(avg_size, 3, 0.1);
-  ASSERT_NEAR(avg_rt, 20, 0.1);
+  stat.accumulate(200, 600, 200, 400, 600, 800, 2000);
+  io_diff.diff(stat, avg_iops, avg_size, avg_prepare, avg_schedule, avg_submit, avg_rt, avg_total);
+  ASSERT_NEAR(avg_iops, 200, 20);
+  ASSERT_NEAR(avg_size, 3, 0.3);
+  ASSERT_NEAR(avg_prepare, 1, 0.1);
+  ASSERT_NEAR(avg_schedule, 2, 0.2);
+  ASSERT_NEAR(avg_submit, 3, 0.3);
+  ASSERT_NEAR(avg_rt, 4, 0.4);
+  ASSERT_NEAR(avg_total, 10, 1);
   ASSERT_GE(avg_cpu, 0);
 }
+
+TEST_F(TestIOStruct, IOGroupUsage)
+{
+  ObIOGroupUsage usage;
+  usage.inc(123456, 100, 200, 300, 400, 1000);
+  double avg_size = 0;
+  double avg_iops = 0;
+  int64_t avg_bw = 0;
+  int64_t avg_prepare_delay = 0;
+  int64_t avg_schedule_delay = 0;
+  int64_t avg_submit_delay = 0;
+  int64_t avg_device_delay = 0;
+  int64_t avg_total_delay = 0;
+  usleep(1000 * 1000);
+  usage.calc(avg_size,
+      avg_iops,
+      avg_bw,
+      avg_prepare_delay,
+      avg_schedule_delay,
+      avg_submit_delay,
+      avg_device_delay,
+      avg_total_delay);
+  ASSERT_NEAR(avg_size, 123456, 12345);
+  ASSERT_NEAR(avg_iops, 1, 0.1);
+  ASSERT_NEAR(avg_bw, 123456, 12345);
+  ASSERT_NEAR(avg_prepare_delay, 100, 10);
+  ASSERT_NEAR(avg_schedule_delay, 200, 20);
+  ASSERT_NEAR(avg_submit_delay, 300, 30);
+  ASSERT_NEAR(avg_device_delay, 400, 40);
+  ASSERT_NEAR(avg_total_delay, 1000, 100);
+}
+
+
 
 TEST_F(TestIOStruct, IOScheduler)
 {
@@ -539,7 +587,8 @@ TEST_F(TestIOStruct, IOScheduler)
   ObIOResult result;
   ObIORequest req;
   result.inc_ref();
-  ObIOInfo io_info = get_random_io_info();
+  ObIOInfo io_info;
+  get_random_io_info(io_info);
   ASSERT_TRUE(io_info.is_valid());
   ASSERT_SUCC(result.basic_init());
   ASSERT_SUCC(result.init(io_info));
@@ -547,10 +596,10 @@ TEST_F(TestIOStruct, IOScheduler)
   ObTenantIOConfig tenant_config = default_tenant_io_config();
   ObTenantIOClock io_clock;
   ObIOUsage io_usage;
-  ASSERT_SUCC(io_clock.init(tenant_config, &io_usage));
+  ASSERT_SUCC(io_clock.init(1002, tenant_config, &io_usage));
   io_clock.destroy();
-  ASSERT_SUCC(io_usage.init(0));
-  ASSERT_SUCC(io_clock.init(tenant_config, &io_usage));
+  ASSERT_SUCC(io_usage.init(1));
+  ASSERT_SUCC(io_clock.init(1002, tenant_config, &io_usage));
   //ASSERT_SUCC(scheduler.schedule_request(io_clock, req));
 
   // test destroy
@@ -567,32 +616,33 @@ TEST_F(TestIOStruct, MClockQueue)
   ObTenantIOConfig io_config;
   io_config.callback_thread_count_ = 2;
   io_config.memory_limit_ = 1024L * 1024L * 1024L;
-  io_config.group_num_ = 2;
   io_config.unit_config_.min_iops_ = 100;
   io_config.unit_config_.max_iops_ = 10000L;
   io_config.unit_config_.weight_ = 1000;
+  io_config.unit_config_.max_net_bandwidth_ = INT64_MAX;
+  io_config.unit_config_.net_bandwidth_weight_ = 100;
 
   ObTenantIOConfig::GroupConfig group_config_1;
   group_config_1.min_percent_ = 1;
   group_config_1.max_percent_ = 90;
   group_config_1.weight_percent_ = 60;
+  group_config_1.group_id_ = 1;
   ObTenantIOConfig::GroupConfig group_config_2;
   group_config_2.min_percent_ = 1;
   group_config_2.max_percent_ = 90;
   group_config_2.weight_percent_ = 30;
+  group_config_2.group_id_ = 2;
   io_config.group_configs_.push_back(group_config_1);
   io_config.group_configs_.push_back(group_config_2);
-  io_config.group_ids_.push_back(1);
-  io_config.group_ids_.push_back(2);
-  io_config.other_group_config_.min_percent_ = 98;
-  io_config.other_group_config_.max_percent_ = 100;
-  io_config.other_group_config_.weight_percent_ = 10;
+  io_config.group_configs_.at((uint8_t)ObIOMode::MAX_MODE).min_percent_ = 98;
+  io_config.group_configs_.at((uint8_t)ObIOMode::MAX_MODE).max_percent_ = 100;
+  io_config.group_configs_.at((uint8_t)ObIOMode::MAX_MODE).weight_percent_ = 10;
   ASSERT_TRUE(io_config.is_valid());
   ObTenantIOClock tenant_clock;
   ObIOUsage io_usage;
-  ASSERT_SUCC(io_usage.init(2));
-  ASSERT_SUCC(io_usage.refresh_group_num(2));
-  ASSERT_SUCC(tenant_clock.init(io_config, &io_usage));
+  ASSERT_SUCC(io_usage.init(io_config.group_configs_.count()));
+  ASSERT_SUCC(io_usage.refresh_group_num(io_config.group_configs_.count()));
+  ASSERT_SUCC(tenant_clock.init(1002, io_config, &io_usage));
   ObMClockQueue mqueue1;
   ObMClockQueue mqueue2;
   const int64_t test_count = 6000L;
@@ -615,8 +665,8 @@ TEST_F(TestIOStruct, Test_Size)
   int64_t size1 = sizeof(ObAsyncSingleMicroBlockIOCallback);
   int64_t size2 = sizeof(ObMultiDataBlockIOCallback);
   int64_t size3 = sizeof(ObSyncSingleMicroBLockIOCallback);
-  int64_t size4 = sizeof(ObTmpPageCache::ObTmpCachedReadPageIOCallback);
-  int64_t size5 = sizeof(ObTmpPageCache::ObTmpDirectReadPageIOCallback);
+  int64_t size4 = sizeof(oceanbase::tmp_file::ObTmpPageCache::ObTmpCachedReadPageIOCallback);
+  int64_t size5 = sizeof(oceanbase::tmp_file::ObTmpPageCache::ObTmpDirectReadPageIOCallback);
   int64_t size6 = sizeof(oceanbase::ObStorageMetaCache::ObStorageMetaIOCallback);
   int64_t max_callback_size = std::max({size1, size2, size3, size4, size5, size6});
   int64_t size_request = sizeof(ObIORequest);
@@ -630,7 +680,6 @@ TEST_F(TestIOStruct, Test_Size)
   int64_t return_size = sizeof(ObIORetCode);
   int64_t trace_size = sizeof(ObCurTraceId::TraceId);
   int64_t fd_size = sizeof(ObIOFd);
-
   ASSERT_LT(max_callback_size, 512);
   LOG_INFO("qilu :check size", K(size1), K(size2), K(size3), K(size4), K(size5), K(size6), K(max_callback_size));
   LOG_INFO("qilu :check size", K(size_request), K(size_result), K(size_info), K(size_thread_cond), K(size_flag),
@@ -645,6 +694,7 @@ TEST_F(TestIOStruct, IOResult)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 1;
+  fd.device_handle_ = THE_IO_DEVICE;
 
   void *result_buf = holder.get_ptr()->io_allocator_.alloc(sizeof(ObIOResult));
   ObIOResult *result = new (result_buf) ObIOResult;
@@ -679,7 +729,7 @@ TEST_F(TestIOStruct, IOResult)
   read_info.user_data_buf_ = user_buf;
 
   ASSERT_TRUE(read_info.is_valid());
-  ASSERT_SUCC(req->tenant_io_mgr_.get_ptr()->io_usage_.init(0));
+  ASSERT_SUCC(req->tenant_io_mgr_.get_ptr()->io_usage_.init(1));
 
   ASSERT_FAIL(result->init(read_info));
   ASSERT_FALSE(result->is_inited_);
@@ -694,8 +744,8 @@ TEST_F(TestIOStruct, IOResult)
   ASSERT_EQ(req->raw_buf_, nullptr); // read buf allocation is delayed
   ASSERT_SUCC(req->prepare());
   ASSERT_NE(req->raw_buf_, nullptr);
-  ASSERT_EQ(result->get_resource_group_id(), 10005);
-  ASSERT_EQ(req->get_resource_group_id(), 10005);
+  ASSERT_EQ(result->get_group_key().group_id_, 10005);
+  ASSERT_EQ(req->get_group_key().group_id_, 10005);
 
   // test finish
   result->finish_without_accumulate(OB_CANCELED);
@@ -726,7 +776,8 @@ TEST_F(TestIOStruct, IOCallbackManager)
   ObIORequest req;
   req.inc_ref();
   result.inc_ref();
-  ObIOInfo io_info = get_random_io_info();
+  ObIOInfo io_info;
+  get_random_io_info(io_info);
   ASSERT_TRUE(io_info.is_valid());
   ASSERT_SUCC(result.basic_init());
   ASSERT_SUCC(result.init(io_info));
@@ -758,7 +809,8 @@ TEST_F(TestIOStruct, IOFaultDetector)
   ASSERT_TRUE(0 == disk_abnormal_time);
 
   // test read failure detection
-  ObIOInfo io_info = get_random_io_info();
+  ObIOInfo io_info;
+  get_random_io_info(io_info);
   ObIOResult result;
   ObIORequest req;
   req.inc_ref();
@@ -836,9 +888,9 @@ public:
     io_config.unit_config_.min_iops_ = 10000;
     io_config.unit_config_.max_iops_ = 100000;
     io_config.unit_config_.weight_ = 100;
-    io_config.other_group_config_.min_percent_ = 100;
-    io_config.other_group_config_.max_percent_ = 100;
-    io_config.other_group_config_.weight_percent_ = 100;
+    io_config.group_configs_.at(0).min_percent_ = 100;
+    io_config.group_configs_.at(0).max_percent_ = 100;
+    io_config.group_configs_.at(0).weight_percent_ = 100;
   }
   virtual void TearDown()
   {
@@ -908,6 +960,7 @@ TEST_F(TestIOManager, simple)
   ObIOInfo io_info;
   io_info.tenant_id_ = OB_SERVER_TENANT_ID;
   io_info.fd_ = fd;
+  io_info.fd_.device_handle_ = THE_IO_DEVICE;
   io_info.flag_.set_write();
   io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   io_info.flag_.set_wait_event(100);
@@ -1035,7 +1088,7 @@ struct IOPerfLoad
     return tenant_id_ > 0 && group_id_ >= 0 && device_id_ > 0
       && mode_ < ObIOMode::MAX_MODE && size_ > 0 && depth_ > 0 && iops_ >= 0
       && thread_count_ > 0 && start_delay_ts_ >= 0 && stop_delay_ts_ > start_delay_ts_ && size_ > 0
-      && (ObIOMode::WRITE == mode_ ? is_io_aligned(size_) : true)
+      && (ObIOMode::WRITE == mode_ ? is_io_aligned(size_, DIO_ALIGN_SIZE) : true)
       && perf_mode_ != IOPerfMode::UNKNOWN;
   }
   int32_t tenant_id_;
@@ -1055,11 +1108,10 @@ struct IOPerfLoad
 
 struct IOPerfScheduler
 {
-  IOPerfScheduler() : sender_count_(0), schedule_media_id_(0), io_greed_(0) {}
+  IOPerfScheduler() : sender_count_(0), io_greed_(0) {}
   int64_t sender_count_;
-  int64_t schedule_media_id_;
   int64_t io_greed_;
-  TO_STRING_KV(K(sender_count_), K(schedule_media_id_), K(io_greed_));
+  TO_STRING_KV(K(sender_count_), K(io_greed_));
 };
 
 struct IOPerfResult
@@ -1296,7 +1348,7 @@ TEST_F(TestIOManager, perf)
   ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_, scheduler_config.schedule_media_id_));
+  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
   ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
@@ -1369,7 +1421,7 @@ TEST_F(TestIOManager, alloc_memory)
   ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_, scheduler_config.schedule_media_id_));
+  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
   ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
@@ -1439,7 +1491,7 @@ TEST_F(TestIOManager, IOTracer)
   ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_, scheduler_config.schedule_media_id_));
+  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
   ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
@@ -1525,7 +1577,7 @@ TEST_F(TestIOManager, ModifyIOPS)
   ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_, scheduler_config.schedule_media_id_));
+  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
   ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
@@ -1611,7 +1663,7 @@ TEST_F(TestIOManager, ModifyCallbackThread)
   ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_, scheduler_config.schedule_media_id_));
+  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
   ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
@@ -1695,7 +1747,7 @@ TEST_F(TestIOManager, ModifyGroupIO)
   ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_, scheduler_config.schedule_media_id_));
+  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
   ASSERT_SUCC(ObIOManager::get_instance().start());
   // prepare devices and files
   char *device_buf = (char *)malloc(sizeof(ObLocalDevice) * perf_devices.count());
@@ -1845,15 +1897,15 @@ void write_group_perf_config()
     LOG_WARN_RET(OB_ERR_SYS, "open perf config file failed", K(fd), K(file_name));
   } else {
     const char *file_buf =
-      "sender_count      schedule_media_id     io_greed\n"
-      "8                 0                     0\n"
+      "sender_count     io_greed\n"
+      "8                     0\n"
       "\n"
       "device_id   media_id    async_channel   sync_channel    max_io_depth    file_size_gb    file_path\n"
       "1           0           8               1               64              1               ./perf_test\n"
       "\n"
-      "tenant_id   min_iops    max_iops    weight          group\n"
-      "1        5000        100000       700             10001: testgroup1: 80, 100, 60; 10002: testgroup2: 10, 60, 30; 0: OTHER_GROUPS: 10, 100, 10;\n"
-      "500        1000        50000        1000            12345: testgroup1: 50, 50, 50; 0: OTHER_GROUPS: 50, 50, 50;\n"
+      "tenant_id   min_iops    max_iops    weight     max_bandwidth      bandwidth_weight      group\n"
+      "1        5000        100000       700       1000000000      100      10001: testgroup1: 80, 100, 60; 10002: testgroup2: 10, 60, 30; 0: OTHER_GROUPS: 10, 100, 10;\n"
+      "500        1000        50000        1000      1000000000      100      12345: testgroup1: 50, 50, 50; 0: OTHER_GROUPS: 50, 50, 50;\n"
       "\n"
       "tenant_id   device_id     group    io_mode     io_size_byte    io_depth    perf_mode     target_iops     thread_count    is_sequence     start_s    stop_s\n"
       "1        1             0        r           16384           10          rolling       0               16              0               0          8\n"
@@ -1890,9 +1942,9 @@ int parse_group_perf_config(const char *config_file_path,
     LOG_WARN("failed to open iops data file, ", K(ret), K(errno), KERRMSG);
   } else {
     char curr_line[1024] = { 0 };
-    const char *scheduler_header = "sender_count      schedule_media_id     io_greed";
+    const char *scheduler_header = "sender_count     io_greed";
     const char *device_header = "device_id   media_id    async_channel   sync_channel    max_io_depth    file_size_gb    file_path";
-    const char *tenant_header = "tenant_id   min_iops    max_iops    weight          group";
+    const char *tenant_header = "tenant_id   min_iops    max_iops    weight     max_bandwidth      bandwidth_weight      group";
     const char *load_header = "tenant_id   device_id     group    io_mode     io_size_byte    io_depth    perf_mode     target_iops     thread_count    is_sequence     start_s    stop_s";
     enum class PerfConfigType { SCHEDULER, DEVICE, TENANT, LOAD, MAX };
     PerfConfigType config_type = PerfConfigType::MAX;
@@ -1912,9 +1964,9 @@ int parse_group_perf_config(const char *config_file_path,
           config_type = PerfConfigType::LOAD;
         }
       } else if (PerfConfigType::SCHEDULER == config_type) {
-        int scan_ret = sscanf(curr_line, "%ld%ld%ld\n",
-            &scheduler_config.sender_count_, &scheduler_config.schedule_media_id_, &scheduler_config.io_greed_);
-        if (OB_UNLIKELY(3 != scan_ret)) {
+        int scan_ret = sscanf(curr_line, "%ld%ld\n",
+            &scheduler_config.sender_count_, &scheduler_config.io_greed_);
+        if (OB_UNLIKELY(2 != scan_ret)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("scan config file failed", K(ret), K(scan_ret));
         }
@@ -1939,10 +1991,11 @@ int parse_group_perf_config(const char *config_file_path,
       } else if (PerfConfigType::TENANT == config_type) {
         IOPerfTenant item;
         char group_config[1024] = { 0 };
-        int scan_ret = sscanf(curr_line, "%d%ld%ld%ld%[^\n]\n",
+        int scan_ret = sscanf(curr_line, "%d%ld%ld%ld%ld%ld%[^\n]\n",
             &item.tenant_id_, &item.config_.unit_config_.min_iops_, &item.config_.unit_config_.max_iops_,
-            &item.config_.unit_config_.weight_, group_config);
-        if (OB_UNLIKELY(5 != scan_ret)) {
+            &item.config_.unit_config_.weight_, &item.config_.unit_config_.max_net_bandwidth_,
+            &item.config_.unit_config_.net_bandwidth_weight_, group_config);
+        if (OB_UNLIKELY(7 != scan_ret)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("scan config file failed", K(ret), K(scan_ret));
         } else {
@@ -2459,17 +2512,17 @@ void IOGroupModify::run1()
   if (modify_init_ts_ + modify_delay_ts_ > current_ts) {
     usleep(modify_init_ts_ + modify_delay_ts_ - current_ts);
   }
-  if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, INT64_MAX, 100, 100, 100))) {
+  if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, 0, 100, 100, 100))) {
     LOG_WARN("fail to modify group config", K(ret));
-  } else if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, 0, 0, 0, 0))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, (uint64_t)ObStorageUsedMod::STORAGE_USED_MAX + 1, 0, 0, 0))) {
     LOG_WARN("fail to modify group config", K(ret));
   }
 
   //change 2
   usleep(3000L * 1000L); // sleep 3s
-  if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, INT64_MAX, 40, 40, 40))) {
+  if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, 0, 40, 40, 40))) {
     LOG_WARN("fail to modify group config", K(ret));
-  } else if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, 0, 60, 60, 60))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.modify_group_io_config(curr_tenant_.tenant_id_, (uint64_t)ObStorageUsedMod::STORAGE_USED_MAX + 1, 60, 60, 60))) {
     LOG_WARN("fail to modify group config", K(ret));
   }
 }

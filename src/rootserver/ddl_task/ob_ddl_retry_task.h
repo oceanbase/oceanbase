@@ -47,8 +47,6 @@ public:
         common::ObMySQLTransaction &trans,
         const uint64_t tenant_id,
         const int64_t task_id);
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
   virtual int cleanup_impl() override;
 private:
   int check_health();

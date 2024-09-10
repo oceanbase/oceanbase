@@ -14,7 +14,7 @@
 #define OB_STORAGE_CKPT_LINKED_MARCO_BLOCK_WRITER_H_
 
 #include "share/io/ob_io_manager.h"
-#include "storage/blocksstable/ob_block_manager.h"
+#include "storage/blocksstable/ob_storage_object_handle.h"
 #include "storage/blocksstable/ob_macro_block_common_header.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
@@ -34,22 +34,33 @@ public:
   ObLinkedMacroBlockWriter(const ObLinkedMacroBlockWriter &) = delete;
   ObLinkedMacroBlockWriter &operator=(const ObLinkedMacroBlockWriter &) = delete;
 
-  int init();
-  int write_block(const char *buf, const int64_t buf_len,
-    blocksstable::ObMacroBlockCommonHeader &common_header,
-    ObLinkedMacroBlockHeader &linked_header, blocksstable::MacroBlockId &pre_block_id);
-  int close(blocksstable::MacroBlockId &pre_block_id);
+  int init(const uint64_t talbet_id);
+  int init_for_object(
+    const uint64_t tablet_id,
+    const int64_t snapshot_version,
+    const int64_t start_macro_seq);
+  int write_block(
+      char *buf, const int64_t buf_len,
+      blocksstable::ObMacroBlockCommonHeader &common_header,
+      ObLinkedMacroBlockHeader &linked_header, blocksstable::MacroBlockId &pre_block_id,
+      blocksstable::ObIMacroBlockFlushCallback *redo_callback_ = nullptr);
+  int close(blocksstable::ObIMacroBlockFlushCallback *redo_callback, blocksstable::MacroBlockId &pre_block_id);
   const blocksstable::MacroBlockId &get_entry_block() const;
   ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
+  int64_t get_meta_block_cnt() const;
+
+  int64_t get_last_macro_seq() const { return cur_macro_seq_; }
   void reset();
   void reuse_for_next_round();
 
 private:
   bool is_inited_;
-  common::ObIOFlag io_desc_;
   blocksstable::ObMacroBlocksWriteCtx write_ctx_;
-  blocksstable::ObMacroBlockHandle handle_;
+  blocksstable::ObStorageObjectHandle handle_;
   blocksstable::MacroBlockId entry_block_id_;
+  uint64_t tablet_id_;
+  int64_t snapshot_version_;
+  int64_t cur_macro_seq_;
 };
 
 class ObLinkedMacroBlockItemWriter final
@@ -60,16 +71,23 @@ public:
   ObLinkedMacroBlockItemWriter(const ObLinkedMacroBlockItemWriter &) = delete;
   ObLinkedMacroBlockItemWriter &operator=(const ObLinkedMacroBlockItemWriter &) = delete;
 
-  int init(const bool need_disk_addr, const ObMemAttr &mem_attr);
+  int init(const bool need_disk_addr, const ObMemAttr &mem_attr, const uint64_t tablet_id = 0);
+  int init_for_object(
+    const uint64_t tablet_id,
+    const int64_t snapshot_version,
+    const int64_t start_macro_seq,
+    blocksstable::ObIMacroBlockFlushCallback *write_callback = nullptr);
   int write_item(const char *item_buf, const int64_t item_buf_len, int64_t *item_idx = nullptr);
   int close();
+  inline bool is_closed() const { return is_closed_; };
   void reset();
   void reuse_for_next_round();
 
   int get_entry_block(blocksstable::MacroBlockId &entry_block) const;
   common::ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
   int64_t get_item_disk_addr(const int64_t item_idx, ObMetaDiskAddr &addr) const;
-
+  int64_t get_last_macro_seq() const { return block_writer_.get_last_macro_seq(); }
+  int64_t get_written_macro_cnt() const { return block_writer_.get_meta_block_cnt(); }
 private:
   void inner_reset();
   int write_block();
@@ -79,8 +97,6 @@ private:
   int set_pre_block_inflight_items_addr(const blocksstable::MacroBlockId &pre_block_id);
 
 private:
-  static const int64_t BLOCK_HEADER_SIZE =
-    sizeof(blocksstable::ObMacroBlockCommonHeader) + sizeof(ObLinkedMacroBlockHeader);
   bool is_inited_;
   bool is_closed_;
   int64_t written_items_cnt_;
@@ -103,8 +119,9 @@ private:
   int64_t io_buf_pos_;
 
   // macro block header
-  blocksstable::ObMacroBlockCommonHeader *common_header_;
-  ObLinkedMacroBlockHeader *linked_header_;
+  blocksstable::ObMacroBlockCommonHeader common_header_;
+  ObLinkedMacroBlockHeader linked_header_;
+  blocksstable::ObIMacroBlockFlushCallback *write_callback_;
 };
 
 }  // end namespace storage

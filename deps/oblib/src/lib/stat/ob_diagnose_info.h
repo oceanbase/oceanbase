@@ -292,6 +292,10 @@ private:
     }                                                           \
   } while(0)
 
+#define EVENT_TENANT_SET(stat_no, value, tenant_id)    \
+  oceanbase::common::ObTenantStatEstGuard tenant_guard(tenant_id); \
+  EVENT_SET(stat_no, value);
+
 #define WAIT_EVENT_GET(stat_no)                                      \
   ({                                                            \
     uint64_t ret = 0;                                        \

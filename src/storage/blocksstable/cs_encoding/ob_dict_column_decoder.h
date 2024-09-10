@@ -52,7 +52,7 @@ public:
     const ObColumnCSDecoderCtx &col_ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObAggCell &agg_cell) const override;
+    storage::ObAggCellBase &agg_cell) const override;
 
   bool fast_decode_valid(const ObColumnCSDecoderCtx &ctx) const;
 
@@ -60,13 +60,13 @@ public:
 
   virtual int read_distinct(
     const ObColumnCSDecoderCtx &ctx,
-    storage::ObGroupByCell &group_by_cell) const;
+    storage::ObGroupByCellBase &group_by_cell) const;
 
   virtual int read_reference(
     const ObColumnCSDecoderCtx &ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObGroupByCell &group_by_cell) const override;
+    storage::ObGroupByCellBase &group_by_cell) const override;
 
   friend class ObDictValueIterator;
 
@@ -103,7 +103,7 @@ protected:
     const ObColumnCSDecoderCtx &ctx,
     const int64_t row_id,
     ObStorageDatum &datum,
-    storage::ObAggCell &agg_cell) const
+    storage::ObAggCellBase &agg_cell) const
   {
     UNUSEDx(ctx, row_id, datum, agg_cell);
     return OB_NOT_SUPPORTED;
@@ -228,9 +228,10 @@ protected:
     int64_t &matched_ref_cnt,
     const bool is_const_result_set);
 
+  template <typename ObFilterExecutor>
   static int in_operator_hash_search(
     const ObDictColumnDecoderCtx &ctx,
-    const sql::ObWhiteFilterExecutor &filter,
+    const ObFilterExecutor &filter,
     sql::ObBitVector *ref_bitset,
     int64_t &matched_ref_cnt,
     const bool is_const_result_set);
@@ -285,7 +286,7 @@ protected:
 
   static int traverse_datum_dict_agg(
     const ObDictColumnDecoderCtx &ctx,
-    storage::ObAggCell &agg_cell);
+    storage::ObAggCellBase &agg_cell);
 
   static int cmp_ref_and_set_result(const uint32_t ref_width_size, const char *ref_buf,
     const int64_t dict_ref, const bool has_null, const uint64_t null_replaced_val,

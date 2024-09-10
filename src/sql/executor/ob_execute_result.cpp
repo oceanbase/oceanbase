@@ -16,6 +16,7 @@
 #include "lib/ash/ob_active_session_guard.h"
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

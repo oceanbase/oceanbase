@@ -13,6 +13,7 @@
 #define OB_STORAGE_COLUMN_STORE_OB_CO_SSTABLE_ROW_SCANNER_H_
 #include "storage/access/ob_sstable_row_scanner.h"
 #include "storage/access/ob_block_batched_row_store.h"
+#include "storage/access/ob_pushdown_aggregate_vec.h"
 #include "ob_column_store_util.h"
 #include "ob_co_sstable_rows_filter.h"
 #include "ob_i_cg_iterator.h"
@@ -23,7 +24,8 @@ namespace oceanbase
 namespace storage
 {
 class ObBlockBatchedRowStore;
-class ObGroupByCell;
+class ObGroupByCellBase;
+class ObGroupByCellVec;
 class ObCGGroupByScanner;
 class ObCOSSTableRowScanner : public ObStoreRowIterator
 {
@@ -168,6 +170,7 @@ protected:
 private:
   int init_group_by_info(ObTableAccessContext &context);
   int push_group_by_processor(ObICGIterator *cg_iterator);
+
   bool is_new_group_;
   bool reverse_scan_;
   bool is_limit_end_;
@@ -185,7 +188,7 @@ private:
   ObCOSSTableRowsFilter *rows_filter_;
   ObICGIterator *project_iter_;
   ObICGIterator *getter_project_iter_;
-  ObGroupByCell *group_by_cell_;
+  ObGroupByCellBase *group_by_cell_;
   ObBlockBatchedRowStore *batched_row_store_;
   ObCGIterParamPool *cg_param_pool_;
   const blocksstable::ObDatumRange *range_;

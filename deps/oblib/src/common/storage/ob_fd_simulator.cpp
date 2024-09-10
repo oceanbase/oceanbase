@@ -22,7 +22,7 @@ union ob_sim_fd_id
   struct fd_sim_id {
     int64_t first_pos_ : 28;
     int64_t second_pos_ : 28;
-    int64_t op_type_ : 4;
+    uint64_t op_type_ : 4;
     int64_t device_type_ : 4;
     fd_sim_id() : first_pos_(0), second_pos_(0),
                   op_type_(0), device_type_(0)

@@ -17,7 +17,7 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/tablet/ob_table_store_util.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-
+#include "storage/blocksstable/ob_major_checksum_info.h"
 namespace oceanbase
 {
 namespace storage
@@ -80,18 +80,28 @@ public:
   int init(
       ObArenaAllocator &allocator,
       const ObTablet &tablet,
-      const blocksstable::ObSSTable *sstable = nullptr);
+      const blocksstable::ObSSTable *sstable = nullptr,
+      // when first create tablet in migration, will carry ObMajorChecksumInfo from src svr
+      const ObMajorChecksumInfo *ckm_info = nullptr);
   // init for update
   int init(
       ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const ObUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
+#ifdef OB_BUILD_SHARED_STORAGE
+  // init for shared storage major compaction
+  int init_for_shared_storage(
+      common::ObArenaAllocator &allocator,
+      const ObUpdateTableStoreParam &param);
+#endif
   // init temp table store with address for serialize, no memtable array
+  // need get all member variables from old table store
   int init(
       ObArenaAllocator &allocator,
       common::ObIArray<ObITable *> &sstable_array,
-      common::ObIArray<ObMetaDiskAddr> &addr_array);
+      common::ObIArray<ObMetaDiskAddr> &addr_array,
+      const blocksstable::ObMajorChecksumInfo &major_ckm_info);
   // init for replace sstables in table store
   int init(
       ObArenaAllocator &allocator,
@@ -205,8 +215,8 @@ public:
       blocksstable::ObSSTable &orig_sstable,
       ObStorageMetaHandle &loaded_sstable_handle,
       blocksstable::ObSSTable *&loaded_sstable);
-  int get_all_minor_sstables(
-      ObTableStoreIterator &iter) const;
+  const blocksstable::ObMajorChecksumInfo &get_major_ckm_info() const { return major_ckm_info_; }
+  int get_all_minor_sstables(ObTableStoreIterator &iter) const;
 private:
   int get_need_to_cache_sstables(
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
@@ -412,6 +422,10 @@ private:
       const ObIArray<ObITable *> &replace_sstable_array,
       const ObSSTableArray &old_tables,
       ObSSTableArray &new_tables) const;
+  int build_major_checksum_info(
+    const ObTabletTableStore &old_store,
+    const ObUpdateTableStoreParam *param,
+    ObArenaAllocator &allocator);
   int replace_ha_remote_sstables_(
       const common::ObIArray<ObITable *> &old_store_sstables,
       const ObTablesHandleArray &new_tables_handle,
@@ -425,7 +439,7 @@ public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;
   static const int64_t TABLE_STORE_VERSION_V2 = 0x0101;
   static const int64_t TABLE_STORE_VERSION_V3 = 0x0102;
-  static const int64_t TABLE_STORE_VERSION_V4 = 0x0103;
+  static const int64_t TABLE_STORE_VERSION_V4 = 0x0103; // for major_ckm_info_
   static const int64_t MAX_SSTABLE_CNT = 128;
   // limit table store memory size to one ACHUNK
   static const int64_t MAX_TABLE_STORE_MEMORY_SIZE= lib::ACHUNK_SIZE - lib::AOBJECT_META_SIZE;
@@ -439,6 +453,8 @@ private:
   ObSSTableArray mds_sstables_;
   ObMemtableArray memtables_;
   ObDDLKVArray ddl_mem_sstables_;
+  blocksstable::ObMajorChecksumInfo major_ckm_info_;
+  // Attention! if add new member variables, need fix serialize/deserialize & all init func
   mutable common::SpinRWLock memtables_lock_; // protect memtable read and update after inited
   bool is_ready_for_read_;
   bool is_inited_;

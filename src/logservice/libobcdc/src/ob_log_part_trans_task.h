@@ -193,6 +193,7 @@ struct ColValue
   bool is_json() const { return value_.is_json(); }
   bool is_geometry() const { return value_.is_geometry(); }
   bool is_roaringbitmap() const { return value_.is_roaringbitmap(); }
+  bool is_collection() const { return value_.is_collection_sql_type(); }
   common::ObObjType get_obj_type() const { return value_.get_type(); }
 
   int add_child(ColValue *child) {return children_.add(child);}

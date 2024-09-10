@@ -3524,7 +3524,7 @@ inline int obj_print_json<ObCollectionSQLType>(const ObObj &obj, char *buf, int6
   } else {
     J_OBJ_START();
     PRINT_META();
-    BUF_PRINTO("COLLECTION");
+    BUF_PRINTO("ARRAY");
     J_COLON();
     BUF_PRINTO(udt_data);
     J_OBJ_END();

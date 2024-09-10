@@ -13,6 +13,8 @@
 #define private public
 #include "ob_log_miner_file_manager.h"
 #undef private
+#include "share/io/ob_io_manager.h"
+#include "share/ob_device_manager.h"
 #include "gtest/gtest.h"
 
 namespace oceanbase
@@ -53,6 +55,14 @@ int main(int argc, char **argv)
   logger.set_file_name("test_ob_log_miner_file_manager.log", true, false);
   logger.set_log_level("DEBUG");
   logger.set_enable_async_log(false);
+  EXPECT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
+  EXPECT_EQ(OB_SUCCESS, ObIOManager::get_instance().init(1000000000));
+  EXPECT_EQ(OB_SUCCESS, ObIOManager::get_instance().start());
+//  ObTenantIOConfig tenant_io_config = ObTenantIOConfig::default_instance();
+//  oceanbase::share::ObTenantBase *tenant_base = MTL_NEW(oceanbase::share::ObTenantBase, "unittest", OB_SERVER_TENANT_ID);
+//  ObTenantIOManager *tio_manager = NULL;
+//  ObTenantIOManager::mtl_new(tio_manager);
+//  ObTenantIOManager::mtl_init(tio_manager);
   testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

@@ -147,11 +147,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantTabletMediumParam);
 };
 
-class ObTenantTabletScheduler
+class ObTenantTabletScheduler : public ObBasicMergeScheduler
 {
 public:
   ObTenantTabletScheduler();
-  ~ObTenantTabletScheduler();
+  virtual ~ObTenantTabletScheduler();
   static int mtl_init(ObTenantTabletScheduler* &scheduler);
 
   int init();
@@ -178,9 +178,6 @@ public:
       || OB_LS_NOT_EXIST == ret;
   }
   // major merge status control
-  void stop_major_merge();
-  void resume_major_merge();
-  OB_INLINE bool could_major_merge_start() const { return ATOMIC_LOAD(&major_merge_status_); }
   OB_INLINE bool is_restore() const { return ATOMIC_LOAD(&is_restore_); }
   // The transfer task sets the flag that prohibits the scheduling of medium when the log stream is src_ls of transfer
   int stop_tablets_schedule_medium(const ObIArray<ObTabletID> &tablet_ids, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag);
@@ -193,15 +190,8 @@ public:
   const ObProhibitScheduleMediumMap& get_prohibit_medium_ls_map() const {
     return prohibit_medium_map_;
   }
-  int64_t get_frozen_version() const;
-  int64_t get_inner_table_merged_scn() const { return ATOMIC_LOAD(&inner_table_merged_scn_); }
-  int get_min_data_version(uint64_t &min_data_version);
-  void set_inner_table_merged_scn(const int64_t merged_scn)
-  {
-    return ATOMIC_STORE(&inner_table_merged_scn_, merged_scn);
-  }
   int64_t get_bf_queue_size() const { return bf_queue_.task_count(); }
-  int schedule_merge(const int64_t broadcast_version);
+  virtual int schedule_merge(const int64_t broadcast_version) override;
   int update_upper_trans_version_and_gc_sstable();
   int try_update_upper_trans_version_and_gc_sstable(ObLS &ls, ObCompactionScheduleIterator &iter);
   int check_ls_compaction_finish(const share::ObLSID &ls_id);
@@ -209,7 +199,6 @@ public:
 
   int gc_info();
   int set_max();
-
   int refresh_tenant_status();
   // Schedule an async task to build bloomfilter for the given macro block.
   // The bloomfilter build task will be ignored if a same build task exists in the queue.
@@ -247,17 +236,17 @@ public:
       const compaction::ObTabletMergeDagParam &param,
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
-      const ObGetMergeTablesResult &result,
-      T *&dag,
-      const bool add_into_scheduler = true);
-  static bool check_weak_read_ts_ready(
-      const int64_t &merge_version,
-      ObLS &ls);
+      const ObGetMergeTablesResult &result);
+  static int check_ready_for_major_merge(
+      const ObLSID &ls_id,
+      const storage::ObTablet &tablet,
+      const ObMergeType merge_type);
   static int schedule_merge_dag(
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,
       const ObMergeType merge_type,
       const int64_t &merge_snapshot_version,
+      const ObExecMode exec_mode,
       const ObDagId *dag_net_id = nullptr);
   static int schedule_convert_co_merge_dag_net(
       const ObLSID &ls_id,
@@ -322,7 +311,6 @@ private:
   int after_schedule_tenant_medium(
     const int64_t merge_version,
     bool all_ls_weak_read_ts_ready);
-  int update_major_progress(const int64_t merge_version);
   bool get_enable_adaptive_compaction();
   int update_tablet_report_status(
     const bool tablet_merge_finish,
@@ -334,6 +322,9 @@ private:
     ObTabletHandle tablet_handle,
     bool &schedule_minor_flag,
     bool &need_fast_freeze_flag);
+  int schedule_ddl_tablet_merge(
+    ObLSHandle &ls_handle,
+    ObTabletHandle &tablet_handle);
   int update_report_scn_as_ls_leader(
       ObLS &ls);
 
@@ -350,11 +341,7 @@ private:
     const bool &tablet_could_schedule_medium,
     const bool &could_major_merge,
     const share::ObLSID &ls_id);
-  int schedule_batch_freeze_dag(
-      const share::ObLSID &ls_id,
-      const common::ObIArray<compaction::ObTabletSchedulePair> &tablet_ids);
 public:
-  static const int64_t INIT_COMPACTION_SCN = 1;
   typedef common::ObSEArray<ObGetMergeTablesResult, compaction::ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
 private:
   static const int64_t BLOOM_FILTER_LOAD_BUILD_THREAD_CNT = 1;
@@ -373,17 +360,11 @@ private:
   static const int64_t MERGE_BACTH_FREEZE_CNT = 100L;
 private:
   bool is_inited_;
-  bool major_merge_status_;
   bool is_stop_;
   bool is_restore_;
   bool enable_adaptive_compaction_;
   bool enable_adaptive_merge_schedule_;
   common::ObDedupQueue bf_queue_;
-  mutable obsys::ObRWLock frozen_version_lock_;
-  int64_t frozen_version_;
-  int64_t merged_version_; // the merged major version of the local server, may be not accurate after reboot
-  int64_t inner_table_merged_scn_;
-  uint64_t min_data_version_;
   ObCompactionScheduleTimeGuard time_guard_;
   ObScheduleStatistics schedule_stats_;
   ObFastFreezeChecker fast_freeze_checker_;

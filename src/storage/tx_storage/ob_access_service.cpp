@@ -754,7 +754,7 @@ int ObAccessService::delete_rows(
     transaction::ObTxDesc &tx_desc,
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &column_ids,
-    common::ObNewRowIterator *row_iter,
+    blocksstable::ObDatumRowIterator *row_iter,
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
@@ -808,7 +808,7 @@ int ObAccessService::put_rows(
     transaction::ObTxDesc &tx_desc,
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &column_ids,
-    common::ObNewRowIterator *row_iter,
+    blocksstable::ObDatumRowIterator *row_iter,
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
@@ -861,7 +861,7 @@ int ObAccessService::insert_rows(
     transaction::ObTxDesc &tx_desc,
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &column_ids,
-    common::ObNewRowIterator *row_iter,
+    blocksstable::ObDatumRowIterator *row_iter,
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
@@ -916,10 +916,10 @@ int ObAccessService::insert_row(
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &column_ids,
     const common::ObIArray<uint64_t> &duplicated_column_ids,
-    const common::ObNewRow &row,
+    blocksstable::ObDatumRow &row,
     const ObInsertFlag flag,
     int64_t &affected_rows,
-    common::ObNewRowIterator *&duplicated_rows)
+    blocksstable::ObDatumRowIterator *&duplicated_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   int ret = OB_SUCCESS;
@@ -970,7 +970,7 @@ int ObAccessService::insert_row(
   return ret;
 }
 
-int ObAccessService::revert_insert_iter(common::ObNewRowIterator *iter)
+int ObAccessService::revert_insert_iter(blocksstable::ObDatumRowIterator *iter)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   int ret = OB_SUCCESS;
@@ -987,7 +987,7 @@ int ObAccessService::update_rows(
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &column_ids,
     const common::ObIArray< uint64_t> &updated_column_ids,
-    common::ObNewRowIterator *row_iter,
+    blocksstable::ObDatumRowIterator *row_iter,
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
@@ -1043,7 +1043,7 @@ int ObAccessService::lock_rows(
     const ObDMLBaseParam &dml_param,
     const int64_t abs_lock_timeout,
     const ObLockFlag lock_flag,
-    common::ObNewRowIterator *row_iter,
+    blocksstable::ObDatumRowIterator *row_iter,
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
@@ -1098,7 +1098,7 @@ int ObAccessService::lock_row(
     transaction::ObTxDesc &tx_desc,
     const ObDMLBaseParam &dml_param,
     const int64_t abs_lock_timeout,
-    const common::ObNewRow &row,
+    blocksstable::ObDatumRow &row,
     const ObLockFlag lock_flag)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);

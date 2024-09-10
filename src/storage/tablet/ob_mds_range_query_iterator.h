@@ -149,7 +149,7 @@ int ObMdsRangeQueryIterator<K, T>::init(
   } else if (OB_FAIL(mds_sstable_iter_.init(scan_param, tablet_handle, store_ctx))) {
     MDS_LOG(WARN, "fail to init mds sstable iter", K(ret), K(scan_param));
   } else {
-    // TODO(@bowen.gbw): currently we pass MAX_SCN as read snapshot,
+    // TODO(@gaishun.gs): currently we pass MAX_SCN as read snapshot,
     // in the future, we should consider the semantic of read snapshot when iteratively reading medium info.
     read_snapshot_.convert_for_tx(scan_param.frozen_version_);
     is_inited_ = true;

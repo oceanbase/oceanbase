@@ -12,12 +12,11 @@
 #include "ob_dup_table_base.h"
 #include "ob_dup_table_lease.h"
 #include "ob_dup_table_tablets.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -452,33 +451,19 @@ int ObDupTableLSCheckpoint::flush()
   int ret = OB_SUCCESS;
 
   SpinWLockGuard w_guard(ckpt_rw_lock_);
+  ObLSHandle ls_handle;
 
-  ObDupTableCkptLog slog_entry;
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(slog_entry.init(dup_ls_meta_))) {
-      DUP_TABLE_LOG(WARN, "init slog entry failed", K(ret), K(slog_entry), KPC(this));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObStorageLogParam log_param;
-    log_param.data_ = &slog_entry;
-    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
-                                            ObRedoLogSubType::OB_REDO_LOG_UPDATE_DUP_TABLE_LS);
-    ObStorageLogger *slogger = nullptr;
-    if (OB_ISNULL(slogger = MTL(ObStorageLogger *))) {
-      ret = OB_ERR_UNEXPECTED;
-      DUP_TABLE_LOG(WARN, "get slog service failed", K(ret));
-    } else if (OB_FAIL(slogger->write_log(log_param))) {
-      DUP_TABLE_LOG(WARN, "fail to write ls meta slog", K(ret), K(log_param), KPC(this));
-    } else {
-      DUP_TABLE_LOG(INFO, "Write dup_table slog successfully", K(ret), K(log_param), KPC(this));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(dup_ls_meta_.ls_id_, ls_handle, ObLSGetMod::TRANS_MOD))) {
+    DUP_TABLE_LOG(WARN, "get ls failed", K(ret), K(dup_ls_meta_));
+  } else if (OB_ISNULL(ls_handle.get_ls())) {
+    ret = OB_ERR_NULL_VALUE;
+    DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
+  } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.update_dup_table_meta(
+      ls_handle.get_ls()->get_ls_epoch(), dup_ls_meta_))) {
+    DUP_TABLE_LOG(WARN, "fail to update dup table meta", K(ret));
+  } else {
     lease_log_rec_scn_.reset();
+    DUP_TABLE_LOG(INFO, "Write dup_table slog successfully", K(ret), KPC(this));
   }
 
   return ret;

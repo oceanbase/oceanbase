@@ -1172,10 +1172,10 @@ int ObFreezer::handle_no_active_memtable_(const ObTabletID &tablet_id,
     } else if (OB_FAIL(tablet->get_protected_memtable_mgr_handle(protected_handle))) {
       LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet));
     } else if (protected_handle->get_max_saved_version_from_medium_info_recorder() >=
-               freeze_snapshot_version.get_val_for_tx()) {
+               freeze_snapshot_version.get_val_for_tx() && !GCTX.is_shared_storage_mode()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(
-              ls_id, *tablet, MEDIUM_MERGE, freeze_snapshot_version.get_val_for_tx()))) {
+              ls_id, *tablet, MEDIUM_MERGE, freeze_snapshot_version.get_val_for_tx(), EXEC_MODE_LOCAL))) {
         if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
           ret = tmp_ret;
           LOG_WARN("failed to schedule medium merge dag", K(ret), K(ls_id), K(tablet_id));

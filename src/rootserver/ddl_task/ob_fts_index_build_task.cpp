@@ -35,14 +35,14 @@ ObFtsIndexBuildTask::ObFtsIndexBuildTask()
     doc_rowkey_aux_table_id_(OB_INVALID_ID),
     fts_index_aux_table_id_(OB_INVALID_ID),
     fts_doc_word_aux_table_id_(OB_INVALID_ID),
-    rowkey_doc_schema_generated_(false),
-    doc_rowkey_schema_generated_(false),
-    fts_index_aux_schema_generated_(false),
-    fts_doc_word_schema_generated_(false),
     rowkey_doc_task_submitted_(false),
     doc_rowkey_task_submitted_(false),
     fts_index_aux_task_submitted_(false),
     fts_doc_word_task_submitted_(false),
+    rowkey_doc_task_id_(0),
+    doc_rowkey_task_id_(0),
+    fts_index_aux_task_id_(0),
+    fts_doc_word_task_id_(0),
     drop_index_task_id_(0),
     drop_index_task_submitted_(false),
     root_service_(nullptr),
@@ -120,7 +120,6 @@ int ObFtsIndexBuildTask::init(
     create_index_arg_.exec_tenant_id_ = tenant_id;
     fts_index_aux_table_id_ = index_table_id_;
     // fts_index aux schema already generated before ddl task begin
-    fts_index_aux_schema_generated_ = true;
     task_version_ = OB_FTS_INDEX_BUILD_TASK_VERSION;
     start_time_ = ObTimeUtility::current_time();
     data_format_version_ = tenant_data_format_version;
@@ -191,7 +190,6 @@ int ObFtsIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     target_object_id_ = index_table_id;
     index_table_id_ = index_table_id;
     fts_index_aux_table_id_ = index_table_id_;
-    fts_index_aux_schema_generated_ = true;
     execution_id_ = task_record.execution_id_;
     ret_code_ = task_record.ret_code_;
     start_time_ = ObTimeUtility::current_time();
@@ -522,71 +520,56 @@ int ObFtsIndexBuildTask::prepare()
   return ret;
 }
 
+// patch from fts2 branch
+int ObFtsIndexBuildTask::prepare_aux_table(
+    const ObIndexType index_type,
+    bool &task_submitted,
+    uint64_t &aux_table_id,
+    int64_t &res_task_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t num_fts_child_task = 4;
+  SMART_VAR(obrpc::ObCreateIndexArg, index_arg) {
+    if (OB_FAIL(construct_create_index_arg(index_type, index_arg))) {
+      LOG_WARN("failed to construct rowkey doc id arg", K(ret));
+    } else if (OB_FAIL(ObDomainIndexBuilderUtil::prepare_aux_table(task_submitted,
+                                                                   aux_table_id,
+                                                                   res_task_id,
+                                                                   lock_,
+                                                                   object_id_,
+                                                                   tenant_id_,
+                                                                   task_id_,
+                                                                   index_arg,
+                                                                   root_service_,
+                                                                   dependent_task_result_map_,
+                                                                   obrpc::ObRpcProxy::myaddr_,
+                                                                   num_fts_child_task))) {
+      LOG_WARN("fail to prepare_aux_table", K(ret), K(index_type));
+    }
+  } // samart var
+  return ret;
+}
+
 int ObFtsIndexBuildTask::prepare_rowkey_doc_table()
 {
   int ret = OB_SUCCESS;
   bool state_finished = false;
-  const int64_t num_fts_child_task = 4;
+  const ObIndexType index_type = ObIndexType::INDEX_TYPE_ROWKEY_DOC_ID_LOCAL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (!dependent_task_result_map_.created() &&
-             OB_FAIL(dependent_task_result_map_.create(num_fts_child_task,
-                                                       lib::ObLabel("DepTasMap")))) {
-    LOG_WARN("create dependent task map failed", K(ret));
-  } else {
-    const uint64_t data_table_id = object_id_;
-    int64_t ddl_rpc_timeout = 0;
-    SMART_VARS_4((obrpc::ObCreateIndexArg, rowkey_doc_arg),
-                 (ObDDLTaskRecord, rowkey_doc_task_record),
-                 (obrpc::ObGenerateAuxIndexSchemaArg, arg),
-                 (obrpc::ObGenerateAuxIndexSchemaRes, res)) {
-      ObDDLService &ddl_service = root_service_->get_ddl_service();
-      arg.tenant_id_ = tenant_id_;
-      arg.exec_tenant_id_ = tenant_id_;
-      arg.data_table_id_ = data_table_id;
-      arg.task_id_ = task_id_;
-      obrpc::ObCommonRpcProxy *common_rpc = nullptr;
-      if (OB_FAIL(construct_rowkey_doc_arg(rowkey_doc_arg))) {
-        LOG_WARN("failed to construct rowkey doc id arg", K(ret));
-      } else if (!rowkey_doc_schema_generated_) {
-        if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_,
-                                                   data_table_id,
-                                                   ddl_rpc_timeout))) {
-          LOG_WARN("get ddl rpc timeout fail", K(ret));
-        } else if (OB_ISNULL(root_service_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("root_service is nullptr", K(ret));
-        } else if (OB_FAIL(arg.create_index_arg_.assign(rowkey_doc_arg))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to assign create index arg", K(ret));
-        } else if (OB_FALSE_IT(common_rpc = root_service_->get_ddl_service().get_common_rpc())) {
-        } else if (OB_ISNULL(common_rpc)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("common rpc is nullptr", K(ret));
-        } else if (OB_FAIL(common_rpc-> to(obrpc::ObRpcProxy::myaddr_).
-                           timeout(ddl_rpc_timeout).generate_aux_index_schema(arg,
-                                                                              res))) {
-          LOG_WARN("generate fts aux index schema failed", K(ret), K(arg));
-        } else if (res.schema_generated_) {
-          rowkey_doc_schema_generated_ = true;
-          rowkey_doc_aux_table_id_ = res.aux_table_id_;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (!rowkey_doc_schema_generated_ ) {
-      } else if (rowkey_doc_task_submitted_) {
-      } else if (OB_FAIL(submit_build_aux_index_task(rowkey_doc_arg,
-                                                     rowkey_doc_task_record,
-                                                     rowkey_doc_task_submitted_))) {
-        LOG_WARN("fail to submit build rowkey doc id index task", K(ret));
-      } else {
-        state_finished = true;
-      }
-    }
+  } else if (OB_FAIL(prepare_aux_table(index_type,
+                                       rowkey_doc_task_submitted_,
+                                       rowkey_doc_aux_table_id_,
+                                       rowkey_doc_task_id_))) {
+    LOG_WARN("failed to prepare aux table", K(ret), K(index_type),
+        K(rowkey_doc_task_submitted_), K(rowkey_doc_aux_table_id_));
+  }
+  if (OB_SUCC(ret) && rowkey_doc_task_submitted_) {
+    state_finished = true;
   }
   if (state_finished) {
     ObDDLTaskStatus next_status;
@@ -605,117 +588,38 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
 {
   int ret = OB_SUCCESS;
   bool state_finished = false;
-  const int64_t num_fts_child_task = 4;
+  const ObIndexType doc_rowkey_type = ObIndexType::INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
+  const ObIndexType fts_index_aux_type = ObIndexType::INDEX_TYPE_FTS_INDEX_LOCAL;
+  const ObIndexType fts_doc_word_type = ObIndexType::INDEX_TYPE_FTS_DOC_WORD_LOCAL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (!dependent_task_result_map_.created() &&
-             OB_FAIL(dependent_task_result_map_.create(num_fts_child_task,
-                                                       lib::ObLabel("DepTasMap")))) {
-    LOG_WARN("create dependent task map failed", K(ret));
-  } else {
-    const uint64_t data_table_id = object_id_;
-    int64_t ddl_rpc_timeout = 0;
-    SMART_VARS_3((obrpc::ObCreateIndexArg, doc_rowkey_arg),
-                 (obrpc::ObCreateIndexArg, fts_index_aux_arg),
-                 (obrpc::ObCreateIndexArg, fts_doc_word_arg)) {
-    SMART_VARS_3((ObDDLTaskRecord, doc_rowkey_task_record),
-                 (ObDDLTaskRecord, fts_index_aux_task_record),
-                 (ObDDLTaskRecord, fts_doc_word_task_record)) {
-    SMART_VARS_4((obrpc::ObGenerateAuxIndexSchemaArg, doc_rowkey_schema_arg),
-                 (obrpc::ObGenerateAuxIndexSchemaRes, doc_rowkey_schema_res),
-                 (obrpc::ObGenerateAuxIndexSchemaArg, fts_doc_word_schema_arg),
-                 (obrpc::ObGenerateAuxIndexSchemaRes, fts_doc_word_schema_res)) {
-      ObDDLService &ddl_service = root_service_->get_ddl_service();
-      doc_rowkey_schema_arg.tenant_id_ = tenant_id_;
-      doc_rowkey_schema_arg.data_table_id_ = data_table_id;
-      doc_rowkey_schema_arg.exec_tenant_id_ = tenant_id_;
-      doc_rowkey_schema_arg.task_id_ = task_id_;
-      fts_doc_word_schema_arg.tenant_id_ = tenant_id_;
-      fts_doc_word_schema_arg.data_table_id_ = data_table_id;
-      fts_doc_word_schema_arg.exec_tenant_id_ = tenant_id_;
-      fts_doc_word_schema_arg.task_id_ = task_id_;
-      obrpc::ObCommonRpcProxy *common_rpc = nullptr;
-      if (OB_ISNULL(root_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("root_service is nullptr", K(ret));
-      } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_,
-                                                        data_table_id,
-                                                        ddl_rpc_timeout))) {
-        LOG_WARN("get ddl rpc timeout fail", K(ret));
-      } else if (OB_FAIL(construct_doc_rowkey_arg(doc_rowkey_arg))) {
-        LOG_WARN("fail to construct doc id rowkey arg", K(ret));
-      } else if (!doc_rowkey_schema_generated_) {
-        if (OB_FAIL(doc_rowkey_schema_arg.create_index_arg_.assign(doc_rowkey_arg))) {
-          LOG_WARN("fail to assign create index arg", K(ret));
-        } else if (OB_FALSE_IT(common_rpc = root_service_->get_ddl_service().get_common_rpc())) {
-        } else if (OB_ISNULL(common_rpc)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("common rpc is nullptr", K(ret));
-        } else if (OB_FAIL(common_rpc->to(obrpc::ObRpcProxy::myaddr_).
-                           timeout(ddl_rpc_timeout).
-                           generate_aux_index_schema(doc_rowkey_schema_arg,
-                                                     doc_rowkey_schema_res))) {
-          LOG_WARN("generate fts doc rowkey schema failed", K(ret), K(doc_rowkey_schema_arg));
-        } else if (doc_rowkey_schema_res.schema_generated_) {
-          doc_rowkey_schema_generated_ = true;
-          doc_rowkey_aux_table_id_ = doc_rowkey_schema_res.aux_table_id_;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (!doc_rowkey_schema_generated_) {
-      } else if (doc_rowkey_task_submitted_) {
-      } else if (OB_FAIL(submit_build_aux_index_task(doc_rowkey_arg,
-                                                     doc_rowkey_task_record,
-                                                     doc_rowkey_task_submitted_))) {
-        LOG_WARN("fail to submit build doc id rowkey index task", K(ret));
-      }
-      // NOTE unlike other 3 aux index schemas which require rpc to generate schema,
-      //      fts index schema is generated before this ddl task start
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(construct_fts_index_aux_arg(fts_index_aux_arg))) {
-        LOG_WARN("fail to construct fts index aux arg", K(ret));
-      } else if (fts_index_aux_task_submitted_) {
-      } else if (OB_FAIL(submit_build_aux_index_task(fts_index_aux_arg,
-                                                     fts_index_aux_task_record,
-                                                     fts_index_aux_task_submitted_))) {
-        LOG_WARN("fail to submit build fts index aux task", K(ret));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(construct_fts_doc_word_arg(fts_doc_word_arg))) {
-        LOG_WARN("fail to construct fts doc word arg", K(ret));
-      } else if (!fts_doc_word_schema_generated_) {
-        if (OB_FAIL(fts_doc_word_schema_arg.create_index_arg_.assign(fts_doc_word_arg))) {
-          LOG_WARN("fail to assign create index arg", K(ret));
-        } else if (OB_FAIL(common_rpc-> to(obrpc::ObRpcProxy::myaddr_).
-                           timeout(ddl_rpc_timeout).
-                           generate_aux_index_schema(fts_doc_word_schema_arg,
-                                                     fts_doc_word_schema_res))) {
-          LOG_WARN("generate fts doc word schema failed", K(ret), K(fts_doc_word_schema_arg));
-        } else if (fts_doc_word_schema_res.schema_generated_) {
-          fts_doc_word_schema_generated_ = true;
-          fts_doc_word_aux_table_id_ = fts_doc_word_schema_res.aux_table_id_;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (!fts_doc_word_schema_generated_) {
-      } else if (fts_doc_word_task_submitted_) {
-      } else if (OB_FAIL(submit_build_aux_index_task(fts_doc_word_arg,
-                                                     fts_doc_word_task_record,
-                                                     fts_doc_word_task_submitted_))) {
-        LOG_WARN("fail to submit build fts doc word index task", K(ret));
-      }
-      if (doc_rowkey_task_submitted_ && fts_index_aux_task_submitted_ &&
-          fts_doc_word_task_submitted_) {
-        state_finished = true;
-      }
-    }
-  } // SMART_VARS
-  } // SMART_VARS
-  } // SMART_VARS
+  } else if (OB_FAIL(prepare_aux_table(doc_rowkey_type,
+                                       doc_rowkey_task_submitted_,
+                                       doc_rowkey_aux_table_id_,
+                                       doc_rowkey_task_id_))) {
+    LOG_WARN("failed to prepare aux table", K(ret),
+        K(doc_rowkey_task_submitted_), K(doc_rowkey_aux_table_id_));
+  } else if (OB_FAIL(prepare_aux_table(fts_index_aux_type,
+                                       fts_index_aux_task_submitted_,
+                                       fts_index_aux_table_id_,
+                                       fts_index_aux_task_id_))) {
+    LOG_WARN("failed to prepare aux table", K(ret),
+        K(fts_index_aux_task_submitted_), K(fts_index_aux_table_id_));
+  } else if (OB_FAIL(prepare_aux_table(fts_doc_word_type,
+                                       fts_doc_word_task_submitted_,
+                                       fts_doc_word_aux_table_id_,
+                                       fts_doc_word_task_id_))) {
+    LOG_WARN("failed to prepare aux table", K(ret),
+        K(fts_doc_word_task_submitted_), K(fts_doc_word_aux_table_id_));
+  }
+  if (OB_SUCC(ret) && doc_rowkey_task_submitted_ &&
+      fts_index_aux_task_submitted_ && fts_doc_word_task_submitted_) {
+    state_finished = true;
+  }
   if (state_finished) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -725,6 +629,34 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
       LOG_INFO("generate schema finished", K(ret), K(parent_task_id_), K(task_id_),
           K(*this));
     }
+  }
+  return ret;
+}
+
+int ObFtsIndexBuildTask::construct_create_index_arg(
+    const ObIndexType index_type,
+    obrpc::ObCreateIndexArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (share::schema::is_rowkey_doc_aux(index_type)) {
+    if (OB_FAIL(construct_rowkey_doc_arg(arg))) {
+      LOG_WARN("failed to construct rowkey doc arg", K(ret));
+    }
+  } else if (share::schema::is_doc_rowkey_aux(index_type)) {
+    if (OB_FAIL(construct_doc_rowkey_arg(arg))) {
+      LOG_WARN("failed to construct doc rowkey arg", K(ret));
+    }
+  } else if (share::schema::is_fts_index_aux(index_type)) {
+    if (OB_FAIL(construct_fts_index_aux_arg(arg))) {
+      LOG_WARN("failed to construct fts index aux arg", K(ret));
+    }
+  } else if (share::schema::is_fts_doc_word_aux(index_type)) {
+    if (OB_FAIL(construct_fts_doc_word_arg(arg))) {
+      LOG_WARN("failed to construct fts doc word arg", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("undexpected index type", K(ret), K(index_type));
   }
   return ret;
 }
@@ -820,7 +752,7 @@ int ObFtsIndexBuildTask::get_index_table_id(
 // wait data complement of aux index tables
 int ObFtsIndexBuildTask::wait_aux_table_complement()
 {
-  using task_iter = common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator;
+  using task_iter = common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus>::const_iterator;
   int ret = OB_SUCCESS;
   bool child_task_failed = false;
   bool state_finished = false;
@@ -961,7 +893,7 @@ int ObFtsIndexBuildTask::submit_build_aux_index_task(
       LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
     } else {
       TCWLockGuard guard(lock_);
-      DependTaskStatus status;
+      share::ObDomainDependTaskStatus status;
       // check if child task is already added
       if (OB_FAIL(dependent_task_result_map_.get_refactored(index_table_id,
                                                             status))) {
@@ -1002,7 +934,7 @@ int ObFtsIndexBuildTask::on_child_task_finish(
   } else {
     TCWLockGuard guard(lock_);
     int64_t org_ret = INT64_MAX;
-    DependTaskStatus status;
+    share::ObDomainDependTaskStatus status;
     if (OB_FAIL(dependent_task_result_map_.get_refactored(child_task_key,
                                                           status))) {
       if (OB_HASH_NOT_EXIST == ret) {
@@ -1092,10 +1024,6 @@ int ObFtsIndexBuildTask::serialize_params_to_message(
     int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  int8_t rowkey_doc_generated = static_cast<int8_t>(rowkey_doc_schema_generated_);
-  int8_t doc_rowkey_generated = static_cast<int8_t>(doc_rowkey_schema_generated_);
-  int8_t fts_index_aux_generated = static_cast<int8_t>(fts_index_aux_schema_generated_);
-  int8_t fts_doc_word_generated = static_cast<int8_t>(fts_doc_word_schema_generated_);
   int8_t rowkey_doc_submitted = static_cast<int8_t>(rowkey_doc_task_submitted_);
   int8_t doc_rowkey_submitted = static_cast<int8_t>(doc_rowkey_task_submitted_);
   int8_t fts_index_aux_submitted = static_cast<int8_t>(fts_index_aux_task_submitted_);
@@ -1131,26 +1059,6 @@ int ObFtsIndexBuildTask::serialize_params_to_message(
   } else if (OB_FAIL(serialization::encode_i8(buf,
                                               buf_len,
                                               pos,
-                                              rowkey_doc_generated))) {
-    LOG_WARN("serialize rowkey doc schema generated failed", K(ret));
-  } else if (OB_FAIL(serialization::encode_i8(buf,
-                                              buf_len,
-                                              pos,
-                                              doc_rowkey_generated))) {
-    LOG_WARN("serialize doc rowkey schema generated failed", K(ret));
-  } else if (OB_FAIL(serialization::encode_i8(buf,
-                                              buf_len,
-                                              pos,
-                                              fts_index_aux_generated))) {
-    LOG_WARN("serialize fts index aux schema generated failed", K(ret));
-  } else if (OB_FAIL(serialization::encode_i8(buf,
-                                              buf_len,
-                                              pos,
-                                              fts_doc_word_generated))) {
-    LOG_WARN("serialize fts doc word schema generated failed", K(ret));
-  } else if (OB_FAIL(serialization::encode_i8(buf,
-                                              buf_len,
-                                              pos,
                                               rowkey_doc_submitted))) {
     LOG_WARN("serialize rowkey doc task submitted failed", K(ret));
   } else if (OB_FAIL(serialization::encode_i8(buf,
@@ -1168,6 +1076,26 @@ int ObFtsIndexBuildTask::serialize_params_to_message(
                                               pos,
                                               fts_doc_word_submitted))) {
     LOG_WARN("serialize fts doc word task submitted failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf,
+                                               buf_len,
+                                               pos,
+                                               rowkey_doc_task_id_))) {
+    LOG_WARN("serialize rowkey doc task id failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf,
+                                               buf_len,
+                                               pos,
+                                               doc_rowkey_task_id_))) {
+    LOG_WARN("serialize doc rowkey task id failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf,
+                                               buf_len,
+                                               pos,
+                                               fts_index_aux_task_id_))) {
+    LOG_WARN("serialize fts index aux task id failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf,
+                                               buf_len,
+                                               pos,
+                                               fts_doc_word_task_id_))) {
+    LOG_WARN("serialize fts doc word task id failed", K(ret));
   } else if (OB_FAIL(serialization::encode_i8(buf,
                                               buf_len,
                                               pos,
@@ -1189,10 +1117,7 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
     int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  int8_t rowkey_doc_generated = 0;
-  int8_t doc_rowkey_generated = 0;
-  int8_t fts_index_aux_generated = 0;
-  int8_t fts_doc_word_generated = 0;
+  const int64_t num_fts_child_task = 4;
   int8_t rowkey_doc_submitted = 0;
   int8_t doc_rowkey_submitted = 0;
   int8_t fts_index_aux_submitted = 0;
@@ -1236,26 +1161,6 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
   } else if (OB_FAIL(serialization::decode_i8(buf,
                                               data_len,
                                               pos,
-                                              &rowkey_doc_generated))) {
-    LOG_WARN("fail to deserialize rowkey doc schema generated", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &doc_rowkey_generated))) {
-    LOG_WARN("fail to deserialize doc rowkey schema generated", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &fts_index_aux_generated))) {
-    LOG_WARN("fail to deserialize fts index aux schema generated", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &fts_doc_word_generated))) {
-    LOG_WARN("fail to deserialize fts doc word schema generated", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
                                               &rowkey_doc_submitted))) {
     LOG_WARN("fail to deserialize rowkey doc task submmitted", K(ret));
   } else if (OB_FAIL(serialization::decode_i8(buf,
@@ -1273,6 +1178,26 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
                                               pos,
                                               &fts_doc_word_submitted))) {
     LOG_WARN("fail to deserialize fts doc word task submmitted", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf,
+                                               data_len,
+                                               pos,
+                                               &rowkey_doc_task_id_))) {
+    LOG_WARN("fail to deserialize rowkey doc task id", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf,
+                                               data_len,
+                                               pos,
+                                               &doc_rowkey_task_id_))) {
+    LOG_WARN("fail to deserialize doc rowkey task id", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf,
+                                               data_len,
+                                               pos,
+                                               &fts_index_aux_task_id_))) {
+    LOG_WARN("fail to deserialize fts index aux task id", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf,
+                                               data_len,
+                                               pos,
+                                               &fts_doc_word_task_id_))) {
+    LOG_WARN("fail to deserialize fts doc word task id", K(ret));
   } else if (OB_FAIL(serialization::decode_i8(buf,
                                               data_len,
                                               pos,
@@ -1283,11 +1208,47 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
                                                pos,
                                                &drop_index_task_id_))) {
     LOG_WARN("fail to deserialize drop fts index task id", K(ret));
+  } else if (!dependent_task_result_map_.created() &&
+             OB_FAIL(dependent_task_result_map_.create(num_fts_child_task,
+                                                       lib::ObLabel("DepTasMap")))) {
+    LOG_WARN("create dependent task map failed", K(ret));
   } else {
-    rowkey_doc_schema_generated_ = rowkey_doc_generated;
-    doc_rowkey_schema_generated_ = doc_rowkey_generated;
-    fts_index_aux_schema_generated_ = fts_index_aux_generated;
-    fts_doc_word_schema_generated_ = fts_doc_word_generated;
+    if (OB_SUCC(ret) && rowkey_doc_task_id_ != 0) {
+      share::ObDomainDependTaskStatus rowkey_doc_status;
+      rowkey_doc_status.task_id_ = rowkey_doc_task_id_;
+      if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_doc_aux_table_id_,
+                                                            rowkey_doc_status))) {
+        LOG_WARN("set dependent task map failed", K(ret), K(rowkey_doc_aux_table_id_),
+            K(rowkey_doc_status));
+      }
+    }
+    if (OB_SUCC(ret) && doc_rowkey_task_id_ != 0) {
+      share::ObDomainDependTaskStatus doc_rowkey_status;
+      doc_rowkey_status.task_id_ = doc_rowkey_task_id_;
+      if (OB_FAIL(dependent_task_result_map_.set_refactored(doc_rowkey_aux_table_id_,
+                                                            doc_rowkey_status))) {
+        LOG_WARN("set dependent task map failed", K(ret), K(doc_rowkey_aux_table_id_),
+            K(doc_rowkey_status));
+      }
+    }
+    if (OB_SUCC(ret) && fts_index_aux_task_id_ != 0) {
+      share::ObDomainDependTaskStatus fts_index_aux_status;
+      fts_index_aux_status.task_id_ = fts_index_aux_task_id_;
+      if (OB_FAIL(dependent_task_result_map_.set_refactored(fts_index_aux_table_id_,
+                                                            fts_index_aux_status))) {
+        LOG_WARN("set dependent task map failed", K(ret), K(fts_index_aux_table_id_),
+            K(fts_index_aux_status));
+      }
+    }
+    if (OB_SUCC(ret) && fts_doc_word_task_id_ != 0) {
+      share::ObDomainDependTaskStatus fts_doc_word_status;
+      fts_doc_word_status.task_id_ = fts_doc_word_task_id_;
+      if (OB_FAIL(dependent_task_result_map_.set_refactored(fts_doc_word_aux_table_id_,
+                                                            fts_doc_word_status))) {
+        LOG_WARN("set dependent task map failed", K(ret), K(fts_doc_word_aux_table_id_),
+            K(fts_doc_word_status));
+      }
+    }
     rowkey_doc_task_submitted_ = rowkey_doc_submitted;
     doc_rowkey_task_submitted_ = doc_rowkey_submitted;
     fts_index_aux_task_submitted_ = fts_index_aux_submitted;
@@ -1299,10 +1260,6 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
 
 int64_t ObFtsIndexBuildTask::get_serialize_param_size() const
 {
-  int8_t rowkey_doc_generated = static_cast<int8_t>(rowkey_doc_schema_generated_);
-  int8_t doc_rowkey_generated = static_cast<int8_t>(doc_rowkey_schema_generated_);
-  int8_t fts_index_aux_generated = static_cast<int8_t>(fts_index_aux_schema_generated_);
-  int8_t fts_doc_word_generated = static_cast<int8_t>(fts_doc_word_schema_generated_);
   int8_t rowkey_doc_submitted = static_cast<int8_t>(rowkey_doc_task_submitted_);
   int8_t doc_rowkey_submitted = static_cast<int8_t>(doc_rowkey_task_submitted_);
   int8_t fts_index_aux_submitted = static_cast<int8_t>(fts_index_aux_task_submitted_);
@@ -1314,21 +1271,21 @@ int64_t ObFtsIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length(doc_rowkey_aux_table_id_)
       + serialization::encoded_length(fts_index_aux_table_id_)
       + serialization::encoded_length(fts_doc_word_aux_table_id_)
-      + serialization::encoded_length_i8(rowkey_doc_generated)
-      + serialization::encoded_length_i8(doc_rowkey_generated)
-      + serialization::encoded_length_i8(fts_index_aux_generated)
-      + serialization::encoded_length_i8(fts_doc_word_generated)
       + serialization::encoded_length_i8(rowkey_doc_submitted)
       + serialization::encoded_length_i8(doc_rowkey_submitted)
       + serialization::encoded_length_i8(fts_index_aux_submitted)
       + serialization::encoded_length_i8(fts_doc_word_submitted)
+      + serialization::encoded_length_i64(rowkey_doc_task_id_)
+      + serialization::encoded_length_i64(doc_rowkey_task_id_)
+      + serialization::encoded_length_i64(fts_index_aux_task_id_)
+      + serialization::encoded_length_i64(fts_doc_word_task_id_)
       + serialization::encoded_length_i8(drop_index_submitted)
       + serialization::encoded_length_i64(drop_index_task_id_);
 }
 
 int ObFtsIndexBuildTask::clean_on_failed()
 {
-  using task_iter = common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator;
+  using task_iter = common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus>::const_iterator;
   int ret = OB_SUCCESS;
   bool state_finished = false;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1459,38 +1416,45 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
         LOG_WARN("fail to get table schema", K(ret), K(fts_doc_word_aux_table_id_));
       }
     }
-    ObDDLTaskRecord task_record;
-    ObCreateDDLTaskParam param(tenant_id_,
-                               ObDDLType::DDL_DROP_FTS_INDEX,
-                               fts_index_aux_schema,
-                               nullptr,
-                               0/*object_id*/,
-                               fts_index_aux_schema->get_schema_version(),
-                               parallelism_,
-                               consumer_group_id_,
-                               &allocator_);
-    param.tenant_data_version_ = data_format_version_;
-    param.aux_rowkey_doc_schema_ = rowkey_doc_schema;
-    param.aux_doc_rowkey_schema_ = doc_rowkey_schema;
-    param.aux_doc_word_schema_ = fts_doc_word_schema;
-    if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
-                create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
-      if (OB_ENTRY_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("submit drop fts index ddl task failed", K(ret));
-      }
-    } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
-                       schedule_ddl_task(task_record))) {
-      LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(fts_index_aux_schema)) {
+    // TODO hanxuan fix create drop fts index when fts index schema is not generated
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fts index aux schema is nullptr, fail to roll back", K(ret));
     } else {
-      if (OB_SUCC(ret)) {
-        drop_index_task_submitted_ = true;
-        drop_index_task_id_ = task_record.task_id_;
-        LOG_INFO("add drop fts index task", K(ret), K(fts_index_aux_table_id_),
-            K(rowkey_doc_aux_table_id_), K(doc_rowkey_aux_table_id_),
-            K(fts_doc_word_aux_table_id_), K(create_index_arg_.index_name_),
-            K(fts_index_aux_schema->get_schema_version()), K(param.schema_version_));
+      ObDDLTaskRecord task_record;
+      ObCreateDDLTaskParam param(tenant_id_,
+                                 ObDDLType::DDL_DROP_FTS_INDEX,
+                                 fts_index_aux_schema,
+                                 nullptr,
+                                 0/*object_id*/,
+                                 fts_index_aux_schema->get_schema_version(),
+                                 parallelism_,
+                                 consumer_group_id_,
+                                 &allocator_);
+      param.tenant_data_version_ = data_format_version_;
+      param.aux_rowkey_doc_schema_ = rowkey_doc_schema;
+      param.aux_doc_rowkey_schema_ = doc_rowkey_schema;
+      param.aux_doc_word_schema_ = fts_doc_word_schema;
+      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
+                  create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
+        if (OB_ENTRY_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("submit drop fts index ddl task failed", K(ret));
+        }
+      } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
+                         schedule_ddl_task(task_record))) {
+        LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+      } else {
+        if (OB_SUCC(ret)) {
+          drop_index_task_submitted_ = true;
+          drop_index_task_id_ = task_record.task_id_;
+          LOG_INFO("add drop fts index task", K(ret), K(fts_index_aux_table_id_),
+              K(rowkey_doc_aux_table_id_), K(doc_rowkey_aux_table_id_),
+              K(fts_doc_word_aux_table_id_), K(create_index_arg_.index_name_),
+              K(fts_index_aux_schema->get_schema_version()), K(param.schema_version_));
+        }
       }
     }
   }
@@ -1596,7 +1560,6 @@ int ObFtsIndexBuildTask::cleanup_impl()
     ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *data_schema = nullptr;
-    const ObTableSchema *index_schema = nullptr;
     int64_t refreshed_schema_version = 0;
     ObTableLockOwnerID owner_id;
     ObMySQLTransaction trans;
@@ -1607,20 +1570,17 @@ int ObFtsIndexBuildTask::cleanup_impl()
                                                      data_table_id,
                                                      data_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(data_table_id));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-                                                     index_table_id,
-                                                     index_schema))) {
-      LOG_WARN("fail to get table schema", K(ret), K(index_table_id));
-    } else if (OB_ISNULL(data_schema) || OB_ISNULL(index_schema)) {
+    } else if (OB_ISNULL(data_schema)) {
       ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("fail to get table schema", K(ret), KPC(data_schema), KPC(index_schema));
+      LOG_WARN("fail to get table schema", K(ret), KPC(data_schema));
     } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), dst_tenant_id_))) {
       LOG_WARN("start transaction failed", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                    task_id_))) {
       LOG_WARN("failed to get owner id", K(ret), K(task_id_));
     } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
-                                                            *index_schema,
+                                                            index_table_id,
+                                                            false,
                                                             owner_id,
                                                             trans))) {
       LOG_WARN("failed to unlock online ddl lock", K(ret));
@@ -1653,14 +1613,6 @@ int ObFtsIndexBuildTask::cleanup_impl()
   }
   LOG_INFO("clean task finished", K(ret), K(*this));
   return ret;
-}
-
-void ObFtsIndexBuildTask::flt_set_task_span_tag() const
-{
-}
-
-void ObFtsIndexBuildTask::flt_set_status_span_tag() const
-{
 }
 
 } // end namespace rootserver

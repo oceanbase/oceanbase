@@ -15,11 +15,9 @@
 
 namespace oceanbase
 {
-
 namespace blocksstable
 {
-class ObMacroBlockHandle;
-class ObMacroBlocksWriteCtx;
+class ObStorageObjectHandle;
 struct ObLogicMacroBlockId;
 
 class ObIMacroBlockFlushCallback
@@ -27,7 +25,7 @@ class ObIMacroBlockFlushCallback
 public:
   ObIMacroBlockFlushCallback() {}
   virtual ~ObIMacroBlockFlushCallback() {}
-  virtual int write(ObMacroBlockHandle &macro_handle,
+  virtual int write(const ObStorageObjectHandle &macro_handle,
                     const ObLogicMacroBlockId &logic_id,
                     char *buf,
                     const int64_t buf_len,

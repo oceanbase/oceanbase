@@ -73,7 +73,7 @@ void TestTabletStatusCache::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;
@@ -757,7 +757,7 @@ TEST_F(TestTabletStatusCache, read_all_committed)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-// TODO(@bowen.gbw): refactor test cases to cover all scene
+// TODO(@gaishun.gs): refactor test cases to cover all scene
 /*
 TEST_F(TestTabletStatusCache, transfer_src_ls_read_all_committed)
 {

@@ -263,6 +263,7 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(multi_restore_path_list),
     K_(white_list),
     K_(recover_table),
+    K_(using_complement_log),
     K_(backup_compatible)
   );
   J_OBJ_END();
@@ -293,6 +294,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     kms_encrypt_ = other.kms_encrypt_;
     concurrency_ = other.concurrency_;
     recover_table_ = other.recover_table_;
+    using_complement_log_ = other.using_complement_log_;
     backup_compatible_ = other.backup_compatible_;
 
     if (FAILEDx(deep_copy_ob_string(allocator_, other.comment_, comment_))) {
@@ -370,6 +372,7 @@ void ObPhysicalRestoreJob::reset()
   kms_encrypt_key_.reset();
   concurrency_ = 0;
   recover_table_ = false;
+  using_complement_log_ = false;
 
 
   passwd_array_.reset();

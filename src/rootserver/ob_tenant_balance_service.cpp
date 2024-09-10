@@ -772,7 +772,7 @@ int ObTenantBalanceService::persist_job_and_task_in_trans_(const share::ObBalanc
     LOG_WARN("job or task is invalid", KR(ret), K(job), K(tasks));
   } else if (OB_FAIL(construct_dependency_of_each_task_(tasks))) {
     LOG_WARN("failed to generate dependency task", KR(ret), K(tasks));
-  } else if (OB_FAIL(lock_and_check_balance_job_(trans, tenant_id_))) {
+  } else if (OB_FAIL(lock_and_check_balance_job(trans, tenant_id_))) {
     LOG_WARN("lock and check balance job failed", KR(ret), K_(tenant_id));
   } else {
     //由于ls_array_是在锁外获取，所以可能会存在没有获取到最新状态的问题，在锁内做二次校验
@@ -808,7 +808,7 @@ int ObTenantBalanceService::persist_job_and_task_in_trans_(const share::ObBalanc
   }
   return ret;
 }
-int ObTenantBalanceService::lock_and_check_balance_job_(
+int ObTenantBalanceService::lock_and_check_balance_job(
     common::ObMySQLTransaction &trans,
     const uint64_t tenant_id)
 {

@@ -231,6 +231,12 @@ int MdsRow<K, V>::construct_insert_record_user_mds_node_(MdsRowBase<K, V> *mds_r
   MDS_TG(5_ms);
   bool need_rollback_node = false;
   UserMdsNode<K, V> *new_node = nullptr;
+  share::SCN last_inner_recycled_scn = share::SCN::min_scn();
+  if (OB_NOT_NULL(mds_row) &&
+      OB_NOT_NULL(mds_row->p_mds_unit_) &&
+      OB_NOT_NULL(mds_row->p_mds_unit_->p_mds_table_)) {
+    last_inner_recycled_scn = mds_row->p_mds_unit_->p_mds_table_->last_inner_recycled_scn_;
+  }
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0) {
     if (!scn.is_max() && !ctx.get_seq_no().is_valid()) {
       ctx.set_seq_no(transaction::ObTxSEQ::MIN_VAL());
@@ -249,6 +255,8 @@ int MdsRow<K, V>::construct_insert_record_user_mds_node_(MdsRowBase<K, V> *mds_r
 #endif
   // if this is an insert action, check is same scn mds node exists
   if (OB_FAIL(ret)) {
+  } else if (!scn.is_max() && last_inner_recycled_scn >= scn) {
+    MDS_LOG_SET(INFO, "scn is not max, and below last_inner_recycled_scn, this replay action should be filtered");
   } else if (scn != share::SCN::max_scn() && MDS_FAIL(sorted_list_.for_each_node(CheckNodeExistOp(scn)))) {
     MDS_LOG_SET(WARN, "scn is not max, this is an insert action, but node with same scn exists");
   } else if (MDS_FAIL_FLAG(MdsFactory::create(new_node,
@@ -269,14 +277,17 @@ int MdsRow<K, V>::construct_insert_record_user_mds_node_(MdsRowBase<K, V> *mds_r
     if (!scn.is_max()) {// replay
       new_node->on_redo_(scn);
     }
-    sorted_list_.insert(new_node);
-    new_node->mds_ctx_ = &ctx;
-    CLICK();
-    ctx.record_written_node(new_node);
-    if (scn == share::SCN::max_scn()) {
-      report_event_("WRITE_NODE", *new_node);
+    if (MDS_FAIL(sorted_list_.insert(new_node))) {
+      MDS_LOG_SET(WARN, "failed to insert new node to sorted_list");
     } else {
-      report_event_("REPLAY_NODE", *new_node);
+      new_node->mds_ctx_ = &ctx;
+      CLICK();
+      ctx.record_written_node(new_node);
+      if (scn == share::SCN::max_scn()) {
+        report_event_("WRITE_NODE", *new_node);
+      } else {
+        report_event_("REPLAY_NODE", *new_node);
+      }
     }
   }
   // rollback logic
@@ -619,6 +630,14 @@ struct DumpNodeOP {
                                   MdsAllocator::get_instance()))) {
       MDS_LOG_SCAN(WARN, "failt to convert user mds node to dump node", K(node));
     /**********************this is different logic from normal logic***************************************************/
+    } else if (specified_node.user_data_.data_type_ == ObTabletMdsUserDataType::START_TRANSFER_OUT_PREPARE) {
+      if (specified_node.seq_no_.is_min()) {
+        dump_kv_.v_.seq_no_ = transaction::ObTxSEQ::mk_v0(47);
+        dump_kv_.v_.crc_check_number_ = dump_kv_.v_.generate_hash();
+        MDS_LOG(INFO, "convert start transfer out prepare tablet status mds node's seq no from min to 47 for compat issue", K(node), K(dump_kv_));
+      } else {
+        MDS_LOG(TRACE, "no need convert start transfer out prepare tablet status mds node's seq no cause it is valid", K(node), K(dump_kv_));
+      }
     } else if (specified_node.user_data_.data_type_ == ObTabletMdsUserDataType::START_TRANSFER_OUT) {
       if (specified_node.seq_no_.is_min()) {
         dump_kv_.v_.seq_no_ = transaction::ObTxSEQ::mk_v0(100);

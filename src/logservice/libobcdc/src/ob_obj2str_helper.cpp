@@ -23,6 +23,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 #include "lib/xml/ob_xml_util.h"
+#include "lib/udt/ob_array_type.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_res_type_map.h"
@@ -115,7 +116,7 @@ void ObObj2strHelper::destroy()
 }
 
 
-//extended_type_info used for enum/set
+//extended_type_info used for enum/set and collection type
 int ObObj2strHelper::obj2str(const uint64_t tenant_id,
     const uint64_t table_id,
     const uint64_t column_id,
@@ -172,6 +173,11 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
   } else if (ObRoaringBitmapType == obj_type) {
     if (OB_FAIL(ObRbUtils::binary_format_convert(allocator, obj.get_string(), str))) {
       OBLOG_LOG(ERROR, "binary_format_convert fail", KR(ret), K(table_id), K(column_id),
+          K(obj), K(obj_type), K(str));
+    }
+  } else if (ObCollectionSQLType == obj_type) {
+    if (OB_FAIL(convert_collection_to_text_(obj, str, extended_type_info, allocator))) {
+      OBLOG_LOG(ERROR, "convert_collection_to_text_ fail", KR(ret), K(table_id), K(column_id),
           K(obj), K(obj_type), K(str));
     }
   // This should be before is_string_type, because for char/nchar it is also ObStringTC, so is_string_type=true
@@ -462,6 +468,16 @@ int ObObj2strHelper::convert_xmltype_to_text_(
 {
   const ObString &data = obj.get_string();
   return ObXmlUtil::xml_bin_to_text(allocator, data, str);
+}
+
+int ObObj2strHelper::convert_collection_to_text_(
+    const common::ObObj &obj,
+    common::ObString &str,
+    const common::ObIArray<common::ObString> &extended_type_info,
+    common::ObIAllocator &allocator) const
+{
+  const ObString &data = obj.get_string();
+  return ObArrayUtil::convert_collection_bin_to_string(data, extended_type_info, allocator, str);
 }
 
 bool ObObj2strHelper::need_padding_(const lib::Worker::CompatMode &compat_mode,

@@ -63,7 +63,12 @@ public:
     MEMCPY(data_, src.data_, byte_count(size));
   }
   inline void set(const int64_t idx);
+  OB_INLINE void atomic_set(const int64_t idx);
   inline void unset(const int64_t idx);
+  OB_INLINE WordType *align_at(const int64_t idx)
+  {
+    return &data_[idx / WORD_BITS];
+  }
     // at(i) |= v;
   inline void bit_or_assign(const int64_t idx, const bool v);
 
@@ -232,6 +237,18 @@ inline void ObBitVectorImpl<WordType>::set(const int64_t idx)
 {
   OB_ASSERT(idx >= 0);
   data_[idx / WORD_BITS] |= 1LU << (idx % WORD_BITS);
+}
+
+template<typename WordType>
+OB_INLINE void ObBitVectorImpl<WordType>::atomic_set(const int64_t idx)
+{
+  OB_ASSERT(idx >= 0);
+  WordType val = data_[idx / WORD_BITS];
+  WordType new_val = val | (1LU << (idx % WORD_BITS));
+  while (!ATOMIC_BCAS(&data_[idx / WORD_BITS], val, new_val)) {
+    val = ATOMIC_LOAD(&data_[idx / WORD_BITS]);
+    new_val = val | (1LU << (idx % WORD_BITS));
+  }
 }
 
 template<typename WordType>

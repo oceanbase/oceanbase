@@ -57,6 +57,7 @@ OB_DEF_SERIALIZE(ObConflictCheckerCtdef)
     OB_UNIS_ENCODE(table_column_exprs_);
     OB_UNIS_ENCODE(use_dist_das_);
     OB_UNIS_ENCODE(rowkey_count_);
+    OB_UNIS_ENCODE(attach_spec_);
   }
   return ret;
 }
@@ -86,6 +87,7 @@ OB_DEF_DESERIALIZE(ObConflictCheckerCtdef)
     OB_UNIS_DECODE(table_column_exprs_);
     OB_UNIS_DECODE(use_dist_das_);
     OB_UNIS_DECODE(rowkey_count_);
+    OB_UNIS_DECODE(attach_spec_);
   }
   return ret;
 }
@@ -109,6 +111,7 @@ OB_DEF_SERIALIZE_SIZE(ObConflictCheckerCtdef)
   OB_UNIS_ADD_LEN(table_column_exprs_);
   OB_UNIS_ADD_LEN(use_dist_das_);
   OB_UNIS_ADD_LEN(rowkey_count_);
+  OB_UNIS_ADD_LEN(attach_spec_);
   return len;
 }
 
@@ -170,6 +173,7 @@ ObConflictChecker::ObConflictChecker(common::ObIAllocator &allocator,
   : eval_ctx_(eval_ctx),
     checker_ctdef_(checker_ctdef),
     das_scan_rtdef_(),
+    attach_rtinfo_(nullptr),
     allocator_(allocator),
     das_ref_(eval_ctx, eval_ctx.exec_ctx_),
     local_tablet_loc_(nullptr),
@@ -765,6 +769,16 @@ int ObConflictChecker::get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *
       das_scan_op->set_scan_rtdef(&das_scan_rtdef_);
       table_loc_->is_reading_ = true; //mark the table location with reading action
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(attach_rtinfo_)) {
+      if (OB_FAIL(das_scan_op->reserve_related_buffer(attach_rtinfo_->related_scan_cnt_))) {
+        LOG_WARN("fail to reserve related buffer", K(ret), K(attach_rtinfo_->related_scan_cnt_));
+      } else if (OB_FAIL(attach_related_taskinfo(*das_scan_op, attach_rtinfo_->attach_rtdef_))) {
+        LOG_WARN("fail to attach related task info", K(ret));
+      } else {
+        das_scan_op->set_attach_ctdef(checker_ctdef_.attach_spec_.attach_ctdef_);
+        das_scan_op->set_attach_rtdef(attach_rtinfo_->attach_rtdef_);
+      }
+    }
   }
   return ret;
 }
@@ -962,8 +976,129 @@ int ObConflictChecker::init_das_scan_rtdef()
   int64_t schema_version = task_exec_ctx.get_query_tenant_begin_schema_version();
   das_scan_rtdef_.tenant_schema_version_ = schema_version;
   das_scan_rtdef_.eval_ctx_ = &eval_ctx_;
+  das_scan_rtdef_.ctdef_ = &checker_ctdef_.das_scan_ctdef_;
+  das_scan_rtdef_.table_loc_ = table_loc_;
   if (OB_FAIL(das_scan_rtdef_.init_pd_op(eval_ctx_.exec_ctx_, checker_ctdef_.das_scan_ctdef_))) {
     LOG_WARN("init pushdown storage filter failed", K(ret));
+  } else if (nullptr != checker_ctdef_.attach_spec_.attach_ctdef_) {
+    if (OB_ISNULL(attach_rtinfo_ = OB_NEWx(ObDASAttachRtInfo, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate das attach info", K(ret));
+    } else if (OB_FAIL(init_attach_scan_rtdef(checker_ctdef_.attach_spec_.attach_ctdef_, attach_rtinfo_->attach_rtdef_))) {
+      LOG_WARN("fail to init attach scan rtdef", K(ret), KPC(checker_ctdef_.attach_spec_.attach_ctdef_));
+    }
+  }
+  return ret;
+}
+
+int ObConflictChecker::init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef,
+                                              ObDASBaseRtDef *&attach_rtdef)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext &ctx = eval_ctx_.exec_ctx_;
+  ObDASTaskFactory &das_factory = DAS_CTX(ctx).get_das_factory();
+  if (OB_ISNULL(attach_ctdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("attach ctdef is nullptr", K(ret));
+  } else if (OB_FAIL(das_factory.create_das_rtdef(attach_ctdef->op_type_, attach_rtdef))) {
+    LOG_WARN("create das rtdef failed", K(ret), K(attach_ctdef->op_type_));
+  } else if (ObDASTaskFactory::is_attached(attach_ctdef->op_type_)) {
+    attach_rtdef->ctdef_ = attach_ctdef;
+    attach_rtdef->children_cnt_ = attach_ctdef->children_cnt_;
+    attach_rtdef->eval_ctx_ = &eval_ctx_;
+    if (attach_ctdef->children_cnt_ > 0) {
+      if (OB_ISNULL(attach_rtdef->children_ = OB_NEW_ARRAY(ObDASBaseRtDef*,
+                                                           &ctx.get_allocator(),
+                                                           attach_ctdef->children_cnt_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate child buf failed", K(ret), K(attach_ctdef->children_cnt_));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < attach_ctdef->children_cnt_; ++i) {
+        if (OB_FAIL(init_attach_scan_rtdef(attach_ctdef->children_[i], attach_rtdef->children_[i]))) {
+          LOG_WARN("init attach scan rtdef failed", K(ret));
+        }
+      }
+    }
+  } else {
+    attach_rtinfo_->related_scan_cnt_++;
+    if (attach_ctdef == &checker_ctdef_.das_scan_ctdef_) {
+      attach_rtdef = &das_scan_rtdef_;
+    } else if (attach_ctdef->op_type_ != DAS_OP_TABLE_SCAN) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("attach ctdef type is invalid", K(ret), K(attach_ctdef->op_type_));
+    } else {
+      ObPhysicalPlanCtx *plan_ctx = eval_ctx_.exec_ctx_.get_physical_plan_ctx();
+      ObSQLSessionInfo *my_session = eval_ctx_.exec_ctx_.get_my_session();
+      ObTaskExecutorCtx &task_exec_ctx = eval_ctx_.exec_ctx_.get_task_exec_ctx();
+      const ObDASScanCtDef *attach_scan_ctdef = static_cast<const ObDASScanCtDef*>(attach_ctdef);
+      const ObDASTableLocMeta *attach_loc_meta = checker_ctdef_.attach_spec_.get_attach_loc_meta(
+          table_loc_->get_table_location_key(), attach_scan_ctdef->ref_table_id_);
+      ObDASScanRtDef *attach_scan_rtdef = static_cast<ObDASScanRtDef*>(attach_rtdef);
+      attach_scan_rtdef->timeout_ts_ = plan_ctx->get_ps_timeout_timestamp();
+      attach_scan_rtdef->sql_mode_ = my_session->get_sql_mode();
+      attach_scan_rtdef->stmt_allocator_.set_alloc(&das_ref_.get_das_alloc());
+      attach_scan_rtdef->scan_allocator_.set_alloc(&das_ref_.get_das_alloc());
+      ObQueryFlag query_flag(ObQueryFlag::Forward/*scan_order*/, false/*daily_merge*/, false/*optimize*/,
+                            false/*sys scan*/, false/*full_row*/, false/*index_back*/, false/*query_stat*/,
+                            ObQueryFlag::MysqlMode/*sql_mode*/, true/*read_latest*/);
+      attach_scan_rtdef->scan_flag_.flag_ = query_flag.flag_;
+      attach_scan_rtdef->tenant_schema_version_ = task_exec_ctx.get_query_tenant_begin_schema_version();
+      attach_scan_rtdef->eval_ctx_ = &eval_ctx_;
+      attach_scan_rtdef->ctdef_ = attach_ctdef;
+      attach_scan_rtdef->table_loc_ = DAS_CTX(ctx).get_table_loc_by_id(table_loc_->get_table_location_key(),
+          attach_scan_ctdef->ref_table_id_);
+      if (OB_FAIL(attach_scan_rtdef->init_pd_op(eval_ctx_.exec_ctx_, *attach_scan_ctdef))) {
+        LOG_WARN("init pushdown storage filter failed", K(ret));
+      } else if (OB_ISNULL(attach_scan_rtdef->table_loc_)) {
+        if (OB_ISNULL(attach_loc_meta)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get table loc by id failed", K(ret), K(table_loc_->get_table_location_key()),
+              K(attach_scan_ctdef->ref_table_id_),K(DAS_CTX(ctx).get_table_loc_list()));
+        } else if (OB_FAIL(DAS_CTX(ctx).extended_table_loc(*attach_loc_meta, attach_scan_rtdef->table_loc_))) {
+          LOG_WARN("extended table location failed", K(ret), KPC(attach_loc_meta));
+        }
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(attach_scan_rtdef->table_loc_)
+          && OB_NOT_NULL(attach_scan_rtdef->table_loc_->loc_meta_)) {
+        if (attach_scan_rtdef->table_loc_->loc_meta_->select_leader_ == 0) {
+          attach_scan_rtdef->scan_flag_.set_is_select_follower();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObConflictChecker::attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(attach_rtdef) || OB_ISNULL(attach_rtdef->ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("attach rtdef is invalid", K(ret), KP(attach_rtdef), KP(attach_rtdef->ctdef_));
+  } else if (attach_rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
+    const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(attach_rtdef->ctdef_);
+    ObDASScanRtDef *scan_rtdef = static_cast<ObDASScanRtDef*>(attach_rtdef);
+    ObDASTableLoc *table_loc = scan_rtdef->table_loc_;
+    ObDASTabletLoc *tablet_loc = ObDASUtils::get_related_tablet_loc(
+        *target_op.get_tablet_loc(), table_loc->loc_meta_->ref_table_id_);
+    if (OB_ISNULL(tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("related tablet loc is not found", K(ret),
+               KPC(target_op.get_tablet_loc()),
+               KPC(table_loc->loc_meta_));
+    } else if (OB_FAIL(target_op.set_related_task_info(scan_ctdef,
+                                                       scan_rtdef,
+                                                       tablet_loc->tablet_id_))) {
+      LOG_WARN("set attach task info failed", K(ret), KPC(tablet_loc));
+    } else {
+      table_loc->is_reading_ = true;
+    }
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < attach_rtdef->children_cnt_; ++i) {
+      if (OB_FAIL(attach_related_taskinfo(target_op, attach_rtdef->children_[i]))) {
+        LOG_WARN("recursive attach related task info failed", K(ret), K(i));
+      }
+    }
   }
   return ret;
 }

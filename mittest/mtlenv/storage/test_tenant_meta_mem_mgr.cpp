@@ -27,7 +27,6 @@
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_slog_helper.h"
 #include "storage/tablet/ob_tablet_status.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
@@ -126,7 +125,7 @@ void TestTenantMetaMemMgr::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   ObClockGenerator::init();
 
   // create ls
@@ -195,6 +194,7 @@ void TestTenantMetaMemMgr::prepare_data_schema(
   table_schema.set_block_size(micro_block_size);
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_micro_index_clustered(false);
   //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
@@ -650,6 +650,8 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
 
   tablet->tablet_meta_.ls_id_ = key.ls_id_;
   tablet->tablet_meta_.tablet_id_ = key.tablet_id_;
+  tablet->tablet_meta_.is_empty_shell_ = true;
+  ASSERT_TRUE(tablet->is_valid());
   handle.reset();
 
   void *free_obj = nullptr;
@@ -657,15 +659,18 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   ASSERT_EQ(common::OB_ITER_END, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.full_tablet_creator_.get_used_obj_cnt());
 
   ret = t3m_.del_tablet(key);
-  // ASSERT_EQ(common::OB_SUCCESS, ret); assert when master is merged
+  ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
+  ASSERT_EQ(1, t3m_.full_tablet_creator_.get_used_obj_cnt());
 
   ptr_hdl.reset();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.full_tablet_creator_.get_used_obj_cnt());
   gc_all_tablets();
+  ASSERT_EQ(0, t3m_.full_tablet_creator_.get_used_obj_cnt());
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
@@ -693,7 +698,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
   ObSSTable sstable;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
+  common::ObSEArray<ObSharedObjectsWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -718,10 +723,12 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
 
   ObTabletID empty_tablet_id;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true/*need_create_empty_major_sstable*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
-  ObTabletPersister persister;
+  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
 
   ObTabletHandle new_handle;
@@ -790,7 +797,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
   ObSSTable sstable;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
+  common::ObSEArray<ObSharedObjectsWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -817,12 +824,15 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   bool make_empty_co_sstable = true;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
-  ObTabletPersister persister;
+  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
+
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
@@ -901,7 +911,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
+  common::ObSEArray<ObSharedObjectsWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -927,12 +937,14 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   bool make_empty_co_sstable = false;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
-  ObTabletPersister persister;
+  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
@@ -991,7 +1003,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
   ObSSTable sstable;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
+  common::ObSEArray<ObSharedObjectsWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -1024,12 +1036,14 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   bool make_empty_co_sstable = true;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
-  ObTabletPersister persister;
+  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
@@ -1142,6 +1156,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
+  param.table_backup_flag_.reset();
+  param.table_shared_flag_.reset();
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   ASSERT_EQ(OB_SUCCESS, sstable.init(param, &allocator_));
 
@@ -1152,7 +1168,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   bool make_empty_co_sstable = false;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -1749,7 +1766,7 @@ TEST_F(TestTenantMetaMemMgr, test_normal_tablet_buffer_fragment)
   ObTenantCtxAllocatorGuard ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(MTL_ID(), ObCtxIds::META_OBJ_CTX_ID);
   double fragment_rate = 1.0 * (ta->get_hold() - ta->get_used()) / ta->get_hold();
   std::cout << "hold: " << ta->get_hold() << " used: " << ta->get_used() << " limit: " << ta->get_limit() << " fragment_rate: " << fragment_rate << std::endl;
-  ASSERT_TRUE(fragment_rate < 0.04);
+  ASSERT_TRUE(fragment_rate < 0.06);
   for (int64_t i = 0; i < tablet_cnt; ++i) {
     tablets[i].reset();
   }

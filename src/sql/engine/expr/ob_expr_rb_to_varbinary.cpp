@@ -72,27 +72,17 @@ int ObExprRbToVarbinary::eval_rb_to_varbinary(const ObExpr &expr,
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
-  ObExpr *arg = expr.args_[0];
+  ObExpr *rb_arg = expr.args_[0];
   bool is_rb_null = false;
   ObDatum *datum = nullptr;
   ObString rb_bin;
   ObString expected_format;
   ObString res_bin;
 
-  if (OB_FAIL(arg->eval(ctx, datum))) {
-    LOG_WARN("eval roaringbitmap args failed", K(ret));
-  } else if (datum->is_null()) {
-    is_rb_null = true;
-  } else if (OB_FALSE_IT(rb_bin = datum->get_string())) {
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                         tmp_allocator,
-                         *datum,
-                         arg->datum_meta_,
-                         arg->obj_meta_.has_lob_header(),
-                         rb_bin))) {
-    LOG_WARN("fail to get real string data", K(ret), K(rb_bin));
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb_arg, rb_bin, is_rb_null))) {
+    LOG_WARN("fail to get input roaringbitmap", K(ret));
   } else if (expr.arg_cnt_ == 1) {
-    res_bin = rb_bin;
+    res_bin.assign(rb_bin.ptr(), rb_bin.length());
   } else {
     ObExpr *format_arg = expr.args_[1];
     ObDatum *format_datum = nullptr;
@@ -112,7 +102,7 @@ int ObExprRbToVarbinary::eval_rb_to_varbinary(const ObExpr &expr,
     } else if (expected_format.case_compare("roaring") != 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported expected format", K(ret), K(expected_format));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expected format expect 'roaring' is");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expected format except 'roaring' is");
     } else if (OB_FAIL(ObRbUtils::binary_format_convert(tmp_allocator, rb_bin, res_bin))) {
       LOG_WARN("failed to convert binary to roaring format", K(ret), K(rb_bin));
     }

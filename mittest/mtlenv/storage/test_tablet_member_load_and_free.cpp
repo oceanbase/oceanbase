@@ -80,7 +80,7 @@ void TestTabletMemberLoadAndFree::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;
@@ -168,7 +168,11 @@ TEST_F(TestTabletMemberLoadAndFree, storage_schema)
 
   // tablet persist
   ObTabletHandle new_tablet_handle;
-  ret = ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle);
+  ObLSHandle ls_handle;
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ObTabletPersisterParam  persister_param(
+      ls_handle.get_ls()->get_ls_id(), ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ret = ObTabletPersister::persist_and_transform_tablet(persister_param, *tablet, new_tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *new_tablet = new_tablet_handle.get_obj();
   ASSERT_NE(nullptr, new_tablet);

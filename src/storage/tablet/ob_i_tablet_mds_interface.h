@@ -33,7 +33,7 @@ class ObMdsRowIterator;
 class ObITabletMdsInterface
 {
   friend class ObTabletCreateDeleteHelper;
-  friend class ObTenantDirectLoadMgr; // TODO(@bowen.gbw): refactor later
+  friend class ObTenantDirectLoadMgr; // TODO(@gaishun.gs): refactor later
 public:
   // new mds
   // Currently, we only support read LATEST multi source data, so please pass MAX_SCN as snapshot.
@@ -77,25 +77,34 @@ public:
   // CAUTIONS: this interface is only for transfer! anyone else shouldn't call this!
   int check_transfer_in_redo_written(bool &written);
 protected:// implemented by ObTablet
-  // TODO(@bowen.gbw): remove these virtual functions later
+  // TODO(@gaishun.gs): remove these virtual functions later
   virtual bool check_is_inited_() const = 0;
   virtual const ObTabletMeta &get_tablet_meta_() const = 0;
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,
                                     const bool create_if_not_exist) const = 0;
   virtual ObTabletPointer *get_tablet_pointer_() const = 0;
-  template <typename K, typename T>
+  template <typename K, typename V>
+  int read_data_from_tablet_cache(const K &key,
+                                  const common::ObFunction<int(const V&)> &read_op,
+                                  bool &applied_success) const;
+  template <typename K, typename V>
+  int read_data_from_mds_sstable(common::ObIAllocator &allocator,
+                                 const K &key,
+                                 const share::SCN &snapshot,
+                                 const int64_t timeout_us,
+                                 const common::ObFunction<int(const V&)> &read_op) const;
+  template <typename K, typename V>
+  int read_data_from_cache_or_mds_sstable(common::ObIAllocator &allocator,
+                                          const K &key,
+                                          const share::SCN &snapshot,
+                                          const int64_t timeout_us,
+                                          const common::ObFunction<int(const V&)> &read_op) const;
+  template <typename K, typename V>
   int get_mds_data_from_tablet(
-      const K &key,
-      const share::SCN &snapshot,
-      const int64_t timeout_us,
-      const common::ObFunction<int(const T&)> &read_op) const;
-  template <typename K, typename T>
-  int read_data_from_mds_sstable(
-      common::ObIAllocator &allocator,
-      const K &key,
-      const share::SCN &snapshot,
-      const int64_t timeout_us,
-      const common::ObFunction<int(const T&)> &read_op) const;
+    const K &key,
+    const share::SCN &snapshot,
+    const int64_t timeout_us,
+    const common::ObFunction<int(const V&)> &read_op) const;
   int read_raw_data(
       common::ObIAllocator &allocator,
       const uint8_t mds_unit_id,

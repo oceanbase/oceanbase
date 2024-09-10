@@ -316,54 +316,68 @@ int ObExprAutoincNextval::get_input_value(const ObExpr &expr,
 int ObExprAutoincNextval::generate_autoinc_value(const ObSQLSessionInfo &my_session,
                                                  uint64_t &new_val,
                                                  ObAutoincrementService &auto_service,
+                                                 ObEvalCtx &ctx,
                                                  AutoincParam *autoinc_param,
                                                  ObPhysicalPlanCtx *plan_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(autoinc_param) ||
-      OB_ISNULL(plan_ctx)) {
+  if (OB_ISNULL(autoinc_param) || OB_ISNULL(plan_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument(s)", K(ret), K(autoinc_param), K(plan_ctx));
   } else {
-    // sync insert value globally before sync value globally
-    if (OB_FAIL(auto_service.sync_insert_value_global(*autoinc_param))) {
-      LOG_WARN("failed to sync insert value globally", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      uint64_t value = 0;
-      CacheHandle *&cache_handle = autoinc_param->cache_handle_;
-      // get cache handle when allocate first auto-increment value
-      if (OB_ISNULL(cache_handle)) {
-        if (OB_FAIL(auto_service.get_handle(*autoinc_param, cache_handle))) {
-          LOG_WARN("failed to get auto_increment handle", K(ret));
-        } else if (OB_ISNULL(cache_handle)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Error unexpceted", K(ret), K(cache_handle));
-        }
+    if (ctx.exec_ctx_.is_ddl_idempotent_autoinc()) {
+      const int64_t table_all_slice_count = ctx.exec_ctx_.get_table_all_slice_count();
+      const int64_t table_level_slice_idx = ctx.exec_ctx_.get_table_level_slice_idx();
+      const int64_t slice_row_idx = ctx.exec_ctx_.get_slice_row_idx();
+      const int64_t autoinc_range_interval = ctx.exec_ctx_.get_autoinc_range_interval();
+      if (OB_FAIL(auto_service.calculate_idempotent_autoinc_val_for_ddl(
+              autoinc_param, table_all_slice_count, table_level_slice_idx, slice_row_idx,
+              autoinc_range_interval, new_val))) {
+        LOG_WARN("failed to calculate idempotent autoinc val for ddl", K(ret), K(autoinc_param),
+                 K(table_all_slice_count), K(table_level_slice_idx), K(slice_row_idx),
+                 K(autoinc_range_interval));
       }
-
+    } else {
+      // sync insert value globally before sync value globally
+      if (OB_FAIL(auto_service.sync_insert_value_global(*autoinc_param))) {
+        LOG_WARN("failed to sync insert value globally", K(ret));
+      }
       if (OB_SUCC(ret)) {
-        // get auto-increment value
-        if (OB_FAIL(cache_handle->next_value(value))) {
-          LOG_DEBUG("failed to get auto_increment value", K(ret), K(value));
-          // release handle No.1
-          auto_service.release_handle(cache_handle);
-          // invalid cache handle; record count
-          ++autoinc_param->autoinc_intervals_count_;
+        uint64_t value = 0;
+        CacheHandle *&cache_handle = autoinc_param->cache_handle_;
+        // get cache handle when allocate first auto-increment value
+        if (OB_ISNULL(cache_handle)) {
           if (OB_FAIL(auto_service.get_handle(*autoinc_param, cache_handle))) {
             LOG_WARN("failed to get auto_increment handle", K(ret));
-          } else if (OB_FAIL(cache_handle->next_value(value))) {
-            LOG_WARN("failed to get auto_increment value", K(ret));
+          } else if (OB_ISNULL(cache_handle)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Error unexpceted", K(ret), K(cache_handle));
           }
         }
-      }
-      if (OB_UNLIKELY(OB_DATA_OUT_OF_RANGE == ret) && !is_strict_mode(my_session.get_sql_mode())) {
-        ret = OB_SUCCESS;
-        value = ObAutoincrementService::get_max_value(autoinc_param->autoinc_col_type_);
-      }
-      if (OB_SUCC(ret)) {
-        new_val = value;
-        plan_ctx->set_autoinc_id_tmp(value);
+
+        if (OB_SUCC(ret)) {
+          // get auto-increment value
+          if (OB_FAIL(cache_handle->next_value(value))) {
+            LOG_DEBUG("failed to get auto_increment value", K(ret), K(value));
+            // release handle No.1
+            auto_service.release_handle(cache_handle);
+            // invalid cache handle; record count
+            ++autoinc_param->autoinc_intervals_count_;
+            if (OB_FAIL(auto_service.get_handle(*autoinc_param, cache_handle))) {
+              LOG_WARN("failed to get auto_increment handle", K(ret));
+            } else if (OB_FAIL(cache_handle->next_value(value))) {
+              LOG_WARN("failed to get auto_increment value", K(ret));
+            }
+          }
+        }
+	if (OB_UNLIKELY(OB_DATA_OUT_OF_RANGE == ret) && !is_strict_mode(my_session.get_sql_mode())) {
+          ret = OB_SUCCESS;
+          value = ObAutoincrementService::get_max_value(autoinc_param->autoinc_col_type_);
+        }
+        if (OB_SUCC(ret)) {
+          new_val = value;
+          plan_ctx->set_autoinc_id_tmp(value);
+        }
       }
     }
   }
@@ -432,8 +446,9 @@ int ObExprAutoincNextval::eval_nextval(
       if (OB_FAIL(get_input_value(
               expr, ctx, input_value, *autoinc_param, is_to_generate, new_val))) {
         LOG_WARN("check generation failed", K(ret));
-      } else if (is_to_generate && OB_FAIL(generate_autoinc_value(*my_session, new_val, auto_service,
-                                                                  autoinc_param, plan_ctx))) {
+      } else if (is_to_generate &&
+                 OB_FAIL(generate_autoinc_value(*my_session, new_val, auto_service, ctx,
+                                                autoinc_param, plan_ctx))) {
         LOG_WARN("generate autoinc value failed", K(ret));
       }
     }

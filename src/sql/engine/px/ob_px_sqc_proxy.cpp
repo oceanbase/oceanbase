@@ -166,6 +166,7 @@ int ObPxSQCProxy::setup_loop_proc(ObSqcCtx &sqc_ctx)
         .register_processor(sqc_ctx.opt_stats_gather_whole_msg_proc_)
         .register_processor(sqc_ctx.sp_winfunc_whole_msg_proc_)
         .register_processor(sqc_ctx.rd_winfunc_whole_msg_proc_)
+        .register_processor(sqc_ctx.join_filter_count_row_whole_msg_proc_)
         .register_interrupt_processor(sqc_ctx.interrupt_proc_);
   }
   return ret;

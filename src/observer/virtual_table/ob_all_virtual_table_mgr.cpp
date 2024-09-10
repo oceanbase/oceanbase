@@ -306,7 +306,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           int64_t data_checksum = 0;
           if (table->is_memtable()) {
             // memtable has no data checksum, do nothing
-          } else if (table->is_co_sstable()) {
+          } else if (table->is_co_sstable() && !static_cast<const ObCOSSTableV2 *>(table)->is_cgs_empty_co_table()) {
             data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
           } else if (table->is_sstable()) {
             data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();

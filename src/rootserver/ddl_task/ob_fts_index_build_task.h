@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_FTS_INDEX_BUILD_TASK_H_
 #define OCEANBASE_ROOTSERVER_OB_FTS_INDEX_BUILD_TASK_H_
 
-#include "rootserver/ddl_task/ob_ddl_task.h"
+#include "share/ob_domain_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -39,8 +39,6 @@ public:
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
   virtual int cleanup_impl() override;
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
@@ -60,18 +58,26 @@ public:
     const int ret_code) override;
   TO_STRING_KV(K(index_table_id_), K(rowkey_doc_aux_table_id_),
       K(doc_rowkey_aux_table_id_), K(fts_index_aux_table_id_),
-      K(fts_doc_word_aux_table_id_), K(rowkey_doc_schema_generated_),
-      K(doc_rowkey_schema_generated_), K(fts_index_aux_schema_generated_),
-      K(fts_doc_word_schema_generated_), K(rowkey_doc_task_submitted_),
+      K(fts_doc_word_aux_table_id_), K(rowkey_doc_task_submitted_),
       K(doc_rowkey_task_submitted_), K(fts_index_aux_task_submitted_),
-      K(fts_doc_word_task_submitted_), K(drop_index_task_id_),
+      K(fts_doc_word_task_submitted_), K(rowkey_doc_task_id_),
+      K(doc_rowkey_task_id_), K(fts_index_aux_task_id_),
+      K(fts_doc_word_task_id_), K(drop_index_task_id_),
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
       K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
 
 private:
   int get_next_status(share::ObDDLTaskStatus &next_status);
+  int prepare_aux_table(
+      const ObIndexType index_type,
+      bool &task_submitted,
+      uint64_t &aux_table_id,
+      int64_t &task_id);
   int prepare_rowkey_doc_table();
   int prepare_aux_index_tables();
+  int construct_create_index_arg(
+      const ObIndexType index_type,
+      obrpc::ObCreateIndexArg &arg);
   int construct_rowkey_doc_arg(obrpc::ObCreateIndexArg &arg);
   int construct_doc_rowkey_arg(obrpc::ObCreateIndexArg &arg);
   int construct_fts_index_aux_arg(obrpc::ObCreateIndexArg &arg);
@@ -104,18 +110,6 @@ private:
       obrpc::ObCreateIndexArg &dest_arg);
 
 private:
-  struct DependTaskStatus final
-  {
-  public:
-    DependTaskStatus()
-      : ret_code_(INT64_MAX), task_id_(0)
-    {}
-    ~DependTaskStatus() = default;
-    TO_STRING_KV(K_(task_id), K_(ret_code));
-  public:
-    int64_t ret_code_;
-    int64_t task_id_;
-  };
   static const int64_t OB_FTS_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::tenant_id_;
   using ObDDLTask::task_id_;
@@ -133,19 +127,19 @@ private:
   uint64_t doc_rowkey_aux_table_id_;
   uint64_t fts_index_aux_table_id_;
   uint64_t fts_doc_word_aux_table_id_;
-  bool rowkey_doc_schema_generated_;
-  bool doc_rowkey_schema_generated_;
-  bool fts_index_aux_schema_generated_;
-  bool fts_doc_word_schema_generated_;
   bool rowkey_doc_task_submitted_;
   bool doc_rowkey_task_submitted_;
   bool fts_index_aux_task_submitted_;
   bool fts_doc_word_task_submitted_;
+  int64_t rowkey_doc_task_id_;
+  int64_t doc_rowkey_task_id_;
+  int64_t fts_index_aux_task_id_;
+  int64_t fts_doc_word_task_id_;
   int64_t drop_index_task_id_;
   bool drop_index_task_submitted_;
   ObRootService *root_service_;
   obrpc::ObCreateIndexArg create_index_arg_;
-  common::hash::ObHashMap<uint64_t, DependTaskStatus> dependent_task_result_map_;
+  common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
 };
 
 } // end namespace rootserver

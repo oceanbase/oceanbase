@@ -167,7 +167,9 @@ int ObResourcePlanManager::refresh_resource_plan(const uint64_t tenant_id, ObStr
   } else if (OB_FAIL(proxy.get_all_plan_directives(tenant_id, plan_name, directives))) {
     LOG_WARN("fail get plan directive", K(tenant_id), K(plan_name), K(ret));
   } else if (OB_FAIL(normalize_iops_directives(tenant_id, directives, other_directive))) {
-    LOG_WARN("fail normalize directive", K(ret));
+    LOG_WARN("fail normalize iops directive", K(ret));
+  } else if (OB_FAIL(normalize_net_bandwidth_directives(tenant_id, directives, other_directive))) {
+    LOG_WARN("fail normalize net bandwidthdirective", K(ret));
   } else if (OB_FAIL(flush_directive_to_iops_control(tenant_id, directives, other_directive))) { // for IOPS
     LOG_WARN("fail flush directive to io control", K(ret));
   } else {
@@ -261,6 +263,44 @@ int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
   return ret;
 }
 
+int ObResourcePlanManager::normalize_net_bandwidth_directives(const uint64_t tenant_id,
+                                                              ObPlanDirectiveSet &directives,
+                                                              ObPlanDirective &other_group_directive)
+{
+  int ret = OB_SUCCESS;
+
+  uint64_t total_weight = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_TENANT_ID;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else {
+    // step 1. sum total net bandwidth weight
+    for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
+      ObPlanDirective &cur_directive = directives.at(i);
+      if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error!!!", K(cur_directive));
+      } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("invalid group net bandwidth config", K(cur_directive));
+      } else {
+        total_weight += cur_directive.net_bandwidth_weight_;
+      }
+    }
+    total_weight += OTHER_GROUPS_NET_BANDWIDTH_WEIGHT; //OTHER GROUPS WEIGHT
+    // step 2. compute real net bandwidth weight
+    if(OB_SUCC(ret) && total_weight > 0) {
+      for (int64_t i = 0; i < directives.count(); ++i) {
+        ObPlanDirective &cur_directive = directives.at(i);
+        cur_directive.net_bandwidth_weight_ = int64_t(100 * (double(cur_directive.net_bandwidth_weight_) / double(total_weight)));
+      }
+      other_group_directive.net_bandwidth_weight_ = int64_t(100 * (double(OTHER_GROUPS_NET_BANDWIDTH_WEIGHT) / double(total_weight)));
+    }
+  }
+
+  return ret;
+}
+
 /*
  * cpu share 比较简单，给相对值即可。
  * cfs_quota_us 相对复杂，需要考虑 cpu 数量。具体规则如下：
@@ -342,8 +382,9 @@ int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
       const ObPlanDirective &cur_directive = directives.at(i);
-      share::OBGroupIOInfo cur_io_info;
-      if (OB_FAIL(cur_io_info.init(cur_directive.min_iops_, cur_directive.max_iops_, cur_directive.weight_iops_))) {
+      share::ObGroupIOInfo cur_io_info;
+      if (OB_FAIL(cur_io_info.init(cur_directive.group_name_.get_value().ptr(), cur_directive.min_iops_, cur_directive.max_iops_, cur_directive.weight_iops_,
+                                   cur_directive.max_net_bandwidth_, cur_directive.net_bandwidth_weight_))) {
         LOG_ERROR("fail init group io info", K(cur_directive), K(ret));
       } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_group_iops(
                         cur_directive.tenant_id_,
@@ -355,10 +396,12 @@ int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant
       // ignore ret, continue
     }
     if (OB_SUCC(ret)) {
-      share::OBGroupIOInfo other_io_info;
-      if (OB_FAIL(other_io_info.init(other_group_directive.min_iops_,
-                                    other_group_directive.max_iops_,
-                                    other_group_directive.weight_iops_))) {
+      share::ObGroupIOInfo other_io_info;
+      if (OB_FAIL(other_io_info.init(other_group_directive.group_name_.get_value().ptr(),
+                                     other_group_directive.min_iops_,
+                                     other_group_directive.max_iops_,
+                                     other_group_directive.weight_iops_,
+                                     other_group_directive.max_net_bandwidth_, other_group_directive.net_bandwidth_weight_))) {
         LOG_ERROR("fail init other group io info", K(other_group_directive), K(ret));
       } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_group_iops(
                         other_group_directive.tenant_id_,

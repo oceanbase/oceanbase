@@ -22,6 +22,7 @@ namespace sql
 {
 
 const int64_t INIT_L2_CACHE_SIZE = get_level2_cache_size();
+const int64_t INIT_L2_CACHE_SIZE_5X = INIT_L2_CACHE_SIZE * 5;
 const int64_t INIT_L3_CACHE_SIZE = get_level3_cache_size();
 const int64_t MAX_L3_CACHE_SIZE = 50 *1024 *1024; //50M
 const uint64_t FORCE_GPD = 0x100;
@@ -32,6 +33,7 @@ public:
   typedef enum {
     STATE_L2_INSERT = 0,
     STATE_L3_INSERT,
+    STATE_L2_INSERT_5X,
     STATE_MAX_MEM_INSERT, // Use the maximum available memory for data deduplication
     STATE_PROBE,
     STATE_ANALYZE,
@@ -43,7 +45,8 @@ public:
                          period_cnt_(MIN_PERIOD_CNT), probe_cnt_(0), exists_cnt_(0),
                          rebuild_times_(0), cut_ratio_(INIT_CUT_RATIO), by_pass_ctrl_enabled_(false),
                          small_row_cnt_(0), op_id_(-1), need_resize_hash_table_(false),
-                         round_times_(0), scaled_llc_est_ndv_(0) {}
+                         round_times_(0), scaled_llc_est_ndv_(0), last_round_processed_cnt_(0),
+                         need_become_l2_insert_5x_(false) {}
   inline void reset() {
     by_pass_ = false;
     processed_cnt_ = 0;
@@ -54,8 +57,14 @@ public:
     exists_cnt_ = 0;
     rebuild_times_ = 0;
     need_resize_hash_table_ = false;
+    need_become_l2_insert_5x_ = false;
+    last_round_processed_cnt_ = 0;
   }
-  inline void reset_state() { state_ = (scaled_llc_est_ndv_ ? STATE_MAX_MEM_INSERT : STATE_L2_INSERT); }
+  inline void reset_state() {
+    state_ = (scaled_llc_est_ndv_ ? STATE_MAX_MEM_INSERT :
+      (need_become_l2_insert_5x_ ? STATE_L2_INSERT_5X : STATE_L2_INSERT));
+    need_become_l2_insert_5x_ = false;
+  }
   inline void set_max_mem_insert_state() { state_ = STATE_MAX_MEM_INSERT; }
   inline bool is_max_mem_insert_state() { return  STATE_MAX_MEM_INSERT == state_; }
   inline void set_analyze_state() { state_ = STATE_ANALYZE; }
@@ -99,6 +108,8 @@ public:
   int64_t ndv_cnt_for_period_[MAX_REBUILD_TIMES];
   int64_t round_times_;
   uint64_t scaled_llc_est_ndv_;
+  int64_t last_round_processed_cnt_;
+  bool need_become_l2_insert_5x_;
 };
 
 } // end namespace sql

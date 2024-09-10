@@ -35,7 +35,7 @@ int ObDASIterUtils::create_das_scan_iter_tree(ObDASIterTreeType tree_type,
   int ret = OB_SUCCESS;
   switch (tree_type) {
     case ITER_TREE_PARTITION_SCAN: {
-      ret = create_partition_scan_tree(scan_param, alloc, scan_ctdef, scan_rtdef, iter_tree);
+      ret = create_partition_scan_tree(scan_param, alloc, scan_ctdef, scan_rtdef, attach_ctdef, attach_rtdef, related_tablet_ids, trans_desc, snapshot, iter_tree);
       break;
     }
     case ITER_TREE_LOCAL_LOOKUP: {
@@ -220,6 +220,11 @@ int ObDASIterUtils::create_partition_scan_tree(storage::ObTableScanParam &scan_p
                                                common::ObIAllocator &alloc,
                                                const ObDASScanCtDef *scan_ctdef,
                                                ObDASScanRtDef *scan_rtdef,
+                                               const ObDASBaseCtDef *attach_ctdef,
+                                               ObDASBaseRtDef *attach_rtdef,
+                                               const ObDASRelatedTabletID &related_tablet_ids,
+                                               transaction::ObTxDesc *trans_desc,
+                                               transaction::ObTxReadSnapshot *snapshot,
                                                ObDASIter *&iter_tree)
 {
   int ret = OB_SUCCESS;
@@ -231,6 +236,15 @@ int ObDASIterUtils::create_partition_scan_tree(storage::ObTableScanParam &scan_p
   } else {
     scan_iter->set_scan_param(scan_param);
     iter_tree = scan_iter;
+    if (OB_NOT_NULL(attach_ctdef)) {
+      if (OB_UNLIKELY(ObDASOpType::DAS_OP_VID_MERGE != attach_ctdef->op_type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, attach op type isn't doc id merge", K(ret), K(attach_ctdef->op_type_), KPC(attach_ctdef));
+      } else if (OB_FAIL(create_vid_scan_sub_tree(scan_param, alloc, static_cast<const ObDASVIdMergeCtDef *>(attach_ctdef),
+              static_cast<ObDASVIdMergeRtDef *>(attach_rtdef), related_tablet_ids, trans_desc, snapshot, iter_tree))) {
+        LOG_WARN("fail to create vec vid scan sub tree", K(ret), K(scan_param), KPC(attach_ctdef), KPC(attach_rtdef));
+      }
+    }
   }
   return ret;
 }
@@ -512,6 +526,55 @@ int ObDASIterUtils::create_text_retrieval_sub_tree(const ObLSID &ls_id,
     }
   }
 
+  return ret;
+}
+
+int ObDASIterUtils::create_vid_scan_sub_tree(
+    ObTableScanParam &scan_param,
+    common::ObIAllocator &alloc,
+    const ObDASVIdMergeCtDef *merge_ctdef,
+    ObDASVIdMergeRtDef *merge_rtdef,
+    const ObDASRelatedTabletID &related_tablet_ids,
+    transaction::ObTxDesc *trans_desc,
+    transaction::ObTxReadSnapshot *snapshot,
+    ObDASIter *&iter_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(merge_ctdef) || OB_UNLIKELY(2 != merge_ctdef->children_cnt_)
+      || OB_ISNULL(iter_tree) || OB_UNLIKELY(ObDASIterType::DAS_ITER_SCAN != iter_tree->get_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(merge_ctdef), KPC(iter_tree));
+  } else {
+    ObDASVIdMergeIterParam vid_merge_param;
+    ObDASVIdMergeIter *vid_merge_iter = nullptr;
+    ObDASScanIterParam rowkey_vid_param;
+    ObDASScanIter *rowkey_vid_iter = nullptr;
+    rowkey_vid_param.scan_ctdef_ = static_cast<ObDASScanCtDef *>(merge_ctdef->children_[1]);
+    if (OB_FAIL(create_das_iter(alloc, rowkey_vid_param, rowkey_vid_iter))) {
+      LOG_WARN("fail to create das scan iter", K(ret), K(rowkey_vid_param));
+    } else {
+      vid_merge_param.rowkey_vid_tablet_id_ = related_tablet_ids.rowkey_vid_tablet_id_;
+      vid_merge_param.rowkey_vid_ls_id_     = scan_param.ls_id_;
+      vid_merge_param.data_table_ctdef_     = static_cast<ObDASScanCtDef *>(merge_ctdef->children_[0]);
+      vid_merge_param.rowkey_vid_ctdef_     = static_cast<ObDASScanCtDef *>(merge_ctdef->children_[1]);
+      vid_merge_param.data_table_rtdef_     = static_cast<ObDASScanRtDef *>(merge_rtdef->children_[0]);
+      vid_merge_param.rowkey_vid_rtdef_     = static_cast<ObDASScanRtDef *>(merge_rtdef->children_[1]);
+      vid_merge_param.data_table_iter_      = static_cast<ObDASScanIter *>(iter_tree);
+      vid_merge_param.rowkey_vid_iter_      = rowkey_vid_iter;
+      vid_merge_param.trans_desc_           = trans_desc;
+      vid_merge_param.snapshot_             = snapshot;
+      if (OB_FAIL(create_das_iter(alloc, vid_merge_param, vid_merge_iter))) {
+        LOG_WARN("fail to create vid id merge iter", K(ret), K(vid_merge_param));
+      } else if (OB_FAIL(create_iter_children_array(2, alloc, vid_merge_iter))) {
+        LOG_WARN("fail to create vid id merge iter children array", K(ret));
+      } else {
+        vid_merge_iter->get_children()[0] = iter_tree;
+        vid_merge_iter->get_children()[1] = rowkey_vid_iter;
+        rowkey_vid_iter->set_scan_param(vid_merge_iter->get_rowkey_vid_scan_param());
+        iter_tree = vid_merge_iter;
+      }
+    }
+  }
   return ret;
 }
 

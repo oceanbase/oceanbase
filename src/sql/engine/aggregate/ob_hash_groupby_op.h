@@ -82,7 +82,8 @@ public:
       group_row_(NULL),
       groupby_store_row_(NULL),
       group_row_count_in_batch_(0),
-      group_row_offset_in_selector_(0)
+      group_row_offset_in_selector_(0),
+      cnt_(1)
   {
   }
 
@@ -91,7 +92,7 @@ public:
   inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   ObGroupRowItem *&next() { return next_; }
 
-  TO_STRING_KV(KP(next_), K(hash_), KP_(group_row),
+  TO_STRING_KV(KP(next_), K(hash_), K(cnt_), KP_(group_row),
                K_(group_row_count_in_batch), K_(group_row_offset_in_selector));
 
 public:
@@ -110,6 +111,7 @@ public:
 
   uint16_t group_row_count_in_batch_;
   uint16_t group_row_offset_in_selector_;
+  uint32_t cnt_;
 };
 
 class ObGroupRowHashTable : public ObExtendHashTable<ObGroupRowItem>
@@ -219,7 +221,12 @@ public:
   static constexpr const double MAX_PART_MEM_RATIO = 0.5;
   static constexpr const double EXTRA_MEM_RATIO = 0.25;
   static const int64_t FIX_SIZE_PER_PART = sizeof(DatumStoreLinkPartition) + ObChunkRowStore::BLOCK_SIZE;
-
+  static const int8_t SKEW_TEST_STEP_SIZE = 5;
+  constexpr static const float SKEW_POPULAR_MAX_RATIO = 0.5;
+  constexpr static const float SKEW_POPULAR_MIN_RATIO = 0.3;
+  const static int8_t SKEW_HEAP_SIZE = 15;
+  const static int8_t SKEW_ITEM_CNT_TOLERANCE = 64;
+  const static int8_t INIT_BUCKET_COUNT_FOR_POPULAR = 32;
 
 public:
   ObHashGroupByOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
@@ -272,7 +279,11 @@ public:
       last_child_row_(nullptr),
       by_pass_child_brs_(nullptr),
       force_by_pass_(false),
-      llc_est_()
+      llc_est_(),
+      by_pass_rows_(0),
+      total_load_rows_(0),
+      popular_map_(),
+      by_pass_agg_rows_(0)
   {
   }
   void reset();
@@ -284,6 +295,15 @@ public:
   virtual void destroy() override;
   int load_data();
   int load_one_row();
+  int process_popular_value(uint64_t hash_value, oceanbase::sql::ObBatchRows *child_brs,
+                            int64_t batch_idx, const int64_t batch_size, bool &is_popular_value);
+  int init_popular_values(); // Data skew constructs the initial popular map based on the data
+                             // during the loaddata sampling period and use in the bypass phase.
+  int popular_value_detect();
+  int check_popular_values_validity();
+  int bypass_process_popular_value(bool &is_popular_value);
+  int bypass_process_popular_value_batch();
+  static bool group_row_items_greater(const ObGroupRowItem *a, const ObGroupRowItem *b);
 
   // for batch
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
@@ -617,6 +637,10 @@ private:
   ObBatchResultHolder by_pass_brs_holder_;
   bool force_by_pass_;
   LlcEstimate llc_est_;
+  uint64_t by_pass_rows_;
+  uint64_t total_load_rows_;
+  common::hash::ObHashMap<uint64_t, uint64_t, hash::NoPthreadDefendMode> popular_map_;
+  uint64_t by_pass_agg_rows_;
 };
 
 } // end namespace sql

@@ -1729,6 +1729,23 @@ int ob_atoll(const char *str, int64_t &res)
   return ret;
 }
 
+int ob_atoull(const char *str, uint64_t &res)
+{
+  int ret = OB_SUCCESS;
+  char *endptr = NULL;
+  uint64_t val = 0;
+  if (OB_ISNULL(str)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(ob_strtoull(str, endptr, val))) {
+    LIB_LOG(WARN, "failed to strtoll", K(ret), KCSTRING(str));
+  } else if (str == endptr || OB_ISNULL(endptr) || OB_UNLIKELY('\0' != *endptr)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    res = val;
+  }
+  return ret;
+}
+
 struct tm *ob_localtime(const time_t *unix_sec, struct tm *result)
 {
   static const int HOURS_IN_DAY = 24;
@@ -1922,6 +1939,57 @@ int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t 
   return ret;
 }
 
+enum CAP_UNIT
+{
+  // shift bits between unit of byte and that
+  CAP_B = 0,
+  CAP_KB = 10,
+  CAP_MB = 20,
+  CAP_GB = 30,
+  CAP_TB = 40,
+  CAP_PB = 50,
+};
+
+int64_t parse_config_capacity(const char *str, bool &valid, bool check_unit /* = true */, bool use_byte /* = false*/)
+{
+  char *p_unit = NULL;
+  int64_t value = 0;
+
+  if (OB_ISNULL(str) || '\0' == str[0]) {
+    valid = false;
+  } else {
+    valid = true;
+    value = strtol(str, &p_unit, 0);
+
+    if (OB_ISNULL(p_unit)) {
+      valid = false;
+    } else if (value < 0) {
+      valid = false;
+    } else if ('\0' == *p_unit) {
+      if (check_unit) {
+        valid = false;
+      } else if (!use_byte) {
+        value <<= CAP_MB;
+      }
+    } else if (0 == STRCASECMP("b", p_unit) || 0 == STRCASECMP("byte", p_unit)) {
+      // do nothing
+    } else if (0 == STRCASECMP("kb", p_unit) || 0 == STRCASECMP("k", p_unit)) {
+      value <<= CAP_KB;
+    } else if (0 == STRCASECMP("mb", p_unit) || 0 == STRCASECMP("m", p_unit)) {
+      value <<= CAP_MB;
+    } else if (0 == STRCASECMP("gb", p_unit) || 0 == STRCASECMP("g", p_unit)) {
+      value <<= CAP_GB;
+    } else if (0 == STRCASECMP("tb", p_unit) || 0 == STRCASECMP("t", p_unit)) {
+      value <<= CAP_TB;
+    } else if (0 == STRCASECMP("pb", p_unit) || 0 == STRCASECMP("p", p_unit)) {
+      value <<= CAP_PB;
+    } else {
+      valid = false;
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get capacity error", K(str), K(p_unit));
+    }
+  }
+  return value;
+}
 
 } // end namespace common
 } // end namespace oceanbase

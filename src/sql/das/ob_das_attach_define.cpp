@@ -59,6 +59,10 @@ OB_SERIALIZE_MEMBER((ObDASSortCtDef, ObDASAttachCtDef),
 
 OB_SERIALIZE_MEMBER((ObDASSortRtDef, ObDASAttachRtDef));
 
+OB_SERIALIZE_MEMBER((ObDASVIdMergeCtDef, ObDASAttachCtDef));
+
+OB_SERIALIZE_MEMBER((ObDASVIdMergeRtDef, ObDASAttachRtDef));
+
 OB_DEF_SERIALIZE(ObDASAttachSpec)
 {
   int ret = OB_SUCCESS;

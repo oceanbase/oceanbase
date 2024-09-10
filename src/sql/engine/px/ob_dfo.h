@@ -520,7 +520,8 @@ public:
     p2p_dh_map_info_(),
     coord_info_ptr_(nullptr),
     force_bushy_(false),
-    query_sql_()
+    query_sql_(),
+    has_into_odps_(false)
   {
   }
 
@@ -561,6 +562,8 @@ public:
   inline bool has_need_branch_id_op() const { return has_need_branch_id_op_; }
   inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }
   inline bool has_temp_table_scan() const { return has_temp_scan_; }
+  inline void set_into_odps(bool has_into_odps) { has_into_odps_ = has_into_odps; }
+  inline bool has_into_odps() const { return has_into_odps_; }
   inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
   inline void set_slave_mapping_type(SlaveMappingType v) { slave_mapping_type_ = v; }
   inline SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
@@ -813,6 +816,7 @@ private:
   bool force_bushy_;
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
   ObString query_sql_;
+  bool has_into_odps_;
 };
 
 

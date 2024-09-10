@@ -783,7 +783,7 @@ int ObTxReplayExecutor::prepare_memtable_replay_(ObStorageTableGuard &w_guard,
                                                  ObIMemtable *&mem_ptr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(w_guard.refresh_and_protect_memtable())) {
+  if (OB_FAIL(w_guard.refresh_and_protect_memtable_for_replay())) {
     TRANS_LOG(WARN, "[Replay Tx] refresh and protect memtable error", K(ret));
   } else if (OB_FAIL(w_guard.get_memtable_for_replay(mem_ptr))) {
     // OB_NO_NEED_UPDATE => don't need to replay

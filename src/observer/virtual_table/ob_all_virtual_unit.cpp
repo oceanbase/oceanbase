@@ -17,6 +17,10 @@
 #include "observer/omt/ob_tenant.h"
 #include "share/ob_unit_getter.h"
 #include "logservice/ob_log_service.h"
+#include "share/ob_server_struct.h"  // GCTX
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -254,17 +258,59 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
           }
           break;
         }
+        case DATA_DISK_SIZE: {
+          if (GCTX.is_shared_storage_mode()) {
+            cur_row_.cells_[i].set_int(tenant_meta.unit_.config_.data_disk_size());
+          } else {
+            cur_row_.cells_[i].set_null();
+          }
+          break;
+        }
         case DATA_DISK_IN_USE: {
           int64_t data_disk_in_use = 0;
-          if (OB_FAIL(static_cast<ObDiskUsageReportTask*>(GCTX.disk_reporter_)->get_data_disk_used_size(tenant_meta.unit_.tenant_id_, data_disk_in_use))) {
-            SERVER_LOG(WARN, "fail to get data disk in use", K(ret), K(tenant_meta));
-          } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+          if (GCTX.is_shared_storage_mode()) {
+            // shared_storage mode
+            MTL_SWITCH(tenant_meta.unit_.tenant_id_) {
+              ObTenantDiskSpaceManager *disk_space_mgr = nullptr;
+              if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager*))) {
+                ret = OB_ERR_UNEXPECTED;
+                SERVER_LOG(WARN, "tenant disk space manager is null", KR(ret), KP(disk_space_mgr));
+              } else if (OB_FAIL(disk_space_mgr->get_used_disk_size(data_disk_in_use))) {
+                SERVER_LOG(WARN, "fail to get used disk size", KR(ret), K(data_disk_in_use));
+              }
+            }
+          } else
+            // shared_nothing mode
+#endif
+          {
+            if (OB_ISNULL(GCTX.disk_reporter_)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "disk_reporter_ is nullptr", KR(ret), KP(GCTX.disk_reporter_));
+            } else if (OB_FAIL(static_cast<ObDiskUsageReportTask*>(GCTX.disk_reporter_)
+                               ->get_data_disk_used_size(tenant_meta.unit_.tenant_id_, data_disk_in_use))) {
+              SERVER_LOG(WARN, "fail to get data disk in use", K(ret), K(tenant_meta));
+            }
+          }
+          if (OB_SUCC(ret)) {
             cur_row_.cells_[i].set_int(data_disk_in_use);
           }
           break;
         }
-        case DATA_DISK_SIZE: {
-          cur_row_.cells_[i].set_null();
+        case MAX_NET_BANDWIDTH: {
+          if (is_meta_tnt) {
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_int(tenant_meta.unit_.config_.max_net_bandwidth());
+          }
+          break;
+        }
+        case NET_BANDWIDTH_WEIGHT: {
+          if (is_meta_tnt) {
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_int(tenant_meta.unit_.config_.net_bandwidth_weight());
+          }
           break;
         }
         case STATUS: {
@@ -276,14 +322,6 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
         case CREATE_TIME:
           cur_row_.cells_[i].set_int(tenant_meta.unit_.create_timestamp_);
           break;
-        case MAX_NET_BANDWIDTH: {
-          cur_row_.cells_[i].set_int(ObUnitResource::DEFAULT_NET_BANDWIDTH);    // not used, keep default
-          break;
-        }
-        case NET_BANDWIDTH_WEIGHT: {
-          cur_row_.cells_[i].set_int(ObUnitResource::DEFAULT_NET_BANDWIDTH_WEIGHT);   // not used, keep default
-          break;
-        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

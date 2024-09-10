@@ -90,10 +90,11 @@ public:
     return delete_count_ == rowkeys_.count();
   }
   int init(
+      const ObColDescIArray &column_descs,
       const ObRelativeTable &table,
       ObStoreCtx &store_ctx,
       const ObITableReadInfo &rowkey_read_info);
-  int check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRelativeTable &table);
+  int check_duplicate(blocksstable::ObDatumRow *rows, const int64_t row_count, ObRelativeTable &table);
   blocksstable::ObDatumRowkey& get_duplicate_rowkey()
   {
     return min_key_;
@@ -265,12 +266,13 @@ private:
 public:
   ObRowkeyAndLockStates rowkeys_;
   ObPermutation permutation_;
-  ObStoreRow *rows_;
+  blocksstable::ObDatumRow *rows_;
   ExistHelper exist_helper_;
   ObTabletID tablet_id_;
 private:
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   blocksstable::ObDatumRowkey min_key_;
+  const ObColDescIArray *col_descs_;
   int64_t conflict_rowkey_idx_;
   int error_code_;
   int64_t delete_count_;

@@ -31,6 +31,7 @@
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
+#include "share/vector_index/ob_vector_index_util.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -1762,6 +1763,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->est_cost_info_.index_meta_info_.is_geo_index_ = index_info_entry->is_index_geo();
     ap->est_cost_info_.index_meta_info_.is_multivalue_index_ = index_info_entry->is_multivalue_index();
     ap->est_cost_info_.index_meta_info_.is_fulltext_index_ = index_info_entry->is_fulltext_index();
+    ap->est_cost_info_.index_meta_info_.is_vector_index_ = index_info_entry->is_vector_index();
     ap->est_cost_info_.is_virtual_table_ = is_virtual_table(ref_id);
     ap->est_cost_info_.table_metas_ = &get_plan()->get_basic_table_metas();
     ap->est_cost_info_.sel_ctx_ = &get_plan()->get_selectivity_ctx();
@@ -2642,6 +2644,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
         entry->set_is_unique_index(is_unique_index);
         entry->set_is_fulltext_index(index_schema->is_fts_index());
         entry->set_is_multivalue_index(index_schema->is_multivalue_index_aux());
+        entry->set_is_vector_index(index_schema->is_vec_index());
         entry->get_ordering_info().set_scan_direction(direction);
       }
       if (OB_SUCC(ret)) {
@@ -3019,10 +3022,18 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
   int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
   const LogTableHint *log_table_hint = NULL;
   ObMatchFunRawExpr *match_expr = NULL;
+  ObRawExpr *vector_expr = NULL;
+  const ObSelectStmt *select_stmt = NULL;
+  bool has_aggr = false; // defend aggr for ann search
+  bool is_vec_index_hint = false;
+  bool vector_index_match = false;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
-      OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
+      OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
+      OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
+      OB_ISNULL(OPT_CTX.get_exec_ctx()->get_sql_ctx()) ||
+      OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(get_plan()), K(stmt), K(schema_guard), K(ret));
   } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id))) {
@@ -3042,6 +3053,33 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     } else if (OB_FAIL(valid_index_ids.push_back(inv_idx_tid))) {
       LOG_WARN("failed to assign index ids", K(ret));
     }
+  } else if (stmt->is_select_stmt() && FALSE_IT(select_stmt = static_cast<const ObSelectStmt*>(stmt))) {
+  } else if (nullptr != select_stmt && FALSE_IT(has_aggr = select_stmt->get_aggr_item_size() > 0)) {
+  } else if (stmt->has_vec_approx()
+             && OB_NOT_NULL(vector_expr = stmt->get_first_vector_expr())
+             && OB_FAIL(get_vector_inv_index_tid(schema_guard, vector_expr, table_id, ref_table_id, has_aggr, vector_index_match, valid_index_ids))) {
+    LOG_WARN("failed to get matched vector index table id", K(ret));
+  } else if (vector_index_match) {
+    // defence weak read
+    bool is_weak_read = false;
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+      is_weak_read = true;
+    } else {
+      ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
+      if (OB_UNLIKELY(INVALID_CONSISTENCY
+              != OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_)) {
+        consistency_level = OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_;
+      } else {
+        consistency_level = session_info->get_consistency_level();
+      }
+      if (WEAK == consistency_level || FROZEN == consistency_level) {
+        is_weak_read = true;
+      }
+    }
+    if (is_weak_read) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using vector index, weak read is");
+    }
   } else if (table_item->is_index_table_) {
     if (OB_FAIL(valid_index_ids.push_back(table_item->ref_id_))) {
       LOG_WARN("failed to push back array", K(ret));
@@ -3058,7 +3096,8 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                                             false,
                                                             table_item->access_all_part(),
                                                             false /*domain index*/,
-                                                            false /*spatial index*/))) {
+                                                            false /*spatial index*/,
+                                                            false /*vector index*/))) {
     LOG_WARN("failed to get can read index", K(ref_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -9573,6 +9612,9 @@ int ObJoinOrder::check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_con
   } else if (join_conditions.empty() || path_info.force_mat_ ||
       (ACCESS != right_tree.get_type() && SUBQUERY != right_tree.get_type())) {
     is_valid = false;
+  } else if (!OPT_CTX.is_push_join_pred_into_view_enabled() &&
+             SUBQUERY == right_tree.get_type()) {
+    is_valid = false;
   } else if (CONNECT_BY_JOIN == path_info.join_type_) {
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < join_conditions.count(); i++) {
       if (OB_ISNULL(join_conditions.at(i))) {
@@ -12516,9 +12558,7 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
           }
           // 对于空间索引，空间谓词一定要回表计算
           if (OB_SUCC(ret) &&
-              (est_cost_info.index_meta_info_.is_geo_index_ ||
-               est_cost_info.index_meta_info_.is_fulltext_index_ ||
-               est_cost_info.index_meta_info_.is_multivalue_index_)) {
+              est_cost_info.index_meta_info_.is_domain_index()) {
             ret = est_cost_info.table_filters_.push_back(filter);
           }
         } else {
@@ -16295,6 +16335,76 @@ int ObJoinOrder::param_values_table_expr(ObIArray<ObRawExpr*> &values_vector,
       LOG_WARN("failed to append", K(ret));
     } else {
       values_vector.at(i) = new_values_exprs.at(0);
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_vector_inv_index_tid(ObSqlSchemaGuard *schema_guard,
+                                          ObRawExpr *vector_expr,
+                                          const uint64_t table_id,
+                                          const uint64_t ref_table_id,
+                                          const bool has_aggr,
+                                          bool &vector_index_match,
+                                          ObIArray<uint64_t> &valid_index_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  const ObTableSchema *table_schema = NULL;
+  uint64_t inv_idx_tid = OB_INVALID_ID;
+  vector_index_match = false;
+  if (OB_ISNULL(vector_expr) || OB_ISNULL(schema_guard) ||
+      OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
+      OB_ISNULL(schema_guard->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("failed to get main table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    uint64_t vec_col_id = OB_INVALID_ID;
+    bool column_exist = false;
+    for (int i = 0; i < vector_expr->get_param_count() && OB_SUCC(ret) && !vector_index_match; ++i) {
+      const ObRawExpr *tmp_expr = vector_expr->get_param_expr(i);
+      const ObColumnSchemaV2 *tmp_index_col = nullptr;
+      if (OB_NOT_NULL(tmp_expr) && tmp_expr->is_column_ref_expr()) {
+        column_exist = true;
+        const ObColumnRefRawExpr *col_ref = ObRawExprUtils::get_column_ref_expr_recursively(tmp_expr);
+        if (col_ref->get_table_id() == table_id
+            && OB_NOT_NULL(tmp_index_col = table_schema->get_column_schema(col_ref->get_column_id()))) {
+          if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*table_schema, *(schema_guard->get_schema_guard()), tmp_index_col->get_column_id(), vector_index_match))) {
+            LOG_WARN("failed to check column has vector index", K(ret), K(tmp_index_col->get_column_id()), K(vector_index_match));
+          } else if (vector_index_match) {
+            vec_col_id = tmp_index_col->get_column_id();
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "should be vector column with vector index");
+          }
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!column_exist) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "should be vector column with vector index");
+    } else if (vector_index_match && has_aggr) {
+      vector_index_match = false;
+    } else if (!vector_index_match) {
+    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard->get_schema_guard(),
+                                                               *table_schema,
+                                                               INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
+                                                               vec_col_id,
+                                                               inv_idx_tid))) {
+      LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(vec_col_id), KPC(table_schema));
+    } else if (inv_idx_tid == OB_INVALID_ID) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_INFO("can not find vector index for spec col id", K(ref_table_id), K(vec_col_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "should be vector column with vector index");
+    } else if (OB_FAIL(valid_index_ids.push_back(inv_idx_tid))) {
+      LOG_WARN("failed to assign index ids", K(ret));
     }
   }
   return ret;

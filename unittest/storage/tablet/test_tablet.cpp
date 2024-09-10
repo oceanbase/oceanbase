@@ -416,6 +416,19 @@ TestTablet::~TestTablet()
 
 void TestTablet::SetUp()
 {
+  OB_LOG(INFO, "ObTabletMeta", K(sizeof(ObTabletMeta)),
+        K(sizeof(ObTabletHAStatus)), K(sizeof(ObTabletReportStatus)), K(sizeof(ObTabletTableStoreFlag)),
+        K(sizeof(ObTabletSpaceUsage)), K(sizeof(lib::Worker::CompatMode)));
+
+  const int64_t tablet_size = sizeof(ObTablet);
+  const int64_t rowkey_size = sizeof(ObRowkeyReadInfo);
+  const int64_t assert_size = tablet_size + rowkey_size;
+
+  OB_LOG(INFO, "ObTablet", K(assert_size), K(tablet_size), K(rowkey_size),
+        K(sizeof(ObTabletMdsData)), K(sizeof(ObTabletHandle)),
+        K(sizeof(ObTabletComplexAddr<ObTabletMacroInfo>)), K(sizeof(ObTabletPointerHandle)),
+        K(sizeof(ObMetaDiskAddr)), K(sizeof(common::SpinRWLock)), K(sizeof(ObTabletStatusCache)),
+        K(sizeof(ObDDLInfoCache)), K(sizeof(ObTableStoreCache)));
 }
 
 void TestTablet::TearDown()

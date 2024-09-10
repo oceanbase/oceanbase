@@ -787,36 +787,6 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
 
 #define SPACE_INT 0x20202020
 
-const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bool is_utf16 /*false*/)
-{
-  const unsigned char *end= ptr + len;
-  if (len > 20 && !is_utf16) {
-    const unsigned char *end_words= (const unsigned char *)(int_ptr)
-      (((ulonglong)(int_ptr)end) / SIZEOF_INT * SIZEOF_INT);
-    const unsigned char *start_words= (const unsigned char *)(int_ptr)
-       ((((ulonglong)(int_ptr)ptr) + SIZEOF_INT - 1) / SIZEOF_INT * SIZEOF_INT);
-    ob_charset_assert(((ulonglong)(int_ptr)ptr) >= SIZEOF_INT);
-    if (end_words > ptr) {
-      while (end > end_words && end[-1] == 0x20) {
-        end--;
-      }
-      if (end[-1] == 0x20 && start_words < end_words) {
-        while (end > start_words && ((unsigned *)end)[-1] == SPACE_INT) {
-          end -= SIZEOF_INT;
-        }
-      }
-    }
-  }
-  if (is_utf16) {
-      while (end - 1 > ptr && end[-2] == 0x00 && end[-1] == 0x20)
-        end-=2;
-  } else {
-    while (end > ptr && end[-1] == 0x20)
-      end--;
-  }
-  return (end);
-}
-
 size_t ob_strxfrm_pad(const ObCharsetInfo *cs, unsigned char *str, unsigned char *frm_end,
                       unsigned char *str_end, unsigned int nweights, unsigned int flags) {
   if (nweights && frm_end < str_end && (flags & OB_STRXFRM_PAD_WITH_SPACE)) {

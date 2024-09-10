@@ -86,8 +86,9 @@ public:
   int create_ls_for_ha(const share::ObTaskId task_id, const ObMigrationOpArg &arg);
 
   // create a LS for replay or update LS's meta
+  // @param [in] ls_epoch, the epoch increases monotonically in tenant scope when an ls is created
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
-  int replay_create_ls(const ObLSMeta &ls_meta);
+  int replay_create_ls(const int64_t ls_epoch, const ObLSMeta &ls_meta);
   // replay create ls commit slog.
   // @param [in] ls_id, the create process of which is committed.
   int replay_create_ls_commit(const share::ObLSID &ls_id);
@@ -160,6 +161,22 @@ public:
   int64_t get_ls_count() const { return ls_map_.get_ls_count(); }
   int dump_ls_info();
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  void report_tablet_id_for_tablet_version_gc(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id)
+  {
+    int ret = OB_SUCCESS;
+    ObLSHandle ls_handle;
+    ObTabletGCInfo tablet_info(tablet_id);
+    if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+      STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id), K(tablet_id));
+    } else {
+      ls_handle.get_ls()->get_ls_private_block_gc_handler().report_tablet_id_for_gc(tablet_info);
+    }
+  }
+#endif
+
   TO_STRING_KV(K_(tenant_id), K_(is_inited));
 private:
   enum class ObLSCreateState {
@@ -198,17 +215,13 @@ private:
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
-  int write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const;
-  int write_commit_create_ls_slog_(const share::ObLSID &ls_id) const;
-  int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
-  int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
   void remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog);
   int safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk);
-  int replay_update_ls_(const ObLSMeta &ls_meta);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
   int replay_remove_ls_(const share::ObLSID &ls_id);
-  int replay_create_ls_(const ObLSMeta &ls_meta);
+  int replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_meta);
+  int replay_update_ls_(const ObLSMeta &ls_meta);
   int post_create_ls_(const int64_t create_type,
                       ObLS *&ls);
   void del_ls_after_create_ls_failed_(ObLSCreateState& ls_create_state, ObLS *ls);

@@ -15,7 +15,7 @@
 #include "ob_integer_stream_decoder.h"
 #include "ob_integer_stream_vector_decoder.h"
 #include "ob_cs_decoding_util.h"
-#include "storage/access/ob_pushdown_aggregate.h"
+#include "storage/access/ob_aggregate_base.h"
 #include "storage/blocksstable/encoding/ob_raw_decoder.h"
 
 namespace oceanbase
@@ -523,9 +523,9 @@ int ObIntegerColumnDecoder::in_operator(
         }
       }
     } else {
-      ObFilterInCmpType cmp_type = get_filter_in_cmp_type(pd_filter_info.count_, filter.get_datums().count(), false);
+      storage::ObFilterInCmpType cmp_type = storage::get_filter_in_cmp_type(pd_filter_info.count_, filter.get_datums().count(), false);
       ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> eval;
-      if (cmp_type == ObFilterInCmpType::BINARY_SEARCH) {
+      if (cmp_type == storage::ObFilterInCmpType::BINARY_SEARCH) {
         eval = [&] (const ObDatum &cur_datum, const int64_t idx)
         {
           int tmp_ret = OB_SUCCESS;
@@ -539,12 +539,12 @@ int ObIntegerColumnDecoder::in_operator(
           }
           return tmp_ret;
         };
-      } else if (cmp_type == ObFilterInCmpType::HASH_SEARCH) {
+      } else if (cmp_type == storage::ObFilterInCmpType::HASH_SEARCH) {
         eval = [&] (const ObDatum &cur_datum, const int64_t idx)
         {
           int tmp_ret = OB_SUCCESS;
           bool is_exist = false;
-          if (OB_TMP_FAIL(filter.exist_in_datum_set(cur_datum, is_exist))) {
+          if (OB_TMP_FAIL(filter.exist_in_set(cur_datum, is_exist))) {
             LOG_WARN("fail to check datum in hashset", KR(tmp_ret), K(cur_datum));
           } else if (is_exist) {
             if (OB_TMP_FAIL(result_bitmap.set(idx))) {
@@ -617,13 +617,13 @@ int ObIntegerColumnDecoder::tranverse_integer_in_op(
 
     if (use_null_replace_val) {
       if (OB_FAIL(ObCSFilterFunctionFactory::instance().integer_in_tranverse_with_null(ctx.data_, store_width_size,
-          null_replaced_val, filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, parent, result_bitmap))) {
+          null_replaced_val, filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, parent, result_bitmap, &filter))) {
         LOG_WARN("fail to handle integer in tranverse with null", KR(ret), K(store_width_size));
       }
     } else {
       const bool exist_null_bitmap = ctx.has_null_bitmap();
       if (OB_FAIL(ObCSFilterFunctionFactory::instance().integer_in_tranverse(ctx.data_, store_width_size,
-          filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, exist_null_bitmap, parent, result_bitmap))) {
+          filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, exist_null_bitmap, parent, result_bitmap, &filter))) {
         LOG_WARN("fail to handle integer in tranverse", KR(ret), K(exist_null_bitmap), K(store_width_size));
       }
     }
@@ -708,7 +708,7 @@ int ObIntegerColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    storage::ObAggCell &agg_cell) const
+    storage::ObAggCellBase &agg_cell) const
 {
   int ret = OB_SUCCESS;
   const ObIntegerColumnDecoderCtx &integer_ctx = ctx.integer_ctx_;
@@ -776,7 +776,7 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
     const bool is_col_signed,
     const int64_t row_start,
     const int64_t row_count,
-    storage::ObAggCell &agg_cell)
+    storage::ObAggCellBase &agg_cell)
 {
   int ret = OB_SUCCESS;
   const bool use_null_replace_val = ctx.is_null_replaced();
@@ -806,7 +806,7 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
     // if agg_val less than base, no need to update min
     // if agg_val larger than RANGE_MAX_VALUE, no need to update max
   } else {
-    uint64_t result = 0;
+    uint64_t result = agg_cell.is_min_agg() ? UINT64_MAX : 0;
     bool result_is_null = false;
     if (use_null_replace_val) {
       const uint64_t null_replaced_val_base_diff = ctx.null_replaced_value_ - base_value;

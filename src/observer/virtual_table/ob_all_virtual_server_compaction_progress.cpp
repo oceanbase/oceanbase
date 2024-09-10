@@ -71,7 +71,7 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
   const int64_t col_count = output_column_ids_.count();
   ObObj *cells = cur_row_.cells_;
   int64_t compression_ratio = 0;
-  int64_t estimate_finish_time = 0;
+  int64_t update_estimated_finish_time = 0;
   compaction::ObServerCompactionEvent tmp_event;
   if (!progress_.is_inited_) {
     progress_.total_tablet_cnt_ = -1;
@@ -137,13 +137,13 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
       break;
     case ESTIMATED_FINISH_TIME:
       if (share::ObIDag::DAG_STATUS_FINISH != progress_.status_) {
-        estimate_finish_time = 0;
+        update_estimated_finish_time = 0;
         MTL_SWITCH(progress_.tenant_id_) {
-          if (OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_max_major_finish_time(progress_.merge_version_, estimate_finish_time))) {
+          if (OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_max_major_finish_time(progress_.merge_version_, update_estimated_finish_time))) {
             SERVER_LOG(WARN, "failed to get max major_finish_time", K(tmp_ret));
           }
         }
-        progress_.estimated_finish_time_ = MAX(progress_.estimated_finish_time_, estimate_finish_time);
+        progress_.estimated_finish_time_ = MAX(progress_.estimated_finish_time_, update_estimated_finish_time);
         int64_t current_time = ObTimeUtility::fast_current_time();
         // update before select, update estimated_finish_time
         if (progress_.estimated_finish_time_ < current_time) {

@@ -70,36 +70,30 @@ int ObExprRbCalcCardinality::eval_rb_calc_cardinality(const ObExpr &expr, ObEval
   bool is_rb1_null = false;
   bool is_rb2_null = false;
   bool is_res_null = false;
-  ObRoaringBitmap *rb1 = nullptr;
-  ObRoaringBitmap *rb2 = nullptr;
+  ObString rb1_bin;
+  ObString rb2_bin;
   uint64_t cardinality = 0;
-  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb1_arg, rb1, is_rb1_null))) {
-    LOG_WARN("failed to get left input roaringbitmap", K(ret));
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb1_arg, rb1_bin, is_rb1_null))) {
+    LOG_WARN("fail to get left input roaringbitmap", K(ret));
   } else if (is_rb1_null && !is_null2empty) {
     is_res_null = true;
-  } else if (is_rb1_null && is_null2empty
-             && OB_ISNULL(rb1 = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
-  } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb2_arg, rb2, is_rb2_null))) {
-    LOG_WARN("failed to get right input roaringbitmap", K(ret));
+  } else if (is_rb1_null && is_null2empty && OB_FAIL(ObRbUtils::build_empty_binary(tmp_allocator, rb1_bin))) {
+    LOG_WARN("failed to build empty roaringbitmap binary", K(ret));
+  } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb2_arg, rb2_bin, is_rb2_null))) {
+    LOG_WARN("fail to get right input roaringbitmap", K(ret));
   } else if (is_rb2_null  && !is_null2empty) {
     is_res_null = true;
-  } else if (is_rb2_null && is_null2empty
-             && OB_ISNULL(rb2 = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
+  } else if (is_rb2_null && is_null2empty && OB_FAIL(ObRbUtils::build_empty_binary(tmp_allocator, rb2_bin))) {
+    LOG_WARN("failed to build empty roaringbitmap binary", K(ret));
+  } else if (OB_FAIL(ObRbUtils::get_calc_cardinality(tmp_allocator, rb1_bin, rb2_bin, cardinality, op))) {
+    LOG_WARN("failed to get roaringbitmap claculate cardinality", K(ret), K(op));
   }
-
   if (OB_FAIL(ret)) {
   } else if (is_res_null) {
     res.set_null();
   } else {
-    ObRbUtils::calc_cardinality(rb1, rb2, cardinality, op);
     res.set_uint(cardinality);
   }
-  ObRbUtils::rb_destroy(rb1);
-  ObRbUtils::rb_destroy(rb2);
   return ret;
 }
 

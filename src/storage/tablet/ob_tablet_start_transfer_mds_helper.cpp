@@ -1254,7 +1254,7 @@ int ObTabletStartTransferInHelper::check_can_skip_replay_(
       ObTabletHandle tablet_handle;
       ObTablet *tablet = nullptr;
       const ObTabletMapKey key(ls->get_ls_id(), tablet_meta.tablet_id_);
-      if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
+      if (OB_FAIL(ObTabletCreateDeleteHelper::replay_mds_get_tablet(key, ls, tablet_handle))) {
         if (OB_TABLET_NOT_EXIST == ret) {
           skip_replay = false;
           ret = OB_SUCCESS;

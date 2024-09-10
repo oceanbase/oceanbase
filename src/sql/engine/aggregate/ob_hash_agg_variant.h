@@ -21,7 +21,7 @@ namespace oceanbase
 namespace sql
 {
 
-
+const static int8_t skew_heap_size = 15;
 using HashAggSetPtr = boost::variant<ObExtendHashTableVec<ObGroupRowBucket> *,
                                      ObExtendHashTableVec<ObGroupRowBucketInline> *>;
 
@@ -206,16 +206,75 @@ struct GetNextBatchVisitor : public boost::static_visitor<int>
 {
   GetNextBatchVisitor(const ObCompactRow **rows,
                       const int64_t max_rows,
-                      int64_t &read_rows) : rows_(rows), max_rows_(max_rows),
-                                            read_rows_(read_rows) {}
+                      int64_t &read_rows,
+                      common::ObArray<std::pair<const ObCompactRow *, int32_t>>
+                        &popular_array_temp,
+                      uint64_t &total_load_rows,
+                      bool get_top_n_item) : rows_(rows), max_rows_(max_rows),
+                                            read_rows_(read_rows),
+                                            popular_array_temp_(popular_array_temp),
+                                            total_load_rows_(total_load_rows),
+                                            get_top_n_item_(get_top_n_item) {}
   template <typename T>
   int operator() (T &t)
   {
-    return t->get_next_batch(rows_, max_rows_, read_rows_);
+    return t->get_next_batch(rows_, max_rows_, read_rows_, popular_array_temp_,
+      total_load_rows_, get_top_n_item_);
   }
   const ObCompactRow **rows_;
   int64_t max_rows_;
   int64_t &read_rows_;
+  common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp_;
+  uint64_t &total_load_rows_;
+  bool get_top_n_item_;
+};
+
+struct ProcessPopularValueBatchVisitor : public boost::static_visitor<int>
+{
+  ProcessPopularValueBatchVisitor(ObBatchRows *result_brs,
+                                  const common::ObIArray<ObExpr *> &exprs,
+                                  const common::ObIArray<int64_t> &lengths,
+                                  uint64_t *hash_vals,
+                                  int64_t dop,
+                                  uint64_t &by_pass_rows,
+                                  const uint64_t check_valid_threshold,
+                                  int64_t &agg_row_cnt,
+                                  int64_t &agg_group_cnt,
+                                  char **batch_old_rows,
+                                  char **batch_new_rows,
+                                  common::hash::ObHashMap<uint64_t, uint64_t,
+                                  hash::NoPthreadDefendMode> *popular_map)
+                                  : result_brs_(result_brs),
+                                    exprs_(exprs),
+                                    lengths_(lengths),
+                                    hash_vals_(hash_vals),
+                                    dop_(dop),
+                                    by_pass_rows_(by_pass_rows),
+                                    check_valid_threshold_(check_valid_threshold),
+                                    agg_row_cnt_(agg_row_cnt),
+                                    agg_group_cnt_(agg_group_cnt),
+                                    batch_old_rows_(batch_old_rows),
+                                    batch_new_rows_(batch_new_rows),
+                                    popular_map_(popular_map){}
+  template <typename T>
+  int operator() (T &t)
+  {
+    return t->process_popular_value_batch(result_brs_, exprs_, lengths_, hash_vals_, dop_,
+       by_pass_rows_, check_valid_threshold_, agg_row_cnt_, agg_group_cnt_, batch_old_rows_,
+      batch_new_rows_, popular_map_);
+  }
+  ObBatchRows *result_brs_;
+  const common::ObIArray<ObExpr *> &exprs_;
+  const common::ObIArray<int64_t> &lengths_;
+  uint64_t *hash_vals_;
+  int64_t dop_;
+  uint64_t &by_pass_rows_;
+  const uint64_t check_valid_threshold_;
+  int64_t &agg_row_cnt_;
+  int64_t &agg_group_cnt_;
+  char **batch_old_rows_;
+  char **batch_new_rows_;
+  common::hash::ObHashMap<uint64_t, uint64_t, hash::NoPthreadDefendMode> *popular_map_;
 };
 
 struct AppendBatchVisitor : public boost::static_visitor<int>
@@ -488,9 +547,32 @@ public:
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
 
-  int get_next_batch(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows)
+  int get_next_batch(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows,
+    common::ObArray<std::pair<const ObCompactRow *, int32_t>> &popular_array_temp,
+    uint64_t &total_load_rows, bool get_top_n_item)
   {
-    GetNextBatchVisitor visitor(rows, max_rows, read_rows);
+    GetNextBatchVisitor visitor(rows, max_rows, read_rows, popular_array_temp,
+      total_load_rows, get_top_n_item);
+    return boost::apply_visitor(visitor, hash_table_ptr_);
+  }
+
+  int process_popular_value_batch(ObBatchRows *result_brs,
+                                  const common::ObIArray<ObExpr *> &exprs,
+                                  const common::ObIArray<int64_t> &lengths,
+                                  uint64_t *hash_vals,
+                                  int64_t dop,
+                                  uint64_t &by_pass_rows,
+                                  const uint64_t check_valid_threshold,
+                                  int64_t &agg_row_cnt,
+                                  int64_t &agg_group_cnt,
+                                  char **batch_old_rows,
+                                  char **batch_new_rows,
+                                  common::hash::ObHashMap<uint64_t, uint64_t,
+                                  hash::NoPthreadDefendMode> *popular_map)
+  {
+    ProcessPopularValueBatchVisitor visitor(result_brs, exprs, lengths, hash_vals, dop, by_pass_rows,
+      check_valid_threshold, agg_row_cnt, agg_group_cnt, batch_old_rows,
+      batch_new_rows, popular_map);
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
 

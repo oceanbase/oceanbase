@@ -39,7 +39,7 @@ public:
   ObRFBloomFilterMsg() : phase_(), bloom_filter_(),
       next_peer_addrs_(allocator_), expect_first_phase_count_(0),
       piece_size_(0), filter_indexes_(allocator_), receive_count_array_(allocator_),
-      filter_idx_(nullptr), create_finish_(nullptr), need_send_msg_(true), is_finish_regen_(false),
+      filter_idx_(0), create_finish_(false), need_send_msg_(true), is_finish_regen_(false),
       use_rich_format_(false) {}
   ~ObRFBloomFilterMsg() { destroy(); }
   virtual int assign(const ObP2PDatahubMsgBase &) final;
@@ -63,6 +63,9 @@ public:
       const ObBitVector &skip,
       const EvalBound &bound,
       ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx) override final;
+
+  int insert_bloom_filter_with_hash_values(const ObBatchRows *child_brs,
+                                           uint64_t *batch_hash_values);
   int insert_by_row_vector(
       const ObBatchRows *child_brs,
       const common::ObIArray<ObExpr *> &expr_array,
@@ -96,6 +99,9 @@ public:
   int atomic_merge(ObP2PDatahubMsgBase &other_msg);
   inline void set_use_rich_format(bool value) { use_rich_format_ = value; }
   inline bool get_use_rich_format() const { return use_rich_format_; }
+
+  inline void set_use_hash_join_seed(bool value) { use_hash_join_seed_ = value; }
+  inline bool use_hash_join_seed() const { return use_hash_join_seed_; }
 private:
   int calc_hash_value(
       const common::ObIArray<ObExpr *> &expr_array,
@@ -126,11 +132,12 @@ public:
   int64_t piece_size_;
   common::ObFixedArray<BloomFilterIndex, common::ObIAllocator> filter_indexes_;
   common::ObFixedArray<BloomFilterReceiveCount, common::ObIAllocator> receive_count_array_;
-  int64_t *filter_idx_; //for shared msg
-  bool *create_finish_; //for shared msg
+  int64_t filter_idx_; //for shared msg
+  bool create_finish_; //for shared msg
   bool need_send_msg_;  //for shared msg, when drain_exch, msg is not need to be sent
   bool is_finish_regen_;
   bool use_rich_format_;
+  bool use_hash_join_seed_ {false};
 };
 
 class ObRFRangeFilterMsg : public ObP2PDatahubMsgBase

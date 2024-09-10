@@ -60,6 +60,10 @@ public:
   OB_INLINE uint64_t get_spatial_mbr_col_id() const { return spatial_mbr_col_id_; }
   OB_INLINE int64_t get_multivalue_col_id() const { return multivalue_col_id_; }
   OB_INLINE int64_t get_multivalue_array_col_id() const { return multivalue_arr_col_id_; }
+  OB_INLINE int64_t get_vec_id_col_id() const { return vec_id_col_id_; }
+  OB_INLINE int64_t get_vec_vector_col_id() const { return vec_vector_col_id_; }
+  OB_INLINE ObString get_vec_index_param() const { return vec_index_param_; }
+  OB_INLINE int64_t get_vec_dim() const { return vec_dim_; }
   OB_INLINE int64_t get_lob_inrow_threshold() const { return lob_inrow_threshold_; }
   OB_INLINE int64_t get_column_count() const { return columns_.count(); }
   OB_INLINE const Columns &get_columns() const { return columns_; }
@@ -81,7 +85,11 @@ public:
   OB_INLINE bool is_fts_index_aux() const { return share::schema::is_fts_index_aux(index_type_); }
   OB_INLINE bool is_multivalue_index() const { return share::schema::is_multivalue_index(index_type_); }
   OB_INLINE bool is_multivalue_index_aux() const { return share::schema::is_multivalue_index_aux(index_type_); }
+  OB_INLINE bool is_vector_delta_buffer() const { return share::schema::is_vec_delta_buffer_type(index_type_); }
+  OB_INLINE bool is_vector_index_id() const { return share::schema::is_vec_index_id_type(index_type_); }
+  OB_INLINE bool is_vector_index_snapshot() const { return share::schema::is_vec_index_snapshot_data_type(index_type_); }
   OB_INLINE bool is_index_local_storage() const { return share::schema::is_index_local_storage(index_type_); }
+  OB_INLINE bool is_vector_index() const { return share::schema::is_vec_index(index_type_); }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
 
@@ -132,6 +140,10 @@ private:
   uint64_t multivalue_col_id_;
   uint64_t multivalue_arr_col_id_;
   int64_t data_table_rowkey_column_num_;
+  uint64_t vec_id_col_id_;
+  ObString vec_index_param_;
+  int64_t vec_dim_;
+  uint64_t vec_vector_col_id_;
 };
 
 class ObTableDMLParam

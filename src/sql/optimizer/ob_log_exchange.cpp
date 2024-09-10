@@ -363,7 +363,9 @@ int ObLogExchange::compute_op_ordering()
   } else if (is_producer()) {
     // for FULL_INPUT_SAMPLE, we cache all rows in transmit and send in random range
     // to avoid send to one worker at one time if input order is the same with %sort_keys_
-    is_local_order_ = FULL_INPUT_SAMPLE == sample_type_;
+    if (FULL_INPUT_SAMPLE == sample_type_) {
+      is_local_order_ = true;
+    }
   } else if (is_consumer()) {
     if (is_merge_sort_) {
       if (OB_UNLIKELY(sort_keys_.empty())) {
@@ -648,6 +650,8 @@ int ObLogExchange::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (NULL != partition_id_expr_ && OB_FAIL(all_exprs.push_back(partition_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+  } else if (NULL != ddl_slice_id_expr_ && OB_FAIL(all_exprs.push_back(ddl_slice_id_expr_))) {
+    LOG_WARN("failed to push back exprs", K(ret));
   } else if (NULL != random_expr_ && OB_FAIL(all_exprs.push_back(random_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else {
@@ -1041,6 +1045,7 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   int ret = OB_SUCCESS;
   is_fixed = expr == calc_part_id_expr_ ||
              expr == partition_id_expr_ ||
+             expr == ddl_slice_id_expr_ ||
              expr == random_expr_;
   return OB_SUCCESS;
 }

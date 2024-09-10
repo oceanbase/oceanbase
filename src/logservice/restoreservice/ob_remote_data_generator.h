@@ -53,7 +53,7 @@ struct RemoteDataBuffer
   LSN cur_lsn_;
   LSN end_lsn_;
   palf::MemoryStorage mem_storage_;
-  palf::PalfIterator<palf::MemoryIteratorStorage, LogEntryType> iter_;
+  palf::PalfIterator<LogEntryType> iter_;
 
   RemoteDataBuffer() { reset(); }
   ~RemoteDataBuffer() { reset(); }
@@ -153,6 +153,7 @@ public:
   virtual int advance_step_lsn(const palf::LSN &lsn) = 0;
   bool is_valid() const;
   bool is_fetch_to_end() const;
+  int set_io_context(const palf::LogIOContext &io_ctx) { io_ctx_ = io_ctx; return OB_SUCCESS; }
   TO_STRING_KV(K_(tenant_id), K_(id), K_(start_lsn), K_(next_fetch_lsn), K_(end_scn),
       K_(end_lsn), K_(to_end));
 
@@ -177,6 +178,7 @@ protected:
   LSN end_lsn_;
   bool to_end_;
   logservice::ObLogExternalStorageHandler *log_ext_handler_;
+  palf::LogIOContext io_ctx_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(RemoteDataGenerator);

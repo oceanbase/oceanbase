@@ -76,7 +76,7 @@ public:
                            const int32_t agg_col_id, const char *data, const int32_t data_len)
   {
     int ret = OB_SUCCESS;
-    UNUSED(data_len);
+    UNUSEDx(data_len);
     ObEvalCtx &ctx = agg_ctx.eval_ctx_;
     int64_t res_data = *reinterpret_cast<const int64_t *>(data);
     int64_t output_idx = ctx.get_batch_idx();
@@ -155,6 +155,20 @@ public:
         count--;
       }
     }
+    return ret;
+  }
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    const char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const int64_t &curr_data = *reinterpret_cast<const int64_t *>(curr_agg_cell);
+    int64_t &rollup_data = *reinterpret_cast<int64_t *>(rollup_agg_cell);
+    rollup_data += curr_data;
     return ret;
   }
   TO_STRING_KV("aggregate", "count");

@@ -335,6 +335,10 @@ DEF_CAP_WITH_CHECKER(_hidden_sys_tenant_memory, OB_CLUSTER_PARAMETER, "0M",
         common::ObConfigTenantMemoryChecker, "[0M,)",
         "the size of the memory reserved for hidden sys tenant, 0M means follow the adjusting value.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP_WITH_CHECKER(_ss_hidden_sys_tenant_data_disk_size, OB_CLUSTER_PARAMETER, "0M",
+        common::ObConfigTenantDataDiskChecker, "[0M,)",
+        "the size of the data disk reserved for hidden sys tenant in shared storage mode, 0M means follow the adjusting value.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(location_cache_cpu_quota, OB_CLUSTER_PARAMETER, "5", "[0,10]",
         "the number of vCPUs allocated for the requests regarding location "
         "info of the core tables. Range: [0,10] in integer",
@@ -937,10 +941,28 @@ DEF_INT(fuse_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "fuse row ca
 DEF_INT(storage_meta_cache_priority, OB_CLUSTER_PARAMETER, "10", "[1,)", "storage meta cache priority. Range:[1, )",
         ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// shared storage local disk cache config
+DEF_INT(_ss_major_compaction_prewarm_level, OB_TENANT_PARAMETER, "0", "[0, 2]",
+        "the level of major compaction prewarm in shared storage mode. Range: [0, 2] "
+        "0: prewarm both meta and data, 1: only prewarm meta, 2: prewarm none of meta and data. "
+        "this prewarm level should be set before one round of major compaction.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ss_replica_prewarm, OB_TENANT_PARAMETER, "True",
+         "specifies whether enable replica prewarm in shared storage mode. "
+         "Value: True:turned on;  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ss_micro_cache_memory_percentage, OB_TENANT_PARAMETER, "20", "[1,50]",
+        "the percentage of tenant memory size used by microblock_cache in shared_stoarge mode, 0 means follow the "
+        "adjusting value. Range: [1, 50]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //background limit config
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
         "io timeout for data storage, Range [1s,600s]. "
         "The default value is 10s",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_object_storage_io_timeout, OB_TENANT_PARAMETER, "20s", "[1s,1200s]",
+        "io timeout for object storage, Range [1s,1200s]. "
+        "The default value is 20s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(data_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s", "[1s,300s]",
         "time to tolerate disk read failure, after that, the disk status will be set warning. Range [1s,300s]. The default value is 5s",
@@ -960,6 +982,10 @@ DEF_INT_WITH_CHECKER(disk_io_thread_count, OB_CLUSTER_PARAMETER, "8",
                      "[2,32]",
                      "The number of io threads on each disk. The default value is 8. Range: [2,32] in even integer",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(sync_io_thread_count, OB_CLUSTER_PARAMETER, "0",
+        "[0,1024]",
+        "The number of io threads for synchronizing request on each device. The default value is 0. Range: [0,1024] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_io_callback_thread_count, OB_TENANT_PARAMETER, "0", "[0,64]",
         "The number of io callback threads. The default value is 0. Range: [0,64] in integer. If not specified, The number of threads is dynamically configured according to the memory size",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1773,6 +1799,9 @@ DEF_TIME(_balance_wait_killing_transaction_end_threshold, OB_TENANT_PARAMETER, "
          "the threshold for waiting time after killing transactions until they end."
          "Range: [10ms, 60s]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hgby_skew_detection, OB_TENANT_PARAMETER, "True",
+         "specifies whether hgby skew detection is enabled",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
         "Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1945,6 +1974,10 @@ DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      "SQL SSL control options, used to specify the minimum SSL/TLS version number. "
                      "values: none, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(shared_log_retention, OB_TENANT_PARAMETER, "1d", "[0s,7d]",
+        "Retention time of log files on shared storage",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // obkv
 DEF_MODE_WITH_PARSER(_obkv_feature_mode, OB_CLUSTER_PARAMETER, "", common::ObKvFeatureModeParser,
     "_obkv_feature_mode is a option list to control specified OBKV features on/off.",
@@ -2063,6 +2096,26 @@ DEF_BOOL(_enable_dbms_job_package, OB_CLUSTER_PARAMETER, "True",
          "Control whether can use DBMS_JOB package.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// for shared storage mode
+DEF_TIME(_ss_new_leader_overwrite_delay, OB_TENANT_PARAMETER, "60s", "[1s,)",
+         "the delay time for new leader to write ss obj, Range: [1s, )"
+         "Range: [1s, )",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_ss_deleted_tablet_gc_time, OB_TENANT_PARAMETER, "5d", "[0,365d]",
+         "the GC time for deleted tablet in shared dir,"
+         "Range: [0,365d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_ss_old_ver_retention_time, OB_TENANT_PARAMETER, "5d", "[0,365d]",
+         "the retention time of old compaction version data in shared dir,"
+         "Range: [0,365d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_ss_migration_prewarm, OB_TENANT_PARAMETER, "True",
+         "Control whether open migration prewarm",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable OBKV feature.",
@@ -2083,9 +2136,31 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+// regexp engine
+DEF_STR_WITH_CHECKER(_regex_engine, OB_TENANT_PARAMETER, "ICU",
+                     common::ObConfigRegexpEngineChecker,
+                     "specifies the regexp engine. Values: ICU(International Components for Unicode), Hyperscan",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_preset_runtime_bloom_filter_size, OB_CLUSTER_PARAMETER, "False",
+         "Whether build runtime bloom filter with row count estimated by optimizor."
+         "Value:  True:turned on  False: turned off",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_check_trigger_const_variables_assign, OB_TENANT_PARAMETER, "True",
         "Used to control whether an error is reported when assigning a value to a const variable in a trigger under an Oracle tenant",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_CAP(errsim_max_key_set_size, OB_CLUSTER_PARAMETER, "2M", "[0M,)",
+        "max key set size, it used to test migrating warmup rpc reconnect"
+        "Range: [0M,)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_unit_gc_wait, OB_CLUSTER_PARAMETER, "True",
          "Used to control enable or disable the unit smooth gc feature, enabled by default.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
+        "[0,100)",
+        "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -24,7 +24,8 @@
 #define private public
 #include "share/ob_thread_pool.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/tmp_file/ob_tmp_file_io_define.h"
+#include "storage/tmp_file/ob_tmp_file_io_info.h"
+#include "storage/tmp_file/ob_tmp_file_io_handle.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase
@@ -448,8 +449,8 @@ void TestMultiTmpFileStress::run1()
   std::cout << "normal case, fd: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "open file success", K(fd));
-  ObTmpFileHandle file_handle;
-  ret = MTL(ObTenantTmpFileManager *)->get_tmp_file(fd, file_handle);
+  tmp_file::ObTmpFileHandle file_handle;
+  ret = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_tmp_file(fd, file_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   file_handle.get()->page_idx_cache_.max_bucket_array_capacity_ = ObTmpFileWBPIndexCache::INIT_BUCKET_ARRAY_CAPACITY * 2;
   file_handle.reset();

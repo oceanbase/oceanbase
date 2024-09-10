@@ -31,7 +31,7 @@
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/test_dml_common.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/ob_storage_schema.h"
 #include "share/scn.h"
 #include "storage/test_schema_prepare.h"
@@ -217,7 +217,7 @@ void TestCompactionPolicy::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // ls service cannot service before ObServerCheckpointSlogHandler starts running
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   // create ls
   ObLSHandle ls_handle;
   ret = TestDmlCommon::create_ls(TEST_TENANT_ID, ObLSID(TEST_LS_ID), ls_handle);
@@ -288,6 +288,7 @@ int TestCompactionPolicy::mock_sstable(
   } else {
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
+    param.filled_tx_scn_ = table_key.get_end_scn();
   }
 
   void *buf = nullptr;
@@ -442,7 +443,8 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (FALSE_IT(need_generate_cs_replica_cg_array = ls_handle.get_ls()->is_cs_replica() && create_tablet_schema.is_row_store() && create_tablet_schema.is_user_data_table())) {
   } else if (OB_FAIL(tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, tablet_id,
-      SCN::min_scn(), snapshot_version, create_tablet_schema, need_empty_major_table, need_generate_cs_replica_cg_array, ls_handle.get_ls()->get_freezer()))) {
+      SCN::min_scn(), snapshot_version, create_tablet_schema, need_empty_major_table,
+      false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {

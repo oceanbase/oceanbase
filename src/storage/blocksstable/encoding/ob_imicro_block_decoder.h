@@ -64,7 +64,8 @@ public:
       const int64_t vec_offset,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      sql::ObExprPtrIArray &exprs) = 0;
+      sql::ObExprPtrIArray &exprs,
+      const bool need_init_vector) = 0;
 
 protected:
   virtual int find_bound(const ObDatumRange &range, const int64_t begin_idx, int64_t &row_idx,

@@ -101,6 +101,8 @@ public:
       return ret;
     }
 
+    bool is_rebuilding(const int64_t id) const { return false; }
+
     void run1()
     {
       share::ObTenantBase tenant_base(OB_SYS_TENANT_ID);
@@ -144,6 +146,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
 {
@@ -202,6 +205,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
       break;
     } else {
       sleep(2);
+      PALF_LOG(INFO, "wait gc", K(leader_min_block_id));
     }
   }
 
@@ -234,9 +238,11 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
   // check block_id
   block_id_t rebuild_server_min_block_id;
   // get block_id may be executed when all blocks are deleted, so wait for OB_SUCCESS
-  while (OB_SUCCESS != rebuild_server->palf_handle_impl_->get_min_block_info_for_gc(rebuild_server_min_block_id, min_scn))
+  int ret = OB_SUCCESS;
+  while (OB_SUCCESS != (ret = rebuild_server->palf_handle_impl_->get_min_block_info_for_gc(rebuild_server_min_block_id, min_scn)))
   {
     sleep(1);
+    PALF_LOG(INFO, "wait get_min_block_info_for_gc", K(ret));
   }
   EXPECT_EQ(2, rebuild_server_min_block_id);
   // check base_lsn
@@ -255,6 +261,10 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
   EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->set_base_lsn(LSN(64*6*MB)));
   sleep(1);
   EXPECT_EQ(OB_SUCCESS, update_disk_options(new_leader_idx, 30));
+  leader.reset();
+  new_leader.reset();
+  rebuild_server->reset();
+  delete_paxos_group(id);
   PALF_LOG(INFO, "end test old_leader_rebuild", K(id));
 }
 
@@ -297,13 +307,17 @@ TEST_F(TestObSimpleLogClusterRebuild, test_follower_rebuild)
       break;
     } else {
       sleep(2);
+      PALF_LOG(INFO, "wait gc", K(leader_min_block_id));
     }
   }
   EXPECT_EQ(recycle_lsn, leader.palf_handle_impl_->log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_);
 
   // follower_idx will trigger rebuild when fetching log
   unblock_net(leader_idx, follower_idx);
-  sleep(10);
+  // check log sync and wait rebuild
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id, 6 * 1024));
+  EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn(), leader.palf_handle_impl_->get_end_lsn());
+  EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn(), rebuild_server->palf_handle_impl_->get_max_lsn());
   PalfBaseInfo base_info_in_leader;
   PalfBaseInfo base_info_after_rebuild;
   // check block_id
@@ -320,8 +334,10 @@ TEST_F(TestObSimpleLogClusterRebuild, test_follower_rebuild)
   leader_end_lsn = leader.palf_handle_impl_->get_end_lsn();
   rebuild_server_end_lsn = rebuild_server->palf_handle_impl_->get_end_lsn();
   PALF_LOG(INFO, "rebuild result", K(leader_end_lsn), K(rebuild_server_end_lsn));
-  // EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
+  leader.reset();
+  rebuild_server->reset();
   revert_cluster_palf_handle_guard(palf_list);
+  EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
   PALF_LOG(INFO, "end test follower_rebuild", K(id));
 }
 
@@ -367,6 +383,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_leader_cannot_rebuild)
   leader.reset();
   new_leader.reset();
   EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
+  update_disk_options(leader_idx, 30);
   PALF_LOG(INFO, "end test_leader_cannot_rebuild", K(id));
 }
 

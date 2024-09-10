@@ -15,6 +15,7 @@
 #include "rpc/frame/ob_req_transport.h"
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"
 #include "share/scn.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 
 namespace oceanbase
 {
@@ -30,7 +31,8 @@ struct ObMajorFreezeParam
 public:
   ObMajorFreezeParam()
     : freeze_info_array_(), freeze_all_(false),
-      freeze_all_user_(false), freeze_all_meta_(false), transport_(nullptr)
+      freeze_all_user_(false), freeze_all_meta_(false),
+      freeze_reason_(MF_REASON_MAX), transport_(nullptr)
   {}
 
   void reset()
@@ -39,6 +41,7 @@ public:
     freeze_all_ = false;
     freeze_all_user_ = false;
     freeze_all_meta_ = false;
+    freeze_reason_ = MF_REASON_MAX;
     transport_ = nullptr;
   }
 
@@ -50,12 +53,14 @@ public:
   int add_freeze_info(const uint64_t tenant_id);
 
   TO_STRING_KV(K_(freeze_info_array), K_(freeze_all),
-               K_(freeze_all_user), K_(freeze_all_meta), KP_(transport));
+               K_(freeze_all_user), K_(freeze_all_meta),
+               "freeze_reason", major_freeze_reason_to_str(freeze_reason_), KP_(transport));
 
   common::ObArray<obrpc::ObSimpleFreezeInfo> freeze_info_array_;
   bool freeze_all_;
   bool freeze_all_user_;
   bool freeze_all_meta_;
+  ObMajorFreezeReason freeze_reason_;
   rpc::frame::ObReqTransport *transport_;
 };
 
@@ -151,10 +156,12 @@ private:
 
   static int do_major_freeze(
       const rpc::frame::ObReqTransport &transport,
+      const ObMajorFreezeReason freeze_reason,
       const common::ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array,
       common::ObIArray<int> &merge_results);
   static int do_one_tenant_major_freeze(
       const rpc::frame::ObReqTransport &transport,
+      const ObMajorFreezeReason freeze_reason,
       const obrpc::ObSimpleFreezeInfo &freeze_info);
 
   static int do_tenant_admin_merge(

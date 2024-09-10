@@ -2272,8 +2272,7 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
     bool is_null = false;
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null, is_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
-    } else if (is_not_null && !expr->is_const_raw_expr() && 
-               NULL != constraints &&
+    } else if (is_not_null && NULL != constraints &&
                OB_FAIL(constraints->push_back(const_cast<ObRawExpr*>(expr)))) {
       LOG_WARN("failed to push back constraint expr", K(ret));
     }
@@ -11240,15 +11239,10 @@ int ObTransformUtils::check_correlated_exprs_can_pullup(const ObIArray<ObExecPar
       //do nothing
     } else if (OB_FAIL(check_can_pullup_conds(subquery, has_special_expr))) {
       LOG_WARN("failed to check can pullup conds", K(ret));
-    } else if (OB_FAIL(is_table_item_correlated(exec_params,
-                                                subquery,
-                                                is_correlated))) {
-      LOG_WARN("failed to check", K(ret));
-    } else if (is_correlated) {
-      can_pullup = false;
-    } else if (OB_FAIL(is_join_conditions_correlated(exec_params,
-                                                     &subquery, is_correlated))) {
-      LOG_WARN("failed to check join condition correlated", K(ret));
+    } else if (OB_FAIL(is_from_item_correlated(exec_params,
+                                               subquery,
+                                               is_correlated))) {
+      LOG_WARN("failed to check if from item contains correlated exprs", K(ret));
     } else if (is_correlated) {
       can_pullup = false;
     } else if (OB_FAIL(check_correlated_having_expr_can_pullup(exec_params,
@@ -11616,31 +11610,31 @@ int ObTransformUtils::check_can_pullup_conds(const ObSelectStmt &view, bool &has
 }
 
 // link.zt why not considering set stmt ?
-int ObTransformUtils::is_table_item_correlated(
-    const ObIArray<ObExecParamRawExpr *> &exec_params, const ObSelectStmt &subquery, bool &contains)
+int ObTransformUtils::is_from_item_correlated(
+    const ObIArray<ObExecParamRawExpr *> &exec_params, const ObSelectStmt &subquery, bool &is_correlated)
 {
   int ret = OB_SUCCESS;
   int64_t N = subquery.get_table_size();
-  contains = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !contains && i < N; ++i) {
+  is_correlated = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < N; ++i) {
     const TableItem *table = subquery.get_table_item(i);
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table should not be NULL", K(ret), K(table));
     } else if (table->is_generated_table() ||
                table->is_lateral_table()) {
-      if (OB_FAIL(is_correlated_subquery(exec_params, table->ref_query_, contains))) {
+      if (OB_FAIL(is_correlated_subquery(exec_params, table->ref_query_, is_correlated))) {
         LOG_WARN("check if subquery correlated failed", K(ret));
       }
     } else if (table->is_function_table()) {
-      if (OB_FAIL(is_correlated_expr(exec_params, table->function_table_expr_, contains))) {
+      if (OB_FAIL(is_correlated_expr(exec_params, table->function_table_expr_, is_correlated))) {
         LOG_WARN("failed to check function table expr correlated", K(ret));
       }
     } else if (table->is_json_table()) {
       if (OB_ISNULL(table->json_table_def_->doc_expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_expr_, contains))) {
+      } else if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_expr_, is_correlated))) {
         LOG_WARN("failed to check function table expr correlated", K(ret));
       }
     } else if (table->is_values_table()) {
@@ -11649,30 +11643,18 @@ int ObTransformUtils::is_table_item_correlated(
         LOG_WARN("unexpect null expr", K(ret));
       } else {
         ObIArray<ObRawExpr*> &access_exprs = table->values_table_def_->access_exprs_;
-        for (int64_t j = 0; OB_SUCC(ret) && !contains && j < access_exprs.count(); ++j) {
-          if (OB_FAIL(is_correlated_expr(exec_params, access_exprs.at(j), contains))) {
+        for (int64_t j = 0; OB_SUCC(ret) && !is_correlated && j < access_exprs.count(); ++j) {
+          if (OB_FAIL(is_correlated_expr(exec_params, access_exprs.at(j), is_correlated))) {
             LOG_WARN("failed to check values table expr correlated", K(ret));
           }
         }
       }
     }
   }
-  return ret;
-}
-
-// check joined table on conditions and semi info semi condition correlated
-int ObTransformUtils::is_join_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                                    const ObSelectStmt *subquery,
-                                                    bool &is_correlated)
-{
-  int ret = OB_SUCCESS;
-  is_correlated = false;
-  if (OB_ISNULL(subquery)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(subquery), K(ret));
-  } else {
-    const ObIArray<JoinedTable*> &joined_tables = subquery->get_joined_tables();
-    const ObIArray<SemiInfo*> &semi_infos = subquery->get_semi_infos();
+  // check joined table on conditions and semi info semi condition correlated
+  if (OB_SUCC(ret) && !is_correlated) {
+    const ObIArray<JoinedTable*> &joined_tables = subquery.get_joined_tables();
+    const ObIArray<SemiInfo*> &semi_infos = subquery.get_semi_infos();
     for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < joined_tables.count(); ++i) {
       if (OB_FAIL(check_joined_conditions_correlated(exec_params,
                                                      joined_tables.at(i),
