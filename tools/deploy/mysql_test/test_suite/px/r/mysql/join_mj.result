@@ -73,7 +73,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |        |28      |90          |
+|0 |PX COORDINATOR MERGE SORT  |        |28      |89          |
 |1 |└─EXCHANGE OUT DISTR       |:EX10000|28      |62          |
 |2 |  └─SORT                   |        |28      |30          |
 |3 |    └─PX PARTITION ITERATOR|        |28      |27          |

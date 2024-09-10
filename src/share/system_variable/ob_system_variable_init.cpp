@@ -7185,7 +7185,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[515].default_value_ = "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90" ;
+      ObSysVars[515].default_value_ = "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90" ;
       ObSysVars[515].info_ = "mock for mysql5.7" ;
       ObSysVars[515].name_ = "ndb_index_stat_option" ;
       ObSysVars[515].data_type_ = ObVarcharType ;
@@ -7193,7 +7193,7 @@ static struct VarsInit{
       ObSysVars[515].id_ = SYS_VAR_NDB_INDEX_STAT_OPTION ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NDB_INDEX_STAT_OPTION)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_NDB_INDEX_STAT_OPTION] = 515 ;
-      ObSysVars[515].base_value_ = "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90" ;
+      ObSysVars[515].base_value_ = "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90" ;
     ObSysVars[515].alias_ = "OB_SV_NDB_INDEX_STAT_OPTION" ;
     }();
 
@@ -9308,7 +9308,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[678].default_value_ = "empty string" ;
+      ObSysVars[678].default_value_ = "empty string" ;
       ObSysVars[678].info_ = "mock for mysql5.7" ;
       ObSysVars[678].name_ = "named_pipe_full_access_group" ;
       ObSysVars[678].data_type_ = ObVarcharType ;
@@ -9316,7 +9316,7 @@ static struct VarsInit{
       ObSysVars[678].id_ = SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_NAMED_PIPE_FULL_ACCESS_GROUP] = 678 ;
-      ObSysVars[678].base_value_ = "empty string" ;
+      ObSysVars[678].base_value_ = "empty string" ;
     ObSysVars[678].alias_ = "OB_SV_NAMED_PIPE_FULL_ACCESS_GROUP" ;
     }();
 
@@ -9926,13 +9926,39 @@ static struct VarsInit{
     ObSysVars[723].alias_ = "OB_SV_ENABLE_PARAMETER_ANONYMOUS_BLOCK" ;
     }();
 
+    [&] (){
+      ObSysVars[724].default_value_ = "10" ;
+      ObSysVars[724].info_ = "Indicate the limit on the number of ranges when optimizer use storage cardinality estimation" ;
+      ObSysVars[724].name_ = "range_index_dive_limit" ;
+      ObSysVars[724].data_type_ = ObIntType ;
+      ObSysVars[724].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[724].id_ = SYS_VAR_RANGE_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_INDEX_DIVE_LIMIT] = 724 ;
+      ObSysVars[724].base_value_ = "10" ;
+    ObSysVars[724].alias_ = "OB_SV_RANGE_INDEX_DIVE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[725].default_value_ = "10" ;
+      ObSysVars[725].info_ = "Indicate the limit on the number of partitions when optimizer use storage cardinality estimation" ;
+      ObSysVars[725].name_ = "partition_index_dive_limit" ;
+      ObSysVars[725].data_type_ = ObIntType ;
+      ObSysVars[725].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[725].id_ = SYS_VAR_PARTITION_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARTITION_INDEX_DIVE_LIMIT] = 725 ;
+      ObSysVars[725].base_value_ = "10" ;
+    ObSysVars[725].alias_ = "OB_SV_PARTITION_INDEX_DIVE_LIMIT" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 724;
+static int64_t var_amount = 726;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

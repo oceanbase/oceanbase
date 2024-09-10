@@ -96,7 +96,10 @@ struct ObOptParamHint
     DEF(INLIST_REWRITE_THRESHOLD,)        \
     DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,) \
+    DEF(CARDINALITY_ESTIMATION_MODEL,) \
     DEF(_PUSH_JOIN_PREDICATE,)   \
+    DEF(RANGE_INDEX_DIVE_LIMIT,) \
+    DEF(PARTITION_INDEX_DIVE_LIMIT,) \
     DEF(ENABLE_ENUM_SET_SUBSCHEMA,)       \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
@@ -115,6 +118,26 @@ struct ObOptParamHint
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
+
+  template<typename T>
+  using GET_PARAM_FUNC = int (ObOptParamHint::*)(const OptParamType, T&) const;
+  template<typename T, GET_PARAM_FUNC<T> PARAM_FUNC>
+  int inner_get_sys_var(const OptParamType param_type,
+                        const ObSQLSessionInfo *session,
+                        const share::ObSysVarClassType sys_var_id,
+                        T &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  int64_t &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  bool &val) const;
+  int get_enum_sys_var(const OptParamType param_type,
+                       const ObSQLSessionInfo *session,
+                       const share::ObSysVarClassType sys_var_id,
+                       int64_t &val) const;
   bool empty() const { return param_types_.empty();  }
   void reset();
   TO_STRING_KV(K_(param_types), K_(param_vals));

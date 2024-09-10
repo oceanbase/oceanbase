@@ -740,6 +740,8 @@ namespace share
   static const char* const OB_SV_KV_MODE = "ob_kv_mode";
   static const char* const OB_SV___OB_CLIENT_CAPABILITY_FLAG = "__ob_client_capability_flag";
   static const char* const OB_SV_ENABLE_PARAMETER_ANONYMOUS_BLOCK = "ob_enable_parameter_anonymous_block";
+  static const char* const OB_SV_RANGE_INDEX_DIVE_LIMIT = "range_index_dive_limit";
+  static const char* const OB_SV_PARTITION_INDEX_DIVE_LIMIT = "partition_index_dive_limit";
 
 }
 }

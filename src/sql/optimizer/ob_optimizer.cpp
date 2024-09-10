@@ -804,20 +804,30 @@ int ObOptimizer::init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo 
   int ret = OB_SUCCESS;
   ObEstCorrelationModel* correlation_model = NULL;
   int64_t type = 0;
-  bool has_hint = false;
+  bool has_new_hint = false;
   if (OB_ISNULL(ctx_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ctx", K(ret));
   } else if (ctx_.get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_4) {
     type = static_cast<int64_t>(ObEstCorrelationType::INDEPENDENT);
-  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, has_hint))) {
+  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::CARDINALITY_ESTIMATION_MODEL, has_new_hint))) {
     LOG_WARN("failed to check whether has hint param", K(ret));
-  } else if (has_hint) {
-    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, type))) {
-      LOG_WARN("failed to get bool hint param", K(ret));
+  } else {
+    /**
+     * 'cardinality_estimation_model' is same as the name of the system variable.
+     * 'correlation_for_cardinality_estimation' should be deprecated.
+     * So the former has a higher priority.
+    */
+    ObOptParamHint::OptParamType opt_param_type = ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION;
+    if (has_new_hint) {
+      opt_param_type = ObOptParamHint::CARDINALITY_ESTIMATION_MODEL;
     }
-  } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_CARDINALITY_ESTIMATION_MODEL, type))) {
-    LOG_WARN("failed to get sys variable", K(ret));
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_sys_var(opt_param_type,
+                                                                    &session,
+                                                                    share::SYS_VAR_CARDINALITY_ESTIMATION_MODEL,
+                                                                    type))) {
+      LOG_WARN("failed to get hint param", K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(type < 0) ||

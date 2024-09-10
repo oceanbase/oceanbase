@@ -302,8 +302,8 @@ Query Plan
 |2 |  └─PX PARTITION ITERATOR |        |
 |3 |    └─DELETE              |        |
 |4 |      └─NESTED-LOOP JOIN  |        |
-|5 |        ├─TABLE RANGE SCAN|t_p     |
-|6 |        └─TABLE GET       |t_p4    |
+|5 |        ├─TABLE RANGE SCAN|t_p4    |
+|6 |        └─TABLE GET       |t_p     |
 ========================================
 Outputs & filters:
 -------------------------------------
@@ -315,17 +315,17 @@ Outputs & filters:
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
   4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
-      conds(nil), nl_params_([t_p.c1(:0)]), use_batch=true
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
-      access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
+      conds(nil), nl_params_([t_p4.c1(:0)]), use_batch=true
+  5 - output([t_p4.c1]), filter(nil), rowset=16
+      access([t_p4.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
-      range_key([t_p.c1]), range[5 ; MAX), 
-      range_cond([t_p.c1 >= 5])
-  6 - output(nil), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p[0-3])
+      range_key([t_p4.c1]), range[5 ; MAX), 
+      range_cond([t_p4.c1 >= 5])
+  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+      access([GROUP_ID], [t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
-      range_key([t_p4.c1]), range(MIN ; MAX), 
-      range_cond([:0 = t_p4.c1])
+      range_key([t_p.c1]), range(MIN ; MAX), 
+      range_cond([t_p.c1 = :0])
 explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
 Query Plan
 ======================================================
