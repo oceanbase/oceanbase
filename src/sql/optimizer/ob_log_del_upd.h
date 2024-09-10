@@ -371,6 +371,7 @@ protected:
    // 当前的DML算子作为partition id expr的consumer添加到ctx中
   // partition id 列是pdml操作中特有的一个column.
   int generate_pdml_partition_id_expr();
+  int generate_ddl_slice_id_expr();
 
   int print_table_infos(const ObString &prefix,
                         char *buf,
@@ -429,6 +430,7 @@ protected:
 private:
   // 如果是PDML，那么对应的DML算子（insert，update，delete）需要一个partition id expr
   ObRawExpr *pdml_partition_id_expr_;
+  ObRawExpr *ddl_slice_id_expr_;
   bool pdml_is_returning_; // 如果计划是pdml计划，表示当前逻辑算子转化为的物理算子是否需要吐/返回行
   // add for error logging
   ObErrLogDefine err_log_define_;

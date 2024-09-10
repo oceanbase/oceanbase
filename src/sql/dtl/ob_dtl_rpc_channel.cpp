@@ -232,8 +232,9 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
     } else if (OB_ISNULL(linked_buffer = alloc_buf(buffer->size()))){
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate buffer", K(ret));
+    } else if (OB_FAIL(ObDtlLinkedBuffer::assign(*buffer, linked_buffer))) {
+      LOG_WARN("failed to assign buffer", K(ret));
     } else {
-      ObDtlLinkedBuffer::assign(*buffer, linked_buffer);
       if (1 == linked_buffer->seq_no() && linked_buffer->is_data_msg()
           && 0 != get_recv_buffer_cnt()) {
         ret = OB_ERR_UNEXPECTED;

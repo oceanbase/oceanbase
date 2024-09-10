@@ -15,6 +15,7 @@
 
 #include "common/row/ob_row_store.h"
 #include "sql/engine/aggregate/ob_groupby_op.h"
+#include "sql/engine/basic/ob_hp_infrastructure_manager.h"
 
 namespace oceanbase
 {
@@ -41,7 +42,10 @@ class ObScalarAggregateOp : public ObGroupByOp
 public:
   friend ObAggregateProcessor;
   ObScalarAggregateOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
-    : ObGroupByOp(exec_ctx, spec, input), started_(false), dir_id_(-1)
+    : ObGroupByOp(exec_ctx, spec, input), started_(false), dir_id_(-1),
+      profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+      sql_mem_processor_(profile_, op_monitor_info_),
+      hp_infras_mgr_(MTL_ID())
   {
   }
 
@@ -54,12 +58,17 @@ public:
   virtual void destroy() override;
   // reset default value of %cur_rownum_ && %rownum_limit_
 private:
+  int init_hp_infras_group_mgr();
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObScalarAggregateOp);
 
 private:
   bool started_;
   int64_t dir_id_;
+  ObSqlWorkAreaProfile profile_;
+  ObSqlMemMgrProcessor sql_mem_processor_;
+  HashPartInfrasMgr hp_infras_mgr_;
 };
 
 } // end namespace sql

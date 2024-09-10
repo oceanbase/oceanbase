@@ -73,6 +73,7 @@ public:
       }
       return ret;
     }
+    bool is_rebuilding(const int64_t id) const { return false; }
   public:
     TestObSimpleLogClusterTruncate *test_base_;
     int64_t server_idx_;
@@ -84,6 +85,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 5;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 TEST_F(TestObSimpleLogClusterTruncate, truncate_log)
 {

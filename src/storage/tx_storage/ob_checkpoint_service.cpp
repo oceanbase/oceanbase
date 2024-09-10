@@ -182,7 +182,7 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
           checkpoint_lsn = archive_lsn;
         }
         if (OB_FAIL(ls->get_log_handler()->advance_base_lsn(checkpoint_lsn))) {
-          ARCHIVE_LOG(WARN, "advance base lsn failed", K(ret), K(checkpoint_lsn));
+          STORAGE_LOG(WARN, "advance base lsn failed", K(ret), K(checkpoint_lsn));
         } else {
           FLOG_INFO("[CHECKPOINT] advance palf base lsn successfully",
               K(checkpoint_lsn), K(ls->get_ls_id()));
@@ -198,77 +198,6 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
       }
     }
   }
-}
-
-bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
-{
-  int ret = OB_SUCCESS;
-  bool get_disk_usage_threshold_success = false;
-  // avod clog disk full
-  logservice::ObLogService *log_service = nullptr;
-  if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "get_log_service failed", K(ret));
-  } else {
-    int64_t used_size = 0;
-    int64_t total_size = 0;
-    if (OB_FAIL(log_service->get_palf_disk_usage(used_size, total_size))) {
-      STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
-    } else {
-      threshold = total_size * NEED_FLUSH_CLOG_DISK_PERCENT / 100;
-      get_disk_usage_threshold_success = true;
-    }
-  }
-
-  return get_disk_usage_threshold_success;
-}
-
-bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t threshold, const bool need_update_checkpoint_scn)
-{
-  int ret = OB_SUCCESS;
-  ObLSIterator *iter = NULL;
-  common::ObSharedGuard<ObLSIterator> guard;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  bool cannot_recycle_log_over_threshold = false;
-  int64_t cannot_recycle_log_size = 0;
-  if (OB_ISNULL(ls_svr)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
-    STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
-  } else if (OB_ISNULL(iter = guard.get_ptr())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "iter is NULL", K(ret));
-  } else {
-    ObLS *ls = nullptr;
-    int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      ObLSHandle ls_handle;
-      ObCheckpointExecutor *checkpoint_executor = nullptr;
-      if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD))) {
-        STORAGE_LOG(WARN, "get log stream failed", K(ret), K(ls->get_ls_id()));
-      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls->get_ls_id()));
-      } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
-      } else if (need_update_checkpoint_scn && OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
-        STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls->get_ls_id()));
-      } else {
-        cannot_recycle_log_size += checkpoint_executor->get_cannot_recycle_log_size();
-      }
-    }
-    if (ret == OB_ITER_END) {
-      if (cannot_recycle_log_size > threshold) {
-        cannot_recycle_log_over_threshold = true;
-      }
-      STORAGE_LOG(INFO, "cannot_recycle_log_size statistics",
-                  K(cannot_recycle_log_size), K(threshold), K(need_update_checkpoint_scn));
-    }
-  }
-
-  return cannot_recycle_log_over_threshold;
 }
 
 int ObCheckPointService::flush_to_recycle_clog_()
@@ -292,14 +221,23 @@ int ObCheckPointService::flush_to_recycle_clog_()
     int64_t ls_cnt = 0;
     int64_t succ_ls_cnt = 0;
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      if (OB_TMP_FAIL(ls->flush_to_recycle_clog())) {
+      ObCheckpointExecutor *checkpoint_executor = ls->get_checkpoint_executor();
+      ObDataCheckpoint *data_checkpoint = ls->get_data_checkpoint();
+      if (OB_ISNULL(checkpoint_executor) || OB_ISNULL(data_checkpoint)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "checkpoint_executor or data_checkpoint should not be null",
+                    KP(checkpoint_executor), KP(data_checkpoint));
+      } else if (data_checkpoint->is_flushing()) {
+        STORAGE_LOG(TRACE, "data_checkpoint is flushing");
+      } else if (OB_TMP_FAIL(checkpoint_executor->update_clog_checkpoint())) {
+        STORAGE_LOG(WARN, "update_clog_checkpoint failed", KR(tmp_ret), KP(checkpoint_executor), KP(data_checkpoint));
+      } else if (OB_TMP_FAIL(ls->flush_to_recycle_clog())) {
         STORAGE_LOG(WARN, "flush ls to recycle clog failed", KR(tmp_ret), KPC(ls));
-        tmp_ret = OB_SUCCESS;
       } else {
         ++succ_ls_cnt;
       }
     }
-    STORAGE_LOG(DEBUG, "finish flush if need", KR(ret), K(ls_cnt), K(succ_ls_cnt));
+    STORAGE_LOG(DEBUG, "finish flush to recycle clog", KR(ret), K(ls_cnt), K(succ_ls_cnt));
 
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
@@ -359,21 +297,15 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
 {
   STORAGE_LOG(INFO, "====== check clog disk timer task ======");
   int ret = OB_SUCCESS;
-  int64_t threshold_size = INT64_MAX;
   bool need_flush = false;
-  if (checkpoint_service_.get_disk_usage_threshold_(threshold_size)) {
-    if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size,
-        false /* not udpate clog_checkpoint_scn */ )) {
-      // update clog_checkpoint_scn, double check
-      if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size,
-          true /* update clog_checkpoint_scn */ )) {
-        need_flush = true;
-      }
-    }
-  }
-
-  if (need_flush && OB_FAIL(checkpoint_service_.flush_to_recycle_clog_())) {
-    STORAGE_LOG(ERROR, "flush to recycle clog failed", K(ret), K(need_flush));
+  logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+  if (OB_ISNULL(log_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "unexpected error, ObLogService is nullptr", KP(log_service));
+  } else if (OB_FAIL(log_service->check_need_do_checkpoint(need_flush))) {
+    STORAGE_LOG(WARN, "check_need_do_checkpoint failed", KP(log_service));
+  } else if (need_flush) {
+    (void)checkpoint_service_.flush_to_recycle_clog_();
   }
 }
 

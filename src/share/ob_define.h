@@ -563,6 +563,8 @@ inline bool &get_replay_is_writing_throttling()
   return (&is_writing_throttling)->v_;
 }
 ///////////////////////////////////
+//max concurrency for log external upload
+const int64_t OB_MAX_LOG_UPLOAD_CONCURRENCY = 16;
 
 enum ObDmlEventType
 {
@@ -578,6 +580,7 @@ const char *const ARBITRATION_MODE_STR = "arbitration";
 const char *const FLASHBACK_VERIFY_MODE_STR = "physical_flashback_verify";
 const char *const DISABLED_CLUSTER_MODE_STR = "disabled_cluster";
 const char *const DISABLED_WITH_READONLY_CLUSTER_MODE_STR = "disabled_with_readonly_cluster";
+const char *const SHARED_STORAGE_MODE_STR = "shared_storage";
 
 static const int64_t MODIFY_GC_SNAPSHOT_INTERVAL = 2 * 1000 * 1000; //2s
 

@@ -27,6 +27,10 @@ class ObLocalIOCB : public common::ObIOCB
 public:
   ObLocalIOCB() : iocb_() {}
   virtual ~ObLocalIOCB() {}
+  virtual ObIOCBType get_type() const override
+  {
+    return ObIOCBType::IOCB_TYPE_LOCAL;
+  }
 private:
   friend class ObLocalDevice;
   struct iocb iocb_;
@@ -37,6 +41,10 @@ class ObLocalIOContext : public common::ObIOContext
 public:
   ObLocalIOContext() : io_context_() {}
   virtual ~ObLocalIOContext() {}
+  virtual ObIOContextType get_type() const override
+  {
+    return ObIOContextType::IO_CONTEXT_TYPE_LOCAL;
+  }
 private:
   friend class ObLocalDevice;
   io_context_t io_context_;
@@ -47,6 +55,10 @@ class ObLocalIOEvents : public common::ObIOEvents
 public:
   ObLocalIOEvents();
   virtual ~ObLocalIOEvents();
+  virtual ObIOEventsType get_type() const override
+  {
+    return ObIOEventsType::IO_EVENTS_TYPE_LOCAL;
+  }
   virtual int64_t get_complete_cnt() const override;
   virtual int get_ith_ret_code(const int64_t i) const override;
   virtual int get_ith_ret_bytes(const int64_t i) const override;
@@ -76,6 +88,8 @@ public:
   virtual int mkdir(const char *pathname, mode_t mode) override;
   virtual int rmdir(const char *pathname) override;
   virtual int unlink(const char *pathname) override;
+  virtual int batch_del_files(
+      const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx) override;
   virtual int rename(const char *oldpath, const char *newpath) override;
   virtual int seal_file(const common::ObIOFd &fd) override;
   virtual int scan_dir(const char *dir_name, int (*func)(const dirent *entry)) override;
@@ -134,6 +148,21 @@ public:
     const int64_t size,
     int64_t &write_size) override;
 
+  virtual int upload_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const int64_t part_id,
+    int64_t &write_size) override;
+  virtual int buf_append_part(
+    const ObIOFd &fd,
+    const char *buf,
+    const int64_t size,
+    const uint64_t tenant_id,
+    bool &is_full) override;
+  virtual int get_part_id(const ObIOFd &fd, bool &is_exist, int64_t &part_id) override;
+  virtual int get_part_size(const ObIOFd &fd, const int64_t part_id, int64_t &part_size) override;
+
   //async io interfaces
   virtual int io_setup(
     uint32_t max_events,
@@ -164,7 +193,7 @@ public:
     int64_t min_nr,
     common::ObIOEvents *events,
     struct timespec *timeout) override;
-  virtual common::ObIOCB *alloc_iocb() override;
+  virtual common::ObIOCB *alloc_iocb(const uint64_t tenant_id) override;
   virtual common::ObIOEvents *alloc_io_events(const uint32_t max_events) override;
   virtual void free_iocb(common::ObIOCB *iocb) override;
   virtual void free_io_events(common::ObIOEvents *io_event) override;
@@ -185,27 +214,10 @@ private:
   int get_data_disk_used_percentage_(
       const int64_t required_size,
       int64_t &percent) const;
-  int get_block_file_size(
-    const char *sstable_dir,
-    const int64_t reserved_size,
-    const int64_t block_size,
-    const int64_t suggest_file_size,
-    const int64_t disk_percentage,
-    int64_t &block_file_size);
-  int open_block_file(
-    const char *store_dir,
-    const char *sstable_dir,
-    const int64_t block_size,
-    const int64_t file_size,
-    const int64_t disk_percentage,
-    const int64_t reserved_size,
-    bool &is_exist);
   int resize_block_file(const int64_t new_size);
   int64_t get_block_file_offset(const common::ObIOFd &fd, const int64_t offset);
   int try_punch_hole(const int64_t block_index);
-  static int pread_impl(const int64_t fd, void *buf, const int64_t size, const int64_t offset, int64_t &read_size);
-  static int pwrite_impl(const int64_t fd, const void *buf, const int64_t size, const int64_t offset, int64_t &write_size);
-  static int convert_sys_errno();
+
 private:
   static const int64_t DEFUALT_PRE_ALLOCATED_IOCB_COUNT = 32 * 512;// 32 thread * max_io_depth
 

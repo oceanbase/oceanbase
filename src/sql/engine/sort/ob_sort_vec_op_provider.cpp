@@ -180,7 +180,7 @@ int ObSortVecOpProvider::init(ObSortVecOpContext &context)
   } else if (OB_INVALID_ID == context.tenant_id_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(context.tenant_id_));
-  } else if (OB_ISNULL(context.sk_exprs_) || OB_ISNULL(context.addon_exprs_)
+  } else if (OB_ISNULL(context.sk_exprs_) || (context.has_addon_ && OB_ISNULL(context.addon_exprs_))
              || OB_ISNULL(context.sk_collations_) || OB_ISNULL(context.eval_ctx_)
              || OB_ISNULL(context.exec_ctx_)) {
     ret = OB_INVALID_ARGUMENT;

@@ -23,7 +23,8 @@ TG_DEF(TEST6, test6, MAP_QUEUE_THREAD, 2)
 TG_DEF(TEST8, test8, REENTRANT_THREAD_POOL, 1)
 // other
 TG_DEF(MEMORY_DUMP, memDump, THREAD_POOL, 1)
-// TG_DEF(SchemaRefTask, SchemaRefTask, DEDUP_QUEUE, 1, 1024, 1024, 1L << 30, 512L << 20, common::OB_MALLOC_BIG_BLOCK_SIZE, "SchemaDedupQueu")
-// TG_DEF(replica_control, replica_control, THREAD_POOL, 1)
+TG_DEF(SchemaRefTask, SchemaRefTask, DEDUP_QUEUE, 1, 1024, 1024, 1L << 30, 512L << 20, common::OB_MALLOC_BIG_BLOCK_SIZE, "SchemaDedupQueu")
+TG_DEF(replica_control, replica_control, THREAD_POOL, 1)
+TG_DEF(QUEUE_THREAD_MANAGER, qth_mgr, THREAD_POOL, 1)
 TG_DEF(SYSLOG_COMPRESS, SyslogCompress, THREAD_POOL, 1)
 #endif

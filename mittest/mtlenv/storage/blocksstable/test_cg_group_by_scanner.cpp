@@ -67,6 +67,7 @@ public:
   sql::ObEvalCtx eval_ctx_;
   sql::ObPushdownExprSpec expr_spec_;
   sql::ObPushdownOperator op_;
+  sql::ObBitVector *skip_bit_;
 };
 
 TestCGGroupByScanner::TestCGGroupByScanner()
@@ -96,6 +97,7 @@ void TestCGGroupByScanner::reset()
   agg_expr_type_.reset();
   datum_buf_ = nullptr;
   datum_buf_offset_ = 0;
+  skip_bit_ = nullptr;
   allocator_.reset();
 }
 
@@ -331,7 +333,9 @@ void TestCGGroupByScanner::prepare_test_case(const bool is_reverse_scan)
   eval_ctx_.batch_size_ = SQL_BATCH_SIZE;
   expr_spec_.max_batch_size_ = SQL_BATCH_SIZE;
   datum_buf_ = allocator_.alloc((sizeof(sql::ObDatum) + OBJ_DATUM_NUMBER_RES_SIZE) * DATUM_ARRAY_CNT * 2 * (output_expr_cnt + agg_expr_cnt));
+  skip_bit_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(SQL_BATCH_SIZE)));
   ASSERT_NE(nullptr, datum_buf_);
+  ASSERT_NE(nullptr, skip_bit_);
   eval_ctx_.frames_ = (char **)(&datum_buf_);
 
   output_cols_project_.set_allocator(&allocator_);
@@ -382,7 +386,7 @@ TEST_F(TestCGGroupByScanner, test_init)
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
   ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
-  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
+  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_, skip_bit_);
   vector_store.group_by_cell_ = &group_by_cell;
   context_.block_row_store_ = &vector_store;
 
@@ -404,7 +408,7 @@ TEST_F(TestCGGroupByScanner, test_decide_group_size)
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
   ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
-  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
+  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_, skip_bit_);
   vector_store.group_by_cell_ = &group_by_cell;
   context_.block_row_store_ = &vector_store;
 
@@ -429,7 +433,7 @@ TEST_F(TestCGGroupByScanner, test_decide_can_group_by)
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
   ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
-  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
+  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_, skip_bit_);
   vector_store.group_by_cell_ = &group_by_cell;
   context_.block_row_store_ = &vector_store;
 
@@ -460,7 +464,7 @@ TEST_F(TestCGGroupByScanner, test_read_distinct)
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
   ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
-  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
+  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_, skip_bit_);
   vector_store.group_by_cell_ = &group_by_cell;
   context_.block_row_store_ = &vector_store;
 
@@ -501,7 +505,7 @@ TEST_F(TestCGGroupByScanner, test_read_reference)
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
   ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
-  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
+  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_, skip_bit_);
   vector_store.group_by_cell_ = &group_by_cell;
   context_.block_row_store_ = &vector_store;
 
@@ -551,7 +555,7 @@ TEST_F(TestCGGroupByScanner, test_calc_aggregate_group_by)
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
   ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
-  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
+  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_, skip_bit_);
   vector_store.group_by_cell_ = &group_by_cell;
   context_.block_row_store_ = &vector_store;
 
@@ -630,7 +634,7 @@ TEST_F(TestCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
   ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
-  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
+  ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_, skip_bit_);
   vector_store.group_by_cell_ = &group_by_cell;
   context_.block_row_store_ = &vector_store;
 

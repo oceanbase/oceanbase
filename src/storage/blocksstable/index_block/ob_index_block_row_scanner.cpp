@@ -1626,6 +1626,40 @@ int ObIndexBlockRowScanner::open(
   return ret;
 }
 
+int ObIndexBlockRowScanner::open(const MacroBlockId &macro_id,
+                                 const ObMicroBlockData &idx_block_data)
+{
+  int ret = OB_SUCCESS;
+  ObDatumRange range;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (OB_UNLIKELY(!macro_id.is_valid() || !idx_block_data.is_valid()
+      || !idx_block_data.is_index_block())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to open an index micro block", K(ret), K(idx_block_data), K_(is_normal_cg), K(macro_id));
+  } else if (OB_FAIL(init_by_micro_data(idx_block_data))) {
+    LOG_WARN("Fail to init scanner by micro data", K(ret), K(idx_block_data));
+  } else if (OB_ISNULL(iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("iter is null", K(index_format_), K(ret));
+  } else if (FALSE_IT(range.set_whole_range())) {
+  } else if (OB_FAIL(locate_range(range, true /* is_left_border */, true /* is_right_border */))) {
+    if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
+      LOG_WARN("Fail to locate range", K(ret));
+    }
+  } else {
+    macro_id_ = macro_id;
+    parent_row_range_.reset();
+    parent_row_range_.start_row_id_ = 0;
+    is_left_border_ = true;
+    is_right_border_ = true;
+    range_idx_ = 0;
+    is_get_ = false;
+  }
+  return ret;
+}
+
 int ObIndexBlockRowScanner::get_next(
     ObMicroIndexInfo &idx_block_row,
     const bool is_multi_check,

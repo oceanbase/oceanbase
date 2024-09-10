@@ -125,6 +125,12 @@ private:
       common::ObString &str,
       common::ObIAllocator &allocator) const;
 
+  int convert_collection_to_text_(
+    const common::ObObj &obj,
+    common::ObString &str,
+    const common::ObIArray<common::ObString> &extended_type_info,
+    common::ObIAllocator &allocator) const;
+
 private:
   bool                          inited_;
   IObCDCTimeZoneInfoGetter      *timezone_info_getter_;

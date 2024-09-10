@@ -163,11 +163,11 @@ TEST_F(TestRefCnt, server_super_block)
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(des_sb.get_serialize_size(), pos);
 
-  ret = OB_SERVER_BLOCK_MGR.write_super_block(super_block);
+  ret = OB_SERVER_BLOCK_MGR.write_super_block(super_block, OB_STORAGE_OBJECT_MGR.super_block_buf_holder_);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObServerSuperBlock ret_sb;
-  ret = OB_SERVER_BLOCK_MGR.read_super_block(ret_sb);
+  ret = OB_SERVER_BLOCK_MGR.read_super_block(ret_sb,  OB_STORAGE_OBJECT_MGR.super_block_buf_holder_);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ASSERT_EQ(super_block.body_.macro_block_size_, ret_sb.body_.macro_block_size_);

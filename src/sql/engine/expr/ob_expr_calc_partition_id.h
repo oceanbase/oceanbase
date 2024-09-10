@@ -90,6 +90,12 @@ public:
     OPT_ROUTE_NONE,
     OPT_ROUTE_HASH_ONE
   };
+  enum class PartType {
+    HASH,
+    KEY,
+    RANGE,
+    LIST
+  };
   explicit ObExprCalcPartitionBase(common::ObIAllocator &alloc, ObExprOperatorType type,
                                    const char *name, int32_t param_num, int32_t dimension)
     : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
@@ -116,6 +122,10 @@ public:
                                       ObDatum &res_datum);
   static int calc_partition_level_one_vector(const ObExpr &expr, ObEvalCtx &ctx,
                                              const ObBitVector &skip, const EvalBound &bound);
+  static int fast_calc_partition_level_one_vector(const ObExpr &expr,
+                                                  ObEvalCtx &ctx,
+                                                  const ObBitVector &skip,
+                                                  const EvalBound &bound);
   static int calc_partition_level_two(const ObExpr &expr,
                                       ObEvalCtx &ctx,
                                       ObDatum &res_datum);

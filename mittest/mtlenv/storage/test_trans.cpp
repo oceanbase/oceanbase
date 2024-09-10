@@ -105,7 +105,7 @@ public:
     ObClusterVersion::get_instance().tenant_config_mgr_ = &omt::ObTenantConfigMgr::get_instance();
 
     ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-    ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
   }
   static void TearDownTestCase()
   {
@@ -164,8 +164,8 @@ void TestTrans::create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls)
 void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot snapshot, const char* ins_str)
 {
   int64_t affected_rows = 0;
-  ObMockNewRowIterator ins_iter;
-  ASSERT_EQ(OB_SUCCESS, ins_iter.from(ins_str));
+  ObMockDatumRowIterator ins_iter;
+  ASSERT_EQ(OB_SUCCESS, ins_iter.from_for_datum(ins_str));
 
   ObArenaAllocator allocator;
   share::schema::ObTableDMLParam table_dml_param(allocator);

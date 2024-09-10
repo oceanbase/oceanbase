@@ -173,7 +173,8 @@ int TestArchiveCheckpointMgr::generate_simple_files(const ObStorageType &type)
       LOG_WARN("failed to join path", K(ret));
     } else if (OB_FAIL(util.mk_parent_dir(tmp_root_path.get_ptr(), &storage_info_))) {
       LOG_WARN("failed to mk dir", K(ret));
-    } else if (OB_FAIL(util.write_single_file(tmp_root_path.get_ptr(), &storage_info_, buf, sizeof(buf)))) {
+    } else if (OB_FAIL(util.write_single_file(tmp_root_path.get_ptr(), &storage_info_, buf, sizeof(buf),
+                                              ObStorageIdMod::get_default_archive_id_mod()))) {
       LOG_WARN("failed to write dir less", K(ret));
     }
   }

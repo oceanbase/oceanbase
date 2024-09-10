@@ -69,7 +69,7 @@ public:
     row_cnt_ = 0;
     stored_row_cnt_ = 0;
     output_row_idx_ = 0;
-    ra_reader_.reset();
+    ra_reader_.~RAReader();
     ra_rs_.reset();
     local_mem_limit_version_ = 0;
   }

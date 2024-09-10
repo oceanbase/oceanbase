@@ -39,7 +39,7 @@
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/high_availability/ob_tablet_transfer_info.h"
 #include "storage/tablet/ob_tablet_space_usage.h"
-
+#include "storage/blocksstable/ob_major_checksum_info.h"
 namespace oceanbase
 {
 namespace storage
@@ -68,7 +68,8 @@ public:
       const int64_t snapshot_version,
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
-      const int64_t create_schema_version);
+      const int64_t create_schema_version,
+      const bool micro_index_clustered);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const int64_t snapshot_version,
@@ -104,7 +105,6 @@ public:
   // mds_checkpoint_scn and ddl_checkpoint_scn.
   // Note, if a new type of checkpoint scn is added, donot forget to modify the returned scn.
   share::SCN get_max_replayed_scn() const;
-
 public:
   static int deserialize_id(
       const char *buf,
@@ -114,6 +114,10 @@ public:
       common::ObTabletID &tablet_id);
   static int init_report_info(
       const blocksstable::ObSSTable *sstable,
+      const int64_t report_version,
+      ObTabletReportStatus &report_status);
+  static int init_report_info(
+      const blocksstable::ObMajorChecksumInfo &major_ckm_info,
       const int64_t report_version,
       ObTabletReportStatus &report_status);
   static int update_meta_last_persisted_committed_tablet_status(
@@ -150,42 +154,44 @@ public:
                K_(last_persisted_committed_tablet_status),
                K_(create_schema_version),
                K_(space_usage),
+               K_(micro_index_clustered),
                K_(ddl_table_type));
 
 public:
-  int32_t version_;
-  int32_t length_;
+  int32_t version_; // alignment: 4B, size: 4B
+  int32_t length_; // alignment: 4B, size: 4B
   share::ObLSID ls_id_; // alignment: 8B, size: 8B
   common::ObTabletID tablet_id_; // alignment: 8B, size: 8B
-  common::ObTabletID data_tablet_id_;
-  common::ObTabletID ref_tablet_id_;
-  share::SCN create_scn_; // alignment: 8B, size: 8B
-  share::SCN start_scn_;
-  share::SCN clog_checkpoint_scn_; // may less than last_minor->end_log_ts
-  share::SCN ddl_checkpoint_scn_;
-  // snapshot_version of last minor
-  int64_t snapshot_version_;
-  int64_t multi_version_start_;
-  ObTabletHAStatus ha_status_;
-  ObTabletReportStatus report_status_; // alignment: 8B, size: 32B
-  ObTabletTableStoreFlag table_store_flag_;
-  share::SCN ddl_start_scn_;
-  int64_t ddl_snapshot_version_;
+  common::ObTabletID data_tablet_id_; // alignment: 8B, size: 8B
+  common::ObTabletID ref_tablet_id_; // alignment: 8B, size: 8B
+  share::SCN create_scn_; // alignment: 8B, size: 8B create_tablet_scn, not create_tablet_version_scn
+  share::SCN start_scn_; // alignment: 8B, size: 8B
+  share::SCN clog_checkpoint_scn_; // may less than last_minor->end_log_ts. alignment: 8B, size: 8B
+  share::SCN ddl_checkpoint_scn_; // alignment: 8B, size: 8B
+  int64_t snapshot_version_; // alignment: 8B, size: 8B
+  int64_t multi_version_start_; // alignment: 8B, size: 8B
+  ObTabletHAStatus ha_status_; // alignment: 8B, size: 8B
+  ObTabletReportStatus report_status_; // alignment: 8B, size: 40B
+  ObTabletTableStoreFlag table_store_flag_; // alignment: 8B, size: 8B
+  share::SCN ddl_start_scn_; // alignment: 8B, size: 8B
+  int64_t ddl_snapshot_version_; // alignment: 8B, size: 8B
   // max_sync_storage_schema_version_ = MIN(serialized_schema_version, sync_schema_version)
   // serialized_schema_version > sync_schema_version when major update storage schema
   // sync_schema_version > serialized_schema_version when replay schema clog but not mini merge yet
   // max_sync_storage_schema_version will be inaccurate after 4.2
-  int64_t max_sync_storage_schema_version_;
-  int64_t ddl_execution_id_;
-  int64_t ddl_data_format_version_;
-  int64_t max_serialized_medium_scn_; // abandon after 4.2
-  share::SCN ddl_commit_scn_;
-  share::SCN mds_checkpoint_scn_;
+  int64_t max_sync_storage_schema_version_; // alignment: 8B, size: 8B
+  int64_t ddl_execution_id_; // alignment: 8B, size: 8B
+  int64_t ddl_data_format_version_; // alignment: 8B, size: 8B
+  int64_t max_serialized_medium_scn_; // abandon after 4.2 // alignment: 8B, size: 8B
+  share::SCN ddl_commit_scn_; // alignment: 8B, size: 8B
+  share::SCN mds_checkpoint_scn_; // alignment: 8B, size: 8B
   ObTabletTransferInfo transfer_info_; // alignment: 8B, size: 32B
   compaction::ObExtraMediumInfo extra_medium_info_;
   ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // quick access for tablet status in sstables
   ObTabletSpaceUsage space_usage_; // calculated by tablet persist, ObMigrationTabletParam doesn't need it
+                                   // alignment: 8B, size: 48B
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
+                                  // alignment: 8B, size: 8B
   // add after 4.3.3, is used to decide storage type for replaying ddl clog and create ddl dump sstable in cs replica.
   // when offline ddl is concurrent with adding C-Replica, it may write row store clog, but storage schema in C-Replica is columnar.
   // so need persist a field in tablet when replaying start log to decide table_type when restart from a checkpoint, or migrating, etc.
@@ -197,7 +203,9 @@ public:
   // and tablet meta init interface for migration.
   // yuque :
   lib::Worker::CompatMode compat_mode_; // alignment: 1B, size: 4B
-  bool has_next_tablet_;
+  bool has_next_tablet_; // alignment: 1B, size: 2B
+  bool is_empty_shell_; // alignment: 1B, size: 2B
+  bool micro_index_clustered_; // alignment: 1B, size: 2B
 
 private:
   void update_extra_medium_info(
@@ -279,7 +287,9 @@ public:
                K_(mds_checkpoint_scn),
                K_(mds_data),
                K_(transfer_info),
-               K_(create_schema_version));
+               K_(create_schema_version),
+               K_(micro_index_clustered),
+               K_(major_ckm_info));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -330,6 +340,8 @@ public:
   ObTabletFullMemoryMdsData mds_data_;
   ObTabletTransferInfo transfer_info_;
   int64_t create_schema_version_;
+  bool micro_index_clustered_;
+  blocksstable::ObMajorChecksumInfo major_ckm_info_; // from table store
   ObITable::TableType ddl_table_type_;
 
   // Add new serialization member before this line, below members won't serialize

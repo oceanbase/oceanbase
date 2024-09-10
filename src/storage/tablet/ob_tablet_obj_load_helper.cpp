@@ -12,7 +12,7 @@
 
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "lib/allocator/page_arena.h"
-#include "storage/blockstore/ob_shared_block_reader_writer.h"
+#include "storage/blockstore/ob_shared_object_reader_writer.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 
 #define USING_LOG_PREFIX STORAGE
@@ -37,14 +37,14 @@ int ObTabletObjLoadHelper::read_from_addr(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("the meta disk address type is not supported", K(ret), K(meta_addr));
   } else {
-    ObSharedBlockReadInfo read_info;
+    ObSharedObjectReadInfo read_info;
     read_info.addr_ = meta_addr;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+    read_info.ls_epoch_ = 0; /* ls_epoch for share storage */
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
-
-    ObSharedBlockReadHandle io_handle(allocator);
-    if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, io_handle))) {
+    ObSharedObjectReadHandle io_handle(allocator);
+    if (OB_FAIL(ObSharedObjectReaderWriter::async_read(read_info, io_handle))) {
       LOG_WARN("fail to async read", K(ret), K(read_info));
     } else if (OB_FAIL(io_handle.wait())) {
       LOG_WARN("fail to wait io_hanlde", K(ret), K(read_info));

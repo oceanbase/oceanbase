@@ -59,6 +59,7 @@ int ObExprRegexpCount::calc_result_typeN(ObExprResType &type,
     if (OB_SUCC(ret)) {
       bool is_case_sensitive = ObCharset::is_bin_sort(types[0].get_calc_collation_type());
       bool need_utf8 = false;
+      bool is_use_hs = type_ctx.get_session()->get_enable_hyperscan_regexp_engine();
       switch (param_num) {
         case 4/*match type*/:
           types[3].set_calc_type(ObVarcharType);
@@ -81,7 +82,7 @@ int ObExprRegexpCount::calc_result_typeN(ObExprResType &type,
           need_utf8 = false;
           if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {
             LOG_WARN("fail to check need utf8", K(ret));
-          } else if (need_utf8) {
+          } else if (need_utf8 || is_use_hs) {
             types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
             types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
@@ -90,7 +91,7 @@ int ObExprRegexpCount::calc_result_typeN(ObExprResType &type,
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(0), need_utf8))) {
             LOG_WARN("fail to check need utf8", K(ret));
-          } else if (need_utf8) {
+          } else if (need_utf8 || is_use_hs) {
             types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
             types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
@@ -125,15 +126,16 @@ int ObExprRegexpCount::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr
       const bool const_text = text->is_const_expr();
       const bool const_pattern = pattern->is_const_expr();
       rt_expr.extra_ = (!const_text && const_pattern) ? 1 : 0;
-      rt_expr.eval_func_ = &eval_regexp_count;
+      const bool is_use_hs = op_cg_ctx.session_->get_enable_hyperscan_regexp_engine();
+      rt_expr.eval_func_ = is_use_hs ? eval_hs_regexp_count : eval_regexp_count;
       LOG_TRACE("regexp count expr cg", K(const_text), K(const_pattern), K(rt_expr.extra_));
     }
   }
   return ret;
 }
 
-int ObExprRegexpCount::eval_regexp_count(
-    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+template<typename RegExpCtx>
+int ObExprRegexpCount::regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   ObDatum *text = NULL;
@@ -168,17 +170,17 @@ int ObExprRegexpCount::eval_regexp_count(
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
       int64_t res_count = 0;
-      ObExprRegexContext local_regex_ctx;
-      ObExprRegexContext *regexp_ctx = &local_regex_ctx;
+      RegExpCtx local_regex_ctx;
+      RegExpCtx *regexp_ctx = &local_regex_ctx;
       ObExprRegexpSessionVariables regexp_vars;
       const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
       bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
       uint32_t flags = 0;
-      ObString text_utf16;
+      ObString text_utf;
       ObString text_str;
       bool is_null = true;
       if (reusable) {
-        if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
+        if (NULL == (regexp_ctx = static_cast<RegExpCtx *>(
                     ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
           if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr.expr_ctx_id_, regexp_ctx))) {
             LOG_WARN("create expr regex context failed", K(ret), K(expr));
@@ -190,7 +192,7 @@ int ObExprRegexpCount::eval_regexp_count(
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, flags))) {
+      } else if (OB_FAIL(RegExpCtx::get_regexp_flags(match_param, is_case_sensitive, true, false, flags))) {
         LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
       } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_regexp_session_vars(regexp_vars))) {
         LOG_WARN("fail to get regexp");
@@ -198,7 +200,7 @@ int ObExprRegexpCount::eval_regexp_count(
                  OB_FAIL(regexp_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
                                           regexp_vars,
                                           pattern->get_string(), flags, reusable, expr.args_[1]->datum_meta_.cs_type_))) {
-        LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));
+        LOG_WARN("fail to init regexp", K(pattern->get_string()), K(flags), K(ret));
       } else if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
         if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, text, text_str))) {
           LOG_WARN("get text string failed", K(ret));
@@ -206,26 +208,34 @@ int ObExprRegexpCount::eval_regexp_count(
       } else {
         text_str = text->get_string();
       }
-
+      ObCollationType res_coll_type = CS_TYPE_INVALID;
       if (OB_FAIL(ret)) {
       } else if (text->is_null() || pattern->is_null() ||
                  (position != NULL && position->is_null())) {
         expr_datum.set_null();
       } else {
         is_null = false;
-        if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
-            expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
-          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str, expr.args_[0]->datum_meta_.cs_type_, text_utf16,
-                                ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI,
-                                tmp_alloc))) {
+        const ObCollationType constexpr expected_bin_coll =
+          std::is_same<RegExpCtx, ObExprRegexContext>::value ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF8MB4_BIN;
+        const ObCollationType constexpr expected_ci_coll =
+          std::is_same<RegExpCtx, ObExprRegexContext>::value ? CS_TYPE_UTF16_GENERAL_CI :
+                                                               CS_TYPE_UTF8MB4_GENERAL_CI;
+        res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ?
+                          expected_bin_coll :
+                          expected_ci_coll;
+        if (expr.args_[0]->datum_meta_.cs_type_ != expected_bin_coll
+            && expr.args_[0]->datum_meta_.cs_type_ != expected_ci_coll) {
+          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str,
+                                                           expr.args_[0]->datum_meta_.cs_type_,
+                                                           text_utf, res_coll_type, tmp_alloc))) {
             LOG_WARN("convert charset failed", K(ret));
           }
         } else {
-          text_utf16 = text_str;
+          text_utf = text_str;
         }
       }
       if (OB_FAIL(ret) || is_null) {
-      } else if (OB_FAIL(regexp_ctx->count(tmp_alloc, text_utf16, pos - 1, res_count))) {
+      } else if (OB_FAIL(regexp_ctx->count(tmp_alloc, text_utf, res_coll_type, pos - 1, res_count))) {
         LOG_WARN("failed to regexp count", K(ret));
       } else {
         number::ObNumber nmb;
@@ -241,5 +251,18 @@ int ObExprRegexpCount::eval_regexp_count(
   return ret;
 }
 
+int ObExprRegexpCount::eval_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  return regexp_count<ObExprRegexContext>(expr, ctx, expr_datum);
+}
+
+int ObExprRegexpCount::eval_hs_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+#if defined(__x86_64__)
+  return regexp_count<ObExprHsRegexCtx >(expr, ctx, expr_datum);
+#else
+  return OB_NOT_IMPLEMENT;
+#endif
+}
 }
 }

@@ -182,6 +182,7 @@ public:
   bool is_dirty() const { return OB_NOT_NULL(data_) && pos_ > 0; }
   void reset();
   inline void reuse() { pos_ = 0; }
+  const ObCompactionBufferBlock& get_block_buffer() const { return block_; }
 private:
   int resize(const int64_t size);
   int alloc_block(const int64_t size, ObCompactionBufferBlock &block);

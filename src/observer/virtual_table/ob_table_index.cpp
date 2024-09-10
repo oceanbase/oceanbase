@@ -40,7 +40,8 @@ ObTableIndex::ObTableIndex()
       is_rowkey_end_(false),
       is_normal_end_(false),
       ft_dep_col_idx_(OB_INVALID_ID),
-      min_data_version_(OB_INVALID_VERSION)
+      min_data_version_(OB_INVALID_VERSION),
+      vec_dep_col_idx_(OB_INVALID_ID)
 {
 }
 
@@ -87,6 +88,7 @@ void ObTableIndex::reset()
   simple_index_infos_.reset();
   ft_dep_col_idx_ = OB_INVALID_ID;
   min_data_version_ = OB_INVALID_VERSION;
+  vec_dep_col_idx_ = OB_INVALID_ID;
 }
 
 int ObTableIndex::init(uint64_t tenant_id) {
@@ -628,6 +630,39 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
                                                   dep_column_ids[ft_dep_col_idx_]))) {
               ret = OB_ERR_UNEXPECTED;
               SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(ft_dep_col_idx_));
+            }
+          } else if (index_schema->is_built_in_vec_index()) {
+            is_sub_end = true;
+          } else if (index_schema->is_vec_index()) {
+            uint64_t vec_vector_id = OB_INVALID_ID;
+            if (OB_FAIL(index_schema->get_vec_index_column_id(vec_vector_id))) {
+              LOG_WARN("get generated column id failed", K(ret));
+            } else {
+              ObArray<uint64_t> vec_index_key_column_ids;
+              const ObColumnSchemaV2 *gen_column_schema = NULL;
+              if (OB_INVALID_ID == static_cast<uint64_t>(vec_dep_col_idx_)) {
+                vec_dep_col_idx_ = 0;
+              }
+              if (OB_UNLIKELY(vec_vector_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == vec_vector_id)) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("invalid vec column id", K(ret), K(vec_vector_id));
+              } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(vec_vector_id))) {
+                ret = OB_SCHEMA_ERROR;
+                SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
+              } else if (OB_FAIL(gen_column_schema->get_cascaded_column_ids(vec_index_key_column_ids))) {
+                LOG_WARN("get cascaded column ids from column schema failed", K(ret), K(*gen_column_schema));
+              } else if (vec_index_key_column_ids.count() <= vec_dep_col_idx_) {
+                is_sub_end = true;
+                vec_dep_col_idx_ = OB_INVALID_ID;
+              } else if (OB_FAIL(add_vec_index_column(database_name,
+                                                      table_schema,
+                                                      index_schema,
+                                                      cells,
+                                                      col_count,
+                                                      vec_index_key_column_ids[vec_dep_col_idx_]))) {
+                ret = OB_ERR_UNEXPECTED;
+                SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(vec_dep_col_idx_));
+              }
             }
           } else {
             if (OB_FAIL(add_normal_index_column(database_name,
@@ -1174,6 +1209,193 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
         }
       }
       ++ft_dep_col_idx_;
+    }
+  }
+  return ret;
+}
+
+int ObTableIndex::add_vec_index_column(const ObString &database_name,
+                                       const ObTableSchema &table_schema,
+                                       const ObTableSchema *index_schema,
+                                       ObObj *cells,
+                                       int64_t col_count,
+                                       const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cells) || OB_ISNULL(index_schema) || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "parameter or data member is NULL", K(ret), K(cells), K(index_schema), K(allocator_));
+  } else if (OB_UNLIKELY(cur_row_.count_ < col_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "cells count is less than output column count",
+               K(ret), K(cur_row_.count_), K(col_count));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == vec_dep_col_idx_ || vec_dep_col_idx_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "vec_dep_col_idx_ is wrong", K(ret));
+  } else {
+    const ObColumnSchemaV2 *column_schema = NULL;
+    ObString index_name;
+    char *buf = NULL;
+    int64_t buf_len = number::ObNumber::MAX_PRINTABLE_SIZE;
+    if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+      ret = OB_SCHEMA_ERROR;
+      SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K(column_id));
+    } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for print buffer failed", K(ret), K(buf_len));
+    } else {
+      uint64_t cell_idx = 0;
+      for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
+        uint64_t col_id = output_column_ids_.at(j);
+        switch(col_id) {
+          // table_id
+          case OB_APP_MIN_COLUMN_ID: {
+            cells[cell_idx].set_int(table_schema.get_table_id());
+            break;
+          }
+          // key_name
+          case OB_APP_MIN_COLUMN_ID + 1: {
+            index_name.reset();
+            //  get the original short index name
+            if (OB_FAIL(ObTableSchema::get_index_name(*allocator_,
+                table_schema.get_table_id(), index_schema->get_table_name_str(),
+                index_name))) {
+              SERVER_LOG(WARN, "error get index table name failed", K(ret));
+            } else {
+              cells[cell_idx].set_varchar(index_name);
+              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            }
+            break;
+          }
+          // seq_in_index
+          case OB_APP_MIN_COLUMN_ID + 2: {
+            cells[cell_idx].set_int(vec_dep_col_idx_ + 1);
+            break;
+          }
+          // table_schema
+          case OB_APP_MIN_COLUMN_ID + 3: {
+            cells[cell_idx].set_varchar(database_name);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          // table
+          case OB_APP_MIN_COLUMN_ID + 4: {
+            cells[cell_idx].set_varchar(table_schema.get_table_name_str());
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          // non_unique
+          case OB_APP_MIN_COLUMN_ID + 5: {
+            cells[cell_idx].set_int(1/*non_unique*/);
+            break;
+          }
+          //index_schema
+          case OB_APP_MIN_COLUMN_ID + 6: {
+            cells[cell_idx].set_varchar(database_name);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+            // column_name
+          case OB_APP_MIN_COLUMN_ID + 7: {
+            cells[cell_idx].set_varchar(column_schema->get_column_name());
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+            // collation
+          case OB_APP_MIN_COLUMN_ID + 8: {
+            cells[cell_idx].set_varchar(ObString("A")); //FIXME 全部是升序吗？
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          // cardinality
+          case OB_APP_MIN_COLUMN_ID + 9: {
+            //TODO 索引中唯一值的数目的估计值。通过运行ANALYZE TABLE或myisamchk -a可以更新。
+            //基数根据被存储为整数的统计数据来计数，所以即使对于小型表，该值也没有必要是精确的。
+            //基数越大，当进行联合时，MySQL使用该索引的机会就越大。
+            cells[cell_idx].set_null();
+            break;
+          }
+          // sub_part
+          case OB_APP_MIN_COLUMN_ID + 10: {
+            //TODO 如果列只是被部分地编入索引，则为被编入索引的字符的数目。如果整列被编入索引，则为NULL。
+            cells[cell_idx].reset(); //清空上一行的结果
+            if (column_schema->is_prefix_column()) {
+              //打印前缀索引的长度
+              int64_t pos = 0;
+              if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d", column_schema->get_data_length()))) {
+                LOG_WARN("print prefix column data length failed", K(ret), KPC(column_schema), K(buf), K(buf_len), K(pos));
+              } else {
+                cells[cell_idx].set_varchar(ObString(pos, buf));
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              }
+            }
+            break;
+          }
+          // packed
+          case OB_APP_MIN_COLUMN_ID + 11: {
+            //TODO 指示关键字如何被压缩。如果没有被压缩，则为NULL。
+            cells[cell_idx].set_null();
+            break;
+          }
+          // null
+          case OB_APP_MIN_COLUMN_ID + 12: {
+            if (column_schema->is_rowkey_column()) {
+              cells[cell_idx].set_varchar(ObString(""));
+            } else if (column_schema->is_nullable()) {
+              cells[cell_idx].set_varchar(ObString("YES"));
+            } else {
+              cells[cell_idx].set_varchar(ObString(""));
+            }
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          // index_type
+          case OB_APP_MIN_COLUMN_ID + 13: {
+            cells[cell_idx].set_varchar(ObString("VECTOR"));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          // comment
+          case OB_APP_MIN_COLUMN_ID + 14: {
+            //TODO
+            cells[cell_idx].set_varchar(ObString(ob_index_status_str(index_schema->get_index_status())));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          // index_comment
+          case OB_APP_MIN_COLUMN_ID + 15: {
+            cells[cell_idx].set_varchar(index_schema->get_comment_str());
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case OB_APP_MIN_COLUMN_ID + 16: {
+            const ObString &is_visible = index_schema->is_index_visible() ? "YES" : "NO";
+            cells[cell_idx].set_varchar(is_visible);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          //expression
+          case OB_APP_MIN_COLUMN_ID + 17: {
+            cells[cell_idx].set_null();
+            break;
+          }
+          // is_column_visible
+          case OB_APP_MIN_COLUMN_ID + 18: {
+            cells[cell_idx].set_int(1); // TODO this value is set for SHOW EXTENDED INDEX
+            break;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                       K(output_column_ids_), K(col_id));
+            break;
+           }
+        }
+        if (OB_SUCC(ret)) {
+          ++cell_idx;
+        }
+      }
+      ++vec_dep_col_idx_;
     }
   }
   return ret;

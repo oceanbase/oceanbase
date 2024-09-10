@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include <errno.h>
 #include <gtest/gtest.h>
 #define protected public
@@ -32,12 +34,14 @@
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/ob_i_store.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
+#include "storage/compaction/ob_partition_merge_iter.h"
 #include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "share/scn.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/compaction/ob_compaction_memory_pool.h"
+#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 
 namespace oceanbase
 {
@@ -48,8 +52,6 @@ using namespace storage;
 using namespace share::schema;
 using namespace std;
 static ObSimpleMemLimitGetter getter;
-
-
 // just for test, skip to use
 int ObCompactionBufferWriter::ensure_space(const int64_t size)
 {
@@ -422,16 +424,22 @@ void TestIndexTree::prepare_data()
   //ObSSTable *data_sstable = NULL;
   ObWholeDataStoreDesc data_desc;
   ObMacroBlockWriter writer;
-  ObMacroDataSeq start_seq(0);
   ObRowGenerate data_row_generate;
 
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
 
-  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1, DATA_CURRENT_VERSION);
+  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
+                       ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
+                       table_schema_.get_micro_index_clustered());
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = writer.open(data_desc.get_desc(), start_seq);
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ret = writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObDatumRow row;
@@ -463,7 +471,8 @@ void TestIndexTree::prepare_data()
 
   writer.reset();
 
-  ret = writer.open(data_desc.get_desc(), start_seq);
+  ObSSTablePrivateObjectCleaner another_cleaner;
+  ret = writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, another_cleaner);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   for (int64_t i = border_row_id + 1; i < border_row_id + 10000; ++i) {
@@ -546,7 +555,12 @@ void TestIndexTreeStress::run1()
   //{
     SpinWLockGuard guard(lock_);
     start_seq_->set_parallel_degree(get_thread_idx() + 2);
-    ret = macro_writer->open(data_store_desc_->get_desc(), *start_seq_);
+    ObMacroSeqParam seq_param;
+    seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+    seq_param.start_ = start_seq_->macro_data_seq_;
+    const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+    ObSSTablePrivateObjectCleaner cleaner;
+    ret = macro_writer->open(data_store_desc_->get_desc(), start_seq_->get_parallel_idx(), seq_param, pre_warm_param, cleaner);
   //}
   ASSERT_EQ(OB_SUCCESS, ret);
   static const int64_t MAX_TEST_COLUMN_CNT = TestIndexTree::TEST_COLUMN_CNT + 3;
@@ -588,7 +602,9 @@ void TestIndexTree::prepare_data_desc(ObWholeDataStoreDesc &data_desc,
                                       ObSSTableIndexBuilder *sstable_builder)
 {
   int ret = OB_SUCCESS;
-  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1, DATA_CURRENT_VERSION);
+  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
+                       ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
+                       table_schema_.get_micro_index_clustered());
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -601,7 +617,8 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
   share::SCN scn;
   scn.convert_for_tx(SNAPSHOT_VERSION);
   const bool is_ddl = false;
-  ASSERT_EQ(OB_SUCCESS, desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION));
+  ASSERT_EQ(OB_SUCCESS, desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
+  MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/));
   ObIArray<ObColDesc> &col_descs = desc.get_desc().col_desc_->col_desc_array_;
   for (int64_t i = 0; i < col_descs.count(); ++i) {
     if (col_descs.at(i).col_type_.type_ == ObIntType) {
@@ -619,7 +636,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
   cg_schema.column_idxs_ = cg_cols;
 
   ASSERT_EQ(OB_SUCCESS, data_desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
-                    MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION,
+                    MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/,
                     scn, &cg_schema, 0));
   data_desc.get_desc().static_desc_->schema_version_ = 10;
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
@@ -640,15 +657,19 @@ void TestIndexTree::mock_compaction(const int64_t test_row_num,
   meta_info_list = new (meta_list_buf) ObMacroMetasArray();
   char *buf = static_cast<char *> (allocator_.alloc(sizeof(ObSSTableIndexBuilder)));
   ASSERT_NE(nullptr, buf);
-  sstable_builder = new (buf) ObSSTableIndexBuilder();
+  sstable_builder = new (buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc, *sstable_builder);
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
 
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -690,48 +711,65 @@ int TestIndexTree::mock_init_backup_rebuilder(ObIndexBlockRebuilder &rebuilder, 
   ObDataStoreDesc *data_store_desc = nullptr;
   ObDataStoreDesc *container_store_desc = nullptr;
   ObDataStoreDesc *leaf_store_desc = nullptr; //unused
-  ObIMacroBlockFlushCallback *callback = nullptr;
   ObSEArray<ObIODevice *, 2> device_handle_array;
   if (OB_UNLIKELY(rebuilder.is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObIndexBlockRebuilder has been inited", K(ret));
   } else if (OB_FAIL(sstable_builder.init_builder_ptrs(rebuilder.sstable_builder_, data_store_desc, rebuilder.index_store_desc_,
-      leaf_store_desc, container_store_desc, rebuilder.index_tree_root_ctx_, callback))) {
+      leaf_store_desc, container_store_desc, rebuilder.index_tree_root_ctx_))) {
     STORAGE_LOG(WARN, "fail to init referemce pointer members", K(ret));
   } else if (OB_FAIL(rebuilder.meta_store_desc_.shallow_copy(*rebuilder.index_store_desc_))) {
     STORAGE_LOG(WARN, "fail to assign leaf store desc", K(ret), KPC(rebuilder.index_store_desc_));
   } else if (rebuilder.meta_row_.init(rebuilder.task_allocator_, container_store_desc->get_row_column_count())) {
     STORAGE_LOG(WARN, "fail to init meta row", K(ret), K(container_store_desc->get_row_column_count()));
   } else if (FALSE_IT(rebuilder.set_task_type(rebuilder.index_store_desc_->is_cg(), false, &device_handle_array))) {
-  } else if (OB_ISNULL(rebuilder.index_tree_dumper_ = OB_NEWx(ObIndexTreeBlockDumper, &rebuilder.task_allocator_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "fail to alloc index tree dumper for rebuilder", K(ret));
-  } else if (OB_FAIL(rebuilder.index_tree_dumper_->init(*data_store_desc, *rebuilder.index_store_desc_, *container_store_desc,
-      callback, *rebuilder.index_tree_root_ctx_->allocator_, rebuilder.task_allocator_, true, nullptr))) {
-    STORAGE_LOG(WARN, "fail to init index block dumper", K(ret));
+  // device_handle_array size must be 2, and the 1st one is index tree, the 2nd one is meta tree
+  } else if (OB_UNLIKELY(rebuilder.micro_index_clustered())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "micro_cluster_index is not support for backup task",
+        K(ret), K(rebuilder.index_tree_root_ctx_->task_type_));
   } else if (OB_ISNULL(rebuilder.meta_tree_dumper_ = OB_NEWx(ObBaseIndexBlockDumper, &rebuilder.task_allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "fail to alloc index tree dumper for rebuilder", K(ret));
-  } else if (OB_FAIL(rebuilder.meta_tree_dumper_->init(*rebuilder.index_store_desc_, *container_store_desc,
-      callback, *rebuilder.index_tree_root_ctx_->allocator_, rebuilder.task_allocator_, true, nullptr))) {
-    STORAGE_LOG(WARN, "fail to init index block dumper", K(ret));
-  } else if (OB_ISNULL(rebuilder.index_tree_root_ctx_->data_blocks_info_ = OB_NEWx(ObDataBlockInfo, rebuilder.index_tree_root_ctx_->allocator_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "fail to alloc data blocks info for root ctx", K(ret));
-  } else if (OB_FAIL(rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_checksums_.reserve(rebuilder.index_store_desc_->get_full_stored_col_cnt()))) {
-    STORAGE_LOG(WARN, "fail to reserve data column checksums", K(ret), K(rebuilder.index_store_desc_->get_full_stored_col_cnt()));
-  } else {
-    rebuilder.index_tree_dumper_->need_build_next_row_ = true;
-    rebuilder.meta_tree_dumper_->need_build_next_row_ = true;
-    rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_cnt_ = rebuilder.index_store_desc_->get_full_stored_col_cnt();
-    rebuilder.index_tree_root_ctx_->task_type_ = ObIndexBuildTaskType::REBUILD_BACKUP_TASK;
-    for (int64_t i = 0; OB_SUCC(ret) && i < rebuilder.index_store_desc_->get_full_stored_col_cnt(); i++) {
-      if (OB_FAIL(rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_checksums_.push_back(0))) {
-        STORAGE_LOG(WARN, "failed to push column checksum", K(ret));
-      }
-    }
-    STORAGE_LOG(DEBUG, "print data blocks_info", K(rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_checksums_.capacity_), K(rebuilder.index_tree_root_ctx_));
+    STORAGE_LOG(WARN, "fail to alloc meta tree dumper for rebuilder", K(ret));
+  } else if (OB_FAIL(rebuilder.meta_tree_dumper_->init(
+                  *rebuilder.index_store_desc_, *container_store_desc,
+                  rebuilder.index_store_desc_->sstable_index_builder_,
+                  *rebuilder.index_tree_root_ctx_->allocator_, rebuilder.task_allocator_, true,
+                  rebuilder.sstable_builder_->enable_dump_disk(),
+                  nullptr))) {
+    STORAGE_LOG(WARN, "fail to init meta tree dumper", K(ret));
   }
+
+  if (OB_SUCC(ret) && rebuilder.index_tree_root_ctx_->is_backup_task() && rebuilder.sstable_builder_->enable_dump_disk()) {
+    if (OB_ISNULL(rebuilder.index_tree_dumper_ = OB_NEWx(ObIndexTreeBlockDumper,
+                                                      &rebuilder.task_allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc index tree dumper for rebuilder",
+                  K(ret));
+    } else if (OB_FAIL(rebuilder.index_tree_dumper_->init(
+                  *data_store_desc, *rebuilder.index_store_desc_, data_store_desc->sstable_index_builder_, *container_store_desc,
+                  *rebuilder.index_tree_root_ctx_->allocator_, rebuilder.task_allocator_, true,
+                  rebuilder.sstable_builder_->enable_dump_disk(),
+                  nullptr))) {
+      STORAGE_LOG(WARN, "fail to init index tree dumper", K(ret));
+    } else if (OB_ISNULL(rebuilder.index_tree_root_ctx_->data_blocks_info_ = OB_NEWx(ObDataBlockInfo, rebuilder.index_tree_root_ctx_->allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc data blocks info for root ctx", K(ret));
+    } else if (OB_FAIL(rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_checksums_.reserve(rebuilder.index_store_desc_->get_full_stored_col_cnt()))) {
+      STORAGE_LOG(WARN, "fail to reserve data column checksums", K(ret), "column count", rebuilder.index_store_desc_->get_full_stored_col_cnt());
+    } else {
+      rebuilder.index_tree_dumper_->need_build_next_row_ = true;
+      rebuilder.meta_tree_dumper_->need_build_next_row_ = true;
+      rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_cnt_ = rebuilder.index_store_desc_->get_full_stored_col_cnt();
+      for (int64_t i = 0; OB_SUCC(ret) && i < rebuilder.index_store_desc_->get_full_stored_col_cnt(); i++) {
+        if (OB_FAIL(rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_checksums_.push_back(0))) {
+          STORAGE_LOG(WARN, "failed to push column checksum", K(ret));
+        }
+      }
+      STORAGE_LOG(DEBUG, "print data blocks_info", K(rebuilder.index_tree_root_ctx_->data_blocks_info_->data_column_checksums_.capacity_), K(rebuilder.index_tree_root_ctx_));
+    }
+  }
+
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(rebuilder.index_tree_root_ctx_->data_blocks_info_)) {
       rebuilder.index_tree_root_ctx_->data_blocks_info_->~ObDataBlockInfo();
@@ -777,13 +815,17 @@ void TestIndexTree::mock_cg_compaction(const int64_t test_row_num,
   meta_info_list = new (meta_list_buf) ObMacroMetasArray();
   char *buf = static_cast<char *> (allocator_.alloc(sizeof(ObSSTableIndexBuilder)));
   ASSERT_NE(nullptr, buf);
-  sstable_builder = new (buf) ObSSTableIndexBuilder();
+  sstable_builder = new (buf) ObSSTableIndexBuilder(false/*use_double_write_buffer*/);
   prepare_cg_data_desc(data_desc, sstable_builder);
   ASSERT_EQ(OB_SUCCESS, sstable_builder->init(data_desc.get_desc()));
 
-  ObMacroDataSeq data_seq(0);
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
   ObMacroBlockWriter data_writer;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
 
   ObDatumRow cg_row;
   ASSERT_EQ(OB_SUCCESS, cg_row.init(1));
@@ -820,6 +862,7 @@ void TestIndexTree::mock_cg_compaction(const int64_t test_row_num,
 
 TEST_F(TestIndexTree, test_macro_id_index_block)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_macro_id_index_block");
   int ret = OB_SUCCESS;
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -829,15 +872,19 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
 
   ObWholeDataStoreDesc data_desc_small;
   data_desc_small.get_static_desc().micro_block_size_limit_ = 1 * 1024L;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc_small, sstable_builder);
 
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, &sstable_builder);
   int64_t num = 100;
-  ObMacroDataSeq data_seq(num);
   ObMacroBlockWriter data_writer;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = num;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
   ObDataIndexBlockBuilder *builder = data_writer.builder_;
   ASSERT_NE(data_writer.builder_, nullptr);
 
@@ -912,10 +959,12 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
     ObIndexBlockRowHeader *header = reinterpret_cast<ObIndexBlockRowHeader *>(val.ptr());
     ASSERT_EQ(header->get_macro_id(), ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID);
   }
+  LOG_INFO("FINISH TestIndexTree.test_macro_id_index_block");
 }
 
 TEST_F(TestIndexTree, test_macro_writer_bug1)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_macro_writer_bug1");
   int ret = OB_SUCCESS;
   ObDatumRow row;
   OK(row.init(allocator_, TEST_COLUMN_CNT));
@@ -926,7 +975,12 @@ TEST_F(TestIndexTree, test_macro_writer_bug1)
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, nullptr);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), 0));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
 
   OK(row_generate_.get_next_row(0, row));
   convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -936,29 +990,36 @@ TEST_F(TestIndexTree, test_macro_writer_bug1)
 
   // failed to append fake_block, but succeeded to switch block again
   ObMacroBlockDesc fake_block;
-  ASSERT_EQ(OB_INVALID_ARGUMENT, data_writer.append_macro_block(fake_block));
+  // TODO(baichangmin): replace nullptr later.
+  ASSERT_EQ(OB_INVALID_ARGUMENT, data_writer.append_macro_block(fake_block, nullptr));
 
   OK(row_generate_.get_next_row(1, row));
   convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
   OK(data_writer.append_row(multi_row));
   OK(data_writer.close());
+  LOG_INFO("FINISH TestIndexTree.test_macro_writer_bug1");
 }
 
 TEST_F(TestIndexTree, test_index_macro_writer)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_index_macro_writer");
   int ret = OB_SUCCESS;
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc, sstable_builder);
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
 
-  ObMacroDataSeq data_seq(0);
   ObDataStoreDesc &desc = sstable_builder.container_store_desc_;
   ASSERT_EQ(nullptr, desc.sstable_index_builder_);
   ObMacroBlockWriter container_macro_writer;
-  ret = container_macro_writer.open(desc, data_seq);
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ret = container_macro_writer.open(desc, 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const int64_t test_row_num = 100;
@@ -970,19 +1031,25 @@ TEST_F(TestIndexTree, test_index_macro_writer)
     ASSERT_EQ(OB_SUCCESS, container_macro_writer.append_row(multi_row));
   }
   ASSERT_EQ(OB_SUCCESS, container_macro_writer.close());
+  LOG_INFO("FINISH TestIndexTree.test_index_macro_writer");
 }
 
 TEST_F(TestIndexTree, test_empty_index_tree)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_empty_index_tree");
   int ret = OB_SUCCESS;
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer */);
   prepare_index_builder(data_desc, sstable_builder);
 
-  ObMacroDataSeq data_seq(0);
   prepare_data_desc(data_desc, &sstable_builder);
   ObMacroBlockWriter data_writer;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
   // do not insert any data
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
   ASSERT_EQ(1, sstable_builder.roots_.count());
@@ -995,7 +1062,8 @@ TEST_F(TestIndexTree, test_empty_index_tree)
   ASSERT_EQ(false, res.table_backup_flag_.has_local());
 
   // test rebuild macro blocks
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObSSTablePrivateObjectCleaner cleaner2;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner2));
   // do not insert any data
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
   ASSERT_EQ(1, sstable_builder.roots_.count());
@@ -1020,11 +1088,12 @@ TEST_F(TestIndexTree, test_empty_index_tree)
     ObIndexBlockRebuilder rebuilder;
     {
       ObWholeDataStoreDesc other_data_desc;
-      ObSSTableIndexBuilder other_sstable_builder;
+      ObSSTableIndexBuilder other_sstable_builder(false /* not need writer buffer*/);
       prepare_index_builder(other_data_desc, other_sstable_builder);
       prepare_data_desc(other_data_desc, &other_sstable_builder);
       OK(rebuilder.init(other_sstable_builder));
-      OK(data_writer.open(other_data_desc.get_desc(), data_seq));
+      ObSSTablePrivateObjectCleaner cleaner;
+      OK(data_writer.open(other_data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
       for(int64_t i = 0; i < 10; ++i) {
         ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
         convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -1035,18 +1104,24 @@ TEST_F(TestIndexTree, test_empty_index_tree)
     data_writer.reset();
     rebuilder.reset();
   }
+  LOG_INFO("FINISH TestIndexTree.test_empty_index_tree");
 }
 
 TEST_F(TestIndexTree, test_accumulative_info)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_accumulative_info");
   int ret = OB_SUCCESS;
-  ObMacroDataSeq data_seq(0);
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, nullptr);
   ObWholeDataStoreDesc index_desc;
   prepare_index_desc(data_desc, index_desc);
   ObMacroBlockWriter index_macro_writer;
-  ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
   ObBaseIndexBlockBuilder builder;
   ret = builder.init(data_desc.get_desc(), index_desc.get_desc(), allocator_, &index_macro_writer, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1098,9 +1173,10 @@ TEST_F(TestIndexTree, test_accumulative_info)
 
 TEST_F(TestIndexTree, test_multi_writers_with_close)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_multi_writers_with_close");
   int ret = OB_SUCCESS;
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc, sstable_builder);
 
   ObMacroDataSeq data_seq(0);
@@ -1126,7 +1202,9 @@ TEST_F(TestIndexTree, test_multi_writers_with_close)
   OK(sstable_builder.sort_roots());
   OK(sstable_builder.index_block_loader_.init(sstable_builder.self_allocator_));
   OK(res.prepare_column_checksum_array(sstable_builder.index_store_desc_.get_desc().get_full_stored_col_cnt()));
-  OK(sstable_builder.merge_index_tree(res));
+  int64_t tmp_seq = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  OK(sstable_builder.merge_index_tree(pre_warm_param, res, tmp_seq, nullptr));
   res.reset();
   sstable_builder.index_block_loader_.reset();
   OK(sstable_builder.close(res));
@@ -1164,12 +1242,14 @@ TEST_F(TestIndexTree, test_multi_writers_with_close)
   int64_t test_row_num = TestIndexTree::TEST_ROW_CNT;
   ASSERT_EQ(thread_ct * test_row_num - 1, last_rowkey_int);
   ASSERT_EQ(total_row_cnt, test_row_num * thread_ct);
+  LOG_INFO("FINISH TestIndexTree.test_multi_writers_with_close");
 }
 
 
 //===================== test secondary meta ================
 TEST_F(TestIndexTree, test_merge_info_build_row)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_merge_info_build_row");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 10;
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -1204,25 +1284,28 @@ TEST_F(TestIndexTree, test_merge_info_build_row)
   ObFIFOAllocator safe_allocator;
   OK(safe_allocator.init(&arena_allocator, OB_MALLOC_BIG_BLOCK_SIZE,
                          ObMemAttr(OB_SERVER_TENANT_ID, ObNewModIds::TEST)));
-  ObDataMacroBlockMeta *copy_meta = nullptr;
-  ObDataMacroBlockMeta &large_meta = *merge_info_list->at(0);
-  int64_t test_col_cnt = 100;
-  for (int64_t i = 0; i < test_col_cnt; ++i) {
-    OK(large_meta.val_.column_checksums_.push_back(i));
+  if (NULL != merge_info_list && NULL != merge_info_list->at(0)) {
+    ObDataMacroBlockMeta *copy_meta = nullptr;
+    ObDataMacroBlockMeta &large_meta = *merge_info_list->at(0);
+    int64_t test_col_cnt = 100;
+    for (int64_t i = 0; i < test_col_cnt; ++i) {
+      OK(large_meta.val_.column_checksums_.push_back(i));
+    }
+    ASSERT_EQ(safe_allocator.current_using_, nullptr);
+    ASSERT_EQ(safe_allocator.normal_used_, 0);
+    OK(large_meta.deep_copy(copy_meta, safe_allocator));
+    ASSERT_NE(safe_allocator.current_using_, nullptr);
+    safe_allocator.free(copy_meta);
+    copy_meta->~ObDataMacroBlockMeta();
+    const int64_t end_key_deep_copy_size = 64; // due to end_key::reset by memset
+    ASSERT_EQ(safe_allocator.normal_used_, end_key_deep_copy_size);
   }
-  ASSERT_EQ(safe_allocator.current_using_, nullptr);
-  ASSERT_EQ(safe_allocator.normal_used_, 0);
-  OK(large_meta.deep_copy(copy_meta, safe_allocator));
-  ASSERT_NE(safe_allocator.current_using_, nullptr);
-  safe_allocator.free(copy_meta);
-  copy_meta->~ObDataMacroBlockMeta();
-  const int64_t end_key_deep_copy_size = 64; // due to end_key::reset by memset
-  ASSERT_EQ(safe_allocator.normal_used_, end_key_deep_copy_size);
   sst_builder->~ObSSTableIndexBuilder();
 }
 
 TEST_F(TestIndexTree, test_meta_builder)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_meta_builder");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 100; // do not run small stt
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -1262,6 +1345,7 @@ TEST_F(TestIndexTree, test_meta_builder)
 
 TEST_F(TestIndexTree, test_meta_builder_data_root)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_meta_builder_data_root");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 2;
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -1307,7 +1391,7 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
 
   char *buf = static_cast<char *> (allocator_.alloc(sizeof(ObSSTableIndexBuilder)));
   ASSERT_NE(nullptr, buf);
-  sst_builder = new (buf) ObSSTableIndexBuilder();
+  sst_builder = new (buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   prepare_index_builder(index_desc, *sst_builder);
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, sst_builder);
@@ -1315,9 +1399,13 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
 
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -1338,12 +1426,13 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
   ASSERT_EQ(sec_blk.original_size_, sec_blk.data_zsize_);
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
 
-  ASSERT_FALSE(sst_builder->roots_[0]->meta_block_info_.in_mem_);
+  ASSERT_TRUE(sst_builder->roots_[0]->meta_block_info_.in_disk());
   ASSERT_EQ((test_row_num - 10) / 10, sst_builder->roots_[0]->meta_block_info_.block_write_ctx_->get_macro_block_count());
 
   ObMacroDataSeq data_seq2(data_writer.get_last_macro_seq() + 1);
   ObMacroBlockWriter data_writer2;
-  ASSERT_EQ(OB_SUCCESS, data_writer2.open(data_desc.get_desc(), data_seq));
+  ObSSTablePrivateObjectCleaner cleaner2;
+  ASSERT_EQ(OB_SUCCESS, data_writer2.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner2));
   for(int64_t i = 0; i < 10; ++i){
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i + test_row_num - 10, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -1352,7 +1441,7 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
     ASSERT_EQ(OB_SUCCESS, data_writer2.try_switch_macro_block());
   }
   ASSERT_EQ(OB_SUCCESS, data_writer2.close());
-  ASSERT_TRUE(sst_builder->roots_[1]->meta_block_info_.in_mem_);
+  ASSERT_TRUE(sst_builder->roots_[1]->meta_block_info_.in_mem());
   ASSERT_EQ(10, sst_builder->roots_[1]->meta_block_info_.get_row_count());
 
   ASSERT_EQ(OB_SUCCESS, sst_builder->close(res));
@@ -1408,7 +1497,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
   ASSERT_EQ(OB_SUCCESS, leaf_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
 
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false);
   prepare_index_builder(data_desc, sstable_builder);
   ObWholeDataStoreDesc index_desc;
   prepare_index_desc(data_desc, index_desc);
@@ -1417,7 +1506,11 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
   ObBaseIndexBlockDumper macro_meta_dumper;
   ObIndexBlockInfo meta_block_info_;
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.init(sst_builder->index_store_desc_.get_desc(),
-      sst_builder->container_store_desc_, nullptr, allocator_, allocator_, true));
+                                               sst_builder->container_store_desc_,
+                                               sst_builder->index_store_desc_.get_desc().sstable_index_builder_,
+                                               allocator_,
+                                               allocator_,
+                                               true));
   ASSERT_NE(nullptr, merge_info_list);
   ASSERT_EQ(test_row_num, merge_info_list->count());
   // test unorder
@@ -1430,7 +1523,11 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
 
   macro_meta_dumper.reset();
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.init(sst_builder->index_store_desc_.get_desc(),
-      sst_builder->container_store_desc_, nullptr, allocator_, allocator_, true));
+                                               sst_builder->container_store_desc_,
+                                               sst_builder->index_store_desc_.get_desc().sstable_index_builder_,
+                                               allocator_,
+                                               allocator_,
+                                               true));
   // genenrate order row
   for (int64_t i = 0; nullptr != merge_info_list && i < merge_info_list->count(); ++i) {
     ObDataMacroBlockMeta *info = merge_info_list->at(i);
@@ -1439,7 +1536,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
   }
   // close
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.close(meta_block_info_));
-  ASSERT_TRUE(meta_block_info_.in_mem_);
+  ASSERT_TRUE(meta_block_info_.in_mem());
   ASSERT_EQ(merge_info_list->count(), meta_block_info_.get_row_count());
   ASSERT_EQ(1, meta_block_info_.get_micro_block_count());
   ObIndexBlockLoader index_block_loader;
@@ -1479,7 +1576,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_disk)
   ObDatumRow leaf_row;
   ASSERT_EQ(OB_SUCCESS, leaf_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false);
   prepare_index_builder(data_desc, sstable_builder);
   ObWholeDataStoreDesc index_desc;
   prepare_index_desc(data_desc, index_desc);
@@ -1488,7 +1585,11 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_disk)
   ObBaseIndexBlockDumper macro_meta_dumper;
   ObIndexBlockInfo meta_block_info_;
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.init(sst_builder->index_store_desc_.get_desc(),
-      sst_builder->container_store_desc_, nullptr, allocator_, allocator_, true));
+                                               sst_builder->container_store_desc_,
+                                               sst_builder->index_store_desc_.get_desc().sstable_index_builder_,
+                                               allocator_,
+                                               allocator_,
+                                               true));
 
   // genenrate row
   for (int64_t i = 0; nullptr != merge_info_list && i < merge_info_list->count(); ++i) {
@@ -1503,7 +1604,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_disk)
   // close
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.close(meta_block_info_));
   ASSERT_EQ(merge_info_list->count(), meta_block_info_.get_row_count());
-  ASSERT_FALSE(meta_block_info_.in_mem_);
+  ASSERT_TRUE(meta_block_info_.in_disk());
   ASSERT_EQ(test_row_num / 10, meta_block_info_.block_write_ctx_->get_macro_block_count());
 
   ObIndexBlockLoader index_block_loader;
@@ -1537,7 +1638,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_micro_in_disk)
   ObDatumRow leaf_row;
   ASSERT_EQ(OB_SUCCESS, leaf_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false);
   prepare_index_builder(data_desc, sstable_builder);
   ObWholeDataStoreDesc index_desc;
   prepare_index_desc(data_desc, index_desc);
@@ -1546,7 +1647,11 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_micro_in_disk)
   ObBaseIndexBlockDumper macro_meta_dumper;
   ObIndexBlockInfo meta_block_info_;
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.init(sst_builder->index_store_desc_.get_desc(),
-      sst_builder->container_store_desc_, nullptr, allocator_, allocator_, true));
+                                               sst_builder->container_store_desc_,
+                                               sst_builder->index_store_desc_.get_desc().sstable_index_builder_,
+                                               allocator_,
+                                               allocator_,
+                                               true));
   // genenrate row
   for (int64_t i = 0; nullptr != merge_info_list && i < merge_info_list->count(); ++i) {
     ObDataMacroBlockMeta *info = merge_info_list->at(i);
@@ -1559,7 +1664,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_micro_in_disk)
   }
   // close
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.close(meta_block_info_));
-  ASSERT_FALSE(meta_block_info_.in_mem_);
+  ASSERT_TRUE(meta_block_info_.in_disk());
   ASSERT_EQ(test_row_num / 10, meta_block_info_.block_write_ctx_->get_macro_block_count());
 
   ObIndexBlockLoader index_block_loader;
@@ -1575,18 +1680,23 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_micro_in_disk)
 
 TEST_F(TestIndexTree, test_single_row_desc)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_single_row_desc");
   // we need use 4K columns to test ObMetaIndexBlockBuilder::build_single_macro_row_desc
   prepare_4K_cols_schema();
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, &sstable_builder);
   ObWholeDataStoreDesc index_desc;
   prepare_index_desc(data_desc, index_desc);
   prepare_index_builder(index_desc, sstable_builder);
 
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
 
   ObDatumRow row;
   const int64_t test_col_cnt = 4096;
@@ -1606,7 +1716,7 @@ TEST_F(TestIndexTree, test_single_row_desc)
   OK(sstable_builder.close(res));
 
   // test rebuild sstable
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder2(false /* not need writer buffer*/);
   prepare_index_builder(index_desc, sstable_builder2);
   ObIndexBlockRebuilder rebuilder;
   OK(rebuilder.init(sstable_builder2));
@@ -1626,7 +1736,7 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObSSTableMergeRes res2;
   OK(sstable_builder2.close(res2));
   // test rebuild sstable by another append_macro_row
-  ObSSTableIndexBuilder sstable_builder3;
+  ObSSTableIndexBuilder sstable_builder3(false /* not need writer buffer*/);
   prepare_index_builder(index_desc, sstable_builder3);
   sstable_builder3.index_store_desc_.get_desc().static_desc_->major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
   sstable_builder3.container_store_desc_.static_desc_->major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
@@ -1645,10 +1755,12 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObSSTableMergeRes res3;
   sstable_builder3.optimization_mode_ = ObSSTableIndexBuilder::ObSpaceOptimizationMode::ENABLE;
   OK(sstable_builder3.close(res3));
+  LOG_INFO("FINISH TestIndexTree.test_single_row_desc");
 }
 
 TEST_F(TestIndexTree, test_extend_micro_block_size)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_extend_micro_block_size");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 20;
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -1658,7 +1770,7 @@ TEST_F(TestIndexTree, test_extend_micro_block_size)
   IndexTreeRootCtxList *roots = nullptr;
   ObWholeDataStoreDesc data_desc;
   char *buf = static_cast<char *> (allocator_.alloc(sizeof(ObSSTableIndexBuilder)));
-  ObSSTableIndexBuilder *sstable_builder = new (buf) ObSSTableIndexBuilder();
+  ObSSTableIndexBuilder *sstable_builder = new (buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
 
   prepare_data_desc(data_desc, sstable_builder);
   data_desc.get_desc().micro_block_size_ = 248; // only push one index block row will exceed 248.
@@ -1668,9 +1780,13 @@ TEST_F(TestIndexTree, test_extend_micro_block_size)
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
 
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -1695,11 +1811,11 @@ TEST_F(TestIndexTree, test_extend_micro_block_size)
   ASSERT_EQ(tmp_res.data_root_desc_.buf_, res.data_root_desc_.buf_);
   ASSERT_EQ(tmp_res.data_blocks_cnt_, res.data_blocks_cnt_);
   sstable_builder->~ObSSTableIndexBuilder();
-
 }
 
 TEST_F(TestIndexTree, test_data_block_checksum)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_data_block_checksum");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 10;
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -1744,15 +1860,19 @@ TEST_F(TestIndexTree, test_reuse_macro_block)
   ASSERT_EQ(test_row_num, macro_metas->count());
 
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false/* not need buffer*/);
   prepare_index_builder(data_desc, sstable_builder);
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
   for (int64_t i = 0; i < test_row_num; ++i) {
     ObMacroBlockDesc macro_desc;
     macro_desc.macro_meta_ = macro_metas->at(i);
-    OK(data_writer.append_macro_block(macro_desc));
+    OK(data_writer.append_macro_block(macro_desc, nullptr));
   }
   OK(data_writer.close());
   ObSSTableMergeRes reused_res;
@@ -1770,6 +1890,7 @@ TEST_F(TestIndexTree, test_reuse_macro_block)
 
 TEST_F(TestIndexTree, DISABLED_test_writer_try_to_append_row)
 {
+  LOG_INFO("BEGIN TestIndexTree.DISABLED_test_writer_try_to_append_row");
   // fix try_to_append_row, enable this case
   int ret = OB_SUCCESS;
   ObDatumRow row;
@@ -1784,7 +1905,12 @@ TEST_F(TestIndexTree, DISABLED_test_writer_try_to_append_row)
   prepare_data_desc(data_desc, nullptr);
   data_desc.get_desc().row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
 
-  OK(data_writer.open(data_desc.get_desc(), 0));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
   ObIMicroBlockWriter *micro_writer = data_writer.micro_writer_;
   const int64_t test_num = 1; // only add one row to avoid encoding optimization
   for (int64_t i = 0; i < test_num; ++i) {
@@ -1804,16 +1930,19 @@ TEST_F(TestIndexTree, DISABLED_test_writer_try_to_append_row)
 
 
   { // set size upper bound after reset
-    OK(data_writer.open(data_desc.get_desc(), 0));
+    ObSSTablePrivateObjectCleaner cleaner;
+    OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
     micro_writer = data_writer.micro_writer_;
     micro_writer->set_block_size_upper_bound(need_store_size - 1);
     // if append succeeded, set_block_size_upper_bound has not limited the block size
     ASSERT_EQ(-4024, micro_writer->append_row(multi_row));
   }
+  LOG_INFO("FINISH TestIndexTree.DISABLED_test_writer_try_to_append_row");
 }
 
 TEST_F(TestIndexTree, test_writer_try_to_append_row)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_writer_try_to_append_row");
   // If fail to pass this test, please check ObIMicroBlockWriter::try_to_append_row
   int ret = OB_SUCCESS;
   ObDatumRow row;
@@ -1826,9 +1955,14 @@ TEST_F(TestIndexTree, test_writer_try_to_append_row)
   ObMacroBlockWriter data_writer;
   ObMicroBlockDesc micro_block_desc;
   prepare_data_desc(data_desc, nullptr);
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
   for (int64_t j = 0; j < ObRowStoreType::MAX_ROW_STORE; ++j) {
     data_desc.get_desc().row_store_type_ = static_cast<ObRowStoreType>(j);
-    OK(data_writer.open(data_desc.get_desc(), 0));
+    ObSSTablePrivateObjectCleaner cleaner;
+    OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
     ObIMicroBlockWriter *micro_writer = data_writer.micro_writer_;
     const int64_t test_num = 10;
     for (int64_t i = 0; i < test_num; ++i) {
@@ -1860,7 +1994,8 @@ TEST_F(TestIndexTree, test_writer_try_to_append_row)
     }
 
     { // set size upper bound after reset
-      OK(data_writer.open(data_desc.get_desc(), 0));
+      ObSSTablePrivateObjectCleaner cleaner;
+      OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
       micro_writer = data_writer.micro_writer_;
       micro_writer->set_block_size_upper_bound(estimate_size);
       for (int64_t i = 0; i < test_num; ++i) {
@@ -1870,10 +2005,12 @@ TEST_F(TestIndexTree, test_writer_try_to_append_row)
       }
     }
   }
+  LOG_INFO("FINISH TestIndexTree.test_writer_try_to_append_row");
 }
 
 TEST_F(TestIndexTree, test_rebuilder)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_rebuilder");
   int ret = OB_SUCCESS;
   ObDatumRow row;
   OK(row.init(allocator_, TEST_COLUMN_CNT));
@@ -1883,15 +2020,19 @@ TEST_F(TestIndexTree, test_rebuilder)
 
   ObWholeDataStoreDesc data_desc1;
   ObWholeDataStoreDesc data_desc2;
-  ObSSTableIndexBuilder sstable_builder1;
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder1(false /* not need writer buffer*/);
+  ObSSTableIndexBuilder sstable_builder2(false /* not need writer buffer*/);
   prepare_index_builder(data_desc1, sstable_builder1);
   prepare_index_builder(data_desc2, sstable_builder2);
   // write data
   int64_t test_num = 10;
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc1.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc1.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -1968,21 +2109,27 @@ TEST_F(TestIndexTree, test_rebuilder)
     ObString val2 = row2.storage_datums_[TEST_ROWKEY_COLUMN_CNT + 2].get_string();
     ASSERT_EQ(val1, val2);
   }
+  LOG_INFO("FINISH TestIndexTree.test_rebuilder");
 }
 
 TEST_F(TestIndexTree, test_diagnose_dump)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_diagnose_dump");
   int ret = OB_SUCCESS;
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc, sstable_builder);
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
 
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
 
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -1997,20 +2144,26 @@ TEST_F(TestIndexTree, test_diagnose_dump)
   OK(data_writer.append_row(multi_row));
   data_writer.dump_block_and_writer_buffer();
   data_writer.micro_writer_->dump_diagnose_info();
+  LOG_INFO("FINISH TestIndexTree.test_diagnose_dump");
 }
 
 TEST_F(TestIndexTree, test_estimate_meta_block_size)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_estimate_meta_block_size");
   int ret = OB_SUCCESS;
   ObWholeDataStoreDesc index_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, &sstable_builder);
   prepare_index_desc(data_desc, index_desc);
   OK(sstable_builder.init(index_desc.get_desc()));
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
 
   ObDatumRow multi_row;
   OK(multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
@@ -2029,7 +2182,7 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   OK(data_writer.builder_->cal_macro_meta_block_size(last_data_key, estimate_meta_block_size));
 
   ObMacroBlock &macro_block = data_writer.macro_blocks_[0];
-  ObMacroBlockHandle &macro_handle = data_writer.macro_handles_[0];
+  ObStorageObjectHandle &macro_handle = data_writer.macro_handles_[0];
   OK(data_writer.build_micro_block());
   OK(data_writer.builder_->generate_macro_row(macro_block, macro_handle.get_macro_id(), -1/*ddl_start_row_offset*/));
   const ObSSTableMacroBlockHeader &macro_header_ = macro_block.macro_header_;
@@ -2042,10 +2195,12 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   macro_meta->val_.macro_id_ = ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID;
   ASSERT_GE(macro_meta->val_.get_serialize_size() + estimate_meta_block_size - val_max_size,
             macro_header_.fixed_header_.meta_block_size_);
+  LOG_INFO("FINISH TestIndexTree.test_estimate_meta_block_size");
 }
 
 TEST_F(TestIndexTree, test_cg_row_offset)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_cg_row_offset");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 500;
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -2055,7 +2210,7 @@ TEST_F(TestIndexTree, test_cg_row_offset)
   IndexTreeRootCtxList *roots = nullptr;
 
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc, sstable_builder);
 
   ObWholeDataStoreDesc index_desc;
@@ -2089,10 +2244,12 @@ TEST_F(TestIndexTree, test_cg_row_offset)
     }
     sst_builder->~ObSSTableIndexBuilder();
   }
+  LOG_INFO("FINISH TestIndexTree.test_cg_row_offset");
 }
 
 TEST_F(TestIndexTree, test_absolute_offset)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_absolute_offset");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 500;
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -2102,7 +2259,7 @@ TEST_F(TestIndexTree, test_absolute_offset)
   IndexTreeRootCtxList *roots = nullptr;
 
   ObWholeDataStoreDesc data_desc;
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
 
   prepare_data_desc(data_desc, &sstable_builder);
   data_desc.get_desc().micro_block_size_ = 512; // make test index tree height > 2
@@ -2119,6 +2276,7 @@ TEST_F(TestIndexTree, test_absolute_offset)
   mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
   ASSERT_EQ(test_row_num, merge_info_list->count());
   vector<int64_t> absolute_offsets;
+  LOG_INFO("test absolute offset", K(test_row_num));
   for (int meta_idx = 0; meta_idx < test_row_num; meta_idx += 10) {
     merge_info_list->at(meta_idx)->val_.ddl_end_row_offset_ = meta_idx;
     rebuilder.append_macro_row(*merge_info_list->at(meta_idx));
@@ -2163,6 +2321,7 @@ TEST_F(TestIndexTree, test_absolute_offset)
 
 TEST_F(TestIndexTree, test_close_with_old_schema)
 {
+  LOG_INFO("BEGIN TestIndexTree.test_close_with_old_schema");
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 10;
   ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
@@ -2176,16 +2335,19 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
 
   // mock old schema with fewer columns
   ObWholeDataStoreDesc index_desc;
-  OK(index_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1/*snapshot*/, 0/*cluster_version*/));
+  OK(index_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
+                     ObTimeUtility::fast_current_time()/*snapshot*/, 0/*cluster_version*/,
+                     table_schema_.get_micro_index_clustered()));
   index_desc.static_desc_.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
   --index_desc.get_desc().col_desc_->full_stored_col_cnt_;
   index_desc.get_desc().col_desc_->col_default_checksum_array_.pop_back();
 
   // read old macro block metas
-  ObSSTableIndexBuilder sstable_builder;
+  ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   OK(sstable_builder.init(index_desc.get_desc()));
   ObIndexBlockRebuilder rebuilder;
   OK(rebuilder.init(sstable_builder));
+  LOG_INFO("test close with old schema", K(test_row_num));
   for (int64_t i = 0; i < test_row_num; ++i) {
     OK(rebuilder.append_macro_row(*merge_info_list->at(i)));
   }
@@ -2193,6 +2355,119 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
   ObSSTableMergeRes res2;
   ASSERT_EQ(OB_INVALID_ARGUMENT, sstable_builder.close(res2));
   sst_builder->~ObSSTableIndexBuilder();
+}
+
+TEST_F(TestIndexTree, test_rebuilder_backup_disable_dump_disk)
+{
+  int ret = OB_SUCCESS;
+  ObDatumRow row;
+  OK(row.init(allocator_, TEST_COLUMN_CNT));
+  ObDatumRow multi_row;
+  OK(multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
+  ObDmlFlag dml = DF_INSERT;
+
+  ObWholeDataStoreDesc index_desc1;
+  ObWholeDataStoreDesc index_desc2;
+  ObSSTableIndexBuilder sstable_builder1(false);
+  ObSSTableIndexBuilder sstable_builder2(false);
+  prepare_index_builder(index_desc1, sstable_builder1);
+  prepare_index_builder(index_desc2, sstable_builder2);
+  // write data
+  ObWholeDataStoreDesc data_desc;
+  prepare_data_desc(data_desc, &sstable_builder1);
+  int64_t test_num = 10;
+  ObMacroBlockWriter data_writer;
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
+  for (int64_t i = 0; i < test_num; ++i) {
+    OK(row_generate_.get_next_row(i, row));
+    convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
+    OK(data_writer.append_row(multi_row));
+    OK(data_writer.build_micro_block());
+    OK(data_writer.try_switch_macro_block());
+  }
+  OK(data_writer.close());
+  ObSSTableMergeRes res1;
+  OK(sstable_builder1.close(res1));
+  ASSERT_EQ(false, res1.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res1.table_backup_flag_.has_local());
+
+  sstable_builder2.enable_dump_disk_ = false; // disable dump disk
+  ObIndexBlockRebuilder rebuilder;
+  OK(mock_init_backup_rebuilder(rebuilder, sstable_builder2));
+
+  // read data blocks
+  ObMacroBlockReadInfo info;
+  ObMacroBlockHandle macro_handle;
+  const int64_t macro_block_size = 2 * 1024 * 1024;
+  info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  info.offset_ = 0;
+  info.size_ = macro_block_size;
+  info.buf_ = reinterpret_cast<char*>(allocator_.alloc(info.size_));
+  ASSERT_NE(nullptr, info.buf_);
+  ObIArray<MacroBlockId> &data_block_ids = res1.data_block_ids_;
+  ObDataMacroBlockMeta *macro_meta = nullptr;
+  ObArenaAllocator meta_allocator;
+  ASSERT_EQ(data_block_ids.count(), test_num);
+  // rebuild index tree
+  int64_t absolute_row_offset = -1;
+  for (int64_t i = 0; OB_SUCC(ret) && i < data_block_ids.count(); ++i) {
+    MacroBlockId &cur_id = data_block_ids.at(i);
+    info.macro_block_id_ = cur_id;
+    macro_handle.reset();
+    OK(ObBlockManager::read_block(info, macro_handle));
+    ASSERT_NE(macro_handle.get_buffer(), nullptr);
+    ASSERT_EQ(macro_handle.get_data_size(), macro_block_size);
+    OK(rebuilder.get_macro_meta(macro_handle.get_buffer(), macro_block_size, cur_id, meta_allocator, macro_meta));
+    absolute_row_offset += macro_meta->val_.row_count_;
+    OK(rebuilder.append_macro_row(macro_handle.get_buffer(), macro_block_size, cur_id, absolute_row_offset));
+  }
+  // mock has backup id
+  OK(rebuilder.close());
+  ObSSTableMergeRes res2;
+  ASSERT_EQ(true, rebuilder.index_tree_root_ctx_->meta_block_info_.in_array());
+  rebuilder.~ObIndexBlockRebuilder();
+  OK(sstable_builder2.close(res2));
+  ASSERT_EQ(false, res2.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res2.table_backup_flag_.has_local());
+  ASSERT_EQ(true, res2.data_root_desc_.is_mem_type());
+  ASSERT_EQ(true, res2.root_desc_.is_mem_type());
+  // compare merge res
+  ASSERT_EQ(res1.root_desc_.height_, res2.root_desc_.height_);
+  ASSERT_EQ(res1.root_desc_.height_, 2);
+  ObMicroBlockData root_block1(res1.root_desc_.buf_, res1.root_desc_.addr_.size_);
+  ObMicroBlockData root_block2(res2.root_desc_.buf_, res2.root_desc_.addr_.size_);
+  ObIMicroBlockReader *micro_reader1;
+  ObIMicroBlockReader *micro_reader2;
+
+  ObMicroBlockReaderHelper reader_helper;
+  ObIMicroBlockReader *micro_reader;
+  ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder1.index_store_desc_.get_desc().row_store_type_, micro_reader1));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder2.index_store_desc_.get_desc().row_store_type_, micro_reader2));
+
+  OK(micro_reader1->init(root_block1, nullptr));
+  OK(micro_reader2->init(root_block2, nullptr));
+
+  blocksstable::ObDatumRow row1;
+  blocksstable::ObDatumRow row2;
+  OK(row1.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
+  OK(row2.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
+  ASSERT_EQ(micro_reader1->row_count(), micro_reader2->row_count());
+  ASSERT_EQ(micro_reader1->row_count(), test_num);
+
+  for (int64_t it = 0; it != micro_reader1->row_count(); ++it) {
+    OK(micro_reader1->get_row(it, row1));
+    OK(micro_reader2->get_row(it, row2));
+
+    ObString val1 = row1.storage_datums_[TEST_ROWKEY_COLUMN_CNT + 2].get_string();
+    ObString val2 = row2.storage_datums_[TEST_ROWKEY_COLUMN_CNT + 2].get_string();
+    ASSERT_EQ(val1, val2);
+  }
 }
 
 TEST_F(TestIndexTree, test_rebuilder_backup_all_mem)
@@ -2206,17 +2481,21 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_mem)
 
   ObWholeDataStoreDesc index_desc1;
   ObWholeDataStoreDesc index_desc2;
-  ObSSTableIndexBuilder sstable_builder1;
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder1(false);
+  ObSSTableIndexBuilder sstable_builder2(false);
   prepare_index_builder(index_desc1, sstable_builder1);
   prepare_index_builder(index_desc2, sstable_builder2);
   // write data
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, &sstable_builder1);
   int64_t test_num = 10;
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -2315,17 +2594,21 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_disk)
 
   ObWholeDataStoreDesc index_desc1;
   ObWholeDataStoreDesc index_desc2;
-  ObSSTableIndexBuilder sstable_builder1;
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder1(false);
+  ObSSTableIndexBuilder sstable_builder2(false);
   prepare_index_builder(index_desc1, sstable_builder1);
   prepare_index_builder(index_desc2, sstable_builder2);
   // write data
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, &sstable_builder1);
   int64_t test_num = 400;
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -2422,17 +2705,21 @@ TEST_F(TestIndexTree, test_rebuilder_backup_mem_and_disk)
 
   ObWholeDataStoreDesc index_desc1;
   ObWholeDataStoreDesc index_desc2;
-  ObSSTableIndexBuilder sstable_builder1;
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder1(false);
+  ObSSTableIndexBuilder sstable_builder2(false);
   prepare_index_builder(index_desc1, sstable_builder1);
   prepare_index_builder(index_desc2, sstable_builder2);
   // write data
   ObWholeDataStoreDesc data_desc;
   prepare_data_desc(data_desc, &sstable_builder1);
   int64_t test_num = 400;
-  ObMacroDataSeq data_seq(0);
   ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), data_seq));
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner));
   for (int64_t i = 0; i < test_num; ++i) {
     OK(row_generate_.get_next_row(i, row));
     convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
@@ -2465,7 +2752,7 @@ TEST_F(TestIndexTree, test_rebuilder_backup_mem_and_disk)
   ASSERT_EQ(data_block_ids.count(), test_num);
   // rebuild index tree
   int64_t absolute_row_offset = -1;
-  for (int64_t i = 0; OB_SUCC(ret) && i < 100; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < 50; ++i) {
     MacroBlockId &cur_id = data_block_ids.at(i);
     info.macro_block_id_ = cur_id;
     macro_handle.reset();
@@ -2480,7 +2767,7 @@ TEST_F(TestIndexTree, test_rebuilder_backup_mem_and_disk)
   ASSERT_EQ(true, rebuilder_mem.index_tree_root_ctx_->index_tree_info_.in_mem());
   rebuilder_mem.~ObIndexBlockRebuilder();
 
-  for (int64_t i = 100; OB_SUCC(ret) && i < data_block_ids.count(); ++i) {
+  for (int64_t i = 50; OB_SUCC(ret) && i < data_block_ids.count(); ++i) {
     MacroBlockId &cur_id = data_block_ids.at(i);
     info.macro_block_id_ = cur_id;
     macro_handle.reset();
@@ -2512,7 +2799,7 @@ TEST_F(TestIndexTree, test_cg_compaction_all_mem)
   mock_cg_compaction(test_num, data_write_ctxs, index_write_ctxs, merge_info_list, res1, roots, sstable_builder1);
   STORAGE_LOG(INFO, "finish cg compaction and prepare rebuild");
 
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder2(false);
   ObWholeDataStoreDesc data_desc2;
   prepare_cg_data_desc(data_desc2, &sstable_builder2);
   ASSERT_EQ(OB_SUCCESS, sstable_builder2.init(data_desc2.get_desc()));
@@ -2605,7 +2892,7 @@ TEST_F(TestIndexTree, test_cg_compaction_all_disk)
   mock_cg_compaction(test_num, data_write_ctxs, index_write_ctxs, merge_info_list, res1, roots, sstable_builder1);
   STORAGE_LOG(INFO, "finish cg compaction and prepare rebuild");
 
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder2(false);
   ObWholeDataStoreDesc data_desc2;
   prepare_cg_data_desc(data_desc2, &sstable_builder2);
   ASSERT_EQ(OB_SUCCESS, sstable_builder2.init(data_desc2.get_desc()));
@@ -2660,7 +2947,7 @@ TEST_F(TestIndexTree, test_cg_compaction_mem_and_disk)
   mock_cg_compaction(test_num, data_write_ctxs, index_write_ctxs, merge_info_list, res1, roots, sstable_builder1);
   STORAGE_LOG(INFO, "finish cg compaction and prepare rebuild");
 
-  ObSSTableIndexBuilder sstable_builder2;
+  ObSSTableIndexBuilder sstable_builder2(false);
   ObWholeDataStoreDesc data_desc2;
   prepare_cg_data_desc(data_desc2, &sstable_builder2);
   ASSERT_EQ(OB_SUCCESS, sstable_builder2.init(data_desc2.get_desc()));
@@ -2670,7 +2957,6 @@ TEST_F(TestIndexTree, test_cg_compaction_mem_and_disk)
   ObIndexBlockRebuilder rebuilder_disk;
   OK(mock_init_backup_rebuilder(rebuilder_disk, sstable_builder2));
   rebuilder_disk.index_tree_root_ctx_->task_idx_ = 0;
-
 
   // read data blocks
   ObMacroBlockReadInfo info;

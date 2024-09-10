@@ -250,6 +250,37 @@ int ObStaticEngineExprCG::cg_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
   return ret;
 }
 
+int ObStaticEngineExprCG::init_attr_expr(ObExpr *rt_expr, ObRawExpr *raw_expr)
+{
+  int ret = OB_SUCCESS;
+  rt_expr->attrs_cnt_ = raw_expr->get_attr_count();
+  // init attrs_;
+  if (rt_expr->attrs_cnt_ > 0) {
+    int64_t alloc_size = rt_expr->attrs_cnt_ * sizeof(ObExpr *);
+    ObExpr **buf = static_cast<ObExpr **>(allocator_.alloc(alloc_size));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    } else {
+      memset(buf, 0, alloc_size);
+      rt_expr->attrs_ = buf;
+      for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_attr_count(); i++) {
+        ObRawExpr *child_expr = NULL;
+        if (OB_ISNULL(child_expr = raw_expr->get_attr_expr(i))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret));
+        } else if (OB_ISNULL(get_rt_expr(*child_expr))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("expr is null", K(ret));
+        } else {
+          rt_expr->attrs_[i] = get_rt_expr(*child_expr);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // init type_, datum_meta_, obj_meta_, obj_datum_map_, args_, arg_cnt_, op_
 int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
 {
@@ -286,6 +317,8 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       if (result_meta.is_xml_sql_type()) {
         // set xml subschema id = ObXMLSqlType
         rt_expr->datum_meta_.cs_type_ = CS_TYPE_INVALID;
+      } else if (result_meta.is_collection_sql_type()) {
+        rt_expr->datum_meta_.cs_type_ = static_cast<ObCollationType>(result_meta.get_subschema_id());
       }
       if (is_lob_storage(rt_expr->obj_meta_.get_type())) {
         if (cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
@@ -367,6 +400,9 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
           }
         }
       }
+    }
+    if (result_meta.is_collection_sql_type() && OB_FAIL(init_attr_expr(rt_expr, raw_expr))) {
+      LOG_WARN("failed to init attr expr", K(ret), K(raw_expr), K(rt_expr));
     }
     if (OB_SUCC(ret) && raw_expr->get_local_session_var().get_var_count() > 0) {
       rt_expr->local_session_var_id_ = raw_expr->get_local_session_var_id();
@@ -1998,7 +2034,7 @@ bool ObStaticEngineExprCG::is_vectorized_expr(const ObRawExpr *raw_expr) const
 {
   bool bret = false;
   ObItemType type = raw_expr->get_expr_type();
-  if (T_QUESTIONMARK == type || IS_CONST_LITERAL(type)) {
+  if (T_QUESTIONMARK == type || IS_CONST_LITERAL(type) || raw_expr->has_flag(IS_ATTR_EXPR)) {
   } else {
     bret = raw_expr->is_vectorize_result();
   }

@@ -291,12 +291,52 @@ private:
 class ObStorageHATabletBuilderUtil
 {
 public:
+  struct BuildTabletTableExtraParam
+  {
+    BuildTabletTableExtraParam()
+      : is_leader_restore_(false), table_key_(), start_meta_macro_seq_(0) {}
+
+    int assign(const BuildTabletTableExtraParam &other);
+    bool is_valid() const;
+    void reset();
+
+    bool is_leader_restore_;
+    ObITable::TableKey table_key_;
+    int64_t start_meta_macro_seq_;
+
+    TO_STRING_KV(K_(is_leader_restore), K_(table_key), K_(start_meta_macro_seq));
+  };
+
+  struct BatchBuildTabletTablesExtraParam
+  {
+    BatchBuildTabletTablesExtraParam() : need_replace_remote_sstable_(false), param_array_() {}
+
+    int get_extra_table_param(
+        const ObITable::TableKey &table_key,
+        bool &is_exist,
+        BuildTabletTableExtraParam &param) const;
+    bool has_extra_param() const;
+    int add_extra_param(const BuildTabletTableExtraParam &extra_param);
+    void reset();
+    bool need_replace_remote_sstable_;
+    common::ObArray<BuildTabletTableExtraParam> param_array_;
+
+    TO_STRING_KV(K_(need_replace_remote_sstable), K_(param_array));
+  };
+
+
+public:
+  static int build_tablet_with_major_tables(
+      ObLS *ls,
+      const common::ObTabletID &tablet_id,
+      const ObTablesHandleArray &major_tables,
+      const ObStorageSchema &storage_schema);
   static int build_tablet_with_major_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
       const ObStorageSchema &storage_schema,
-      const bool need_replace_remote_sstable);
+      const BatchBuildTabletTablesExtraParam &extra_param);
   static int build_table_with_minor_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
@@ -314,14 +354,14 @@ private:
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
       const ObStorageSchema &storage_schema,
-      const bool need_replace_remote_sstable);
+      const BatchBuildTabletTablesExtraParam &extra_param);
   // for column store
   static int build_tablet_for_column_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
       const ObStorageSchema &storage_schema,
-      const bool need_replace_remote_sstable);
+      const BatchBuildTabletTablesExtraParam &extra_param);
 
   static int get_tablet_(
       const common::ObTabletID &tablet_id,
@@ -338,7 +378,8 @@ private:
       ObLS *ls,
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
-      const int64_t transfer_seq);
+      const int64_t transfer_seq,
+      const BuildTabletTableExtraParam &extra_param);
   static int inner_update_tablet_table_store_with_minor_(
       ObLS *ls,
       ObTablet *tablet,
@@ -359,11 +400,9 @@ private:
       const ObStorageSchema &storage_schema,
       const int64_t multi_version_start,
       const ObTablesHandleArray &co_tables,
-      const bool need_replace_remote_sstable);
+      const BatchBuildTabletTablesExtraParam &extra_batch_param);
   static int append_sstable_array_(ObTablesHandleArray &dest_array, const ObTablesHandleArray &src_array);
 };
-
-
 
 
 }

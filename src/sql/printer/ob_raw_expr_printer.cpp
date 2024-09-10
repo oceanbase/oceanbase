@@ -865,6 +865,10 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("geomcollection");
       break;
     }
+    case T_FUN_SYS_ARRAY: {
+      SET_SYMBOL_IF_EMPTY("array");
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown expr type", K(ret), "type", get_type_name(type));

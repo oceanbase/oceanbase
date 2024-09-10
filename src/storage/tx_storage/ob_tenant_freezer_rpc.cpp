@@ -155,6 +155,7 @@ int ObTenantFreezerP::do_major_freeze_()
 
       ObMajorFreezeParam param;
       param.transport_ = GCTX.net_frame_->get_req_transport();
+      param.freeze_reason_ = rootserver::MF_MAJOR_COMPACT_TRIGGER;
       if (OB_FAIL(param.add_freeze_info(tenant_id))) {
         LOG_WARN("push back failed", KR(ret), K(tenant_id));
       } else {

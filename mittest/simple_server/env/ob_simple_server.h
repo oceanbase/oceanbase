@@ -24,6 +24,7 @@ namespace oceanbase
 namespace observer
 {
 
+
 class ObSimpleServer
 {
 public:
@@ -33,6 +34,7 @@ public:
   ObSimpleServer(const std::string &env_prefix,
                  const char *log_disk_size = "10G",
                  const char *memory_limit = "10G",
+                 const char *datafile_size = "10G",
                  ObServer &server = ObServer::get_instance(),
                  const std::string &dir_prefix = "./store_");
   ~ObSimpleServer() { reset(); }
@@ -66,6 +68,7 @@ private:
   int mysql_port_;
   const char *log_disk_size_;
   const char *memory_limit_;
+  const char *datafile_size_;
   std::string data_dir_;
   std::string rs_list_;
   std::string optstr_;

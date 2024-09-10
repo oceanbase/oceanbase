@@ -616,6 +616,74 @@ int ObOperator::output_expr_sanity_check()
   return ret;
 }
 
+int ObOperator::output_nested_expr_sanity_check_batch(const ObExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; OB_SUCC(ret) && i < expr.attrs_cnt_; ++i) {
+    if (OB_FAIL(output_expr_sanity_check_batch_inner(*expr.attrs_[i]))) {
+      LOG_WARN("check nested expr sanity failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOperator::output_expr_sanity_check_batch_inner(const ObExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  VectorFormat vec_fmt = expr.get_format(eval_ctx_);
+  ObIVector *ivec = expr.get_vector(eval_ctx_);
+  if (vec_fmt == VEC_UNIFORM || vec_fmt == VEC_UNIFORM_CONST) {
+    ObUniformBase *uni_data = static_cast<ObUniformBase *>(ivec);
+    if (vec_fmt == VEC_UNIFORM_CONST) {
+      if (brs_.skip_->accumulate_bit_cnt(brs_.size_) < brs_.size_) {
+        ObDatum &datum = uni_data->get_datums()[0];
+        SANITY_CHECK_RANGE(datum.ptr_, datum.len_);
+      }
+    } else {
+      ObDatum *datums = uni_data->get_datums();
+      for (int j = 0; j < brs_.size_; j++) {
+        if (!brs_.skip_->at(j)) {
+          SANITY_CHECK_RANGE(datums[j].ptr_, datums[j].len_);
+        }
+      }
+    }
+  } else if (vec_fmt == VEC_FIXED) {
+    ObFixedLengthBase *fixed_data = static_cast<ObFixedLengthBase *>(ivec);
+    ObBitmapNullVectorBase *nulls = static_cast<ObBitmapNullVectorBase *>(ivec);
+    int32_t len = fixed_data->get_length();
+    for (int j = 0; j < brs_.size_; j++) {
+      if (!brs_.skip_->at(j) && !nulls->is_null(j)) {
+        SANITY_CHECK_RANGE(fixed_data->get_data() + j * len, len);
+      }
+    }
+  } else if (vec_fmt == VEC_DISCRETE) {
+    ObDiscreteBase *dis_data = static_cast<ObDiscreteBase *>(ivec);
+    ObBitmapNullVectorBase *nulls = static_cast<ObBitmapNullVectorBase *>(ivec);
+    char **ptrs = dis_data->get_ptrs();
+    ObLength *lens = dis_data->get_lens();
+    for (int j = 0; j < brs_.size_; j++) {
+      if (!brs_.skip_->at(j) && !nulls->is_null(j)) {
+        SANITY_CHECK_RANGE(ptrs[j], lens[j]);
+      }
+    }
+  } else if (vec_fmt == VEC_CONTINUOUS) {
+    ObContinuousBase *cont_base = static_cast<ObContinuousBase *>(ivec);
+    ObBitmapNullVectorBase *nulls = static_cast<ObBitmapNullVectorBase *>(ivec);
+    uint32_t *offsets = cont_base->get_offsets();
+    char *data = cont_base->get_data();
+    for (int j = 0; j < brs_.size_; j++) {
+      if (!brs_.skip_->at(j) && !nulls->is_null(j)) {
+        SANITY_CHECK_RANGE(data + offsets[j], offsets[j + 1] - offsets[j]);
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected format", K(ret), K(vec_fmt));
+  }
+
+  return ret;
+}
+
 int ObOperator::output_expr_sanity_check_batch()
 {
   int ret = OB_SUCCESS;
@@ -627,57 +695,12 @@ int ObOperator::output_expr_sanity_check_batch()
       LOG_WARN("error unexpected, expr is nullptr", K(ret));
     } else if (OB_FAIL(expr->eval_vector(eval_ctx_, brs_))) {
       LOG_WARN("eval vector failed", K(ret));
-    } else {
-      VectorFormat vec_fmt = expr->get_format(eval_ctx_);
-      ObIVector *ivec = expr->get_vector(eval_ctx_);
-      if (vec_fmt == VEC_UNIFORM || vec_fmt == VEC_UNIFORM_CONST) {
-        ObUniformBase *uni_data = static_cast<ObUniformBase *>(ivec);
-        if (vec_fmt == VEC_UNIFORM_CONST) {
-          if (brs_.skip_->accumulate_bit_cnt(brs_.size_) < brs_.size_) {
-            ObDatum &datum = uni_data->get_datums()[0];
-            SANITY_CHECK_RANGE(datum.ptr_, datum.len_);
-          }
-        } else {
-          ObDatum *datums = uni_data->get_datums();
-          for (int j = 0; j < brs_.size_; j++) {
-            if (!brs_.skip_->at(j)) {
-              SANITY_CHECK_RANGE(datums[j].ptr_, datums[j].len_);
-            }
-          }
-        }
-      } else if (vec_fmt == VEC_FIXED) {
-        ObFixedLengthBase *fixed_data = static_cast<ObFixedLengthBase *>(ivec);
-        ObBitmapNullVectorBase *nulls = static_cast<ObBitmapNullVectorBase *>(ivec);
-        int32_t len = fixed_data->get_length();
-        for (int j = 0; j < brs_.size_; j++) {
-          if (!brs_.skip_->at(j) && !nulls->is_null(j)) {
-            SANITY_CHECK_RANGE(fixed_data->get_data() + j * len, len);
-          }
-        }
-      } else if (vec_fmt == VEC_DISCRETE) {
-        ObDiscreteBase *dis_data = static_cast<ObDiscreteBase *>(ivec);
-        ObBitmapNullVectorBase *nulls = static_cast<ObBitmapNullVectorBase *>(ivec);
-        char **ptrs = dis_data->get_ptrs();
-        ObLength *lens = dis_data->get_lens();
-        for (int j = 0; j < brs_.size_; j++) {
-          if (!brs_.skip_->at(j) && !nulls->is_null(j)) {
-            SANITY_CHECK_RANGE(ptrs[j], lens[j]);
-          }
-        }
-      } else if (vec_fmt == VEC_CONTINUOUS) {
-        ObContinuousBase *cont_base = static_cast<ObContinuousBase *>(ivec);
-        ObBitmapNullVectorBase *nulls = static_cast<ObBitmapNullVectorBase *>(ivec);
-        uint32_t *offsets = cont_base->get_offsets();
-        char *data = cont_base->get_data();
-        for (int j = 0; j < brs_.size_; j++) {
-          if (!brs_.skip_->at(j) && !nulls->is_null(j)) {
-            SANITY_CHECK_RANGE(data + offsets[j], offsets[j + 1] - offsets[j]);
-          }
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected format", K(ret), K(vec_fmt));
+    } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx_))) {
+      if (OB_FAIL(output_nested_expr_sanity_check_batch(*expr))) {
+        LOG_WARN("check nested expr sanity failed", K(ret));
       }
+    } else if (OB_FAIL(output_expr_sanity_check_batch_inner(*expr))) {
+      LOG_WARN("expr sanity check batch failed", K(ret));
     }
   }
   return ret;
@@ -1402,7 +1425,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         op_monitor_info_.skipped_rows_count_ += skipped_rows_count; // for batch
         ++op_monitor_info_.output_batches_; // for batch
         if (!got_first_row_ && !brs_.end_) {
-          op_monitor_info_.first_row_time_ = ObClockGenerator::getClock();;
+          op_monitor_info_.first_row_time_ = ObClockGenerator::getClock();
           got_first_row_ = true;
         }
         if (brs_.end_) {
@@ -1463,7 +1486,7 @@ int ObOperator::convert_vector_format()
     // new operator -> old operator
     FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
       LOG_TRACE("cast to uniform", K(*e));
-      if (OB_FAIL((*e)->cast_to_uniform(brs_.size_, eval_ctx_))) {
+      if (OB_FAIL((*e)->cast_to_uniform(brs_.size_, eval_ctx_, brs_.skip_))) {
         LOG_WARN("expr evaluate failed", K(ret), KPC(*e), K_(eval_ctx));
       }
     }

@@ -49,7 +49,7 @@ private:
   const sql::ObExprPtrIArray *output_exprs_;
   // aggregate cell indexes for each output(agg) expr
   ObSEArray<ObGroupByAggIdxArray, 2> group_by_agg_idxs_;
-  ObGroupByCell *group_by_cell_;
+  ObGroupByCellBase *group_by_cell_;
   ObCGIndexPrefetcher index_prefetcher_;
 };
 

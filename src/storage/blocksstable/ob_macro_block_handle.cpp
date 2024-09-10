@@ -70,15 +70,14 @@ void ObMacroBlockHandle::reset()
 
 void ObMacroBlockHandle::reuse()
 {
-  io_handle_.reset();
-  reset_macro_id();
+  reset();
 }
 
 void ObMacroBlockHandle::reset_macro_id()
 {
   int ret = OB_SUCCESS;
   if (macro_id_.is_valid()) {
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id_))) {
+    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_id_))) {
       LOG_ERROR("failed to dec macro block ref cnt", K(ret), K(macro_id_));
     } else {
       macro_id_.reset();
@@ -142,9 +141,11 @@ int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
     io_info.fd_.first_id_ = read_info.macro_block_id_.first_id();
     io_info.fd_.second_id_ = read_info.macro_block_id_.second_id();
     io_info.fd_.third_id_ = read_info.macro_block_id_.third_id();
+    io_info.fd_.device_handle_ = THE_IO_DEVICE;
     const int64_t real_timeout_ms = min(read_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
     io_info.user_data_buf_ = read_info.buf_;
+    io_info.buf_ = read_info.buf_; // for sync io
     // resource manager level is higher than default
     io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
@@ -196,6 +197,7 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
     io_info.fd_.first_id_ = macro_id_.first_id();
     io_info.fd_.second_id_ = macro_id_.second_id();
     io_info.fd_.third_id_ = macro_id_.third_id();
+    io_info.fd_.device_handle_ = THE_IO_DEVICE;
     if (OB_FAIL(write_info.fill_io_info_for_backup(macro_id_, io_info))) {
       LOG_WARN("failed to fill io info for backup", K(ret), K_(macro_id));
     }
@@ -206,7 +208,7 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
 
     io_info.flag_.set_write();
     if (FAILEDx(ObIOManager::get_instance().aio_write(io_info, io_handle_))) {
-      LOG_WARN("Fail to aio_write", K(ret), K(write_info));
+      LOG_WARN("Fail to aio_write", K(ret), K_(macro_id), K(write_info));
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(macro_id_))) {
@@ -239,6 +241,11 @@ int ObMacroBlockHandle::wait(const int64_t wait_timeout_ms)
   return ret;
 }
 
+int ObMacroBlockHandle::get_io_ret() const
+{
+  return io_handle_.get_io_ret();
+}
+
 int ObMacroBlockHandle::set_macro_block_id(const MacroBlockId &macro_block_id)
 {
   int ret = common::OB_SUCCESS;
@@ -250,7 +257,6 @@ int ObMacroBlockHandle::set_macro_block_id(const MacroBlockId &macro_block_id)
     ret = common::OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(macro_block_id));
   } else {
-    ob_assert(!macro_block_id.is_local_id() || 0 == macro_block_id.device_id()); // TODO(fenggu.yh)
     macro_id_ = macro_block_id;
     if (macro_id_.is_valid()) {
       if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id_))) {
@@ -265,27 +271,27 @@ int ObMacroBlockHandle::set_macro_block_id(const MacroBlockId &macro_block_id)
 }
 
 /**
- * --------------------------------------ObMacroBlocksHandle----------------------------------------
+ * --------------------------------------ObStorageObjectsHandle----------------------------------------
  */
-ObMacroBlocksHandle::ObMacroBlocksHandle()
+ObStorageObjectsHandle::ObStorageObjectsHandle()
   : macro_id_list_()
 {
   macro_id_list_.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "MacroIdList"));
 }
 
-ObMacroBlocksHandle::~ObMacroBlocksHandle()
+ObStorageObjectsHandle::~ObStorageObjectsHandle()
 {
   reset();
 }
 
-int ObMacroBlocksHandle::add(const MacroBlockId &macro_id)
+int ObStorageObjectsHandle::add(const MacroBlockId &macro_id)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(macro_id_list_.push_back(macro_id))) {
     LOG_WARN("failed to add macro id", K(ret));
   } else {
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_id))) {
       LOG_ERROR("failed to inc macro block ref cnt", K(ret), K(macro_id));
     }
 
@@ -297,7 +303,7 @@ int ObMacroBlocksHandle::add(const MacroBlockId &macro_id)
   return ret;
 }
 
-int ObMacroBlocksHandle::assign(const common::ObIArray<MacroBlockId> &list)
+int ObStorageObjectsHandle::assign(const common::ObIArray<MacroBlockId> &list)
 {
   int ret = OB_SUCCESS;
 
@@ -308,7 +314,7 @@ int ObMacroBlocksHandle::assign(const common::ObIArray<MacroBlockId> &list)
     } else if (OB_FAIL(macro_id_list_.push_back(list.at(i)))) {
       LOG_WARN("failed to add macro", K(ret));
     } else {
-      if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(list.at(i)))) {
+      if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(list.at(i)))) {
         LOG_ERROR("failed to inc macro block ref cnt", K(ret), "macro_id", list.at(i));
       }
       if (OB_FAIL(ret)) {
@@ -319,13 +325,13 @@ int ObMacroBlocksHandle::assign(const common::ObIArray<MacroBlockId> &list)
   return ret;
 }
 
-void ObMacroBlocksHandle::reset()
+void ObStorageObjectsHandle::reset()
 {
   if (macro_id_list_.count() > 0) {
     int tmp_ret = OB_SUCCESS;
 
     for (int64_t i = 0; i < macro_id_list_.count(); ++i) {
-      if (OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id_list_.at(i)))) {
+      if (OB_SUCCESS != (tmp_ret = OB_STORAGE_OBJECT_MGR.dec_ref(macro_id_list_.at(i)))) {
         LOG_ERROR_RET(tmp_ret, "failed to dec macro block ref cnt", K(tmp_ret), "macro_id", macro_id_list_.at(i));
       }
     }
@@ -333,7 +339,7 @@ void ObMacroBlocksHandle::reset()
   macro_id_list_.reset();
 }
 
-int ObMacroBlocksHandle::reserve(const int64_t block_cnt)
+int ObStorageObjectsHandle::reserve(const int64_t block_cnt)
 {
   int ret = OB_SUCCESS;
   if (block_cnt > 0) {

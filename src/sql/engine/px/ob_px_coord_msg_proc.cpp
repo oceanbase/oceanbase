@@ -159,3 +159,9 @@ int ObPxSubCoordMsgProc::on_whole_msg(const RDWinFuncPXWholeMsg &pkt) const
   ObDhWholeeMsgProc<RDWinFuncPXWholeMsg> proc;
   return proc.on_whole_msg(sqc_ctx_, dtl::DH_RD_WINFUNC_PX_WHOLE_MSG, pkt);
 }
+
+int ObPxSubCoordMsgProc::on_whole_msg(const ObJoinFilterCountRowWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<ObJoinFilterCountRowWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG, pkt);
+}

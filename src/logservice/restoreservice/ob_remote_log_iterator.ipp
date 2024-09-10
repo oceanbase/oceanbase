@@ -97,6 +97,19 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
 }
 
 template<class LogEntryType>
+int ObRemoteLogIterator<LogEntryType>::set_io_context(const palf::LogIOContext &io_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(gen_)) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObRemoteLogIterator not init", K(ret), K(inited_));
+  } else if (OB_FAIL(gen_->set_io_context(io_ctx))) {
+    CLOG_LOG(WARN, "set_io_context failed", K(ret), K(io_ctx));
+  } else { }
+  return ret;
+}
+
+template<class LogEntryType>
 int ObRemoteLogIterator<LogEntryType>::next(LogEntryType &entry, LSN &lsn, const char *&buf, int64_t &buf_size)
 {
   int ret = OB_SUCCESS;

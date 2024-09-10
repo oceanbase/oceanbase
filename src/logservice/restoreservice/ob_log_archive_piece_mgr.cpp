@@ -434,7 +434,7 @@ int ObLogArchivePieceContext::get_round_range_()
   int64_t max_round_id = 0;
   share::ObArchiveStore archive_store;
   if (OB_FAIL(load_archive_meta_())) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_INVALID_BACKUP_DEST;
       CLOG_LOG(WARN, "archive meta file not exist, invalid archive dest", K(id_), K(archive_dest_));
     } else {
@@ -1047,9 +1047,9 @@ int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id,
   if (OB_FAIL(archive_store.init(archive_dest_))) {
     CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
   } else if (OB_FAIL(archive_store.read_single_ls_info(dest_id, round_id, piece_id, id, desc))
-      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+      && OB_OBJECT_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single piece file failed", K(ret), K(dest_id), K(round_id), K(piece_id), K(id));
-  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+  } else if (OB_OBJECT_NOT_EXIST == ret) {
     exist = false;
     ret = OB_SUCCESS;
     CLOG_LOG(INFO, "ls not exist in cur piece", K(dest_id), K(round_id), K(piece_id), K(id));
@@ -1439,6 +1439,8 @@ int ObLogArchivePieceContext::get_max_log_in_file_(const ObLogArchivePieceContex
           K(context_match), K(file_id), K(file_offset), K(id_));
     } else if (OB_FAIL(iter.init(base_lsn, [](){ return palf::LSN(palf::LOG_MAX_LSN_VAL); }, &mem_storage))) {
       CLOG_LOG(WARN, "iter init failed", K(id_), K(base_lsn), K(log_buf), K(log_buf_size));
+    } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_.id(), palf::LogIOUser::ARCHIVE)))) {
+      CLOG_LOG(WARN, "iter set_io_context failed", K(id_), K(base_lsn));
     } else {
       palf::LogGroupEntry entry;
       while (OB_SUCC(ret)) {
@@ -1544,6 +1546,8 @@ int ObLogArchivePieceContext::seek_in_file_(const int64_t file_id, const SCN &sc
     CLOG_LOG(WARN, "MemoryStorage append failed", K(ret));
   } else if (OB_FAIL(iter.init(base_lsn, [](){ return palf::LSN(palf::LOG_MAX_LSN_VAL); }, &mem_storage))) {
     CLOG_LOG(WARN, "iter init failed", K(ret));
+  } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_.id(), palf::LogIOUser::ARCHIVE)))) {
+    CLOG_LOG(WARN, "iter set_io_context failed", K(ret));
   } else {
     palf::LogGroupEntry entry;
     palf::LSN lsn;
@@ -1600,7 +1604,9 @@ int ObLogArchivePieceContext::read_part_file_(const int64_t round_id,
           round_id, piece_id, id_, file_id, path))) {
     CLOG_LOG(WARN, "get ls archive file path failed", K(ret), KPC(this));
   } else if (OB_FAIL(archive::ObArchiveFileUtils::range_read(path.get_ptr(),
-          archive_dest_.get_storage_info(), buf, buf_size, file_offset, read_size))) {
+          archive_dest_.get_storage_info(),
+          common::ObStorageIdMod(dest_id_, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+          buf, buf_size, file_offset, read_size))) {
     CLOG_LOG(WARN, "range read failed", K(ret), K(path));
   }
   return ret;
@@ -1700,7 +1706,9 @@ int ObLogArchivePieceContext::get_ls_meta_in_piece_(
             round_context_.round_id_, piece_id, id_, meta_type, file_id, path))) {
       CLOG_LOG(WARN, "ger ls meta record prefix failed", K(ret), KPC(this));
     } else if (OB_FAIL(archive::ObArchiveFileUtils::read_file(path.get_obstr(),
-            archive_dest_.get_storage_info(), buf, buf_size, read_size))) {
+            archive_dest_.get_storage_info(),
+            common::ObStorageIdMod(dest_id_, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+            buf, buf_size, read_size))) {
       CLOG_LOG(WARN, "read_file failed", K(ret), K(path), KPC(this));
     }
   }
@@ -2165,6 +2173,9 @@ int ObLogRawPathPieceContext::read_part_file_(const int64_t file_id,
   char uri_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
   char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   share::ObBackupStorageInfo storage_info;
+  // get dest_id from __all_log_restore_source is difficult,
+  // so set dest_id of restore as OB_INVALID_ID
+  const uint64_t dest_id = OB_INVALID_ID;
   if (OB_FAIL((get_cur_uri(uri_str, sizeof(uri_str))))) {
     CLOG_LOG(WARN, "fail to get current uri ptr", KPC(this));
   } else if (OB_FAIL(get_cur_storage_info(storage_info_str, sizeof(storage_info_str)))) {
@@ -2174,7 +2185,9 @@ int ObLogRawPathPieceContext::read_part_file_(const int64_t file_id,
   } else if (OB_FAIL(storage_info.set(uri_str, storage_info_str))) {
     CLOG_LOG(WARN, "fail to set storage info", K(ret));
   } else if (OB_FAIL(archive::ObArchiveFileUtils::range_read(path.get_ptr(),
-          &storage_info, buf, buf_size, file_offset, read_size))) {
+     &storage_info,
+     common::ObStorageIdMod(dest_id, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
+     buf, buf_size, file_offset, read_size))) {
     CLOG_LOG(WARN, "range read failed", K(ret), K(path));
   }
   return ret;

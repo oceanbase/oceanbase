@@ -177,6 +177,24 @@ struct ObNullSafeDatumUDTCmp
   }
 };
 
+template <bool NULL_FIRST, bool HAS_LOB_HEADER>
+struct ObNullSafeDatumCollectionCmp
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret) {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(l.is_null()) && OB_UNLIKELY(r.is_null())) {
+      cmp_ret = 0;
+    } else if (OB_UNLIKELY(l.is_null())) {
+      cmp_ret = NULL_FIRST ? -1 : 1;
+    } else if (OB_UNLIKELY(r.is_null())) {
+      cmp_ret = NULL_FIRST ? 1 : -1;
+    } else {
+      ret = datum_cmp::ObDatumCollectionCmp<HAS_LOB_HEADER>::cmp(l, r, cmp_ret);
+    }
+    return ret;
+  }
+};
+
 template <ObScale SCALE, bool NULL_FIRST>
 struct ObNullSafeFixedDoubleCmp
 {
@@ -372,6 +390,28 @@ struct InitGeoCmpArray
 
 bool g_geo_cmp_array_inited = ObArrayConstIniter<1, InitGeoCmpArray>::init();
 
+
+static ObDatumCmpFuncType NULLSAFE_COLLECTION_CMP_FUNCS[2][2];
+
+template<int IDX>
+struct InitCollectionCmpArray
+{
+  template <bool... args>
+  using Cmp = ObNullSafeDatumCollectionCmp<args...>;
+  using Def = datum_cmp::ObDatumCollectionCmp<false>;
+
+  static void init_array()
+  {
+    auto &funcs = NULLSAFE_COLLECTION_CMP_FUNCS;
+    funcs[0][0] = Def::defined_ ? &Cmp<0, 0>::cmp : NULL;
+    funcs[0][1] = Def::defined_ ? &Cmp<0, 1>::cmp : NULL;
+    funcs[1][0] = Def::defined_ ? &Cmp<1, 1>::cmp : NULL;
+    funcs[1][1] = Def::defined_ ? &Cmp<1, 1>::cmp : NULL;
+  }
+};
+
+bool g_collection_cmp_array_inited = ObArrayConstIniter<1, InitCollectionCmpArray>::init();
+
 static ObDatumCmpFuncType FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][2];
 template <int X>
 struct InitFixedDoubleCmpArray
@@ -438,6 +478,8 @@ ObDatumCmpFuncType ObDatumFuncs::get_nullsafe_cmp_func(
     func_ptr = FIXED_DOUBLE_CMP_FUNCS[max_scale][null_pos_idx];
   } else if (is_geometry(type1) && is_geometry(type2)) {
     func_ptr = NULLSAFE_GEO_CMP_FUNCS[null_pos_idx][has_lob_header];
+  } else if (is_collection(type1) && is_collection(type2)) {
+    func_ptr = NULLSAFE_COLLECTION_CMP_FUNCS[null_pos_idx][has_lob_header];
   } else if (ob_is_decimal_int(type1) && ob_is_decimal_int(type2) && prec1 != PRECISION_UNKNOWN_YET
              && prec2 != PRECISION_UNKNOWN_YET) {
     ObDecimalIntWideType lw = get_decimalint_type(prec1);
@@ -469,6 +511,12 @@ bool ObDatumFuncs::is_geometry(const ObObjType type)
 {
   const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
   return (tc == ObGeometryTC);
+}
+
+bool ObDatumFuncs::is_collection(const ObObjType type)
+{
+  const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
+  return (tc == ObCollectionSQLTC);
 }
 
 /**
@@ -549,6 +597,20 @@ struct DatumJsonHashCalculator : public DefHashMethod<T>
 
 template <typename T, bool HAS_LOB_HEADER>
 struct DatumGeoHashCalculator : public DefHashMethod<T>
+{
+  static int calc_datum_hash(const ObDatum &datum, const uint64_t seed, uint64_t &res)
+  {
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
+  }
+
+  static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
+  {
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
+  }
+};
+
+template <typename T, bool HAS_LOB_HEADER>
+struct DatumCollectionHashCalculator : public DefHashMethod<T>
 {
   static int calc_datum_hash(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
@@ -1115,6 +1177,58 @@ struct InitBasicGeoFuncArray
   }
 };
 
+static ObExprBasicFuncs EXPR_BASIC_COLLECTION_FUNCS[2];
+template<int IDX>
+struct InitBasicCollectionFuncArray
+{
+  template <typename T, bool HAS_LOB_HEADER>
+  using Hash = DefHashFunc<DatumCollectionHashCalculator<T, HAS_LOB_HEADER>>;
+  template <bool NULL_FIRST>
+  using TCCmp = ObNullSafeDatumTCCmp<ObCollectionSQLTC, ObCollectionSQLTC, NULL_FIRST>;
+  using TCDef = datum_cmp::ObDatumTCCmp<ObCollectionSQLTC, ObCollectionSQLTC>;
+  template <bool NULL_FIRST, bool HAS_LOB_HEADER>
+  using TypeCmp = ObNullSafeDatumCollectionCmp<NULL_FIRST, HAS_LOB_HEADER>;
+  using TypeDef = datum_cmp::ObDatumCollectionCmp<false>;
+
+  static void init_array()
+  {
+    auto &basic_funcs = EXPR_BASIC_COLLECTION_FUNCS;
+    basic_funcs[0].default_hash_ = Hash<ObDefaultHash, false>::hash;
+    basic_funcs[0].default_hash_batch_= Hash<ObDefaultHash, false>::hash_batch;
+    basic_funcs[0].murmur_hash_ = Hash<ObMurmurHash, false>::hash;
+    basic_funcs[0].murmur_hash_batch_ = Hash<ObMurmurHash, false>::hash_batch;
+    basic_funcs[0].xx_hash_ = Hash<ObXxHash, false>::hash;
+    basic_funcs[0].xx_hash_batch_ = Hash<ObXxHash, false>::hash_batch;
+    basic_funcs[0].wy_hash_ = Hash<ObWyHash, false>::hash;
+    basic_funcs[0].wy_hash_batch_ = Hash<ObWyHash, false>::hash_batch;
+    basic_funcs[0].null_first_cmp_ = TypeDef::defined_
+        ? &TypeCmp<1, 0>::cmp
+        : TCDef::defined_ ? &TCCmp<1>::cmp : NULL;
+    basic_funcs[0].null_last_cmp_ = TypeDef::defined_
+        ? &TypeCmp<0, 0>::cmp
+        : TCDef::defined_ ? &TCCmp<0>::cmp : NULL;
+    basic_funcs[0].murmur_hash_v2_ = Hash<ObMurmurHash, false>::hash_v2;
+    basic_funcs[0].murmur_hash_v2_batch_ = Hash<ObMurmurHash, false>::hash_v2_batch;
+
+    basic_funcs[1].default_hash_ = Hash<ObDefaultHash, true>::hash;
+    basic_funcs[1].default_hash_batch_= Hash<ObDefaultHash, true>::hash_batch;
+    basic_funcs[1].murmur_hash_ = Hash<ObMurmurHash, true>::hash;
+    basic_funcs[1].murmur_hash_batch_ = Hash<ObMurmurHash, true>::hash_batch;
+    basic_funcs[1].xx_hash_ = Hash<ObXxHash, true>::hash;
+    basic_funcs[1].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
+    basic_funcs[1].wy_hash_ = Hash<ObWyHash, true>::hash;
+    basic_funcs[1].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
+    basic_funcs[1].null_first_cmp_ = TypeDef::defined_
+        ? &TypeCmp<1, 1>::cmp
+        : TCDef::defined_ ? &TCCmp<1>::cmp : NULL;
+    basic_funcs[1].null_last_cmp_ = TypeDef::defined_
+        ? &TypeCmp<0, 1>::cmp
+        : TCDef::defined_ ? &TCCmp<0>::cmp : NULL;
+    basic_funcs[1].murmur_hash_v2_ = Hash<ObMurmurHash, true>::hash_v2;
+    basic_funcs[1].murmur_hash_v2_batch_ = Hash<ObMurmurHash, true>::hash_v2_batch;
+  }
+};
+
 static ObExprBasicFuncs FIXED_DOUBLE_BASIC_FUNCS[OB_NOT_FIXED_SCALE];
 template <int X>
 struct InitFixedDoubleBasicFuncArray
@@ -1177,6 +1291,7 @@ bool g_basic_funcs_array_inited = ObArrayConstIniter<ObMaxType, InitBasicFuncArr
 bool g_basic_str_array_inited = Ob2DArrayConstIniter<CS_TYPE_MAX, 2, InitBasicStrFuncArray>::init();
 bool g_basic_json_array_inited = ObArrayConstIniter<1, InitBasicJsonFuncArray>::init();
 bool g_basic_geo_array_inited = ObArrayConstIniter<1, InitBasicGeoFuncArray>::init();
+bool g_basic_collection_array_inited = ObArrayConstIniter<1, InitBasicCollectionFuncArray>::init();
 
 bool g_fixed_double_basic_func_array_inited =
   ObArrayConstIniter<OB_NOT_FIXED_SCALE, InitFixedDoubleBasicFuncArray>::init();
@@ -1247,7 +1362,7 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
     } else if (ob_is_user_defined_sql_type(type)) {
       res = &EXPR_BASIC_UDT_FUNCS[0];
     } else if (ob_is_collection_sql_type(type)) {
-      res = &EXPR_BASIC_STR_FUNCS[cs_type][false][has_lob_locator];
+      res = &EXPR_BASIC_COLLECTION_FUNCS[has_lob_locator];
     } else if (!is_oracle_mode && ob_is_double_type(type) &&
                 scale > SCALE_UNKNOWN_YET && scale < OB_NOT_FIXED_SCALE) {
       res = &FIXED_DOUBLE_BASIC_FUNCS[scale];
@@ -1331,6 +1446,11 @@ REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_GEO_CMP,
                    NULLSAFE_GEO_CMP_FUNCS,
                    sizeof(NULLSAFE_GEO_CMP_FUNCS) / sizeof(void*));
 
+static_assert(2 * 2 == sizeof(NULLSAFE_COLLECTION_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_COLLECTION_CMP,
+                   NULLSAFE_COLLECTION_CMP_FUNCS,
+                   sizeof(NULLSAFE_COLLECTION_CMP_FUNCS) / sizeof(void*));
 
 static_assert(OB_NOT_FIXED_SCALE * 2 == sizeof(FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
               "unexpected size");
@@ -1390,6 +1510,8 @@ static ExprBasicFuncSerPart2 EXPR_BASIC_DECINT_FUNCS_PART2[DECIMAL_INT_MAX];
 
 static ExprBasicFuncSerPart1 EXPR_BASIC_UDT_FUNCS_PART1[1];
 static ExprBasicFuncSerPart2 EXPR_BASIC_UDT_FUNCS_PART2[1];
+static ExprBasicFuncSerPart1 EXPR_BASIC_COLLECTION_FUNCS_PART1[2];
+static ExprBasicFuncSerPart2 EXPR_BASIC_COLLECTION_FUNCS_PART2[2];
 
 bool split_basic_func_for_ser(void)
 {
@@ -1423,6 +1545,10 @@ bool split_basic_func_for_ser(void)
   for (int64_t i = 0; i < sizeof(EXPR_BASIC_UDT_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
     EXPR_BASIC_UDT_FUNCS_PART1[i].from(EXPR_BASIC_UDT_FUNCS[i]);
     EXPR_BASIC_UDT_FUNCS_PART2[i].from(EXPR_BASIC_UDT_FUNCS[i]);
+  }
+  for (int64_t i = 0; i < sizeof(EXPR_BASIC_COLLECTION_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
+    EXPR_BASIC_COLLECTION_FUNCS_PART1[i].from(EXPR_BASIC_COLLECTION_FUNCS[i]);
+    EXPR_BASIC_COLLECTION_FUNCS_PART2[i].from(EXPR_BASIC_COLLECTION_FUNCS[i]);
   }
   return true;
 }
@@ -1493,6 +1619,15 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_UDT_BASIC_PART1,
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_UDT_BASIC_PART2,
                    EXPR_BASIC_UDT_FUNCS_PART2,
                    sizeof(EXPR_BASIC_UDT_FUNCS_PART2) / sizeof(void *));
+
+static_assert(2 * EXPR_BASIC_FUNC_MEMBER_CNT == sizeof(EXPR_BASIC_COLLECTION_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_EXPR_COLLECTION_BASIC_PART1,
+                   EXPR_BASIC_COLLECTION_FUNCS_PART1,
+                   sizeof(EXPR_BASIC_COLLECTION_FUNCS_PART1) / sizeof(void *));
+REG_SER_FUNC_ARRAY(OB_SFA_EXPR_COLLECTION_BASIC_PART2,
+                   EXPR_BASIC_COLLECTION_FUNCS_PART2,
+                   sizeof(EXPR_BASIC_COLLECTION_FUNCS_PART2) / sizeof(void *));
 
 } // end namespace sql
 } // end namespace oceanbase

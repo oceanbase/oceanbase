@@ -17,8 +17,10 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "sql/das/ob_das_utils.h"
+#include "sql/das/ob_das_dml_vec_iter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
+#include "storage/blocksstable/ob_datum_row_utils.h"
 
 using namespace oceanbase::common;
 
@@ -59,10 +61,11 @@ int ObDASDomainUtils::generate_spatial_index_rows(
   } else {
     ObS2Adapter s2object(&allocator, srid != 0 ? srs_item->is_geographical_srs() : false);
     ObSpatialMBR spa_mbr;
-    ObObj *obj_arr = NULL;
     ObS2Cellids cellids;
-    char *mbr = NULL;
+    char *mbr = nullptr;
     int64_t mbr_len = 0;
+    void *rows_buf = nullptr;
+    blocksstable::ObDatumRow *rows = nullptr;
     if (OB_FAIL(s2object.init(wkb_str, srs_bound))) {
       LOG_WARN("Init s2object failed", K(ret));
     } else if (OB_FAIL(s2object.get_cellids(cellids, false))) {
@@ -81,38 +84,35 @@ int ObDASDomainUtils::generate_spatial_index_rows(
       LOG_WARN("failed to alloc memory for spatial index row mbr", K(ret));
     } else if (OB_FAIL(spa_mbr.to_char(mbr, mbr_len))) {
       LOG_WARN("failed transform ObSpatialMBR to string", K(ret));
+    } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(cellids.size() * sizeof(blocksstable::ObDatumRow))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for spatial index rows buffer", K(ret));
     } else {
+      rows = new (rows_buf) blocksstable::ObDatumRow[cellids.size()];
+      int64_t cellid_col_idx = 0;
+      int64_t mbr_col_idx = 1;
       for (uint64_t i = 0; OB_SUCC(ret) && i < cellids.size(); i++) {
-        if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * rowkey_num)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory for spatial index row cells", K(ret));
+        if (OB_FAIL(rows[i].init(allocator, rowkey_num))) {
+          LOG_WARN("init datum row failed", K(ret), K(rowkey_num));
         } else {
           // 索引行[cellid_obj][mbr_obj][rowkey_obj]
           for(uint64_t j = 0; OB_SUCC(ret) && j < rowkey_num; j++) {
-            obj_arr[j].set_nop_value();
             const ObObjMeta &col_type = das_ctdef.column_types_.at(j);
             const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
             int64_t projector_idx = row_projector.at(j);
-            if (OB_FAIL(dml_row.cells()[projector_idx].to_obj(obj_arr[j], col_type))) {
-              LOG_WARN("stored row to new row obj failed", K(ret),
-                  K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(j));
-            } else if (OB_FAIL(ObDASUtils::reshape_storage_value(col_type, col_accuracy, allocator, obj_arr[j]))) {
+            if (FALSE_IT(rows[i].storage_datums_[j].shallow_copy_from_datum(dml_row.cells()[projector_idx]))) {
+            } else if (rows[i].storage_datums_[j].is_null()) {
+            } else if (OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
               LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
             }
           }
           if (OB_SUCC(ret)) {
-            int64_t cellid_col_idx = 0;
-            int64_t mbr_col_idx = 1;
-            obj_arr[cellid_col_idx].set_uint64(cellids.at(i));
+            rows[i].storage_datums_[cellid_col_idx].set_uint(cellids.at(i));
             ObString mbr_val(mbr_len, mbr);
-            obj_arr[mbr_col_idx].set_varchar(mbr_val);
-            obj_arr[mbr_col_idx].set_collation_type(CS_TYPE_BINARY);
-            obj_arr[mbr_col_idx].set_collation_level(CS_LEVEL_IMPLICIT);
-            ObNewRow row;
-            row.cells_ = obj_arr;
-            row.count_ = rowkey_num;
-            if (OB_FAIL(spat_rows.push_back(row))) {
-              LOG_WARN("failed to push back spatial index row", K(ret), K(row));
+            rows[i].storage_datums_[mbr_col_idx].set_string(mbr_val);
+            // not set_collation_type(CS_TYPE_BINARY) and set_collation_level(CS_LEVEL_IMPLICIT)
+            if (OB_FAIL(spat_rows.push_back(&rows[i]))) {
+              LOG_WARN("failed to push back spatial index row", K(ret), K(rows[i]));
             }
           }
         }
@@ -137,7 +137,8 @@ int ObDASDomainUtils::generate_spatial_index_rows(
   const int64_t ft_word_bkt_cnt = MAX(fulltext.length() / 10, 2);
   int64_t doc_length = 0;
   ObFTWordMap ft_word_map;
-  ObObj *obj_arr = nullptr;
+  void *rows_buf = nullptr;
+  blocksstable::ObDatumRow *rows = nullptr;
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(!ft_obj_meta.is_valid())
       || OB_UNLIKELY(doc_id.length() != sizeof(ObDocId) || doc_id.empty()) ) {
@@ -153,47 +154,41 @@ int ObDASDomainUtils::generate_spatial_index_rows(
         K(ft_obj_meta.get_collation_type()), K(fulltext));
   } else if (0 == ft_word_map.size()) {
     ret = OB_ITER_END;
-  } else {
-    const int64_t obj_cnt = ft_word_map.size() * FT_WORD_DOC_COL_CNT;
-    const int64_t obj_arr_size = sizeof(ObObj) * obj_cnt;
-    if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(obj_arr_size)))) {
+  } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(ft_word_map.size() * sizeof(blocksstable::ObDatumRow))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate obj array", K(ret), K(obj_arr_size));
-    } else {
-      for (int64_t i = 0; i < obj_cnt; ++i) {
-        new (obj_arr + i) ObObj();
-      }
-    }
+      LOG_WARN("failed to alloc memory for full text index rows buffer", K(ret));
+  } else {
     int64_t i = 0;
+    rows = new (rows_buf) blocksstable::ObDatumRow[ft_word_map.size()];
     for (ObFTWordMap::const_iterator iter = ft_word_map.begin();
          OB_SUCC(ret) && iter != ft_word_map.end();
          ++iter) {
-      const ObFTWord &ft_word = iter->first;
-      const int64_t word_cnt = iter->second;
-      // index row format
-      //  -    FTS_INDEX: [WORD], [DOC_ID], [WORD_COUNT]
-      //  - FTS_DOC_WORD: [DOC_ID], [WORD], [WORD_COUNT]
-      const int64_t word_idx = is_fts_index_aux ? 0 : 1;
-      const int64_t doc_id_idx = is_fts_index_aux ? 1 : 0;
-      const int64_t word_cnt_idx = 2;
-      const int64_t doc_len_idx = 3;
-      obj_arr[i * FT_WORD_DOC_COL_CNT + word_idx].set_varchar(ft_word.get_word());
-      obj_arr[i * FT_WORD_DOC_COL_CNT + word_idx].set_meta_type(ft_obj_meta);
-      obj_arr[i * FT_WORD_DOC_COL_CNT + doc_id_idx].set_varbinary(doc_id);
-      obj_arr[i * FT_WORD_DOC_COL_CNT + word_cnt_idx].set_uint64(word_cnt);
-      obj_arr[i * FT_WORD_DOC_COL_CNT + doc_len_idx].set_uint64(doc_length);
-      ObNewRow row;
-      row.cells_ = &(obj_arr[i * FT_WORD_DOC_COL_CNT]);
-      row.count_ = FT_WORD_DOC_COL_CNT;
-      if (OB_FAIL(word_rows.push_back(row))) {
-        LOG_WARN("fail to push back row", K(ret), K(row));
+      if (OB_FAIL(rows[i].init(allocator, FT_WORD_DOC_COL_CNT))) {
+        LOG_WARN("init datum row failed", K(ret), K(FT_WORD_DOC_COL_CNT));
       } else {
-        ObDocId tmp_doc_id;
-        tmp_doc_id.tablet_id_ = ((const uint64_t *)doc_id.ptr())[0];
-        tmp_doc_id.seq_id_ = ((const uint64_t *)doc_id.ptr())[1];
-        STORAGE_FTS_LOG(DEBUG, "succeed to add word row", K(ret), K(is_fts_index_aux), "doc_id", tmp_doc_id,
-            K(ft_word), K(word_cnt), K(i), K(row));
-        ++i;
+        const ObFTWord &ft_word = iter->first;
+        const int64_t word_cnt = iter->second;
+        // index row format
+        //  -    FTS_INDEX: [WORD], [DOC_ID], [WORD_COUNT]
+        //  - FTS_DOC_WORD: [DOC_ID], [WORD], [WORD_COUNT]
+        const int64_t word_idx = is_fts_index_aux ? 0 : 1;
+        const int64_t doc_id_idx = is_fts_index_aux ? 1 : 0;
+        const int64_t word_cnt_idx = 2;
+        const int64_t doc_len_idx = 3;
+        rows[i].storage_datums_[word_idx].set_string(ft_word.get_word());
+        rows[i].storage_datums_[doc_id_idx].set_string(doc_id);
+        rows[i].storage_datums_[word_cnt_idx].set_uint(word_cnt);
+        rows[i].storage_datums_[doc_len_idx].set_uint(doc_length);
+        if (OB_FAIL(word_rows.push_back(&rows[i]))) {
+          LOG_WARN("fail to push back row", K(ret), K(rows[i]));
+        } else {
+          ObDocId tmp_doc_id;
+          tmp_doc_id.tablet_id_ = ((const uint64_t *)doc_id.ptr())[0];
+          tmp_doc_id.seq_id_ = ((const uint64_t *)doc_id.ptr())[1];
+          STORAGE_FTS_LOG(DEBUG, "succeed to add word row", K(ret), K(is_fts_index_aux), "doc_id", tmp_doc_id,
+              K(ft_word), K(word_cnt), K(i), K(rows[i]));
+          ++i;
+        }
       }
     }
   }
@@ -332,65 +327,66 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
   uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
   uint64_t rowkey_column_end = column_num - 1;
 
+  void *rows_buf = nullptr;
+
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
   } else if (record_num == 0 && (is_unique_index && rowkey_column_start == 1)) {
   } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
     dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
+  } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(record_num * sizeof(blocksstable::ObDatumRow))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for multi value index rows buffer", K(ret));
   } else {
 
-    ObObj *obj_arr = nullptr;
     int64_t pos = sizeof(uint32_t);
+    blocksstable::ObDatumRow *rows = new (rows_buf) blocksstable::ObDatumRow[record_num];
+    ObObj obj;
 
     for (int i = 0; OB_SUCC(ret) && (i < record_num || !is_none_unique_done) ; ++i) {
-      if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * column_num)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory for multivalue index row cells", K(ret));
-      }
-      for(uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
-        obj_arr[j].set_nop_value();
-        ObObjMeta col_type = das_ctdef.column_types_.at(j);
-        const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
-        int64_t projector_idx = row_projector.at(j);
+      if (OB_FAIL(rows[i].init(allocator, column_num))) {
+        LOG_WARN("init datum row failed", K(ret), K(column_num));
+      } else {
+        for(uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
+          ObObjMeta col_type = das_ctdef.column_types_.at(j);
+          const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
+          int64_t projector_idx = row_projector.at(j);
 
-        if (multivalue_idx == projector_idx) {
-          if (OB_FAIL(obj_arr[j].deserialize(data, data_len, pos))) {
-            LOG_WARN("failed to deserialize datum.", K(ret), K(json_str));
-          } else {
-            if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
-              col_type.set_collation_level(CS_LEVEL_NUMERIC);
+          if (multivalue_idx == projector_idx) {
+            // TODO: change obj to datum when do deserialize@xuanxi
+            obj.set_nop_value();
+            if (OB_FAIL(obj.deserialize(data, data_len, pos))) {
+              LOG_WARN("failed to deserialize datum", K(ret), K(json_str));
+            } else if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
+              LOG_WARN("failed to convert datum from obj", K(ret), K(obj));
             } else {
-              col_type.set_collation_level(CS_LEVEL_IMPLICIT);
+              if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+                col_type.set_collation_level(CS_LEVEL_NUMERIC);
+              } else {
+                col_type.set_collation_level(CS_LEVEL_IMPLICIT);
+              }
+              is_none_unique_done = true;
             }
-
-            obj_arr[j].set_collation_level(col_type.get_collation_level());
-            obj_arr[j].set_collation_type(col_type.get_collation_type());
-            obj_arr[j].set_type(col_type.get_type());
-            is_none_unique_done = true;
+          } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
+            rows[i].storage_datums_[j].set_null();
+          } else if (multivalue_arr_idx == projector_idx) {
+            rows[i].storage_datums_[j].set_null();
+          } else {
+            rows[i].storage_datums_[j].shallow_copy_from_datum(dml_row.cells()[projector_idx]);
           }
-        } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
-          obj_arr[j].set_null();
-        } else if (multivalue_arr_idx == projector_idx) {
-          obj_arr[j].set_null();
-        } else if (OB_FAIL(dml_row.cells()[projector_idx].to_obj(obj_arr[j], col_type))) {
-          LOG_WARN("stored row to new row obj failed", K(ret),
-              K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(j));
+
+          if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
+            LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
+          }
         }
 
-        if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_storage_value(col_type, col_accuracy, allocator, obj_arr[j]))) {
-          LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
-        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(mvi_rows.push_back(&rows[i]))) {
+            LOG_WARN("failed to push back spatial index row", K(ret), K(rows[i]));
+          }
+        } // end if (OB_SUCC(ret))
       }
-
-      if (OB_SUCC(ret)) {
-        ObNewRow row;
-        row.cells_ = obj_arr;
-        row.count_ = column_num;
-        if (OB_FAIL(mvi_rows.push_back(row))) {
-          LOG_WARN("failed to push back spatial index row", K(ret), K(row));
-        }
-      } // end if (OB_SUCC(ret))
     }
   }
 
@@ -437,6 +433,15 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
       LOG_WARN("fail to allocate fulltext dml iterator memory", K(ret), KP(buf));
     } else {
       ObMultivalueDMLIterator *iter = new (buf) ObMultivalueDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef);
+      domain_iter = static_cast<ObDomainDMLIterator *>(iter);
+    }
+  } else if (das_ctdef->table_param_.get_data_table().is_vector_index()) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObVecIndexDMLIterator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate fulltext dml iterator memory", K(ret), KP(buf));
+    } else {
+      ObVecIndexDMLIterator *iter = new (buf) ObVecIndexDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef);
       domain_iter = static_cast<ObDomainDMLIterator *>(iter);
     }
   } else {
@@ -501,7 +506,7 @@ bool ObDomainDMLIterator::is_same_domain_type(const ObDASDMLBaseCtDef *das_ctdef
   return is_same_domain_type;
 }
 
-int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
+int ObDomainDMLIterator::get_next_domain_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = nullptr;
@@ -529,7 +534,7 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
       }
     }
     if (OB_SUCC(ret) && row_idx_ < rows_.count()) {
-      row = &(rows_[row_idx_]);
+      row = rows_[row_idx_];
       ++row_idx_;
       got_row = true;
     }
@@ -538,7 +543,7 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
   return ret;
 }
 
-int ObDomainDMLIterator::get_next_domain_rows(ObNewRow *&row, int64_t &row_count)
+int ObDomainDMLIterator::get_next_domain_rows(blocksstable::ObDatumRow *&row, int64_t &row_count)
 {
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = nullptr;
@@ -572,7 +577,7 @@ int ObDomainDMLIterator::get_next_domain_rows(ObNewRow *&row, int64_t &row_count
         }
       }
       if (OB_SUCC(ret) && row_idx_ < rows_.count()) {
-        row = &(rows_[row_idx_]);
+        row = rows_[row_idx_];
         row_count = rows_.count() - row_idx_;
         row_idx_ = rows_.count();
         got_row = true;

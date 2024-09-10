@@ -31,7 +31,6 @@ namespace observer
 {
 
 class ObMySQLResultSet;
-struct ObGlobalContext;
 enum ObQueryRetryType
 {
   RETRY_TYPE_NONE, // 不重试

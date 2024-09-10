@@ -28,7 +28,6 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/blocksstable/ob_datum_row.h"
-#include "storage/ob_sstable_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_service.h"
 
@@ -104,14 +103,13 @@ int ObUniqueIndexChecker::calc_column_checksum(
     STORAGE_LOG(WARN, "fail to reserve column", K(ret), K(column_cnt));
   } else {
     const ObDatumRow *row = NULL;
-    const ObDatumRow *unused_row = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
       if (OB_FAIL(column_checksum.push_back(0))) {
         STORAGE_LOG(WARN, "fail to push back column checksum", K(ret));
       }
     }
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(iterator.get_next_row(row, unused_row))) {
+      if (OB_FAIL(iterator.get_next_row(row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
@@ -156,7 +154,6 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, UNIQUE_INDEX_CHECKER_SCAN_TABLE_WITH_CHECKSUM_FAILED))) {
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
     } else {
-      transaction::ObTransService *trans_service = nullptr;
       ObTabletTableIterator iterator;
       ObQueryFlag query_flag(ObQueryFlag::Forward,
           false, /* daily merge*/
@@ -173,10 +170,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       ObLSHandle ls_handle;
       range.set_whole_range();
 
-      if (OB_ISNULL(trans_service = MTL(transaction::ObTransService*))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("trans_service is null", K(ret));
-      } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
         LOG_WARN("fail to get log stream", K(ret), K(ls_id_));
       } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -192,9 +186,10 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
           LOG_WARN("snapshot version has been discarded", K(ret));
         }
       } else if (OB_FAIL(local_scan.init(*param.col_ids_, *param.org_col_ids_, *param.output_projector_,
-              *param.data_table_schema_, param.snapshot_version_, trans_service, *param.index_schema_, true/*output org cols only*/))) {
+              *param.data_table_schema_, param.snapshot_version_, *param.index_schema_,
+              true/*unique_index_checking*/))) {
         LOG_WARN("init local scan failed", K(ret));
-      } else if (OB_FAIL(local_scan.table_scan(*param.data_table_schema_, ls_id_, tablet_id_, iterator, query_flag, range, nullptr))) {
+      } else if (OB_FAIL(local_scan.table_scan(*param.data_table_schema_, ls_id_, tablet_id_, iterator, query_flag, range))) {
         LOG_WARN("fail to table scan", K(ret));
       } else {
         const ObColDescIArray &out_cols = *param.org_col_ids_;
@@ -545,7 +540,7 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
         LOG_WARN("fail to get log stream", K(ret), K(ls_id_));
       } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id_, tablet_handle_))) {
         LOG_WARN("fail to get tablet", K(ret), K(tablet_id_), K(tablet_handle_));
-      } else if (index_schema_->is_fts_index()) {
+      } else if (index_schema_->is_fts_index() || index_schema_->is_vec_index()) {
         STORAGE_LOG(INFO, "do not need to check unique for domain index", "index_id", index_schema_->get_table_id());
       } else {
         if (OB_FAIL(ret)) {

@@ -78,8 +78,6 @@ TestLinkedMacroBlock::TestLinkedMacroBlock()
 void TestLinkedMacroBlock::SetUp()
 {
   TestDataFilePrepare::SetUp();
-  ObTenantBase tenant_ctx(OB_SERVER_TENANT_ID);
-  ObTenantEnv::set_tenant(&tenant_ctx);
 }
 
 void TestLinkedMacroBlock::TearDown()

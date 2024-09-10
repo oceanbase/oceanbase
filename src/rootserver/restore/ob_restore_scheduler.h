@@ -107,6 +107,8 @@ private:
   int reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info);
   int update_restore_concurrency_(const common::ObString &tenant_name, const uint64_t tenant_id,
       const int64_t restore_concurrency);
+  int fill_backup_storage_info_(const share::ObPhysicalRestoreJob &job_info);
+  int remove_backup_storage_info_(const share::ObPhysicalRestoreJob &job_info);
   int stat_restore_progress_(
       common::ObISQLClient &proxy,
       const share::ObPhysicalRestoreJob &job_info,

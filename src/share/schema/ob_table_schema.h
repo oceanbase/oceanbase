@@ -990,8 +990,17 @@ public:
   inline bool is_multivalue_index_aux() const;
   inline bool is_spatial_index() const;
   inline static bool is_spatial_index(const ObIndexType index_type);
+  inline bool is_vec_index() const;
+  inline static bool is_vec_index(const ObIndexType index_type);
+  inline bool is_built_in_vec_index() const;
+  inline bool is_vec_rowkey_vid_type() const;
+  inline bool is_vec_vid_rowkey_type() const;
+  inline bool is_vec_delta_buffer_type() const;
+  inline bool is_vec_index_id_type() const;
+  inline bool is_vec_index_snapshot_data_type() const;
   inline bool is_fts_index() const;
   inline bool is_built_in_fts_index() const;
+  inline bool is_built_in_index() const;  // fts / vector index
   inline bool is_rowkey_doc_id() const;
   inline bool is_doc_id_rowkey() const;
   inline bool is_fts_index_aux() const;
@@ -1442,6 +1451,8 @@ public:
   int get_is_row_store(bool &is_row_store) const;
   inline void reset_column_group_count() { column_group_cnt_ = 0; }
   inline int64_t get_constraint_count() const { return cst_cnt_; }
+  inline bool get_micro_index_clustered() const { return micro_index_clustered_; }
+  inline void set_micro_index_clustered(const bool micro_index_clustered) { micro_index_clustered_ = micro_index_clustered; }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
   inline const_column_iterator column_begin() const { return column_array_; }
   inline const_column_iterator column_end() const { return NULL == column_array_ ? NULL : &(column_array_[column_cnt_]); }
@@ -1493,7 +1504,8 @@ public:
   int get_spatial_geo_column_id(uint64_t &geo_column_id) const;
   int get_spatial_index_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
-
+  int get_vec_index_column_id(uint64_t &vec_vector_id) const;
+  int get_vec_index_vid_col_id(uint64_t &vec_id_col_id) const;
   // get columns for building rowid
   int get_column_ids_serialize_to_rowid(common::ObIArray<uint64_t> &col_ids,
                                         int64_t &rowkey_cnt) const;
@@ -1754,6 +1766,7 @@ public:
   int check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const;
   int check_has_fts_index(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const;
   int check_has_multivalue_index(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const;
+  int check_has_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
   int is_real_unique_index_column(ObSchemaGetterGuard &schema_guard,
                                   uint64_t column_id,
                                   bool &is_uni) const;
@@ -1764,12 +1777,15 @@ public:
                              uint64_t column_id,
                              bool &is_mul) const;
   int get_doc_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const;
+  int get_vec_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const;
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
   int get_rowkey_doc_tid(uint64_t &index_table_id) const;
+  int get_rowkey_vid_tid(uint64_t &index_table_id) const;
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   bool has_lob_column() const;
+  int64_t get_lob_columns_count() const;
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
   bool has_mlog_table() const { return (OB_INVALID_ID != mlog_tid_); }
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
@@ -1994,6 +2010,7 @@ protected:
   ObNameGeneratedType name_generated_type_;
   int64_t lob_inrow_threshold_;
   int64_t auto_increment_cache_size_;
+  bool micro_index_clustered_;
 
   // column group
   bool is_column_store_supported_;
@@ -2090,6 +2107,46 @@ inline bool ObSimpleTableSchemaV2::is_multivalue_index_aux() const
   return share::schema::is_multivalue_index_aux(index_type_);
 }
 
+inline bool ObSimpleTableSchemaV2::is_vec_index() const
+{
+  return share::schema::is_vec_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_index(const ObIndexType index_type)
+{
+  return share::schema::is_vec_index(index_type);
+}
+
+inline bool ObSimpleTableSchemaV2::is_built_in_vec_index() const
+{
+  return share::schema::is_built_in_vec_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_rowkey_vid_type() const
+{
+  return share::schema::is_vec_rowkey_vid_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_vid_rowkey_type() const
+{
+  return share::schema::is_vec_vid_rowkey_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_delta_buffer_type() const
+{
+  return share::schema::is_vec_delta_buffer_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_index_id_type() const
+{
+  return share::schema::is_vec_index_id_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_index_snapshot_data_type() const
+{
+  return share::schema::is_vec_index_snapshot_data_type(index_type_);
+}
+
 inline bool ObSimpleTableSchemaV2::is_fts_index() const
 {
   return share::schema::is_fts_index(index_type_);
@@ -2098,6 +2155,11 @@ inline bool ObSimpleTableSchemaV2::is_fts_index() const
 inline bool ObSimpleTableSchemaV2::is_built_in_fts_index() const
 {
   return share::schema::is_built_in_fts_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_built_in_index() const
+{
+  return share::schema::is_built_in_index(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_rowkey_doc_id() const

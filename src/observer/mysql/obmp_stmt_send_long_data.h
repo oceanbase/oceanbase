@@ -27,7 +27,6 @@ class ObMultiStmtItem;
 namespace observer
 {
 
-struct ObGlobalContext;
 
 class ObMPStmtSendLongData : public ObMPBase
 {

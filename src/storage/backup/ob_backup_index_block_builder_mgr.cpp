@@ -829,6 +829,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                               merge_type,
                                               tablet->get_snapshot_version(),
                                               0/*cluster_version*/,
+                                              false/*micro_index_clustered*/,
                                               table_key.get_end_scn()))) {
         LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema));
       }
@@ -858,6 +859,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                         merge_type,
                                         tablet->get_snapshot_version(),
                                         0/*cluster_version*/,
+                                        false/*micro_index_clustered*/,
                                         table_key.get_end_scn(),
                                         cg_schema,
                                         cg_idx))) {
@@ -908,10 +910,10 @@ int ObBackupTabletSSTableIndexBuilderMgr::alloc_sstable_index_builder_(
   } else if (OB_ISNULL(buf = mtl_malloc(sizeof(blocksstable::ObSSTableIndexBuilder), ObModIds::BACKUP))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
-  } else if (OB_ISNULL(index_builder = new (buf) blocksstable::ObSSTableIndexBuilder)) {
+  } else if (OB_ISNULL(index_builder = new (buf) blocksstable::ObSSTableIndexBuilder(false/* not use writer buffer*/))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
-  } else if (OB_FAIL(index_builder->init(data_store_desc, NULL, ObSSTableIndexBuilder::DISABLE))) {
+  } else if (OB_FAIL(index_builder->init(data_store_desc, ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("failed to init index builder", K(ret), K(data_store_desc));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(index_builder)) {
@@ -933,6 +935,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::close_sstable_index_builder_(
   } else if (OB_FAIL(index_builder->close(sstable_merge_res,
                                           OB_DEFAULT_MACRO_BLOCK_SIZE/*nested_size*/,
                                           0/*nested_offset*/,
+                                          nullptr, // TODO: yangyi.yyy, 确认一下用null吗
                                           device_handle))) {
     LOG_WARN("failed to close sstable index builder", K(ret));
   }

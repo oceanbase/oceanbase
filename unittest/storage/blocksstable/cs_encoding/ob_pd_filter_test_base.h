@@ -397,8 +397,7 @@ void ObPdFilterTestBase::init_in_filter(
                 return cmp_ret < 0;
             });
   filter.cmp_func_ = cmp_func;
-  filter.cmp_func_rev_ = cmp_func_rev;
-  filter.param_set_.set_hash_and_cmp_func(col_basic_funcs->murmur_hash_v2_, filter.cmp_func_rev_);
+  filter.param_set_.set_hash_and_cmp_func(col_basic_funcs->murmur_hash_v2_, filter.cmp_func_);
 }
 
 int ObPdFilterTestBase::check_column_store_white_filter(

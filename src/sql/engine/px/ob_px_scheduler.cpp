@@ -532,6 +532,12 @@ int ObPxMsgProc::on_piece_msg(ObExecContext &ctx, const RDWinFuncPXPieceMsg &pkt
   return proc.on_piece_msg(coord_info_, ctx, pkt);
 }
 
+int ObPxMsgProc::on_piece_msg(ObExecContext &ctx, const ObJoinFilterCountRowPieceMsg &pkt)
+{
+  ObDhPieceMsgProc<ObJoinFilterCountRowPieceMsg> proc;
+  return proc.on_piece_msg(coord_info_, ctx, pkt);
+}
+
 int ObPxMsgProc::on_eof_row(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;

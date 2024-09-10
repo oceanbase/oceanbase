@@ -173,10 +173,7 @@ public:
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                 ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),
         standby_part_collected_(), ask_state_info_interval_(100 * 1000), refresh_state_info_interval_(100 * 1000),
-        transfer_deleted_(false),
-        last_rollback_to_request_id_(0),
-        last_rollback_to_timestamp_(0),
-        last_transfer_in_timestamp_(0)
+        transfer_deleted_(false)
   { /*reset();*/ }
   ~ObPartTransCtx() { destroy(); }
   void destroy();
@@ -739,6 +736,8 @@ private:
   int check_is_aborted_in_tx_data_(const ObTransID tx_id,
                                    bool &is_aborted);
 
+  int64_t get_max_transfer_epoch_();
+
   // ========================================================
 
   // ======================== C2PC MSG HANDLER BEGIN ========================
@@ -921,7 +920,8 @@ public:
                             ObTxSEQ from_seq,
                             const ObTxSEQ to_seq,
                             const int64_t seq_base,
-                            const int64_t request_id,
+                            const int64_t input_transfer_epoch,
+                            int64_t &output_transfer_epoch,
                             ObIArray<ObTxLSEpochPair> &downstream_parts);
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
   bool is_transfer_deleted() const { return transfer_deleted_; }
@@ -1120,11 +1120,6 @@ private:
 
   // for transfer move tx ctx to clean for abort
   bool transfer_deleted_;
-
-  // TODO(handora.qc): remove after fix the transfer bwteen rollback_to bug
-  int64_t last_rollback_to_request_id_;
-  int64_t last_rollback_to_timestamp_;
-  int64_t last_transfer_in_timestamp_;
   // ========================================================
 };
 

@@ -213,8 +213,9 @@ int ColumnSchemaInfo::init_extended_type_info_(
     common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  const bool is_extended_type = column_table_schema.is_enum_or_set() || column_table_schema.is_collection();
 
-  if (! column_table_schema.is_enum_or_set()) {
+  if (! is_extended_type) {
     // do nothing
   } else {
     // Only enum or set types are cached

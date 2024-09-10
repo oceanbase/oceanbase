@@ -53,11 +53,11 @@ public:
       ObTableAccessContext &context);
   virtual ~ObBlockBatchedRowStore();
   virtual void reset() override;
-  virtual int init(const ObTableAccessParam &param) override;
+  virtual int init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask = nullptr) override;
   virtual int fill_row(blocksstable::ObDatumRow &out_row) = 0;
   virtual int fill_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockRowScanner *scanner,
+      blocksstable::ObIMicroBlockRowScanner &scanner,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res) = 0;

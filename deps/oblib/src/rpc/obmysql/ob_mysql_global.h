@@ -361,6 +361,12 @@ inline const char *get_emysql_field_type_str(const obmysql::EMySQLFieldType &typ
     case obmysql::MYSQL_TYPE_ROARINGBITMAP:
       str = "MYSQL_TYPE_ROARINGBITMAP";
       break;
+    case obmysql::MYSQL_TYPE_OB_VECTOR:
+      str = "MYSQL_TYPE_OB_VECTOR";
+      break;
+    case obmysql::MYSQL_TYPE_OB_ARRAY:
+      str = "MYSQL_TYPE_OB_ARRAY";
+      break;
     case obmysql::MYSQL_TYPE_NEWDECIMAL:
       str = "MYSQL_TYPE_NEWDECIMAL";
       break;

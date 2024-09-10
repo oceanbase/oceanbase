@@ -518,6 +518,11 @@ class ObMergeGroupBySpec;
 class ObMergeGroupByOp;
 REGISTER_OPERATOR(ObLogGroupBy, PHY_MERGE_GROUP_BY, ObMergeGroupBySpec,
                   ObMergeGroupByOp, NOINPUT, VECTORIZED_OP);
+class ObMergeGroupByVecSpec;
+class ObMergeGroupByVecOp;
+REGISTER_OPERATOR(ObLogGroupBy, PHY_VEC_MERGE_GROUP_BY, ObMergeGroupByVecSpec,
+                  ObMergeGroupByVecOp, NOINPUT, VECTORIZED_OP, 0 /*+version*/,
+                  SUPPORT_RICH_FORMAT);
 
 class ObLogGroupBy;
 class ObHashGroupBySpec;
@@ -549,6 +554,12 @@ class ObMergeJoinSpec;
 class ObMergeJoinOp;
 REGISTER_OPERATOR(ObLogJoin, PHY_MERGE_JOIN, ObMergeJoinSpec, ObMergeJoinOp,
                   NOINPUT, VECTORIZED_OP);
+class ObMergeJoinVecSpec;
+class ObMergeJoinVecOp;
+class ObMergeJoinVecInput;
+REGISTER_OPERATOR(ObLogJoin, PHY_VEC_MERGE_JOIN, ObMergeJoinVecSpec, ObMergeJoinVecOp,
+                  NOINPUT, VECTORIZED_OP, 0 /*+version*/,
+                  SUPPORT_RICH_FORMAT);
 
 class ObLogTopk;
 class ObTopKSpec;

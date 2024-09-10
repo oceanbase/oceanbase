@@ -26,6 +26,12 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+  class ObExecContext;
+  class ObDesExecContext;
+}
+
 namespace observer
 {
 enum class ObDirectLoadControlCommandType
@@ -196,6 +202,9 @@ public:
   storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
   double online_sample_percent_;
+  sql::ObExecContext *exec_ctx_;
+  common::ObArenaAllocator allocator_;
+  sql::ObDesExecContext *des_exec_ctx_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final

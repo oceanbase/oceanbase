@@ -310,6 +310,8 @@ public:
             || meta_type_.is_xml_sql_type());
   }
 
+  OB_INLINE bool is_collection() const { return meta_type_.is_collection_sql_type(); }
+
   NEED_SERIALIZE_AND_DESERIALIZE_DICT;
   TO_STRING_KV(
       K_(column_id),

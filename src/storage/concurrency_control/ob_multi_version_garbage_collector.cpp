@@ -15,6 +15,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "src/storage/tx/ob_ts_mgr.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {
@@ -1160,7 +1161,7 @@ int ObMultiVersionGarbageCollector::is_disk_almost_full_(bool &is_almost_full)
 
   // Case1: io device is almost full
   if (!is_almost_full
-      && OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
+      && OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size))) {
     if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
       ret = OB_SUCCESS;
       is_almost_full = true;

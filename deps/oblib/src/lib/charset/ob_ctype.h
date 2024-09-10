@@ -146,6 +146,8 @@ enum ObCharsetPadAttr { PAD_SPACE, NO_PAD };
     right_to_die_or_duty_to_live_c();\
   }
 
+extern "C" void right_to_die_or_duty_to_live_c();
+
 struct ObCharsetInfo;
 
 typedef char        ob_bool; /* Small bool */
@@ -567,7 +569,36 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
                 ulong *nr1, ulong *nr2,
         const bool calc_end_space, hash_algo hash_algo);
 
-const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bool is_utf16);
+inline const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bool is_utf16 /*false*/)
+{
+  const static unsigned SPACE_INT = 0x20202020;
+  const unsigned char *end= ptr + len;
+  if (len > 20 && !is_utf16) {
+    const unsigned char *end_words= (const unsigned char *)(int_ptr)
+      (((ulonglong)(int_ptr)end) / SIZEOF_INT * SIZEOF_INT);
+    const unsigned char *start_words= (const unsigned char *)(int_ptr)
+       ((((ulonglong)(int_ptr)ptr) + SIZEOF_INT - 1) / SIZEOF_INT * SIZEOF_INT);
+    ob_charset_assert(((ulonglong)(int_ptr)ptr) >= SIZEOF_INT);
+    if (end_words > ptr) {
+      while (end > end_words && end[-1] == 0x20) {
+        end--;
+      }
+      if (end[-1] == 0x20 && start_words < end_words) {
+        while (end > start_words && ((unsigned *)end)[-1] == SPACE_INT) {
+          end -= SIZEOF_INT;
+        }
+      }
+    }
+  }
+  if (is_utf16) {
+      while (end - 1 > ptr && end[-2] == 0x00 && end[-1] == 0x20)
+        end-=2;
+  } else {
+    while (end > ptr && end[-1] == 0x20)
+      end--;
+  }
+  return (end);
+}
 
 size_t ob_numchars_mb(const ObCharsetInfo *cs __attribute__((unused)), const char *pos, const char *end);
 

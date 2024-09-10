@@ -18,7 +18,7 @@
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_expr_util.h"
-
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 using namespace oceanbase::common;
 
@@ -52,6 +52,17 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
     ob_is_decimal_int(type1.get_type()) && ob_is_decimal_int(type2.get_type());
   const bool is_oracle = lib::is_oracle_mode();
   if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
+  } else if (type.is_collection_sql_type()) {
+    // only support vector/array/varchar * vector/array/varchar now // array and varchar need cast to array(float)
+    uint16_t res_subschema_id = UINT16_MAX;
+    if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type1, type2, type_ctx, res_subschema_id))) {
+      LOG_WARN("failed to calc cast type", K(ret), K(type1));
+    } else if (UINT16_MAX == res_subschema_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected result subschema_id", K(ret));
+    } else {
+      type.set_collection(res_subschema_id);
+    }
   } else if (type.is_decimal_int() && (type1.is_null() || type2.is_null())) {
     type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
     type.set_scale(MAX(type1.get_scale(), type2.get_scale()));
@@ -1561,6 +1572,10 @@ int ObExprMul::cg_expr(ObExprCGCtx &op_cg_ctx,
       set_decimal_int_eval_func(rt_expr, false /*is_oracle*/);
       break;
     }
+    case ObCollectionSQLType: {
+      SET_MUL_FUNC_PTR(mul_vec_vec);
+      break;
+    }
     default: {
       break;
     }
@@ -1573,6 +1588,18 @@ int ObExprMul::cg_expr(ObExprCGCtx &op_cg_ctx,
   return ret;
 }
 #undef SET_MUL_FUNC_PTR
+
+int ObExprMul::mul_vec_vec(EVAL_FUNC_ARG_DECL)
+{
+  ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::MUL;
+  return def_arith_eval_func<ObVectorVectorArithFunc>(EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+}
+
+int ObExprMul::mul_vec_vec_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::MUL;
+  return def_batch_arith_op_by_datum_func<ObVectorVectorArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+}
 
 }
 }

@@ -55,23 +55,37 @@ public:
    */
   struct ColumnBlock : public Block
   {
-    static int calc_rows_size(const IVectorPtrs &vectors,
+    static int calc_rows_size(ObEvalCtx &ctx,
+                              const ObExprPtrIArray &exprs,
+                              const IVectorPtrs &vectors,
                               const uint16_t *selector,
                               const ObArray<ObLength> &lengths,
                               const int64_t size,
                               int64_t &batch_mem_size);
-    int add_batch(ShrinkBuffer &buf,
+    static int calc_nested_size(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
+                                const ObArray<ObLength> &lengths, const int64_t size,
+                                int64_t &batch_mem_size);
+    int add_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
+                         const int64_t size, char *head, int64_t &pos);
+    static int distribute_uniform_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
+                                               const VectorFormat format, const int64_t size);
+    int add_batch(ObEvalCtx &ctx,
+                  const ObExprPtrIArray &exprs,
+                  ShrinkBuffer &buf,
                   const IVectorPtrs &vectors,
                   const uint16_t *selector,
                   const ObArray<ObLength> &lengths,
                   const int64_t size,
                   const int64_t batch_mem_size);
 
-    int get_next_batch(const IVectorPtrs &vectors,
+    int get_next_batch(const ObExprPtrIArray &exprs,
+                       ObEvalCtx &ctx,
+                       const IVectorPtrs &vectors,
                        const ObArray<ObLength> &lengths,
                        const int32_t start_read_pos,
                        int32_t &batch_rows,
                        int32_t &batch_pos) const;
+    int get_nested_batch(ObExpr &expr, ObEvalCtx &ctx, char *buf, int64_t &pos, const int64_t size) const;
   private:
     inline static int64_t get_header_size(const int64_t vec_cnt)
     {

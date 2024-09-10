@@ -368,9 +368,6 @@ private:
   int check_condition_match_index(MvRewriteHelper &helper,
                                   bool &is_match_index);
   int add_param_constraint(MvRewriteHelper &helper);
-  int mv_privilege_check(MvInfo &mv_info,
-                         bool &is_valid);
-  int push_back_stmt_privilege(MvInfo &mv_info);
 
   static int find_query_rel_id(MvRewriteHelper &helper, int64_t mv_relid);
   static int classify_predicates(const ObIArray<ObRawExpr*> &input_conds,

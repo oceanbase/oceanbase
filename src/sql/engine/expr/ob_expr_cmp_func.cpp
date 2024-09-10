@@ -18,6 +18,9 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "share/ob_lob_access_utils.h"
+#include "lib/udt/ob_array_type.h"
+#include "sql/engine/ob_subschema_ctx.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -45,8 +48,8 @@ template <> constexpr int get_cmp_ret<CO_GT> (const int ret) { return ret > 0; }
 template <> constexpr int get_cmp_ret<CO_NE> (const int ret) { return ret != 0; }
 template <> constexpr int get_cmp_ret<CO_CMP> (const int ret) { return ret; }
 
-template <typename DatumFunc>
-int def_relational_eval_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+template <typename DatumFunc, typename... Args>
+int def_relational_eval_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum, Args &...args)
 {
   int ret = OB_SUCCESS;
   ObDatum *l = NULL;
@@ -60,7 +63,7 @@ int def_relational_eval_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_d
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid operands", K(ret), K(l), K(r));
     } else {
-      ret = DatumFunc()(expr_datum, *l, *r);
+      ret = DatumFunc()(expr_datum, *l, *r, args...);
     }
   }
   return ret;
@@ -368,6 +371,54 @@ struct ObRelationalGeoFunc<true, HAS_LOB_HEADER, CMP_OP>
   }
 };
 
+// cmp for collection
+template<bool, bool HAS_LOB_HEADER, ObCmpOp CMP_OP>
+struct ObRelationalCollectionFunc{};
+
+template<bool HAS_LOB_HEADER, ObCmpOp CMP_OP>
+struct ObRelationalCollectionFunc<false, HAS_LOB_HEADER, CMP_OP> : ObDummyRelationalFunc {};
+
+template<bool HAS_LOB_HEADER, ObCmpOp CMP_OP>
+struct ObRelationalCollectionFunc<true, HAS_LOB_HEADER, CMP_OP>
+{
+  struct DatumCmp
+  {
+    int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx) const
+    {
+      int ret = OB_SUCCESS;
+      int cmp_ret = 0;
+      ObString left = l.get_string();
+      ObString right = r.get_string();
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+      common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+      const uint16_t left_meta_id = expr.args_[0]->obj_meta_.get_subschema_id();
+      const uint16_t right_meta_id = expr.args_[1]->obj_meta_.get_subschema_id();
+      ObIArrayType *left_obj = NULL;
+      ObIArrayType *right_obj = NULL;
+      if (OB_FAIL(ObNestedArithOpBaseFunc::construct_param(tmp_allocator, ctx, left_meta_id, left, left_obj))) {
+        LOG_WARN("construct left param failed", K(ret), K(left_meta_id));
+      } else if (OB_FAIL(ObNestedArithOpBaseFunc::construct_param(tmp_allocator, ctx, right_meta_id, right, right_obj))) {
+        LOG_WARN("construct left param failed", K(ret), K(left_meta_id));
+      } else if (OB_FAIL(left_obj->compare(*right_obj, cmp_ret))) {
+        LOG_WARN("array do compare failed", K(ret), K(left_meta_id), K(right_meta_id));
+      } else {
+        res.set_int(get_cmp_ret<CMP_OP>(cmp_ret));
+      }
+      return ret;
+    }
+  };
+
+  inline static int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return def_relational_eval_func<DatumCmp>(expr, ctx, expr_datum, expr, ctx);
+  }
+
+  inline static int eval_batch(BATCH_EVAL_FUNC_ARG_DECL)
+  {
+    return def_relational_eval_batch_func<DatumCmp>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx);
+  }
+};
+
 // define null, extend, string evaluate batch functions.
 template<ObCmpOp CMP_OP>
 struct ObRelationalExtraFunc
@@ -621,6 +672,84 @@ struct ObRelationalExtraFunc
   }
 };
 
+template<ObCmpOp CMP_OP>
+struct ObRelationalVecFunc
+{
+  struct DatumCmp
+  {
+    int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx) const
+    {
+      int ret = OB_SUCCESS;
+      int cmp_ret = 0;
+      const ObExpr &left_expr = *expr.args_[0];
+      const ObExpr &right_expr = *expr.args_[1];
+      ObIArrayType *arr_l = NULL;
+      ObIArrayType *arr_r = NULL;
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+      common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+      if (OB_FAIL(ObArrayExprUtils::get_type_vector(left_expr, l, ctx, tmp_allocator, arr_l))) {
+        LOG_WARN("failed to get vector", K(ret));
+      } else if (OB_FAIL(ObArrayExprUtils::get_type_vector(right_expr, r, ctx, tmp_allocator, arr_r))) {
+        LOG_WARN("failed to get vector", K(ret));
+      } else if (OB_ISNULL(arr_l) || OB_ISNULL(arr_r)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr", K(ret), K(arr_l), K(arr_r));
+      } else if (OB_UNLIKELY(arr_l->size() != arr_r->size())) {
+        ret = OB_ERR_INVALID_VECTOR_DIM;
+        LOG_WARN("check array validty failed", K(ret), K(arr_l->size()), K(arr_r->size()));
+      } else if (arr_l->contain_null() || arr_r->contain_null()) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("array with null can't cmp", K(ret));
+      } else {
+        const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
+        const float *data_r = reinterpret_cast<const float*>(arr_r->get_data());
+        const uint32_t size = arr_l->size();
+        for (int64_t i = 0; i < size && cmp_ret == 0; ++i) {
+          if (isnan(data_l[i]) || isnan(data_r[i])) {
+            if (isnan(data_l[i]) && isnan(data_r[i])) {
+              cmp_ret = 0;
+            } else if (isnan(data_l[i])) {
+              // l is nan, r is not nan:left always bigger than right
+              cmp_ret = 1;
+            } else {
+              // l is not nan, r is nan, left always less than right
+              cmp_ret = -1;
+            }
+          } else {
+            cmp_ret = data_l[i] == data_r[i] ? 0 : (data_l[i] < data_r[i] ? -1 : 1);
+          }
+        }
+        res.set_int(get_cmp_ret<CMP_OP>(cmp_ret));
+      }
+      return ret;
+    }
+  };
+
+  inline static int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    int ret = OB_SUCCESS;
+    ObDatum *l = NULL;
+    ObDatum *r = NULL;
+    bool contain_null = false;
+    if (OB_FAIL(ObRelationalExprOperator::get_comparator_operands(
+                expr, ctx, l, r, expr_datum, contain_null))) {
+      LOG_WARN("failed to eval args", K(ret));
+    } else if (!contain_null) {
+      if (OB_ISNULL(l) || OB_ISNULL(r)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid operands", K(ret), K(l), K(r));
+      } else {
+        ret = DatumCmp()(expr_datum, *l, *r, expr, ctx);
+      }
+    }
+    return ret;
+  }
+  inline static int eval_batch(BATCH_EVAL_FUNC_ARG_DECL)
+  {
+    return def_relational_eval_batch_func<DatumCmp>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx);
+  }
+};
+
 
 static ObExpr::EvalBatchFunc EVAL_BATCH_NULL_EXTEND_CMP_FUNCS[CO_MAX];
 static ObExpr::EvalBatchFunc EVAL_BATCH_STR_CMP_FUNCS[CO_MAX];
@@ -629,6 +758,7 @@ static ObExpr::EvalBatchFunc EVAL_BATCH_TEXT_STR_CMP_FUNCS[CO_MAX];
 static ObExpr::EvalBatchFunc EVAL_BATCH_STR_TEXT_CMP_FUNCS[CO_MAX];
 static ObExpr::EvalBatchFunc EVAL_BATCH_JSON_CMP_FUNCS[CO_MAX];
 static ObExpr::EvalBatchFunc EVAL_BATCH_GEO_CMP_FUNCS[CO_MAX];
+static ObExpr::EvalBatchFunc EVAL_BATCH_COLLECTION_CMP_FUNCS[CO_MAX];
 
 static ObExpr::EvalFunc EVAL_TYPE_CMP_FUNCS[ObMaxType][ObMaxType][CO_MAX];
 static ObExpr::EvalBatchFunc EVAL_BATCH_TYPE_CMP_FUNCS[ObMaxType][ObMaxType][CO_MAX];
@@ -651,6 +781,8 @@ static ObExpr::EvalFunc EVAL_JSON_CMP_FUNCS[CO_MAX][2];
 static ObDatumCmpFuncType DATUM_JSON_CMP_FUNCS[2];
 static ObExpr::EvalFunc EVAL_GEO_CMP_FUNCS[CO_MAX][2];
 static ObDatumCmpFuncType DATUM_GEO_CMP_FUNCS[2];
+static ObExpr::EvalFunc EVAL_COLLECTION_CMP_FUNCS[CO_MAX][2];
+static ObDatumCmpFuncType DATUM_COLLECTION_CMP_FUNCS[2];
 
 static ObExpr::EvalFunc EVAL_FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][CO_MAX];
 static ObExpr::EvalBatchFunc EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][CO_MAX];
@@ -661,6 +793,8 @@ static ObExpr::EvalBatchFunc EVAL_BATCH_DECINT_CMP_FUNCS[DECIMAL_INT_MAX][DECIMA
 
 static ObDatumCmpFuncType DATUM_DECINT_CMP_FUNCS[DECIMAL_INT_MAX][DECIMAL_INT_MAX];
 
+static ObExpr::EvalFunc EVAL_VEC_CMP_FUNCS[CO_MAX];
+static ObExpr::EvalBatchFunc EVAL_BATCH_VEC_CMP_FUNCS[CO_MAX];
 template<int X>
 struct ExtraExprCmpIniter
 {
@@ -932,6 +1066,34 @@ struct DatumGeoExprCmpIniter
   }
 };
 
+template<int Y>
+struct CollectionExprFuncIniter
+{
+  template<bool HAS_LOB_HEADER>
+  using EvalCmp = ObRelationalCollectionFunc<true,
+        HAS_LOB_HEADER,
+        static_cast<ObCmpOp>(Y)>;
+  static void init_array()
+  {
+    EVAL_COLLECTION_CMP_FUNCS[Y][0] = EvalCmp<0>::eval;
+    EVAL_COLLECTION_CMP_FUNCS[Y][1] = EvalCmp<1>::eval;
+    EVAL_BATCH_COLLECTION_CMP_FUNCS[Y] = EvalCmp<1>::eval_batch;
+  }
+};
+
+template<int X>
+struct DatumCollectionExprCmpIniter
+{
+  template<bool HAS_LOB_HEADER>
+  using DatumCmp = datum_cmp::ObDatumCollectionCmp<HAS_LOB_HEADER>;
+  using Def = datum_cmp::ObDatumCollectionCmp<false>;
+  static void init_array()
+  {
+    DATUM_COLLECTION_CMP_FUNCS[0] = Def::defined_ ? DatumCmp<0>::cmp : NULL;
+    DATUM_COLLECTION_CMP_FUNCS[1] = Def::defined_ ? DatumCmp<1>::cmp : NULL;
+  }
+};
+
 int g_init_type_ret = Ob2DArrayConstIniter<ObMaxType, ObMaxType, TypeExprCmpFuncIniter>::init();
 int g_init_tc_ret = Ob2DArrayConstIniter<ObMaxTC, ObMaxTC, TCExprCmpFuncIniter>::init();
 int g_init_str_ret = Ob2DArrayConstIniter<CS_TYPE_MAX, CO_MAX, StrExprFuncIniter>::init();
@@ -946,6 +1108,9 @@ int g_init_json_ret = ObArrayConstIniter<CO_MAX, JsonExprFuncIniter>::init();
 int g_init_json_datum_ret = ObArrayConstIniter<1, DatumJsonExprCmpIniter>::init();
 int g_init_geo_ret = ObArrayConstIniter<CO_MAX, GeoExprFuncIniter>::init();
 int g_init_geo_datum_ret = ObArrayConstIniter<1, DatumGeoExprCmpIniter>::init();
+
+int g_init_collection_ret = ObArrayConstIniter<CO_MAX, CollectionExprFuncIniter>::init();
+int g_init_collection_datum_ret = ObArrayConstIniter<1, DatumCollectionExprCmpIniter>::init();
 
 template<int X>
 struct FixedDoubleCmpFuncIniter
@@ -1072,6 +1237,8 @@ ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType ty
     func_ptr = EVAL_JSON_CMP_FUNCS[cmp_op][has_lob_header];
   } else if (tc1 == ObGeometryTC && tc2 == ObGeometryTC) {
     func_ptr = EVAL_GEO_CMP_FUNCS[cmp_op][has_lob_header];
+  } else if (tc1 == ObCollectionSQLTC && tc2 == ObCollectionSQLTC) {
+    func_ptr = EVAL_COLLECTION_CMP_FUNCS[cmp_op][has_lob_header];
   } else if (IS_FIXED_DOUBLE) {
     func_ptr = EVAL_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)][cmp_op];
   } else if (tc1 == ObDecimalIntTC && tc2 == ObDecimalIntTC) {
@@ -1080,6 +1247,8 @@ ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType ty
     OB_ASSERT(lw < DECIMAL_INT_MAX && lw >= 0);
     OB_ASSERT(rw < DECIMAL_INT_MAX && rw >= 0);
     func_ptr = EVAL_DECINT_CMP_FUNCS[lw][rw][cmp_op];
+  } else if (tc1 == ObCollectionSQLTC && tc2 == ObCollectionSQLTC) {
+    func_ptr = EVAL_VEC_CMP_FUNCS[cmp_op];
   } else if (tc1 == ObUserDefinedSQLTC || tc2 == ObUserDefinedSQLTC) {
     func_ptr = NULL; //?
   } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
@@ -1134,6 +1303,8 @@ ObExpr::EvalBatchFunc ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
     if (NULL != EVAL_GEO_CMP_FUNCS[cmp_op][has_lob_header]) {
       func_ptr = EVAL_BATCH_GEO_CMP_FUNCS[cmp_op];
     }
+  } else if (tc1 == ObCollectionSQLTC && tc2 == ObCollectionSQLTC) {
+    func_ptr = EVAL_BATCH_COLLECTION_CMP_FUNCS[cmp_op];
   } else if (IS_FIXED_DOUBLE) {
     func_ptr = EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)][cmp_op];
   } else if (ob_is_decimal_int(type1) && ob_is_decimal_int(type2)) {
@@ -1193,6 +1364,8 @@ DatumCmpFunc ObExprCmpFuncsHelper::get_datum_expr_cmp_func(const ObObjType type1
     func_ptr = DATUM_JSON_CMP_FUNCS[has_lob_header];
   } else if (type1 == ObGeometryType && type2 == ObGeometryType) {
     func_ptr = DATUM_GEO_CMP_FUNCS[has_lob_header];
+  } else if (type1 == ObCollectionSQLType && type2 == ObCollectionSQLType) {
+    func_ptr = DATUM_COLLECTION_CMP_FUNCS[has_lob_header];
   } else if (IS_FIXED_DOUBLE) {
     func_ptr = DATUM_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)];
   } else if (ob_is_decimal_int(type1) && ob_is_decimal_int(type2)) {
@@ -1374,6 +1547,25 @@ static_assert(2 == sizeof(DATUM_GEO_CMP_FUNCS) / sizeof(void *),
 REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_GEO,
                    DATUM_GEO_CMP_FUNCS,
                    sizeof(DATUM_GEO_CMP_FUNCS) / sizeof(void *));
+
+// Collection cmp functions reg
+static_assert(7 == CO_MAX && CO_MAX * 2 == sizeof(EVAL_COLLECTION_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_COLLECTION_EVAL,
+                   EVAL_COLLECTION_CMP_FUNCS,
+                   sizeof(EVAL_COLLECTION_CMP_FUNCS) / sizeof(void *));
+
+static_assert(7 == CO_MAX && CO_MAX == sizeof(EVAL_BATCH_COLLECTION_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_COLLECTION_EVAL_BATCH,
+                   EVAL_BATCH_COLLECTION_CMP_FUNCS,
+                   sizeof(EVAL_BATCH_COLLECTION_CMP_FUNCS) / sizeof(void *));
+
+static_assert(2 == sizeof(DATUM_COLLECTION_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_COLLECTION,
+                   DATUM_COLLECTION_CMP_FUNCS,
+                   sizeof(DATUM_COLLECTION_CMP_FUNCS) / sizeof(void *));
 
 // Fixed double cmp functions reg
 static_assert(

@@ -317,6 +317,17 @@ void ObGlobalHint::merge_direct_load_hint(const ObDirectLoadHint &other)
   direct_load_hint_.load_method_ = other.load_method_;
 }
 
+// use the first resource group hint now.
+void ObGlobalHint::merge_resource_group_hint(const ObString &resource_group)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (!resource_group_.empty() || resource_group.empty()) {
+    // do nothing
+  } else {
+    resource_group_.assign_ptr(resource_group.ptr(), resource_group.length());
+  }
+}
+
 // zhanyue todo: try remove this later
 bool ObGlobalHint::has_hint_exclude_concurrent() const
 {
@@ -347,7 +358,8 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || false != has_dbms_stats_hint_
          || -1 != dynamic_sampling_
          || flashback_read_tx_uncommitted_
-         || has_direct_load();
+         || has_direct_load()
+         || !resource_group_.empty();
 }
 
 void ObGlobalHint::reset()
@@ -380,6 +392,7 @@ void ObGlobalHint::reset()
   alloc_op_hints_.reuse();
   direct_load_hint_.reset();
   dblink_hints_.reset();
+  resource_group_.reset();
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -408,6 +421,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   dblink_hints_ = other.dblink_hints_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
   merge_direct_load_hint(other.direct_load_hint_);
+  merge_resource_group_hint(other.resource_group_);
   if (OB_FAIL(merge_alloc_op_hints(other.alloc_op_hints_))) {
     LOG_WARN("failed to merge alloc op hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -590,6 +604,12 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && OB_FAIL(direct_load_hint_.print_direct_load_hint(plan_text))) {
     LOG_WARN("failed to print direct load hint", KR(ret));
+  }
+  if (OB_SUCC(ret) && !resource_group_.empty()) { //RESOURCE_GROUP
+    if (OB_FAIL(BUF_PRINTF("%sRESOURCE_GROUP(\"%.*s\")", outline_indent,
+                                    resource_group_.length(), resource_group_.ptr() ))) {
+      LOG_WARN("failed to print resource group hint", K(ret));
+    }
   }
   return ret;
 }
@@ -860,6 +880,20 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       }
       break;
     }
+    case IO_READ_BATCH_SIZE: {
+      // ref tenant parameter _io_read_batch_size, range: [0K, 16M]
+      if (!val.is_varchar()) {
+        is_valid = false;
+      } else {
+        IGNORE_RETURN ObConfigCapacityParser::get(val.get_varchar().ptr(), is_valid);
+      }
+      break;
+    }
+    case IO_READ_REDUNDANT_LIMIT_PERCENTAGE: {
+      // ref tenant parameter _io_read_redundant_limit_percentage, range: [0, 99]
+      is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() < 100);
+      break;
+    }
     case PUSHDOWN_STORAGE_LEVEL: {
       is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 4);
       break;
@@ -872,6 +906,11 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
         ObSysVarCardinalityEstimationModel sv;
         is_valid = (OB_SUCCESS == sv.find_type(val.get_varchar(), type));
       }
+      break;
+    }
+    case _PUSH_JOIN_PREDICATE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
       break;
     }
     default:

@@ -99,6 +99,14 @@ int ObCodeGenerator::detect_batch_size(
       log_plan.get_optimizer_context().get_session_info();
   ObExecContext *exec_ctx = log_plan.get_optimizer_context().get_exec_ctx();
   CK(NULL != exec_ctx && NULL != exec_ctx->get_physical_plan_ctx());
+  bool has_registered_vec_op = false;
+  if (OB_ISNULL(log_plan.get_plan_root())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null plan root", K(ret));
+  } else if (OB_FAIL(ObStaticEngineCG::exist_registered_vec_op(*log_plan.get_plan_root(), true,
+                                                               has_registered_vec_op))) {
+    LOG_WARN("check exist registetered vectorized operator failed", K(ret));
+  }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(session)) {
     // empty session disable batch processing
@@ -118,7 +126,16 @@ int ObCodeGenerator::detect_batch_size(
                                                      scan_cardinality,
                                                      log_plan.get_plan_root()));
     }
-    if (OB_SUCC(ret) && vectorize) {
+    if (OB_FAIL(ret)) {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0 && !vectorize) {
+      // set max_batch_size = 1
+      // if all physical operator is not registered as vec op, disable vectorization
+      if (rowsets_enabled && has_registered_vec_op) {
+        batch_size = 1;
+      } else {
+        batch_size = 0;
+      }
+    } else if (vectorize) {
       ObArenaAllocator alloc;
       ObRawExprUniqueSet flattened_exprs(true);
       OZ(flattened_exprs.flatten_and_add_raw_exprs(log_plan.get_optimizer_context()

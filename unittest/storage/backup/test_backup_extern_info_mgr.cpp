@@ -15,6 +15,8 @@
 #include <gtest/gtest.h>
 #include "test_backup.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "share/io/ob_io_manager.h"
+#include "share/ob_device_manager.h"
 #include "storage/backup/ob_backup_extern_info_mgr.h"
 #define private public
 #define protected public
@@ -32,6 +34,8 @@ class TestBackupExternInfoMgr : public ::testing::Test {
 public:
   TestBackupExternInfoMgr();
   virtual ~TestBackupExternInfoMgr();
+  static void SetUpTestCase();
+  static void TearDownTestCase();
   virtual void SetUp();
   virtual void TearDown();
 
@@ -56,6 +60,32 @@ TestBackupExternInfoMgr::TestBackupExternInfoMgr()
 
 TestBackupExternInfoMgr::~TestBackupExternInfoMgr()
 {}
+
+void TestBackupExternInfoMgr::SetUpTestCase()
+{
+  ObTenantBase *tenant_base = new share::ObTenantBase(OB_SYS_TENANT_ID);
+  auto malloc = ObMallocAllocator::get_instance();
+  if (NULL == malloc->get_tenant_ctx_allocator(OB_SYS_TENANT_ID, 0)) {
+    malloc->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);
+  }
+  tenant_base->init();
+  ObTenantEnv::set_tenant(tenant_base);
+  ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
+  ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().start());
+  ObTenantIOManager *io_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
+  EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+  EXPECT_EQ(OB_SUCCESS, io_service->start());
+  tenant_base->set(io_service);
+  ObTenantEnv::set_tenant(tenant_base);
+}
+
+void TestBackupExternInfoMgr::TearDownTestCase()
+{
+  ObIOManager::get_instance().stop();
+  ObIOManager::get_instance().destroy();
+}
 
 void TestBackupExternInfoMgr::SetUp()
 {
@@ -122,7 +152,8 @@ TEST_F(TestBackupExternInfoMgr, read_write_ls_meta_info)
   ObExternLSMetaMgr mgr;
   int64_t retry_id = 0;
   int64_t turn_id = 1;
-  ret = mgr.init(backup_dest_, backup_set_desc_, ls_id_, turn_id, retry_id);
+  int64_t dest_id = 1;
+  ret = mgr.init(backup_dest_, backup_set_desc_, ls_id_, turn_id, retry_id, dest_id);
   EXPECT_EQ(OB_SUCCESS, ret);
   ret = mgr.write_ls_meta_info(write_info);
   EXPECT_EQ(OB_SUCCESS, ret);

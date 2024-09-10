@@ -36,9 +36,9 @@ static uint64_t g_tenant_id;
 static ObTransferPartList g_part_list;
 static ObTransferPartList g_batch_part_list;
 
-#define INNER_EXE_SQL(...)                                          \
+#define INNER_EXE_SQL(tenant_id, ...)                                          \
   ASSERT_EQ(OB_SUCCESS, sql.assign(__VA_ARGS__));                   \
-  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(tenant_id, sql.ptr(), affected_rows));
 
 #define EXE_SQL(...)                                                \
   ASSERT_EQ(OB_SUCCESS, sql.assign(__VA_ARGS__));                   \
@@ -107,7 +107,7 @@ int TestTenantTransferService::gen_mock_data(const ObTransferTaskID task_id, con
 {
   int ret = OB_SUCCESS;
   ObLSID src_ls(1001);
-  ObLSID dest_ls(1002);
+  ObLSID dest_ls(1);
   ObTableLockOwnerID owner_id;
   owner_id.convert_from_value(999);
   share::SCN start_scn;
@@ -153,10 +153,10 @@ TEST_F(TestTenantTransferService, test_service)
   ObSqlString sql;
   int64_t affected_rows = 0;
   // stuck storage transfer
-  INNER_EXE_SQL("alter system set debug_sync_timeout = '1000s'");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set debug_sync_timeout = '1000s'");
   usleep(100000); // wait for debug_sync_timeout to take effect
   sql.reset();
-  INNER_EXE_SQL("set ob_global_debug_sync = 'AFTER_TRANSFER_PROCESS_INIT_TASK_AND_BEFORE_NOTIFY_STORAGE wait_for signal execute 10000'");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'AFTER_TRANSFER_PROCESS_INIT_TASK_AND_BEFORE_NOTIFY_STORAGE wait_for signal execute 10000'");
 
   ASSERT_EQ(4, g_part_list.count());
   ASSERT_TRUE(is_valid_tenant_id(g_tenant_id));
@@ -254,6 +254,9 @@ TEST_F(TestTenantTransferService, test_service)
   ObTransferTask history_task;
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_history_task(inner_sql_proxy, g_tenant_id, task_id, history_task, create_time, finish_time));
   ASSERT_TRUE(history_task.get_status().is_completed_status());
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'AFTER_TRANSFER_PROCESS_INIT_TASK_AND_BEFORE_NOTIFY_STORAGE clear'");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'now signal signal'");
+
   // test retry task with interval
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_task_retry_interval = '1h'"));
@@ -277,10 +280,28 @@ TEST_F(TestTenantTransferService, test_service)
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_task_retry_interval = '0'"));
   ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(g_tenant_id, sql.ptr(), affected_rows));
-  ASSERT_TRUE(OB_NEED_RETRY != tenant_transfer->process_init_task_(retry_task_id));
-  uint64_t data_version = 0;
-  ASSERT_EQ(OB_SUCCESS, ObShareUtil::fetch_current_data_version(inner_sql_proxy, g_tenant_id, data_version));
-  ASSERT_TRUE(data_version == history_task.get_data_version());
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->process_init_task_(retry_task_id));
+  INNER_EXE_SQL(g_tenant_id, "update __all_transfer_task set status = 'FAILED' where task_id = 444");
+  ObTransferTask::TaskStatus task_stat;
+  ASSERT_EQ(OB_SUCCESS, task_stat.init(retry_task_id, ObTransferStatus(ObTransferStatus::FAILED)));
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->process_task_(task_stat));
+
+  // test wait tenant major compaction
+#ifdef OB_BUILD_SHARED_STORAGE
+  GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
+  LOG_INFO("test wait major compaction begin", K(GCTX.is_shared_storage_mode()));
+  INNER_EXE_SQL(g_tenant_id, "update __all_freeze_info set frozen_scn = now()");
+  ObTransferTask conflict_compaction_task;
+  ObTransferTaskID conflict_task_id(4444);
+  ASSERT_EQ(OB_SUCCESS, gen_mock_data(conflict_task_id, ObTransferStatus(ObTransferStatus::INIT), conflict_compaction_task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::insert(inner_sql_proxy, g_tenant_id, conflict_compaction_task));
+  ASSERT_EQ(OB_NEED_WAIT, tenant_transfer->process_init_task_(conflict_task_id));
+  ObTransferTask conflict_task_after_process;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, conflict_task_id, false, conflict_task_after_process, 0/*group_id*/));
+  ASSERT_TRUE(WAIT_FOR_MAJOR_COMPACTION == conflict_task_after_process.get_comment() && conflict_task_after_process.get_status().is_init_status());
+  INNER_EXE_SQL(g_tenant_id, "update __all_freeze_info set frozen_scn = 1");
+  LOG_INFO("test wait major compaction finished");
+#endif
 }
 
 TEST_F(TestTenantTransferService, test_batch_part_list)
@@ -330,14 +351,14 @@ TEST_F(TestTenantTransferService, test_empty_list)
   // errorsim
   ObSqlString sql;
   int64_t affected_rows = 0;
-  INNER_EXE_SQL("alter system set_tp tp_name = EN_TENANT_TRANSFER_ALL_LIST_EMPTY, error_code = 4016, frequency = 1");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set_tp tp_name = EN_TENANT_TRANSFER_ALL_LIST_EMPTY, error_code = 4016, frequency = 1");
   // transfer
   ObTransferTaskID task_id;
   ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1),
-      g_part_list, ObBalanceTaskID(124), transfer_task));
+      g_batch_part_list, ObBalanceTaskID(124), transfer_task));
   task_id = transfer_task.get_task_id();
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -356,10 +377,10 @@ void TestTenantTransferService::create_hidden_table()
   ObSqlString sql;
   int64_t affected_rows = 0;
 
-  INNER_EXE_SQL("set ob_global_debug_sync = 'reset';");
-  INNER_EXE_SQL("alter system set debug_sync_timeout = '1000s';");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'reset';");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set debug_sync_timeout = '1000s';");
   usleep(100000);
-  INNER_EXE_SQL("set ob_global_debug_sync = 'TABLE_REDEFINITION_REPLICA_BUILD wait_for signal execute 10000'");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'TABLE_REDEFINITION_REPLICA_BUILD wait_for signal execute 10000'");
   usleep(100000);
   EXE_SQL("create table t_hidden_1(c1 int); ");
   EXE_SQL("alter table t_hidden_1 modify c1 char(10);");

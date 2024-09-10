@@ -25,15 +25,14 @@
 #include "sql/ob_result_set.h"
 #include "ob_eliminate_task.h"
 #include "ob_ra_queue.h"
-#include "ob_dl_queue.h"
+#include "observer/mysql/ob_dl_queue.h"
 #include "ob_construct_queue.h"
 
 namespace oceanbase
 {
-namespace conmmon
+namespace common
 {
   class ObConcurrentFIFOAllocator;
-  class ObDlQueue;
 }
 
 namespace obmysql

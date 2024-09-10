@@ -53,12 +53,12 @@ public:
   OB_INLINE int get_distinct_count(int64_t &distinct_cnt) const
   { return decoder_->get_distinct_count(*ctx_, distinct_cnt); }
   OB_INLINE int read_distinct(
-      storage::ObGroupByCell &group_by_cell) const
+      storage::ObGroupByCellBase &group_by_cell) const
   { return decoder_->read_distinct(*ctx_, group_by_cell); }
   OB_INLINE int read_reference(
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const
+      storage::ObGroupByCellBase &group_by_cell) const
   { return decoder_->read_reference(*ctx_, row_ids, row_cap, group_by_cell); }
 
 public:
@@ -178,10 +178,6 @@ public:
   static int get_decoder_cache_size(const char *block, const int64_t block_size, int64_t &size);
   static int cache_decoders(char *buf, const int64_t size, const char *block, const int64_t block_size);
 
-  virtual ObReaderType get_type() override
-  {
-    return CSDecoder;
-  }
   virtual void reset();
   virtual int init(const ObMicroBlockData &block_data, const ObITableReadInfo &read_info) override;
   //TODO @fenggu support cs decoder without read info
@@ -240,7 +236,12 @@ public:
         ((ObCSColumnHeader::INT_DICT == decoders_[col_offsets.at(0)].ctx_->type_) || (ObCSColumnHeader::STR_DICT == decoders_[col_offsets.at(0)].ctx_->type_))
             && transform_helper_.get_micro_block_header()->all_lob_in_row_;
   }
-
+  virtual bool can_pushdown_decoder(
+      const share::schema::ObColumnParam &col_param,
+      const int32_t col_offset,
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      const storage::ObAggCellBase &agg_cell) override;
   virtual int get_aggregate_result(
       const ObTableIterParam &iter_param,
       const ObTableAccessContext &context,
@@ -250,13 +251,26 @@ public:
       const int64_t row_cap,
       storage::ObAggDatumBuf &agg_datum_buf,
       ObAggCell &agg_cell) override;
+  virtual int get_aggregate_result(
+      const int32_t col_offset,
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      ObAggCellVec &agg_cell) override;
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
   virtual int read_distinct(const int32_t group_by_col, const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const override;
+    storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int read_reference(const int32_t group_by_col, const int32_t *row_ids,
-    const int64_t row_cap, storage::ObGroupByCell &group_by_cell) const override;
+    const int64_t row_cap, storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int get_group_by_aggregate_result(const int32_t *row_ids, const char **cell_datas,
     const int64_t row_cap, storage::ObGroupByCell &group_by_cell) override;
+  virtual int get_group_by_aggregate_result(
+      const int32_t *row_ids,
+      const char **cell_datas,
+      const int64_t row_cap,
+      const int64_t vec_offset,
+      uint32_t *len_array,
+      sql::ObEvalCtx &eval_ctx,
+      storage::ObGroupByCellVec &group_by_cell) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
@@ -266,7 +280,8 @@ public:
       const int64_t vec_offset,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      sql::ObExprPtrIArray &exprs) override;
+      sql::ObExprPtrIArray &exprs,
+      const bool need_init_vector) override;
   virtual bool has_lob_out_row() const override final
   { return transform_helper_.get_micro_block_header()->has_lob_out_row(); }
 

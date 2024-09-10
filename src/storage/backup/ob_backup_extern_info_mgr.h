@@ -47,7 +47,7 @@ public:
   ObExternLSMetaMgr();
   virtual ~ObExternLSMetaMgr();
   int init(const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
-      const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id);
+      const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const int64_t dest_id);
   int write_ls_meta_info(const ObBackupLSMetaInfo &ls_meta);
   int read_ls_meta_info(ObBackupLSMetaInfo &ls_meta);
 
@@ -61,6 +61,7 @@ private:
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
+  int64_t dest_id_;
   DISALLOW_COPY_AND_ASSIGN(ObExternLSMetaMgr);
 };
 
@@ -96,8 +97,8 @@ public:
       bandwidth_throttle_(NULL) {};
   ~ObExternTabletMetaWriter() {};
   int init(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
-           const int64_t turn_id, const int64_t retry_id, const bool is_final_fuse,
-           common::ObInOutBandwidthThrottle &bandwidth_throttle);
+           const int64_t turn_id, const int64_t retry_id, const int64_t dest_id,
+	   const bool is_final_fuse, common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int write_meta_data(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id);
   int close();
 private:
@@ -122,6 +123,7 @@ private:
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
+  int64_t dest_id_;
   bool is_final_fuse_;
   common::ObIOFd io_fd_;
   common::ObIODevice *dev_handle_;
@@ -136,16 +138,19 @@ class ObExternTabletMetaReader final
 {
 public:
   ObExternTabletMetaReader(): is_inited_(false), cur_tablet_idx_(-1), cur_trailer_idx_(-1), cur_buf_offset_(-1),
-                              tablet_meta_array_(), tablet_info_trailer_array_() {}
+                              tablet_meta_array_(), tablet_info_trailer_array_(), mod_() {}
   ~ObExternTabletMetaReader() {};
-  int init(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, const bool is_final_fuse);
+  int init(const share::ObBackupDest &backup_set_dest, const common::ObStorageIdMod& mod, const share::ObLSID &ls_id,
+      const bool is_final_fuse);
   int get_next(storage::ObMigrationTabletParam &tablet_meta);
 private:
   bool end_();
   int read_next_batch_();
   int read_next_range_tablet_metas_();
-  int fill_tablet_info_trailer_(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, const bool is_final_fuse);
-  int read_file_trailer_(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, ObTabletInfoTrailer &trailer);
+  int fill_tablet_info_trailer_(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
+      const ObStorageIdMod &mod, const bool is_final_fuse);
+  int read_file_trailer_(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
+      const ObStorageIdMod &mod, ObTabletInfoTrailer &trailer);
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
@@ -157,6 +162,7 @@ private:
   ObArray<ObTabletInfoTrailer> tablet_info_trailer_array_;
   int64_t retry_id_;
   int64_t turn_id_;
+  common::ObStorageIdMod mod_;
   share::ObBackupDest backup_set_dest_;
   DISALLOW_COPY_AND_ASSIGN(ObExternTabletMetaReader);
 };

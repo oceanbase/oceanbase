@@ -369,7 +369,8 @@ public:
   void set_register_dm_info(const common::ObRegisterDmInfo &register_dm_info) { register_dm_info_ = register_dm_info; }
 
   //不包含allocated_chid_ copy，谁申请谁释放
-  static void assign(const ObDtlLinkedBuffer &src, ObDtlLinkedBuffer *dst) {
+  static int assign(const ObDtlLinkedBuffer &src, ObDtlLinkedBuffer *dst) {
+    int ret = OB_SUCCESS;
     MEMCPY(dst->buf_, src.buf_, src.size_);
     dst->size_ = src.size_;
     dst->is_data_msg_ = src.is_data_msg_;
@@ -386,12 +387,14 @@ public:
     dst->sqc_id_ = src.sqc_id_;
     dst->enable_channel_sync_ = src.enable_channel_sync_;
     dst->register_dm_info_ = src.register_dm_info_;
-    dst->row_meta_ = src.row_meta_;
+    ret = dst->row_meta_.assign(src.row_meta_);
     dst->op_info_ = src.op_info_;
+    return ret;
   }
 
-  void shallow_copy(const ObDtlLinkedBuffer &src)
+  int shallow_copy(const ObDtlLinkedBuffer &src)
   {
+    int ret = OB_SUCCESS;
     buf_ = src.buf_;
     size_ = src.size_;
     is_data_msg_ = src.is_data_msg_;
@@ -407,8 +410,9 @@ public:
     sqc_id_ = src.sqc_id_;
     enable_channel_sync_ = src.enable_channel_sync_;
     register_dm_info_ = src.register_dm_info_;
-    row_meta_ = src.row_meta_;
+    ret = row_meta_.assign(src.row_meta_);
     op_info_ = src.op_info_;
+    return ret;
   }
 
   OB_INLINE ObDtlDfoKey &get_dfo_key() {

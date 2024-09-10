@@ -141,6 +141,7 @@ public:
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
   int write_meta_data(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
+  int write_other_block(const blocksstable::ObBufferReader &reader, int64_t &offset, int64_t &length);
   int64_t get_file_size() const
   {
     return file_write_ctx_.get_file_size();

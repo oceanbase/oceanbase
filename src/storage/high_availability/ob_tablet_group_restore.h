@@ -422,6 +422,9 @@ private:
   int check_need_copy_sstable_(
       const ObITable::TableKey &table_key,
       bool &need_copy);
+  int check_need_copy_macro_blocks_(
+      const ObMigrationSSTableParam &param,
+      bool &need_copy);
   int check_remote_sstable_exist_in_table_store_(
     const ObITable::TableKey &table_key,
     bool &is_exist,

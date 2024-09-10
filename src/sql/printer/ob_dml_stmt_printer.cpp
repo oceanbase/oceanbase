@@ -2013,6 +2013,18 @@ int ObDMLStmtPrinter::print_order_by()
   return ret;
 }
 
+int ObDMLStmtPrinter::print_approx()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret));
+  } else if (stmt_->has_vec_approx()) {
+    DATA_PRINTF(" approx ");
+  }
+  return ret;
+}
+
 int ObDMLStmtPrinter::print_limit()
 {
   int ret = OB_SUCCESS;

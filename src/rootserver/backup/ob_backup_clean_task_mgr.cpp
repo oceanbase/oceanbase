@@ -441,7 +441,7 @@ int ObBackupCleanTaskMgr::get_set_ls_ids_(ObIArray<ObLSID> &ls_ids)
   if (OB_FAIL(store.init(backup_dest_, desc))) {
     LOG_WARN("faield to init backup data extern mgr", K(ret));
   } else if (OB_FAIL(store.read_ls_attr_info(ls_attr))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       if (OB_FAIL(get_set_ls_ids_from_traverse_(ls_ids))) {
         LOG_WARN("failed to get set ls ids from traverse", K(ret));
       }
@@ -490,7 +490,7 @@ int ObBackupCleanTaskMgr::get_piece_ls_ids_(ObIArray<ObLSID> &ls_ids)
     LOG_WARN("failed to init store", K(ret), K_(task_attr));
   } else if (OB_FAIL(store.read_piece_info(backup_piece_info_.key_.dest_id_, backup_piece_info_.key_.round_id_,
       backup_piece_info_.key_.piece_id_, desc))) {
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       if (OB_FAIL(get_piece_ls_ids_from_traverse_(ls_ids))) {
         LOG_WARN("failed to get piece ls ids from traverse", K(ret));
       }

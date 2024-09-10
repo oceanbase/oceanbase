@@ -546,8 +546,7 @@ ObTmpFileBlockManager::ObTmpFileBlockManager() :
                              block_index_generator_(0),
                              block_map_(),
                              block_allocator_(),
-                             stat_lock_(),
-                             map_lock_()
+                             stat_lock_()
                              {}
 
 ObTmpFileBlockManager::~ObTmpFileBlockManager()
@@ -613,7 +612,6 @@ int ObTmpFileBlockManager::create_tmp_file_block(const int64_t begin_page_id, co
   } else if (OB_FAIL(handle.init(blk, this))) {
     LOG_WARN("fail to init tmp file block handle", KR(ret), K(block_index));
   } else {
-    SharedLockGuard guard(map_lock_);
     if (OB_FAIL(block_map_.insert(ObTmpFileBlockKey(block_index), handle))) {
       LOG_WARN("fail to insert tmp file block into map", KR(ret), K(block_index));
     }
@@ -765,7 +763,6 @@ int ObTmpFileBlockManager::remove_tmp_file_block_(const int64_t block_index)
     ret = OB_NOT_INIT;
     LOG_WARN("ObTmpFileBlockManager has not been inited", KR(ret), K(tenant_id_));
   } else {
-    SharedLockGuard guard(map_lock_);
     if (OB_FAIL(block_map_.erase(ObTmpFileBlockKey(block_index), handle))) {
       if (ret != OB_ENTRY_NOT_EXIST) {
         LOG_WARN("fail to erase tmp file block", KR(ret), K(block_index));
@@ -818,7 +815,7 @@ void ObTmpFileBlockManager::print_block_usage()
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
+    LOG_WARN("ObTmpFileBlockManager has not been inited", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(get_block_usage_stat(used_page_num, block_num))) {
     LOG_WARN("fail to get block usage stat", KR(ret));
   } else if (OB_UNLIKELY(0 == block_num)) {
@@ -847,7 +844,6 @@ int ObTmpFileBlockManager::get_macro_block_count(int64_t &macro_block_count)
 int ObTmpFileBlockManager::get_macro_block_list(common::ObIArray<blocksstable::MacroBlockId> &macro_id_list)
 {
   int ret = OB_SUCCESS;
-  ExclusiveLockGuard guard(map_lock_);
   CollectMacroBlockIdFunctor func(macro_id_list);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

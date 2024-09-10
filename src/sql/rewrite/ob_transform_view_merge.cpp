@@ -639,10 +639,10 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
       LOG_WARN("unexpect null table item", K(ret));
     } else if (!helper.trans_table->is_lateral_table()) {
       // do nothing
-    } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(helper.trans_table->exec_params_,
-                                                                  *child_stmt,
-                                                                  contain))) {
-      LOG_WARN("failed to check is table item correlated", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::is_from_item_correlated(helper.trans_table->exec_params_,
+                                                                 *child_stmt,
+                                                                 contain))) {
+      LOG_WARN("failed to check is from item correlated", K(ret));
     } else if (contain) {
       can_be = false;
       OPT_TRACE("lateral inline view has correlated table item, can not merge");

@@ -32,11 +32,6 @@
 namespace oceanbase
 {
 
-namespace observer
-{
-struct ObGlobalContext;
-}
-
 namespace transaction
 {
 class ObTsMgr;

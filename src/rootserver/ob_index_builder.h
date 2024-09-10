@@ -98,8 +98,27 @@ public:
                               const uint64_t tenant_data_version,
                               common::ObIAllocator &allocator,
                               ObDDLTaskRecord &task_record);
+  int submit_rebuild_index_task(common::ObMySQLTransaction &trans,
+                                const obrpc::ObRebuildIndexArg &arg,
+                                const share::schema::ObTableSchema *data_schema,
+                                const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                                const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
+                                const share::schema::ObTableSchema *index_schema,
+                                const int64_t parallelism,
+                                const int64_t group_id,
+                                const uint64_t tenant_data_version,
+                                common::ObIAllocator &allocator,
+                                ObDDLTaskRecord &task_record);
 private:
-  int recognize_index_schemas(
+  int recognize_vec_index_schemas(
+      const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      const bool is_vec_inner_drop,
+      int64_t &index_ith,
+      int64_t &rowkey_vid_ith,
+      int64_t &vid_rowkey_ith,
+      int64_t &index_id_ith,
+      int64_t &snapshot_data_ith);
+  int recognize_fts_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       int64_t &index_ith,
       int64_t &aux_doc_word_ith,
@@ -116,11 +135,11 @@ private:
                               share::schema::ObTableSchema &schema);
 
   bool is_final_index_status(const share::schema::ObIndexStatus index_status) const;
-  int check_has_fts_or_multivalue_index(
+  int check_has_none_shared_index_tables_for_fts_or_multivalue_or_vector_index_(
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
-      bool &has_fts_or_multivalue_index);
+      bool &has_fts_or_multivalue_or_vector_index);
   bool ignore_error_code_for_domain_index(
       const int ret,
       const obrpc::ObDropIndexArg &arg,

@@ -10,9 +10,13 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_tenant_tablet_scheduler_task_mgr.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "observer/report/ob_tablet_table_updater.h"
-
+#include "storage/compaction/ob_compaction_schedule_util.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction/ob_tenant_compaction_obj_mgr.h"
+#include "storage/compaction/ob_tenant_ls_merge_scheduler.h"
+#endif
 namespace oceanbase
 {
 using namespace storage;
@@ -41,31 +45,27 @@ ObTenantTabletSchedulerTaskMgr::~ObTenantTabletSchedulerTaskMgr()
 
 void ObTenantTabletSchedulerTaskMgr::destroy()
 {
-  TG_DESTROY(merge_loop_tg_id_);
-  TG_DESTROY(medium_loop_tg_id_);
-  TG_DESTROY(sstable_gc_tg_id_);
-  TG_DESTROY(compaction_refresh_tg_id_);
-  merge_loop_tg_id_ = -1;
-  medium_loop_tg_id_ = -1;
-  sstable_gc_tg_id_ = -1;
-  compaction_refresh_tg_id_ = -1;
+  DESTROY_THREAD(merge_loop_tg_id_);
+  DESTROY_THREAD(medium_loop_tg_id_);
+  DESTROY_THREAD(sstable_gc_tg_id_);
+  DESTROY_THREAD(compaction_refresh_tg_id_);
   schedule_interval_ = -1;
 }
 
 void ObTenantTabletSchedulerTaskMgr::stop()
 {
-  TG_STOP(merge_loop_tg_id_);
-  TG_STOP(medium_loop_tg_id_);
-  TG_STOP(sstable_gc_tg_id_);
-  TG_STOP(compaction_refresh_tg_id_);
+  STOP_THREAD(merge_loop_tg_id_);
+  STOP_THREAD(medium_loop_tg_id_);
+  STOP_THREAD(sstable_gc_tg_id_);
+  STOP_THREAD(compaction_refresh_tg_id_);
 }
 
 void ObTenantTabletSchedulerTaskMgr::wait()
 {
-  TG_WAIT(merge_loop_tg_id_);
-  TG_WAIT(medium_loop_tg_id_);
-  TG_WAIT(sstable_gc_tg_id_);
-  TG_WAIT(compaction_refresh_tg_id_);
+  WAIT_THREAD(merge_loop_tg_id_);
+  WAIT_THREAD(medium_loop_tg_id_);
+  WAIT_THREAD(sstable_gc_tg_id_);
+  WAIT_THREAD(compaction_refresh_tg_id_);
 }
 
 void ObTenantTabletSchedulerTaskMgr::MergeLoopTask::runTimerTask()
@@ -73,11 +73,7 @@ void ObTenantTabletSchedulerTaskMgr::MergeLoopTask::runTimerTask()
   int ret = OB_SUCCESS;
   int64_t cost_ts = ObTimeUtility::fast_current_time();
   ObCurTraceId::init(GCONF.self_addr_);
-  if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_SLOG_REPLAY_INVERVAL)) {
-      LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
-    }
-  } else {
+  if (ObBasicMergeScheduler::could_start_loop_task()) {
     if (OB_FAIL(MTL(ObTenantTabletScheduler *)->schedule_all_tablets_minor())) {
       LOG_WARN("Fail to merge all partition", K(ret));
     }
@@ -91,11 +87,7 @@ void ObTenantTabletSchedulerTaskMgr::MediumLoopTask::runTimerTask()
   int ret = OB_SUCCESS;
   int64_t cost_ts = ObTimeUtility::fast_current_time();
   ObCurTraceId::init(GCONF.self_addr_);
-  if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_SLOG_REPLAY_INVERVAL)) {
-      LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
-    }
-  } else {
+  if (ObBasicMergeScheduler::could_start_loop_task()) {
     if (OB_FAIL(MTL(ObTenantTabletScheduler *)->schedule_all_tablets_medium())) {
       LOG_WARN("Fail to merge all partition", K(ret));
     }
@@ -107,14 +99,14 @@ void ObTenantTabletSchedulerTaskMgr::MediumLoopTask::runTimerTask()
 void ObTenantTabletSchedulerTaskMgr::SSTableGCTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_SLOG_REPLAY_INVERVAL)) {
-      LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
-    }
-  } else {
+  if (ObBasicMergeScheduler::could_start_loop_task()) {
     // use tenant config to loop minor && medium task
     MTL(ObTenantTabletScheduler *)->reload_tenant_config();
-
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      MTL(ObTenantLSMergeScheduler *)->reload_tenant_config();
+    }
+#endif
     int64_t cost_ts = ObTimeUtility::fast_current_time();
     ObCurTraceId::init(GCONF.self_addr_);
     if (OB_FAIL(MTL(ObTenantTabletScheduler *)->update_upper_trans_version_and_gc_sstable())) {
@@ -180,14 +172,6 @@ int ObTenantTabletSchedulerTaskMgr::start()
     LOG_WARN("failed to start minor merge scan thread", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(merge_loop_tg_id_, merge_loop_task_, schedule_interval_, repeat))) {
     LOG_WARN("Fail to schedule minor merge scan task", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::MediumLoop, medium_loop_tg_id_))) {
-    LOG_WARN("failed to create medium loop thread", K(ret));
-  } else if (OB_FAIL(TG_START(medium_loop_tg_id_))) {
-    LOG_WARN("failed to start medium merge scan thread", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(medium_loop_tg_id_, medium_loop_task_, schedule_interval_, repeat))) {
-    LOG_WARN("Fail to schedule medium merge scan task", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(medium_loop_tg_id_, medium_check_task_, MEDIUM_CHECK_INTERVAL, repeat))) {
-    LOG_WARN("Fail to schedule medium merge check task", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::SSTableGC, sstable_gc_tg_id_))) {
     LOG_WARN("failed to create merge loop thread", K(ret));
   } else if (OB_FAIL(TG_START(sstable_gc_tg_id_))) {
@@ -202,6 +186,16 @@ int ObTenantTabletSchedulerTaskMgr::start()
     LOG_WARN("Fail to schedule info pool resize task", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(compaction_refresh_tg_id_, tablet_updater_refresh_task_, TABLET_UPDATER_REFRESH_INTERVAL, repeat))) {
     LOG_WARN("Fail to schedule tablet updater refresh task", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
+    LOG_INFO("shared storage mode do not use medium_loop_task to do major merge", K(ret));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::MediumLoop, medium_loop_tg_id_))) {
+    LOG_WARN("failed to create medium loop thread", K(ret));
+  } else if (OB_FAIL(TG_START(medium_loop_tg_id_))) {
+    LOG_WARN("failed to start medium merge scan thread", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(medium_loop_tg_id_, medium_loop_task_, schedule_interval_, repeat))) {
+    LOG_WARN("Fail to schedule medium merge scan task", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(medium_loop_tg_id_, medium_check_task_, MEDIUM_CHECK_INTERVAL, repeat))) {
+    LOG_WARN("Fail to schedule medium merge check task", K(ret));
   }
   return ret;
 }
@@ -211,30 +205,16 @@ int ObTenantTabletSchedulerTaskMgr::restart_scheduler_timer_task(
 {
   int ret = OB_SUCCESS;
   if (schedule_interval_ == merge_schedule_interval) {
-  } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, medium_loop_tg_id_, medium_loop_task_))) {
-    LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
   } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, merge_loop_tg_id_, merge_loop_task_))) {
+    LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
+  } else if (GCTX.is_shared_storage_mode()) {
+    schedule_interval_ = merge_schedule_interval;
+    LOG_INFO("succeeded to reload new merge schedule interval for merge loop task", K(merge_schedule_interval));
+  } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, medium_loop_tg_id_, medium_loop_task_))) {
     LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
   } else {
     schedule_interval_ = merge_schedule_interval;
     LOG_INFO("succeeded to reload new merge schedule interval", K(merge_schedule_interval));
-  }
-  return ret;
-}
-
-int ObTenantTabletSchedulerTaskMgr::restart_schedule_timer_task(
-  const int64_t schedule_interval,
-  const int64_t tg_id,
-  common::ObTimerTask &timer_task)
-{
-  int ret = OB_SUCCESS;
-  bool is_exist = false;
-  if (OB_FAIL(TG_TASK_EXIST(tg_id, timer_task, is_exist))) {
-    LOG_ERROR("failed to check merge schedule task exist", K(ret));
-  } else if (is_exist && OB_FAIL(TG_CANCEL_R(tg_id, timer_task))) {
-    LOG_WARN("failed to cancel task", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(tg_id, timer_task, schedule_interval, true/*repeat*/))) {
-    LOG_WARN("Fail to schedule timer task", K(ret));
   }
   return ret;
 }

@@ -19,7 +19,7 @@
 #include "observer/ob_server.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "ob_storage_ha_utils.h"
 
 using namespace oceanbase;
@@ -426,7 +426,7 @@ void ObRebuildService::run1()
   lib::set_thread_name("RebuildService");
 
   while (!has_set_stop()) {
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
     } else if (OB_FAIL(build_rebuild_ctx_map_())) {
@@ -1079,6 +1079,7 @@ int ObLSRebuildMgr::generate_rebuild_task_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
   } else {
+    ObReplicaType replica_type;
   #ifdef ERRSIM
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
@@ -1088,14 +1089,15 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       }
   #endif
     if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(replica_type = ls->is_cs_replica() ? REPLICA_TYPE_COLUMNSTORE : REPLICA_TYPE_FULL)) {
     } else {
       DEBUG_SYNC(BEFOR_EXEC_REBUILD_TASK);
       ObTaskId task_id;
       task_id.init(GCONF.self_addr_);
       ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp,
-                                         REPLICA_TYPE_FULL/*dummy_replica_type*/);
+                                         replica_type);
       ObReplicaMember src_replica_member(GCONF.self_addr_, timestamp,
-                                         REPLICA_TYPE_FULL/*dummy_replica_type*/);
+                                         replica_type);
       ObMigrationOpArg arg;
       arg.cluster_id_ = GCONF.cluster_id;
       arg.data_src_ = src_replica_member;

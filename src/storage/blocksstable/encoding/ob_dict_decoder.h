@@ -137,18 +137,18 @@ public:
   virtual int read_distinct(
     const ObColumnDecoderCtx &ctx,
     const char **cell_datas,
-    storage::ObGroupByCell &group_by_cell) const;
+    storage::ObGroupByCellBase &group_by_cell) const;
 
   virtual int read_reference(
       const ObColumnDecoderCtx &ctx,
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const override;
+      storage::ObGroupByCellBase &group_by_cell) const override;
   int batch_read_distinct(
       const ObColumnDecoderCtx &ctx,
       const char **cell_datas,
       const int64_t meta_length,
-      storage::ObGroupByCell &group_by_cell) const;
+      storage::ObGroupByCellBase &group_by_cell) const;
 
 public:
   ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
@@ -222,11 +222,12 @@ private:
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
+  template <typename ObFilterExecutor>
   int in_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
-      const sql::ObWhiteFilterExecutor &filter,
+      const ObFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 

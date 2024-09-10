@@ -62,14 +62,14 @@ class ObWriteHelper final
 {
 public:
   ObWriteHelper()
-    : merge_info_(),
-      data_store_desc_(),
-      macro_writer_(),
+    : data_store_desc_(),
+      macro_writer_(false/*is_need_macro_buffer*/),
       projector_(),
       skip_project_(false)
   {}
   ~ObWriteHelper() = default;
   int init(
+      ObBasicTabletMergeCtx &ctx,
       const ObMergeParameter &merge_param,
       const int64_t parallel_idx,
       const int64_t cg_idx,
@@ -77,7 +77,8 @@ public:
       ObTabletMergeInfo &merge_info);
   int append(const blocksstable::ObDatumRow &row, const bool direct_append = false);
   int append_micro_block(const blocksstable::ObMicroBlock &micro_block) { return macro_writer_.append_micro_block(micro_block); }
-  int append_macro_block(const ObMacroBlockDesc &macro_desc) { return macro_writer_.append_macro_block(macro_desc); }
+  int append_macro_block(const ObMacroBlockDesc &macro_desc, const ObMicroBlockData *micro_block_data)
+  { return macro_writer_.append_macro_block(macro_desc, micro_block_data); }
   int project(const blocksstable::ObDatumRow &row, blocksstable::ObDatumRow &result_row, bool &is_all_nop) const
   {
     return projector_.project(row, result_row, is_all_nop);
@@ -90,9 +91,8 @@ public:
   const common::ObIArray<share::schema::ObColDesc>& get_col_desc_array() const { return data_store_desc_.get_col_desc_array(); }
   bool is_cg() const { return data_store_desc_.is_cg(); }
   int end_write(ObTabletMergeInfo &merge_info);
-  TO_STRING_KV(K_(merge_info), K_(data_store_desc), K_(projector), K_(skip_project))
+  TO_STRING_KV(K_(data_store_desc), K_(projector), K_(skip_project))
 private:
-  ObSSTableMergeInfo merge_info_;
   blocksstable::ObDataStoreDesc data_store_desc_;
   blocksstable::ObMacroBlockWriter macro_writer_;
   ObCOMergeProjector projector_;
@@ -113,6 +113,7 @@ public:
   {}
   virtual ~ObCOMergeWriter();
   virtual int init(
+        ObBasicTabletMergeCtx &ctx,
         const blocksstable::ObDatumRow &default_row,
         const ObMergeParameter &merge_param,
         const int64_t parallel_idx,
@@ -126,6 +127,7 @@ public:
   { return OB_NOT_SUPPORTED; }
 
   virtual int init(
+      ObBasicTabletMergeCtx &ctx,
       const blocksstable::ObDatumRow &default_row,
       const ObMergeParameter &merge_param,
       const ObITableReadInfo *full_read_info,
@@ -159,7 +161,8 @@ protected:
 private:
   int compare(const ObMergeLog &mergelog, int64_t &cmp_ret, const blocksstable::ObDatumRow &row, bool &skip_curr_row) const;
   int process_mergelog_row(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row);
-  virtual int process(const ObMacroBlockDesc &macro_desc) = 0;
+  virtual int process(const ObMacroBlockDesc &macro_desc,
+                      const ObMicroBlockData *micro_block_data) = 0;
   virtual int process(const blocksstable::ObMicroBlock &micro_block) = 0;
   virtual int process(const blocksstable::ObDatumRow &row) = 0;
   virtual bool is_cg() const { return false; } //temp code
@@ -185,6 +188,7 @@ public:
   {}
   ~ObCOMergeRowWriter();
   virtual int init(
+        ObBasicTabletMergeCtx &ctx,
         const blocksstable::ObDatumRow &default_row,
         const ObMergeParameter &merge_param,
         const int64_t idx,
@@ -199,7 +203,7 @@ public:
   virtual int end_write(const int64_t task_idx, ObTabletMergeInfo &merge_info) override;
   INHERIT_TO_STRING_KV("ObCOMergeRowWriter", ObCOMergeWriter, K_(write_helper));
 private:
-  virtual int process(const ObMacroBlockDesc &macro_desc) override;
+  virtual int process(const ObMacroBlockDesc &macro_desc, const ObMicroBlockData *micro_block_data) override;
   virtual int process(const blocksstable::ObMicroBlock &micro_block) override;
   virtual int process(const blocksstable::ObDatumRow &row) override;
   virtual bool is_cg() const override { return write_helper_.is_cg(); }
@@ -225,6 +229,7 @@ public:
   {}
   virtual ~ObCOMergeSingleWriter();
   virtual int init(
+      ObBasicTabletMergeCtx &ctx,
       const blocksstable::ObDatumRow &default_row,
       const ObMergeParameter &merge_param,
       const ObITableReadInfo *full_read_info,
@@ -236,7 +241,11 @@ public:
       ObSSTable *row_table) override;
   virtual int end_write(const int64_t start, const int64_t end, ObTabletMergeInfo **merge_infos) override;
 private:
-  virtual int process(const ObMacroBlockDesc &macro_desc) override { return OB_NOT_SUPPORTED; }
+  virtual int process(const ObMacroBlockDesc &macro_desc,
+                      const ObMicroBlockData *micro_block_data) override
+  {
+    return OB_NOT_SUPPORTED;
+  }
   virtual int process(const blocksstable::ObMicroBlock &micro_block) override { return OB_NOT_SUPPORTED; };
   virtual int process(const blocksstable::ObDatumRow &row) override;
 

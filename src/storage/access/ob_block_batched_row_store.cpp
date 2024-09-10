@@ -48,8 +48,9 @@ ObBlockBatchedRowStore::~ObBlockBatchedRowStore()
   reset();
 }
 
-int ObBlockBatchedRowStore::init(const ObTableAccessParam &param)
+int ObBlockBatchedRowStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)
 {
+  UNUSED(agg_col_mask);
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   void *len_array_buf = nullptr;

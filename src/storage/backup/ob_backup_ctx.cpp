@@ -24,6 +24,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/backup/ob_backup_data_table_operator.h"
+#include "common/storage/ob_device_common.h"
 
 #include <algorithm>
 
@@ -31,6 +32,7 @@ using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
 using namespace oceanbase::lib;
 using namespace oceanbase::share;
+using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace backup {
@@ -421,12 +423,19 @@ int ObBackupDataCtx::close()
 int ObBackupDataCtx::open_file_writer_(const share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
+  ObStorageIdMod mod;
+  mod.storage_id_ = param_.dest_id_;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
   common::ObBackupIoAdapter util;
   const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
   if (OB_FAIL(util.mk_parent_dir(backup_path.get_obstr(), param_.backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to make parent dir", K(backup_path));
-  } else if (OB_FAIL(util.open_with_access_type(
-                 dev_handle_, io_fd_, param_.backup_dest_.get_storage_info(), backup_path.get_obstr(), access_type))) {
+  } else if (OB_FAIL(util.open_with_access_type(dev_handle_,
+                                                io_fd_,
+                                                param_.backup_dest_.get_storage_info(),
+                                                backup_path.get_obstr(),
+                                                access_type,
+                                                mod))) {
     LOG_WARN("failed to open with access type", K(ret), K(param_), K(backup_path));
   } else {
     LOG_INFO("open file writer", K(ret), K(backup_path));
@@ -521,6 +530,30 @@ int ObBackupDataCtx::write_meta_data_(const blocksstable::ObBufferReader &reader
     } else {
       ++file_trailer_.meta_count_;
       file_offset_ += length;
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataCtx::write_other_block(const blocksstable::ObBufferReader &reader, int64_t &offset, int64_t &length)
+{
+  int ret = OB_SUCCESS;
+  const int64_t alignment = DIO_READ_ALIGN_SIZE;
+  const ObBackupBlockType block_type = BACKUP_BLOCK_OTHER_BLOCK;
+  if (!reader.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(reader));
+  } else if (OB_FAIL(write_data_align_(reader, block_type, alignment))) {
+    LOG_WARN("failed to write data align", K(ret), K(reader));
+  } else {
+    ObBufferReader buffer_reader(tmp_buffer_.data(), tmp_buffer_.length(), tmp_buffer_.length());
+    if (OB_FAIL(file_write_ctx_.append_buffer(buffer_reader))) {
+      LOG_WARN("failed to append buffer", K(ret), K_(tmp_buffer), K(buffer_reader));
+    } else {
+      offset = file_offset_;
+      length = tmp_buffer_.length();
+      file_offset_ += length;
+      LOG_INFO("write other block", K(offset), K(length), K_(file_offset));
     }
   }
   return ret;

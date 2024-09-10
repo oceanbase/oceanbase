@@ -16,6 +16,7 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/string/ob_string.h"
 #include "lib/allocator/page_arena.h"
+#include "src/share/schema/ob_column_schema.h"
 
 namespace oceanbase
 {
@@ -76,6 +77,10 @@ class ObExternalTableUtils {
                                        const int64_t &column_idx,
                                        int64_t &start_lineno,
                                        int64_t &end_lineno);
+  static int resolve_odps_start_step(const common::ObNewRange &range,
+                                       const int64_t &column_idx,
+                                       int64_t &start,
+                                       int64_t &step);
   static int convert_external_table_new_range(const common::ObString &file_url,
                                               const int64_t file_id,
                                               const uint64_t ref_table_id,
@@ -111,6 +116,8 @@ class ObExternalTableUtils {
     const ObString &location,
     const ObString &access_info,
     const ObString &pattern,
+    const ObString &properties,
+    const bool &is_partitioned_table,
     const sql::ObExprRegexpSessionVariables &regexp_vars,
     ObIAllocator &allocator,
     common::ObSqlString &full_path,
@@ -127,11 +134,6 @@ class ObExternalTableUtils {
     ObIArray<int64_t> &file_sizes,
     common::ObSqlString &partition_path,
     ObIAllocator &allocator);
-
- private:
-  static bool is_left_edge(const common::ObObj &value);
-  static bool is_right_edge(const common::ObObj &value);
-  static int64_t get_edge_value(const common::ObObj &edge);
   static int make_external_table_scan_range(const common::ObString &file_url,
                                             const int64_t file_id,
                                             const uint64_t ref_table_id,
@@ -139,7 +141,12 @@ class ObExternalTableUtils {
                                             const int64_t last_lineno,
                                             common::ObIAllocator &allocator,
                                             common::ObNewRange &new_range);
+  static bool is_skipped_insert_column(const schema::ObColumnSchemaV2& column);
 
+ private:
+  static bool is_left_edge(const common::ObObj &value);
+  static bool is_right_edge(const common::ObObj &value);
+  static int64_t get_edge_value(const common::ObObj &edge);
   static int sort_external_files(ObIArray<ObString> &file_urls,
                           ObIArray<int64_t> &file_sizes);
 

@@ -76,17 +76,16 @@ int ObRowWriter::init_common(char *buf, const int64_t buf_size, const int64_t po
 }
 
 int ObRowWriter::check_row_valid(
-    const ObStoreRow &row,
+    const ObDatumRow &row,
     const int64_t rowkey_column_count)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!row.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid row writer input argument", K(row), K(ret));
-  } else if (OB_UNLIKELY(rowkey_column_count <= 0 || rowkey_column_count > row.row_val_.count_)) {
+    LOG_WARN("invalid row writer input argument", K(ret), K(row));
+  } else if (OB_UNLIKELY(rowkey_column_count <= 0 || rowkey_column_count > row.count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid row writer input argument",
-        K(rowkey_column_count), K(row.row_val_.count_), K(ret));
+    LOG_WARN("invalid row writer input argument", K(ret), K(rowkey_column_count), K(row.count_));
   }
   return ret;
 }
@@ -230,24 +229,24 @@ int ObRowWriter::write(const int64_t rowkey_column_cnt, const ObDatumRow &datum_
   return ret;
 }
 
-// when update_idx == nullptr, write full row; else only write rowkey + update cells
+// when update_idx == nullptr, write full row; else only write rowkey + update storage_datums
 int ObRowWriter::write(
     const int64_t rowkey_column_count,
-    const storage::ObStoreRow &row,
+    const ObDatumRow &datum_row,
     const ObIArray<int64_t> *update_idx,
     char *&buf,
     int64_t &len)
 {
   int ret = OB_SUCCESS;
   len = 0;
-  if (OB_UNLIKELY(nullptr != update_idx && update_idx->count() > row.row_val_.count_)) {
+  if (OB_UNLIKELY(nullptr != update_idx && update_idx->count() > datum_row.count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update idx is invalid", K(ret), KPC(update_idx), K_(row.row_val_.count), K(rowkey_column_count));
+    LOG_WARN("update idx is invalid", K(ret), KPC(update_idx), K_(datum_row.count), K(rowkey_column_count));
   } else {
     do {
       if (OB_FAIL(alloc_buf_and_init(OB_BUF_NOT_ENOUGH == ret))) {
         LOG_WARN("row writer fail to alloc and init", K(ret));
-      } else if (OB_FAIL(inner_write_row(rowkey_column_count, row, update_idx))) {
+      } else if (OB_FAIL(inner_write_row(rowkey_column_count, datum_row, update_idx))) {
         if (OB_BUF_NOT_ENOUGH != ret) {
           LOG_WARN("row writer fail to append row header", K(ret), K(row_buffer_), K(pos_));
         }
@@ -289,29 +288,29 @@ int ObRowWriter::check_update_idx_array_valid(
 
 int ObRowWriter::inner_write_row(
     const int64_t rowkey_column_count,
-    const ObStoreRow &row,
+    const ObDatumRow &datum_row,
     const ObIArray<int64_t> *update_idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(check_row_valid(row, rowkey_column_count))) {
+  if (OB_FAIL(check_row_valid(datum_row, rowkey_column_count))) {
     LOG_WARN("row writer fail to init store row", K(ret), K(rowkey_column_count));
   } else if (nullptr != update_idx && OB_FAIL(check_update_idx_array_valid(rowkey_column_count, update_idx))) {
     LOG_WARN("invalid update idx array", K(ret));
   } else if (OB_FAIL(append_row_header(
-          row.flag_.get_serialize_flag(),
-          row.row_type_flag_.flag_,
-          row.trans_id_.get_id(),
-          row.row_val_.count_,
+          datum_row.row_flag_.get_serialize_flag(),
+          datum_row.mvcc_row_flag_.flag_,
+          datum_row.trans_id_.get_id(),
+          datum_row.count_,
           rowkey_column_count))) {
     if (OB_BUF_NOT_ENOUGH != ret) {
-      LOG_WARN("row writer fail to append row header", K(ret), K(row));
+      LOG_WARN("row writer fail to append row header", K(ret), K(datum_row));
     }
   } else {
     update_idx_array_ = update_idx;
     rowkey_column_cnt_ = rowkey_column_count;
-    if (OB_FAIL(inner_write_cells(row.row_val_.cells_, row.row_val_.count_))) {
+    if (OB_FAIL(inner_write_cells(datum_row.storage_datums_, datum_row.count_))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
-        LOG_WARN("failed to write cells", K(ret), K(row));
+        LOG_WARN("failed to write cells", K(ret), K(datum_row));
       }
     }
   }

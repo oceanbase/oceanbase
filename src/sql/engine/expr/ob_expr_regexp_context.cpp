@@ -65,7 +65,6 @@ int ObExprRegexContext::init(ObExprStringBuf &string_buf,
                              const ObCollationType pattern_cs_type)
 {
   int ret = OB_SUCCESS;
-  int regex_error_num = 0;
   ObString pattern;
   ObString origin_pattern_utf16;
   if (OB_UNLIKELY(inited_ && !reusable)) {
@@ -157,9 +156,11 @@ int ObExprRegexContext::init(ObExprStringBuf &string_buf,
 
 int ObExprRegexContext::match(ObExprStringBuf &string_buf,
                               const ObString &text,
+                              const ObCollationType cs_type,
                               const int64_t start,
                               bool &result) const
 {
+  UNUSED(cs_type);
   int ret = OB_SUCCESS;
   UChar *u_text = NULL;
   int32_t u_text_length = 0;
@@ -184,12 +185,14 @@ int ObExprRegexContext::match(ObExprStringBuf &string_buf,
 
 int ObExprRegexContext::find(ObExprStringBuf &string_buf,
                              const ObString &text,
+                             const ObCollationType cs_type,
                              const int64_t start,
                              const int64_t occurrence,
                              const int64_t return_option,
                              const int64_t subexpr,
                              int64_t &result) const
 {
+  UNUSED(cs_type);
   int ret = OB_SUCCESS;
   UChar *u_text = NULL;
   int32_t u_text_length = 0;
@@ -235,9 +238,11 @@ int ObExprRegexContext::find(ObExprStringBuf &string_buf,
 
 int ObExprRegexContext::count(ObExprStringBuf &string_buf,
                               const ObString &text,
+                              const ObCollationType cs_type,
                               const int32_t start,
                               int64_t &result) const
 {
+  UNUSED(cs_type);
   int ret = OB_SUCCESS;
   UChar *u_text = NULL;
   int32_t u_text_length = 0;
@@ -270,11 +275,13 @@ int ObExprRegexContext::count(ObExprStringBuf &string_buf,
 
 int ObExprRegexContext::substr(ObExprStringBuf &string_buf,
                                const ObString &text,
+                               const ObCollationType cs_type,
                                const int64_t start,
                                const int64_t occurrence,
                                const int64_t subexpr,
                                ObString &result) const
 {
+  UNUSED(cs_type);
   int ret = OB_SUCCESS;
   UChar *u_text = NULL;
   int32_t u_text_length = 0;
@@ -322,12 +329,14 @@ int ObExprRegexContext::substr(ObExprStringBuf &string_buf,
 
 int ObExprRegexContext::replace(ObExprStringBuf &string_buf,
                                 const ObString &text_string,
+                                const ObCollationType cs_type,
                                 const ObString &replace_string,
                                 const int64_t start,
                                 const int64_t occurrence,
                                 ObString &result) const
 {
   int ret = OB_SUCCESS;
+  UNUSED(cs_type);
   UChar *u_text = NULL;
   int32_t u_text_length = 0;
   result.reset();
@@ -671,8 +680,11 @@ int ObExprRegexContext::preprocess_pattern(ObExprStringBuf &string_buf,
 
 int ObExprRegexContext::get_regexp_flags(const ObString &match_param,
                                          const bool is_case_sensitive,
+                                         const bool is_som_leftmost,
+                                         const bool is_single_match,
                                          uint32_t& flags)
 {
+  UNUSEDx(is_som_leftmost, is_single_match);
   int ret = OB_SUCCESS;
   const char *ptr = match_param.ptr();
   int length = match_param.length();
@@ -885,6 +897,457 @@ int ObExprRegexContext::check_binary_compatible(const ObExprResType *types, int6
 }
 
 OB_SERIALIZE_MEMBER(ObExprRegexpSessionVariables, regexp_stack_limit_, regexp_time_limit_);
+
+#if defined(__x86_64__)
+ObExprHsRegexCtx::ObExprHsRegexCtx()
+  : ObExprOperatorCtx(),
+    inited_(false),
+    pattern_(),
+    hs_flags_(0),
+    hs_db_(nullptr),
+    hs_scratch_(nullptr),
+    hs_compile_err_(nullptr)
+{
+}
+
+ObExprHsRegexCtx::~ObExprHsRegexCtx()
+{
+  destroy();
+}
+
+void ObExprHsRegexCtx::reset()
+{
+  destroy();
+}
+
+void ObExprHsRegexCtx::destroy()
+{
+  if (inited_) {
+    inited_ = false;
+    hs_flags_= 0;
+    if (hs_scratch_ != nullptr) {
+      hs_free_scratch(hs_scratch_);
+      hs_scratch_ = nullptr;
+    }
+    if (hs_db_ != nullptr) {
+      hs_free_database(hs_db_);
+      hs_db_ = nullptr;
+    }
+  }
+}
+
+int ObExprHsRegexCtx::get_regexp_flags(const ObString &match_param,
+                                       const bool is_case_sensitive,
+                                       const bool is_som_leftmost,
+                                       const bool is_single_match,
+                                       uint32_t &flags) {
+  int ret = OB_SUCCESS;
+  flags = HS_FLAG_UTF8;
+  if (is_single_match) {
+    flags |= HS_FLAG_ALLOWEMPTY;
+  }
+  flags |= is_case_sensitive ? 0 : HS_FLAG_CASELESS;
+  flags |= is_som_leftmost ? HS_FLAG_SOM_LEFTMOST : 0;
+  flags |= is_single_match ? HS_FLAG_SINGLEMATCH : 0;
+  const char *ptr = match_param.ptr();
+  int length = match_param.length();
+  for (int i = 0; OB_SUCC(ret) && i < length; i++) {
+    char c = ptr[i];
+    switch (c) {
+      case 'c':
+        flags &= ~HS_FLAG_CASELESS;
+        break;
+      case 'i':
+        flags |= HS_FLAG_CASELESS;
+        break;
+      case 'm':
+        flags |= HS_FLAG_MULTILINE;
+        break;
+      case 'n':
+        flags |= HS_FLAG_DOTALL;
+        break;
+      case 'u':
+        // hyperscan use unix-only ending by default, do nothing
+        break;
+      case 'x':
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hyperscan cann't handle flag 'u' or 'x', please use ICU.", K(match_param), K(c));
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "not supported match_param of hyperscan engine");
+        break;
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid match param", K(match_param), K(c));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "use match param in regexp expression");
+        break;
+    }
+  }
+  return ret;
+}
+
+int ObExprHsRegexCtx::init(ObExprStringBuf &string_buf,
+                           const ObExprRegexpSessionVariables &regex_vars,
+                           const ObString &origin_pattern,
+                           const uint32_t flags,
+                           const bool reusable,
+                           const ObCollationType cs_type)
+{
+  int ret = OB_SUCCESS;
+  ObString pattern;
+  ObString origin_pattern_utf8;
+  UNUSED(regex_vars);
+  if (OB_UNLIKELY(inited_ && !reusable)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("already inited", K(ret), K(this));
+  } else if (OB_UNLIKELY(origin_pattern.length() < 0) ||
+             (origin_pattern.length() > 0 && OB_ISNULL(origin_pattern.ptr()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid pattern", K(ret), K(origin_pattern));
+  } else if (CS_TYPE_UTF8MB4_BIN != cs_type && CS_TYPE_UTF8MB4_GENERAL_CI != cs_type) {
+    // hyperscan cannot handle empty pattern as ICU can.
+    // and empty pattern is not supported in mysql mode, it is supported in oracle mode.
+    // so only in oracle mode, hyperscan and icu handle empty pattern differently.
+    if (OB_FAIL(ObExprUtil::convert_string_collation(
+          origin_pattern,
+          cs_type,
+          origin_pattern_utf8,
+          ObCharset::is_bin_sort(cs_type) ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI,
+          string_buf))) {
+      LOG_WARN("convert charset failed", K(ret));
+    }
+  } else {
+    origin_pattern_utf8 = origin_pattern;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(pattern = origin_pattern_utf8)) { // TODO: preprocess pattern for oracle
+  } else if (reusable &&
+             inited_ &&
+             pattern_ == ObString(0, pattern.length(), pattern.ptr()) &&
+             hs_flags_ == flags) {
+    // reuse the previous compile result.
+  } else {
+    if (inited_) { // reusable && pattern changed
+      reset();
+    }
+    LOG_TRACE("init hs engine", K(origin_pattern), K(reusable), K(cs_type), K(pattern.length()),
+              K(pattern), K(flags));
+    char *pattern_save = static_cast<char *>(string_buf.alloc(pattern.length() + 1));
+    if (OB_ISNULL(pattern_save)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), KP(pattern_save));
+    } else {
+      MEMCPY(pattern_save, pattern.ptr(), pattern.length());
+      pattern_save[pattern.length()] = '\0';
+      pattern_.assign(pattern_save, pattern.length());
+      hs_flags_ = flags;
+    }
+    hs_error_t hs_ret = HS_SUCCESS;
+    hs_compile_err_ = nullptr;
+    if (OB_FAIL(ret)) {
+    } else if ((hs_ret = hs_compile(pattern_save, hs_flags_ | HS_FLAG_ALLOWEMPTY, HS_MODE_BLOCK, nullptr, &hs_db_,
+                                    &hs_compile_err_)) != HS_SUCCESS) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("compile pattern failed", K(ret), K(hs_flags_));
+      if (hs_ret == HS_COMPILER_ERROR && hs_compile_err_ != nullptr) {
+
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED, hs_compile_err_->message);
+      }
+    } else if (OB_ISNULL(hs_db_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null hs database", K(ret));
+    } else if (hs_alloc_scratch(hs_db_, &hs_scratch_) != HS_SUCCESS) {
+      ret = OB_ERR_UNEXPECTED;
+      ObString err_msg(hs_compile_err_->message);
+      LOG_WARN("alloc hyper scan scratch failed", K(ret), K(err_msg));
+      hs_free_database(hs_db_);
+      hs_db_ = nullptr;
+      hs_scratch_ = nullptr;
+    } else {
+      inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObExprHsRegexCtx::match(ObExprStringBuf &string_buf,
+                            const ObString &text,
+                            const ObCollationType cs_type,
+                            const int64_t start,
+                            bool &result) const
+{
+  int ret = OB_SUCCESS;
+  result = false;
+  int64_t start_pos = -1;
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(hs_db_) || OB_ISNULL(hs_scratch_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hs regexp context not inited", K(ret), K(inited_), K(hs_scratch_), K(hs_db_));
+  } else if (0 == text.length() || start >= text.length()) {
+    //do nothing
+  } else if (FALSE_IT(start_pos = ObCharset::charpos(cs_type, text.ptr(), text.length(), start))) {
+  } else if (OB_UNLIKELY(start_pos >= text.length())) {
+    // do nothing
+  } else {
+    MatchChain match_infos;
+    hs_scratch_t *scratch = hs_scratch_;
+    hs_error_t status;
+    status = hs_scan(hs_db_, text.ptr() + start_pos, text.length() - start_pos, 0, scratch,
+                     match_handler, &match_infos);
+
+    if (OB_FAIL(check_hs_regexp_status(status))) {
+      LOG_WARN("hs scan failed", K(ret), K(status));
+    } else {
+      result = (match_infos.count() > 0);
+      LOG_DEBUG("Succeed to match", K(start), K(start_pos), K(text.length()), K(result));
+    }
+  }
+  return ret;
+}
+
+int ObExprHsRegexCtx::find(ObExprStringBuf &string_buf,
+                           const ObString &text,
+                           const ObCollationType cs_type,
+                           const int64_t start,
+                           const int64_t occurrence,
+                           const int64_t return_option,
+                           const int64_t subexpr,
+                           int64_t &result) const
+{
+  int ret = OB_SUCCESS;
+  result = 0;
+  int64_t start_pos = -1;
+  UNUSED(subexpr);
+  // compatible with mysql, any value less than 1, use occur = 1
+  int64_t occur = (occurrence < 1 && lib::is_mysql_mode() ? 1 : occurrence);
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(hs_db_) || OB_ISNULL(hs_scratch_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hs regexp context not inited", K(ret), K(inited_), K(hs_scratch_), K(hs_db_));
+  } else if (0 == text.length() || text.length() <= start) {
+    //do nothing
+  } else if (FALSE_IT(start_pos = ObCharset::charpos(cs_type, text.ptr(), text.length(), start))) {
+  } else if (OB_UNLIKELY(start_pos >= text.length())) {
+  } else {
+    MatchChain match_infos;
+    hs_scratch_t *scratch = hs_scratch_;
+    hs_error_t status;
+    status = hs_scan(hs_db_, text.ptr() + start_pos, text.length() - start_pos, 0, scratch, match_handler,
+                     &match_infos);
+
+    if (OB_FAIL(check_hs_regexp_status(status))) {
+      LOG_WARN("scan failed", K(ret), K(status));
+    } else if (match_infos.count() >= occur) {
+      uint64_t begin = start_pos + match_infos.at(occur - 1).from_ + 1;
+      uint64_t end = start_pos + match_infos.at(occur - 1).to_ + 1;
+      result = return_option ? end : begin;
+    }
+    LOG_DEBUG("succeed to hs regexp substr", K(result), K(start), K(start_pos), K(occurrence),
+              K(return_option), K(match_infos), K(match_infos.count()), K(text), K(text.length()));
+  }
+  return ret;
+}
+
+int ObExprHsRegexCtx::count(ObExprStringBuf &string_buf,
+                            const ObString &text,
+                            const ObCollationType cs_type,
+                            const int32_t start,
+                            int64_t &result) const
+{
+  int ret = OB_SUCCESS;
+  result = 0;
+  int64_t start_pos = -1;
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(hs_db_) || OB_ISNULL(hs_scratch_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hs regexp context not inited", K(ret), K(inited_), K(hs_scratch_), K(hs_db_));
+  } else if (0 == text.length() || start >= text.length()) {
+    //do nothing
+  } else if (FALSE_IT(start_pos = ObCharset::charpos(cs_type, text.ptr(), text.length(), start))) {
+  } else if (OB_UNLIKELY(start_pos >= text.length())) {
+  } else {
+    MatchChain match_infos;
+    hs_scratch_t *scratch = hs_scratch_;
+    hs_error_t status;
+    status = hs_scan(hs_db_, text.ptr() + start_pos, text.length() - start_pos, 0, scratch, match_handler,
+                     &match_infos);
+    if (OB_FAIL(check_hs_regexp_status(status))) {
+      LOG_WARN("scan failed", K(ret), K(status));
+    } else {
+      result = match_infos.count();
+      LOG_DEBUG("succeed get hs regexp count", K(result), K(text), K(start), K(start_pos));
+    }
+  }
+  return ret;
+}
+
+int ObExprHsRegexCtx::match_handler(unsigned int id, unsigned long long from, unsigned long long to,
+                                    unsigned int flags, void *ctx)
+{
+  int ret = OB_SUCCESS;
+  MatchChain *chain = static_cast<MatchChain *>(ctx);
+  if (chain->empty()) {
+    ret = chain->push_back(MatchInfo(from, to));
+  } else if (chain->at(chain->count() - 1).from_ == from) {
+    chain->at(chain->count() - 1).to_ = to;
+  } else if (chain->at(chain->count() - 1).to_ <= from) {
+    // exclude multiple matches. such as 'abc', pattern [a-z]{2} will match 'ab' and 'bc'.
+    ret = chain->push_back(MatchInfo(from, to));
+  }
+  return ret;
+}
+
+int ObExprHsRegexCtx::substr(ObExprStringBuf &string_buf,
+                             const ObString &text,
+                             const ObCollationType cs_type,
+                             const int64_t start,
+                             const int64_t occurrence,
+                             const int64_t subexpr,
+                             ObString &result) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(subexpr);
+  result.reset();
+  int64_t start_pos = -1;
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(hs_db_) || OB_ISNULL(hs_scratch_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hs regexp context not inited", K(ret), K(inited_), K(hs_scratch_), K(hs_db_));
+  } else if (0 == text.length() || text.length() <= start) {
+    // do nothing
+  } else if (FALSE_IT(start_pos = ObCharset::charpos(cs_type, text.ptr(), text.length(), start))) {
+  } else if (OB_UNLIKELY(start_pos >= text.length())) {
+  } else {
+    MatchChain match_infos;
+    hs_scratch_t *scratch = hs_scratch_;
+    hs_error_t status;
+    status = hs_scan(hs_db_, text.ptr() + start_pos, text.length() - start_pos, 0, scratch, match_handler,
+                     &match_infos);
+
+    if (OB_FAIL(check_hs_regexp_status(status))) {
+      LOG_WARN("scan failed", K(ret), K(status));
+    } else if (match_infos.count() >= occurrence) {
+      uint64_t begin_pos = start_pos + match_infos.at(occurrence - 1).from_;
+      uint64_t end_pos = start_pos + match_infos.at(occurrence - 1).to_;
+      char *res_buf = nullptr;
+      int64_t res_len = end_pos - begin_pos;
+      if (OB_ISNULL(res_buf = static_cast<char *>(string_buf.alloc(res_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(match_infos));
+      } else {
+        MEMCPY(res_buf, text.ptr() + begin_pos, res_len);
+        result.assign_ptr(res_buf, res_len);
+      }
+    }
+    LOG_DEBUG("succeed to hs regexp substr", K(result), K(start), K(start_pos), K(occurrence),
+              K(match_infos), K(match_infos.count()), K(text), K(text.length()));
+  }
+  return ret;
+}
+
+// TODO: occurrency < 0
+int ObExprHsRegexCtx::replace(ObExprStringBuf &string_buf,
+                              const ObString &text_string,
+                              const ObCollationType cs_type,
+                              const ObString &replace_string,
+                              const int64_t start,
+                              const int64_t occurrence,
+                              ObString &result) const
+{
+  int ret = OB_SUCCESS;
+  result.reset();
+  size_t start_pos = -1;
+  if (OB_UNLIKELY(!inited_ || OB_ISNULL(hs_db_) || OB_ISNULL(hs_scratch_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hs regexp context not inited", K(ret), K(inited_), K(hs_scratch_), K(hs_db_));
+  } else if (0 == text_string.length() || text_string.length() <= start) {
+    result = text_string;
+  } else if (FALSE_IT(start_pos = ObCharset::charpos(cs_type, text_string.ptr(), text_string.length(), start))) {
+  } else if (OB_UNLIKELY(start_pos >= text_string.length())) {
+    result = text_string;
+  } else {
+    MatchChain match_infos;
+    hs_scratch_t *scratch = hs_scratch_;
+    hs_error_t status;
+    status = hs_scan(hs_db_, text_string.ptr() + start_pos, text_string.length() - start_pos, 0, scratch,
+                     match_handler, &match_infos);
+    if (OB_FAIL(check_hs_regexp_status(status))) {
+      LOG_WARN("scan failed", K(ret), K(status));
+    } else if (match_infos.count() <= 0) {
+      result = text_string;
+    } else {
+      // 1. calculate the length of result string
+      // 2. modify from_ and to_ in match_infos according to start
+      char *res_buf = nullptr;
+      uint64_t res_len = 0;
+      uint64_t last_to = 0;
+      if (occurrence == 0) {
+        for (int32_t i = 0; i < match_infos.count(); i++) {
+          match_infos.at(i).from_ += start_pos;
+          match_infos.at(i).to_ += start_pos;
+          res_len += match_infos.at(i).from_ - last_to;
+          res_len += replace_string.length();
+          last_to = match_infos.at(i).to_;
+        }
+      } else if (occurrence <= match_infos.count()) {
+          match_infos.at(occurrence - 1).from_ += start_pos;
+          match_infos.at(occurrence - 1).to_ += start_pos;
+          res_len += match_infos.at(occurrence - 1).from_;
+          res_len += replace_string.length();
+          last_to = match_infos.at(occurrence - 1).to_;
+      }
+      res_len += text_string.length() - last_to;
+      // 3. replace string
+      if (OB_ISNULL(res_buf = static_cast<char *>(string_buf.alloc(res_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(match_infos));
+      } else {
+        uint64_t last_to = 0, offset = 0;
+        if (occurrence == 0) {
+          for (int i = 0; i < match_infos.count(); i++) {
+            MEMCPY(res_buf + offset,
+                   text_string.ptr() + last_to,
+                   match_infos.at(i).from_ - last_to);
+            offset += match_infos.at(i).from_ - last_to;
+            MEMCPY(res_buf + offset, replace_string.ptr(), replace_string.length());
+            offset += replace_string.length();
+            last_to = match_infos.at(i).to_;
+          }
+        } else if (occurrence <= match_infos.count()) {
+          MEMCPY(res_buf, text_string.ptr(), match_infos.at(occurrence - 1).from_);
+          offset += match_infos.at(occurrence - 1).from_;
+          MEMCPY(res_buf + offset, replace_string.ptr(), replace_string.length());
+          offset += replace_string.length();
+          last_to = match_infos.at(occurrence - 1).to_;
+        }
+        MEMCPY(res_buf + offset, text_string.ptr() + last_to, text_string.length() - last_to);
+        offset += text_string.length() - last_to;
+        if (OB_UNLIKELY(offset != res_len)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected offset", K(ret), K(match_infos), K(text_string), K(offset));
+        } else {
+          result.assign_ptr(res_buf, offset);
+        }
+      }
+    }
+    LOG_DEBUG("succeed to regexp replace", K(result),
+                                           K(match_infos),
+                                           K(start),
+                                           K(start_pos),
+                                           K(occurrence),
+                                           K(text_string),
+                                           K(text_string.length()),
+                                           K(replace_string),
+                                           K(replace_string.length()));
+  }
+  return ret;
+}
+
+int ObExprHsRegexCtx::check_hs_regexp_status(hs_error_t status) const
+{
+  int ret = OB_SUCCESS;
+  if (HS_SUCCESS == status) {
+  } else {
+    ret = OB_ERR_REGEXP_ERROR;
+    LOG_WARN("other error in hyperscan regexp", K(ret), K(status));
+  }
+  return ret;
+}
+#endif
 
 }
 }

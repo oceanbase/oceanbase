@@ -75,7 +75,7 @@ TestDDLMergeRowMultiScanner::TestDDLMergeRowMultiScanner()
 {
   is_ddl_merge_data_ = true;
   max_row_cnt_ = 150000;
-  max_partial_row_cnt_ = 78881;
+  max_partial_row_cnt_ = 77873;
   co_sstable_row_offset_ = max_partial_row_cnt_ - 1;
   partial_kv_start_idx_ = 3;
 }

@@ -23,6 +23,7 @@
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "rootserver/ddl_task/ob_drop_index_task.h"
 #include "rootserver/ddl_task/ob_drop_fts_index_task.h"
+#include "rootserver/ddl_task/ob_drop_vec_index_task.h"
 #include "rootserver/ddl_task/ob_drop_primary_key_task.h"
 #include "rootserver/ddl_task/ob_index_build_task.h"
 #include "rootserver/ddl_task/ob_build_mview_task.h"
@@ -31,6 +32,8 @@
 #include "rootserver/ddl_task/ob_table_redefinition_task.h"
 #include "rootserver/ddl_task/ob_recover_restore_table_task.h"
 #include "rootserver/ddl_task/ob_build_mview_task.h"
+#include "rootserver/ddl_task/ob_rebuild_index_task.h"
+#include "rootserver/ddl_task/ob_vec_index_build_task.h"
 #include "share/ob_ddl_common.h"
 #include "share/ob_rpc_struct.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
@@ -973,6 +976,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   const obrpc::ObAlterTableArg *alter_table_arg = nullptr;
   const obrpc::ObCreateIndexArg *create_index_arg = nullptr;
   const obrpc::ObDropIndexArg *drop_index_arg = nullptr;
+  const obrpc::ObRebuildIndexArg *rebuild_index_arg = nullptr;
   const obrpc::ObMViewCompleteRefreshArg *mview_complete_refresh_arg = nullptr;
   ObRootService *root_service = GCTX.root_service_;
   LOG_INFO("create ddl task", K(param));
@@ -1032,6 +1036,21 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
           LOG_WARN("fail to create build fts index task", K(ret));
         }
         break;
+      case DDL_CREATE_VEC_INDEX:
+        create_index_arg = static_cast<const obrpc::ObCreateIndexArg *>(param.ddl_arg_);
+        if (OB_FAIL(create_build_vec_index_task(proxy,
+                                                param.src_table_schema_,
+                                                param.dest_table_schema_,
+                                                param.parallelism_,
+                                                param.parent_task_id_,
+                                                param.consumer_group_id_,
+                                                create_index_arg,
+                                                param.tenant_data_version_,
+                                                *param.allocator_,
+                                                task_record))) {
+          LOG_WARN("fail to create build vec index task", K(ret));
+        }
+        break;
       case DDL_DROP_INDEX:
       case DDL_DROP_MLOG:
         // in this case, src_table_schema is data table, dest_table_schema is index table
@@ -1062,6 +1081,23 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
           LOG_WARN("fail to create drop fts index task", K(ret));
         }
         break;
+      case DDL_DROP_VEC_INDEX:
+        drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
+        if (OB_FAIL(create_drop_vec_index_task(proxy,
+                                                param.src_table_schema_,
+                                                param.schema_version_,
+                                                param.consumer_group_id_,
+                                                param.vec_vid_rowkey_schema_,
+                                                param.vec_rowkey_vid_schema_,
+                                                param.vec_index_id_schema_,
+                                                param.vec_snapshot_data_schema_,
+                                                param.tenant_data_version_,
+                                                drop_index_arg,
+                                                *param.allocator_,
+                                                task_record))) {
+          LOG_WARN("fail to create drop vec index task", K(ret));
+        }
+        break;
       case DDL_MODIFY_COLUMN:
       case DDL_ADD_PRIMARY_KEY:
       case DDL_ALTER_PRIMARY_KEY:
@@ -1088,6 +1124,22 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                    *param.allocator_,
                                                    task_record))) {
           LOG_WARN("fail to create table redefinition task", K(ret));
+        }
+        break;
+      case DDL_REBUILD_INDEX:
+        rebuild_index_arg = static_cast<const obrpc::ObRebuildIndexArg *>(param.ddl_arg_);
+        if (OB_FAIL(create_rebuild_index_task(proxy,
+                                              param.type_,
+                                              param.src_table_schema_,
+                                              param.parallelism_,
+                                              param.parent_task_id_,
+                                              param.consumer_group_id_,
+                                              param.sub_task_trace_id_,
+                                              rebuild_index_arg,
+                                              param.tenant_data_version_,
+                                              *param.allocator_,
+                                              task_record))) {
+          LOG_WARN("fail to create rebuild index task", KR(ret));
         }
         break;
       case DDL_CREATE_MVIEW:
@@ -1593,6 +1645,52 @@ int ObDDLScheduler::create_build_fts_index_task(
   return ret;
 }
 
+int ObDDLScheduler::create_build_vec_index_task(
+    common::ObISQLClient &proxy,
+    const ObTableSchema *data_table_schema,
+    const ObTableSchema *index_schema,
+    const int64_t parallelism,
+    const int64_t parent_task_id,
+    const int64_t consumer_group_id,
+    const obrpc::ObCreateIndexArg *create_index_arg,
+    const uint64_t tenant_data_version,
+    ObIAllocator &allocator,
+    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_id = 0;
+  SMART_VAR(ObVecIndexBuildTask, index_task) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (OB_ISNULL(create_index_arg) || OB_ISNULL(data_table_schema)
+              || OB_ISNULL(index_schema) || OB_UNLIKELY(tenant_data_version <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
+          KPC(data_table_schema), KPC(index_schema));
+    } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), data_table_schema->get_tenant_id(), task_id))) {
+      LOG_WARN("fetch new task id failed", K(ret));
+    } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),
+                                       task_id,
+                                       data_table_schema,
+                                       index_schema,
+                                       data_table_schema->get_schema_version(),
+                                       parallelism,
+                                       consumer_group_id,
+                                       *create_index_arg,
+                                       tenant_data_version,
+                                       parent_task_id))) {
+      LOG_WARN("init fts index task failed", K(ret), K(data_table_schema), K(index_schema));
+    } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, index_task, allocator, task_record))) {
+      LOG_WARN("fail to insert task record", K(ret));
+    }
+    LOG_INFO("ddl_scheduler create build vec index task finished", K(ret), K(index_task));
+  }
+  return ret;
+}
+
 int ObDDLScheduler::create_build_index_task(
     common::ObISQLClient &proxy,
     const share::ObDDLType &ddl_type,
@@ -1772,6 +1870,101 @@ int ObDDLScheduler::create_drop_fts_index_task(
     }
   }
   LOG_INFO("ddl_scheduler create drop fts index task finished", K(ret), K(index_task));
+  return ret;
+}
+
+
+int ObDDLScheduler::create_drop_vec_index_task(
+    common::ObISQLClient &proxy,
+    const share::schema::ObTableSchema *index_schema,
+    const int64_t schema_version,
+    const int64_t consumer_group_id,
+    const share::schema::ObTableSchema *vid_rowkey_schema,
+    const share::schema::ObTableSchema *rowkey_vid_schema,
+    const share::schema::ObTableSchema *index_id_schema,
+    const share::schema::ObTableSchema *snapshot_data_schema,
+    const uint64_t tenant_data_version,
+    const obrpc::ObDropIndexArg *drop_index_arg,
+    ObIAllocator &allocator,
+    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_id = 0;
+  ObDropVecIndexTask index_task;
+  common::ObString vec_domain_index_name;
+  common::ObString vec_vid_rowkey_name;
+  common::ObString vec_rowkey_vid_name;
+  common::ObString vec_index_id_name;
+  common::ObString vec_snapshot_data_name;
+
+  // multivalue index may run here, need calc index type first
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(index_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg));
+  } else if (OB_UNLIKELY(schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), index_schema->get_tenant_id(), task_id))) {
+    LOG_WARN("fetch new task id failed", K(ret));
+  } else if (OB_FAIL(index_schema->get_index_name(vec_domain_index_name))) {
+    LOG_WARN("fail to get vec index name", K(ret), KPC(index_schema));
+  } else {
+    if (OB_FAIL(ret) || OB_ISNULL(vid_rowkey_schema)) {
+    } else if (OB_FAIL(vid_rowkey_schema->get_index_name(vec_vid_rowkey_name))) {
+      LOG_WARN("fail to get vid rowkey name", K(ret), KPC(vid_rowkey_schema));
+    }
+    if (OB_FAIL(ret) || OB_ISNULL(rowkey_vid_schema)) {
+    } else if (OB_FAIL(rowkey_vid_schema->get_index_name(vec_rowkey_vid_name))) {
+      LOG_WARN("fail to get rowkey vid name", K(ret), KPC(rowkey_vid_schema));
+    }
+    if (OB_FAIL(ret) || OB_ISNULL(index_id_schema)) {
+    } else if (OB_FAIL(index_id_schema->get_index_name(vec_index_id_name))) {
+      LOG_WARN("fail to get index id name", K(ret), KPC(index_id_schema));
+    }
+    if (OB_FAIL(ret) || OB_ISNULL(snapshot_data_schema)) {
+    } else if (OB_FAIL(snapshot_data_schema->get_index_name(vec_snapshot_data_name))) {
+      LOG_WARN("fail to get snapshot data name", K(ret), KPC(snapshot_data_schema));
+    }
+
+    const int64_t init_task_id = 0;
+    const uint64_t data_table_id = index_schema->get_data_table_id();
+
+    uint64_t vid_rowkey_table_id = OB_ISNULL(vid_rowkey_schema) ? OB_INVALID_ID : vid_rowkey_schema->get_table_id();
+    uint64_t rowkey_vid_table_id = OB_ISNULL(rowkey_vid_schema) ? OB_INVALID_ID : rowkey_vid_schema->get_table_id();
+    uint64_t index_id_table_id = OB_ISNULL(index_id_schema) ? OB_INVALID_ID : index_id_schema->get_table_id();
+    uint64_t snapshot_data_table_id = OB_ISNULL(snapshot_data_schema) ? OB_INVALID_ID : snapshot_data_schema->get_table_id();
+
+    const ObVecIndexDDLChildTaskInfo domain_index(vec_domain_index_name, index_schema->get_table_id(), init_task_id);
+    const ObVecIndexDDLChildTaskInfo vid_rowkey(vec_vid_rowkey_name, vid_rowkey_table_id, init_task_id);
+    const ObVecIndexDDLChildTaskInfo rowkey_vid(vec_rowkey_vid_name, rowkey_vid_table_id, init_task_id);
+    const ObVecIndexDDLChildTaskInfo index_id(vec_index_id_name, index_id_table_id, init_task_id);
+    const ObVecIndexDDLChildTaskInfo snapshot_data(vec_snapshot_data_name, snapshot_data_table_id, init_task_id);
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
+                                task_id,
+                                data_table_id,
+                                DDL_DROP_VEC_INDEX,
+                                rowkey_vid,
+                                vid_rowkey,
+                                domain_index,
+                                index_id,
+                                snapshot_data,
+                                schema_version,
+                                consumer_group_id,
+                                tenant_data_version,
+                                *drop_index_arg))) {
+      LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(domain_index));
+    } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, index_task, allocator, task_record))) {
+      LOG_WARN("fail to insert task record", K(ret));
+    }
+  }
+  LOG_INFO("ddl_scheduler create drop vec index task finished", K(ret), K(index_task));
   return ret;
 }
 
@@ -2246,9 +2439,18 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case ObDDLType::DDL_CREATE_FTS_INDEX:
         ret = schedule_build_fts_index_task(record);
         break;
+      case ObDDLType::DDL_DROP_VEC_INDEX:
+        ret = schedule_drop_vec_index_task(record);
+        break;
+      case ObDDLType::DDL_CREATE_VEC_INDEX:
+        ret = schedule_build_vec_index_task(record);
+        break;
       case ObDDLType::DDL_DROP_FTS_INDEX:
       case ObDDLType::DDL_DROP_MULVALUE_INDEX:
         ret = schedule_drop_fts_index_task(record);
+        break;
+      case ObDDLType::DDL_REBUILD_INDEX:
+        ret = schedule_rebuild_index_task(record);
         break;
       case DDL_DROP_PRIMARY_KEY:
         ret = schedule_drop_primary_key_task(record);
@@ -2337,6 +2539,33 @@ int ObDDLScheduler::schedule_build_fts_index_task(
   return ret;
 }
 
+int ObDDLScheduler::schedule_build_vec_index_task(
+    const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObVecIndexBuildTask *build_index_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(alloc_ddl_task(build_index_task))) {
+    LOG_WARN("alloc ddl task failed", K(ret));
+  } else if (OB_FAIL(build_index_task->init(task_record))) {
+    LOG_WARN("init global_index_task failed", K(ret), K(task_record));
+  } else if (OB_FAIL(build_index_task->set_trace_id(task_record.trace_id_))) {
+    LOG_WARN("init build index task failed", K(ret));
+  } else if (OB_FAIL(inner_schedule_ddl_task(build_index_task, task_record))) {
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_WARN("inner schedule task failed", K(ret), K(*build_index_task));
+    }
+  }
+  if (OB_FAIL(ret) && nullptr != build_index_task) {
+    build_index_task->~ObVecIndexBuildTask();
+    allocator_.free(build_index_task);
+    build_index_task = nullptr;
+  }
+  return ret;
+}
+
 int ObDDLScheduler::schedule_build_index_task(
     const ObDDLTaskRecord &task_record)
 {
@@ -2368,6 +2597,64 @@ int ObDDLScheduler::schedule_build_index_task(
   }
   return ret;
 }
+
+int ObDDLScheduler::create_rebuild_index_task(
+                    common::ObISQLClient &proxy,
+                    const share::ObDDLType &ddl_type,
+                    const ObTableSchema *index_schema,
+                    const int64_t parallelism,
+                    const int64_t parent_task_id,
+                    const int64_t consumer_group_id,
+                    const int32_t sub_task_trace_id,
+                    const obrpc::ObRebuildIndexArg *rebuild_index_arg,
+                    const uint64_t tenant_data_version,
+                    ObIAllocator &allocator,
+                    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_id = 0;
+  SMART_VAR(ObRebuildIndexTask, index_task){
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(index_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(index_schema));
+  } else if (!index_schema->is_vec_index()) { // current only support vector index ddl rebuild task
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("rebuild domain index is not supported", KR(ret), KPC(index_schema));
+  } else if (index_schema->is_built_in_vec_index()) { // 期望是可见性表发起的重建（3号表）
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index schema", KR(ret), KPC(index_schema));
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), index_schema->get_tenant_id(), task_id))) {
+    LOG_WARN("fetch new task id failed", KR(ret));
+  } else {
+    const uint64_t data_table_id = index_schema->get_data_table_id();
+    const uint64_t index_table_id = index_schema->get_table_id();
+    if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
+                                task_id,
+                                ddl_type,
+                                data_table_id,
+                                index_table_id,
+                                index_schema->get_schema_version(),
+                                parent_task_id,
+                                consumer_group_id,
+                                sub_task_trace_id,
+                                parallelism,
+                                tenant_data_version,
+                                *rebuild_index_arg))) {
+      LOG_WARN("init drop index task failed", KR(ret), K(data_table_id), K(index_table_id));
+    } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", KR(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, index_task, allocator, task_record))) {
+      LOG_WARN("fail to insert task record", KR(ret));
+    }
+  }
+  } // end smart var
+  LOG_INFO("ddl_scheduler create rebuild index task finished", KR(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
+  return ret;
+}
+
 
 int ObDDLScheduler::schedule_drop_primary_key_task(const ObDDLTaskRecord &task_record)
 {
@@ -2573,6 +2860,36 @@ int ObDDLScheduler::schedule_drop_index_task(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
+int ObDDLScheduler::schedule_drop_vec_index_task(const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObDropVecIndexTask *drop_vec_index_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLScheduler has not been inited", K(ret));
+  } else if (OB_FAIL(alloc_ddl_task(drop_vec_index_task))) {
+    LOG_WARN("fail to alloc drop fts index task", K(ret));
+  } else if (OB_ISNULL(drop_vec_index_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null pointer of drop_vec_index_task", K(ret));
+  } else if (OB_FAIL(drop_vec_index_task->init(task_record))) {
+    LOG_WARN("fail to init drop fts index task", K(ret));
+  } else if (OB_FAIL(drop_vec_index_task->set_trace_id(task_record.trace_id_))) {
+    LOG_WARN("fail to set trace id", K(ret));
+  } else if (OB_FAIL(inner_schedule_ddl_task(drop_vec_index_task, task_record))) {
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_WARN("fail to inner schedule task", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) && nullptr != drop_vec_index_task) {
+    drop_vec_index_task->~ObDropVecIndexTask();
+    allocator_.free(drop_vec_index_task);
+    drop_vec_index_task = nullptr;
+  }
+
+  return ret;
+}
+
 int ObDDLScheduler::schedule_drop_fts_index_task(const ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
@@ -2692,6 +3009,35 @@ int ObDDLScheduler::schedule_build_mview_task(const ObDDLTaskRecord &task_record
     build_mview_task->~ObBuildMViewTask();
     allocator_.free(build_mview_task);
     build_mview_task = nullptr;
+  }
+  return ret;
+}
+
+int ObDDLScheduler::schedule_rebuild_index_task(const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObRebuildIndexTask *rebuild_index_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLScheduler has not been inited", K(ret));
+  } else if (OB_FAIL(alloc_ddl_task(rebuild_index_task))) {
+    LOG_WARN("alloc ddl task failed", KR(ret));
+  } else if (OB_FAIL(rebuild_index_task->init(task_record))) {
+    LOG_WARN("init drop index task failed", KR(ret));
+  } else if (OB_FAIL(rebuild_index_task->set_trace_id(task_record.trace_id_))) {
+    LOG_WARN("set trace id failed", KR(ret));
+  } else if (OB_FAIL(inner_schedule_ddl_task(rebuild_index_task, task_record))) {
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_WARN("inner schedule task failed", KR(ret));
+    }
+  }
+  if (nullptr != rebuild_index_task) {
+    LOG_INFO("ddl_scheduler schedule rebuild index task", KR(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
+  }
+  if (OB_FAIL(ret) && nullptr != rebuild_index_task) {
+    rebuild_index_task->~ObRebuildIndexTask();
+    allocator_.free(rebuild_index_task);
+    rebuild_index_task = nullptr;
   }
   return ret;
 }
@@ -2915,6 +3261,11 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
           case ObDDLType::DDL_COLUMN_REDEFINITION:
             if (OB_FAIL(static_cast<ObColumnRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+              LOG_WARN("update complete sstable job status", K(ret), K(tablet_id), K(snapshot_version), K(ret_code));
+            }
+            break;
+          case ObDDLType::DDL_DROP_VEC_INDEX:
+           if (OB_FAIL(static_cast<ObDropVecIndexTask *>(&task)->update_drop_lob_meta_row_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret), K(tablet_id), K(snapshot_version), K(ret_code));
             }
             break;

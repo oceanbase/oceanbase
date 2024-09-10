@@ -126,7 +126,9 @@ struct ObSelectIntoItem
         is_optional_(DEFAULT_OPTIONAL_ENCLOSED),
         is_single_(DEFAULT_SINGLE_OPT),
         max_file_size_(DEFAULT_MAX_FILE_SIZE),
-        escaped_cht_()
+        escaped_cht_(),
+        file_partition_expr_(NULL),
+        buffer_size_(DEFAULT_BUFFER_SIZE)
   {
     field_str_.set_varchar(DEFAULT_FIELD_TERM_STR);
     field_str_.set_collation_type(ObCharset::get_system_collation());
@@ -151,8 +153,12 @@ struct ObSelectIntoItem
     max_file_size_ = other.max_file_size_;
     escaped_cht_ = other.escaped_cht_;
     cs_type_ = other.cs_type_;
+    file_partition_expr_ = other.file_partition_expr_;
+    buffer_size_ = other.buffer_size_;
     return user_vars_.assign(other.user_vars_);
   }
+  int deep_copy(ObIRawExprCopier &copier,
+                const ObSelectIntoItem &other);
   TO_STRING_KV(K_(into_type),
                K_(outfile_name),
                K_(field_str),
@@ -162,7 +168,8 @@ struct ObSelectIntoItem
                K_(is_single),
                K_(max_file_size),
                K_(escaped_cht),
-               K_(cs_type));
+               K_(cs_type),
+               N_EXPR, file_partition_expr_);
   ObItemType into_type_;
   common::ObObj outfile_name_;
   common::ObObj field_str_; // field terminated str
@@ -175,6 +182,9 @@ struct ObSelectIntoItem
   int64_t max_file_size_;
   common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
+  sql::ObRawExpr* file_partition_expr_;
+  int64_t buffer_size_;
+  ObPQDistributeMethod::Type dist_method_;
 
   static const char* const DEFAULT_FIELD_TERM_STR;
   static const char* const DEFAULT_LINE_TERM_STR;
@@ -182,6 +192,7 @@ struct ObSelectIntoItem
   static const bool DEFAULT_OPTIONAL_ENCLOSED;
   static const bool DEFAULT_SINGLE_OPT;
   static const int64_t DEFAULT_MAX_FILE_SIZE;
+  static const int64_t DEFAULT_BUFFER_SIZE;
   static const char DEFAULT_FIELD_ESCAPED_CHAR;
 };
 

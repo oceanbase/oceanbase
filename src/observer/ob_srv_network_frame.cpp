@@ -24,6 +24,7 @@
 #include "observer/net/ob_rpc_reverse_keepalive.h"
 #include "storage/ob_locality_manager.h"
 #include "lib/ssl/ob_ssl_config.h"
+#include "src/share/io/ob_io_manager.h"
 extern "C" {
 #include "ussl-hook.h"
 #include "auth-methods.h"
@@ -50,6 +51,7 @@ ObSrvNetworkFrame::ObSrvNetworkFrame(ObGlobalContext &gctx)
       rpc_handler_(deliver_),
       mysql_handler_(deliver_, gctx),
       ingress_service_(),
+      SSNT_service_(),
       net_(),
       rpc_transport_(NULL),
       high_prio_rpc_transport_(NULL),
@@ -159,6 +161,8 @@ int ObSrvNetworkFrame::init()
     LOG_ERROR("high prio rpc net register fail", K(ret));
   } else if (OB_FAIL(ingress_service_.init(GCONF.cluster_id))) {
     LOG_ERROR("endpoint ingress service init fail", K(ret));
+  } else if (OB_FAIL(SSNT_service_.init(GCONF.cluster_id))) {
+    LOG_ERROR("SSNT service init fail", K(ret));
   } else if (OB_FAIL(rpc_reverse_keepalive_instance.init(GCTX.srv_rpc_proxy_))) {
     LOG_ERROR("rpc reverse keepalive instance init fail", K(ret));
   } else if (OB_FAIL(net_.add_rpc_unix_listen(rpc_unix_path, rpc_handler_))) {
@@ -188,6 +192,7 @@ void ObSrvNetworkFrame::destroy()
   ObNetKeepAlive::get_instance().destroy();
   ingress_service_.destroy();
   rpc_reverse_keepalive_instance.destroy();
+  SSNT_service_.destroy();
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->destroy();
   }
@@ -231,6 +236,11 @@ int ObSrvNetworkFrame::start()
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ingress_service_.start())) {
       LOG_ERROR("endpoint register task start fail", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(SSNT_service_.start())) {
+      LOG_ERROR("SSNT_service_ register task start fail", K(ret));
     }
   }
   return ret;
@@ -671,6 +681,7 @@ void ObSrvNetworkFrame::wait()
   net_.wait();
   ObNetKeepAlive::get_instance().wait();
   ingress_service_.wait();
+  SSNT_service_.wait();
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->wait();
   }
@@ -691,6 +702,7 @@ int ObSrvNetworkFrame::stop()
     ObNetKeepAlive::get_instance().stop();
   }
   ingress_service_.stop();
+  SSNT_service_.stop();
   return ret;
 }
 
@@ -776,6 +788,10 @@ oceanbase::rootserver::ObIngressBWAllocService *ObSrvNetworkFrame::get_ingress_s
 {
   return &ingress_service_;
 }
+oceanbase::rootserver::ObSSNTAllocService *ObSrvNetworkFrame::get_SSNT_service()
+{
+  return &SSNT_service_;
+}
 int ObSrvNetworkFrame::net_endpoint_register(const ObNetEndpointKey &endpoint_key, int64_t expire_time)
 {
   int ret = OB_SUCCESS;
@@ -838,12 +854,127 @@ int ObSrvNetworkFrame::net_endpoint_set_ingress(const ObNetEndpointKey &endpoint
   return ret;
 }
 
+// share storage net throt
+int ObSrvNetworkFrame::shared_storage_net_throt_register(const ObSSNTEndpointArg &endpoint_storage_infos)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_UNLIKELY(!is_sys_tenant(tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("endpoint register is only valid in sys tenant", K(ret), K(endpoint_storage_infos));
+  } else if (!SSNT_service_.is_leader()) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("endpoint register is only valid in leader", K(ret), K(endpoint_storage_infos));
+  } else if (OB_FAIL(SSNT_service_.register_endpoint(endpoint_storage_infos))) {
+    LOG_WARN("endpoint register failed", K(ret), K(endpoint_storage_infos));
+  }
+  return ret;
+}
+
+int ObSrvNetworkFrame::shared_storage_net_throt_predict(
+    const ObSSNTEndpointArg &endpoint_storage_infos, ObSharedDeviceResourceArray &predicted_resource)
+{
+  int ret = OB_SUCCESS;
+  struct GetNeedUsage
+  {
+    GetNeedUsage(
+        const ObTrafficControl::ObStorageKey &key, obrpc::ObSharedDeviceResourceArray &usage, int64_t idx_begin)
+        : key_(key), usage_(usage), idx_begin_(idx_begin)
+    {}
+    int operator()(hash::HashMapPair<ObTrafficControl::ObIORecordKey, ObTrafficControl::ObSharedDeviceIORecord> &entry)
+    {
+      if (key_ != entry.first.id_) {
+      } else if (OB_UNLIKELY(idx_begin_ < 0)) {
+      } else if (OB_UNLIKELY(idx_begin_ + ResourceType::ResourceTypeCnt > usage_.array_.count())) {
+      } else {
+        // key_ == entry.first.id_
+        const int64_t bw_in =   entry.second.ibw_.calc();
+        const int64_t bw_out =  entry.second.obw_.calc();
+        const int64_t req_in =  entry.second.ips_.calc();
+        const int64_t req_out = entry.second.ops_.calc();
+        const int64_t tagps =   entry.second.tagps_.calc();
+
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ops).key_ = key_;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ips).key_ = key_;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::iops).key_ = key_;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::obw).key_ = key_;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ibw).key_ = key_;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::iobw).key_ = key_;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::tag).key_ = key_;
+
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ops).type_ = ResourceType::ops;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ips).type_ = ResourceType::ips;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::iops).type_ = ResourceType::iops;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::obw).type_ = ResourceType::obw;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ibw).type_ = ResourceType::ibw;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::iobw).type_ = ResourceType::iobw;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::tag).type_ = ResourceType::tag;
+
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ops).value_ += req_out;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ips).value_ += req_in;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::iops).value_ += req_out + req_in;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::obw).value_ += bw_out;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::ibw).value_ += bw_in;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::iobw).value_ += bw_out + bw_in;
+        usage_.array_.at(idx_begin_ + (int)obrpc::ResourceType::tag).value_ += tagps;
+      }
+      return OB_SUCCESS;
+    }
+    const ObTrafficControl::ObStorageKey &key_;
+    obrpc::ObSharedDeviceResourceArray &usage_;
+    int64_t idx_begin_;
+  };
+  const int64_t storage_key_count = endpoint_storage_infos.storage_keys_.count();
+  predicted_resource.array_.reserve(storage_key_count * ResourceType::ResourceTypeCnt);
+  for (int64_t i = 0; OB_SUCC(ret) && i < endpoint_storage_infos.storage_keys_.count(); ++i) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < ResourceType::ResourceTypeCnt; ++j) {
+      if (OB_FAIL(predicted_resource.array_.push_back(ObSharedDeviceResource()))) {
+        LOG_WARN("push back failed", K(predicted_resource), K(ret));
+      }
+    }
+    int64_t idx_begin = i * ResourceType::ResourceTypeCnt;
+    GetNeedUsage fn(endpoint_storage_infos.storage_keys_.at(i), predicted_resource, idx_begin);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("push back failed", K(predicted_resource), K(ret));
+    } else if (idx_begin + ResourceType::ResourceTypeCnt != predicted_resource.array_.count()) {
+      LOG_WARN("predicted resource count is not match", K(predicted_resource.array_.count()), K(i), K(ret));
+    } else if (OB_FAIL(OB_IO_MANAGER.get_tc().foreach_record(fn))) {
+      LOG_WARN("predict failed", K(predicted_resource), K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < predicted_resource.array_.count(); ++i) {
+    uint64_t value = predicted_resource.array_[i].value_;
+    const ResourceType type = predicted_resource.array_[i].type_;
+    if (type == ResourceType::ops || type == ResourceType::ips || type == ResourceType::iops) {
+      value = value + max((int64_t)value / 5, 100L);
+    } else if (type == ResourceType::obw || type == ResourceType::ibw || type == ResourceType::iobw) {
+      value = value + max((int64_t)value / 5, 1024L * 1024L);
+    } else {
+      value = value + max((int64_t)value / 5, 10L);
+    }
+    predicted_resource.array_[i].value_ = (uint64_t)(value);
+  }
+  if (OB_FAIL(ret)) {
+    predicted_resource.array_.reuse();
+  }
+  return ret;
+}
+
+int ObSrvNetworkFrame::shared_storage_net_throt_set(const ObSharedDeviceResourceArray &assigned_resource)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(OB_IO_MANAGER.get_tc().set_limit(assigned_resource))) {
+    LOG_WARN("set failed", K(assigned_resource));
+  }
+  return ret;
+}
+
 uint64_t ObSrvNetworkFrame::get_root_certificate_table_hash()
 {
   int ret = OB_SUCCESS;
   uint64_t hash_value = 0;
-  int64_t  row_count = 0;
-  int64_t  last_modify_time = 0;
+  int64_t row_count = 0;
+  int64_t last_modify_time = 0;
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
     LOG_WARN("get min data_version with sys tenant id failed", KR(ret));
@@ -851,7 +982,8 @@ uint64_t ObSrvNetworkFrame::get_root_certificate_table_hash()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is too low", KR(ret), K(data_version));
   } else {
-    MTL_SWITCH(OB_SYS_TENANT_ID) {
+    MTL_SWITCH(OB_SYS_TENANT_ID)
+    {
       ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
       if (OB_ISNULL(mysql_proxy)) {
         ret = OB_NOT_INIT;
@@ -860,15 +992,17 @@ uint64_t ObSrvNetworkFrame::get_root_certificate_table_hash()
         int sql_len = 0;
         char sql[OB_SHORT_SQL_LENGTH];
         const char *table_name = share::OB_ALL_TRUSTED_ROOT_CERTIFICATE_TNAME;
-        sql_len = snprintf(sql, OB_SHORT_SQL_LENGTH,
-                            "SELECT count(*), max(gmt_modified) "
-                            "FROM %s",
-                            table_name);
+        sql_len = snprintf(sql,
+            OB_SHORT_SQL_LENGTH,
+            "SELECT count(*), max(gmt_modified) "
+            "FROM %s",
+            table_name);
         if (sql_len >= OB_SHORT_SQL_LENGTH || sql_len <= 0) {
           ret = OB_SIZE_OVERFLOW;
           LOG_WARN("failed to format sql, buffer size not enough", K(ret));
         } else {
-          SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+          SMART_VAR(ObMySQLProxy::MySQLResult, res)
+          {
             common::sqlclient::ObMySQLResult *result = NULL;
             if (OB_FAIL(mysql_proxy->read(res, OB_SYS_TENANT_ID, sql))) {
               LOG_WARN("failed to read data", K(ret));
@@ -890,7 +1024,7 @@ uint64_t ObSrvNetworkFrame::get_root_certificate_table_hash()
           }
         }
         if (OB_SUCC(ret)) {
-        hash_value = common::murmurhash(&row_count, sizeof(row_count), last_modify_time);
+          hash_value = common::murmurhash(&row_count, sizeof(row_count), last_modify_time);
         }
       }
     }

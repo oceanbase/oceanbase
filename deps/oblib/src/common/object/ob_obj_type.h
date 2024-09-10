@@ -1342,6 +1342,7 @@ int ob_sql_type_str_with_coll(char *buff,
     int64_t precision,
     int64_t scale,
     ObCollationType coll_type,
+    const common::ObIArray<ObString> &type_info,
     const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
 
 //such as "double(10,7)". with accuracy
@@ -1353,6 +1354,7 @@ int ob_sql_type_str(char *buff,
                     int64_t precision,
                     int64_t scale,
                     ObCollationType coll_type,
+                    const common::ObIArray<ObString> &type_info,
                     const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
 
 int ob_sql_type_str(const common::ObObjMeta &obj_meta,
@@ -1368,6 +1370,7 @@ int ob_sql_type_str(char *buff,
                     int64_t buff_length,
                     ObObjType type,
                     ObCollationType coll_type,
+                    const common::ObIArray<ObString> &type_info,
                     const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
 
 // print obj type class string

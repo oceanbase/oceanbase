@@ -26,23 +26,27 @@ class ObString;
 }
 namespace share
 {
-enum ObFunctionType
+enum ObFunctionType : uint8_t
 {
-  PRIO_COMPACTION_HIGH = 0,
-  PRIO_HA_HIGH = 1,
-  PRIO_COMPACTION_MID = 2,
-  PRIO_HA_MID = 3,
-  PRIO_COMPACTION_LOW = 4,
-  PRIO_HA_LOW = 5,
-  PRIO_DDL = 6,
-  PRIO_DDL_HIGH = 7,
-  PRIO_OTHER_BACKGROUND = 8,
-  // PRIO_CLOG_LOW = 9,    placeholder
-  // PRIO_CLOG_MID = 10,   placeholder
-  // PRIO_CLOG_HIGH = 11,  placeholder
+  DEFAULT_FUNCTION = 0,
+  PRIO_COMPACTION_HIGH = 1,
+  PRIO_HA_HIGH = 2,
+  PRIO_COMPACTION_MID = 3,
+  PRIO_HA_MID = 4,
+  PRIO_COMPACTION_LOW = 5,
+  PRIO_HA_LOW = 6,
+  PRIO_DDL = 7,
+  PRIO_DDL_HIGH = 8,
+  PRIO_SERVER_BACKGROUND_LOW = 9, // block manager scans for bad blocks in the background
+  PRIO_CLOG_LOW = 10,
+  PRIO_CLOG_MID = 11,
+  PRIO_CLOG_HIGH = 12,
+  PRIO_EXTERNAL = 13,
+  PRIO_EXPORT = 14,
+
+
   MAX_FUNCTION_NUM
 };
-
 ObString get_io_function_name(ObFunctionType function_type);
 
 // 为了便于作为 hash value，所以把 ObString 包一下
@@ -157,54 +161,6 @@ public:
   ObResMgrVarcharValue func_name_;
 };
 
-// ObTenantGroupIdKey
-class ObTenantGroupIdKey {
-public:
-  ObTenantGroupIdKey() : tenant_id_(OB_INVALID_TENANT_ID), group_id_(OB_INVALID_ID)
-  {}
-  ObTenantGroupIdKey(const uint64_t tenant_id, const uint64_t group_id) :
-    tenant_id_(tenant_id), group_id_(group_id)
-  {}
-  int assign(const ObTenantGroupIdKey &other)
-  {
-    tenant_id_ = other.tenant_id_;
-    group_id_ = other.group_id_;
-    return common::OB_SUCCESS;
-  }
-  uint64_t hash() const
-  {
-    uint64_t hash_val = 0;
-    hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
-    hash_val = common::murmurhash(&group_id_, sizeof(group_id_), hash_val);
-    return hash_val;
-  }
-  int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return common::OB_SUCCESS;
-  }
-  int compare(const ObTenantGroupIdKey& r) const
-  {
-    int cmp = 0;
-    if (tenant_id_ < r.tenant_id_) {
-      cmp = -1;
-    } else if (tenant_id_ == r.tenant_id_) {
-      cmp = group_id_ < r.group_id_ ? -1 : (group_id_ > r.group_id_ ? 1 : 0);
-    } else {
-      cmp = 1;
-    }
-    return cmp;
-  }
-  bool operator== (const ObTenantGroupIdKey &other) const { return 0 == compare(other); }
-  bool operator!=(const ObTenantGroupIdKey &other) const { return !operator==(other); }
-  bool operator<(const ObTenantGroupIdKey &other) const { return -1 == compare(other); }
-  TO_STRING_KV(K_(tenant_id), K_(group_id));
-
-public:
-  uint64_t tenant_id_;
-  uint64_t group_id_;
-};
-
 class ObPlanDirective
 {
 public:
@@ -216,7 +172,10 @@ public:
       max_iops_(100),
       weight_iops_(0),
       group_id_(),
-      group_name_()
+      group_name_(),
+      max_net_bandwidth_(100),
+      net_bandwidth_weight_(0),
+      level_(1)
   {}
   ~ObPlanDirective() = default;
 public:
@@ -224,7 +183,9 @@ public:
   {
     bool bret =  min_iops_ >= 0 && min_iops_ <= 100 && max_iops_ >= 0 &&
                  max_iops_ <= 100 && weight_iops_ >= 0 && weight_iops_ <= 100 &&
-                 min_iops_ <= max_iops_;
+                 min_iops_ <= max_iops_ &&
+                 max_net_bandwidth_ >= 0 && max_net_bandwidth_ <= 100 &&
+                 net_bandwidth_weight_ >= 0 && net_bandwidth_weight_ <= 100;
     return bret;
   }
   int set_tenant_id(const uint64_t tenant_id)
@@ -265,6 +226,14 @@ public:
   {
     return group_name_.set_value(name);
   }
+  void set_max_net_bandwidth(const uint64_t max_net_bandwidth)
+  {
+    max_net_bandwidth_ = max_net_bandwidth;
+  }
+  void set_net_bandwidth_weight(const uint64_t net_bandwidth_weight)
+  {
+    net_bandwidth_weight_ = net_bandwidth_weight;
+  }
   int assign(const ObPlanDirective &other);
   TO_STRING_KV(K_(tenant_id),
                "group_name", group_name_.get_value(),
@@ -273,7 +242,10 @@ public:
                K_(min_iops),
                K_(max_iops),
                K_(weight_iops),
-               K_(group_id));
+               K_(group_id),
+               K_(max_net_bandwidth),
+               K_(net_bandwidth_weight),
+               K_(level));
 public:
   uint64_t tenant_id_;
   double mgmt_p1_;
@@ -283,6 +255,9 @@ public:
   uint64_t weight_iops_;
   uint64_t group_id_;
   share::ObGroupName group_name_;
+  uint64_t max_net_bandwidth_;
+  uint64_t net_bandwidth_weight_; // percent of all weight
+  int level_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanDirective);
 };

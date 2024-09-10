@@ -270,7 +270,7 @@ public:
 
 void TestBufferPool::SetUp()
 {
-  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_page_cache_controller();
+  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
   ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   wbp.destroy();
   ASSERT_EQ(OB_SUCCESS, wbp.init());
@@ -278,7 +278,7 @@ void TestBufferPool::SetUp()
 
 void TestBufferPool::TearDown()
 {
-  MTL(ObTenantTmpFileManager *)->get_page_cache_controller().get_write_buffer_pool().destroy();
+  MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller().get_write_buffer_pool().destroy();
 }
 
 void TestBufferPool::SetUpTestCase()
@@ -293,7 +293,7 @@ void TestBufferPool::TearDownTestCase()
 
 TEST_F(TestBufferPool, test_buffer_pool_basic)
 {
-  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_page_cache_controller();
+  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
   ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   WBPTestFunctor wbp_test_functor(0, ObTmpWriteBufferPool::BLOCK_PAGE_NUMS, 100, &wbp);
   wbp_test_functor();
@@ -301,7 +301,7 @@ TEST_F(TestBufferPool, test_buffer_pool_basic)
 
 TEST_F(TestBufferPool, test_buffer_pool_concurrent)
 {
-  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_page_cache_controller();
+  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
   ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   const int64_t MAX_THREAD_NUM = 5;
   const int64_t MAX_LOOP_NUM = 100;
@@ -317,7 +317,7 @@ TEST_F(TestBufferPool, test_buffer_pool_concurrent)
 
 TEST_F(TestBufferPool, test_entry_state_switch_write_back)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->page_cache_controller_.get_write_buffer_pool();
+  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 200;
@@ -415,7 +415,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
 
 TEST_F(TestBufferPool, test_entry_state_switch_loading)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->page_cache_controller_.get_write_buffer_pool();
+  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 200;
@@ -486,7 +486,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_loading)
 TEST_F(TestBufferPool, test_alloc_page_limit)
 {
   int ret = OB_SUCCESS;
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->page_cache_controller_.get_write_buffer_pool();
+  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
   int64_t max_page_num = wbp.get_max_page_num();
   std::cout << "write buffer pool max page num " << max_page_num << std::endl;
   LOG_INFO("write buffer pool max page num", K(max_page_num));
@@ -606,7 +606,7 @@ TEST_F(TestBufferPool, test_alloc_page_limit)
 
 TEST_F(TestBufferPool, test_get_page_id_by_offset)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->page_cache_controller_.get_write_buffer_pool();
+  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 400;
@@ -643,7 +643,7 @@ TEST_F(TestBufferPool, test_get_page_id_by_offset)
 
 TEST_F(TestBufferPool, test_truncate_page)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->page_cache_controller_.get_write_buffer_pool();
+  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 200;

@@ -88,6 +88,33 @@ static int mock_addr(const char *ipport, common::ObAddr &addr)
   return ret;
 }
 
+static int add_learner_list(const common::ObAddr &addr, common::GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(learner_list.add_server(addr))) {
+    LOG_WARN("failed to add server", K(ret), K(addr));
+  }
+  return ret;
+}
+
+static int add_c_to_learner_list(const common::ObAddr &addr, common::GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  common::ObReplicaMember c_replica;
+  common::ObReplicaType type = common::ObReplicaType::REPLICA_TYPE_COLUMNSTORE;
+  common::ObRegion region("shanghai");
+  if (OB_FAIL(mock_replica_member(addr, region, type, c_replica))) {
+    LOG_WARN("failed to mock replica member", K(ret));
+  } else {
+    c_replica.set_columnstore();
+    if (OB_FAIL(learner_list.add_learner(c_replica))) {
+      LOG_WARN("failed to add server", K(ret), K(c_replica));
+    }
+  }
+
+  return ret;
+}
+
 static int mock_learner_list(const common::ObAddr &addr, common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
@@ -355,7 +382,7 @@ static int mock_migrate_arg(const common::ObReplicaMember &replica, ObMigrationO
   const share::ObLSID ls_id(1);
   mock_arg.ls_id_ = ls_id;
   mock_arg.type_ = ObMigrationOpType::TYPE::MIGRATE_LS_OP;
-  mock_arg.cluster_id_  = 0;
+  mock_arg.cluster_id_  = 1;
   mock_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
   mock_arg.src_ = replica;
   common::ObReplicaMember dst_replica;
@@ -463,6 +490,20 @@ static int mock_migrate_arg_for_r_type(ObMigrationOpArg &mock_arg)
   return ret;
 }
 
+static int mock_migrate_arg_for_c_type(ObMigrationOpArg &mock_arg)
+{
+  int ret = OB_SUCCESS;
+  mock_arg.reset();
+
+  if (OB_FAIL(mock_migrate_arg_for_location(mock_arg))) {
+    LOG_WARN("failed to mock ", K(ret), K(mock_arg));
+  } else {
+    mock_arg.dst_.set_columnstore();
+    mock_arg.dst_.replica_type_ = common::ObReplicaType::REPLICA_TYPE_COLUMNSTORE;
+  }
+  return ret;
+}
+
 static share::SCN mock_ckpt_inc(share::SCN &local_ls_checkpoint_scn)
 {
   share::SCN result;
@@ -471,54 +512,58 @@ static share::SCN mock_ckpt_inc(share::SCN &local_ls_checkpoint_scn)
 }
 
 static int get_checkpoint_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+    const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = false;
   const char *str = "idc";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, policy))) {
-    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id));
+      enable_choose_source_policy, str, learner_list, policy))) {
+    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;
 }
 
 
 static int get_recommand_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+    const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = true;
   const char *str = "idc";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, policy))) {
-    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id));
+      enable_choose_source_policy, str, learner_list, policy))) {
+    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;
 }
 
 static int get_idc_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+    const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = true;
   const char *str = "idc";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, policy))) {
-    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id));
+      enable_choose_source_policy, str, learner_list, policy))) {
+    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;
 }
 
 static int get_region_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+    const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = true;
   const char *str = "region";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, policy))) {
-    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id));
+      enable_choose_source_policy, str, learner_list, policy))) {
+    LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;
 }
@@ -566,8 +611,55 @@ static int mock_migrate_arg_init_fail(ObMigrationOpArg &mock_arg)
 static int mock_check_replica_type_addr(common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(mock_addr("192.168.1.5:1234", addr))) {
+    LOG_WARN("failed to mock leader addr", K(ret));
+  }
+  return ret;
+}
+
+static int mock_c_replica_type_addr_2(common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(mock_addr("192.168.1.2:1234", addr))) {
+    LOG_WARN("failed to mock leader addr", K(ret));
+  }
+  return ret;
+}
+
+static int mock_c_replica_type_addr_3(common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(mock_addr("192.168.1.3:1234", addr))) {
+    LOG_WARN("failed to mock leader addr", K(ret));
+  }
+  return ret;
+}
+
+static int mock_c_replica_type_addr_4(common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
   if (OB_FAIL(mock_addr("192.168.1.4:1234", addr))) {
     LOG_WARN("failed to mock leader addr", K(ret));
+  }
+  return ret;
+}
+
+static int mock_migrate_choose_helper_param(
+    const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const share::SCN &local_clog_checkpoint_scn,
+    const ObMigrationOpArg &arg, ObMigrationChooseSrcHelperInitParam &param)
+{
+  int ret = OB_SUCCESS;
+  param.reset();
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
+      || !local_clog_checkpoint_scn.is_valid() || !arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn), K(arg));
+  } else {
+    param.tenant_id_ = tenant_id;
+    param.ls_id_ = ls_id;
+    param.local_clog_checkpoint_scn_ = local_clog_checkpoint_scn;
+    param.arg_ = arg;
   }
   return ret;
 }

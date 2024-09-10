@@ -180,6 +180,7 @@ private:
   int wait_channel_ready_msg();
   int hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
   int keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes);
+  int keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes);
   int64_t get_random_seq()
   {
     return nrand48(rand48_buf_) % INT16_MAX;
@@ -194,6 +195,8 @@ private:
   int try_wait_channel();
   void init_data_msg_type(const common::ObIArray<ObExpr *> &output);
   void fill_batch_ptrs(const int64_t *indexes);
+  int prepare_for_nested_expr();
+  void fill_batch_ptrs_fixed(const int64_t *indexes);
   dtl::ObDtlMsgType get_data_msg_type() const { return data_msg_type_; }
 protected:
   ObArray<ObChunkDatumStore::Block *> ch_blocks_;
@@ -232,23 +235,65 @@ protected:
   bool receive_channel_ready_;
   dtl::ObDtlMsgType data_msg_type_;
   //slice_idx, batch_idx
-  uint16_t **slice_info_bkts_;
-  uint16_t *slice_bkt_item_cnts_;
-  ObFixedArray<ObIVector *, common::ObIAllocator> vectors_;
-  uint16_t *selector_array_;
-  int64_t selector_cnt_;
-  uint32_t *row_size_array_;
-  ObCompactRow **return_rows_;
-  bool use_hash_reorder_;
-  RowMeta meta_;
-  uint16_t *fallback_array_;
-  int64_t fallback_cnt_;
-  ObTempRowStore::DtlRowBlock **blocks_;
-  int64_t *heads_;
-  int64_t *tails_;
-  int64_t *init_pos_; //memset from this pos
-  bool *channel_unobstructeds_;
-  bool init_hash_reorder_struct_;
+  struct VectorSendParams {
+    VectorSendParams(common::ObIAllocator &alloc) : slice_info_bkts_(nullptr),
+                                                    slice_bkt_item_cnts_(nullptr),
+                                                    vectors_(&alloc),
+                                                    selector_array_(nullptr),
+                                                    selector_cnt_(0),
+                                                    row_size_array_(nullptr),
+                                                    return_rows_(nullptr),
+                                                    meta_(),
+                                                    fallback_array_(nullptr),
+                                                    fallback_cnt_(0),
+                                                    blocks_(nullptr),
+                                                    heads_(nullptr),
+                                                    tails_(nullptr),
+                                                    init_pos_(nullptr),
+                                                    channel_unobstructeds_(nullptr),
+                                                    init_hash_reorder_struct_(false),
+                                                    fixed_payload_headers_(nullptr),
+                                                    column_offsets_(nullptr),
+                                                    column_lens_(nullptr),
+                                                    row_cnts_(nullptr),
+                                                    row_idx_(nullptr),
+                                                    offset_inited_(false),
+                                                    row_limit_(-1),
+                                                    fixed_rows_(nullptr),
+                                                    reorder_fixed_expr_(false) {}
+    int init_basic_params(const int64_t max_batch_size, const int64_t channel_cnt,
+                          const int64_t output_cnt, ObIAllocator &alloc, ObExecContext &ctx);
+    int init_hash_params(const int64_t max_batch_size, const int64_t channel_cnt,
+                         const int64_t output_cnt, ObIAllocator &alloc);
+    int init_keep_order_params(const int64_t max_batch_size, const int64_t channel_cnt,
+                               const int64_t output_cnt, ObIAllocator &alloc);
+    uint16_t **slice_info_bkts_;
+    uint16_t *slice_bkt_item_cnts_;
+    ObFixedArray<ObIVector *, common::ObIAllocator> vectors_;
+    uint16_t *selector_array_;
+    int64_t selector_cnt_;
+    uint32_t *row_size_array_;
+    ObCompactRow **return_rows_;
+    RowMeta meta_;
+    uint16_t *fallback_array_;
+    int64_t fallback_cnt_;
+    ObTempRowStore::DtlRowBlock **blocks_;
+    int64_t *heads_;
+    int64_t *tails_;
+    int64_t *init_pos_; //memset from this pos
+    bool *channel_unobstructeds_;
+    bool init_hash_reorder_struct_;
+    char **fixed_payload_headers_;
+    int64_t *column_offsets_;
+    int64_t *column_lens_;
+    int64_t *row_cnts_;
+    int64_t *row_idx_;
+    bool offset_inited_;
+    int64_t row_limit_;
+    char **fixed_rows_;
+    bool reorder_fixed_expr_;
+  };
+  VectorSendParams params_;
 };
 
 inline void ObPxTransmitOp::update_row(const ObExpr *expr, int64_t tablet_id)

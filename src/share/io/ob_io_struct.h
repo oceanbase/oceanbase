@@ -18,6 +18,7 @@
 #include "lib/lock/ob_mutex.h"
 #include "lib/lock/ob_drw_lock.h"
 #include "lib/thread/thread_mgr_interface.h"
+#include "lib/thread/ob_simple_thread_pool.h"
 #include "lib/queue/ob_fixed_queue.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
@@ -45,10 +46,15 @@ public:
       K(data_storage_warning_tolerance_time_),
       K(data_storage_error_tolerance_time_),
       K(disk_io_thread_count_),
+      K(sync_io_thread_count_),
       K(data_storage_io_timeout_ms_));
 
-public:
+private:
+  // async io thread count
   static const int64_t MAX_IO_THREAD_COUNT = 32 * 2;
+  // sync io thread count
+  static const int64_t MAX_SYNC_IO_THREAD_COUNT = 1024;
+public:
   // diagnose related
   int64_t write_failure_detect_interval_; // const literal
   int64_t read_failure_black_list_interval_; // const literal
@@ -56,6 +62,7 @@ public:
   int64_t data_storage_error_tolerance_time_;
   // resource related
   int64_t disk_io_thread_count_;
+  int64_t sync_io_thread_count_;
   int64_t data_storage_io_timeout_ms_;
 };
 
@@ -114,14 +121,18 @@ struct ObIOStat final
 public:
   ObIOStat();
   ~ObIOStat();
-  void accumulate(const uint64_t io_count, const uint64_t io_bytes, const uint64_t io_rt_us);
+  void accumulate(const uint64_t io_count, const uint64_t io_bytes, const uint64_t prepare_delay, const uint64_t schedule_delay, const uint64_t submit_delay, const int64_t device_delay, const int64_t total_delay);
   void reset();
-  TO_STRING_KV(K(io_count_), K(io_bytes_), K(io_rt_us_));
+  TO_STRING_KV(K(io_count_), K(io_bytes_), K(io_prepare_delay_us_), K(io_schedule_delay_us_), K(io_submit_delay_us_), K(io_device_delay_us_), K(io_total_delay_us_));
 
 public:
   uint64_t io_count_;
   uint64_t io_bytes_;
-  uint64_t io_rt_us_;
+  uint64_t io_prepare_delay_us_;
+  uint64_t io_schedule_delay_us_;
+  uint64_t io_submit_delay_us_;
+  uint64_t io_device_delay_us_;
+  uint64_t io_total_delay_us_;
 };
 
 class ObIOStatDiff final
@@ -129,58 +140,102 @@ class ObIOStatDiff final
 public:
   ObIOStatDiff();
   ~ObIOStatDiff();
-  void diff(const ObIOStat &io_stat, double &avg_iops, double &avg_bytes, double &avg_rt_us);
+  void diff(const ObIOStat &io_stat, double &avg_iops, double &avg_bytes, int64_t &avg_prepare_delay,
+      int64_t &avg_schedule_delay, int64_t &avg_submit_delay, int64_t &avg_device_delay, int64_t &avg_total_delay);
   void reset();
   TO_STRING_KV(K(last_stat_), K(last_ts_));
+
 private:
   ObIOStat last_stat_;
   int64_t last_ts_;
 };
 
+struct ObIOUsageInfo
+{
+  ObIOStat io_stat_;
+  ObIOStatDiff io_estimator_;
+  double avg_iops_;
+  double avg_byte_;
+  int64_t avg_prepare_delay_us_;
+  int64_t avg_schedule_delay_us_;
+  int64_t avg_submit_delay_us_;
+  int64_t avg_device_delay_us_; //Before 4.3.4, it was called avg_rt_us_.
+  int64_t avg_total_delay_us_;
+  TO_STRING_KV(K(io_stat_), K(io_estimator_), K(avg_iops_), K(avg_byte_), K(avg_prepare_delay_us_), K(avg_schedule_delay_us_), K(avg_submit_delay_us_), K(avg_device_delay_us_), K(avg_total_delay_us_));
+};
+
+struct ObIOGroupUsage
+{
+  ObIOGroupUsage()
+      : last_ts_(ObTimeUtility::fast_current_time()),
+        io_count_(0),
+        size_(0),
+        last_io_ps_record_(0),
+        last_io_bw_record_(0),
+        total_prepare_delay_(0),
+        total_schedule_delay_(0),
+        total_submit_delay_(0),
+        total_device_delay_(0),
+        total_total_delay_(0)
+  {}
+  int calc(double &avg_size, double &avg_iops, int64_t &avg_bw, int64_t &avg_prepare_delay,
+      int64_t &avg_schedule_delay, int64_t &avg_submit_delay, int64_t &avg_device_delay, int64_t &avg_total_delay);
+  void inc(const int64_t size, const int prepare_delay, const int64_t schedule_delay, const int64_t submit_delay,
+      const int64_t device_delay, const int64_t total_delay)
+  {
+    ATOMIC_FAA(&size_, size);
+    ATOMIC_FAA(&io_count_, 1);
+    ATOMIC_FAA(&total_prepare_delay_, prepare_delay);
+    ATOMIC_FAA(&total_schedule_delay_, schedule_delay);
+    ATOMIC_FAA(&total_submit_delay_, submit_delay);
+    ATOMIC_FAA(&total_device_delay_, device_delay);
+    ATOMIC_FAA(&total_total_delay_, total_delay);
+  }
+  int clear()
+  {
+    ATOMIC_SET(&total_prepare_delay_, 0);
+    ATOMIC_SET(&total_schedule_delay_, 0);
+    ATOMIC_SET(&total_submit_delay_, 0);
+    ATOMIC_SET(&total_device_delay_, 0);
+    ATOMIC_SET(&total_total_delay_, 0);
+    return OB_SUCCESS;
+  }
+  int64_t last_ts_;
+  int64_t io_count_;
+  int64_t size_;
+  int64_t last_io_ps_record_;    // iops
+  int64_t last_io_bw_record_;    // iobw
+  int64_t total_prepare_delay_;  // us
+  int64_t total_schedule_delay_;
+  int64_t total_submit_delay_;
+  int64_t total_device_delay_;
+  int64_t total_total_delay_;
+  TO_STRING_KV(K(last_ts_), K(io_count_), K(size_), K(last_io_ps_record_), K(last_io_bw_record_),
+      K(total_prepare_delay_), K(total_schedule_delay_), K(total_submit_delay_), K(total_device_delay_),
+      K(total_total_delay_));
+};
+
+struct ObIOFailedReqUsageInfo : ObIOGroupUsage
+{
+};
+
 class ObIOUsage final
 {
 public:
-  ObIOUsage();
-  ~ObIOUsage();
+  ObIOUsage() : info_(), failed_req_info_() {}
+  ~ObIOUsage() {}
   int init(const int64_t group_num);
   int refresh_group_num (const int64_t group_num);
-  void accumulate(ObIOResult &result, ObIORequest &request);
+  void accumulate(ObIORequest &request);
   void calculate_io_usage();
-  typedef ObSEArray<ObSEArray<double, GROUP_START_NUM>, 2> AvgItems;
-  int get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us);
-  void record_request_start(ObIOResult &result);
-  void record_request_finish(ObIOResult &result);
-  bool is_request_doing(const int64_t index) const;
-  int64_t get_io_usage_num() const;
-  ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
+  const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &get_io_usage() { return info_; }
+  ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> &get_failed_req_usage() { return failed_req_info_; }
+  ObSEArray<int64_t, GROUP_START_NUM> &get_group_throttled_time_us() { return group_throttled_time_us_; }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
-  ObSEArray<ObSEArray<ObIOStat, GROUP_START_NUM>, 2> io_stats_;
-  ObSEArray<ObSEArray<ObIOStatDiff, GROUP_START_NUM>, 2> io_estimators_;
-  AvgItems group_avg_iops_;
-  AvgItems group_avg_byte_;
-  AvgItems group_avg_rt_us_;
-  int64_t group_num_;
-  ObSEArray<int64_t, GROUP_START_NUM> doing_request_count_;
-};
-
-class ObSysIOUsage final
-{
-public:
-  ObSysIOUsage();
-  ~ObSysIOUsage();
-  int init();
-  void accumulate(ObIOResult &result, ObIORequest &request);
-  void calculate_io_usage();
-  typedef ObSEArray<ObSEArray<double, SYS_MODULE_CNT>, 2> SysAvgItems;
-  int get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us);
-  TO_STRING_KV(K(io_stats_), K(io_estimators_), K(group_avg_iops_), K(group_avg_byte_), K(group_avg_rt_us_));
-private:
-  ObSEArray<ObSEArray<ObIOStat, SYS_MODULE_CNT>, 2> io_stats_;
-  ObSEArray<ObSEArray<ObIOStatDiff, SYS_MODULE_CNT>, 2> io_estimators_;
-  SysAvgItems group_avg_iops_;
-  SysAvgItems group_avg_byte_;
-  SysAvgItems group_avg_rt_us_;
+  ObSEArray<ObIOUsageInfo, GROUP_START_NUM> info_;
+  ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> failed_req_info_;
+  ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
 };
 
 class ObCpuUsage final
@@ -199,7 +254,7 @@ class ObIOScheduler;
 class ObIOTuner : public lib::TGRunnable
 {
 public:
-  ObIOTuner(ObIOScheduler &io_scheduler);
+  ObIOTuner();
   virtual ~ObIOTuner();
   int init();
   void stop();
@@ -207,15 +262,11 @@ public:
   void destroy();
   int send_detect_task();
   virtual void run1() override;
-  int64_t to_string(char *buf, const int64_t len) const;
 private:
-  void print_sender_status();
   int try_release_thread();
-  void print_io_status();
 private:
   bool is_inited_;
   ObCpuUsage cpu_usage_;
-  ObIOScheduler &io_scheduler_;
 };
 
 struct ObIOGroupQueues final {
@@ -224,12 +275,11 @@ public:
   ~ObIOGroupQueues();
   int init(const int64_t group_num);
   void destroy();
-  TO_STRING_KV(K(is_inited_), K(other_phy_queue_), K(group_phy_queues_));
+  TO_STRING_KV(K(is_inited_), K(group_phy_queues_));
 public:
   bool is_inited_;
   ObIAllocator &allocator_;
   ObSEArray<ObPhyQueue *, GROUP_START_NUM> group_phy_queues_;
-  ObPhyQueue other_phy_queue_;
 };
 
 
@@ -241,8 +291,7 @@ public:
 public:
   int64_t queuing_count_;
   int64_t reservation_ts_;
-  int64_t group_limitation_ts_;
-  int64_t tenant_limitation_ts_;
+  int64_t limitation_ts_;
   int64_t proportion_ts_;
 };
 
@@ -270,17 +319,19 @@ public:
   int stop_phy_queue(const uint64_t tenant_id, const uint64_t index);
   int notify();
   int64_t get_queue_count() const;
-  int get_sender_info(int64_t &reservation_ts,
-                      int64_t &group_limitation_ts,
-                      int64_t &tenant_limitation_ts,
-                      int64_t &proportion_ts);
   int get_sender_status(const uint64_t tenant_id, const uint64_t index, ObSenderInfo &sender_info);
+  int inc_queue_count(const ObIORequest &req);
+  int dec_queue_count(const ObIORequest &req);
   TO_STRING_KV(K(is_inited_), K(stop_submit_), K(is_retry_sender_), KPC(io_queue_), K(tg_id_), K(sender_index_));
 //private:
   void pop_and_submit();
   int64_t calc_wait_timeout(const int64_t queue_deadline);
   int submit(ObIORequest &req);
   int64_t sender_req_count_;
+  int64_t sender_req_local_r_count_;
+  int64_t sender_req_local_w_count_;
+  int64_t sender_req_remote_r_count_;
+  int64_t sender_req_remote_w_count_;
   int64_t sender_index_;
   int tg_id_; // thread group id
   bool is_inited_;
@@ -298,29 +349,29 @@ class ObIOScheduler final
 public:
   ObIOScheduler(const ObIOConfig &io_config, ObIAllocator &allocator);
   ~ObIOScheduler();
-  int init(const int64_t queue_count, const int64_t schedule_media_id = 0);
+  int init(const int64_t queue_count);
   void destroy();
   int start();
   void stop();
   void wait();
   void accumulate(const ObIORequest &req);
   int schedule_request(ObIORequest &req);
-  int retry_request(ObIORequest &req);
+  int retry_request(ObIORequest &req) { return schedule_request_(req, 0); }
   int init_group_queues(const uint64_t tenant_id, const int64_t group_num, ObIOAllocator *io_allocator);
   int update_group_queues(const uint64_t tenant_id, const int64_t group_num);
   int remove_phyqueues(const uint64_t tenant_id);
   int stop_phy_queues(const uint64_t tenant_id, const int64_t index);
-  ObIOSender *get_cur_sender(const int thread_id){ return senders_.at(thread_id); };
+  ObIOSender *get_sender(const int idx_id){ return senders_.at(idx_id); };
   int64_t get_senders_count() { return senders_.count(); }
   TO_STRING_KV(K(is_inited_), K(io_config_), K(senders_));
 private:
-  friend class ObIOTuner;
+  int schedule_request_(ObIORequest &req, const int64_t schedule_request);
+private:
   bool is_inited_;
   const ObIOConfig &io_config_;
   ObIAllocator &allocator_;
   ObSEArray<ObIOSender *, 1> senders_; //the first sender is for retry_alloc_memory to avoid blocking current sender
   ObIOTuner io_tuner_;
-  int64_t schedule_media_id_;
 };
 
 class ObDeviceChannel;
@@ -329,35 +380,32 @@ class ObDeviceChannel;
  * worker to process sync io request and get result of async io request from file system
  * io channel has two independent threads, one for sync io operation, another for polling events from file system
  */
-class ObIOChannel : public lib::TGRunnable
+class ObIOChannel
 {
 public:
   ObIOChannel();
   virtual ~ObIOChannel();
 
   int base_init(ObDeviceChannel *device_channel);
-  int start_thread();
-  void destroy_thread();
   virtual int submit(ObIORequest &req) = 0;
   virtual void cancel(ObIORequest &req) = 0;
   virtual int64_t get_queue_count() const = 0;
-  TO_STRING_KV(K(is_inited_), KP(device_handle_), K(tg_id_), "queue_count", get_queue_count());
+  TO_STRING_KV(KP(device_handle_), "queue_count", get_queue_count());
 
 protected:
-  bool is_inited_;
-  int tg_id_; // thread group id
-  ObIODevice *device_handle_; //local device_handle
+  ObIODevice *device_handle_;
   ObDeviceChannel *device_channel_;
 };
 
 
-class ObAsyncIOChannel : public ObIOChannel
+class ObAsyncIOChannel : public ObIOChannel, public lib::TGRunnable
 {
 public:
   ObAsyncIOChannel();
   virtual ~ObAsyncIOChannel();
 
   int init(ObDeviceChannel *device_channel);
+  int start();
   void stop();
   void wait();
   void destroy();
@@ -368,6 +416,8 @@ public:
   INHERIT_TO_STRING_KV("IOChannel", ObIOChannel, KP(io_context_), KP(io_events_), K(submit_count_));
 
 private:
+  int start_thread();
+  void destroy_thread();
   void get_events();
   int on_full_return(ObIORequest &req, const int64_t complete_size);
   int on_partial_return(ObIORequest &req, const int64_t complete_size);
@@ -378,6 +428,9 @@ private:
 private:
   static const int32_t MAX_AIO_EVENT_CNT = 512;
   static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L - 1L; // almost 1s, for timespec_valid check
+private:
+  bool is_inited_;
+  int tg_id_; // thread group id
   ObIOContext *io_context_;
   ObIOEvents *io_events_;
   struct timespec polling_timeout_;
@@ -385,25 +438,28 @@ private:
   ObThreadCond depth_cond_;
 };
 
-class ObSyncIOChannel : public ObIOChannel
+class ObSyncIOChannel : public ObIOChannel, public common::ObSimpleThreadPool
 {
 public:
   ObSyncIOChannel();
   virtual ~ObSyncIOChannel();
-  int init(ObDeviceChannel *device_channel);
+  int init(ObDeviceChannel *device_channel, const int64_t thread_num);
   void destroy();
-  virtual void run1() override;
   virtual int submit(ObIORequest &req) override;
   virtual void cancel(ObIORequest &req) override;
   virtual int64_t get_queue_count() const override;
-  INHERIT_TO_STRING_KV("IOChannel", ObIOChannel, K(req_queue_.get_total()));
+  int set_thread_count(const int64_t conf_thread_count);
+  INHERIT_TO_STRING_KV("IOChannel", ObIOChannel, K(get_queue_num()));
 private:
+  virtual void handle(void *task) override;
+  int start_thread(const int64_t thread_num, const int64_t task_num);
+  void destroy_thread();
   int do_sync_io(ObIORequest &req);
 private:
-  static const int64_t MAX_SYNC_IO_QUEUE_COUNT = 512;
-  ObFixedQueue<ObIORequest> req_queue_;
-  ObThreadCond cond_;
-  bool is_wait_;
+  static const int64_t SYNC_IO_TASK_COUNT = 1024;
+  static int64_t cal_thread_count(const int64_t conf_thread_count);
+private:
+  bool is_inited_;
 };
 
 // each device has several channels, including async channels and sync channels.
@@ -420,6 +476,8 @@ public:
            ObIAllocator &allocator);
   void destroy();
   int submit(ObIORequest &req);
+  void print_status();
+  int reload_config(const ObIOConfig &conf);
   TO_STRING_KV(K(is_inited_), KP(allocator_), K(async_channels_), K(sync_channels_));
 private:
   int get_random_io_channel(ObIArray<ObIOChannel *> &io_channels, ObIOChannel *&ch);
@@ -442,7 +500,7 @@ class ObIORunner : public lib::TGRunnable
 public:
   ObIORunner();
   virtual ~ObIORunner();
-  int init(const int64_t queue_capacity, ObIAllocator &allocator);
+  int init(const int64_t queue_capacity, ObIAllocator &allocator, const int64_t idx);
   void stop();
   void wait();
   void destroy();
@@ -454,7 +512,10 @@ public:
   int pop(ObIORequest *&req);
   int handle(ObIORequest *req);
   int64_t get_queue_count();
-  TO_STRING_KV(K(is_inited_), K(queue_.get_total()), K(tg_id_));
+
+  int64_t get_tid() const { return tid_; }
+
+  TO_STRING_KV(K(is_inited_), K(queue_.get_total()), K(tg_id_), K(idx_), K(tid_));
 private:
   static const int64_t CALLBACK_WAIT_PERIOD_US = 1000L * 1000L; // 1s
   bool is_inited_;
@@ -462,6 +523,8 @@ private:
   int tg_id_;
   ObThreadCond cond_;
   ObFixedQueue<ObIORequest> queue_;
+  int64_t idx_;
+  int64_t tid_;
 };
 
 
@@ -478,18 +541,91 @@ public:
   void try_release_thread();
   void get_thread_and_runner_num(int64_t &thread_num, int64_t &runner_count);
   int update_thread_count(const int64_t thread_count);
-  int64_t get_thread_count();
+  int64_t get_thread_count() const;
   int64_t get_queue_depth() const;
   int get_queue_count(ObIArray<int64_t> &queue_count_array);
-  TO_STRING_KV(K(is_inited_), K(config_thread_count_), K(queue_depth_), K(runners_), KPC(io_allocator_));
 
+  const ObArray<ObIORunner *> &get_runners() { return runners_; };
+
+  TO_STRING_KV(K(is_inited_), K(config_thread_count_), K(queue_depth_), K(runners_), KPC(io_allocator_));
+private:
+  int64_t get_callback_queue_idx(const ObIOCallbackType cb_type) const;
+private:
+  static const int64_t ATOMIC_WRITE_CALLBACK_THREAD_RATIO = 2;
 private:
   bool is_inited_;
   int32_t queue_depth_;
   int64_t config_thread_count_;
-  common::DRWLock lock_;
+  mutable common::DRWLock lock_;
   ObArray<ObIORunner *> runners_;
   ObIOAllocator *io_allocator_;
+};
+
+struct ObIOGroupMemInfo
+{
+public:
+  ObIOGroupMemInfo() : total_cnt_(0), total_size_(0)
+  {}
+  int inc(const int size)
+  {
+    ATOMIC_INC(&total_cnt_);
+    ATOMIC_AAF(&total_size_, size);
+    return OB_SUCCESS;
+  }
+  int dec(const int size)
+  {
+    ATOMIC_DEC(&total_cnt_);
+    ATOMIC_AAF(&total_size_, -size);
+    return OB_SUCCESS;
+  }
+  int64_t total_cnt_;
+  int64_t total_size_;
+  TO_STRING_KV(K(total_cnt_), K(total_size_));
+};
+
+struct ObIOMemStat
+{
+  ObIOMemStat() : group_mem_infos_()
+  {}
+  ~ObIOMemStat()
+  {}
+  int init(const int64_t group_num);
+  int refresh_group_num(const int64_t group_num);
+  int inc(const ObIORequest &req);
+  int dec(const ObIORequest &req);
+  TO_STRING_KV(K(group_mem_infos_));
+  ObSEArray<ObIOGroupMemInfo, GROUP_START_NUM> group_mem_infos_;
+};
+
+class ObIOMemStats
+{
+public:
+  ObIOMemStats() : sys_mem_stat_(), mem_stat_()
+  {}
+  ~ObIOMemStats()
+  {}
+  int init(const int64_t sys_group_num, const int64_t group_num);
+  int inc(const ObIORequest &req);
+  int dec(const ObIORequest &req);
+  ObIOMemStat &get_sys_mem_stat() { return sys_mem_stat_; }
+  ObIOMemStat &get_mem_stat() { return mem_stat_; }
+  TO_STRING_KV(K(sys_mem_stat_), K(mem_stat_));
+private:
+  ObIOMemStat sys_mem_stat_;
+  ObIOMemStat mem_stat_;
+};
+struct ObIOFuncUsageByMode : ObIOGroupUsage
+{
+};
+typedef ObSEArray<ObIOFuncUsageByMode, static_cast<uint8_t>(ObIOGroupMode::MODECNT)> ObIOFuncUsage;
+struct ObIOFuncUsages
+{
+public:
+  ObIOFuncUsages();
+  ~ObIOFuncUsages() = default;
+  int accumulate(ObIORequest &req);
+  TO_STRING_KV(K(func_usages_));
+  ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> func_usages_;
 };
 
 // Device Health status
@@ -513,15 +649,20 @@ public:
   virtual void handle(void *task) override;
   int get_device_health_status(ObDeviceHealthStatus &dhs, int64_t &device_abnormal_time);
   void reset_device_health();
-  void record_io_error(const ObIOResult &result, const ObIOInfo &info);
-  void record_io_timeout(const ObIOResult &result, ObIORequest *req);
+  void record_io_error(const ObIOResult &result, const ObIORequest &req);
+  void record_io_timeout(const ObIOResult &result, const ObIORequest &req);
   int record_timing_task(const int64_t first_id, const int64_t second_id);
 
 private:
-  int record_read_failure(const ObIOInfo &info);
+  int record_read_failure_(const ObIOResult &result, const ObIORequest &req);
   int record_write_failure();
   void set_device_warning();
   void set_device_error();
+  int set_detect_task_io_info_(ObIOInfo &io_info, const ObIOResult &result, const ObIORequest &req);
+  // If executes the detect task in SS mode, checking if it's a read operation on the micro cache file.
+  // In SN mode, always returns true.
+  // In SS mode, returns true if fd == micro cache file fd.
+  bool is_supported_detect_read_(const uint64_t tenant_id, const ObIOFd &fd);
 
 private:
   static const int64_t WRITE_FAILURE_DETECT_EVENT_COUNT = 100;
@@ -613,19 +754,20 @@ void ObIOAllocator::free(T *instance)
 
 // some utilities
 
-inline bool is_io_aligned(const int64_t value)
+inline bool is_io_aligned(const int64_t value, const int64_t align)
 {
-  return 0 == value % DIO_READ_ALIGN_SIZE;
+  return 0 == (value % align);
 }
 
 inline void align_offset_size(
-    const int32_t offset,
+    const int64_t offset,
     const int64_t size,
-    int32_t &align_offset,
+    const int64_t align,
+    int64_t &align_offset,
     int64_t &align_size)
 {
-  align_offset = static_cast<int32_t>(lower_align(static_cast<int64_t>(offset), DIO_READ_ALIGN_SIZE));
-  align_size = upper_align(size + static_cast<int64_t>(offset) - align_offset, DIO_READ_ALIGN_SIZE);
+  align_offset = lower_align(offset, align);
+  align_size = upper_align(size + offset - align_offset, align);
 }
 
 typedef ObRefHolder<ObIORequest> RequestHolder;

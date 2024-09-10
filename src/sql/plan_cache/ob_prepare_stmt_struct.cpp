@@ -612,16 +612,15 @@ bool ObPsStmtInfo::check_erase_inc_ref_count()
 void ObPsStmtInfo::dec_ref_count()
 {
   LOG_TRACE("ps info dec ref count", K(*this));
-  int64_t ref_count = ATOMIC_SAF(&ref_count_, 1);
-  if (ref_count > 0) {
-    if (ref_count == 1) {
+  int64_t cur_ref_count = ATOMIC_LOAD(&ref_count_);
+  if (cur_ref_count > 1) {
+    if (cur_ref_count == 2) {
       last_closed_timestamp_ = common::ObTimeUtility::current_time();
     }
-    LOG_TRACE("ps info dec ref count", K(ref_count), K(*this));
-  } else if (0 == ref_count) {
-    LOG_INFO("free ps info", K(ref_count), K(*this));
-  } else if (ref_count < 0) {
-    BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "ObPsStmtInfo %p ref count < 0, ref_count = %ld", this, ref_count);
+    LOG_TRACE("ps info dec ref count", K(cur_ref_count), K(*this));
+    ATOMIC_DEC(&ref_count_);
+  } else {
+    BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "ObPsStmtInfo %p, cur_ref_count = %ld", this, cur_ref_count);
   }
   return;
 }

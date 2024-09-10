@@ -105,7 +105,7 @@ const char *ob_sql_type_str(ObObjType type)
       "GEOMETRY",
       "UDT",
       "DECIMAL_INT",
-      "COLLECTION",
+      "ARRAY",
       "MYSQL_DATE",
       "MYSQL_DATETIME",
       "ROARINGBITMAP",
@@ -165,7 +165,7 @@ const char *ob_sql_type_str(ObObjType type)
       "SDO_GEOMETRY",
       "UDT",
       "DECIMAL_INT",
-      "COLLECTION",
+      "ARRAY",
       "MYSQL_DATE",
       "MYSQL_DATETIME",
       "ROARINGBITMAP",
@@ -549,6 +549,21 @@ int ob_udt_sub_type_str(char *buff,
   return ret;
 }
 
+int ob_collection_str(const ObObjType &type, const common::ObIArray<ObString> &type_info, char *buff, int64_t buff_length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ob_is_collection_sql_type(type)) || type_info.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected column type", K(ret), K(type), K(type_info.count()));
+  } else {
+    ObString cur_str = type_info.at(0);
+    if (OB_FAIL(databuff_printf(buff, buff_length, pos, "%.*s", cur_str.length(), cur_str.ptr()))) {
+      LOG_WARN("fail to print array type info", K(ret), K(buff_length), K(pos));
+    }
+  }
+  return ret;
+}
+
 int ob_enum_or_set_str(const ObObjMeta &obj_meta, const common::ObIArray<ObString> &type_info, char *buff, int64_t buff_length, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -706,10 +721,11 @@ int ob_sql_type_str_with_coll(char *buff,
     int64_t precision,
     int64_t scale,
     ObCollationType coll_type,
+    const common::ObIArray<ObString> &type_info,
     const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, sub_type))) {
+  if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, type_info, sub_type))) {
     LOG_WARN("fail to get data type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
   } else if (lib::is_mysql_mode() && ob_is_string_type(type) && CS_TYPE_BINARY != coll_type) {
       if (ObCharset::is_default_collation(coll_type)) {
@@ -733,6 +749,7 @@ int ob_sql_type_str(char *buff,
     int64_t precision,
     int64_t scale,
     ObCollationType coll_type,
+    const common::ObIArray<ObString> &type_info,
     const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
@@ -813,6 +830,11 @@ int ob_sql_type_str(char *buff,
     if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, dummy_arr, sub_type, true))) {
       LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
     }
+  } else if (ob_is_collection_sql_type(type)) {
+    int64_t pos = 0;
+    if (OB_FAIL(ob_collection_str(type, type_info, buff, buff_length, pos))) {
+      LOG_WARN("fail to get enum_or_set str", K(ret), K(type), K(type_info), K(buff_length), K(pos));
+    }
   } else {
     ret = sql_type_name[OB_LIKELY(type < ObMaxType) ? type : ObMaxType](buff, buff_length, pos, length, precision, scale, coll_type);
   }
@@ -823,6 +845,7 @@ int ob_sql_type_str(char *buff,
     int64_t buff_length,
     ObObjType type,
     ObCollationType coll_type,
+    const common::ObIArray<ObString> &type_info,
     const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
@@ -902,6 +925,11 @@ int ob_sql_type_str(char *buff,
     if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, geo_type))) {
       LOG_WARN("fail to get geometry sub type str", K(ret), K(geo_type), K(buff), K(buff_length), K(pos));
     }
+  } else if (ob_is_collection_sql_type(type)) {
+    int64_t pos = 0;
+    if (OB_FAIL(ob_collection_str(type, type_info, buff, buff_length, pos))) {
+      LOG_WARN("fail to get enum_or_set str", K(ret), K(type), K(type_info), K(buff_length), K(pos));
+    }
   } else if (OB_ISNULL(sql_type_name[type])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("function pointer is NULL", K(type), K(ret));
@@ -939,6 +967,10 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
      if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, type_info, sub_type))) {
        LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
      }
+  } else if (obj_meta.is_collection_sql_type()) {
+    if (OB_FAIL(ob_collection_str(obj_meta.get_type(), type_info, buff, buff_length, pos))) {
+      LOG_WARN("fail to get enum_or_set str", K(ret), K(obj_meta), K(accuracy), K(buff_length), K(pos));
+    }
   } else {
     ObObjType datatype = obj_meta.get_type();
     ObCollationType coll_type = obj_meta.get_collation_type();
@@ -952,7 +984,7 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
     if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos,
                                 datatype, length,
                                 precision_or_length_semantics,
-                                accuracy.get_scale(), coll_type, sub_type))) {
+                                accuracy.get_scale(), coll_type, type_info, sub_type))) {
       LOG_WARN("fail to print sql type", K(ret), K(obj_meta), K(accuracy));
     }
   }

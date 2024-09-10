@@ -115,7 +115,7 @@ void TestBackupIndexIterator::SetUp()
 
   ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
   ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
 
   if (OB_INIT_TWICE == ret) {
     ret = OB_SUCCESS;
@@ -133,7 +133,7 @@ void TestBackupIndexIterator::SetUp()
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
-  tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+  tf_mgr->get_sn_file_manager().page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
 
@@ -214,7 +214,7 @@ void TestBackupIndexIterator::init_macro_range_index_iterator(ObBackupMacroRange
 {
   int ret = OB_SUCCESS;
   ret = iter.init(task_id_, backup_dest_, tenant_id_, backup_set_desc_, ls_id_, backup_data_type_,
-      turn_id_, retry_id_);
+      turn_id_, retry_id_, dest_id_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 

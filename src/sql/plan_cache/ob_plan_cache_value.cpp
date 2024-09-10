@@ -592,61 +592,85 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
             } else {
               SQL_PC_LOG(TRACE, "failed to select plan in plan set", K(ret));
             }
-          } else if (NULL != params) {
-            // set res map rule
-            uint64_t rule_id = plan_set->res_map_rule_id_;
-            int64_t param_idx = plan_set->res_map_rule_param_idx_;
-            uint64_t tenant_id = OB_INVALID_ID;
-            ObString param_text;
-            ObCollationType cs_type = CS_TYPE_INVALID;
-            if (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX
-                && pc_ctx.sql_ctx_.enable_sql_resource_manage_) {
-              if (OB_UNLIKELY(param_idx < 0 || param_idx >= params->count())) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_ERROR("unexpected res map rule param idx", K(ret), K(rule_id), K(param_idx), K(params->count()));
-              } else if (OB_FAIL(session->get_collation_connection(cs_type))) {
-                LOG_WARN("get collation connection failed", K(ret));
-              } else if (OB_INVALID_ID == (tenant_id = session->get_effective_tenant_id())) {
-                ret = OB_ERR_UNEXPECTED;
-                SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
-              } else if (OB_FAIL(ObObjCaster::get_obj_param_text(
-                                      params->at(plan_set->res_map_rule_param_idx_),
-                                      pc_ctx.raw_sql_, pc_ctx.allocator_,
-                                      cs_type, param_text))) {
-                LOG_WARN("get obj param text failed", K(ret));
-              } else {
-                uint64_t group_id = G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
-                                      tenant_id,
-                                      plan_set->res_map_rule_id_,
-                                      session->get_user_name(),
-                                      param_text);
-                if (OB_INVALID_ID == group_id) {
-                   // OB_INVALID_ID means current user+param_value is not defined in mapping rule,
-                   // get group_id according to current user.
-                  if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
-                                tenant_id, session->get_user_id(), group_id))) {
-                    LOG_WARN("get group id by user failed", K(ret));
-                  } else if (OB_INVALID_ID == group_id) {
-                    // if not set consumer_group for current user, use OTHER_GROUP by default.
-                    group_id = 0;
-                  }
-                }
-                if (OB_SUCC(ret)) {
-                  session->set_expect_group_id(group_id);
-                  if (group_id == THIS_WORKER.get_group_id()) {
-                    // do nothing if equals to current group id.
-                  } else if (session->get_is_in_retry()
-                            && OB_NEED_SWITCH_CONSUMER_GROUP
-                                == session->get_retry_info().get_last_query_retry_err()) {
-                    LOG_ERROR("use unexpected group when retry, maybe set packet retry failed before",
-                              K(group_id), K(THIS_WORKER.get_group_id()), K(rule_id), K(param_idx));
+          } else if (pc_ctx.sql_ctx_.enable_sql_resource_manage_) {
+            uint64_t rule_id = plan_set->resource_map_rule_.get_res_map_rule_id();
+            int64_t param_idx = plan_set->resource_map_rule_.get_res_map_rule_param_idx();
+            if (plan_set->resource_map_rule_.use_hint_control_resource()
+                || (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX)) {
+              uint64_t final_choosed_group_id = OB_INVALID_ID;
+              // 1. check hint first
+              if (plan_set->resource_map_rule_.use_hint_control_resource()) {
+                share::ObGroupName group_name;
+                group_name.set_value(plan_set->resource_map_rule_.get_resource_group());
+                ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+                if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name,
+                                                          final_choosed_group_id))) {
+                  if (OB_HASH_NOT_EXIST == ret) {
+                    // create directive and delete it immediately，may haven't beed flush into disk
+                    // storage group not exist, or hint is invalid，need to try to match column rule
+                    ret = OB_SUCCESS;
+                    LOG_TRACE("resource group specified by hint did not exist",
+                              K(plan_set->resource_map_rule_.get_resource_group()), K(tenant_id));
                   } else {
-                    ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+                    LOG_WARN("fail get group id", K(ret), K(final_choosed_group_id), K(group_name));
                   }
-                  LOG_TRACE("get expect rule id", K(ret), K(group_id),
-                            K(THIS_WORKER.get_group_id()), K(session->get_expect_group_id()),
-                            K(pc_ctx.raw_sql_));
                 }
+              } else {
+                // 2. check col res map rule
+                uint64_t tenant_id = OB_INVALID_ID;
+                ObString param_text;
+                ObCollationType cs_type = CS_TYPE_INVALID;
+                if (OB_UNLIKELY(param_idx < 0 || param_idx >= params->count())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_ERROR("unexpected res map rule param idx", K(ret), K(rule_id), K(param_idx),
+                            K(params->count()));
+                } else if (OB_FAIL(session->get_collation_connection(cs_type))) {
+                  LOG_WARN("get collation connection failed", K(ret));
+                } else if (OB_INVALID_ID == (tenant_id = session->get_effective_tenant_id())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
+                } else if (OB_FAIL(ObObjCaster::get_obj_param_text(
+                             params->at(param_idx), pc_ctx.raw_sql_, pc_ctx.allocator_, cs_type,
+                             param_text))) {
+                  LOG_WARN("get obj param text failed", K(ret));
+                } else {
+                  final_choosed_group_id =
+                    G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
+                      tenant_id, rule_id, session->get_user_name(), param_text);
+                }
+              }
+              // 3.use default resource group if not match any resource group
+              // OB_INVALID_ID means current neither
+              // resource group specified by hint
+              // nor
+              // user+param_value column rule
+              // is in used
+              // get group_id according to current user.
+              if (OB_SUCC(ret) && OB_INVALID_ID == final_choosed_group_id) {
+                if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
+                      tenant_id, session->get_user_id(), final_choosed_group_id))) {
+                  LOG_WARN("get group id by user failed", K(ret));
+                } else if (OB_INVALID_ID == final_choosed_group_id) {
+                  // if not set consumer_group for current user, use OTHER_GROUP by default.
+                  final_choosed_group_id = 0;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (final_choosed_group_id == THIS_WORKER.get_group_id()) {
+                  // do nothing if equals to current group id.
+                } else if (session->get_is_in_retry()
+                           && OB_NEED_SWITCH_CONSUMER_GROUP
+                                == session->get_retry_info().get_last_query_retry_err()) {
+                  LOG_ERROR("use unexpected group when retry, maybe set packet retry failed before",
+                            K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
+                            K(plan_set->resource_map_rule_));
+                } else {
+                  session->set_expect_group_id(final_choosed_group_id);
+                  ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+                }
+                LOG_TRACE("get expect rule id", K(ret), K(final_choosed_group_id),
+                          K(THIS_WORKER.get_group_id()), K(session->get_expect_group_id()),
+                          K(pc_ctx.raw_sql_));
               }
             }
             break; //这个地方建议保留，如果去掉，需要另外加标记在for()中判断，并且不使用上面的for循环的宏；

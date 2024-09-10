@@ -65,7 +65,7 @@ public:
   bool handlePacketQueue(rpc::ObRequest *req, void *args) override final
   {
     ObIAllocator &alloc = THIS_WORKER.get_sql_arena_allocator();
-    const observer::ObGlobalContext gctx;
+    const observer::ObGlobalContext &gctx = observer::ObGlobalContext::get_instance();
     ObReqProcessor *processor = NULL;
     ObRpcPacketCode pcode = reinterpret_cast<const obrpc::ObRpcPacket &>(req->get_packet()).get_pcode();
     if (OB_RPC_REVERSE_KEEPALIVE == pcode) {

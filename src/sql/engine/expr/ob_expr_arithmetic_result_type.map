@@ -53,7 +53,7 @@ static constexpr ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
     ObDoubleType,      /* ObDecimalIntType  */
-    ObMaxType,         /*  ObCollectionSQLType*/
+    ObCollectionSQLType,         /*  ObCollectionSQLType*/
     ObDoubleType,      /* ObMySQLDateType */
     ObDoubleType,      /* ObMySQLDateTimeType */
     ObMaxType,         /* ObRoaringBitmapType */
@@ -1351,7 +1351,7 @@ static constexpr ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
     ObDoubleType,      /* ObDecimalIntType  */
-    ObMaxType,         /*  ObCollectionSQLType*/
+    ObCollectionSQLType,         /*  ObCollectionSQLType*/
     ObDoubleType,      /* ObMySQLDateType */
     ObDoubleType,      /* ObMySQLDateTimeType */
     ObMaxType,         /* ObRoaringBitmapType */
@@ -2986,7 +2986,7 @@ static constexpr ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
   },
   /*ObCollectionSqlType*/
   {
-    ObMaxType,         /* NullType  */
+    ObCollectionSQLType,         /* NullType  */
     ObMaxType,         /* TinyIntType  */
     ObMaxType,         /* SmallIntType  */
     ObMaxType,         /* MediumIntType  */
@@ -3008,7 +3008,7 @@ static constexpr ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* DateType  */
     ObMaxType,         /* TimeType  */
     ObMaxType,         /* YearType  */
-    ObMaxType,         /* VarcharType  */
+    ObCollectionSQLType,         /* VarcharType  */
     ObMaxType,         /* CharType  */
     ObMaxType,         /* HexStringType  */
     ObMaxType,         /* ExtendType  */
@@ -3037,7 +3037,7 @@ static constexpr ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
     ObMaxType,         /* ObDecimalIntType */
-    ObMaxType,         /*  ObCollectionSQLType*/
+    ObCollectionSQLType, /* ObCollectionSQLType*/
     ObMaxType,         /* ObMySQLDateType */
     ObMaxType,         /* ObMySQLDateTimeType */
     ObMaxType,         /* ObRoaringBitmapType */

@@ -79,6 +79,7 @@ enum ObResourceType
   RES_CPU = 0,
   RES_MEM = 1,
   RES_LOG_DISK = 2,
+  RES_DATA_DISK = 3,
   RES_MAX
 };
 

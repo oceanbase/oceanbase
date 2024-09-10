@@ -24,7 +24,8 @@ class IPalfEnvImpl;
 enum class LogSharedTaskType
 {
   LogHandleSubmitType = 1,
-  LogFillCacheType = 2,
+  LogFastRebuildType = 2,
+  LogFillCacheType = 3,
 };
 
 inline const char *shared_type_2_str(const LogSharedTaskType type)
@@ -33,6 +34,7 @@ inline const char *shared_type_2_str(const LogSharedTaskType type)
   switch(type)
   {
     EXTRACT_SHARED_TYPE(LogHandleSubmitType);
+    EXTRACT_SHARED_TYPE(LogFastRebuildType);
     EXTRACT_SHARED_TYPE(LogFillCacheType);
     default:
       return "Invalid Type";

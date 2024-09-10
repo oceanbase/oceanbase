@@ -17,6 +17,7 @@
 #include "share/table/ob_ttl_util.h"
 #include "share/table/ob_table_ttl_common.h"
 #include "share/tablet/ob_tablet_info.h"
+#include "share/vector_index/ob_plugin_vector_index_scheduler.h"
 
 namespace oceanbase
 {
@@ -160,6 +161,8 @@ public:
   int safe_to_destroy(bool &is_safe);
   int sync_all_dirty_task(common::ObIArray<ObTabletID>& dirty_tasks);
   void run_task();
+  share::ObPluginVectorIndexLoadScheduler &get_vector_idx_scheduler() { return vector_idx_scheduler_; }
+
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
@@ -274,6 +277,7 @@ private:
   bool is_timer_start_;
   int64_t periodic_delay_;
   OBTTLTimerPeriodicTask periodic_task_;
+  share::ObPluginVectorIndexLoadScheduler vector_idx_scheduler_;
   common::ObSpinLock lock_;
   storage::ObLS *ls_;
   int tg_id_;

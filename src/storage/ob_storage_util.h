@@ -96,11 +96,21 @@ int check_skip_by_monotonicity(sql::ObBlackFilterExecutor &filter,
 
 int cast_obj(const common::ObObjMeta &src_meta, common::ObIAllocator &cast_allocator, common::ObObj &obj);
 
-int init_expr_vector_header(
+int distribute_attrs_on_rich_format_columns(const int64_t row_count, const int64_t vec_offset,
+                                            sql::ObExpr &expr, sql::ObEvalCtx &eval_ctx);
+
+OB_INLINE int init_expr_vector_header(
     sql::ObExpr &expr,
     sql::ObEvalCtx &eval_ctx,
     const int64_t size,
-    const VectorFormat format = VectorFormat::VEC_UNIFORM);
+    const VectorFormat format = VectorFormat::VEC_UNIFORM)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.init_vector(eval_ctx, format, size, true))) {
+    STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(expr));
+  }
+  return ret;
+}
 
 OB_INLINE int init_exprs_uniform_header(
     const sql::ObExprPtrIArray *exprs,
@@ -122,10 +132,55 @@ OB_INLINE int init_exprs_uniform_header(
   return ret;
 }
 
-int init_exprs_new_format_header(
+OB_INLINE int init_exprs_vector_header(
+    const sql::ObExprPtrIArray *exprs,
+    sql::ObEvalCtx &eval_ctx,
+    const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != exprs) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs->count(); ++i) {
+      sql::ObExpr *expr = exprs->at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected null expr", K(ret), KPC(exprs));
+      } else if (OB_FAIL(init_expr_vector_header(*expr, eval_ctx, size, expr->get_default_res_format()))) {
+        STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(expr));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_INLINE int init_exprs_new_format_header(
     const common::ObIArray<int32_t> &cols_projector,
     const sql::ObExprPtrIArray &exprs,
-    sql::ObEvalCtx &eval_ctx);
+    sql::ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
+    sql::ObExpr *expr = exprs.at(i);
+    if (expr->is_nested_expr()) {
+      if (OB_FAIL(expr->init_vector(eval_ctx, VEC_DISCRETE, eval_ctx.max_batch_size_))) {
+        STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
+      }
+    } else if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
+      STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
+    }
+  }
+  return ret;
+}
+
+OB_INLINE void set_not_null_for_exprs(
+    const common::ObIArray<int32_t> &cols_projector,
+    const sql::ObExprPtrIArray &exprs,
+    sql::ObEvalCtx &eval_ctx)
+{
+  for (int64_t i = 0; i < cols_projector.count(); ++i) {
+    sql::ObExpr *expr = exprs.at(i);
+    expr->set_all_not_null(eval_ctx, eval_ctx.max_batch_size_);
+  }
+}
 
 OB_INLINE bool can_do_ascii_optimize(common::ObCollationType cs_type)
 {
@@ -304,10 +359,11 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
 struct ObDatumComparator
 {
 public:
-  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal)
+  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal, bool reverse=false)
     : cmp_func_(cmp_func),
       ret_(ret),
-      equal_(equal)
+      equal_(equal),
+      reverse_(reverse)
   {}
   ~ObDatumComparator() {}
   OB_INLINE bool operator() (const ObDatum &datum1, const ObDatum &datum2)
@@ -316,17 +372,20 @@ public:
     int cmp_ret = 0;
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(cmp_func_(datum1, datum2, cmp_ret))) {
+    } else if (!reverse_ && OB_FAIL(cmp_func_(datum1, datum2, cmp_ret))) {
+      STORAGE_LOG(WARN, "Failed to compare datum", K(ret), K(datum1), K(datum2), K_(cmp_func));
+    } else if (reverse_ && OB_FAIL(cmp_func_(datum2, datum1, cmp_ret))) {
       STORAGE_LOG(WARN, "Failed to compare datum", K(ret), K(datum1), K(datum2), K_(cmp_func));
     } else if (0 == cmp_ret && !equal_) {
       equal_ = true;
     }
-    return cmp_ret < 0;
+    return reverse_ ? cmp_ret > 0 : cmp_ret < 0;
   }
 private:
   ObDatumCmpFuncType cmp_func_;
   int &ret_;
   bool &equal_;
+  bool reverse_;
 };
 
 enum class ObFilterInCmpType {

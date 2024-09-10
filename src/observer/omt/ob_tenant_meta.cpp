@@ -32,7 +32,8 @@ int ObTenantMeta::build(const share::ObUnitInfoGetter::ObTenantConfig &unit,
   } else {
     unit_ = unit;
     super_block_ = super_block;
-    create_status_ = ObTenantCreateStatus::CREATING;
+    create_status_ = storage::ObTenantCreateStatus::CREATING;
+    epoch_ = 0;
   }
 
   return ret;

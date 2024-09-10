@@ -115,7 +115,8 @@ int ObAllBalanceGroupBuilder::prepare(bool need_load_tablet_size)
   } else if (OB_FAIL(tablet_to_ls_.build(tenant_id_, *sql_proxy_))) {
     LOG_WARN("build tablet to LS info fail", KR(ret), K(tenant_id_));
   } else if (FALSE_IT(step_time = ObTimeUtility::current_time())) {
-  } else if (need_load_tablet_size && OB_FAIL(prepare_tablet_data_size_())) {
+  } else if (need_load_tablet_size && !GCTX.is_shared_storage_mode()
+             && OB_FAIL(prepare_tablet_data_size_())) {
     LOG_WARN("prepare tablet data size fail", KR(ret));
   }
 

@@ -282,17 +282,21 @@ int ObCacheObjIterator::operator()(common::hash::HashMapPair<ObCacheObjID, ObILi
 int ObCacheObjIterator::next(int64_t &tenant_id, ObCacheObjGuard &guard)
 {
   int ret = OB_SUCCESS;
+  bool find = false;
   do {
     if (plan_id_array_.count() == 0) {
       if (tenant_id_array_idx_ < tenant_id_array_.count() - 1) {
         ++tenant_id_array_idx_;
         tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
         MTL_SWITCH(tenant_id) {
-          cur_plan_cache_ = MTL(ObPlanCache*);
-          if (OB_ISNULL(cur_plan_cache_)) {
+          ObPlanCache* plan_cache = MTL(ObPlanCache*);
+          if (OB_ISNULL(plan_cache)) {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "cur_plan_cache_ is NULL", K(ret));
-          } else if (OB_FAIL(cur_plan_cache_->foreach_cache_obj(*this))) {
+            SERVER_LOG(WARN, "plan_cache is NULL", K(ret));
+          } else if (!plan_cache->is_inited()) {
+            // not inited
+            SERVER_LOG(INFO, "plan cache is not inited, ", K(ret), K(tenant_id));
+          } else if (OB_FAIL(plan_cache->foreach_cache_obj(*this))) {
             SERVER_LOG(WARN, "fail to traverse plan cache obj", K(ret));
           }
         } else {
@@ -307,23 +311,35 @@ int ObCacheObjIterator::next(int64_t &tenant_id, ObCacheObjGuard &guard)
       if (plan_id_array_.count() == 0) {
       } else {
         uint64_t plan_id = 0;
-        if (OB_FAIL(plan_id_array_.pop_back(plan_id))) {
-          SERVER_LOG(WARN, "failed to pop back plan id", K(ret));
-        } else if (OB_ISNULL(cur_plan_cache_)) {
+        tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
+        MTL_SWITCH(tenant_id) {
+          ObPlanCache* plan_cache = MTL(ObPlanCache*);
+          if (OB_ISNULL(plan_cache)) {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "cur_plan_cache_ is NULL", K(ret));
-        } else if (OB_FAIL(cur_plan_cache_->ref_cache_obj(plan_id, guard))) {
-          if (ret == OB_HASH_NOT_EXIST) {
-            ret = OB_SUCCESS;
+            SERVER_LOG(WARN, "plan_cache is NULL", K(ret));
+          } else if (OB_FAIL(plan_id_array_.pop_back(plan_id))) {
+            SERVER_LOG(WARN, "failed to pop back plan id", K(ret));
+          } else if (OB_ISNULL(plan_cache)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "plan_cache is NULL", K(ret));
+          } else if (OB_FAIL(plan_cache->ref_cache_obj(plan_id, guard))) {
+            if (ret == OB_HASH_NOT_EXIST) {
+              ret = OB_SUCCESS;
+            } else {
+              SERVER_LOG(WARN, "fail to ref physical plan", K(ret));
+            }
           } else {
-            SERVER_LOG(WARN, "fail to ref physical plan", K(ret));
+            find = true;
           }
         } else {
-          break;
+          // tenant has been deleted, clear all plan id of the tenant
+          plan_id_array_.reuse();
+          ret = OB_SUCCESS;
+          SERVER_LOG(INFO, "fail to switch tenant, may be deleted", K(ret), K(tenant_id));
         }
       }
     }
-  } while (OB_SUCC(ret));
+  } while (OB_SUCC(ret) && !find);
   return ret;
 }
 

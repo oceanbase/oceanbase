@@ -19,7 +19,13 @@ using namespace storage;
 namespace blocksstable {
 
 ObDualMacroMetaIterator::ObDualMacroMetaIterator()
-  : allocator_(nullptr), macro_iter_(), sec_meta_iter_(), iter_end_(false), is_inited_(false) {}
+    : allocator_(nullptr),
+      macro_iter_(),
+      sec_meta_iter_(),
+      iter_end_(false),
+      is_inited_(false)
+{
+}
 
 void ObDualMacroMetaIterator::reset()
 {
@@ -80,12 +86,14 @@ int ObDualMacroMetaIterator::get_next_macro_block(ObMacroBlockDesc &block_desc)
   } else if (OB_UNLIKELY(iter_end_)) {
     ret = OB_ITER_END;
   } else if (OB_SUCC(macro_iter_.get_next_macro_block(block_desc))) {
-    if (OB_FAIL(sec_meta_iter_.get_next(*macro_meta))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sec_meta_iter_.get_next(*macro_meta))) {
       if (OB_ITER_END == ret) {
         ret = OB_ERR_UNEXPECTED;
       }
       LOG_WARN("Fail to get next secondary meta iterator", K(ret), K_(macro_iter), K_(sec_meta_iter));
-    } else if (OB_UNLIKELY(block_desc.macro_block_id_ != macro_meta->get_macro_id())) {
+    } else if (OB_UNLIKELY(block_desc.macro_block_id_ !=
+                           macro_meta->get_macro_id())) {
       ret = OB_ERR_SYS;
       LOG_WARN("Logic macro block id from iterated macro block and merge info not match",
           K(ret), K(block_desc), KPC(macro_meta));
@@ -101,6 +109,20 @@ int ObDualMacroMetaIterator::get_next_macro_block(ObMacroBlockDesc &block_desc)
     } else {
       iter_end_ = true;
     }
+  }
+  return ret;
+}
+
+int ObDualMacroMetaIterator::get_current_clustered_index_info(
+    const blocksstable::ObMicroBlockData *&clustered_micro_block_data)
+{
+  int ret = OB_SUCCESS;
+  clustered_micro_block_data = nullptr;
+  if (OB_FAIL(macro_iter_.get_current_clustered_index_info(clustered_micro_block_data))) {
+    LOG_WARN("fail to get current clustered index info", K(ret));
+  } else {
+    LOG_DEBUG("succeed to get current clustered index info in dual iter",
+              K(ret), KPC(clustered_micro_block_data));
   }
   return ret;
 }

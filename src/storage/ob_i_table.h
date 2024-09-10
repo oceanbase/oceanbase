@@ -254,7 +254,7 @@ public:
   virtual int64_t get_max_merged_trans_version() const { return get_snapshot_version(); }
   virtual int get_frozen_schema_version(int64_t &schema_version) const = 0;
   OB_INLINE uint16_t get_column_group_id() const { return key_.get_column_group_id(); }
-
+  OB_INLINE common::ObNewVersionRange &get_version_range() { return key_.version_range_; }
   virtual void inc_ref();
   virtual int64_t dec_ref();
   virtual int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }

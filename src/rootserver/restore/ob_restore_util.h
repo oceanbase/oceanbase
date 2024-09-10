@@ -14,6 +14,7 @@
 #define __OB_RS_RESTORE_UTIL_H__
 
 #include "share/ob_rpc_struct.h"
+#include "share/backup/ob_backup_struct.h"
 #include "share/restore/ob_physical_restore_table_operator.h"//PhysicalRestoreStatus
 #include "share/backup/ob_archive_struct.h"
 #include "share/backup/ob_archive_store.h" //ObSinglePieceDesc
@@ -272,6 +273,41 @@ private:
   bool is_inited_;
   share::ObPhysicalRestoreJob job_;
   DISALLOW_COPY_AND_ASSIGN(ObRestoreFailureChecker);
+};
+
+class ObRestoreStorageInfoFiller final
+{
+public:
+  ObRestoreStorageInfoFiller();
+  ~ObRestoreStorageInfoFiller();
+
+  int init(const uint64_t tenant_id,
+      const share::ObPhysicalRestoreJob &job,
+      common::ObISQLClient &sql_proxy);
+
+  int fill_backup_storage_info();
+
+private:
+  int do_with_backup_set_list_(int64_t &data_dest_id);
+  int do_with_backup_piece_list_(const int64_t data_dest_id);
+
+  int get_next_dest_id_(int64_t &dest_id); // fetch id from inner table
+  int insert_backup_storage_info_for_set_(
+      const share::ObBackupSetPath &backup_set_path,
+      const int64_t dest_id);
+  int insert_backup_storage_info_for_piece_(
+      const share::ObRestoreLogPieceBriefInfo &backup_piece_info,
+      const int64_t dest_id);
+
+private:
+  bool is_inited_;
+  uint64_t tenant_id_;
+  bool is_restore_using_complement_log_;
+  share::ObPhysicalRestoreJob job_;
+  common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
+  common::ObArray<share::ObRestoreLogPieceBriefInfo> backup_piece_list_;
+  common::ObISQLClient *sql_proxy_;
+  DISALLOW_COPY_AND_ASSIGN(ObRestoreStorageInfoFiller);
 };
 
 }

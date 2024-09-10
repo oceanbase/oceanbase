@@ -45,6 +45,8 @@ int ObTenantTabletTTLMgr::init(ObLS *ls)
     LOG_WARN("fail to get ls", KR(ret));
   } else if (OB_FAIL(init(MTL_ID()))) {
     LOG_WARN("fail to init tenant ttl mgr", KR(ret), K(MTL_ID()));
+  } else if (OB_FAIL(vector_idx_scheduler_.init(MTL_ID(), ls, tg_id_))) {
+    LOG_WARN("fail to init vector idx scheduler", KR(ret), K(MTL_ID()));
   } else {
     ls_ = ls;
     sql_proxy_ = GCTX.sql_proxy_;
@@ -66,6 +68,8 @@ int ObTenantTabletTTLMgr::init(const uint64_t tenant_id)
     LOG_WARN("schema service is null", KR(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantTabletTTLMgr, tg_id_))) {
     LOG_WARN("fail to init timer", KR(ret));
+  } else if (OB_FAIL(TG_START(tg_id_))) {
+    LOG_WARN("fail to create ObTenantTabletTTLMgr thread", K(ret), K_(tg_id));
   } else if (OB_FAIL(alloc_tenant_info(tenant_id))) {
     LOG_WARN("fail to alloc tenant info", KR(ret), K(MTL_ID()));
   } else {
@@ -137,11 +141,9 @@ int ObTenantTabletTTLMgr::start()
 {
   int ret = OB_SUCCESS;
   FLOG_INFO("tenant_tablet_ttl_mgr: begin to start", KPC_(ls), K_(tenant_id));
-  if (IS_NOT_INIT) {
+  if (IS_NOT_INIT || tg_id_ == 0) {
     ret = OB_NOT_INIT;
-    LOG_WARN("tablet ttl mgr not init", KR(ret));
-  } else if (OB_FAIL(TG_START(tg_id_))) {
-    LOG_WARN("fail to create ObTenantTabletTTLMgr thread", K(ret), K_(tg_id));
+    LOG_WARN("tablet ttl mgr not init", KR(ret), K(tg_id_));
   } else if (OB_FAIL(TG_SCHEDULE(tg_id_, periodic_task_, periodic_delay_, true))) {
     LOG_WARN("fail to schedule periodic task", KR(ret), K_(tg_id));
   } else {
@@ -163,6 +165,7 @@ void ObTenantTabletTTLMgr::stop()
     // 2) acquire ObTenantTabletTTLMgr's lock_
     TG_STOP(tg_id_);
     is_timer_start_ = false;
+    vector_idx_scheduler_.stop();
     common::ObSpinLockGuard guard(lock_);
     // set is_leader_ to false to ensure after stop, not new TTL dag task will be generate,
     // i.e., dag_ref won't increase anymore
@@ -1327,6 +1330,9 @@ int ObTenantTabletTTLMgr::safe_to_destroy(bool &is_safe)
       LOG_WARN("tenant ttl tablet mgr can't destroy", K(dag_ref));
     }
     is_safe = false;
+  }
+  if (is_safe && OB_SUCC(ret) && OB_FAIL(vector_idx_scheduler_.safe_to_destroy(is_safe))) {
+    LOG_WARN("fail to check vector index scheduler safe to destroy", KR(ret), K(is_safe));
   }
   return ret;
 }

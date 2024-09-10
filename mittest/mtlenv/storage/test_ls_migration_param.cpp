@@ -74,7 +74,7 @@ void TestLSMigrationParam::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;
@@ -253,7 +253,8 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/,
+      true/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_commit_scn;
@@ -275,6 +276,7 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   ret = src_handle.get_obj()->build_migration_tablet_param(tablet_param);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(tablet_param.is_valid());
+  ASSERT_TRUE(tablet_param.micro_index_clustered_);
 
   ObTabletMapKey dst_key;
   dst_key.ls_id_ = TEST_LS_ID;
@@ -294,6 +296,8 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   LOG_INFO("dump meta", K(dst_meta));
   ASSERT_TRUE(src_meta.is_valid());
   ASSERT_TRUE(dst_meta.is_valid());
+  ASSERT_EQ(true, src_meta.micro_index_clustered_);
+  ASSERT_EQ(true, dst_meta.micro_index_clustered_);
 
   // check create_schema_version_ in tablet meta/migrate param
   ASSERT_TRUE(table_schema.get_schema_version() == src_meta.create_schema_version_);
@@ -334,7 +338,8 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/,
+      true/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_commit_scn;
@@ -373,6 +378,7 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   ret = des_param.deserialize(buf, buf_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(des_param.is_valid());
+  ASSERT_EQ(true, des_param.micro_index_clustered_);
   OB_LOG(INFO, "cooper", K(des_param));
 }
 

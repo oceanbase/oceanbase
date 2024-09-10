@@ -78,6 +78,9 @@ int ObExprIsBase::calc_result_type2(ObExprResType &type,
       }
     } else {
       type1.set_calc_type(type1.get_type());
+      if (ob_is_collection_sql_type(type1.get_type())) {
+        type1.set_calc_subschema_id(type1.get_subschema_id()); // avoid invalid cast
+      }
       // query range extract check the calc type of %type.
       type.set_calc_meta(type1.get_calc_meta());
     }

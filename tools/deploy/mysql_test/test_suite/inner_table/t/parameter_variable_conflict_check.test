@@ -34,7 +34,7 @@ connection my_mysql;
 # sql start
 SELECT a.name as para_name, b.name as var_name 
 FROM V$OB_PARAMETERS a, __all_sys_variable b 
-WHERE a.name = b.name;
+WHERE a.name = b.name order by para_name;
 # sql end
 disconnect my_mysql;
  

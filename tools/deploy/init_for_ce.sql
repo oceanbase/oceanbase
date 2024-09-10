@@ -13,6 +13,7 @@ alter system set enable_syslog_wf=false;
 set @@session.ob_query_timeout = 200000000;
 
 source init_create_tenant_routines.sql;
+source drop_all_tenants_except_sys_mysql_oracle.sql;
 
 call adjust_sys_resource();
 call create_tenant_with_arg('mysql', 'mysql', '2c2g', '');

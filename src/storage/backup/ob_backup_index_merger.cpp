@@ -17,6 +17,7 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_operator.h"
+#include "common/storage/ob_device_common.h"
 #include "share/backup/ob_backup_path.h"
 
 #include <algorithm>
@@ -586,14 +587,23 @@ int ObIBackupIndexMerger::get_all_retries_(const int64_t task_id, const uint64_t
   return ret;
 }
 
-int ObIBackupIndexMerger::open_file_writer_(const share::ObBackupPath &path, const share::ObBackupStorageInfo *storage_info)
+int ObIBackupIndexMerger::open_file_writer_(const share::ObBackupPath &path,
+    const share::ObBackupStorageInfo *storage_info, const int64_t dest_id)
 {
   int ret = OB_SUCCESS;
   common::ObBackupIoAdapter util;
   const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
+  ObStorageIdMod mod;
+  mod.storage_id_ = dest_id;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
   if (OB_FAIL(util.mk_parent_dir(path.get_obstr(), storage_info))) {
     LOG_WARN("failed to make parent dir", K(path), K(path), KP(storage_info));
-  } else if (OB_FAIL(util.open_with_access_type(dev_handle_, io_fd_, storage_info, path.get_obstr(), access_type))) {
+  } else if (OB_FAIL(util.open_with_access_type(dev_handle_,
+                                                io_fd_,
+                                                storage_info,
+                                                path.get_obstr(),
+                                                access_type,
+                                                mod))) {
     LOG_WARN("failed to open with access type", K(ret), K(path), KP(storage_info));
   } else {
     LOG_INFO("backup index merger open file writer", K(path), KP(storage_info));
@@ -907,7 +917,7 @@ int ObBackupMacroBlockIndexMerger::prepare_merge_ctx_(
     LOG_WARN("failed to assign array", K(ret));
   } else if (OB_FAIL(get_output_file_path_(merge_param, backup_path))) {
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
-  } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
+  } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info(), merge_param.dest_id_))) {
     LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
   } else if (OB_FAIL(prepare_file_write_ctx_(bandwidth_throttle, write_ctx_))) {
     LOG_WARN("failed to prepare file write ctx", K(ret));
@@ -983,7 +993,8 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
                  merge_param.ls_id_,
                  merge_param.backup_data_type_,
                  prev_tenant_index_turn_id,
-                 prev_tenant_index_retry_id))) {
+                 prev_tenant_index_retry_id,
+                 merge_param.dest_id_))) {
     LOG_WARN("failed to init backup macro range index iterator", K(ret), K(merge_param), K(prev_backup_set_desc), K(prev_tenant_index_retry_id));
   } else {
     iter = tmp_iter;
@@ -1038,6 +1049,7 @@ int ObBackupMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_level,
                      merge_param.backup_data_type_,
                      turn_id,
                      retry_id,
+                     merge_param.dest_id_,
                      true/*need_read_inner_table*/))) {
         LOG_WARN("failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id));
       } else {
@@ -1061,7 +1073,8 @@ int ObBackupMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_level,
                      ls_id,
                      merge_param.backup_data_type_,
                      turn_id,
-                     retry_id))) {
+                     retry_id,
+                     merge_param.dest_id_))) {
         LOG_WARN(
             "failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id), K(retry_id));
       } else {
@@ -1427,7 +1440,7 @@ int ObBackupMetaIndexMerger::prepare_merge_ctx_(
     LOG_WARN("failed to assign array", K(ret));
   } else if (OB_FAIL(get_output_file_path_(merge_param, backup_path))) {
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
-  } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
+  } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info(), merge_param.dest_id_))) {
     LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
   } else if (OB_FAIL(prepare_file_write_ctx_(bandwidth_throttle, write_ctx_))) {
     LOG_WARN("failed to prepare file write ctx", K(ret));
@@ -1481,7 +1494,8 @@ int ObBackupMetaIndexMerger::alloc_merge_iter_(const ObBackupIndexMergeParam &me
                  ls_id,
                  merge_param.backup_data_type_,
                  turn_id,
-                 retry_id))) {
+                 retry_id,
+                 merge_param.dest_id_))) {
     LOG_WARN("failed to init meta index iterator", K(ret), K(merge_param));
   } else {
     iter = tmp_iter;
@@ -1826,7 +1840,7 @@ int ObBackupUnorderdMacroBlockIndexMerger::prepare_merge_ctx_(
     LOG_WARN("failed to prepare merge iters", K(ret), K(merge_param), K(retry_list));
   } else if (OB_FAIL(get_output_file_path_(merge_param, backup_path))) {
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
-  } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
+  } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info(), merge_param.dest_id_))) {
     LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
   } else if (OB_FAIL(prepare_file_write_ctx_(bandwidth_throttle, write_ctx_))) {
     LOG_WARN("failed to prepare file write ctx", K(ret));

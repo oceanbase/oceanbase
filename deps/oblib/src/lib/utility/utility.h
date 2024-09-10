@@ -1274,6 +1274,7 @@ private:
 void get_addr_by_proxy_sessid(const uint64_t session_id, ObAddr &addr);
 
 int ob_atoll(const char *str, int64_t &res);
+int ob_atoull(const char *str, uint64_t &res);
 int ob_strtoll(const char *str, char *&endptr, int64_t &res);
 int ob_strtoull(const char *str, char *&endptr, uint64_t &res);
 
@@ -1318,6 +1319,9 @@ void call_dtor(T *&ptr)
 int is_dir_empty(const char *dirname, bool &is_empty);
 
 int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t &expired_time);
+
+int64_t parse_config_capacity(const char *str, bool &valid, bool check_unit = true, bool use_byte = false);
+
 } // end namespace common
 } // end namespace oceanbase
 

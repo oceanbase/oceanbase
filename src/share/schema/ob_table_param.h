@@ -312,6 +312,8 @@ public:
   inline void set_is_fts_index(const bool is_fts_index) { is_fts_index_ = is_fts_index; }
   inline int64_t is_multivalue_index() const { return is_multivalue_index_; }
   inline void set_is_multivalue_index(bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
+  inline bool is_vec_index() const { return is_vec_index_; }
+  inline void set_is_vec_index(const bool is_vec_index) { is_vec_index_ = is_vec_index; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
   inline bool enable_lob_locator_v2() const { return enable_lob_locator_v2_; }
   inline bool &get_enable_lob_locator_v2() { return enable_lob_locator_v2_; }
@@ -408,6 +410,7 @@ private:
   bool is_fts_index_;
   bool is_multivalue_index_;
   bool is_column_replica_table_;
+  bool is_vec_index_;
 };
 } //namespace schema
 } //namespace share

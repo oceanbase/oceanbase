@@ -30,6 +30,18 @@ public:
   ~LogIteratorInfo() {
     reset();
   }
+  LogIteratorInfo &operator=(const LogIteratorInfo &iterator_info)
+  {
+    if (&iterator_info != this) {
+      this->allow_filling_cache_ = iterator_info.allow_filling_cache_;
+      this->hot_cache_stat_ = iterator_info.hot_cache_stat_;
+      this->cold_cache_stat_ = iterator_info.cold_cache_stat_;
+      this->read_io_cnt_ = iterator_info.read_io_cnt_;
+      this->read_io_size_ = iterator_info.read_io_size_;
+      this->read_disk_cost_ts_ = iterator_info.read_disk_cost_ts_;
+    }
+    return *this;
+  }
   void reset() {
     allow_filling_cache_ = false;
     hot_cache_stat_.reset();
@@ -78,6 +90,15 @@ private:
   public:
     IteratorCacheStat() : hit_cnt_(0), miss_cnt_(0), cache_read_size_(0) {}
     ~IteratorCacheStat() { reset(); }
+    IteratorCacheStat &operator=(const IteratorCacheStat &cache_stat)
+    {
+      if (&cache_stat != this) {
+        this->hit_cnt_ = cache_stat.hit_cnt_;
+        this->miss_cnt_ = cache_stat.miss_cnt_;
+        this->cache_read_size_ = cache_stat.cache_read_size_;
+      }
+      return *this;
+    }
     void reset() {
       hit_cnt_ = 0;
       miss_cnt_ = 0;
@@ -99,6 +120,7 @@ private:
   };
 private:
   bool allow_filling_cache_;
+  // fields below are just for minotor.
   IteratorCacheStat hot_cache_stat_;
   IteratorCacheStat cold_cache_stat_;
   int64_t read_io_cnt_;

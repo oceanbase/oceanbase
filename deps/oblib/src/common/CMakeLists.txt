@@ -5,6 +5,7 @@ ob_set_subtarget(oblib_common common
   ob_clock_generator.cpp
   ob_common_utility.cpp
   ob_field.cpp
+  ob_file_common_header.cpp
   ob_member.cpp
   ob_member_list.ipp
   ob_learner_list.ipp

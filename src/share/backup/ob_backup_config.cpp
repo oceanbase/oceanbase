@@ -411,10 +411,12 @@ int ObDataBackupDestConfigParser::parse_from(const common::ObSqlString &value)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(pair.key_.assign(type_.get_backup_config_type_str()))) {
     LOG_WARN("fail to assign backup config type str", K(ret));
-  } else if (OB_FAIL(pair.value_.assign(path.ptr()))) {
+  } else if (OB_FAIL(pair.value_.assign(value.ptr()))) {
     LOG_WARN("fail to assign backup dest root path", K(ret));
   } else if (OB_FAIL(config_items_.push_back(pair))) {
     LOG_WARN("fail to push backup item", K(ret));
+  } else {
+    LOG_INFO("parse from", K(value), K(backup_dest), K(path), K(config_items_));
   }
   return ret;
 }
@@ -468,7 +470,7 @@ int ObDataBackupDestConfigParser::update_data_backup_dest_config_(common::ObISQL
       LOG_WARN("fail to set backup dest", K(ret), K_(tenant_id), K_(config_items));
     } else if (OB_FAIL(dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)))) {
       LOG_WARN("fail to get_backup_dest_str", K(ret), K(dest));
-    } 
+    }
   }
   
   if (OB_FAIL(ret)) {

@@ -19,12 +19,13 @@
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "logservice/ob_append_callback.h"
-
+#include "storage/tablet/ob_tablet.h"
 namespace oceanbase
 {
 
 namespace storage
 {
+class ObTablet;
 enum class ObDDLClogType : int64_t
 {
   UNKNOWN = -1,
@@ -33,6 +34,7 @@ enum class ObDDLClogType : int64_t
   DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG = 0x10,
   DDL_START_LOG = 0x20,
   DDL_COMMIT_LOG = 0x40,// rename from DDL_PREPARE_LOG
+  DDL_FINISH_LOG = 0x80,// finish log, smilarity role in shared storage mode
 };
 
 enum ObDDLClogState : uint8_t
@@ -128,11 +130,14 @@ private:
   bool is_inited_;
   ObDDLClogCbStatus status_;
   share::ObLSID ls_id_;
-  storage::ObDDLMacroBlockRedoInfo redo_info_;
   blocksstable::MacroBlockId macro_block_id_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
   ObTabletHandle tablet_handle_;
+  ObDDLMacroBlock ddl_macro_block_;
+  int64_t snapshot_version_;
+  uint64_t data_format_version_;
+  bool with_cs_replica_;
 };
 
 class ObDDLCommitClogCb : public logservice::AppendCb
@@ -248,6 +253,54 @@ private:
   share::SCN start_scn_;
   ObTabletID lob_meta_tablet_id_; // avoid replay get newest mds data
 };
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObDDLFinishLog final
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObDDLFinishLog();
+  ~ObDDLFinishLog() = default;
+  int init(const int64_t tenant_id,
+           const share::ObLSID ls_id,
+           const ObITable::TableKey &table_key,
+           const char* buf,
+           const int64_t buf_len,
+           const blocksstable::MacroBlockId &macro_block_id,
+           const uint64_t data_format_version);
+  int assign(const storage::ObDDLFinishLogInfo &other);
+
+  bool is_valid() const { return finish_info_.is_valid(); }
+  ObITable::TableKey get_table_key() const { return finish_info_.table_key_; }
+  blocksstable::MacroBlockId get_macro_block_id() const { return finish_info_.macro_block_id_; }
+  ObString get_data_buffer() const { return finish_info_.data_buffer_; }
+  share::ObLSID get_ls_id() const { return finish_info_.ls_id_; }
+  storage::ObDDLFinishLogInfo get_log_info() const { return finish_info_; }
+  uint64_t get_data_format_version() const { return finish_info_.data_format_version_; }
+  TO_STRING_KV(K_(finish_info));
+private:
+  storage::ObDDLFinishLogInfo finish_info_;
+};
+
+class ObDDLFinishClogCb : public logservice::AppendCb
+{
+public:
+  ObDDLFinishClogCb();
+  virtual ~ObDDLFinishClogCb() = default;
+  int init(const ObDDLFinishLog &finish_log);
+  virtual int on_success() override;
+  virtual int on_failure() override;
+  inline bool is_success() const { return status_.is_success(); }
+  inline bool is_failed() const { return status_.is_failed(); }
+  inline bool is_finished() const { return status_.is_finished(); }
+  int get_ret_code() const { return status_.get_ret_code(); }
+  void try_release();
+  TO_STRING_KV(K(is_inited_), K(status_), K(finish_log_));
+private:
+  bool is_inited_;
+  ObDDLClogCbStatus status_;
+  ObDDLFinishLog finish_log_;
+};
+#endif
 
 class ObTabletSchemaVersionChangeLog final
 {

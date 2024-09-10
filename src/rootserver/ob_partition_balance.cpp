@@ -131,7 +131,8 @@ int ObPartitionBalance::process()
     LOG_WARN("process_balance_partition_inner fail", KR(ret), K(tenant_id_));
   } else if (transfer_logical_tasks_.empty() && OB_FAIL(process_balance_partition_extend_())) {
     LOG_WARN("process_balance_partition_extend fail", KR(ret), K(tenant_id_));
-  } else if (transfer_logical_tasks_.empty() && OB_FAIL(process_balance_partition_disk_())) {
+  } else if (!GCTX.is_shared_storage_mode() && // do disk balance only in shared_nothing mode
+             transfer_logical_tasks_.empty() && OB_FAIL(process_balance_partition_disk_())) {
     LOG_WARN("process_balance_partition_disk fail", KR(ret), K(tenant_id_));
   } else if (!transfer_logical_tasks_.empty() && OB_FAIL(generate_balance_job_from_logical_task_())) {
     LOG_WARN("generate_balance_job_from_logical_task_ fail", KR(ret), K(tenant_id_));

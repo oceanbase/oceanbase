@@ -88,7 +88,7 @@ public:
   static constexpr uint64_t META_INFO_IDX = 4;
   static constexpr uint64_t USER_DATA_IDX = 5;
   static constexpr int64_t MDS_SCHEMA_VERSION = 9527; // for mds schema change
-  static constexpr uint64_t MDS_TABLE_ID = 88888; // TODO(@bowen.gbw): choose another value?
+  static constexpr uint64_t MDS_TABLE_ID = 88888; // TODO(@gaishun.gs): choose another value?
 private:
   static constexpr const char *MDS_TABLE_NAME = "mds_table";
   static constexpr const char *MDS_TYPE_COLUMN_NAME = "mds_type";

@@ -71,7 +71,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObHexStringType,        /* ObGeometryType */
     ObMaxType,         /* UDT */
     ObDecimalIntType, /* ObDecimalIntType */
-    ObMaxType,        /* COLLECTION */
+    ObCollectionSQLType,  /* COLLECTION */
     ObMySQLDateType,      /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
     ObHexStringType,      /* RoaringBitmap */
@@ -1371,7 +1371,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObHexStringType,        /* ObGeometryType */
     ObMaxType,         /* UDT */
     ObDecimalIntType, /* ObDecimalIntType */
-    ObMaxType,        /* COLLECTION */
+    ObCollectionSQLType,  /* COLLECTION */
     ObMySQLDateTimeType,  /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
     ObMaxType,            /* RoaringBitmap */
@@ -3009,7 +3009,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   },
   /*ObCollectionSQLType*/
   {
-    ObMaxType,        /* NullType  */
+    ObCollectionSQLType,  /* NullType  */
     ObMaxType,      /* TinyIntType  */
     ObMaxType,      /* SmallIntType  */
     ObMaxType,      /* MediumIntType  */
@@ -3031,7 +3031,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,    /* DateType  */
     ObMaxType,        /* TimeType  */
     ObMaxType,      /* YearType  */
-    ObMaxType,     /* VarcharType  */
+    ObCollectionSQLType,   /* VarcharType  */
     ObMaxType,        /* CharType  */
     ObMaxType,     /* HexStringType  */
     ObMaxType,         /* ExtendType  */
@@ -3060,7 +3060,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObGeometryType */
     ObMaxType,         /* UDT */
     ObMaxType,     /* ObDecimalIntType */
-    ObMaxType,         /* COLLECTION */
+    ObCollectionSQLType,  /* COLLECTION */
     ObMaxType,  /* MySQLDateType */
     ObMaxType,  /* MySQLDateTimeType */
     ObMaxType,        /* RoaringBitmap */

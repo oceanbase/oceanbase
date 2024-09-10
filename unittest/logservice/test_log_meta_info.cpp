@@ -349,10 +349,43 @@ TEST(TestLogMetaInfos, test_log_snapshot_meta)
   LSN lsn; lsn.val_ = 1;
   ObAddr addr(ObAddr::IPV4, "127.0.0.1", 4096);
 
+  LogInfo prev_log_info; prev_log_info.generate_by_default();
   // Test invalid argument
   EXPECT_FALSE(log_snapshot_meta1.is_valid());
-  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn));
+  PALF_LOG(INFO, "compatibility test case 1", K(log_snapshot_meta1));
+  LSN base_lsn(2*PALF_BLOCK_SIZE), prev_tail_lsn(PALF_BLOCK_SIZE);
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(base_lsn, prev_log_info, prev_tail_lsn));
+  PALF_LOG(INFO, "compatibility test case 1, trace", K(log_snapshot_meta1));
+  EXPECT_EQ(true, log_snapshot_meta1.prev_log_info_.is_valid());
+  EXPECT_EQ(true, log_snapshot_meta1.prev_log_tail_lsn_.is_valid());
+  EXPECT_EQ(LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION_V2, log_snapshot_meta1.version_);
+  LogInfo result_log_info;
+  LSN input_curr_lsn = prev_tail_lsn;
+  LSN output_prev_tail_lsn;
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.get_prev_log_info(input_curr_lsn, result_log_info, output_prev_tail_lsn));
+  EXPECT_EQ(result_log_info, prev_log_info);
+  EXPECT_EQ(output_prev_tail_lsn.is_valid(), true);
+  // return OB_ENTRY_NOT_EXIST when base_lsn is not same as prev_tail_lsn of prev_log_info
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_snapshot_meta1.get_prev_log_info(base_lsn, result_log_info, output_prev_tail_lsn));
   EXPECT_TRUE(log_snapshot_meta1.is_valid());
+  // 验证SN版本
+  {
+    // for 新建日志流，prev_tail_lsn一定是有效的，这里验证升级场景，prev_tail_lsn_sn是无效的
+    LogSnapshotMeta log_snapshot_meta_sn;
+    LSN base_lsn_sn(2*PALF_BLOCK_SIZE), prev_tail_lsn_sn;
+    EXPECT_EQ(OB_SUCCESS, log_snapshot_meta_sn.generate(base_lsn_sn, prev_log_info, prev_tail_lsn_sn));
+    PALF_LOG(INFO, "compatibility test case sn, trace", K(log_snapshot_meta_sn));
+    EXPECT_EQ(true, log_snapshot_meta_sn.prev_log_info_.is_valid());
+    EXPECT_EQ(false, log_snapshot_meta_sn.prev_log_tail_lsn_.is_valid());
+    EXPECT_EQ(LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION_V2, log_snapshot_meta_sn.version_);
+    LogInfo result_log_info;
+    LSN input_curr_lsn = base_lsn_sn;
+    LSN output_prev_tail_lsn;
+    // SN升级场景下，推进snapshot meta后，prev_log_info预期不在被依赖，get_prev_log_info返回OB_ENTRY_NOT_EXIST
+    EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_snapshot_meta_sn.get_prev_log_info(input_curr_lsn, result_log_info, output_prev_tail_lsn));
+    EXPECT_EQ(result_log_info.is_valid(), false);
+    EXPECT_EQ(output_prev_tail_lsn.is_valid(), false);
+  }
 
   // Test serialize and deserialize
   int64_t pos = 0;
@@ -363,6 +396,59 @@ TEST(TestLogMetaInfos, test_log_snapshot_meta)
   EXPECT_EQ(OB_SUCCESS, log_snapshot_meta2.deserialize(buf, BUFSIZE, pos));
   EXPECT_EQ(log_snapshot_meta1.base_lsn_,
             log_snapshot_meta2.base_lsn_);
+
+  PALF_LOG(INFO, "compatibility test case 2", K(log_snapshot_meta1));
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_VERSION_4_3_0_0);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_3_0_0);
+  LogSnapshotMeta old_version;
+  EXPECT_EQ(OB_SUCCESS, old_version.generate(base_lsn, prev_log_info, prev_tail_lsn));
+  EXPECT_EQ(false, old_version.prev_log_info_.is_valid());
+  PALF_LOG(INFO, "compatibility test case 2, trace", K(old_version));
+  EXPECT_EQ(LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION, old_version.version_);
+  pos = 0;
+  EXPECT_EQ(OB_SUCCESS, old_version.serialize(buf, BUFSIZE, pos));
+  EXPECT_EQ(pos, old_version.get_serialize_size());
+  pos = 0;
+  log_snapshot_meta2.reset();
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta2.deserialize(buf, BUFSIZE, pos));
+  EXPECT_EQ(log_snapshot_meta2.base_lsn_, old_version.base_lsn_);
+  EXPECT_EQ(log_snapshot_meta2.prev_log_info_, old_version.prev_log_info_);
+  EXPECT_EQ(log_snapshot_meta2.version_, old_version.version_);
+  EXPECT_EQ(log_snapshot_meta2.version_, LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION);
+  // return OB_ENTRY_NOT_EXIST when prev_tail_lsn is same as base lsn of log_snapshot_meta2 but prev_log_info_ is invalid.
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_snapshot_meta2.get_prev_log_info(prev_tail_lsn, result_log_info, output_prev_tail_lsn));
+  EXPECT_EQ(result_log_info.is_valid(), false);
+  EXPECT_EQ(output_prev_tail_lsn.is_valid(), false);
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_snapshot_meta2.get_prev_log_info(base_lsn, result_log_info, output_prev_tail_lsn));
+
+  PALF_LOG(INFO, "compatibility test case 3", K(log_snapshot_meta1));
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_VERSION_4_3_0_0);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_3_0_0);
+  LogSnapshotMeta old_version1;
+  EXPECT_EQ(OB_SUCCESS, old_version1.generate(prev_tail_lsn, prev_log_info, prev_tail_lsn));
+  EXPECT_EQ(true, old_version1.prev_log_info_.is_valid());
+  EXPECT_EQ(false, old_version1.prev_log_tail_lsn_.is_valid());
+  PALF_LOG(INFO, "compatibility test case 3, trace", K(old_version1));
+  EXPECT_EQ(LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION, old_version1.version_);
+  pos = 0;
+  EXPECT_EQ(OB_SUCCESS, old_version1.serialize(buf, BUFSIZE, pos));
+  EXPECT_EQ(pos, old_version1.get_serialize_size());
+  pos = 0;
+  LogSnapshotMeta log_snapshot_meta3;
+  log_snapshot_meta3.reset();
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta3.deserialize(buf, BUFSIZE, pos));
+  PALF_LOG(INFO, "compatibility test case 3, trace1", K(log_snapshot_meta3));
+  EXPECT_EQ(log_snapshot_meta3.base_lsn_, old_version1.base_lsn_);
+  EXPECT_EQ(log_snapshot_meta3.prev_log_info_, old_version1.prev_log_info_);
+  EXPECT_EQ(log_snapshot_meta3.prev_log_tail_lsn_, old_version1.prev_log_tail_lsn_);
+  EXPECT_EQ(log_snapshot_meta3.version_, old_version1.version_);
+  EXPECT_EQ(log_snapshot_meta3.version_, LogSnapshotMeta::LOG_SNAPSHOT_META_VERSION);
+  // return OB_SUCCESS when base_lsn is same as base lsn of log_snapshot_meta2.
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta3.get_prev_log_info(prev_tail_lsn, result_log_info, output_prev_tail_lsn));
+  EXPECT_EQ(result_log_info, prev_log_info);
+  EXPECT_EQ(output_prev_tail_lsn.is_valid(), false);
+  EXPECT_EQ(log_snapshot_meta3.prev_log_tail_lsn_.is_valid(), false);
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_snapshot_meta3.get_prev_log_info(base_lsn, result_log_info, output_prev_tail_lsn));
 }
 
 TEST(TestLogReplicaPropertyMeta, test_log_replica_property_meta)
@@ -437,10 +523,11 @@ TEST(TestLogMetaInfos, test_log_config_version)
 int main(int args, char **argv)
 {
   OB_LOGGER.set_file_name("test_log_meta_infos.log", true);
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("TRACE");
   PALF_LOG(INFO, "begin unittest::test_log_meta_infos");
   ::testing::InitGoogleTest(&args, argv);
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }
 

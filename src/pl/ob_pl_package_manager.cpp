@@ -503,7 +503,8 @@ static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_trusted_certificate_manager", "dbms_trusted_certificate_manager_mysql.sql", "dbms_trusted_certificate_manager_body_mysql.sql"},
   {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
   {"dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"},
-  {"external_table_alert_log", "external_table_alert_log.sql", nullptr}
+  {"external_table_alert_log", "external_table_alert_log.sql", nullptr},
+  {"dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"}
 };
 
 // for now! we only have one special system package "__DBMS_UPGRADE"

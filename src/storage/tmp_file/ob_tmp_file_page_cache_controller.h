@@ -20,6 +20,7 @@ namespace oceanbase
 {
 namespace tmp_file
 {
+class ObSNTenantTmpFileManager;
 
 class ObTmpFilePageCacheController
 {
@@ -43,7 +44,7 @@ public:
   static const int64_t FLUSH_INTERVAL = 1000;       // 1s
   static const int64_t SWAP_FAST_INTERVAL = 5;      // 5ms
   static const int64_t SWAP_INTERVAL = 1000;        // 2s
-  int init(ObTenantTmpFileManager &file_mgr);
+  int init(ObSNTenantTmpFileManager &file_mgr);
   int start();
   void stop();
   void wait();

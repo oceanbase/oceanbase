@@ -355,7 +355,6 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
       compaction_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
   } else {
-    ObSqlString order_by_sql;
     for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
       const ObTabletLSPair &pair = pairs.at(idx);
       if (OB_UNLIKELY(!pair.is_valid())) {
@@ -367,30 +366,11 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
           pair.get_ls_id().id(),
           ((idx == end_idx - 1) ? ")" : ", ")))) {
         LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(pair));
-      } else if (OB_FAIL(order_by_sql.append_fmt(
-          ",%ld",
-          pair.get_tablet_id().id()))) {
-        SHARE_LOG(WARN, "fail to assign sql", KR(ret), K(tenant_id), K(pair));
       }
     }
-    if (FAILEDx(sql.append_fmt(" ORDER BY FIELD(tablet_id%s)", order_by_sql.string().ptr()))) {
+    if (FAILEDx(sql.append_fmt(" ORDER BY tablet_id"))) {
       SHARE_LOG(WARN, "fail to assign sql string", KR(ret), K(tenant_id), K(compaction_scn), K(pairs_cnt));
     }
-  }
-  return ret;
-}
-
-int ObTabletChecksumOperator::insert_tablet_checksum_item(
-    ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObTabletChecksumItem &item)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObTabletChecksumItem> items;
-  if (OB_FAIL(items.push_back(item))) {
-    LOG_WARN("fail to add item into array", KR(ret), K(item));
-  } else if (OB_FAIL(insert_tablet_checksum_items(sql_client, tenant_id, items))) {
-    LOG_WARN("fail to insert tablet checksum items", KR(ret), K(item));
   }
   return ret;
 }

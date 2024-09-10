@@ -32,6 +32,7 @@ ObMdsTableHandler::~ObMdsTableHandler() { ATOMIC_STORE(&is_written_, false); }
 int ObMdsTableHandler::get_mds_table_handle(mds::MdsTableHandle &handle,
                                             const ObTabletID &tablet_id,
                                             const share::ObLSID &ls_id,
+                                            const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
                                             const bool not_exist_create,
                                             ObTabletPointer *pointer)
 {
@@ -89,6 +90,7 @@ int ObMdsTableHandler::get_mds_table_handle(mds::MdsTableHandle &handle,
         if (MDS_FAIL(mds_table_handle_.init<mds::NormalMdsTable>(mds::MdsAllocator::get_instance(),
                                                                  tablet_id,
                                                                  ls_id,
+                                                                 mds_ckpt_scn_from_tablet,
                                                                  pointer,
                                                                  mds_table_mgr_handle_.get_mds_table_mgr()))) {
           MDS_LOG_INIT(WARN, "fail to init mds table");

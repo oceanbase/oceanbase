@@ -10,6 +10,11 @@
 #ifndef OB_STORAGE_CO_MERGE_CTX_H_
 #define OB_STORAGE_CO_MERGE_CTX_H_
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction/ob_major_task_checkpoint_mgr.h"
+#include "storage/shared_storage/prewarm/ob_mc_prewarm_struct.h"
+#endif
+#include "storage/blocksstable/ob_major_checksum_info.h"
 namespace oceanbase
 {
 namespace compaction
@@ -56,11 +61,12 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   ~ObCOTabletMergeCtx();
   void destroy();
   virtual int prepare_schema() override;
+  virtual int init_tablet_merge_info() override;
   virtual int cal_merge_param() override;
-  virtual int init_tablet_merge_info(const bool need_check = true) override;
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
   virtual int build_ctx(bool &finish_flag) override;
+  virtual int check_merge_ctx_valid() override;
   OB_INLINE bool all_cg_finish() const // locked by ObCODagNet ctx_lock_
   {
     return exe_stat_.finish_cg_count_ == array_count_;
@@ -95,7 +101,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
       const uint32_t start_cg_idx,
       const uint32_t end_cg_idx,
       const bool is_retry_create = false);
-  int create_sstables(const uint32_t start_cg_idx, const uint32_t end_cg_idx);
+  virtual int create_sstables(const uint32_t start_cg_idx, const uint32_t end_cg_idx);
   int inner_add_cg_sstables(const ObSSTable *&new_sstable);
   int validate_column_checksums(
       int64_t *all_column_cksums,
@@ -140,10 +146,11 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
+  const ObSSTableMergeHistory &get_merge_history() { return dag_net_merge_history_; }
 
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
       K_(array_count), K_(exe_stat));
-
+  virtual int mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx) { return OB_SUCCESS; }
   static const int64_t DEFAULT_CG_MERGE_BATCH_SIZE = 10;
   static const int64_t SCHEDULE_MINOR_CG_CNT_THREASHOLD = 20;
   static const int64_t SCHEDULE_MINOR_TABLE_CNT_THREASHOLD = 3;
@@ -155,6 +162,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   static constexpr double EXE_DAG_FINISH_UP_RATIO = 0.6;
   static const int64_t DAG_NET_ERROR_COUNT_UP_THREASHOLD = 2000;
   int64_t array_count_; // equal to cg count
+  int64_t start_schedule_cg_idx_;
   ObCOMergeExeStat exe_stat_;
   ObCOMergeDagNet &dag_net_;
   ObTabletMergeInfo **cg_merge_info_array_;
@@ -170,7 +178,57 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   OLD_MAJOR is pure col, need mock one row_store read_info to read row from pure_col(use query interface)
 */
   ObTableReadInfo mocked_row_store_table_read_info_; // read info for merge from col store to row store
+  ObSSTableMergeHistory dag_net_merge_history_; // TODO, record info for dag net
 };
+
+#ifdef OB_BUILD_SHARED_STORAGE
+struct ObCOTabletOutputMergeCtx : public ObCOTabletMergeCtx
+{
+  ObCOTabletOutputMergeCtx(
+    ObCOMergeDagNet &dag_net,
+    ObTabletMergeDagParam &param,
+    common::ObArenaAllocator &allocator)
+    : ObCOTabletMergeCtx(dag_net, param, allocator),
+      task_ckp_mgr_(),
+      pre_warm_writer_(param.tablet_id_.id(), param.merge_version_),
+      major_pre_warm_param_(pre_warm_writer_)
+  {}
+  virtual ~ObCOTabletOutputMergeCtx() { destroy(); }
+  void destroy();
+  virtual int check_medium_info(
+    const ObMediumCompactionInfo &next_medium_info,
+    const int64_t last_major_snapshot) override;
+  virtual int init_tablet_merge_info() override;
+  virtual int get_macro_seq_by_stage(const ObGetMacroSeqStage stage,
+                                     int64_t &macro_start_seq) const override;
+  virtual int mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx) override;
+  virtual int update_tablet(ObTabletHandle &new_tablet_handle) override;
+  virtual int generate_macro_seq_info(const int64_t task_idx, int64_t &macro_start_seq) override;
+  virtual void after_update_tablet_for_major() override;
+  virtual const share::ObPreWarmerParam &get_pre_warm_param() const override { return major_pre_warm_param_; }
+protected:
+  ObCOMajorTaskCheckpointMgr task_ckp_mgr_;
+  storage::ObHotTabletInfoWriter pre_warm_writer_;
+  ObMajorPreWarmerParam major_pre_warm_param_;
+};
+
+struct ObCOTabletValidateMergeCtx : public ObCOTabletMergeCtx
+{
+  ObCOTabletValidateMergeCtx(
+    ObCOMergeDagNet &dag_net,
+    ObTabletMergeDagParam &param,
+    common::ObArenaAllocator &allocator)
+    : ObCOTabletMergeCtx(dag_net, param, allocator)
+  {}
+  virtual int update_tablet_after_merge() override;
+  virtual int create_sstables(const uint32_t start_cg_idx, const uint32_t end_cg_idx) override;
+  virtual int check_medium_info(
+    const ObMediumCompactionInfo &next_medium_info,
+    const int64_t last_major_snapshot) override;
+  blocksstable::ObCOMajorChecksumInfo major_ckm_info_;
+};
+
+#endif
 
 } // namespace compaction
 } // namespace oceanbase

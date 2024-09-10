@@ -897,5 +897,70 @@ int ObCOSSTableV2::multi_get(
   return ret;
 }
 
+int ObCOSSTableV2::fill_column_ckm_array(
+  const ObStorageSchema &storage_schema,
+  ObIArray<int64_t> &column_checksums) const
+{
+  int ret = OB_SUCCESS;
+  if (is_cgs_empty_co_table()) {
+    ret = ObSSTable::fill_column_ckm_array(column_checksums);
+  } else {
+    const common::ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();
+    column_checksums.reset();
+    const int64_t column_count = get_cs_meta().full_column_cnt_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; i++) {
+      if (OB_FAIL(column_checksums.push_back(0))) {
+        LOG_WARN("fail to push back column checksum", K(ret), K(i));
+      }
+    }
+
+    common::ObArray<ObSSTableWrapper> cg_tables;
+    if (FAILEDx(get_all_tables(cg_tables))) {
+      LOG_WARN("fail to get_all_tables", K(ret));
+    } else {
+      ObSSTableMetaHandle cg_table_meta_hdl;
+      for (int64_t i = 0; i < cg_tables.count() && OB_SUCC(ret); i++) {
+        const ObSSTable *cg_sstable = cg_tables.at(i).get_sstable();
+        if (OB_UNLIKELY(nullptr == cg_sstable || !cg_sstable->is_sstable())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected cg table", K(ret), KPC(cg_sstable));
+        } else {
+          const uint32_t cg_idx = cg_sstable->get_key().get_column_group_id();
+          const ObStorageColumnGroupSchema &column_group = column_groups.at(cg_idx);
+          if (OB_FAIL(cg_sstable->get_meta(cg_table_meta_hdl))) {
+            LOG_WARN("fail to get meta", K(ret), KPC(cg_sstable));
+          } else if (OB_UNLIKELY(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt() != column_group.get_column_count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col_checksum_cnt", K(ret),
+                K(cg_table_meta_hdl.get_sstable_meta().get_col_checksum_cnt()), K(column_group.get_column_count()));
+          } else {
+            for (int64_t j = 0; j < column_group.get_column_count() && OB_SUCC(ret); j++) {
+              const uint16_t column_idx = column_group.get_column_idx(j);
+              if (OB_UNLIKELY(column_idx >= column_count)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected column idx", K(ret), K(column_idx), K(column_count));
+              } else if (column_checksums.at(column_idx) == 0) {
+                int64_t &column_checksum = column_checksums.at(column_idx);
+                column_checksum = cg_table_meta_hdl.get_sstable_meta().get_col_checksum()[j];
+              } else if (OB_UNLIKELY(column_checksums.at(column_idx) != cg_table_meta_hdl.get_sstable_meta().get_col_checksum()[j])) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected col_checksum_cnt", K(ret), K(column_checksums.at(column_idx)),
+                  K(cg_table_meta_hdl.get_sstable_meta().get_col_checksum()[j]));
+              }
+            } // for
+          }
+        }
+      } // for
+    }
+  }
+  return ret;
+}
+
+int64_t ObCOSSTableV2::get_data_checksum() const
+{
+  return !is_cgs_empty_co_table() ? get_cs_meta().data_checksum_
+                                  : ObSSTable::get_data_checksum();
+}
+
 } /* storage */
 } /* oceanbase */

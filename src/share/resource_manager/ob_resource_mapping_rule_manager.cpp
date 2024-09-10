@@ -27,7 +27,7 @@ int ObResourceMappingRuleManager::init()
   int rule_bucket_size = 4096;
   int group_bucket_size = 512;
   if (user_rule_map_.created() || group_id_name_map_.created() ||
-      function_rule_map_.created() || group_name_id_map_.created() || group_id_type_map_.created()) {
+      function_rule_map_.created() || group_name_id_map_.created()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("mapping rule manager should not init multiple times", K(ret));
   } else if (OB_FAIL(user_rule_map_.create(rule_bucket_size, "UsrRuleMap", "UsrRuleMapNode"))) {
@@ -40,7 +40,7 @@ int ObResourceMappingRuleManager::init()
     LOG_WARN("fail create function rule map", K(ret));
   } else if (OB_FAIL(group_name_id_map_.create(group_bucket_size, "GrpNameIdMap", "GrpNameIdNode"))) {
     LOG_WARN("fail create name id map", K(ret));
-  } else if (OB_FAIL(group_id_type_map_.create(group_bucket_size, "GrpIdTypeMap", "GrpIdTypeNode")))
+  }
   LOG_INFO("resource mapping rule manager init ok");
   return ret;
 }
@@ -155,11 +155,8 @@ int ObResourceMappingRuleManager::refresh_resource_user_mapping_rule(
                   1 /* overwrite on dup key */))) {
         LOG_WARN("fail set user mapping rule to rule_map", K(rule), K(ret));
       }
-      if (OB_SUCC(ret) && OB_FAIL(group_id_type_map_.set_refactored(
-                              share::ObTenantGroupIdKey(rule.tenant_id_, group_id), ResourceGroupType::USER_GROUP))) {
-        LOG_WARN("group_id_type_map_ set_refactored failed", K(ret), K(group_id));
-      }
     }
+    (void)clear_resource_user_mapping_rule(tenant_id, user_rules);
     LOG_INFO("refresh resource user mapping rule", K(tenant_id), K(plan), K(user_rules));
   }
   return ret;
@@ -196,13 +193,60 @@ int ObResourceMappingRuleManager::refresh_resource_function_mapping_rule(
                   1 /* overwrite on dup key */))) {
         LOG_WARN("fail set user mapping rule to rule_map", K(rule), K(ret));
       }
-      if (OB_SUCC(ret) && OB_FAIL(group_id_type_map_.set_refactored(
-                              share::ObTenantGroupIdKey(rule.tenant_id_, group_id), ResourceGroupType::FUNCTION_GROUP))) {
-        LOG_WARN("group_id_type_map_ set_refactored failed", K(ret), K(group_id));
+    }
+    (void)clear_resource_function_mapping_rule(tenant_id, rules);
+    LOG_INFO("refresh resource mapping rule", K(tenant_id), K(plan), K(rules));
+  }
+  return ret;
+}
+
+
+int ObResourceMappingRuleManager::clear_resource_function_mapping_rule(const uint64_t tenant_id,
+    const ObResourceMappingRuleSet &rules)
+{
+  int ret = OB_SUCCESS;
+  for (common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t>::const_iterator func_iter = function_rule_map_.begin();
+      OB_SUCC(ret) && func_iter != function_rule_map_.end(); ++func_iter) {
+    if (func_iter->first.tenant_id_ == tenant_id && func_iter->second > 0) {
+      bool hit = false;
+      for (int64_t i = 0; !hit && i < rules.count(); ++i) {
+        const ObResourceMappingRule &rule = rules.at(i);
+        if (share::ObTenantFunctionKey(rule.tenant_id_, rule.value_) == func_iter->first) {
+          hit = true;
+        }
+      }
+      if (!hit) {
+        LOG_INFO("tenant function need to be cleared", "function", func_iter->first, "group_id", func_iter->second);
+        if (OB_FAIL(function_rule_map_.set_refactored(func_iter->first, 0, 1/*overwrite*/))) {
+          LOG_WARN("failed to reset user map", K(ret), K(func_iter->first));
+        }
       }
     }
-    LOG_INFO("refresh_resource_function_mapping_rule", K(tenant_id), K(plan), K(rules));
   }
+  return ret;
+}
 
+int ObResourceMappingRuleManager::clear_resource_user_mapping_rule(const uint64_t tenant_id,
+    const ObResourceUserMappingRuleSet &rules)
+{
+  int ret = OB_SUCCESS;
+  for (common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t>::const_iterator iter = user_rule_map_.begin();
+      OB_SUCC(ret) && iter != user_rule_map_.end(); ++iter) {
+    if (iter->first.tenant_id_ == tenant_id && iter->second > 0) {
+      bool hit = false;
+      for (int64_t i = 0; !hit && i < rules.count(); ++i) {
+        const ObResourceUserMappingRule &rule = rules.at(i);
+        if (sql::ObTenantUserKey(rule.tenant_id_, rule.user_id_) == iter->first) {
+          hit = true;
+        }
+      }
+      if (!hit) {
+        LOG_INFO("tenant user group need to be cleared", "user", iter->first, "group_id", iter->second);
+        if (OB_FAIL(user_rule_map_.set_refactored(iter->first, 0, 1/*overwrite*/))) {
+          LOG_WARN("failed to reset user map", K(ret), K(iter->first));
+        }
+      }
+    }
+  }
   return ret;
 }

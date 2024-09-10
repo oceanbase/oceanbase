@@ -21,6 +21,7 @@
 #include "share/ob_share_util.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/direct_load/ob_direct_load_table_builder_allocator.h"
+#include "share/resource_manager/ob_resource_manager.h"
 
 namespace oceanbase
 {
@@ -242,6 +243,7 @@ void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
   share::ObTenantBase *tenant_base = MTL_CTX();
   lib::Worker::CompatMode mode = ((omt::ObTenant *)tenant_base)->get_compat_mode();
   lib::Worker::set_compatibility_mode(mode);
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_DDL);
 
   LOG_INFO("table load task thread run", KP(this), "pid", get_tid_cache(), K(thread_idx));
 

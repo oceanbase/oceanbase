@@ -467,8 +467,7 @@ int ObCOSSTableRowScanner::construct_cg_iter_params(
       }
     } else if (0 == row_param.output_exprs_->count()) {
       const uint32_t cg_idx = OB_CS_VIRTUAL_CG_IDX;
-      if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, *row_param.output_exprs_,
-                                                 cg_param, row_param.enable_pd_aggregate()))) {
+      if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, *row_param.output_exprs_, cg_param))) {
         LOG_WARN("Fail to get cg iter param", K(ret), K(cg_idx), K(row_param));
       } else if (OB_FAIL(iter_params.push_back(cg_param))) {
         LOG_WARN("Fail to push back cg iter param", K(ret), K(cg_param));
@@ -506,6 +505,9 @@ int ObCOSSTableRowScanner::construct_cg_agg_iter_params(
 {
   int ret = OB_SUCCESS;
   ObTableIterParam* cg_param = nullptr;
+  common::ObSEArray<sql::ObExpr*, 1> output_exprs;
+  common::ObSEArray<sql::ObExpr*, 4> agg_exprs;
+  common::ObSEArray<sql::ObExpr*, 1> count_star_exprs;
   if (OB_UNLIKELY(nullptr == row_param.aggregate_exprs_ ||
                   row_param.aggregate_exprs_->count() < 1 ||
                   nullptr == row_param.output_exprs_)) {
@@ -514,8 +516,8 @@ int ObCOSSTableRowScanner::construct_cg_agg_iter_params(
   } else if (0 == row_param.output_exprs_->count()) {
     // only COUNT(*) and without filter
     const uint32_t cg_idx = OB_CS_VIRTUAL_CG_IDX;
-    if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, *row_param.aggregate_exprs_,
-        cg_param, row_param.enable_pd_aggregate()))) {
+    if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, output_exprs,
+                                               cg_param, row_param.aggregate_exprs_))) {
       LOG_WARN("Fail to get cg iter param", K(ret), K(cg_idx), K(row_param));
     } else if (OB_FAIL(iter_params.push_back(cg_param))) {
       LOG_WARN("Fail to push back cg iter param", K(ret), K(cg_param));
@@ -523,29 +525,64 @@ int ObCOSSTableRowScanner::construct_cg_agg_iter_params(
     LOG_DEBUG("[COLUMNSTORE] cons one cg param", K(ret), K(cg_idx), KPC(cg_param));
   } else {
     int64_t agg_cnt = 0;
-    common::ObSEArray<sql::ObExpr*, 4> exprs;
     const int64_t access_col_cnt =  row_param.output_exprs_->count();
+    bool has_col_agg = false;
+    bool is_assigned = false;
     const common::ObIArray<int32_t> *access_cgs = row_param.get_read_info()->get_cg_idxs();
     if (OB_ISNULL(access_cgs)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null cg indexs", K(ret), KPC(row_param.get_read_info()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < access_col_cnt; ++i) {
-      exprs.reuse();
+      output_exprs.reuse();
+      agg_exprs.reuse();
       const int32_t out_col_offset = row_param.out_cols_project_->at(i);
       const uint32_t cg_idx = access_cgs->at(out_col_offset);
-      for (int64_t j = 0; OB_SUCC(ret) && j < row_param.agg_cols_project_->count(); ++j) {
-        const int32_t agg_col_offset = row_param.agg_cols_project_->at(j);
-        if ((0 == i && OB_COUNT_AGG_PD_COLUMN_ID == agg_col_offset) || out_col_offset == agg_col_offset) {
-          if (OB_FAIL(exprs.push_back(row_param.aggregate_exprs_->at(j)))) {
-            LOG_WARN("Fail to push back", K(ret), K(i), K(j), K(access_col_cnt), K(access_cgs));
+      sql::ObExpr *output_expr = row_param.output_exprs_->at(i);
+      if (OB_ISNULL(output_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null output expr", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < row_param.agg_cols_project_->count(); ++j) {
+          const int32_t agg_col_offset = row_param.agg_cols_project_->at(j);
+          if (i == 0 && OB_COUNT_AGG_PD_COLUMN_ID == agg_col_offset) {
+            if (OB_FAIL(count_star_exprs.push_back(row_param.aggregate_exprs_->at(j)))) {
+              LOG_WARN("Failed to push back count(*) expr", K(ret));
+            }
           } else {
-            agg_cnt++;
+            has_col_agg = true;
+            if (out_col_offset == agg_col_offset) {
+              if (OB_FAIL(agg_exprs.push_back(row_param.aggregate_exprs_->at(j)))) {
+                LOG_WARN("Fail to push back", K(ret), K(i), K(j), K(access_col_cnt), K(access_cgs));
+              } else if (output_exprs.count() == 0 && OB_FAIL(output_exprs.push_back(output_expr))) {
+                LOG_WARN("Failed to push back output expr", K(ret));
+              } else {
+                agg_cnt++;
+              }
+            }
+          }
+        }
+        // If has aggregate column iterator, assign COUNT(*) to first aggregate iterator.
+        // Otherwise, build a new iterator.
+        if (OB_SUCC(ret) && !is_assigned && count_star_exprs.count() > 0) {
+          if (!has_col_agg || agg_exprs.count() > 0) {
+            for (int64_t j = 0; OB_SUCC(ret) && j < count_star_exprs.count(); ++j) {
+              if (OB_FAIL(agg_exprs.push_back(count_star_exprs.at(j)))) {
+                LOG_WARN("Fail to push back", K(ret), K(i), K(j), K(has_col_agg), K(agg_exprs.count()), KPC(count_star_exprs.at(j)));
+              } else {
+                agg_cnt++;
+              }
+            }
+            if (OB_SUCC(ret)) {
+              is_assigned = true;
+            }
           }
         }
       }
-      if (OB_FAIL(ret) || 0 == exprs.count()) {
-      } else if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, exprs, cg_param, row_param.enable_pd_aggregate()))) {
+
+      if (OB_FAIL(ret) || 0 == agg_exprs.count()) {
+      } else if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, output_exprs,
+                                                        cg_param, &agg_exprs))) {
         LOG_WARN("Fail to get cg iter param", K(ret), K(cg_idx), K(row_param));
       } else if (OB_FAIL(iter_params.push_back(cg_param))) {
         LOG_WARN("Fail to push back cg iter param", K(ret), K(cg_param));
@@ -553,10 +590,10 @@ int ObCOSSTableRowScanner::construct_cg_agg_iter_params(
       LOG_DEBUG("[COLUMNSTORE] cons one cg param", K(ret), K(cg_idx), KPC(cg_param));
     }
     if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(agg_cnt != row_param.aggregate_exprs_->count())) {
+      if (OB_UNLIKELY(agg_cnt != row_param.aggregate_exprs_->count() || (count_star_exprs.count() > 0 && !is_assigned))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected touched agg cnt", K(ret), K(agg_cnt),
-                  K(row_param.aggregate_exprs_->count()), K(access_cgs));
+        LOG_WARN("Unexpected touched agg cnt or COUNT(*) is not assigned", K(ret), K(agg_cnt), K(is_assigned),
+                  K(count_star_exprs.count()), K(row_param.aggregate_exprs_->count()), K(access_cgs));
       }
     }
   }
@@ -1005,7 +1042,7 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
   ObVectorStore *vector_store = dynamic_cast<ObVectorStore *>(batched_row_store_);
   ObICGGroupByProcessor *group_by_processor = group_by_iters_.at(0);
   bool can_group_by = false;
-  bool already_init_uniform = false;
+  bool already_init_header = false;
   sql::ObEvalCtx &eval_ctx = iter_param_->op_->get_eval_ctx();
   if (group_by_cell_->is_processing()) {
     can_group_by = true;
@@ -1020,26 +1057,19 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
   } else if (can_group_by) {
     int64_t output_cnt = 0;
     if (!group_by_cell_->is_processing()) {
-      if (iter_param_->use_uniform_format() &&
-          OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx))) {
-        LOG_WARN("Failed to init uniform header", K(ret));
-      } else if (OB_FAIL(do_group_by())) {
+      if (OB_FAIL(do_group_by())) {
         LOG_WARN("Failed to do group by", K(ret));
       } else if (!group_by_cell_->is_exceed_sql_batch()) {
         output_cnt = group_by_cell_->get_distinct_cnt();
       } else {
         group_by_cell_->reset_projected_cnt();
         group_by_cell_->set_is_processing(true);
-        already_init_uniform = true;
+        already_init_header = true;
       }
     }
     if (OB_FAIL(ret)) {
     } else if (group_by_cell_->is_processing()) {
-      if (!already_init_uniform &&
-          iter_param_->use_uniform_format() &&
-          OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx))) {
-        LOG_WARN("Failed to init uniform header", K(ret));
-      } else if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt))) {
+      if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt, *iter_param_))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
           ret = OB_SUCCESS;
           group_by_cell_->set_is_processing(false);
@@ -1066,10 +1096,7 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to fetch output rows", K(ret));
     }
-  } else if (iter_param_->use_uniform_format() &&
-      OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx, false))) {
-    LOG_WARN("Failed to init uniform header", K(ret));
-  } else if (OB_FAIL(group_by_cell_->copy_output_rows(vector_store->get_row_count()))) {
+  } else if (OB_FAIL(group_by_cell_->copy_output_rows(vector_store->get_row_count(), *iter_param_))) {
     LOG_WARN("Failed to copy output rows", K(ret));
   }
   LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), KPC(group_by_cell_));

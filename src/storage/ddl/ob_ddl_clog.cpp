@@ -20,7 +20,11 @@
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-
+#include "storage/blocksstable/ob_object_manager.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#include "storage/blockstore/ob_shared_object_reader_writer.h"
 namespace oceanbase
 {
 
@@ -155,8 +159,8 @@ void ObDDLStartClogCb::try_release()
 }
 
 ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
-  : is_inited_(false), status_(), ls_id_(), redo_info_(), macro_block_id_(),
-    data_buffer_lock_(), is_data_buffer_freed_(false)
+  : is_inited_(false), status_(), ls_id_(), macro_block_id_(),
+    data_buffer_lock_(), is_data_buffer_freed_(false), ddl_macro_block_(), snapshot_version_(0), data_format_version_(0), with_cs_replica_(false)
 {
 
 }
@@ -164,7 +168,7 @@ ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
 ObDDLMacroBlockClogCb::~ObDDLMacroBlockClogCb()
 {
   int ret = OB_SUCCESS;
-  if (macro_block_id_.is_valid() && OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_block_id_))) {
+  if (macro_block_id_.is_valid() && OB_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(macro_block_id_))) {
     LOG_ERROR("dec ref failed", K(ret), K(macro_block_id_), K(common::lbt()));
   }
   macro_block_id_.reset();
@@ -182,13 +186,29 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_block_id))) {
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_block_id))) {
     LOG_WARN("inc reference count failed", K(ret), K(macro_block_id));
   } else {
-    redo_info_ = redo_info;
     ls_id_ = ls_id;
     macro_block_id_ = macro_block_id;
     tablet_handle_ = tablet_handle;
+    snapshot_version_ = redo_info.table_key_.get_snapshot_version();
+    data_format_version_ = redo_info.data_format_version_;
+    with_cs_replica_ = redo_info.with_cs_replica_;
+    if (OB_FAIL(ddl_macro_block_.block_handle_.set_block_id(macro_block_id_))) {
+      LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
+    } else if (OB_FAIL(ddl_macro_block_.set_data_macro_meta(macro_block_id_,
+                                                            redo_info.data_buffer_.ptr(),
+                                                            redo_info.data_buffer_.length(),
+                                                            redo_info.block_type_))) {
+      LOG_WARN("failed to set data macro meta", K(ret), KP(redo_info.data_buffer_.ptr()), K(redo_info.data_buffer_.length()));
+    } else {
+      ddl_macro_block_.block_type_ = redo_info.block_type_;
+      ddl_macro_block_.logic_id_ = redo_info.logic_id_;
+      ddl_macro_block_.ddl_start_scn_ = redo_info.start_scn_;
+      ddl_macro_block_.table_key_ = redo_info.table_key_;
+      ddl_macro_block_.end_row_id_ = redo_info.end_row_id_;
+    }
   }
   return ret;
 }
@@ -218,6 +238,8 @@ int ObDDLMacroBlockClogCb::on_success()
   } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is nullptr", K(ret));
+  } else if (ObDDLUtil::use_idempotent_mode(data_format_version_)) {
+    // do nothing, can NOT get direct load mgr
   } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
         ls_id_, tablet->get_tablet_meta().tablet_id_, true/*is_full_direct_load*/, direct_load_mgr_handle, is_major_sstable_exist))) {
     if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
@@ -228,33 +250,15 @@ int ObDDLMacroBlockClogCb::on_success()
     }
   }
 
-  ObDDLMacroBlock macro_block;
-  {
-    ObSpinLockGuard data_buffer_guard(data_buffer_lock_);
-    if (is_data_buffer_freed_) {
-      LOG_INFO("data buffer is freed, do not need to callback");
-    } else if (OB_FAIL(ret)) {
-    } else if (redo_info_.with_cs_replica_ && redo_info_.table_key_.is_column_store_sstable()) {
-      LOG_TRACE("[CS-Replica] skip replay cs replica redo clog in leader", K(ret), K_(redo_info));
-    } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_block_id_))) {
-      LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
-    } else {
-      macro_block.block_type_ = redo_info_.block_type_;
-      macro_block.logic_id_ = redo_info_.logic_id_;
-      macro_block.scn_ = __get_scn();
-      macro_block.buf_ = redo_info_.data_buffer_.ptr();
-      macro_block.size_ = redo_info_.data_buffer_.length();
-      macro_block.ddl_start_scn_ = redo_info_.start_scn_;
-      macro_block.table_key_ = redo_info_.table_key_;
-      macro_block.end_row_id_ = redo_info_.end_row_id_;
-      const int64_t snapshot_version = redo_info_.table_key_.get_snapshot_version();
-      const uint64_t data_format_version = redo_info_.data_format_version_;
-      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet, macro_block,
-        snapshot_version, data_format_version, direct_load_mgr_handle))) {
-        LOG_WARN("set macro block into ddl kv failed", K(ret), KPC(tablet), K(macro_block),
-            K(snapshot_version), K(data_format_version));
-      }
-    }
+  if (OB_FAIL(ret)) {
+  } else if (with_cs_replica_ && ddl_macro_block_.table_key_ .is_column_store_sstable()) {
+    LOG_INFO("[CS-Replica] skip replay cs replica redo clog in leader", K(ret), K_(with_cs_replica), K_(ddl_macro_block));
+  } else if (FALSE_IT(ddl_macro_block_.scn_ = __get_scn())) {
+  } else if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(
+      tablet, ddl_macro_block_, snapshot_version_,
+      data_format_version_, direct_load_mgr_handle))) {
+    LOG_WARN("set macro block into ddl kv failed", K(ret), KPC(tablet), K(ddl_macro_block_),
+            K(snapshot_version_), K(data_format_version_));
   }
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
@@ -493,6 +497,100 @@ int ObTabletSchemaVersionChangeLog::init(const ObTabletID &tablet_id, const int6
 OB_SERIALIZE_MEMBER(ObTabletSchemaVersionChangeLog, tablet_id_, schema_version_);
 
 OB_SERIALIZE_MEMBER(ObDDLBarrierLog, ls_id_, hidden_tablet_ids_);
+#ifdef OB_BUILD_SHARED_STORAGE
+ObDDLFinishLog::ObDDLFinishLog()
+  :finish_info_()
+{
+}
+
+int ObDDLFinishLog::assign(const storage::ObDDLFinishLogInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguemnt", K(ret), K(other));
+  } else if (OB_FAIL(finish_info_.assign(other))) {
+    LOG_WARN("failed to assign value", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLFinishLog::init(int64_t tenant_id,
+                         const share::ObLSID ls_id,
+                         const ObITable::TableKey &table_key,
+                         const char* buf,
+                         const int64_t buf_len,
+                         const blocksstable::MacroBlockId &macro_block_id,
+                         const uint64_t data_format_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() ||!table_key.is_valid() ||
+       nullptr == buf || buf_len <= 0  || !macro_block_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(table_key), KP(buf), K(buf_len), K(macro_block_id));
+  } else {
+    finish_info_.ls_id_ = ls_id;
+    finish_info_.table_key_ = table_key;
+    finish_info_.data_buffer_.assign_ptr(buf, buf_len);
+    finish_info_.macro_block_id_ = macro_block_id;
+    finish_info_.data_format_version_ = data_format_version;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObDDLFinishLog, finish_info_);
+
+ObDDLFinishClogCb::ObDDLFinishClogCb():
+is_inited_(false), status_(), finish_log_()
+{
+}
+
+int ObDDLFinishClogCb::init(const ObDDLFinishLog &finish_log)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init finish log cb twice", K(ret));
+  } else if (!finish_log.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(finish_log));
+  } else if (OB_FAIL(finish_log_.assign(finish_log.get_log_info()))) {
+    LOG_WARN("failed to assign value", K(ret), K(finish_log));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+/*
+ * apply only need to clean up ddl kv·
+*/
+int ObDDLFinishClogCb::on_success()
+{
+  /* on success do nothing upload and update tablet meta is call in following action*/
+  int ret = OB_SUCCESS;
+  status_.set_ret_code(ret);
+  status_.set_state(STATE_SUCCESS);
+  try_release();
+  return OB_SUCCESS;
+}
+
+void ObDDLFinishClogCb::try_release()
+{
+  if (status_.try_set_release_flag()) {
+  } else {
+    this->~ObDDLFinishClogCb();
+    ob_free(this);
+  }
+}
+
+int ObDDLFinishClogCb::on_failure()
+{
+  status_.set_state(STATE_FAILED);
+  try_release();
+  return OB_SUCCESS;
+}
+#endif
 
 }
 }

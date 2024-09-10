@@ -45,7 +45,7 @@ enum ObMaxIdType
   OB_MAX_USED_REWRITE_RULE_VERSION_TYPE,
   OB_MAX_USED_TTL_TASK_ID_TYPE,
 
-  /* the following ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
+  /* OB_MAX_USED_TABLE_ID_TYPE ~ OB_MAX_USED_RLS_CONTEXT_ID_TYPE ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
   OB_MAX_USED_TABLE_ID_TYPE,
   OB_MAX_USED_DATABASE_ID_TYPE,
   OB_MAX_USED_USER_ID_TYPE,
@@ -75,7 +75,11 @@ enum ObMaxIdType
   OB_MAX_USED_RLS_POLICY_ID_TYPE,
   OB_MAX_USED_RLS_GROUP_ID_TYPE,
   OB_MAX_USED_RLS_CONTEXT_ID_TYPE,
+
+  /* the following ObMaxIdType will be persisted. */
   OB_MAX_USED_SERVICE_NAME_ID_TYPE,
+  OB_MAX_USED_STORAGE_ID_TYPE, /* used for storage id of zone storage */
+  OB_MAX_USED_STORAGE_OP_ID_TYPE, /* used for storage op id of zone storage */
   OB_MAX_ID_TYPE,
 };
 

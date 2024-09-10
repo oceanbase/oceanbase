@@ -26,6 +26,7 @@
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_attach_define.h"
 #include "sql/das/ob_das_ir_define.h"
+#include "sql/das/ob_das_vec_define.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
 #include "sql/das/iter/ob_das_iter.h"
@@ -71,18 +72,18 @@ struct ObSpatialIndexCache
 public:
   ObSpatialIndexCache() :
       spat_rows_(nullptr),
+      rows_(nullptr),
       spat_row_index_(0),
       mbr_buffer_(nullptr),
-      obj_buffer_(nullptr),
       geo_idx_(0),
       cell_idx_(0),
       mbr_idx_(0)
   {}
   ~ObSpatialIndexCache() {};
   ObDomainIndexRow *spat_rows_;
+  blocksstable::ObDatumRow *rows_;
   uint8_t spat_row_index_;
   void *mbr_buffer_;
-  void *obj_buffer_;
   uint32_t geo_idx_;
   uint32_t cell_idx_;
   uint32_t mbr_idx_;
@@ -167,6 +168,7 @@ public:
   }
   int allocate_dppr_table_loc();
   ObDASScanCtDef *get_lookup_ctdef();
+  ObDASScanCtDef *get_rowkey_vid_ctdef();
   TO_STRING_KV(K_(pre_query_range),
                K_(flashback_item),
                K_(bnlj_param_idxs),
@@ -509,7 +511,7 @@ protected:
                             ObTableScanStat &scan_stat) const;
   void set_cache_stat(const ObPlanStat &plan_stat);
   int inner_get_next_row_implement();
-  int fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &mbr);
+  int fill_generated_cellid_mbr(const ObStorageDatum &cellid, const ObStorageDatum &mbr);
   int inner_get_next_spatial_index_row();
   int init_spatial_index_rows();
   void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }

@@ -117,7 +117,9 @@ int ObHashUnionVecOp::inner_get_next_batch(const int64_t max_row_cnt)
                               child_brs))) {
         LOG_WARN("copy current row failed", K(ret));
       } else if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(MY_SPEC.set_exprs_,
-                                                              *child_brs,
+                                                              *child_brs->skip_,
+                                                              child_brs->size_,
+                                                              false /* all_rows_active */,
                                                               hash_values_for_batch_))) {
         LOG_WARN("failed to calc hash value for batch", K(ret));
       } else {

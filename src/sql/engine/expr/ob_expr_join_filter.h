@@ -41,7 +41,7 @@ public:
       ObExprJoinFilterContext() : ObExprOperatorCtx(),
           rf_msg_(nullptr), rf_key_(), hash_funcs_(), cmp_funcs_(), start_time_(0),
           filter_count_(0), total_count_(0), check_count_(0),
-          n_times_(0), ready_ts_(0), slide_window_(total_count_), flag_(0),
+          n_times_(0), ready_ts_(0), slide_window_(total_count_), flag_(0), max_wait_time_ms_(0),
           cur_row_(), cur_row_with_hash_(nullptr), skip_vector_(nullptr)
         {
           cur_row_.set_attr(ObMemAttr(MTL_ID(), "RfCurRow"));
@@ -121,10 +121,10 @@ public:
           // for runtime filter pushdown, if is partition wise join, we need to reset
           // pushdown filter parameters
           bool is_partition_wise_jf_ : 1;
-          int32_t max_wait_time_ms_:32;
-          int32_t reserved_:27;
+          uint64_t reserved_:59;
         };
       };
+      int64_t max_wait_time_ms_;
       ObTMArray<ObDatum> cur_row_;
       ObRowWithHash *cur_row_with_hash_; // used in ObRFInFilterVecMsg, for probe
       // used in ObRFInFilterVecMsg/ObRFBloomFilterMsg, for probe in single row interface

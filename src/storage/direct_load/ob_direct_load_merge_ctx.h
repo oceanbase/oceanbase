@@ -78,6 +78,7 @@ public:
   uint64_t target_table_id_;
   int64_t rowkey_column_num_;
   int64_t store_column_count_;
+  int64_t lob_column_cnt_;
   int64_t fill_cg_thread_cnt_;
   const common::ObArray<int64_t> *lob_column_idxs_;
   storage::ObDirectLoadTableDataDesc table_data_desc_;

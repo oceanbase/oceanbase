@@ -31,6 +31,7 @@ namespace storage
 
 ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
     : is_inited_(false),
+      is_vec2_(false),
       pd_filter_info_(),
       context_(context),
       iter_param_(nullptr),
@@ -63,8 +64,9 @@ void ObBlockRowStore::reuse()
   is_aggregated_in_prefetch_ = false;
 }
 
-int ObBlockRowStore::init(const ObTableAccessParam &param)
+int ObBlockRowStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)
 {
+  UNUSED(agg_col_mask);
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -160,11 +162,11 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
   } else if (nullptr == pd_filter_info_.filter_) {
     // nothing to do
-  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(context_.stmt_allocator_, need_convert))) {
+  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(&pd_filter_info_.filter_->get_allocator(), need_convert))) {
     LOG_WARN("Failed to init pushdown filter evaluated datums", K(ret));
   } else {
     if (OB_UNLIKELY(need_convert)) {
-      sql::ObPushdownFilterFactory filter_factory(context_.stmt_allocator_);
+      sql::ObPushdownFilterFactory filter_factory(&pd_filter_info_.filter_->get_allocator());
       if (OB_FAIL(filter_factory.convert_white_filter_to_black(pd_filter_info_.filter_))) {
         LOG_WARN("Failed to convert white filter to black filter", K(ret), KPC_(pd_filter_info_.filter));
       } else {

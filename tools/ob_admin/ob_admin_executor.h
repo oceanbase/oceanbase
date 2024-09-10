@@ -43,7 +43,6 @@ protected:
   ObIODevice *get_device_inner();
   int prepare_io();
   int prepare_decoder();
-  int init_slogger_mgr();
   int load_config();
 
 protected:

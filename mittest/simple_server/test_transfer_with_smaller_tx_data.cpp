@@ -30,6 +30,7 @@ namespace storage
 {
 int64_t ObTxTable::UPDATE_MIN_START_SCN_INTERVAL = 0;
 
+
 int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
   const share::ObTransferTaskInfo &task_info,
   ObTimeoutCtx &timeout_ctx)
@@ -82,7 +83,6 @@ public:
     WRITE_SQL_BY_CONN(connection, "set GLOBAL ob_query_timeout = 10000000000");
     WRITE_SQL_BY_CONN(connection, "alter system set enable_early_lock_release = False;");
     WRITE_SQL_BY_CONN(connection, "alter system set undo_retention = 1800;");
-    WRITE_SQL_BY_CONN(connection, "alter system set partition_balance_schedule_interval = '10s';");
     sleep(5);
   }
 
@@ -164,12 +164,15 @@ public:
     MTL_SWITCH(tenant_id) {
       TRANS_LOG(INFO, "worker to do partition_balance");
       auto b_svr = MTL(rootserver::ObTenantBalanceService*);
+      b_svr->stop();
       b_svr->reset();
       int64_t job_cnt = 0;
       int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
       ObBalanceJob job;
       if (OB_FAIL(b_svr->gather_stat_())) {
         TRANS_LOG(WARN, "failed to gather stat", KR(ret));
+      } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_))) {
+        TRANS_LOG(WARN, "failed to gather ls stat", KR(ret));
       } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
                            tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -408,7 +411,7 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
   fprintf(stdout, "end update upper info the second time %lu\n", second_min_start_scn);
   TRANS_LOG(INFO, "end update upper info the second time");
 
-  ASSERT_EQ(true, first_min_start_scn > second_min_start_scn);
+  ASSERT_GT(first_min_start_scn, second_min_start_scn);
 
   min_start_scn_in_tx_data.set_max();
   fprintf(stdout, "start get min start in tx data table second time\n");
@@ -418,8 +421,8 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
   fprintf(stdout, "end get min start in tx data table second time, %lu\n", min_start_scn_in_tx_data.val_);
   TRANS_LOG(INFO, "end get min start in tx data table second time");
 
-  ASSERT_EQ(true, first_min_start_scn > second_min_start_scn);
-  ASSERT_EQ(true, first_min_start_scn_in_tx_data > second_min_start_scn_in_tx_data);
+  ASSERT_GT(first_min_start_scn, second_min_start_scn);
+  ASSERT_GT(first_min_start_scn_in_tx_data, second_min_start_scn_in_tx_data);
 
   inject_tx_fault_helper.release();
   th.join();

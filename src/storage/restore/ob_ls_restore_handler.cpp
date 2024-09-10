@@ -2708,19 +2708,20 @@ int ObLSRestoreMajorState::do_restore_major_(
   ObTabletGroupRestoreArg arg;
   bool reach_dag_limit = false;
   bool is_new_election = false;
-  // No matter is leader or follower, always restore data from backup.
-  if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
-    LOG_WARN("fail to fill leader ls restore arg", K(ret));
-  }
+  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
 
-#if 0
-  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
-  if (!is_follower(role_) && OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
-    LOG_WARN("fail to fill ls restore arg", K(ret));
-  } else if (is_follower(role_) && OB_FAIL(follower_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
-    LOG_WARN("fail to fill ls restore arg", K(ret));
+  if (!is_shared_storage_mode) {
+    // No matter is leader or follower, always restore data from backup.
+    if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
+      LOG_WARN("fail to fill leader ls restore arg", K(ret));
+    }
+  } else {
+    if (!is_follower(role_) && OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
+      LOG_WARN("fail to fill ls restore arg", K(ret));
+    } else if (is_follower(role_) && OB_FAIL(follower_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
+      LOG_WARN("fail to fill ls restore arg", K(ret));
+    }
   }
-#endif
 
   if (FAILEDx(check_new_election_(is_new_election))) {
     LOG_WARN("fail to check change role", K(ret));
@@ -3066,7 +3067,7 @@ bool ObLSRestoreResultMgr::can_retrieable_err(const int err) const
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
     case OB_SERVER_OUTOF_DISK_SPACE :
-    case OB_BACKUP_FILE_NOT_EXIST :
+    case OB_OBJECT_NOT_EXIST :
     case OB_ARCHIVE_ROUND_NOT_CONTINUOUS :
     case OB_HASH_NOT_EXIST:
     case OB_TOO_MANY_PARTITIONS_ERROR:

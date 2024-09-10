@@ -27,6 +27,11 @@
 #include "logservice/palf/fetch_log_engine.h"
 #include "logservice/rcservice/ob_role_change_service.h"
 #include "observer/ob_startup_accel_task_handler.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
+#include "close_modules/shared_storage/storage/shared_storage/ob_private_block_gc_task.h"
+#include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
+#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

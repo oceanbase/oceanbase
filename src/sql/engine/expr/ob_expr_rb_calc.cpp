@@ -69,39 +69,62 @@ int ObExprRbCalc::eval_rb_calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res,
   bool is_rb1_null = false;
   bool is_rb2_null = false;
   bool is_res_null = false;
-  ObRoaringBitmap *rb1 = nullptr;
-  ObRoaringBitmap *rb2 = nullptr;
-  ObString rb_res;
-  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb1_arg, rb1, is_rb1_null))) {
-    LOG_WARN("failed to get left input roaringbitmap", K(ret));
-  } else if (is_rb1_null && !is_null2empty) {
-    is_res_null = true;
-  } else if (is_rb1_null && is_null2empty
-            && OB_ISNULL(rb1 = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
-  } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb2_arg, rb2, is_rb2_null))) {
-    LOG_WARN("failed to get right input roaringbitmap", K(ret));
-  } else if (is_rb2_null  && !is_null2empty) {
-    is_res_null = true;
-  } else if (is_rb2_null && is_null2empty
-            && OB_ISNULL(rb2 = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
-  } else if (OB_FAIL(rb1->value_calc(rb2, op))) {
-    LOG_WARN("failed to calcutlate roaringbitmap value_and", K(ret));
+  ObString res_rb_bin;
+  if (op == ObRbOperation::AND || op == ObRbOperation::ANDNOT) {
+    ObString rb1_bin;
+    ObString rb2_bin;
+    if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb1_arg, rb1_bin, is_rb1_null))) {
+      LOG_WARN("fail to get left input roaringbitmap", K(ret));
+    } else if (is_rb1_null && !is_null2empty) {
+      is_res_null = true;
+    } else if (is_rb1_null && is_null2empty && OB_FAIL(ObRbUtils::build_empty_binary(tmp_allocator, rb1_bin))) {
+      LOG_WARN("failed to build empty roaringbitmap binary", K(ret));
+    } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb2_arg, rb2_bin, is_rb2_null))) {
+      LOG_WARN("fail to get right input roaringbitmap", K(ret));
+    } else if (is_rb2_null  && !is_null2empty) {
+      is_res_null = true;
+    } else if (is_rb2_null && is_null2empty && OB_FAIL(ObRbUtils::build_empty_binary(tmp_allocator, rb2_bin))) {
+      LOG_WARN("failed to build empty roaringbitmap binary", K(ret));
+    } else if (OB_FAIL(ObRbUtils::binary_calc(tmp_allocator, rb1_bin, rb2_bin, res_rb_bin, op))) {
+      LOG_WARN("failed to calculate roaringbitmap", K(ret), K(rb1_bin), K(rb2_bin), K(op));
+    }
+  } else if (op == ObRbOperation::OR || op == ObRbOperation::XOR) {
+    ObRoaringBitmap *rb1 = nullptr;
+    ObRoaringBitmap *rb2 = nullptr;
+    if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb1_arg, rb1, is_rb1_null))) {
+      LOG_WARN("failed to get left input roaringbitmap", K(ret));
+    } else if (is_rb1_null && !is_null2empty) {
+      is_res_null = true;
+    } else if (is_rb1_null && is_null2empty
+              && OB_ISNULL(rb1 = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
+    } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb2_arg, rb2, is_rb2_null))) {
+      LOG_WARN("failed to get right input roaringbitmap", K(ret));
+    } else if (is_rb2_null  && !is_null2empty) {
+      is_res_null = true;
+    } else if (is_rb2_null && is_null2empty
+              && OB_ISNULL(rb2 = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
+    } else if (OB_FAIL(ObRbUtils::calc_inplace(rb1, rb2, op))) {
+      LOG_WARN("failed to calcutlate roaringbitmap inplace", K(ret));
+    } else if (OB_FAIL(ObRbUtils::rb_serialize(tmp_allocator, res_rb_bin, rb1))) {
+      LOG_WARN("failed to serialize roaringbitmap", K(ret));
+    }
+    ObRbUtils::rb_destroy(rb1);
+    ObRbUtils::rb_destroy(rb2);
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("operation is not supported", K(ret), K(op));
   }
 
   if (OB_FAIL(ret)) {
   } else if (is_res_null) {
     res.set_null();
-  } else if (OB_FAIL(ObRbUtils::rb_serialize(tmp_allocator, rb_res, rb1))) {
-    LOG_WARN("failed to serialize roaringbitmap", K(ret));
-  } else if (OB_FAIL(ObRbExprHelper::pack_rb_res(expr, ctx, res, rb_res))) {
+  } else if (OB_FAIL(ObRbExprHelper::pack_rb_res(expr, ctx, res, res_rb_bin))) {
     LOG_WARN("fail to pack roaringbitmap res", K(ret));
   }
-  ObRbUtils::rb_destroy(rb1);
-  ObRbUtils::rb_destroy(rb2);
   return ret;
 }
 

@@ -77,6 +77,13 @@ public:
   static bool is_invisible_column(uint64_t flag);
   static bool is_cte_generated_column(uint64_t flag);
   static bool is_default_expr_v2_column(uint64_t flag);
+  static bool is_vec_index_column(const uint64_t flag);
+  static bool is_vec_vid_column(const uint64_t flag);
+  static bool is_vec_type_column(const uint64_t flag);
+  static bool is_vec_vector_column(const uint64_t flag);
+  static bool is_vec_scn_column(const uint64_t flag);
+  static bool is_vec_key_column(const uint64_t flag);
+  static bool is_vec_data_column(const uint64_t flag);
   static bool is_fulltext_column(const uint64_t flag);
   static bool is_doc_id_column(const uint64_t flag);
   static bool is_word_segment_column(const uint64_t flag);
