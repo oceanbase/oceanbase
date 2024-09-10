@@ -3540,6 +3540,7 @@ struct ReCheckFun {
       locked = lock_state_.is_locked_ && lock_state_.lock_trans_id_ != tx_id;
       wait_on_row = !lock_state_.is_delayed_cleanout_;
     }
+
     return ret;
   }
 private:
@@ -3878,6 +3879,10 @@ void ObMemtable::mvcc_write_statistic_(const ObMvccWriteResults &mvcc_results)
       } else if (blocksstable::ObDmlFlag::DF_DELETE == dml_flag) {
         ++mt_stat_.delete_row_count_;
       }
+
+      EVENT_ADD(ObStatEventIds::MEMSTORE_WRITE_BYTES,
+                mvcc_results[i].mtk_.get_rowkey()->get_deep_copy_size() +
+                mvcc_results[i].tx_node_->get_data_size());
     }
   }
 }
