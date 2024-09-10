@@ -438,7 +438,7 @@ int ObResultSet::end_stmt(const bool is_rollback)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid inner state", K(physical_plan_));
     } else if (physical_plan_->is_need_trans()) {
-      if (OB_FAIL(ObSqlTransControl::end_stmt(get_exec_context(), is_rollback))) {
+      if (OB_FAIL(ObSqlTransControl::end_stmt(get_exec_context(), is_rollback, is_will_retry_()))) {
         SQL_LOG(WARN, "fail to end stmt", K(ret), K(is_rollback));
       }
     }

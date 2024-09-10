@@ -221,7 +221,7 @@ public:
                                    ObPhysicalPlanCtx *plan_ctx,
                                    transaction::ObTransService* txs,
                                    const int64_t nested_level);
-  static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback);
+  static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback, const bool will_retry);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
   static int kill_tx(ObSQLSessionInfo *session, int cause);
   static int kill_idle_timeout_tx(ObSQLSessionInfo *session);
@@ -321,6 +321,8 @@ public:
   // called when response client to decide whether need allow free route and whether state need to be returned
   static int calc_txn_free_route(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_route_ctx);
   static int check_free_route_tx_alive(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_rotue_ctx);
+  static transaction::ObTxCleanPolicy
+  decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry);
 };
 
 inline int ObSqlTransControl::get_trans_expire_ts(const ObSQLSessionInfo &my_session,
