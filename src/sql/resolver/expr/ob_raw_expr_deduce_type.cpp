@@ -147,6 +147,12 @@ int ObRawExprDeduceType::visit(ObColumnRefRawExpr &expr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid meta of binary_ref", K(expr));
   }
+
+  if (OB_SUCC(ret)) {
+    if (expr.get_result_type().is_lob_storage() && !IS_CLUSTER_VERSION_BEFORE_4_1_0_0) {
+      expr.set_has_lob_header();
+    }
+  }
   return ret;
 }
 
