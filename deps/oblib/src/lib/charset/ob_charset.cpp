@@ -3870,12 +3870,8 @@ int ObCharset::init_charset_and_arr() {
   if (OB_SUCC(ret)) {
     auto *utf8_pinyin = &ob_charset_utf8mb4_zh_0900_as_cs;
     ObCollationHandler *pinyin_coll = ob_charset_utf8mb4_zh_0900_as_cs.coll;
-    if (pinyin_coll->init(utf8_pinyin, &loader)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to init charset", K(ret));
-    } else {
-      add_coll(CS_TYPE_UTF8MB4_ZH_0900_AS_CS_CPY, utf8_pinyin);
-    }
+    // uca 900 include this col
+    add_coll(CS_TYPE_UTF8MB4_ZH_0900_AS_CS_CPY, utf8_pinyin);
   }
   if (OB_SUCC(ret)) {
     auto *utf8_radical = &ob_charset_utf8mb4_zh2_0900_as_cs;
