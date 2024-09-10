@@ -157,9 +157,38 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
     }
   } else {
     const int64_t col_count = output_column_ids_.count();
+    const int64_t cur_col_cnt = MAX_COLUMN_ID - common::OB_APP_MIN_COLUMN_ID;
+    const int64_t schema_col_cnt = table_schema_->get_column_count();
+    int column_id_fix_shift = 0;
+    const int column_id_fix_offset = START_SCN;
+    if (schema_col_cnt != cur_col_cnt) {
+      // for version less than 4.2.5
+      // serveral column's id not aligned, need adjust:
+      ObString column_name;
+      bool exist = false;
+      table_schema_->get_column_name_by_column_id(START_SCN, column_name, exist);
+      if (!exist) {
+        // no need align
+      } else if (column_name == "busy_cbs" || column_name == "BUSY_CBS") {
+        /*
+          ('start_scn', 'uint'),          <------------+
+          ('end_scn', 'uint'),                         | not exist in 4.2.4
+          ('rec_scn', 'uint'),                         |
+          ('transfer_blocking', 'bool'),  <------------+
+          ('busy_cbs', 'int'),
+          ('replay_complete', 'int'),
+          ('serial_log_final_scn', 'int'),
+          ('callback_list_stats', 'longtext'),
+        */
+        column_id_fix_shift = 4;
+      }
+    }
     xid_ = tx_stat.xid_;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
+      if (column_id_fix_shift && col_id >= column_id_fix_offset) {
+        col_id += column_id_fix_shift;
+      }
       switch (col_id) {
         case TENANT_ID:
           cur_row_.cells_[i].set_int(tx_stat.tenant_id_);

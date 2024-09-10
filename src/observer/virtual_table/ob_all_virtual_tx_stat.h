@@ -93,6 +93,7 @@ private:
     REPLAY_COMPLETE,
     SERIAL_LOG_FINAL_SCN,
     CALLBACK_LIST_STATS,
+    MAX_COLUMN_ID
   };
 
   static const int64_t OB_MAX_BUFFER_SIZE = 1024;
