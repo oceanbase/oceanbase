@@ -225,30 +225,6 @@ enum class ObExistFlag : uint8_t
   NOT_EXIST    = 2,
 };
 
-static ObExistFlag extract_exist_flag_from_dml_flag(const blocksstable::ObDmlFlag dml_flag)
-{
-  ObExistFlag exist_flag = ObExistFlag::UNKNOWN;
-  switch (dml_flag) {
-  case blocksstable::ObDmlFlag::DF_NOT_EXIST:
-    exist_flag = ObExistFlag::UNKNOWN;
-    break;
-  case blocksstable::ObDmlFlag::DF_LOCK:
-    exist_flag = ObExistFlag::EXIST;
-    break;
-  case blocksstable::ObDmlFlag::DF_UPDATE:
-  case blocksstable::ObDmlFlag::DF_INSERT:
-    exist_flag = ObExistFlag::EXIST;
-    break;
-  case blocksstable::ObDmlFlag::DF_DELETE:
-    exist_flag = ObExistFlag::NOT_EXIST;
-    break;
-  default:
-    ob_abort();
-    break;
-  }
-  return exist_flag;
-}
-
 struct ObStoreRowLockState
 {
 public:
@@ -259,23 +235,40 @@ public:
     lock_data_sequence_(),
     lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
     is_delayed_cleanout_(false),
-    exist_flag_(ObExistFlag::UNKNOWN),
     mvcc_row_(NULL),
     trans_scn_(share::SCN::max_scn()) {}
+  inline bool row_exist_not_decided() const
+  {
+    return lock_dml_flag_ == blocksstable::ObDmlFlag::DF_NOT_EXIST;
+  }
   inline bool row_exist_decided() const
   {
-    return ObExistFlag::EXIST == exist_flag_
-      || ObExistFlag::NOT_EXIST == exist_flag_;
+    return lock_dml_flag_ == blocksstable::ObDmlFlag::DF_LOCK ||
+      lock_dml_flag_ == blocksstable::ObDmlFlag::DF_UPDATE ||
+      lock_dml_flag_ == blocksstable::ObDmlFlag::DF_INSERT ||
+      lock_dml_flag_ == blocksstable::ObDmlFlag::DF_DELETE;
   }
   inline bool row_exist() const
   {
-    return ObExistFlag::EXIST == exist_flag_;
+    return lock_dml_flag_ == blocksstable::ObDmlFlag::DF_LOCK ||
+      lock_dml_flag_ == blocksstable::ObDmlFlag::DF_UPDATE ||
+      lock_dml_flag_ == blocksstable::ObDmlFlag::DF_INSERT;
+  }
+  inline bool row_deleted() const
+  {
+    return lock_dml_flag_ == blocksstable::ObDmlFlag::DF_DELETE;
+  }
+  inline bool is_row_decided() const
+  {
+    return is_locked_ ||
+      (!trans_version_.is_min() &&
+       lock_dml_flag_ != blocksstable::ObDmlFlag::DF_NOT_EXIST);
   }
   inline bool is_lock_decided() const
   {
     return is_locked_ || !trans_version_.is_min();
   }
-  inline bool is_locked(const transaction::ObTransID trans_id) const
+  inline bool is_locked_not_by(const transaction::ObTransID trans_id) const
   {
     return is_locked_ && lock_trans_id_ != trans_id;
   }
@@ -286,7 +279,6 @@ public:
                K_(lock_data_sequence),
                K_(lock_dml_flag),
                K_(is_delayed_cleanout),
-               K_(exist_flag),
                KP_(mvcc_row),
                K_(trans_scn));
 
@@ -296,7 +288,6 @@ public:
   transaction::ObTxSEQ lock_data_sequence_;
   blocksstable::ObDmlFlag lock_dml_flag_;
   bool is_delayed_cleanout_;
-  ObExistFlag exist_flag_;
   memtable::ObMvccRow *mvcc_row_;
   share::SCN trans_scn_; // sstable takes end_scn, memtable takes scn_ of ObMvccTransNode
 };
@@ -469,6 +460,7 @@ struct ObStoreCtx
                     const int64_t lock_timeout_us,
                     const share::SCN &snapshot_version);
   void force_print_trace_log();
+  int get_all_tables(ObIArray<ObITable *> &iter_tables);
   TO_STRING_KV(KP(this),
                K_(ls_id),
                KP_(ls),

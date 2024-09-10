@@ -131,7 +131,6 @@ private:
   int init_datum_row();
   int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header, const ObDatumRowkey *&endkey);
   int get_next_idx_row(ObMicroIndexInfo &idx_block_row);
-  void skip_index_rows();
   int find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx);
   int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row);
 private:

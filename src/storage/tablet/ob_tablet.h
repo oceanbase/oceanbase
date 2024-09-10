@@ -256,13 +256,11 @@ public:
   int insert_rows(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
-      ObStoreRow *rows,
-      ObRowsInfo &rows_info,
       const bool check_exist,
       const ObColDescIArray &col_descs,
-      const int64_t row_count,
-      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
-  int insert_row_without_rowkey_check(
+      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
+      ObRowsInfo &rows_info);
+  int insert_row(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
       const bool check_exist,
@@ -277,6 +275,14 @@ public:
       const storage::ObStoreRow &old_row,
       const storage::ObStoreRow &new_row,
       const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
+  int update_rows(
+      ObRelativeTable &relative_table,
+      ObStoreCtx &store_ctx,
+      const ObColDescIArray &col_descs,
+      const ObIArray<int64_t> &update_idx,
+      const storage::ObStoreRow *old_tbl_rows,
+      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
+      ObRowsInfo &rows_info);
   int lock_row(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,

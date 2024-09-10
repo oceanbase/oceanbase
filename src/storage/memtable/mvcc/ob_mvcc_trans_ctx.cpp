@@ -122,6 +122,13 @@ void ObITransCallback::after_append_cb(const bool is_replay)
   (void)after_append(is_replay);
 }
 
+void ObITransCallback::after_append_fail_cb(const bool is_replay)
+{
+  if (need_fill_redo_ == !is_replay && need_submit_log_ == !is_replay) {
+    (void)after_append_fail(is_replay);
+  }
+}
+
 int ObITransCallback::log_submitted_cb()
 {
   int ret = OB_SUCCESS;
@@ -165,6 +172,15 @@ void ObITransCallback::append(ObITransCallback *node)
   node->set_next(this->get_next());
   this->get_next()->set_prev(node);
   this->set_next(node);
+}
+
+void ObITransCallback::append(ObITransCallback *head,
+                              ObITransCallback *tail)
+{
+  head->set_prev(this);
+  tail->set_next(this->get_next());
+  this->get_next()->set_prev(tail);
+  this->set_next(head);
 }
 
 int ObITransCallback::remove()
@@ -367,7 +383,7 @@ int ObTransCallbackMgr::get_tx_seq_replay_idx(const transaction::ObTxSEQ seq) co
 
 _RLOCAL(bool, ObTransCallbackMgr::parallel_replay_);
 
-// called by write and replay:
+// called by write and replay
 int ObTransCallbackMgr::append(ObITransCallback *node)
 {
   int ret = OB_SUCCESS;
@@ -450,6 +466,131 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
     }
   }
   after_append(node, ret);
+  return ret;
+}
+
+// called only by write now
+int ObTransCallbackMgr::append(ObITransCallback *head,
+                               ObITransCallback *tail,
+                               const int64_t length)
+{
+  int ret = OB_SUCCESS;
+
+  if (nullptr != head && nullptr != tail) {
+    if (for_replay_) {
+      // We donot support batch append for replay now
+      OB_ASSERT(1 == length);
+    }
+
+    // Step1: prepare the callback append(epoch for pdml and statistic)
+    for (ObITransCallback *cb = head; cb != nullptr; cb = cb->get_next()) {
+      (void)before_append(cb);
+      if (!for_replay_) {
+        cb->set_epoch(write_epoch_);
+      }
+    }
+
+    // Step2: find the slot for register or replay
+    const transaction::ObTxSEQ seq_no = head->get_seq_no();
+    if (OB_LIKELY(seq_no.support_branch())) {
+      // NEW since version 4.2.4, select by branch
+      int slot = seq_no.get_branch() % MAX_CALLBACK_LIST_COUNT;
+      if (OB_UNLIKELY(slot > 0
+                      && for_replay_
+                      && is_serial_final_()
+                      && head->get_scn() <= serial_final_scn_)) {
+        // _NOTE_
+        // for log with scn before serial final and replayed after txn recovery from point after serial final
+        // it's replayed into first callback-list to keep the scn is in asc order for all callback list
+        // for example:
+        // serial final log scn = 100
+        // recovery point scn = 200
+        // log replaying with scn = 80
+        //
+        // Checksum calculation:
+        // this log has been accumulated, it will not be required in all calback-list
+        if (parallel_replay_) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "parallel replay an serial log", KR(ret), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+          ob_abort();
+#endif
+        }
+        if (OB_SUCC(ret) && OB_UNLIKELY(!has_branch_replayed_into_first_list_)) {
+          // sanity check: the serial_final_seq_no must be set
+          // which will be used in replay `rollback branch savepoint` log
+          if (OB_UNLIKELY(!serial_final_seq_no_.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(ERROR, "serial_final_seq_no is invalid", KR(ret), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+            ob_abort();
+#endif
+          } else {
+            ATOMIC_STORE(&has_branch_replayed_into_first_list_, true);
+            TRANS_LOG(INFO, "replay log before serial final when reach serial final",
+                      KPC(this), KPC(get_trans_ctx()), KPC(head));
+          }
+        }
+        slot = 0;
+      }
+
+      // Step2: register or replay
+      if (OB_FAIL(ret)) {
+      } else if (OB_LIKELY(slot == 0)) {
+        // no parallel and no branch requirement
+        ret = callback_list_.append_callback(head,
+                                             tail,
+                                             length,
+                                             for_replay_,
+                                             parallel_replay_,
+                                             is_serial_final_());
+        // try to extend callback_lists_ if required
+      } else if (!callback_lists_ && OB_FAIL(extend_callback_lists_(MAX_CALLBACK_LIST_COUNT - 1))) {
+        TRANS_LOG(WARN, "extend callback lists failed", K(ret));
+      } else {
+        ret = callback_lists_[slot - 1].append_callback(head,
+                                                        tail,
+                                                        length,
+                                                        for_replay_,
+                                                        parallel_replay_,
+                                                        is_serial_final_());
+      }
+    } else {
+      // OLD before version 4.2.4
+      // if has parallel select from callback_lists_
+      // don't select main, and merge into main finally
+      const int64_t tid = get_itid() + 1;
+      int slot = tid % MAX_CALLBACK_LIST_COUNT;
+      int64_t stat = ATOMIC_LOAD(&parallel_stat_);
+      if (PARALLEL_STMT == stat) {
+        if (OB_FAIL(!callback_lists_ && extend_callback_lists_(MAX_CALLBACK_LIST_COUNT))) {
+          TRANS_LOG(WARN, "extend callback lists failed", K(ret));
+        } else {
+          ret = callback_lists_[slot].append_callback(head,
+                                                      tail,
+                                                      length,
+                                                      for_replay_,
+                                                      parallel_replay_,
+                                                      true /*is_serial_final*/);
+          add_slave_list_append_cnt();
+        }
+      } else {
+        ret = callback_list_.append_callback(head,
+                                             tail,
+                                             length,
+                                             for_replay_,
+                                             parallel_replay_,
+                                             true /*is_serial_final*/);
+        add_main_list_append_cnt();
+      }
+    }
+
+    // Step1: prepare the callback append(epoch for pdml and statistic)
+    for (ObITransCallback *cb = head; nullptr != cb && tail != cb->get_prev(); cb = cb->get_next()) {
+      after_append(cb, ret);
+    }
+  }
+
   return ret;
 }
 
@@ -1941,6 +2082,14 @@ int ObMvccRowCallback::checkpoint_callback()
   }
 
   return ret;
+}
+
+void ObMvccRowCallback::after_append_fail(const bool is_replay)
+{
+  if (!is_replay) {
+    dec_unsubmitted_cnt_();
+    dec_unsynced_cnt_();
+  }
 }
 
 static blocksstable::ObDmlFlag get_dml_flag(ObMvccTransNode *node)

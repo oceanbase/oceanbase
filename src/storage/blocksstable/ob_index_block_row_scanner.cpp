@@ -784,15 +784,6 @@ int ObIndexBlockRowScanner::get_next_idx_row(ObMicroIndexInfo &idx_block_row)
   return ret;
 }
 
-void ObIndexBlockRowScanner::skip_index_rows()
-{
-  for (; rowkey_begin_idx_ < rowkey_end_idx_; ++rowkey_begin_idx_) {
-    if (!rows_info_->is_row_skipped(rowkey_begin_idx_)) {
-      break;
-    }
-  }
-}
-
 int ObIndexBlockRowScanner::find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx)
 {
   int ret = OB_SUCCESS;
@@ -840,7 +831,13 @@ int ObIndexBlockRowScanner::find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_
 int ObIndexBlockRowScanner::skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row)
 {
   int ret = OB_SUCCESS;
-  skip_index_rows();
+  // The rowkeys may have been processed by the upper-layer sstable or by the bloom filter
+  // during prefetch, so the processed rowkeys must be skipped.
+  for (; rowkey_begin_idx_ < rowkey_end_idx_; ++rowkey_begin_idx_) {
+    if (!rows_info_->is_row_skipped(rowkey_begin_idx_)) {
+      break;
+    }
+  }
   if (rowkey_begin_idx_ == rowkey_end_idx_) {
     ret = OB_ITER_END;
   } else if (IndexFormat::TRANSFORMED == index_format_) {
@@ -882,6 +879,9 @@ int ObIndexBlockRowScanner::skip_to_next_valid_position(ObMicroIndexInfo &idx_bl
     idx_block_row.rowkey_begin_idx_ = rowkey_begin_idx_;
     if (OB_FAIL(find_rowkeys_belong_to_same_idx_row(idx_block_row.rowkey_end_idx_))) {
       LOG_WARN("Failed to find rowkeys belong to same index row", K(ret), K_(current), KPC_(idx_data_header));
+    } else {
+      // set the rowkey_begin_idx_ for next index row
+      rowkey_begin_idx_ = idx_block_row.rowkey_end_idx_;
     }
   }
   return ret;

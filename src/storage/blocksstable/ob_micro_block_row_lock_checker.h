@@ -28,10 +28,6 @@ public:
   {
     lock_state_ = lock_state;
   }
-  inline void set_row_state(ObRowState *row_state)
-  {
-    row_state_ = row_state;
-  }
   inline void set_snapshot_version(const share::SCN &snapshot_version)
   {
     snapshot_version_ = snapshot_version;
@@ -42,11 +38,9 @@ public:
   }
 protected:
   virtual int inner_get_next_row(
-      bool &row_lock_checked,
       int64_t &current,
       ObStoreRowLockState *&lock_state);
   virtual int check_row(
-      const bool row_lock_checked,
       const transaction::ObTransID &trans_id,
       const ObRowHeader *row_header,
       const ObStoreRowLockState &lock_state,
@@ -56,7 +50,6 @@ protected:
   bool check_exist_;
   share::SCN snapshot_version_;
   ObStoreRowLockState *lock_state_;
-  ObRowState* row_state_;
   ObStoreRowLockState tmp_lock_state_;
 };
 
@@ -73,11 +66,9 @@ public:
    void inc_empty_read();
 protected:
   virtual int inner_get_next_row(
-      bool &row_lock_checked,
       int64_t &current,
       ObStoreRowLockState *&lock_state);
   virtual int check_row(
-      const bool row_lock_checked,
       const transaction::ObTransID &trans_id,
       const ObRowHeader *row_header,
       const ObStoreRowLockState &lock_state,

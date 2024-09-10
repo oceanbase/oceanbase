@@ -165,6 +165,17 @@ public:
       const ObInsertFlag flag,
       int64_t &affected_rows,
       common::ObNewRowIterator *&duplicated_rows);
+  int insert_rows_with_fetch_dup(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      transaction::ObTxDesc &tx_desc,
+      const ObDMLBaseParam &dml_param,
+      const common::ObIArray<uint64_t> &column_ids,
+      const common::ObIArray<uint64_t> &duplicated_column_ids,
+      common::ObNewRowIterator *row_iter,
+      const ObInsertFlag flag,
+      int64_t &affected_rows,
+      common::ObNewRowIterator *&duplicated_rows);
   int revert_insert_iter(common::ObNewRowIterator *iter);
   int update_rows(
       const share::ObLSID &ls_id,

@@ -158,6 +158,7 @@ public:
       uint64_t in_plsql_compilation_  : 1;
       uint64_t in_plsql_execution_  : 1;
       uint64_t in_filter_rows_: 1;
+      uint64_t in_check_row_confliction_: 1;
     };
   };
 
@@ -440,6 +441,7 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_committing)
 DEF_ASH_FLAGS_SETTER_GUARD(in_storage_read)
 DEF_ASH_FLAGS_SETTER_GUARD(in_storage_write)
 DEF_ASH_FLAGS_SETTER_GUARD(in_filter_rows)
+DEF_ASH_FLAGS_SETTER_GUARD(in_check_row_confliction)
 
 #undef DEF_ASH_FLAGS_SETTER_GUARD
 
