@@ -1352,7 +1352,7 @@ int ObBaseIndexBlockBuilder::close_index_tree(ObBaseIndexBlockBuilder *&root_bui
   } else if (OB_UNLIKELY(next_level_builder_ == nullptr)) {
     root_builder = this;
   } else {
-    //TODO(luhaopeng.lhp) check if row_count == 0 is error?
+    //TODO(baichangmin.bcm) check if row_count == 0 is error?
     if (OB_LIKELY(micro_writer_->get_row_count() > 0)) {
       if (OB_FAIL(append_index_micro_block())) {
         STORAGE_LOG(WARN, "Fail to append index micro block, ", K(ret));

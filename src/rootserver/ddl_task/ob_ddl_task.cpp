@@ -217,7 +217,7 @@ void ObDDLTracing::close()
 {
   if (OB_DDL_TASK_ENABLE_TRACING) {
   int ret = OB_SUCCESS;
-  // TODO hanxuan fix MTL_SWITCH
+  // TODO jiahua.cjh fix MTL_SWITCH
   MTL_SWITCH(OB_SYS_TENANT_ID) {
     end_status_span();
     // flush task span
@@ -341,7 +341,7 @@ void ObDDLTracing::end_task_span()
     FLT_RESTORE_DDL_TRACE_CTX(trace_ctx_);
     FLT_SET_AUTO_FLUSH(true);
     task_->flt_set_task_span_tag();
-    // TODO hanxuan fix MTL_SWITCH
+    // TODO jiahua.cjh fix MTL_SWITCH
     MTL_SWITCH(OB_SYS_TENANT_ID) {
       FLT_END_SPAN(task_span_);
     }
@@ -505,7 +505,7 @@ void ObDDLTracing::end_status_span()
     FLT_RESTORE_DDL_TRACE_CTX(trace_ctx_);
     FLT_SET_AUTO_FLUSH(true);
     task_->flt_set_status_span_tag();
-    // TODO hanxuan fix MTL_SWITCH
+    // TODO jiahua.cjh fix MTL_SWITCH
     MTL_SWITCH(OB_SYS_TENANT_ID) {
       FLT_END_SPAN(status_span_);
     }
