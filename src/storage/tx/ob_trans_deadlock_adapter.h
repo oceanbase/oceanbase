@@ -175,7 +175,8 @@ private:
                                             const ObTransID self_tx_id,
                                             const ObIArray<storage::ObRowConflictInfo> &conflict_array,
                                             SessionGuard &session_guard,
-                                            const uint32_t count_down_allow_detect);
+                                            const uint32_t count_down_allow_detect,
+                                            const uint64_t start_delay);
   static int replace_conflict_trans_ids_(const SessionIDPair sess_id_pair,
                                          const ObTransID self_tx_id,
                                          const ObIArray<storage::ObRowConflictInfo> &conflict_array,

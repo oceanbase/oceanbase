@@ -212,7 +212,8 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
                                                                    const ObTransID self_tx_id,
                                                                    const ObIArray<storage::ObRowConflictInfo> &conflict_array,
                                                                    SessionGuard &session_guard,
-                                                                   const uint32_t count_down_allow_detect)
+                                                                   const uint32_t count_down_allow_detect,
+                                                                   const uint64_t start_delay)
 {
   #define PRINT_WRAPPER KR(ret), K(self_tx_id), K(sess_id_pair), K(conflict_array), K(query_timeout), K(self_tx_scheduler)
   int ret = OB_SUCCESS;
@@ -246,7 +247,7 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
                                                                fill_virtual_info_callback,
                                                                session_guard->get_tx_desc()->get_active_ts(),
                                                                ~session_guard->get_tx_desc()->get_active_ts(),
-                                                               3_s,
+                                                               start_delay,
                                                                count_down_allow_detect))) {
     DETECT_LOG(WARN, "fail to register deadlock", PRINT_WRAPPER);
   } else {
@@ -391,7 +392,7 @@ int ObTransDeadlockDetectorAdapter::register_or_replace_conflict_trans_ids(const
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_tx_id, is_detector_exist))) {
     DETECT_LOG(WARN, "fail to get detector exist status", PRINT_WRAPPER);
   } else if (!is_detector_exist) {
-    if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect))) {
+    if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect, 3_s))) {
       DETECT_LOG(WARN, "register new detector in remote execution failed", PRINT_WRAPPER);
     } else {
       DETECT_LOG(INFO, "register new detector in remote execution", PRINT_WRAPPER);
@@ -435,11 +436,12 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_conflict_trans_ids
   } else if (is_detector_exist) {
     unregister_from_deadlock_detector(self_tx_id,
                                       UnregisterPath::REPLACE_MEET_TOTAL_DIFFERENT_LIST);
-    if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect))) {
-      DETECT_LOG(WARN, "register new detector in remote execution failed", PRINT_WRAPPER);
-    } else {
-      DETECT_LOG(INFO, "register new detector in remote execution", PRINT_WRAPPER);
-    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect, 0))) {
+    DETECT_LOG(WARN, "register new detector in remote execution failed", PRINT_WRAPPER);
+  } else {
+    DETECT_LOG(INFO, "register new detector in remote execution", PRINT_WRAPPER);
   }
   return ret;
   #undef PRINT_WRAPPER
