@@ -1552,13 +1552,15 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
   }
 
   bool enable_var_assign_use_das = false;
+  bool enable_distributed_das_scan = true;
   if (OB_SUCC(ret)) {
-    ObSQLSessionInfo *session_info = NULL;
-    if (OB_NOT_NULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
-      enable_var_assign_use_das = session_info->is_var_assign_use_das_enabled();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (!tenant_config.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid tenant config", K(ret));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session info is null", K(ret));
+      enable_var_assign_use_das = tenant_config->_enable_var_assign_use_das;
+      enable_distributed_das_scan = tenant_config->_enable_distributed_das_scan;
     }
   }
   if(OB_SUCC(ret)) {
@@ -1600,6 +1602,9 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     } else if (hint_force_das || hint_force_no_das) {
       create_das_path = hint_force_das;
       create_basic_path = hint_force_no_das;
+    } else if (OB_UNLIKELY(!enable_distributed_das_scan)) {
+      create_das_path = false;
+      create_basic_path = true;
     } else if (index_info_entry->is_index_global() && OB_FAIL(get_explicit_dop_for_path(index_id, explicit_dop))) {
       LOG_WARN("failed to get explicit dop", K(ret));
     } else if (ObGlobalHint::DEFAULT_PARALLEL == explicit_dop) {

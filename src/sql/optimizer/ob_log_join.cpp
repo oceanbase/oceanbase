@@ -1284,13 +1284,7 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
       }
     }
     if (OB_SUCC(ret)) {
-      if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
-        // For the global index lookup, if there is a pushdown filter when scanning the index,
-        // batch cannot be used.
-        ts->set_use_batch(false);
-      } else {
-        ts->set_use_batch(ts->use_batch() || (can_use_batch_nlj_ && has_param));
-      }
+      ts->set_use_batch(ts->use_batch() || (can_use_batch_nlj_ && has_param));
     }
   } else if (root->get_num_of_child() == 1) {
     if(OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
@@ -1392,10 +1386,6 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
         OB_ISNULL(info = ts->get_table_partition_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid input", K(ret));
-    } else if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
-      // For the global index lookup, if there is a pushdown filter when scanning the index,
-      // batch cannot be used.
-      can_use_batch_nlj = false;
     } else if (ts->get_scan_direction() != default_asc_direction() && ts->get_scan_direction() != ObOrderDirection::UNORDERED) {
       can_use_batch_nlj = false;
     } else {

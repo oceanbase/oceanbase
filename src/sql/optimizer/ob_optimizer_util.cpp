@@ -9287,9 +9287,9 @@ int ObOptimizerUtil::check_ancestor_node_support_skip_scan(ObLogicalOperator* op
   } else if (OB_ISNULL(parent = op->get_parent())) {
     // do nothing
   } else if (can_use_batch_nlj) {
-    if (parent->get_type() == log_op_def::LOG_SUBPLAN_FILTER) {
+    if (parent->get_type() == log_op_def::LOG_SUBPLAN_FILTER && parent->get_child(0) != op) {
       can_use_batch_nlj = false;
-    } else if (parent->get_type() == log_op_def::LOG_JOIN) {
+    } else if (parent->get_type() == log_op_def::LOG_JOIN && parent->get_child(0) != op) {
       ObLogJoin *join = static_cast<ObLogJoin*>(parent);
       if (IS_SEMI_ANTI_JOIN(join->get_join_type())) {
         can_use_batch_nlj = false;

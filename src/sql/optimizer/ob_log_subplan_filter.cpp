@@ -485,10 +485,6 @@ int ObLogSubPlanFilter::check_if_match_das_group_rescan(ObLogicalOperator *root,
         group_rescan = false;
       } else if (tsc->get_scan_direction() != default_asc_direction() && tsc->get_scan_direction() != ObOrderDirection::UNORDERED) {
         group_rescan = false;
-      } else if (tsc->has_index_scan_filter() && tsc->get_index_back() && tsc->get_is_index_global()) {
-        // For the global index lookup, if there is a pushdown filter when scanning the index,
-        // batch cannot be used.
-        group_rescan = false;
       } else {/*do nothing*/}
     }
   } else if (log_op_def::LOG_SUBPLAN_SCAN == root->get_type()) {
