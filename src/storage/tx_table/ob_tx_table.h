@@ -102,6 +102,7 @@ public:
 public:
   ObTxTable()
       : is_inited_(false),
+        calc_upper_trans_is_disabled_(false),
         epoch_(INVALID_READ_EPOCH),
         state_(OFFLINE),
         ls_id_(),
@@ -115,6 +116,7 @@ public:
 
   ObTxTable(ObTxDataTable &tx_data_table)
       : is_inited_(false),
+        calc_upper_trans_is_disabled_(false),
         epoch_(INVALID_READ_EPOCH),
         state_(OFFLINE),
         ls_id_(),
@@ -310,7 +312,9 @@ public:
   void enable_upper_trans_calculation(const share::SCN latest_transfer_scn);
 
   TO_STRING_KV(KP(this),
+               K_(ls_id),
                K_(is_inited),
+               K_(calc_upper_trans_is_disabled),
                K_(epoch),
                "state", get_state_string(state_),
                KP_(ls),
@@ -368,6 +372,7 @@ private:
   static const int64_t LS_TX_CTX_SCHEMA_ROWKEY_CNT = 1;
   static const int64_t LS_TX_CTX_SCHEMA_COLUMN_CNT = 3;
   bool is_inited_;
+  bool calc_upper_trans_is_disabled_;
   int64_t epoch_ CACHE_ALIGNED;
   TxTableState state_ CACHE_ALIGNED;
   share::ObLSID ls_id_;

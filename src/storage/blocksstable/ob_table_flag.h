@@ -36,7 +36,6 @@ public:
 class ObTableHasLocalFlag final
 {
 public:
-  // TODO: yangyi.yyy
   enum FLAG
   {
     HAS_LOCAL = 0,

@@ -90,7 +90,8 @@ public:
                        KPC_(trans_info_expr),
                        K_(ir_scan_type),
                        K_(rowkey_exprs),
-                       K_(table_scan_opt));
+                       K_(table_scan_opt),
+                       K_(vec_vid_idx));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -233,7 +234,9 @@ public:
   ObDASScanRtDef *get_lookup_rtdef();
   int get_aux_lookup_tablet_id(common::ObTabletID &tablet_id) const;
   int get_table_lookup_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_rowkey_vid_tablet_id(common::ObTabletID &tablet_id) const;
   int init_scan_param();
+  int do_vec_index_rescan();
   int rescan();
   int reuse_iter();
   void reset_access_datums_ptr(int64_t capacity = 0);
@@ -245,6 +248,12 @@ public:
       common::ObTabletID &inv_idx_tablet_id,
       common::ObTabletID &fwd_idx_tablet_id,
       common::ObTabletID &doc_id_idx_tablet_id);
+  int get_vec_ir_tablet_ids(
+      common::ObTabletID &vec_row_tid,
+      common::ObTabletID &delta_buf_tid,
+      common::ObTabletID &index_id_tid,
+      common::ObTabletID &snapshot_tid,
+      common::ObTabletID &com_aux_vec_tid);
   bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(scan_ctdef),

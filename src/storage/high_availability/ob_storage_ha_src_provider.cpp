@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_src_provider.h"
-#include "ob_storage_ha_utils.h"
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx_storage/ob_ls_handle.h"
@@ -27,8 +26,8 @@ namespace storage {
  * ------------------------------ObStorageHAGetMemberHelper---------------------
  */
 ObStorageHAGetMemberHelper::ObStorageHAGetMemberHelper()
-  : storage_rpc_(nullptr),
-    is_inited_(false)
+  : is_inited_(false),
+    storage_rpc_(nullptr)
 {
 }
 
@@ -141,7 +140,7 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(member_and_learner_info.member_list_.get_addr_array(member_list))) {
       LOG_WARN("failed to get member addr array", K(ret), K(member_and_learner_info));
-    } else if (OB_FAIL(member_and_learner_info.learner_list_.deep_copy_to(learner_list))) {
+    } else if (OB_FAIL(learner_list.deep_copy(member_and_learner_info.learner_list_))) {
       LOG_WARN("failed to get learner addr array", K(ret), K(member_and_learner_info));
     }
   } else {
@@ -227,11 +226,71 @@ bool ObStorageHAGetMemberHelper::check_tenant_primary()
 {
   return MTL_TENANT_ROLE_CACHE_IS_PRIMARY();
 }
+
+int ObStorageHAGetMemberHelper::filter_dest_replica_(
+    const common::ObReplicaMember &dst,
+    common::GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  if (!dst.is_valid() || !learner_list.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(dst), K(learner_list));
+  } else if (!learner_list.contains(dst.get_server())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("learner list must include dst", K(ret), K(learner_list), K(dst));
+  } else if (OB_FAIL(learner_list.remove_learner(dst.get_server()))) {
+    LOG_WARN("failed to remove learner", K(ret), K(learner_list), K(dst));
+  }
+  return ret;
+}
+
+int ObStorageHAGetMemberHelper::get_member_list_by_replica_type(
+    const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObReplicaMember &dst,
+    ObLSMemberListInfo &info)
+{
+  int ret = OB_SUCCESS;
+  bool need_learner_list = false;
+  common::ObArray<common::ObAddr> learner_addr_array;
+  info.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObStorageHAGetMemberHelper do not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
+             || !dst.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(dst));
+  } else {
+    if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()) {
+      need_learner_list = false;
+    } else if (ObReplicaTypeCheck::is_non_paxos_replica(dst.get_replica_type())) {
+      need_learner_list = true;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected replica type", K(ret), "replica_type", dst.get_replica_type());
+    }
+    if (FAILEDx(get_ls_member_list_and_learner_list(tenant_id, ls_id, need_learner_list,
+        info.leader_addr_, info.learner_list_, info.member_list_))) {
+      LOG_WARN("failed to fetch ls leader member list and learner list", K(ret), K(tenant_id), K(ls_id),
+          K(need_learner_list));
+    } else if (need_learner_list && OB_FAIL(filter_dest_replica_(dst, info.learner_list_))) {
+      LOG_WARN("failed to filter dest replica", K(ret), K(info), K(dst));
+    } else if (info.learner_list_.is_valid()) {
+      if (OB_FAIL(info.learner_list_.get_addr_array(learner_addr_array))) {
+        LOG_WARN("failed to get addr array from learner list", K(ret), K(info));
+      } else if (OB_FAIL(common::append(info.member_list_, learner_addr_array))) {
+        LOG_WARN("failed to append addr list", K(ret), K(info), K(learner_addr_array));
+      }
+    }
+    LOG_INFO("get member info", K(ret), K(info));
+  }
+  return ret;
+}
 /**
  * ------------------------------ObStorageHASrcProvider---------------------
  */
 ObStorageHASrcProvider::ObStorageHASrcProvider()
   : is_inited_(false),
+    member_list_info_(),
     tenant_id_(OB_INVALID_ID),
     ls_id_(),
     type_(ObMigrationOpType::MAX_LS_OP),
@@ -248,82 +307,36 @@ ObStorageHASrcProvider::~ObStorageHASrcProvider()
   storage_rpc_ = nullptr;
 }
 
-int ObStorageHASrcProvider::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
+int ObStorageHASrcProvider::init(const ObMigrationChooseSrcHelperInitParam &param,
     const ChooseSourcePolicy policy_type,
-    const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+    storage::ObStorageRpc *storage_rpc,
     ObStorageHAGetMemberHelper *member_helper)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage ha src provider init twice", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || OB_ISNULL(storage_rpc)
-      || !local_clog_checkpoint_scn.is_valid()
+  } else if (!param.is_valid() || OB_ISNULL(storage_rpc)
       || policy_type < ChooseSourcePolicy::IDC
       || policy_type >= ChooseSourcePolicy::MAX_POLICY
-      || replica_type < common::ObReplicaType::REPLICA_TYPE_FULL || replica_type >= common::ObReplicaType::REPLICA_TYPE_MAX
-      || type < ObMigrationOpType::ADD_LS_OP || type >= ObMigrationOpType::MAX_LS_OP
       || OB_ISNULL(member_helper)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), K(type),
-        KP(storage_rpc), K(replica_type), K(local_clog_checkpoint_scn), KP(member_helper));
+    LOG_WARN("get invalid argument", K(ret), K(param),
+        KP(storage_rpc), K(policy_type), KP(member_helper));
   } else {
     storage_rpc_ = storage_rpc;
     member_helper_ = member_helper;
-    if (OB_FAIL(init_palf_parent_checkpoint_scn_(tenant_id, ls_id, local_clog_checkpoint_scn, replica_type))) {
-      LOG_WARN("failed to init palf parent checkpoint scn", K(ret), K(tenant_id), K(ls_id),
-          K(local_clog_checkpoint_scn), K(replica_type), KP(storage_rpc_));
+    if (OB_FAIL(init_palf_parent_checkpoint_scn_(param.tenant_id_, param.ls_id_,
+        param.local_clog_checkpoint_scn_, param.arg_.dst_.get_replica_type()))) {
+      LOG_WARN("failed to init palf parent checkpoint scn", K(ret), K(param), KP(storage_rpc_));
+    } else if (OB_FAIL(member_list_info_.assign(param.info_))) {
+      LOG_WARN("failed to assign member list info", K(ret), K(param));
     } else {
-      tenant_id_ = tenant_id;
-      ls_id_ = ls_id;
-      type_ = type;
-      local_clog_checkpoint_scn_ = local_clog_checkpoint_scn;
+      tenant_id_ = param.tenant_id_;
+      ls_id_ = param.ls_id_;
+      type_ = param.arg_.type_;
+      local_clog_checkpoint_scn_ = param.local_clog_checkpoint_scn_;
       policy_type_ = policy_type;
-    }
-  }
-  return ret;
-}
-
-// TODO(zhixing.yh) : 1.learner_list and addr_list have data, it is unreasonable
-// 2. For F replica, learner_list is empty, it is unreasonable
-int ObStorageHASrcProvider::get_replica_addr_list(
-    const common::ObReplicaMember &dst,
-    common::ObAddr &leader_addr, common::GlobalLearnerList &learner_list,
-    common::ObIArray<common::ObAddr> &addr_list)
-{
-  int ret = OB_SUCCESS;
-  leader_addr.reset();
-  addr_list.reset();
-  learner_list.reset();
-  common::ObArray<common::ObAddr> learner_addr_array;
-  bool need_learner_list = false;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObStorageHASrcProvider do not init", K(ret));
-  } else if (!dst.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument!", K(ret), K(dst));
-  } else {
-    if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()) {
-      need_learner_list = false;
-    } else if (ObReplicaTypeCheck::is_non_paxos_replica(dst.get_replica_type())) {
-      need_learner_list = true;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected dst replica type", K(ret), K(dst));
-    }
-
-    if (FAILEDx(member_helper_->get_ls_member_list_and_learner_list(tenant_id_, ls_id_, need_learner_list,
-        leader_addr, learner_list, addr_list))) {
-      LOG_WARN("failed to fetch ls leader member list and learner list", K(ret), K_(tenant_id), K_(ls_id),
-          K(leader_addr), K(need_learner_list));
-    } else if (learner_list.is_valid()) {
-      if (OB_FAIL(learner_list.get_addr_array(learner_addr_array))) {
-        LOG_WARN("failed to get addr array from learner list", K(ret), K(learner_list));
-      } else if (OB_FAIL(common::append(addr_list, learner_addr_array))) {
-        LOG_WARN("failed to append addr list", K(ret), K(addr_list), K(learner_addr_array));
-      }
     }
   }
   return ret;
@@ -368,14 +381,33 @@ int ObStorageHASrcProvider::fetch_ls_meta_info_(const uint64_t tenant_id, const 
   return ret;
 }
 
-int ObStorageHASrcProvider::check_replica_type_(
+int ObStorageHASrcProvider::check_replica_type_for_c_replica_(
     const common::ObAddr &addr,
     const common::ObReplicaMember &dst,
     const common::GlobalLearnerList &learner_list,
     bool &is_replica_type_valid)
 {
   int ret = OB_SUCCESS;
+  ObMember src;
   is_replica_type_valid = false;
+  if (!addr.is_valid() || !dst.is_valid() || !learner_list.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(addr), K(dst), K(learner_list));
+  } else if (OB_FAIL(learner_list.get_learner_by_addr(addr, src))) {
+    LOG_WARN("failed to get learner by addr", KR(ret), K(addr));
+  } else if (src.is_columnstore()) {
+    is_replica_type_valid = true;
+  }
+  return ret;
+}
+
+int ObStorageHASrcProvider::check_replica_type_for_normal_replica_(
+    const common::ObAddr &addr,
+    const common::ObReplicaMember &dst,
+    const common::GlobalLearnerList &learner_list,
+    bool &is_replica_type_valid)
+{
+  int ret = OB_SUCCESS;
   if (!addr.is_valid() || !dst.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(addr), K(dst));
@@ -405,6 +437,46 @@ int ObStorageHASrcProvider::check_replica_type_(
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected dst replica type", K(ret), K(dst), K(learner_list));
+    }
+  }
+  return ret;
+}
+
+int ObStorageHASrcProvider::check_replica_type_(
+    const common::ObAddr &addr,
+    const common::ObReplicaMember &dst,
+    const common::GlobalLearnerList &learner_list,
+    bool &is_replica_type_valid)
+{
+  int ret = OB_SUCCESS;
+  is_replica_type_valid = false;
+  if (!addr.is_valid() || !dst.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(addr), K(dst));
+  } else {
+    switch (policy_type_) {
+      case ChooseSourcePolicy::C_TYPE_REPLICA: {
+        // TODO(zhixing.yh) When the learner concurrency can be controlled, this function will be overwritten
+        is_replica_type_valid = true;
+        // if (OB_FAIL(check_replica_type_for_c_replica_(addr, dst,
+        //     learner_list, is_replica_type_valid))) {
+        //   LOG_WARN("failed to check replica type for c replica", K(ret), K(addr), K(dst), K(learner_list));
+        // }
+        break;
+      };
+      case ChooseSourcePolicy::IDC:
+      case ChooseSourcePolicy::REGION:
+      case ChooseSourcePolicy::CHECKPOINT:
+      case ChooseSourcePolicy::RECOMMEND: {
+        if (OB_FAIL(check_replica_type_for_normal_replica_(addr, dst, learner_list, is_replica_type_valid))) {
+          LOG_WARN("failed to check replica type", K(ret), K(addr), K(dst), K(learner_list));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected policy type", K(ret), K(policy_type_));
+      }
     }
   }
   return ret;
@@ -514,6 +586,12 @@ int ObStorageHASrcProvider::check_replica_validity(
   } else if (!addr.is_valid() || !dst.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(addr), K(dst));
+  } else if (OB_FAIL(check_replica_type_(addr, dst, learner_list, is_replica_type_valid))) {
+    LOG_WARN("failed to check replica type", K(ret), K(tenant_id_), K(ls_id_), K(addr),
+        K(dst), K(learner_list));
+  } else if (!is_replica_type_valid) {
+    ret = OB_DATA_SOURCE_NOT_VALID;
+    LOG_WARN("do not choose this src, replica type check failed", K(ret), K(tenant_id_), K(ls_id_), K(addr), K(dst), K(learner_list), K(ls_info));
   } else if (OB_FAIL(fetch_ls_meta_info_(tenant_id_, ls_id_, addr, ls_info))) {
     LOG_WARN("failed to fetch ls meta info", K(ret), K(tenant_id_), K(ls_id_), K(addr));
   } else if (!ls_info.is_valid()) {
@@ -529,12 +607,6 @@ int ObStorageHASrcProvider::check_replica_validity(
     ret = OB_DATA_SOURCE_NOT_VALID;
     LOG_WARN("do not choose this src, parent checkpoint scn check failed", K(ret), K(tenant_id_), K(ls_id_), K(addr), K(dst), K(learner_list),
         K(palf_parent_checkpoint_scn_), K(ls_info));
-  } else if (OB_FAIL(check_replica_type_(addr, dst, learner_list, is_replica_type_valid))) {
-    LOG_WARN("failed to check replica type", K(ret), K(tenant_id_), K(ls_id_), K(addr),
-        K(dst), K(learner_list), K(ls_info));
-  } else if (!is_replica_type_valid) {
-    ret = OB_DATA_SOURCE_NOT_VALID;
-    LOG_WARN("do not choose this src, replica type check failed", K(ret), K(tenant_id_), K(ls_id_), K(addr), K(dst), K(learner_list), K(ls_info));
   }
   return ret;
 }
@@ -543,7 +615,8 @@ const char *ObStorageHASrcProvider::ObChooseSourcePolicyStr[static_cast<int64_t>
   "idc",
   "region",
   "checkpoint",
-  "recommend"
+  "recommend",
+  "c_type_replica"
 };
 
 const char *ObStorageHASrcProvider::get_policy_str(const ChooseSourcePolicy policy_type)
@@ -582,10 +655,8 @@ ObMigrationSrcByLocationProvider::~ObMigrationSrcByLocationProvider()
 {
 }
 
-int ObMigrationSrcByLocationProvider::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
+int ObMigrationSrcByLocationProvider::init(const ObMigrationChooseSrcHelperInitParam &param,
     const ChooseSourcePolicy policy_type,
-    const common::ObReplicaType replica_type,
     storage::ObStorageRpc *storage_rpc,
     ObStorageHAGetMemberHelper *member_helper)
 {
@@ -593,20 +664,14 @@ int ObMigrationSrcByLocationProvider::init(const uint64_t tenant_id, const share
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObMigrationSrcByLocationProvider init twice", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || OB_ISNULL(storage_rpc)
-      || !local_clog_checkpoint_scn.is_valid()
+  } else if (!param.is_valid() || OB_ISNULL(storage_rpc)
       || policy_type < ChooseSourcePolicy::IDC
       || policy_type >= ChooseSourcePolicy::MAX_POLICY
-      || replica_type < common::ObReplicaType::REPLICA_TYPE_FULL || replica_type >= common::ObReplicaType::REPLICA_TYPE_MAX
-      || type < ObMigrationOpType::ADD_LS_OP || type >= ObMigrationOpType::MAX_LS_OP
       || OB_ISNULL(member_helper)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), K(type),
-        K(local_clog_checkpoint_scn), K(policy_type), K(replica_type), KP(storage_rpc), KP(member_helper));
-  } else if (OB_FAIL(ObStorageHASrcProvider::init(tenant_id, ls_id, type, local_clog_checkpoint_scn, policy_type,
-      replica_type, storage_rpc, member_helper))) {
-    LOG_WARN("failed to init src provider", K(ret), K(tenant_id), K(ls_id), K(type), K(local_clog_checkpoint_scn),
-        K(replica_type), KP(storage_rpc), K(policy_type), KP(member_helper));
+    LOG_WARN("get invalid argument", K(ret), K(param), K(policy_type), KP(storage_rpc), KP(member_helper));
+  } else if (OB_FAIL(ObStorageHASrcProvider::init(param, policy_type, storage_rpc, member_helper))) {
+    LOG_WARN("failed to init src provider", K(ret), K(param), KP(storage_rpc), K(policy_type), KP(member_helper));
   } else {
     locality_manager_ = GCTX.locality_manager_;
     is_inited_ = true;
@@ -618,21 +683,18 @@ int ObMigrationSrcByLocationProvider::choose_ob_src(
     const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr)
 {
   int ret = OB_SUCCESS;
-  common::ObAddr leader_addr;
-  common::ObArray<common::ObAddr> addr_list;
-  common::GlobalLearnerList learner_list;
+  chosen_src_addr.reset();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMigrationSrcByLocationProvider is not init.", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(arg));
-  } else if (OB_FAIL(get_replica_addr_list(arg.dst_, leader_addr, learner_list, addr_list))) {
-    LOG_WARN("failed to get leader_addr, learner_list and addr_list", K(ret), "tenant_id", get_tenant_id(), "ls_id", get_ls_id());
   } else if (OB_FAIL(inner_choose_ob_src(
-      leader_addr, learner_list, addr_list, arg, chosen_src_addr))) {
+      member_list_info_.leader_addr_, member_list_info_.learner_list_,
+      member_list_info_.member_list_, arg, chosen_src_addr))) {
     LOG_WARN("failed to inner choose ob src", K(ret), "tenant_id", get_tenant_id(), "ls_id", get_ls_id(),
-        K(leader_addr), K(learner_list), K(addr_list), K(arg));
+        K(member_list_info_), K(arg));
   }
   return ret;
 }
@@ -863,30 +925,23 @@ ObMigrationSrcByCheckpointProvider::~ObMigrationSrcByCheckpointProvider()
 {
 }
 
-int ObMigrationSrcByCheckpointProvider::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
+int ObMigrationSrcByCheckpointProvider::init(const ObMigrationChooseSrcHelperInitParam &param,
     const ChooseSourcePolicy policy_type,
-    const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+    storage::ObStorageRpc *storage_rpc,
     ObStorageHAGetMemberHelper *member_helper)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObMigrationSrcByCheckpointProvider init twice", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || OB_ISNULL(storage_rpc)
-      || !local_clog_checkpoint_scn.is_valid()
+  } else if (!param.is_valid() || OB_ISNULL(storage_rpc)
       || policy_type < ChooseSourcePolicy::IDC
       || policy_type >= ChooseSourcePolicy::MAX_POLICY
-      || replica_type < common::ObReplicaType::REPLICA_TYPE_FULL || replica_type >= common::ObReplicaType::REPLICA_TYPE_MAX
-      || type < ObMigrationOpType::ADD_LS_OP || type >= ObMigrationOpType::MAX_LS_OP
       || OB_ISNULL(member_helper)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), K(type), K(local_clog_checkpoint_scn),
-        K(replica_type), KP(storage_rpc), KP(member_helper));
-  } else if (OB_FAIL(ObStorageHASrcProvider::init(tenant_id, ls_id, type, local_clog_checkpoint_scn, policy_type,
-      replica_type, storage_rpc, member_helper))) {
-    LOG_WARN("failed to init src provider", K(ret), K(tenant_id), K(ls_id), K(type), K(local_clog_checkpoint_scn),
-        K(replica_type), KP(storage_rpc), K(policy_type), KP(member_helper));
+    LOG_WARN("get invalid argument", K(ret), K(param), K(policy_type), KP(storage_rpc), KP(member_helper));
+  } else if (OB_FAIL(ObStorageHASrcProvider::init(param, policy_type, storage_rpc, member_helper))) {
+    LOG_WARN("failed to init src provider", K(ret), K(param), KP(storage_rpc), K(policy_type), KP(member_helper));
   } else {
     is_inited_ = true;
   }
@@ -897,21 +952,18 @@ int ObMigrationSrcByCheckpointProvider::choose_ob_src(
     const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr)
 {
   int ret = OB_SUCCESS;
-  common::ObAddr leader_addr;
-  common::ObArray<common::ObAddr> addr_list;
-  common::GlobalLearnerList learner_list;
+  chosen_src_addr.reset();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMigrationSrcByCheckpointProvider is not init.", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(arg));
-  } else if (OB_FAIL(get_replica_addr_list(arg.dst_, leader_addr, learner_list, addr_list))) {
-    LOG_WARN("failed to get leader_addr, learner_list and addr_list", K(ret), "tenant_id", get_tenant_id(), "ls_id", get_ls_id());
   } else if (OB_FAIL(inner_choose_ob_src_(
-      leader_addr, learner_list, addr_list, arg, chosen_src_addr))) {
+      member_list_info_.leader_addr_, member_list_info_.learner_list_,
+      member_list_info_.member_list_, arg, chosen_src_addr))) {
     LOG_WARN("failed to inner choose ob src", K(ret), "tenant_id", get_tenant_id(), "ls_id", get_ls_id(),
-        K(leader_addr), K(learner_list), K(addr_list), K(arg));
+        K(member_list_info_), K(arg));
   }
   return ret;
 }
@@ -979,30 +1031,25 @@ ObRSRecommendSrcProvider::~ObRSRecommendSrcProvider()
 {
 }
 
-int ObRSRecommendSrcProvider::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
+int ObRSRecommendSrcProvider::init(const ObMigrationChooseSrcHelperInitParam &param,
     const ChooseSourcePolicy policy_type,
-    const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+    storage::ObStorageRpc *storage_rpc,
     ObStorageHAGetMemberHelper *member_helper)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObRSRecommendSrcProvider init twice", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || OB_ISNULL(storage_rpc)
-      || !local_clog_checkpoint_scn.is_valid()
+  } else if (!param.is_valid() || OB_ISNULL(storage_rpc)
       || policy_type < ChooseSourcePolicy::IDC
       || policy_type >= ChooseSourcePolicy::MAX_POLICY
-      || replica_type < common::ObReplicaType::REPLICA_TYPE_FULL || replica_type >= common::ObReplicaType::REPLICA_TYPE_MAX
-      || type < ObMigrationOpType::ADD_LS_OP || type >= ObMigrationOpType::MAX_LS_OP
       || OB_ISNULL(member_helper)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), K(type), K(local_clog_checkpoint_scn), K(replica_type),
+    LOG_WARN("get invalid argument", K(ret), K(param), K(policy_type),
         KP(storage_rpc), KP(member_helper));
-  } else if (OB_FAIL(ObStorageHASrcProvider::init(tenant_id, ls_id, type, local_clog_checkpoint_scn, policy_type, replica_type,
+  } else if (OB_FAIL(ObStorageHASrcProvider::init(param, policy_type,
       storage_rpc, member_helper))) {
-    LOG_WARN("failed to init src provider", K(ret), K(tenant_id), K(ls_id), K(type), K(local_clog_checkpoint_scn),
-        K(replica_type), KP(storage_rpc), K(policy_type), KP(member_helper));
+    LOG_WARN("failed to init src provider", K(ret), K(param), KP(storage_rpc), K(policy_type), KP(member_helper));
   } else {
     is_inited_ = true;
   }
@@ -1018,9 +1065,10 @@ int ObRSRecommendSrcProvider::check_replica_validity_(
   int ret = OB_SUCCESS;
   obrpc::ObFetchLSMetaInfoResp ls_info;
   int64_t gconf_cluster_id = GCONF.cluster_id;
-  if (cluster_id != gconf_cluster_id) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rs recommend source cluster id is invalid", K(ret), K(cluster_id), K(gconf_cluster_id));
+  if (addr_list.empty() || !addr.is_valid() || !dst.is_valid() || cluster_id != gconf_cluster_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(addr_list), K(addr), K(dst),
+        K(cluster_id), K(gconf_cluster_id));
   } else if (OB_FAIL(check_replica_validity(addr, dst, learner_list, ls_info))) {
     LOG_WARN("failed to check replica validity", K(ret), K(addr), K(dst), K(learner_list));
   } else {
@@ -1043,21 +1091,153 @@ int ObRSRecommendSrcProvider::choose_ob_src(
     const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr)
 {
   int ret = OB_SUCCESS;
-  common::ObAddr leader_addr;
-  common::ObArray<common::ObAddr> addr_list;
-  common::GlobalLearnerList learner_list;
+  chosen_src_addr.reset();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRSRecommendSrcProvider is not init.", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(arg));
-  } else if (OB_FAIL(get_replica_addr_list(arg.dst_, leader_addr, learner_list, addr_list))) {
-    LOG_WARN("failed to get leader_addr, learner_list and addr_list", K(ret), "tenant_id", get_tenant_id(), "ls_id", get_ls_id());
-  } else if (OB_FAIL(check_replica_validity_(arg.cluster_id_, addr_list, arg.data_src_.get_server(), arg.dst_, learner_list))) {
-    LOG_WARN("failed to check replica validity", K(ret), K(addr_list), K(arg), K(learner_list));
+  } else if (OB_FAIL(check_replica_validity_(arg.cluster_id_, member_list_info_.member_list_,
+      arg.data_src_.get_server(), arg.dst_, member_list_info_.learner_list_))) {
+    LOG_WARN("failed to check replica validity", K(ret), K(member_list_info_), K(arg));
   } else {
     chosen_src_addr = arg.data_src_.get_server();
+  }
+  return ret;
+}
+/**
+ * ------------------------------ObCTypeReplicaSrcProvider---------------------
+ */
+ObCTypeReplicaSrcProvider::ObCTypeReplicaSrcProvider()
+  : ObStorageHASrcProvider()
+{
+}
+
+ObCTypeReplicaSrcProvider::~ObCTypeReplicaSrcProvider()
+{
+}
+
+int ObCTypeReplicaSrcProvider::init(const ObMigrationChooseSrcHelperInitParam &param,
+    const ChooseSourcePolicy policy_type,
+    storage::ObStorageRpc *storage_rpc,
+    ObStorageHAGetMemberHelper *member_helper)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObCTypeReplicaSrcProvider init twice", K(ret));
+  } else if (!param.is_valid() || OB_ISNULL(storage_rpc)
+      || policy_type < ChooseSourcePolicy::IDC
+      || policy_type >= ChooseSourcePolicy::MAX_POLICY
+      || OB_ISNULL(member_helper)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(param), K(policy_type),
+        KP(storage_rpc), KP(member_helper));
+  } else if (OB_FAIL(ObStorageHASrcProvider::init(param, policy_type,
+      storage_rpc, member_helper))) {
+    LOG_WARN("failed to init src provider", K(ret), K(param), KP(storage_rpc), K(policy_type), KP(member_helper));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObCTypeReplicaSrcProvider::get_valid_c_replica_(
+    const common::ObAddr &addr,
+    const common::GlobalLearnerList &learner_list,
+    ObIArray<common::ObAddr> &c_replica_list) const
+{
+  int ret = OB_SUCCESS;
+  ObMember src;
+  if (!addr.is_valid() || !learner_list.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(addr), K(learner_list));
+  } else if (!learner_list.contains(addr)) {
+  } else if (OB_FAIL(learner_list.get_learner_by_addr(addr, src))) {
+    LOG_WARN("failed to get learner by addr", KR(ret), K(addr));
+  } else if (src.is_columnstore() && OB_FAIL(c_replica_list.push_back(addr))) {
+    LOG_WARN("failed to push back addr", K(ret), K(addr), K(src), K(learner_list));
+  }
+  return ret;
+}
+
+int ObCTypeReplicaSrcProvider::inner_choose_ob_src_(
+    const common::ObIArray<common::ObAddr> &addr_list,
+    const common::GlobalLearnerList &learner_list,
+    const ObMigrationOpArg &arg, common::ObAddr &choosen_src_addr)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  choosen_src_addr.reset();
+  common::ObArray<int64_t> candidate_addr_list;
+  obrpc::ObFetchLSMetaInfoResp ls_info;
+  ObArray<common::ObAddr> c_replica_list;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCTypeReplicaSrcProvider is not init.", K(ret));
+  } else if (addr_list.empty() || !learner_list.is_valid() || !arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(addr_list), K(learner_list), K(arg));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
+      if (OB_TMP_FAIL(check_replica_validity(addr_list.at(i), arg.dst_, learner_list, ls_info))) {
+        if (OB_DATA_SOURCE_NOT_EXIST == tmp_ret) {
+          // overwrite ret
+          ret = tmp_ret;
+          LOG_WARN("failed to check replica validity", K(ret), K(tmp_ret), "tenant_id", get_tenant_id(),
+              "ls_id", get_ls_id(), "addr", addr_list.at(i), K(arg.dst_), K(learner_list));
+          break;
+        } else {
+          LOG_WARN("this address is not suitable.", K(ret), K(tmp_ret), "tenant_id", get_tenant_id(),
+              "ls_id", get_ls_id(), "addr", addr_list.at(i), K(arg.dst_), K(learner_list));
+        }
+      } else if (OB_FAIL(candidate_addr_list.push_back(i))) {
+        LOG_WARN("failed to push back to candidate_addr_list", K(ret), "index", i, "addr", addr_list.at(i));
+      } else if (OB_FAIL(get_valid_c_replica_(addr_list.at(i), learner_list, c_replica_list))) {
+        LOG_WARN("failed to get valid c replica", K(ret), "addr", addr_list.at(i), K(learner_list));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (candidate_addr_list.empty() && c_replica_list.empty()) {
+        ret = OB_DATA_SOURCE_NOT_EXIST;
+        LOG_INFO("no available data source exist in this area", K(ret), "tenant_id", get_tenant_id(),
+            "ls_id", get_ls_id(), K(arg.dst_), K(addr_list), K(learner_list));
+      } else if (candidate_addr_list.empty() && !c_replica_list.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("this case is unexpected", K(ret), K(c_replica_list), "tenant_id", get_tenant_id(),
+            "ls_id", get_ls_id(), K(arg.dst_), K(addr_list), K(learner_list));
+      } else if (!c_replica_list.empty()) {
+        int64_t num = c_replica_list.count();
+        choosen_src_addr = c_replica_list.at(rand() % num);
+        LOG_INFO("found available C replica source in this area", "tenant_id", get_tenant_id(),
+            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(choosen_src_addr), K(addr_list), K(c_replica_list));
+      } else {
+        int64_t num = candidate_addr_list.count();
+        choosen_src_addr = addr_list.at(candidate_addr_list.at(rand() % num));
+        LOG_INFO("no available C replica, but found other available source in this area", "tenant_id", get_tenant_id(),
+            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(choosen_src_addr), K(addr_list));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCTypeReplicaSrcProvider::choose_ob_src(
+    const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr)
+{
+  int ret = OB_SUCCESS;
+  chosen_src_addr.reset();
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCTypeReplicaSrcProvider is not init.", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(arg));
+  } else if (OB_FAIL(inner_choose_ob_src_(
+      member_list_info_.member_list_, member_list_info_.learner_list_, arg, chosen_src_addr))) {
+    LOG_WARN("failed to inner choose ob src", K(ret), "tenant_id", get_tenant_id(), "ls_id", get_ls_id(),
+        K(member_list_info_), K(arg));
   }
   return ret;
 }
@@ -1081,8 +1261,7 @@ ObStorageHAChooseSrcHelper::~ObStorageHAChooseSrcHelper()
   storage_rpc_ = nullptr;
 }
 
-int ObStorageHAChooseSrcHelper::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg,
+int ObStorageHAChooseSrcHelper::init(const ObMigrationChooseSrcHelperInitParam &param,
     const ObStorageHASrcProvider::ChooseSourcePolicy policy, storage::ObStorageRpc *storage_rpc,
     ObStorageHAGetMemberHelper *member_helper)
 {
@@ -1090,45 +1269,47 @@ int ObStorageHAChooseSrcHelper::init(const uint64_t tenant_id, const share::ObLS
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage ha src helper init twice", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
-      || !local_clog_checkpoint_scn.is_valid() || !arg.is_valid()
+  } else if (!param.is_valid()
       || policy >= ObStorageHASrcProvider::ChooseSourcePolicy::MAX_POLICY
       || policy < ObStorageHASrcProvider::ChooseSourcePolicy::IDC
       || OB_ISNULL(storage_rpc)
       || OB_ISNULL(member_helper)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument!", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn),
-        K(policy), K(arg), KP(storage_rpc), KP(member_helper));
+    LOG_WARN("invalid argument!", K(ret), K(param), KP(storage_rpc), KP(member_helper));
   } else {
     switch (policy) {
       case ObStorageHASrcProvider::ChooseSourcePolicy::IDC:
       case ObStorageHASrcProvider::ChooseSourcePolicy::REGION: {
-        if (OB_FAIL(init_choose_source_by_location_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg, policy,
+        if (OB_FAIL(init_choose_source_by_location_provider_(param, policy,
             storage_rpc, member_helper))) {
-          LOG_WARN("failed to init choose source by location provider", K(ret), K(tenant_id),
-              K(ls_id), K(local_clog_checkpoint_scn), K(arg), K(policy));
+          LOG_WARN("failed to init choose source by location provider", K(ret), K(param), K(policy));
         }
         break;
       }
       case ObStorageHASrcProvider::ChooseSourcePolicy::CHECKPOINT: {
-        if (OB_FAIL(init_choose_source_by_checkpoint_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg,
+        if (OB_FAIL(init_choose_source_by_checkpoint_provider_(param,
             storage_rpc, member_helper))) {
-          LOG_WARN("failed to init choose source by checkpoint provider", K(ret), K(tenant_id),
-              K(ls_id), K(local_clog_checkpoint_scn), K(arg), K(policy));
+          LOG_WARN("failed to init choose source by checkpoint provider", K(ret), K(param), K(policy));
         }
         break;
       }
       case ObStorageHASrcProvider::ChooseSourcePolicy::RECOMMEND: {
-        if (OB_FAIL(init_rs_recommend_source_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg,
+        if (OB_FAIL(init_rs_recommend_source_provider_(param,
             storage_rpc, member_helper))) {
-          LOG_WARN("failed to init choose source by rs recommend provider", K(ret), K(tenant_id),
-              K(ls_id), K(local_clog_checkpoint_scn), K(arg), K(policy));
+          LOG_WARN("failed to init choose source by rs recommend provider", K(ret), K(param), K(policy));
+        }
+        break;
+      }
+      case ObStorageHASrcProvider::ChooseSourcePolicy::C_TYPE_REPLICA: {
+        if (OB_FAIL(init_c_type_replica_source_provider_(param,
+            storage_rpc, member_helper))) {
+          LOG_WARN("failed to init c replica choose source provider", K(ret), K(param), K(policy));
         }
         break;
       }
       default: {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected choose source policy", K(ret), K(arg), K(policy));
+        LOG_WARN("unexpected choose source policy", K(ret), K(param), K(policy));
       }
     }
   }
@@ -1161,13 +1342,13 @@ int ObStorageHAChooseSrcHelper::get_available_src(const ObMigrationOpArg &arg, O
                    "tenant_id", provider_->get_tenant_id(),
                    "ls_id", provider_->get_ls_id().id(),
                    "src_addr", src_info.src_addr_,
+                   "dst_addr", arg.dst_.get_server(),
                    "op_type", ObMigrationOpType::get_str(provider_->get_type()));
   return ret;
 }
 
 int ObStorageHAChooseSrcHelper::init_rs_recommend_source_provider_(
-    const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg,
+    const ObMigrationChooseSrcHelperInitParam &param,
     storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper)
 {
   int ret = OB_SUCCESS;
@@ -1180,10 +1361,8 @@ int ObStorageHAChooseSrcHelper::init_rs_recommend_source_provider_(
   } else if (OB_ISNULL(recommend_src_provider = (new (buf) ObRSRecommendSrcProvider()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("provider is nullptr", K(ret));
-  } else if (OB_FAIL(recommend_src_provider->init(tenant_id, ls_id, arg.type_,
-      local_clog_checkpoint_scn, policy, arg.dst_.get_replica_type(), storage_rpc, member_helper))) {
-    LOG_WARN("failed to init rs recommend src provider", K(ret), K(tenant_id), K(ls_id),
-              "type", arg.type_, K(local_clog_checkpoint_scn), K(arg.dst_), KP(storage_rpc), KP(member_helper));
+  } else if (OB_FAIL(recommend_src_provider->init(param, policy, storage_rpc, member_helper))) {
+    LOG_WARN("failed to init rs recommend src provider", K(ret), K(param), K(policy), KP(storage_rpc), KP(member_helper));
   } else {
     provider_ = recommend_src_provider;
     recommend_src_provider = nullptr;
@@ -1197,8 +1376,7 @@ int ObStorageHAChooseSrcHelper::init_rs_recommend_source_provider_(
 }
 
 int ObStorageHAChooseSrcHelper::init_choose_source_by_location_provider_(
-    const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg,
+    const ObMigrationChooseSrcHelperInitParam &param,
     const ObStorageHASrcProvider::ChooseSourcePolicy policy,
     storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper)
 {
@@ -1211,10 +1389,8 @@ int ObStorageHAChooseSrcHelper::init_choose_source_by_location_provider_(
   } else if (OB_ISNULL(choose_src_by_location_provider = (new (buf) ObMigrationSrcByLocationProvider()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("provider is nullptr", K(ret));
-  } else if (OB_FAIL(choose_src_by_location_provider->init(tenant_id, ls_id, arg.type_,
-      local_clog_checkpoint_scn, policy, arg.dst_.get_replica_type(), storage_rpc, member_helper))) {
-    LOG_WARN("failed to init src by location provider", K(ret), K(tenant_id), K(ls_id),
-        "type", arg.type_, K(local_clog_checkpoint_scn), K(policy), K(arg.dst_), KP(storage_rpc), KP(member_helper));
+  } else if (OB_FAIL(choose_src_by_location_provider->init(param, policy, storage_rpc, member_helper))) {
+    LOG_WARN("failed to init src by location provider", K(ret), K(param), K(policy), KP(storage_rpc), KP(member_helper));
   } else {
     provider_ = choose_src_by_location_provider;
     choose_src_by_location_provider = nullptr;
@@ -1228,8 +1404,7 @@ int ObStorageHAChooseSrcHelper::init_choose_source_by_location_provider_(
 }
 
 int ObStorageHAChooseSrcHelper::init_choose_source_by_checkpoint_provider_(
-    const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg,
+    const ObMigrationChooseSrcHelperInitParam &param,
     storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper)
 {
   int ret = OB_SUCCESS;
@@ -1242,10 +1417,8 @@ int ObStorageHAChooseSrcHelper::init_choose_source_by_checkpoint_provider_(
   } else if (OB_ISNULL(choose_src_by_checkpoint_provider = (new (buf) ObMigrationSrcByCheckpointProvider()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("provider is nullptr", K(ret));
-  } else if (OB_FAIL(choose_src_by_checkpoint_provider->init(tenant_id, ls_id, arg.type_, local_clog_checkpoint_scn,
-      policy, arg.dst_.get_replica_type(), storage_rpc, member_helper))) {
-    LOG_WARN("failed to init src by checkpoint provider", K(ret), K(tenant_id), K(ls_id),
-        "type", arg.type_, K(local_clog_checkpoint_scn), K(arg.dst_), KP(storage_rpc), KP(member_helper));
+  } else if (OB_FAIL(choose_src_by_checkpoint_provider->init(param, policy, storage_rpc, member_helper))) {
+    LOG_WARN("failed to init src by checkpoint provider", K(ret), K(param), K(policy), KP(storage_rpc), KP(member_helper));
   } else {
     provider_ = choose_src_by_checkpoint_provider;
     choose_src_by_checkpoint_provider = nullptr;
@@ -1258,19 +1431,54 @@ int ObStorageHAChooseSrcHelper::init_choose_source_by_checkpoint_provider_(
   return ret;
 }
 
+int ObStorageHAChooseSrcHelper::init_c_type_replica_source_provider_(
+    const ObMigrationChooseSrcHelperInitParam &param,
+    storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  ObCTypeReplicaSrcProvider *c_replica_choose_src_provider = nullptr;
+  const ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::C_TYPE_REPLICA;
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCTypeReplicaSrcProvider)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret));
+  } else if (OB_ISNULL(c_replica_choose_src_provider = (new (buf) ObCTypeReplicaSrcProvider()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("provider is nullptr", K(ret));
+  } else if (OB_FAIL(c_replica_choose_src_provider->init(param, policy, storage_rpc, member_helper))) {
+    LOG_WARN("failed to init c replica src provider", K(ret), K(param), K(policy), KP(storage_rpc), KP(member_helper));
+  } else {
+    provider_ = c_replica_choose_src_provider;
+    c_replica_choose_src_provider = nullptr;
+  }
+  if (OB_NOT_NULL(c_replica_choose_src_provider)) {
+    c_replica_choose_src_provider->~ObCTypeReplicaSrcProvider();
+    c_replica_choose_src_provider = nullptr;
+  }
+  buf = nullptr;
+  return ret;
+}
+
 int ObStorageHAChooseSrcHelper::get_policy_type(
     const ObMigrationOpArg &arg,
     const uint64_t tenant_id,
     bool enable_choose_source_policy,
     const char *policy_str,
+    const common::GlobalLearnerList &learner_list,
     ObStorageHASrcProvider::ChooseSourcePolicy &policy)
 {
   int ret = OB_SUCCESS;
   policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
+  bool use_c_replica_policy = false;
   if (!arg.is_valid()
       || OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(arg), K(tenant_id));
+    LOG_WARN("invalid argument", K(ret), K(arg), K(tenant_id), K(learner_list));
+  } else if (OB_FAIL(check_c_replica_migration_policy_(tenant_id, arg.ls_id_, arg.dst_, learner_list, use_c_replica_policy))) {
+    LOG_WARN("failed to check c replica choose source", K(ret), K(tenant_id), K(arg.ls_id_), K(arg.dst_), K(learner_list));
+  } else if (use_c_replica_policy) {
+    policy = ObStorageHASrcProvider::ChooseSourcePolicy::C_TYPE_REPLICA;
+    LOG_INFO("c replica choose source", K(tenant_id), K(arg.ls_id_));
   } else if (arg.data_src_.is_valid() && ObMigrationOpType::TYPE::REBUILD_LS_OP != arg.type_) { // TODO (zhixing.yh) modify condition after repairing compat
     policy = ObStorageHASrcProvider::ChooseSourcePolicy::RECOMMEND;
     LOG_INFO("rs recommend source", K(arg.data_src_), K(tenant_id));
@@ -1308,6 +1516,52 @@ void ObStorageHAChooseSrcHelper::errsim_test_(const ObMigrationOpArg &arg, ObSto
     }
   }
 #endif
+}
+
+int ObStorageHAChooseSrcHelper::check_exist_c_replica_(const uint64_t tenant_id,
+    const share::ObLSID &ls_id, const common::GlobalLearnerList &learner_list, bool &exist_c_replica)
+{
+  int ret = OB_SUCCESS;
+  exist_c_replica = false;
+  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() || !learner_list.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(learner_list));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < learner_list.get_member_number(); i++) {
+      ObMember learner;
+      if (OB_FAIL(learner_list.get_learner(i, learner))) {
+        LOG_WARN("failed to get learner", K(ret), K(learner_list), K(i));
+      } else if (learner.is_columnstore()) {
+        exist_c_replica = true;
+        LOG_INFO("succeed to find c replica", K(tenant_id), K(ls_id), K(learner_list));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStorageHAChooseSrcHelper::check_c_replica_migration_policy_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const common::ObReplicaMember &dst, const common::GlobalLearnerList &learner_list, bool &use_c_replica_policy)
+{
+  int ret = OB_SUCCESS;
+  use_c_replica_policy = false;
+  bool exist_c_replica = false;
+  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() || !dst.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(dst), K(learner_list));
+  } else if (REPLICA_TYPE_COLUMNSTORE != dst.get_replica_type()) {
+    use_c_replica_policy = false;
+  } else if (!learner_list.is_valid()) {
+    use_c_replica_policy = false;
+  } else if (OB_FAIL(check_exist_c_replica_(tenant_id, ls_id, learner_list, exist_c_replica))) {
+    LOG_WARN("failed to check exist c replica", K(ret), K(tenant_id), K(ls_id), K(learner_list));
+  } else if (exist_c_replica) {
+    use_c_replica_policy = true;
+  } else {
+    use_c_replica_policy = false;
+  }
+  return ret;
 }
 }  // namespace storage
 }  // namespace oceanbase

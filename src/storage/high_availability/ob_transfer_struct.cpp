@@ -492,6 +492,8 @@ int ObTXTransferUtils::build_empty_minor_sstable_param_(
     param.filled_tx_scn_ = end_scn;
     param.original_size_ = 0;
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+    param.table_backup_flag_.reset();
+    param.table_shared_flag_.reset();
 
     if (!param.is_valid()) {
       ret = OB_INVALID_ARGUMENT;

@@ -24,7 +24,7 @@ struct PushdownFilterInfo;
 namespace storage
 {
 class ObSSTableWrapper;
-class ObGroupByCell;
+class ObGroupByCellBase;
 
 class ObICGIterator
 {

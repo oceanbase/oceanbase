@@ -390,7 +390,7 @@ int ObTmpPageCache::load_page(const ObTmpPageCacheKey &key,
     p_handle.value_ = new (buf) ObTmpPageCacheValue(buf + sizeof(ObTmpPageCacheValue));
   }
   if (OB_SUCC(ret)) {
-    ObTmpFileBlockManager &block_manager = MTL(ObTenantTmpFileManager*)->get_tmp_file_block_manager();
+    ObTmpFileBlockManager &block_manager = MTL(ObTenantTmpFileManager*)->get_sn_file_manager().get_tmp_file_block_manager();
     blocksstable::ObMacroBlockHandle mb_handle;
     blocksstable::MacroBlockId macro_block_id;
     //TODO: io_desc and io_timeout_ms value settings
@@ -533,7 +533,7 @@ int ObTmpPageCache::inner_read_io_(const blocksstable::MacroBlockId macro_block_
                 K(begin_offset_in_block), K(io_desc), K(io_timeout_ms), KP(callback));
   }
 
-  // if read successful, callback will be freed after user calls ObTmpFileIOHandle::wait()
+  // if read successful, callback will be freed after user calls ObSNTmpFileIOHandle::wait()
   // for copying data from callback's buf to user's buf
   // thus, here just free memory of the failed cases
   if (OB_FAIL(ret) && OB_NOT_NULL(callback) && OB_NOT_NULL(callback->get_allocator())) {
@@ -570,8 +570,8 @@ int ObTmpPageCache::async_read_(const blocksstable::MacroBlockId macro_block_id,
   return ret;
 }
 
-ObTmpPageCache::ObITmpPageIOCallback::ObITmpPageIOCallback()
-  : cache_(NULL), allocator_(NULL), data_buf_(NULL)
+ObTmpPageCache::ObITmpPageIOCallback::ObITmpPageIOCallback(const common::ObIOCallbackType type)
+  : common::ObIOCallback(type), cache_(NULL), allocator_(NULL), data_buf_(NULL)
 {
   static_assert(sizeof(*this) <= CALLBACK_BUF_SIZE, "IOCallback buf size not enough");
 }
@@ -605,7 +605,7 @@ int ObTmpPageCache::ObITmpPageIOCallback::process_page(
 }
 
 ObTmpPageCache::ObTmpCachedReadPageIOCallback::ObTmpCachedReadPageIOCallback()
-  : page_keys_()
+  : ObITmpPageIOCallback(ObIOCallbackType::TMP_MULTI_PAGE_CALLBACK), page_keys_()
 {
   static_assert(sizeof(*this) <= CALLBACK_BUF_SIZE, "IOCallback buf size not enough");
   page_keys_.set_attr(ObMemAttr(MTL_ID(), "TFCacheRead"));

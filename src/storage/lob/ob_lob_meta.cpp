@@ -46,8 +46,8 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
 ObLobMetaScanIter::ObLobMetaScanIter()
   : lob_adatper_(nullptr), meta_iter_(nullptr),
     byte_size_(0), offset_(0), len_(0), coll_type_(ObCollationType::CS_TYPE_INVALID), scan_backward_(false),
-    allocator_(nullptr), access_ctx_(nullptr), scan_param_(), cur_pos_(0), cur_byte_pos_(0), not_calc_char_len_(false),
-    not_need_last_info_(false) {}
+    allocator_(nullptr), access_ctx_(nullptr), scan_param_(), cur_pos_(0), cur_byte_pos_(0),
+    not_calc_char_len_(false), not_need_last_info_(false) {}
 
 int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
 {
@@ -972,7 +972,7 @@ int ObLobMetaManager::write(ObLobAccessParam& param, ObLobMetaInfo& in_row)
   return ret;
 }
 
-int ObLobMetaManager::batch_insert(ObLobAccessParam& param, ObNewRowIterator &iter)
+int ObLobMetaManager::batch_insert(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(persistent_lob_adapter_.write_lob_meta(param, iter))) {
@@ -981,7 +981,7 @@ int ObLobMetaManager::batch_insert(ObLobAccessParam& param, ObNewRowIterator &it
   return ret;
 }
 
-int ObLobMetaManager::batch_delete(ObLobAccessParam& param, ObNewRowIterator &iter)
+int ObLobMetaManager::batch_delete(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(persistent_lob_adapter_.erase_lob_meta(param, iter))) {

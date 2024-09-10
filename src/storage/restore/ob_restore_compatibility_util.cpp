@@ -33,7 +33,7 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done(
 {
   int ret = OB_SUCCESS;
 
-  if (ObBackupSetFileDesc::is_backup_set_support_quick_restore(backup_compatible_)) {
+  if (ObBackupSetFileDesc::is_allow_quick_restore(backup_compatible_)) {
     if (OB_FAIL(is_tablet_restore_phase_done_(ls_id, ls_restore_status, tablet_handle, is_finish))) {
       LOG_WARN("failed to check tablet restore finished", K(ret));
     }
@@ -51,7 +51,7 @@ ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action(
     const ObLSRestoreStatus &ls_restore_status) const
 {
   ObTabletRestoreAction::ACTION action = ObTabletRestoreAction::RESTORE_NONE;
-  if (ObBackupSetFileDesc::is_backup_set_support_quick_restore(backup_compatible_)) {
+  if (ObBackupSetFileDesc::is_allow_quick_restore(backup_compatible_)) {
     action = get_restore_action_(ls_id, ls_restore_status);
   } else {
     action = get_restore_action_prev_v4_(ls_id, ls_restore_status);

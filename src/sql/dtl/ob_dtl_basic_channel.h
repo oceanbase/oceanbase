@@ -111,6 +111,8 @@ static DtlWriterType msg_writer_map[] =
   CONTROL_WRITER, // DH_SP_WINFUNC_PX_WHOLE_MSG
   CONTROL_WRITER, // DH_RD_WINFUNC_PX_PIECE_MSG
   CONTROL_WRITER, // DH_RD_WINFUNC_PX_WHOLE_MSG
+  CONTROL_WRITER, // DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG,
+  CONTROL_WRITER, // DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG,
 };
 
 static_assert(ARRAYSIZEOF(msg_writer_map) == ObDtlMsgType::MAX, "invalid ms_writer_map size");
@@ -349,27 +351,26 @@ public:
   }
   OB_INLINE ObTempRowStore::DtlRowBlock *get_block() { return block_; }
   OB_INLINE ObDtlLinkedBuffer *get_write_buffer() { return write_buffer_; }
+  void set_row_meta(RowMeta *meta) { meta_ = meta; }
 private:
   DtlWriterType type_;
   ObDtlLinkedBuffer *write_buffer_;
   ObTempRowStore::DtlRowBlock *block_;
   ObTempRowStore::ShrinkBuffer *block_buffer_;
-  RowMeta row_meta_;
+  RowMeta *meta_;
   int64_t row_cnt_;
   int write_ret_;
+
 };
 
 OB_INLINE int ObDtlVectorRowMsgWriter::try_append_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(write_buffer_->get_row_meta().col_cnt_ <= 0)) {
-    if (OB_FAIL(write_buffer_->get_row_meta().init(exprs, 0, false))) {
-      SQL_DTL_LOG(WARN, "failed init row meta", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(row_meta_.col_cnt_ <= 0)) {
-    if (OB_FAIL(row_meta_.init(exprs, 0, false))) {
+  if (OB_ISNULL(meta_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_DTL_LOG(WARN, "failed to get meta", K(ret));
+  } else if (OB_UNLIKELY(write_buffer_->get_row_meta().col_cnt_ <= 0)) {
+    if (OB_FAIL(write_buffer_->get_row_meta().assign(*meta_))) {
       SQL_DTL_LOG(WARN, "failed init row meta", K(ret));
     }
   }
@@ -396,14 +397,11 @@ OB_INLINE int ObDtlVectorRowMsgWriter::try_append_batch(const common::ObIArray<O
                                                     ObCompactRow **new_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(write_buffer_->get_row_meta().col_cnt_ <= 0)) {
-    if (OB_FAIL(write_buffer_->get_row_meta().init(exprs, 0, false))) {
-      SQL_DTL_LOG(WARN, "failed init row meta", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(row_meta_.col_cnt_ <= 0)) {
-    if (OB_FAIL(row_meta_.init(exprs, 0, false))) {
+  if (OB_ISNULL(meta_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_DTL_LOG(WARN, "failed to get meta", K(ret));
+  } else if (OB_UNLIKELY(write_buffer_->get_row_meta().col_cnt_ <= 0)) {
+    if (OB_FAIL(write_buffer_->get_row_meta().assign(*meta_))) {
       SQL_DTL_LOG(WARN, "failed init row meta", K(ret));
     }
   }
@@ -525,6 +523,12 @@ public:
   OB_INLINE int64_t used() { return vector_buffer_.get_mem_used(); }
   OB_INLINE int64_t rows() { return vector_buffer_.get_row_cnt(); }
   OB_INLINE int64_t remain() { return vector_buffer_.get_mem_limit() - vector_buffer_.get_row_cnt(); }
+  OB_INLINE char *get_header(int32_t col_idx) { return vector_buffer_.get_data(col_idx); }
+  OB_INLINE int64_t get_row_cnt() const { return vector_buffer_.get_row_cnt(); }
+  OB_INLINE int64_t get_row_limit() const { return vector_buffer_.get_row_limit(); }
+  OB_INLINE int64_t get_fixed_len(int32_t col_idx) const { return vector_buffer_.get_fixed_length(col_idx); }
+  OB_INLINE void update_row_cnt(int64_t row_cnt) { vector_buffer_.update_row_cnt(row_cnt); }
+  OB_INLINE void set_null(int32_t col_idx, int64_t row_idx) { vector_buffer_.get_nulls(col_idx)->set(row_idx); }
   int write(const ObDtlMsg &msg, ObEvalCtx *eval_ctx, const bool is_eof);
   int append_row(const common::ObIArray<ObExpr*> &exprs, const int32_t batch_idx, ObEvalCtx &ctx)
   { return vector_buffer_.append_row(exprs, batch_idx, ctx); }
@@ -717,6 +721,7 @@ public:
   ObDtlVectorFixedMsgWriter &get_vector_fixed_msg_writer() { return vector_fixed_msg_writer_; }
   virtual int push_buffer_batch_info() override;
   void switch_msg_type(const ObDtlMsg &msg);
+  void set_row_meta(RowMeta &meta) { meta_ = &meta; }
 
   TO_STRING_KV(KP_(id), K_(peer));
 protected:
@@ -785,6 +790,7 @@ public:
   int64_t send_use_time_;
   int64_t msg_count_;
   dtl::ObDTLIntermResultInfoGuard result_info_guard_;
+  RowMeta *meta_;
 };
 
 OB_INLINE bool ObDtlBasicChannel::is_empty() const

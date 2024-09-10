@@ -177,7 +177,7 @@ int ObMicroBlockBareIterator::open(
   return ret;
 }
 
-int ObMicroBlockBareIterator::get_next_micro_block_data(ObMicroBlockData &micro_block)
+int ObMicroBlockBareIterator::get_next_micro_block_data_and_offset(ObMicroBlockData &micro_block, int64_t &offset)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -186,6 +186,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_data(ObMicroBlockData &micro_
   } else if (iter_idx_ > end_idx_) {
     ret = OB_ITER_END;
   } else {
+    offset = read_pos_;
     ObMicroBlockHeader header;
     const char *micro_buf = macro_block_buf_ + read_pos_;
     int64_t pos = 0;
@@ -215,6 +216,12 @@ int ObMicroBlockBareIterator::get_next_micro_block_data(ObMicroBlockData &micro_
     }
   }
   return ret;
+}
+
+int ObMicroBlockBareIterator::get_next_micro_block_data(ObMicroBlockData &micro_block)
+{
+  int64_t offset = 0;
+  return get_next_micro_block_data_and_offset(micro_block, offset);
 }
 
 int ObMicroBlockBareIterator::get_next_micro_block_desc(
@@ -278,6 +285,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     micro_index_info.endkey_.set_compact_rowkey(&micro_block_desc.last_rowkey_);
     micro_block_desc.has_string_out_row_ = micro_index_info.has_string_out_row();
     micro_block_desc.has_lob_out_row_ = micro_index_info.has_lob_out_row();
+    micro_block_desc.logic_micro_id_ = micro_index_info.get_logic_micro_id();
 
     // only for minor
     micro_block_desc.row_count_delta_ = micro_index_info.get_row_count_delta();
@@ -418,7 +426,9 @@ int ObMicroBlockBareIterator::get_micro_block_count(int64_t &micro_block_count)
   return ret;
 }
 
-int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block, const bool force_deserialize, const bool is_macro_meta_block)
+int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block,
+                                              const bool force_deserialize,
+                                              const bool is_macro_meta_block)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!macro_block_header_.is_valid())) {
@@ -437,7 +447,9 @@ int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block, con
     int64_t pos = 0;
     bool is_compressed = false;
     if (OB_FAIL(header.deserialize(micro_buf, macro_block_buf_size_ - index_block_offset, pos))) {
-      LOG_WARN("Fail to deserialize record header", K(ret), K(macro_block_header_));
+      LOG_WARN("Fail to deserialize record header", K(ret),
+               K(macro_block_header_), K(macro_block_buf_size_),
+               K(index_block_offset));
     } else if (FALSE_IT(micro_buf_size = header.header_size_ + header.data_zlength_)) {
     } else if (OB_FAIL(header.check_record(micro_buf, micro_buf_size, MICRO_BLOCK_HEADER_MAGIC))) {
       LOG_WARN("Fail to check record header", K(ret), K(header));

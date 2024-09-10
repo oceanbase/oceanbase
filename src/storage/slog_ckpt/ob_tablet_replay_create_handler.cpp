@@ -23,8 +23,8 @@
 #include "storage/high_availability/ob_tablet_transfer_info.h"
 #include "storage/high_availability/ob_storage_ha_struct.h"
 #include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
-#include "storage/blockstore/ob_shared_block_reader_writer.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#include "storage/blockstore/ob_shared_object_reader_writer.h"
 
 namespace oceanbase
 {
@@ -401,7 +401,7 @@ int ObTabletReplayCreateHandler::replay_discrete_tablets(const ObIArray<ObTablet
         // io maybe timeout, so need retry
         int64_t max_retry_time = 5;
         do {
-          if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->read_from_disk(replay_item.addr_, io_allocator, buf, buf_len))) {
+          if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(replay_item.addr_, 0 /* ls_epoch for share storage */, io_allocator, buf, buf_len))) {
             LOG_WARN("fail to read from disk", K(ret), K(replay_item), KP(buf), K(buf_len));
           }
         } while (OB_FAIL(ret) && OB_TIMEOUT == ret && max_retry_time-- > 0);
@@ -421,7 +421,7 @@ int ObTabletReplayCreateHandler::replay_aggregate_tablets(const ObIArray<ObTable
   int64_t buf_len = 0;
   ObArenaAllocator io_allocator("AggregateRep", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   char *io_buf = nullptr;
-  const int64_t io_buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t io_buf_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -432,8 +432,8 @@ int ObTabletReplayCreateHandler::replay_aggregate_tablets(const ObIArray<ObTable
     LOG_WARN("failed to alloc macro read info buffer", K(ret), K(io_buf_size));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_arr.count(); i++) {
-    ObMacroBlockHandle macro_handle;
-    ObMacroBlockReadInfo read_info;
+    ObStorageObjectReadInfo read_info;
+    ObStorageObjectHandle object_handle;
     read_info.offset_ = 0;
     read_info.buf_ = io_buf;
     read_info.size_ = io_buf_size;
@@ -443,15 +443,16 @@ int ObTabletReplayCreateHandler::replay_aggregate_tablets(const ObIArray<ObTable
     read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
     read_info.macro_block_id_ = total_tablet_item_arr_[range_arr.at(i).first].addr_.block_id();
-    if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
+    read_info.mtl_tenant_id_ = MTL_ID();
+    if (OB_FAIL(ObObjectManager::read_object(read_info, object_handle))) {
       LOG_WARN("fail to read block", K(ret), K(read_info));
     }
     for (int64_t idx = range_arr.at(i).first; OB_SUCC(ret) && idx < range_arr.at(i).second; idx++) {
       const ObTabletReplayItem &replay_item = total_tablet_item_arr_[idx];
       if (OB_FAIL(ATOMIC_LOAD(&errcode_))) {
         LOG_WARN("replay create has already failed", K(ret));
-      } else if (OB_FAIL(ObSharedBlockReaderWriter::parse_data_from_macro_block(macro_handle, replay_item.addr_, buf, buf_len))) {
-        LOG_WARN("fail to parse_data_from_macro_block", K(ret), K(macro_handle), K(replay_item), K(i), K(idx));
+      } else if (OB_FAIL(ObSharedObjectReaderWriter::parse_data_from_object(object_handle, replay_item.addr_, buf, buf_len))) {
+        LOG_WARN("fail to parse_data_from_macro_block", K(ret), K(object_handle), K(replay_item), K(i), K(idx));
       } else if (OB_FAIL(do_replay(replay_item, buf, buf_len, io_allocator))) {
         LOG_WARN("fail to do replay", K(ret), K(replay_item));
       }
@@ -595,6 +596,13 @@ int ObTabletReplayCreateHandler::check_is_need_record_transfer_info_(
   return ret;
 }
 
+int ObTabletReplayCreateHandler::record_ls_transfer_info_tmp(
+      const ObLSHandle &ls_handle,
+      const ObTabletID &tablet_id,
+      const ObTabletTransferInfo &tablet_transfer_info)
+{
+  return record_ls_transfer_info_(ls_handle, tablet_id, tablet_transfer_info);
+}
 int ObTabletReplayCreateHandler::record_ls_transfer_info_(
     const ObLSHandle &ls_handle,
     const ObTabletID &tablet_id,

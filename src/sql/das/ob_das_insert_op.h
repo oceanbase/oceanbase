@@ -22,8 +22,8 @@ namespace sql
 {
 class ObDASInsertResult;
 
-typedef common::ObList<ObNewRowIterator *, common::ObIAllocator> ObDuplicatedIterList;
-class ObDASConflictIterator : public common::ObNewRowIterator
+typedef common::ObList<blocksstable::ObDatumRowIterator *, common::ObIAllocator> ObDuplicatedIterList;
+class ObDASConflictIterator : public blocksstable::ObDatumRowIterator
 {
 public:
   ObDASConflictIterator(const ObjMetaFixedArray &output_types,
@@ -36,9 +36,8 @@ public:
 
   ~ObDASConflictIterator() {};
 
-  virtual int get_next_row(common::ObNewRow *&row) override;
-  virtual int get_next_row() override;
-  virtual void reset() override;
+  void reset();
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
 
   void init_curr_iter()
   { curr_iter_ = duplicated_iter_list_.begin(); }
@@ -78,7 +77,7 @@ public:
     return insert_buffer_.dump_data(*ins_ctdef_);
   }
 
-  common::ObNewRowIterator *get_duplicated_result()
+  blocksstable::ObDatumRowIterator *get_duplicated_result()
   { return result_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
@@ -93,7 +92,7 @@ private:
 
   int insert_index_with_fetch(ObDMLBaseParam &dml_param,
                               ObAccessService *as,
-                              common::ObNewRowIterator &dml_iter,
+                              blocksstable::ObDatumRowIterator &dml_iter,
                               ObDASConflictIterator *result_iter,
                               const ObDASInsCtDef *ins_ctdef,
                               ObDASInsRtDef *ins_rtdef,
@@ -105,12 +104,12 @@ private:
   const ObDASInsCtDef *ins_ctdef_;
   ObDASInsRtDef *ins_rtdef_;
   ObDASWriteBuffer insert_buffer_;
-  common::ObNewRowIterator *result_;
+  blocksstable::ObDatumRowIterator *result_;
   int64_t affected_rows_;  // local execute result, no need to serialize
   bool is_duplicated_;  // local execute result, no need to serialize
 };
 
-class ObDASInsertResult : public ObIDASTaskResult, public common::ObNewRowIterator
+class ObDASInsertResult : public ObIDASTaskResult, public blocksstable::ObDatumRowIterator
 {
   OB_UNIS_VERSION_V(1);
 public:
@@ -118,10 +117,8 @@ public:
   virtual ~ObDASInsertResult();
   virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
   virtual int reuse() override;
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override;
-  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
-  virtual void reset() override;
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
+  virtual void reset();
   virtual int link_extra_result(ObDASExtraData &extra_result) override;
   int init_result_newrow_iter(const ObjMetaFixedArray *output_types);
   ObDASWriteBuffer &get_result_buffer() { return result_buffer_; }

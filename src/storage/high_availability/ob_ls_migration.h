@@ -245,12 +245,13 @@ private:
   int check_ls_need_copy_data_(bool &need_copy);
   int check_before_ls_migrate_(const ObLSMeta &ls_meta);
   int build_ls_();
-  int inner_build_ls_();
+  int inner_build_ls_(bool &is_rpc_not_support);
   int create_all_tablets_(ObCopyLSViewInfoObReader *ob_reader);
   int inner_build_ls_with_old_rpc_();
   int create_all_tablets_with_4_1_rpc_();
 
   int record_server_event_();
+  int join_learner_list_();
 
 private:
   bool is_inited_;
@@ -387,6 +388,7 @@ private:
       bool &need_copy);
   int check_transfer_seq_equal_(
       const ObMigrationTabletParam *src_tablet_meta);
+
   int generate_mds_copy_tasks_(
       ObTabletCopyFinishTask *tablet_copy_finish_task,
       share::ObITask *&parent_task);
@@ -458,7 +460,6 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObDataTabletsMigrationTask"), KP(this), KPC(ctx_));
 private:
-  int join_learner_list_();
   int ls_online_();
   int generate_tablet_group_migration_dag_();
   int generate_tablet_group_dag_(

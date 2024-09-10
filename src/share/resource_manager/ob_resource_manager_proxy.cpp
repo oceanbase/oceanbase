@@ -376,6 +376,29 @@ int ObResourceManagerProxy::delete_consumer_group(
   return ret;
 }
 
+int ObResourceManagerProxy::check_net_bandwidth_config_is_default_(
+    const common::ObObj &max_net_bandwidth,
+    const common::ObObj &net_bandwidth_weight)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t max_net_bandwidth_value = 0;
+  int64_t net_bandwidth_weight_value = 100;
+  if (OB_FAIL(get_percentage("MAX_NET_BANDWIDTH", max_net_bandwidth, max_net_bandwidth_value))) {
+    LOG_WARN("fail to get max_net_bandwidth percentage", K(ret), K(max_net_bandwidth));
+  } else if (max_net_bandwidth_value != 100) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("max_net_bandwidht not default value", K(ret), K(max_net_bandwidth));
+  } else if (OB_FAIL(get_percentage("MAX_NET_BANDWIDTH", net_bandwidth_weight, net_bandwidth_weight_value))) {
+    LOG_WARN("fail to get net_bandwidth_weight percentage", K(ret), K(net_bandwidth_weight_value));
+  } else if (net_bandwidth_weight_value != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("net_bandwidth_weight not default value", K(ret), K(max_net_bandwidth));
+  }
+
+  return ret;
+}
+
 int ObResourceManagerProxy::create_plan_directive(
     uint64_t tenant_id,
     const common::ObString &plan,
@@ -385,13 +408,17 @@ int ObResourceManagerProxy::create_plan_directive(
     const common::ObObj &utilization_limit,
     const common::ObObj &min_iops,
     const common::ObObj &max_iops,
-    const common::ObObj &weight_iops)
+    const common::ObObj &weight_iops,
+    const common::ObObj &max_net_bandwidth,
+    const common::ObObj &net_bandwidth_weight)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   TransGuard trans_guard(trans, tenant_id, ret);
   if (trans_guard.ready()) {
-    ret = create_plan_directive(trans, tenant_id, plan, group, comment, mgmt_p1, utilization_limit, min_iops, max_iops, weight_iops);
+    ret = create_plan_directive(trans, tenant_id, plan, group, comment, mgmt_p1, utilization_limit,
+                                min_iops, max_iops, weight_iops,
+                                max_net_bandwidth, net_bandwidth_weight);
   }
   return ret;
 }
@@ -406,7 +433,9 @@ int ObResourceManagerProxy::create_plan_directive(
     const common::ObObj &utilization_limit,
     const common::ObObj &min_iops,
     const common::ObObj &max_iops,
-    const common::ObObj &weight_iops)
+    const common::ObObj &weight_iops,
+    const common::ObObj &max_net_bandwidth,
+    const common::ObObj &net_bandwidth_weight)
 {
   int ret = OB_SUCCESS;
   bool consumer_group_exist = true;
@@ -443,8 +472,11 @@ int ObResourceManagerProxy::create_plan_directive(
         SQL_COL_APPEND_VALUE(sql, values, v, "UTILIZATION_LIMIT", "%ld");
       }
       uint64_t tenant_data_version = 0;
+      ObSEArray<ObPlanDirective, 8> directives;
       if (OB_FAIL(ret)) {
         // do nothing
+      } else if (OB_FAIL(get_all_plan_directives(tenant_id, plan, directives))) {
+        LOG_WARN("get directives failed", K(ret), K(plan));
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
       } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && (
@@ -463,7 +495,7 @@ int ObResourceManagerProxy::create_plan_directive(
         if (OB_SUCC(ret) && OB_SUCC(get_percentage("MAX_IOPS", max_iops, v))) {
           iops_maximum = v;
           bool is_valid = false;
-          if (OB_FAIL(check_iops_validity(tenant_id, plan, group, iops_minimum, iops_maximum, is_valid))) {
+          if (OB_FAIL(check_iops_validity(tenant_id, plan, group, iops_minimum, iops_maximum, is_valid, directives))) {
             LOG_WARN("check iops setting failed", K(tenant_id), K(plan), K(iops_minimum), K(iops_maximum));
           } else if (OB_UNLIKELY(!is_valid)) {
             ret = OB_INVALID_CONFIG;
@@ -474,6 +506,28 @@ int ObResourceManagerProxy::create_plan_directive(
         }
         if (OB_SUCC(ret) && OB_SUCC(get_percentage("WEIGHT_IOPS", weight_iops, v))) {
           SQL_COL_APPEND_VALUE(sql, values, v, "WEIGHT_IOPS", "%ld");
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
+        if (OB_FAIL(check_net_bandwidth_config_is_default_(max_net_bandwidth, net_bandwidth_weight))) {
+          LOG_WARN("fail to check net bandwidth default", K(ret));
+        }
+      } else if (tenant_data_version >= DATA_VERSION_4_3_3_0) {
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(get_percentage("MAX_NET_BANDWIDTH", max_net_bandwidth, v))) {
+            LOG_WARN("fail get max net bandwidth", K(ret));
+          } else {
+            SQL_COL_APPEND_VALUE(sql, values, v, "MAX_NET_BANDWIDTH", "%ld");
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(get_percentage("NET_BANDWIDTH_WEIGHT", net_bandwidth_weight, v))) {
+            LOG_WARN("fail get net bandwidth weight", K(ret));
+          } else {
+            SQL_COL_APPEND_VALUE(sql, values, v, "NET_BANDWIDTH_WEIGHT", "%ld");
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -673,6 +727,9 @@ int ObResourceManagerProxy::check_if_function_exist(const ObString &function_nam
       0 == function_name.compare("HA_LOW") ||
       0 == function_name.compare("DDL_HIGH") ||
       0 == function_name.compare("DDL") ||
+      0 == function_name.compare("CLOG_LOW")  ||
+      0 == function_name.compare("CLOG_MID")  ||
+      0 == function_name.compare("CLOG_HIGH") ||
       0 == function_name.compare("OTHER_BACKGROUND")) {
     exist = true;
   } else {
@@ -828,7 +885,8 @@ int ObResourceManagerProxy::check_iops_validity(
     const common::ObString &group,
     const int64_t iops_minimum,
     const int64_t iops_maximum,
-    bool &valid)
+    bool &valid,
+    ObIArray<ObPlanDirective> &directives)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
@@ -894,38 +952,39 @@ int ObResourceManagerProxy::check_iops_validity(
     }
     //step 3: check min/max iops
     if (OB_SUCC(ret)) {
-      ObSEArray<ObPlanDirective, 8> directives;
-      if (OB_FAIL(get_all_plan_directives(tenant_id, plan_name, directives))) {
-        LOG_WARN("fail get plan directive", K(tenant_id), K(plan_name), K(ret));
-      } else {
-        uint64_t total_min = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
-          ObPlanDirective &cur_directive = directives.at(i);
-          if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected group id", K(cur_directive));
-          } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
-            ret = OB_INVALID_CONFIG;
-            LOG_WARN("invalid group io config", K(cur_directive));
-          } else if ((0 == group.compare(cur_directive.group_name_.get_value()))) {
-            //skip cur group
-          } else {
-            total_min += cur_directive.min_iops_;
-          }
+      // ObSEArray<ObPlanDirective, 8> directives;
+      // if (OB_FAIL(get_all_plan_directives(tenant_id, plan_name, directives))) {
+      //   LOG_WARN("fail get plan directive", K(tenant_id), K(plan_name), K(ret));
+      // } else {
+      // get directives out of this func
+      uint64_t total_min = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
+        ObPlanDirective &cur_directive = directives.at(i);
+        if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected group id", K(cur_directive));
+        } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
+          ret = OB_INVALID_CONFIG;
+          LOG_WARN("invalid group io config", K(cur_directive));
+        } else if ((0 == group.compare(cur_directive.group_name_.get_value()))) {
+          //skip cur group
+        } else {
+          total_min += cur_directive.min_iops_;
         }
-        if(OB_SUCC(ret)) {
-          total_min += iops_minimum;
-          if (total_min > 100) {
-            valid = false;
-            ret = OB_INVALID_CONFIG;
-            LOG_USER_ERROR(OB_INVALID_CONFIG, "invalid config, sum min_iops > 100");
-            LOG_WARN("invalid group io config", K(ret), K(total_min), K(iops_minimum), K(iops_maximum), K(plan_name));
-          } else {
-            valid = true;
-          }
+      }
+      if(OB_SUCC(ret)) {
+        total_min += iops_minimum;
+        if (total_min > 100) {
+          valid = false;
+          ret = OB_INVALID_CONFIG;
+          LOG_USER_ERROR(OB_INVALID_CONFIG, "invalid config, sum min_iops > 100");
+          LOG_WARN("invalid group io config", K(ret), K(total_min), K(iops_minimum), K(iops_maximum), K(plan_name));
+        } else {
+          valid = true;
         }
       }
     }
+    //}
   }
   return ret;
 }
@@ -997,7 +1056,9 @@ int ObResourceManagerProxy::update_plan_directive(
     const ObObj &utilization_limit,
     const ObObj &min_iops,
     const ObObj &max_iops,
-    const ObObj &weight_iops)
+    const ObObj &weight_iops,
+    const common::ObObj &max_net_bandwidth,
+    const common::ObObj &net_bandwidth_weight)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -1040,8 +1101,11 @@ int ObResourceManagerProxy::update_plan_directive(
         comma = ",";
       }
       uint64_t tenant_data_version = 0;
+      ObSEArray<ObPlanDirective, 8> directives;
       if (OB_FAIL(ret)) {
         // do nothing
+      } else if (OB_FAIL(get_all_plan_directives(tenant_id, plan, directives))) {
+        LOG_WARN("get directives failed", K(ret), K(plan));
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
       } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && (
@@ -1080,7 +1144,7 @@ int ObResourceManagerProxy::update_plan_directive(
           }
           if (OB_SUCC(ret)) {
             bool is_valid = false;
-            if (OB_FAIL(check_iops_validity(tenant_id, plan, group, new_iops_minimum, new_iops_maximum, is_valid))) {
+            if (OB_FAIL(check_iops_validity(tenant_id, plan, group, new_iops_minimum, new_iops_maximum, is_valid, directives))) {
               LOG_WARN("check iops setting failed", K(tenant_id), K(plan), K(new_iops_minimum), K(new_iops_maximum));
             } else if (OB_UNLIKELY(!is_valid)) {
               ret = OB_INVALID_CONFIG;
@@ -1096,6 +1160,32 @@ int ObResourceManagerProxy::update_plan_directive(
             OB_SUCC(get_percentage("NEW_WEIGHT_IOPS", weight_iops, v))) {
           ret = sql.append_fmt("%s WEIGHT_IOPS=%ld", comma, v);
           comma = ",";
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
+        if (OB_FAIL(check_net_bandwidth_config_is_default_(max_net_bandwidth, net_bandwidth_weight))) {
+          LOG_WARN("fail to check net bandwidth default", K(ret));
+        }
+      } else if (tenant_data_version >= DATA_VERSION_4_3_3_0) {
+        if (OB_SUCC(ret)) {
+          if (!max_net_bandwidth.is_null()) {
+            if (OB_FAIL(get_percentage("NEW_MAX_NET_BANDWIDTH", max_net_bandwidth, v))) {
+              LOG_WARN("fail get percentage", K(ret));
+            } else if (OB_FAIL(sql.append_fmt("%s MAX_NET_BANDWIDTH=%ld", comma, v))) {
+              LOG_WARN("fail append value", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (!net_bandwidth_weight.is_null()) {
+            if (OB_FAIL(get_percentage("NEW_NET_BANDWIDTH_WEIGHT", net_bandwidth_weight, v))) {
+              LOG_WARN("fail get percentage", K(ret));
+            } else if (OB_FAIL(sql.append_fmt("%s NET_BANDWIDTH_WEIGHT=%ld", comma, v))) {
+              LOG_WARN("fail append value", K(ret));
+            }
+          }
         }
       }
       if (OB_FAIL(ret)) {
@@ -1215,6 +1305,8 @@ int ObResourceManagerProxy::get_all_plan_directives(
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "min_iops", directive.min_iops_, int64_t, skip_null_error, skip_column_error, 0);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "max_iops", directive.max_iops_, int64_t, skip_null_error, skip_column_error, 100);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "weight_iops", directive.weight_iops_, int64_t, skip_null_error, skip_column_error, 0);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "max_net_bandwidth", directive.max_net_bandwidth_, int64_t, skip_null_error, skip_column_error, 100);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "net_bandwidth_weight", directive.net_bandwidth_weight_, int64_t, skip_null_error, skip_column_error, 0);
             if (OB_SUCC(ret)) {
               ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
               //如果读失败了，可能是group info还没有放到map里，因此不执行该directive直到下一次刷新

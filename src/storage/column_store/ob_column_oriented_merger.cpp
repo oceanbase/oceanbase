@@ -227,7 +227,7 @@ int ObCOMerger::alloc_single_writer(
   if (OB_ISNULL(writer = OB_NEWx(ObCOMergeSingleWriter, &merger_arena_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "Failed to allocate memory for ObCOMergeSingleWriter", K(ret));
-  } else if (OB_FAIL(writer->init(default_row, merge_param_, &merge_ctx_->read_info_, task_idx_,
+  } else if (OB_FAIL(writer->init(*merge_ctx_, default_row, merge_param_, &merge_ctx_->read_info_, task_idx_,
       cg_array, start_cg_idx_, end_cg_idx_, merge_infos, is_empty_table(sstable) ? nullptr : &sstable))) {
     STORAGE_LOG(WARN, "fail to init writer", K(ret));
   } else if (OB_FAIL(merge_writers_.push_back(writer))) {
@@ -303,8 +303,9 @@ int ObCOMerger:: alloc_row_writers(
       table = cg_sstable;
     }
 
+
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(writer->init(default_row, merge_param_, task_idx_,
+    } else if (OB_FAIL(writer->init(*merge_ctx_, default_row, merge_param_, task_idx_,
                                     ctx->get_full_read_info(), *cg_schema_ptr, idx, ctx->progressive_merge_mgr_,
                                     *merge_infos[idx], table, add_column))) {
       // table->old major, read_info used to read old major

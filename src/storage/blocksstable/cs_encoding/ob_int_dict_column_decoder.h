@@ -38,7 +38,7 @@ public:
     const ObColumnCSDecoderCtx &ctx,
     const int64_t row_id,
     ObStorageDatum &datum,
-    storage::ObAggCell &agg_cell) const override;
+    storage::ObAggCellBase &agg_cell) const override;
 
   virtual ObCSColumnHeader::Type get_type() const override { return type_; }
 };

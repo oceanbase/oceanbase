@@ -63,6 +63,50 @@ inline bool ObTabletMapKey::operator <(const ObTabletMapKey &other) const
 {
   return ls_id_ < other.ls_id_ && tablet_id_ < other.tablet_id_;
 }
+
+class ObDieingTabletMapKey final
+{
+public:
+  ObDieingTabletMapKey();
+  ObDieingTabletMapKey(const uint64_t tablet_id, const int64_t transfer_seq);
+  ObDieingTabletMapKey(const ObTabletMapKey &tablet_map_key, const int64_t transfer_seq);
+  ~ObDieingTabletMapKey();
+
+  void reset();
+  bool is_valid() const;
+
+  bool operator ==(const ObDieingTabletMapKey &other) const;
+  bool operator !=(const ObDieingTabletMapKey &other) const;
+  bool operator <(const ObDieingTabletMapKey &other) const;
+  int hash(uint64_t &hash_val) const;
+  uint64_t hash() const;
+
+  TO_STRING_KV(K_(tablet_id), K_(transfer_seq));
+private:
+  uint64_t tablet_id_;
+  int64_t transfer_seq_;
+};
+
+inline bool ObDieingTabletMapKey::is_valid() const
+{
+  return ObTabletID::INVALID_TABLET_ID != tablet_id_ && transfer_seq_ >= 0;
+}
+
+inline bool ObDieingTabletMapKey::operator ==(const ObDieingTabletMapKey &other) const
+{
+  return tablet_id_ == other.tablet_id_ && transfer_seq_ == other.transfer_seq_;
+}
+
+inline bool ObDieingTabletMapKey::operator !=(const ObDieingTabletMapKey &other) const
+{
+  return !(*this == other);
+}
+
+inline bool ObDieingTabletMapKey::operator <(const ObDieingTabletMapKey &other) const
+{
+  return tablet_id_ < other.tablet_id_ && transfer_seq_ < other.transfer_seq_;
+}
+
 } // namespace storage
 } // namespace oceanbase
 

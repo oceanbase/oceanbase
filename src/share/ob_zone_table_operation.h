@@ -54,6 +54,10 @@ public:
       ObZoneInfo &info,
       const bool check_zone_exists = false);
 
+  static int get_zone_region_list(
+      common::ObISQLClient &sql_client,
+      hash::ObHashMap<ObZone, ObRegion> &zone_info_map);
+
   static int insert_global_info(common::ObISQLClient &sql_client, ObGlobalInfo &info);
   static int insert_zone_info(common::ObISQLClient &sql_client, ObZoneInfo &info);
 
@@ -74,6 +78,10 @@ public:
   static int get_active_zone_list(
       common::ObISQLClient &sql_client,
       common::ObIArray<common::ObZone> &zone_list);
+  static int get_zone_info(
+      const ObZone &zone,
+      common::ObISQLClient &sql_client,
+      ObZoneInfo &zone_info);
 private:
   template <typename T>
       static int set_info_item(const char *name, const int64_t value, const char *info_str,
@@ -86,10 +94,6 @@ private:
   template <typename T>
       static int insert_info(common::ObISQLClient &sql_client, T &info);
   static int get_zone_item_count(int64_t &cnt);
-  static int get_zone_info(
-      const ObZone &zone,
-      common::ObISQLClient &sql_client,
-      ObZoneInfo &zone_info);
   // if is_active, then get active zone_list
   // if !is_active, then get inactive zone_list
   static int get_zone_list_(

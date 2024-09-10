@@ -1298,8 +1298,13 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_MULTILINESTRING:
       case T_FUN_SYS_POLYGON:
       case T_FUN_SYS_MULTIPOLYGON:
-      case T_FUN_SYS_GEOMCOLLECTION: {
+      case T_FUN_SYS_GEOMCOLLECTION:
+      case T_FUN_SYS_ARRAY: {
         OZ (process_geo_func_node(node, expr));
+        break;
+      }
+      case T_FUN_SYS_VECTOR_DISTANCE: {
+        OZ (process_vector_func_node(node, expr));
         break;
       }
       case T_FUN_SYS_XML_ELEMENT: {
@@ -1352,6 +1357,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       }
       case T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS: {
         if (OB_FAIL(process_sql_udt_attr_access_node(node, expr))) {
+          LOG_WARN("fail to process sql udt access attr node", K(ret), K(node));
+        }
+        break;
+      }
+      case T_FUNC_SYS_ARRAY_CONTAINS: {
+        if (OB_FAIL(process_array_contains_node(node, expr))) {
           LOG_WARN("fail to process sql udt access attr node", K(ret), K(node));
         }
         break;
@@ -1492,6 +1503,49 @@ int ObRawExprResolverImpl::process_sql_udt_construct_node(const ParseNode *node,
       }
     }
     OX(expr = sys_udt_construct);
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_array_contains_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node));
+  } else if (OB_UNLIKELY(2 != node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param num", K(node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else {
+    func_expr->set_func_name(N_ARRAY_CONTAINS);
+    if (OB_UNLIKELY(T_EXPR_LIST != node->children_[1]->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid children for array contains function", K(node), K(node->children_[1]));
+    } else if (OB_UNLIKELY(1 != node->children_[1]->num_child_)) {
+      ret = OB_ERR_PARAM_SIZE;
+      LOG_WARN("invalid children for array contains function", K(node), K(node->children_[1]->num_child_));
+    } else {
+      ObRawExpr *para_expr = NULL;
+      if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], para_expr)))) {
+        LOG_WARN("fail to recursive resolve expr list item", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+        LOG_WARN("fail to add param expr to expr", K(ret));
+      } else if (OB_ISNULL(node->children_[1]->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr list node children", K(ret), K(node->children_[0]));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1]->children_[0], para_expr)))) {
+        LOG_WARN("fail to recursive resolve expr list item", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+        LOG_WARN("fail to add param expr to expr", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    func_expr->set_extra(1); // param order is reversed, so set extra to 1
+    expr = func_expr;
   }
   return ret;
 }
@@ -3300,6 +3354,35 @@ int ObRawExprResolverImpl::process_char_charset_node(const ParseNode *node, ObRa
   return ret;
 }
 
+int ObRawExprResolverImpl::process_vector_func_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else {
+    func_expr->set_func_name(N_VECTOR_DISTANCE);
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      ObRawExpr *para_expr = NULL;
+      if (OB_ISNULL(node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr list node children", K(ret), K(i), K(node->children_[i]));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], para_expr)))) {
+        LOG_WARN("fail to recursive resolve expr list item", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+        LOG_WARN("fail to add param expr to expr", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    expr = func_expr;
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::set_geo_func_name(ObSysFunRawExpr *func_expr,
                                              const ObItemType func_type)
 {
@@ -3336,6 +3419,10 @@ int ObRawExprResolverImpl::set_geo_func_name(ObSysFunRawExpr *func_expr,
       }
       case T_FUN_SYS_GEOMCOLLECTION: {
         OX(func_expr->set_func_name(N_GEOMCOLLECTION));
+        break;
+      }
+      case T_FUN_SYS_ARRAY: {
+        OX(func_expr->set_func_name(N_ARRAY));
         break;
       }
       default: {

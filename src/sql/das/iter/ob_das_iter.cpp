@@ -13,6 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_iter.h"
+#include "sql/das/iter/ob_das_vid_merge_iter.h"
 
 
 namespace oceanbase
@@ -125,6 +126,29 @@ int ObDASIter::get_next_rows(int64_t &count, int64_t capacity)
     LOG_WARN("das iter get next rows before init", K(ret));
   } else {
     ret = inner_get_next_rows(count, capacity);
+  }
+  return ret;
+}
+
+int ObDASIter::get_vid_merge_iter(ObDASVIdMergeIter *&vid_merge_iter)
+{
+  int ret = OB_SUCCESS;
+  vid_merge_iter = nullptr;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("das iter get next rows before init", K(ret));
+  } else if (ObDASIterType::DAS_ITER_VEC_VID_MERGE == type_) {
+    vid_merge_iter = static_cast<ObDASVIdMergeIter *>(this);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && nullptr == vid_merge_iter && i < children_cnt_; ++i) {
+      ObDASIter *iter = children_[i];
+      if (OB_ISNULL(iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("das iter is nullptr", K(ret), KPC(iter));
+      } else if (OB_FAIL(iter->get_vid_merge_iter(vid_merge_iter))) {
+        LOG_WARN("fail to get vid merge iter", K(ret), KPC(iter));
+      }
+    }
   }
   return ret;
 }

@@ -53,7 +53,7 @@ public:
   virtual OB_INLINE const storage::ObITable *get_table() const = 0;
   virtual int next() = 0;
   virtual bool is_iter_end() const = 0;
-  virtual bool is_macro_block_opened() const { return true; };
+  virtual bool is_macro_block_opened() const { return true; }
   virtual bool is_micro_block_opened() const { return true; }
   virtual const blocksstable::ObDatumRow *get_curr_row() const = 0;
   virtual int get_curr_macro_block(const blocksstable::ObMacroBlockDesc *&macro_desc) const
@@ -61,11 +61,18 @@ public:
     UNUSEDx(macro_desc);
     return OB_NOT_SUPPORTED;
   }
-  virtual int get_curr_micro_block(const blocksstable::ObMicroBlock *&micro_block) {UNUSED(micro_block);  return OB_NOT_SUPPORTED; };
+  virtual int get_curr_macro_block(
+      const blocksstable::ObMacroBlockDesc *&macro_desc,
+      const blocksstable::ObMicroBlockData *&micro_block_data) const
+  {
+    UNUSEDx(macro_desc, micro_block_data);
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int get_curr_micro_block(const blocksstable::ObMicroBlock *&micro_block) { UNUSED(micro_block);  return OB_NOT_SUPPORTED; }
   virtual int64_t get_last_row_id() const = 0;
   virtual int get_curr_row_id(int64_t& row_id) const = 0;
 
-  virtual int get_curr_range_end_rowid(int64_t &row_id) const { UNUSED(row_id); return OB_NOT_SUPPORTED; };
+  virtual int get_curr_range_end_rowid(int64_t &row_id) const { UNUSED(row_id); return OB_NOT_SUPPORTED; }
   virtual int open_curr_range(const bool for_rewrite, const bool for_compare = false) { UNUSEDx(for_rewrite, for_compare); return OB_NOT_SUPPORTED; }
   virtual int need_open_curr_range(const blocksstable::ObDatumRow &row, bool &need_open, const int64_t row_id_for_cg = 0)
   { UNUSEDx(row, need_open, row_id_for_cg); return OB_NOT_SUPPORTED; }
@@ -90,7 +97,7 @@ public:
     const ObITableReadInfo *read_info) override final;
   virtual OB_INLINE const storage::ObITable *get_table() const override { return nullptr; }
   virtual int next() override;
-  virtual bool is_iter_end() const override { return curr_row_count_ > total_row_count_; };
+  virtual bool is_iter_end() const override { return curr_row_count_ > total_row_count_; }
   virtual const blocksstable::ObDatumRow *get_curr_row() const override;
   virtual int get_curr_row_id(int64_t& row_id) const override;
   virtual int64_t get_last_row_id() const override
@@ -223,13 +230,23 @@ public:
     macro_desc = &curr_block_desc_;
     return OB_SUCCESS;
   }
+  virtual int get_curr_macro_block(
+      const blocksstable::ObMacroBlockDesc *&macro_desc,
+      const blocksstable::ObMicroBlockData *&micro_block_data) const;
   virtual int need_open_curr_range(const blocksstable::ObDatumRow &row, bool &need_open, const int64_t row_id_for_cg = 0) override final;
-  INHERIT_TO_STRING_KV("ObPartitionMacroMergeIter", ObPartitionMergeIter, K_(macro_block_opened),
-                       KP_(macro_block_iter), K_(curr_block_desc), K(curr_block_meta_));
+  INHERIT_TO_STRING_KV("ObPartitionMacroMergeIter", ObPartitionMergeIter,
+                       K_(macro_block_opened), KP_(macro_block_iter),
+                       K_(curr_block_desc), K_(curr_block_meta));
+
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
-  void reset_macro_block_desc() { curr_block_desc_.reset(); curr_block_meta_.reset(); curr_block_desc_.macro_meta_ = &curr_block_meta_; }
+  void reset_macro_block_desc()
+  {
+    curr_block_desc_.reset();
+    curr_block_meta_.reset();
+    curr_block_desc_.macro_meta_ = &curr_block_meta_;
+  }
   virtual int next_range();
   virtual int check_row_changed(const blocksstable::ObDatumRow &row, const int64_t row_id, bool &is_changed);
   int exist(const blocksstable::ObDatumRow &row, bool &is_exist);
@@ -342,17 +359,30 @@ public:
     macro_desc = &curr_block_desc_;
     return OB_SUCCESS;
   }
+  virtual int get_curr_macro_block(
+      const blocksstable::ObMacroBlockDesc *&macro_desc,
+      const blocksstable::ObMicroBlockData *&micro_block_data) const;
 
-  INHERIT_TO_STRING_KV("ObPartitionMinorMacroMergeIter", ObPartitionMinorRowMergeIter,
-      K_(macro_block_opened), K_(curr_block_desc), K_(curr_block_meta), K_(macro_block_iter),
-      K_(last_macro_block_reused), K_(last_macro_block_recycled), K_(last_mvcc_row_already_output), K_(have_macro_output_row), K_(reuse_uncommit_row));
+  INHERIT_TO_STRING_KV("ObPartitionMinorMacroMergeIter",
+                       ObPartitionMinorRowMergeIter, K_(macro_block_opened),
+                       K_(curr_block_desc), K_(curr_block_meta),
+                       K_(macro_block_iter), K_(last_macro_block_reused),
+                       K_(last_macro_block_recycled),
+                       K_(last_mvcc_row_already_output),
+                       K_(have_macro_output_row), K_(reuse_uncommit_row));
+
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
   virtual int inner_next(const bool open_macro) override;
   virtual int next_range();
   virtual int open_curr_macro_block();
-  void reset_macro_block_desc() { curr_block_desc_.reset(); curr_block_meta_.reset(); curr_block_desc_.macro_meta_ = &curr_block_meta_; }
+  void reset_macro_block_desc()
+  {
+    curr_block_desc_.reset();
+    curr_block_meta_.reset();
+    curr_block_desc_.macro_meta_ = &curr_block_meta_;
+  }
   int check_need_open_curr_macro_block(bool &need);
   int check_macro_block_recycle(const ObMacroBlockDesc &macro_desc, bool &can_recycle);
   int recycle_last_rowkey_in_macro_block(ObSSTableRowWholeScanner &iter);

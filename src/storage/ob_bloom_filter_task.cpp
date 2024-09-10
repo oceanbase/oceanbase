@@ -129,8 +129,8 @@ int ObBloomFilterBuildTask::build_bloom_filter()
     bool need_build = false;
 
     ObBloomFilterCacheValue bfcache_value;
-    ObMacroBlockHandle macro_handle;
-    ObMacroBlockReadInfo read_info;
+    ObStorageObjectHandle macro_handle;
+    ObStorageObjectReadInfo read_info;
     ObMacroBlockRowBareIterator *macro_bare_iter = nullptr;
     ObSSTableMacroBlockHeader macro_header;
     const ObDatumRow *row = nullptr;
@@ -155,9 +155,14 @@ int ObBloomFilterBuildTask::build_bloom_filter()
       read_info.macro_block_id_ = macro_id_;
       read_info.offset_ = 0;
       read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
+      read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
       read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::BLOOM_FILTER_IO);
+      read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+      read_info.mtl_tenant_id_ = MTL_ID();
+
+
       if (OB_ISNULL(io_buf_) && OB_ISNULL(io_buf_ =
           reinterpret_cast<char*>(allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -166,7 +171,7 @@ int ObBloomFilterBuildTask::build_bloom_filter()
         read_info.buf_ = io_buf_;
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
+      } else if (OB_FAIL(ObObjectManager::read_object(read_info, macro_handle))) {
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
       } else if (OB_FAIL(macro_bare_iter->open(
           read_info.buf_, macro_handle.get_data_size(), true /*check*/))) {

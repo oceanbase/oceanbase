@@ -16,6 +16,7 @@
 #include "lib/random/ob_random.h"
 #include "../../unittest/storage/blocksstable/ob_row_generate.h"
 #include "storage/ob_store_row_comparer.h"
+#include "src/share/ob_device_manager.h"
 
 namespace oceanbase {
 
@@ -207,6 +208,10 @@ TEST_F(TestExternalSort, test_async) {
 }
 
 int main(int argc, char **argv) {
+	int tmp_ret = OB_SUCCESS;
+	if (OB_TMP_FAIL(oceanbase::common::ObDeviceManager::get_instance().init_devices_env())) {
+		STORAGE_LOG(ERROR, "fail to init device manager", K(tmp_ret));
+	}
     oceanbase::lib::set_memory_limit(8L * 1024L * 1024L * 1024L);
 	oceanbase::common::ObIOManager::get_instance().init(1024L * 1024L * 1024L);
 	oceanbase::common::ObLogger::get_logger().set_log_level("TRACE");

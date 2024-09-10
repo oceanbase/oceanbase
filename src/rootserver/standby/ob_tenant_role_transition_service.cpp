@@ -37,6 +37,8 @@
 #include "share/oracle_errno.h"//oracle error code
 #include "rootserver/ob_service_name_command.h"
 
+using namespace oceanbase::common::sqlclient;
+
 namespace oceanbase
 {
 using namespace share;

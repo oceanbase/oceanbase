@@ -67,8 +67,9 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcRefreshMemStatP, gctx_);
     RPC_PROCESSOR(ObRpcWashMemFragmentationP, gctx_);
     RPC_PROCESSOR(ObRpcBootstrapP, gctx_);
-    RPC_PROCESSOR(ObRpcIsEmptyServerP, gctx_);
-    RPC_PROCESSOR(ObRpcCheckServerForAddingServerP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckServerEmptyP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckServerEmptyWithResultP, gctx_);
+    RPC_PROCESSOR(ObRpcPrepareServerForAddingServerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckServerMachineStatusP, gctx_);
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
@@ -107,6 +108,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcBatchGetTabletBindingP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLRedoLogP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
+    RPC_PROCESSOR(ObRpcSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLIncCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcLSCancelReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSMigrateReplicaP, gctx_);
@@ -136,4 +138,18 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckStorageOperationStatusP, gctx_);
+#ifdef OB_BUILD_SHARED_STORAGE
+    RPC_PROCESSOR(ObRpcRemoteWriteDDLFinishLogP, gctx_);
+    RPC_PROCESSOR(ObFetchReplicaPrewarmMicroBlockP, gctx_.bandwidth_throttle_);
+    RPC_PROCESSOR(ObGetSSMacroBlockP, gctx_);
+    RPC_PROCESSOR(ObGetSSPhyBlockInfoP, gctx_);
+    RPC_PROCESSOR(ObGetSSMicroBlockMetaP, gctx_);
+    RPC_PROCESSOR(ObRpcSyncHotMicroKeyP, gctx_);
+    RPC_PROCESSOR(ObGetSSMacroBlockByURIP, gctx_);
+    RPC_PROCESSOR(ObDelSSTabletMetaP, gctx_);
+    RPC_PROCESSOR(ObEnableSSMicroCacheP, gctx_);
+    RPC_PROCESSOR(ObGetSSMicroCacheInfoP, gctx_);
+#endif
+    RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);
 }

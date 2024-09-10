@@ -28,6 +28,7 @@
 #include "storage/ob_parallel_external_sort.h"
 #include "storage/backup/ob_backup_index_store.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/backup/ob_backup_other_blocks_mgr.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "common/storage/ob_io_device.h"
 #include "storage/blocksstable/ob_macro_block.h"
@@ -58,6 +59,8 @@ public:
   static int check_tablet_with_major_sstable(const storage::ObTabletHandle &tablet_handle, bool &with_major);
   static int fetch_macro_block_logic_id_list(const storage::ObTabletHandle &tablet_handle,
       const blocksstable::ObSSTable &sstable, common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
+  static int fetch_macro_block_id_list_for_ddl_in_ss_mode(const storage::ObTabletHandle &tablet_handle,
+      blocksstable::ObSSTable &sstable, common::ObIArray<blocksstable::MacroBlockId> &macro_id_list);
   static int report_task_result(const int64_t job_id, const int64_t task_id, const uint64_t tenant_id,
       const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const share::ObTaskId trace_id,
       const share::ObTaskId &dag_id, const int64_t result, ObBackupReportCtx &report_ctx);
@@ -103,6 +106,8 @@ struct ObBackupTabletCtx final {
   int64_t opened_rebuilder_count_;
   int64_t closed_rebuilder_count_;
   bool is_all_loaded_;
+  ObBackupOtherBlocksMgr other_block_mgr_;
+  ObBackupLinkedBlockItemWriter linked_writer_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletCtx);
 };
 
@@ -215,12 +220,14 @@ private:
 
 enum ObBackupProviderItemType {
   PROVIDER_ITEM_MACRO_ID = 0,
-  PROVIDER_ITEM_TABLET_AND_SSTABLE_META = 1,
+  PROVIDER_ITEM_DDL_OTHER_BLOCK_ID = 1,
+  PROVIDER_ITEM_TABLET_AND_SSTABLE_META = 2,
   PROVIDER_ITEM_MAX,
 };
 
 class ObBackupProviderItem {
   friend class ObBackupTabletStat;
+  friend class ObBackupTabletProvider;
 public:
   ObBackupProviderItem();
   virtual ~ObBackupProviderItem();
@@ -228,6 +235,8 @@ public:
   int set_with_fake(const ObBackupProviderItemType &item_type,
       const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type);
   // for macro block
+  int set_for_ss_ddl(const blocksstable::MacroBlockId &macro_id,
+      const storage::ObITable::TableKey &table_key, const common::ObTabletID &tablet_id);
   int set(const ObBackupProviderItemType &item_type, const share::ObBackupDataType &backup_data_type,
       const ObBackupMacroBlockId &backup_macro_id, const storage::ObITable::TableKey &table_key, const common::ObTabletID &tablet_id);
   bool operator==(const ObBackupProviderItem &other) const;
@@ -353,13 +362,18 @@ private:
       ObITabletLogicMacroIdReader *&reader);
   int fetch_all_logic_macro_block_id_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable, int64_t &total_count);
+  int fetch_ddl_macro_id_in_ss_mode_(const common::ObTabletID &tablet_id,
+      const storage::ObTabletHandle &tablet_handle, const ObITable::TableKey &table_key,
+      const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int add_macro_block_id_item_list_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
       const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count);
+  int add_sstable_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl,
+      const storage::ObITable::TableKey &table_key);
   int get_backup_data_type_(const storage::ObITable::TableKey &table_key, share::ObBackupDataType &backup_data_type);
   bool is_same_type_(const storage::ObITable::TableKey &lhs, const storage::ObITable::TableKey &rhs);
   int add_tablet_item_(const common::ObTabletID &tablet_id);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
-  int check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal);
+  int get_tablet_status_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObTabletStatus &status);
   int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
   int get_tenant_meta_index_turn_id_(int64_t &turn_id);
   int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,

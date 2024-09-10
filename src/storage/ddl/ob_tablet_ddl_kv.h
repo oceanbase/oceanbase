@@ -93,6 +93,9 @@ public:
                          const blocksstable::ObDatumRowkey *rowkey,
                          const blocksstable::ObDataMacroBlockMeta *meta,
                          const int64_t co_sstable_row_offset);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int insert_macro_block(const ObDDLMacroHandle &macro_handle);
+#endif
   int locate_key(const blocksstable::ObDatumRange &range,
                  const blocksstable::ObStorageDatumUtils &datum_utils,
                  blocksstable::DDLBtreeIterator &iter,
@@ -114,6 +117,7 @@ public:
   int64_t get_macro_block_cnt() const { return macro_blocks_.count(); }
   int get_last_rowkey(const blocksstable::ObDatumRowkey *&last_rowkey);
   int get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array);
+  int get_macro_id_array(ObIArray<blocksstable::MacroBlockId> &macro_id_array) const;
   int exist(const blocksstable::ObDatumRowkey *rowkey, bool &is_exist);
   const blocksstable::ObDataStoreDesc &get_data_desc() const { return data_desc_.get_desc(); }
   bool is_valid() const { return is_inited_; }
@@ -173,7 +177,8 @@ public:
       ObTablet &tablet,
       const ObITable::TableKey &table_key,
       const share::SCN &ddl_start_scn,
-      const uint64_t data_format_version);
+      const uint64_t data_format_version,
+      const bool is_inc_direct_load = false);
   void reset();
   int insert_block_meta_tree(
       const ObDDLMacroHandle &macro_handle,
@@ -196,6 +201,7 @@ private:
       ObTabletCreateSSTableParam &sstable_param);
 private:
   bool is_inited_;
+  bool is_inc_direct_load_;
   ObBlockMetaTree block_meta_tree_;
 };
 
@@ -368,6 +374,9 @@ private:
   int wait_pending();
   int full_load_freeze_(const share::SCN &freeze_scn);
   int inc_load_freeze_();
+#ifdef OB_BUILD_SHARED_STORAGE
+  int warmup_index_block(const ObDDLMacroBlock &macro_block);
+#endif
 
   int create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &table_key, ObDDLMemtable *&ddl_memtable);
 

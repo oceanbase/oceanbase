@@ -12,7 +12,7 @@
 
 #include <stdint.h>
 #include "logservice/ob_append_callback.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
+//#include "storage/meta_mem/ob_tablet_handle.h"
 namespace oceanbase
 {
 namespace logservice
@@ -22,6 +22,7 @@ class ObLogHandler;
 
 namespace storage
 {
+class ObTabletHandle;
 class ObIStorageClogRecorder
 {
 protected:

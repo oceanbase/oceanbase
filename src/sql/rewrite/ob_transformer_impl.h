@@ -153,6 +153,7 @@ public:
   };
   static int check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &func);
   int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);
+  int check_vec_approx(ObDMLStmt *stmt, bool &has_approx);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
   int set_transformation_parameters(ObQueryCtx *query_ctx);
 private:

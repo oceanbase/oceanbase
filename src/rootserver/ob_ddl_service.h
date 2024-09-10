@@ -156,6 +156,9 @@ public:
                        ObSchemaGetterGuard &schema_guard,
                        const share::schema::ObTableSchema &mlog_schema);
 
+  int rebuild_vec_index(const obrpc::ObRebuildIndexArg &arg,
+                        obrpc::ObAlterTableRes &res);
+
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg,
                     obrpc::ObAlterTableRes &res);
 
@@ -336,6 +339,7 @@ public:
       share::schema::ObTableSchema &new_table_schema,
       obrpc::ObAlterTableArg &alter_table_arg,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_data_version,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
@@ -548,6 +552,14 @@ public:
       const ObTableSchema *hidden_table_schema,
       const ObTableSchema *orig_table_schema,
       ObSchemaGetterGuard &schema_guard);
+
+  /**
+   * This function is called by the DDL REBUILD INDEX TASK.
+   * This task will switch old vector index and new vector index name
+   * Also will change old vector index status to INDEX_STATUS_UNAVAILABLE
+   * All these index status and name will change in the same trans
+  */
+  int switch_index_name_and_status_for_vec_index_table(obrpc::ObAlterTableArg &alter_table_arg);
 
   /**
    * This function is called by the storage layer in the three stage of offline ddl.
@@ -1306,7 +1318,7 @@ private:
       ObSchemaGetterGuard &schema_guard,
       const uint64_t tenant_id,
       const uint64_t data_table_id,
-      bool &fts_exist);
+      bool &domain_index_exist);
   int check_has_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t teannt_id,
@@ -1500,6 +1512,7 @@ private:
   // offline ddl cannot appear at the same time with other ddl types
   // Offline ddl cannot appear at the same time as offline ddl
   int check_is_offline_ddl(obrpc::ObAlterTableArg &alter_table_arg,
+                           const uint64_t data_format_version,
                            share::ObDDLType &ddl_type,
                            bool &ddl_need_retry_at_executor);
   int check_is_oracle_mode_add_column_not_null_ddl(const obrpc::ObAlterTableArg &alter_table_arg,
@@ -1511,6 +1524,7 @@ private:
   int check_ddl_with_primary_key_operation(const obrpc::ObAlterTableArg &alter_table_arg,
                                            bool &with_primary_key_operation);
   int do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
+                              const uint64_t tenant_data_version,
                               obrpc::ObAlterTableRes &res);
   int add_not_null_column_to_table_schema(
       obrpc::ObAlterTableArg &alter_table_arg,
@@ -1649,6 +1663,7 @@ private:
                                const share::schema::ObTableSchema &orig_table_schema,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const bool is_oracle_mode,
+                               const uint64_t data_format_version,
                                share::ObDDLType &ddl_type,
                                bool &ddl_need_retry_at_executor);
   int check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,
@@ -2127,11 +2142,28 @@ private:
       const int64_t new_data_table_schema_version,
       const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions,
       ObDDLSQLTransaction &trans);
+  int get_dropping_vec_index_invisiable_table_schema_(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const uint64_t index_table_id,
+      const bool is_vec_inner_drop,
+      const ObString &index_name,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
+      common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
 
 public:
-  int generate_aux_index_schema(
-      const obrpc::ObGenerateAuxIndexSchemaArg &arg,
-      obrpc::ObGenerateAuxIndexSchemaRes &result);
+  int create_aux_index(
+      const obrpc::ObCreateAuxIndexArg &arg,
+      obrpc::ObCreateAuxIndexRes &result);
+  int check_aux_index_schema_exist_(
+      const uint64_t tenant_id,
+      const obrpc::ObCreateIndexArg &arg,
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema *data_schema,
+      bool &is_exist,
+      const ObTableSchema *&index_schema);
   int check_parallel_ddl_conflict(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const obrpc::ObDDLArg &arg);
@@ -2191,12 +2223,25 @@ public:
              common::ObIAllocator *allocator = NULL);
 #endif
 private:
-  int check_schema_generated_for_aux_index_schema_(
-      const obrpc::ObGenerateAuxIndexSchemaArg &arg,
+  int generate_aux_index_schema_(
+      const uint64_t tenant_id,
       ObSchemaGetterGuard &schema_guard,
+      obrpc::ObCreateIndexArg &create_index_arg,
+      ObTableSchema &nonconst_data_schema,
       const ObTableSchema *data_schema,
-      bool &schema_generated,
-      uint64_t &index_table_id);
+      ObIArray<ObColumnSchemaV2*> &gen_columns,
+      ObDDLSQLTransaction &trans,
+      const uint64_t tenant_data_version,
+      ObTableSchema &index_schema);
+  int create_aux_index_task_(
+      const ObTableSchema *data_schema,
+      const ObTableSchema *idx_schema,
+      obrpc::ObCreateIndexArg &create_index_arg,
+      ObArenaAllocator &allocator,
+      const int64_t parent_task_id,
+      const uint64_t tenant_data_version,
+      ObDDLSQLTransaction &trans,
+      ObDDLTaskRecord &task_record);
   int adjust_cg_for_offline(ObTableSchema &new_table_schema);
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                        const share::schema::ObTableSchema &ori_table_schema,

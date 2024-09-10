@@ -1565,7 +1565,7 @@ int ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(
     LOG_WARN("invalid argument", K(ret), K(data_schema));
   } else if (data_schema.is_partitioned_table() && data_schema.is_heap_table()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create full-text or multi-value index on partition table without primary key");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create full-text or multi-value or vector index on partition table without primary key");
   }
   return ret;
 }

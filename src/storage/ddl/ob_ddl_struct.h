@@ -16,6 +16,8 @@
 #include "lib/container/ob_array.h"
 #include "share/scn.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/ob_macro_block_meta.h"
+#include "storage/ob_i_table.h"
 
 namespace oceanbase
 {
@@ -24,11 +26,15 @@ namespace storage
 
 static const int64_t DDL_FLUSH_MACRO_BLOCK_TIMEOUT = 5 * 1000 * 1000;
 
+static const int64_t SS_DDL_START_SCN_VAL = 100;
+
 enum ObDDLMacroBlockType
 {
   DDL_MB_INVALID_TYPE = 0,
   DDL_MB_DATA_TYPE = 1,
   DDL_MB_INDEX_TYPE = 2,
+  DDL_MB_SSTABLE_META_TYPE = 3,
+  DDL_MB_TABLET_META_TYPE = 4
 };
 
 class ObDDLMacroHandle
@@ -54,6 +60,11 @@ public:
   ~ObDDLMacroBlock();
   const blocksstable::MacroBlockId &get_block_id() const { return block_handle_.get_block_id(); }
   int deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator &allocator) const;
+  int set_data_macro_meta(const blocksstable::MacroBlockId &macro_id,
+                          const char* macor_block_buf,
+                          const int64_t size,
+                          const ObDDLMacroBlockType &block_type,
+                          const bool force_set_macro_meta = false);
   bool is_valid() const;
   bool is_column_group_info_valid() const;
   TO_STRING_KV(K_(block_handle),
@@ -61,22 +72,25 @@ public:
                K_(block_type),
                K_(ddl_start_scn),
                K_(scn),
-               KP_(buf),
-               K_(size),
                K_(table_key),
                K_(end_row_id),
-               K_(trans_id));
+               K_(trans_id),
+               KPC_(data_macro_meta),
+               KP_(buf),
+               K_(size));
 public:
+  ObArenaAllocator allocator_; // used to hold data_macro_meta_
   ObDDLMacroHandle block_handle_;
   blocksstable::ObLogicMacroBlockId logic_id_;
   ObDDLMacroBlockType block_type_;
   share::SCN ddl_start_scn_;
   share::SCN scn_;
-  const char *buf_;
-  int64_t size_;
   ObITable::TableKey table_key_;
   int64_t end_row_id_;
   transaction::ObTransID trans_id_; // for incremental direct load only
+  blocksstable::ObDataMacroBlockMeta *data_macro_meta_;
+  const char* buf_; // only used for warm up
+  int64_t size_;
 };
 
 class ObDDLKV;
@@ -118,6 +132,8 @@ public:
     ObTablet *tablet,
     const share::SCN &scn,
     const share::SCN &start_scn,
+    const int64_t snapshot_version, // used for shared-storage mode.
+    const uint64_t data_format_version, // used for shared-storage mode.
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
   ~ObDDLKVPendingGuard();
   int get_ret() const { return ret_; }
@@ -138,6 +154,8 @@ enum ObDirectLoadType {
   DIRECT_LOAD_DDL = 1,
   DIRECT_LOAD_LOAD_DATA = 2,
   DIRECT_LOAD_INCREMENTAL = 3,
+  DIRECT_LOAD_DDL_V2 = 4,
+  DIRECT_LOAD_LOAD_DATA_V2 = 5,
   DIRECT_LOAD_MAX
 };
 
@@ -148,24 +166,32 @@ static inline bool is_valid_direct_load(const ObDirectLoadType &type)
 
 static inline bool is_ddl_direct_load(const ObDirectLoadType &type)
 {
-  return ObDirectLoadType::DIRECT_LOAD_DDL == type;
+  return ObDirectLoadType::DIRECT_LOAD_DDL == type || ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type;
 }
 
 static inline bool is_full_direct_load(const ObDirectLoadType &type)
 {
-  return ObDirectLoadType::DIRECT_LOAD_DDL <= type
-      && ObDirectLoadType::DIRECT_LOAD_LOAD_DATA >= type;
+  return ObDirectLoadType::DIRECT_LOAD_DDL == type
+      || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA == type
+      || ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type
+      || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
 }
 
 static inline bool is_data_direct_load(const ObDirectLoadType &type)
 {
-  return ObDirectLoadType::DIRECT_LOAD_LOAD_DATA <= type
-      && ObDirectLoadType::DIRECT_LOAD_INCREMENTAL >= type;
+  return ObDirectLoadType::DIRECT_LOAD_LOAD_DATA == type
+      || ObDirectLoadType::DIRECT_LOAD_INCREMENTAL == type
+      || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
 }
 
 static inline bool is_incremental_direct_load(const ObDirectLoadType &type)
 {
   return ObDirectLoadType::DIRECT_LOAD_INCREMENTAL == type;
+}
+
+static inline bool is_shared_storage_dempotent_mode(const ObDirectLoadType &type)
+{
+  return ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
 }
 
 struct ObDDLMacroBlockRedoInfo final
@@ -213,7 +239,6 @@ public:
   storage::ObDirectLoadType type_;
   transaction::ObTransID trans_id_; // for incremental direct load only
   bool with_cs_replica_;
-
   blocksstable::MacroBlockId macro_block_id_; // for shared storage mode
   // for shared storage gc occupy info
   int64_t parallel_cnt_;
@@ -240,6 +265,26 @@ public:
 private:
   ObTabletDirectLoadMgr *tablet_mgr_;
 };
+
+#ifdef OB_BUILD_SHARED_STORAGE
+struct ObDDLFinishLogInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLFinishLogInfo();
+  ~ObDDLFinishLogInfo() = default;
+  bool is_valid() const;
+  int assign(const ObDDLFinishLogInfo &other);
+  void reset();
+  TO_STRING_KV(K_(ls_id), K_(table_key), K_(data_buffer), K_(data_format_version), K_(macro_block_id));
+public:
+  share::ObLSID ls_id_;
+  storage::ObITable::TableKey table_key_;
+  ObString data_buffer_;
+  uint64_t data_format_version_;
+  blocksstable::MacroBlockId  macro_block_id_;
+};
+#endif
 
 }  // end namespace storage
 }  // end namespace oceanbase

@@ -105,7 +105,8 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
           } else if (OB_FAIL(ob_sql_type_str(data_type_str,
                                            OB_MAX_SYS_PARAM_NAME_LENGTH,
                                            param_type.get_obj_type(),
-                                           param_type.get_collation_type()))) {
+                                           param_type.get_collation_type(),
+                                           param_info->get_extended_type_info()))) {
             SERVER_LOG(WARN, "fail to get data type str", K(ret), K(param_type.get_obj_type()));
           } else {
             ObString type_val(OB_MAX_SYS_PARAM_NAME_LENGTH, static_cast<int32_t>(strlen(data_type_str)), data_type_str);
@@ -184,7 +185,8 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
                                            param_type.get_length(),
                                            precision_or_length_semantics,
                                            param_type.get_scale(),
-                                           param_type.get_collation_type()))) {
+                                           param_type.get_collation_type(),
+                                           param_info->get_extended_type_info()))) {
             SERVER_LOG(WARN,"fail to get column type str",K(ret), K(param_type.get_obj_type()));
           } else {
             ObString type_val(OB_MAX_SYS_PARAM_NAME_LENGTH, static_cast<int32_t>(strlen(column_type_str)),column_type_str);

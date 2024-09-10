@@ -56,8 +56,6 @@ public:
   const char dummy_empty_char = '\0';
 private:
   common::ObStorageType storage_type_;
-  ObIODOpt opts_[1];
-  ObIODOpts iod_opts_;
   share::ObBackupStorageInfo access_info_;
   ObIODevice* device_handle_;
   ObIOFd fd_;

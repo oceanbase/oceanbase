@@ -181,6 +181,8 @@
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "sql/engine/basic/ob_values_table_access_op.h"
+#include "sql/engine/aggregate/ob_merge_groupby_vec_op.h"
+#include "sql/engine/join/ob_merge_join_vec_op.h"
 
 namespace oceanbase
 {

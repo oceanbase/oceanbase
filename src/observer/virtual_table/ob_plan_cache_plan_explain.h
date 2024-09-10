@@ -101,8 +101,7 @@ class ObCacheObjIterator
     ObCacheObjIterator(common::ObSEArray<uint64_t, 16> &tenant_id_array):
     tenant_id_array_(tenant_id_array),
     tenant_id_array_idx_(-1),
-    plan_id_array_(),
-    cur_plan_cache_(nullptr)
+    plan_id_array_()
     {}
 
     int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry);
@@ -112,7 +111,6 @@ class ObCacheObjIterator
     common::ObSEArray<uint64_t, 16> &tenant_id_array_;
     int64_t tenant_id_array_idx_;
     common::ObSEArray<uint64_t, 16> plan_id_array_;
-    ObPlanCache *cur_plan_cache_;
 };
 
 class ObPlanCachePlanExplain : public common::ObVirtualTableScannerIterator

@@ -264,6 +264,7 @@ public:
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
   int check_das_need_keep_ordering(ObLogicalOperator *op);
+  int check_das_need_scan_with_vid(ObLogicalOperator *op);
 
   int gen_das_table_location_info(ObLogTableScan *table_scan,
                                   ObTablePartitionInfo *&table_partition_info);
@@ -989,7 +990,10 @@ public:
 
   int allocate_select_into_as_top(ObLogicalOperator *&old_top);
 
-  int check_select_into(bool &has_select_into, bool &is_single, bool &has_order_by);
+  int check_select_into(bool &has_select_into,
+                        bool &is_single,
+                        bool &has_order_by,
+                        ObRawExpr *&file_partition_expr);
 
   int allocate_expr_values_as_top(ObLogicalOperator *&top,
                                   const ObIArray<ObRawExpr*> *filter_exprs = NULL);
@@ -1420,8 +1424,25 @@ public:
 
   int construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogicalOperator *log_op);
 
+  int prepare_vector_index_info(ObLogicalOperator *scan);
   int prepare_text_retrieval_scan(const ObIArray<ObRawExpr*> &exprs, ObLogicalOperator *scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
+  int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
+                                    ObRawExpr *topn_expr,
+                                    ObRawExpr *limit_expr,
+                                    ObRawExpr *offset_expr,
+                                    bool is_fetch_with_ties,
+                                    bool need_exchange,
+                                    const ObIArray<OrderItem> &sort_keys,
+                                    bool &need_further_sort);
+  int try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
+                                          ObRawExpr *topn_expr,
+                                          ObRawExpr *limit_expr,
+                                          ObRawExpr *offset_expr,
+                                          bool is_fetch_with_ties,
+                                          bool need_exchange,
+                                          const ObIArray<OrderItem> &sort_keys,
+                                          bool &need_further_sort);
   int try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
                                              ObRawExpr *topn_expr,
                                              ObRawExpr *limit_expr,
@@ -1889,6 +1910,46 @@ private:
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> new_or_quals_;
 
   ObSelectLogPlan *nonrecursive_plan_for_fake_cte_;
+
+  // has_allocated_range_shuffle_ is a flag for select into
+  // when flag = true, logical plan is like
+  // select into
+  //     |
+  //    sort
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(range)
+  // condition: partition expr is null or const expr, single is false, has order by without limit
+  //
+  // when flag = false, logical plan is like
+  // select into
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(random)
+  // condition: single is false, no order by, partition expr is null or const expr
+  //
+  // or
+  //
+  // select into
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(hash)
+  // condition: single is false, no order by, partition expr is not const expr
+  //
+  // or
+  //
+  // select into
+  //     |
+  // px coordinator
+  //     |
+  // exchange out distr
+  // condition: single is true / parallel = 1 / has limit / has order by and partition by
+  //
+  // 为select into分配了range shuffle后, 在分配select into算子时不应再分配exchange算子
+  bool has_allocated_range_shuffle_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

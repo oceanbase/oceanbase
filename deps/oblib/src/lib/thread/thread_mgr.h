@@ -141,6 +141,12 @@ public:
     UNUSED(strategy);
     return common::OB_NOT_SUPPORTED;
   }
+  virtual int set_adaptive_thread(int64_t min_thread_num, int64_t max_thread_num)
+  {
+    UNUSED(min_thread_num);
+    UNUSED(max_thread_num);
+    return common::OB_NOT_SUPPORTED;
+  }
   virtual int push_task(void *task)
   {
     UNUSED(task);
@@ -302,8 +308,8 @@ public:
   void stop() override
   {
     if (nullptr != th_) {
-      th_->runnable_->set_stop(true);
       th_->stop();
+      th_->runnable_->set_stop(true);
     }
   }
   void wait() override
@@ -439,23 +445,25 @@ class TG_QUEUE_THREAD : public ITG
 {
 public:
   TG_QUEUE_THREAD(ThreadCountPair pair, const int64_t task_num_limit)
-    : thread_num_(pair.get_thread_cnt()),
+    : min_thread_num_(pair.get_thread_cnt()),
+      max_thread_num_(pair.get_thread_cnt()),
       task_num_limit_(task_num_limit)
   {}
   TG_QUEUE_THREAD(int64_t thread_num, const int64_t task_num_limit)
-    : thread_num_(thread_num),
+    : min_thread_num_(thread_num),
+      max_thread_num_(thread_num),
       task_num_limit_(task_num_limit)
   {}
   ~TG_QUEUE_THREAD() { destroy(); }
-  int thread_cnt() override { return (int)thread_num_; }
+  int thread_cnt() override { return (int)max_thread_num_; }
   int set_thread_cnt(int64_t thread_cnt) override
   {
     int ret = common::OB_SUCCESS;
     if (qth_ == nullptr) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      thread_num_ = thread_cnt;
-      qth_->set_thread_count(thread_num_);
+      max_thread_num_ = thread_cnt;
+      qth_->set_thread_count(max_thread_num_);
     }
     return ret;
   }
@@ -469,7 +477,12 @@ public:
       qth_ = new (buf_) MySimpleThreadPool();
       qth_->handler_ = &handler;
       qth_->set_run_wrapper(tg_helper_);
-      ret = qth_->init(thread_num_, task_num_limit_, attr_.name_, tenant_id);
+      if (min_thread_num_ != max_thread_num_) {
+        ret = qth_->set_adaptive_thread(min_thread_num_, max_thread_num_);
+      }
+      if (OB_SUCC(ret)) {
+        ret = qth_->init(max_thread_num_, task_num_limit_, attr_.name_, tenant_id);
+      }
     }
     return ret;
   }
@@ -518,6 +531,13 @@ public:
     }
     return ret;
   }
+  int set_adaptive_thread(int64_t min_thread_num, int64_t max_thread_num) override
+  {
+    int ret = common::OB_SUCCESS;
+    min_thread_num_ = min_thread_num;
+    max_thread_num_ = max_thread_num;
+    return ret;
+  }
   void destroy()
   {
     if (qth_ != nullptr) {
@@ -535,7 +555,8 @@ public:
 private:
   char buf_[sizeof(MySimpleThreadPool)];
   MySimpleThreadPool *qth_ = nullptr;
-  int64_t thread_num_;
+  int64_t min_thread_num_;
+  int64_t max_thread_num_;
   int64_t task_num_limit_;
 };
 
@@ -1113,6 +1134,7 @@ public:
     ret;                                                   \
   })
 #define TG_SET_ADAPTIVE_STRATEGY(tg_id, args...) TG_INVOKE(tg_id, set_adaptive_strategy, args)
+#define TG_SET_ADAPTIVE_THREAD(tg_id, min_thread, max_thread) TG_INVOKE(tg_id, set_adaptive_thread, min_thread, max_thread)
 #define TG_PUSH_TASK(tg_id, args...) TG_INVOKE(tg_id, push_task, args)
 #define TG_GET_QUEUE_NUM(tg_id, args...) TG_INVOKE(tg_id, get_queue_num, args)
 #define TG_GET_THREAD_CNT(tg_id) TG_INVOKE(tg_id, thread_cnt)

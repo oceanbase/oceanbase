@@ -72,8 +72,8 @@ TEST(TestBackupDataStruct, BackupPhysicalID)
   backup_physical_id.turn_id_ = 1;
   backup_physical_id.retry_id_ = 0;
   backup_physical_id.file_id_ = 3;
-  backup_physical_id.offset_ = 584288;
-  backup_physical_id.length_ = 492;
+  backup_physical_id.aligned_offset_ = 584288;
+  backup_physical_id.aligned_length_ = 492;
   ret = backup_physical_id.get_backup_macro_block_index(logic_id, macro_index);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObBackupMacroBlockIndex actual_macro_index;

@@ -13,22 +13,14 @@
 #ifndef OCEANBASE_STORAGE_OB_COMPLEMENT_DATA_TASK_H
 #define OCEANBASE_STORAGE_OB_COMPLEMENT_DATA_TASK_H
 
-#include "storage/access/ob_table_access_context.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/access/ob_table_access_context.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/ob_store_row_comparer.h"
-#include "sql/engine/expr/ob_expr_frame_info.h"
+#include "storage/ddl/ob_direct_load_mgr_agent.h"
 
 namespace oceanbase
 {
-namespace sql
-{
-struct ObTempExpr;
-}
+
 namespace storage
 {
 class ObScan;
@@ -38,7 +30,6 @@ class ObMultipleScanMerge;
 struct ObComplementDataParam final
 {
 public:
-  static const int64_t DEFAULT_COMPLEMENT_DATA_MEMORY_LIMIT = 128L * 1024L * 1024L;
   ObComplementDataParam():
     is_inited_(false), orig_tenant_id_(common::OB_INVALID_TENANT_ID), dest_tenant_id_(common::OB_INVALID_TENANT_ID),
     orig_ls_id_(share::ObLSID::INVALID_LS_ID), dest_ls_id_(share::ObLSID::INVALID_LS_ID), orig_table_id_(common::OB_INVALID_ID),
@@ -49,7 +40,13 @@ public:
   {}
   ~ObComplementDataParam() { destroy(); }
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
-  int split_task_ranges(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t tablet_size, const int64_t hint_parallelism);
+  int split_task_ranges(
+      const int64_t task_id,
+      const uint64_t data_format_version,
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t tablet_size,
+      const int64_t hint_parallelism);
 
   bool is_valid() const
   {
@@ -60,7 +57,6 @@ public:
            && data_format_version_ > 0;
   }
 
-  int get_hidden_table_key(ObITable::TableKey &table_key) const;
   bool use_new_checksum() const { return data_format_version_ >= DATA_VERSION_4_2_1_1; }
   void destroy()
   {
@@ -110,7 +106,7 @@ public:
   int64_t tablet_task_id_;
   lib::Worker::CompatMode compat_mode_;
   uint64_t data_format_version_;
-  ObSEArray<common::ObStoreRange, 32> ranges_;
+  ObSEArray<blocksstable::ObDatumRange, 32> ranges_;
 private:
   common::ObArenaAllocator allocator_;
 };
@@ -121,40 +117,36 @@ struct ObComplementDataContext final
 {
 public:
   ObComplementDataContext():
-    is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
+    is_inited_(false), ddl_agent_(), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
+    is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
-    data_sstable_redo_writer_(), index_builder_(nullptr), start_scn_(share::SCN::min_scn()), tablet_direct_load_mgr_handle_(), row_scanned_(0), row_inserted_(0), context_id_(0),
-    allocator_("CompleteDataCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    row_scanned_(0), row_inserted_(0), cg_row_inserted_(0), context_id_(0), lob_cols_cnt_(0)
   {}
   ~ObComplementDataContext() { destroy(); }
-  int init(const ObComplementDataParam &param, const blocksstable::ObDataStoreDesc &desc);
+  int init(
+    const ObComplementDataParam &param,
+    const share::schema::ObTableSchema &hidden_table_schema);
   void destroy();
   int write_start_log(const ObComplementDataParam &param);
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
-  int check_already_committed(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      bool &is_commited);
-  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder),
-    K_(start_scn), K_(tablet_direct_load_mgr_handle), K_(row_scanned), K_(row_inserted));
+  TO_STRING_KV(K_(is_inited), K_(ddl_agent), K_(direct_load_type), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt),
+      K_(row_scanned), K_(row_inserted), K_(cg_row_inserted), K_(context_id), K_(lob_cols_cnt));
 public:
   bool is_inited_;
+  ObDirectLoadMgrAgent ddl_agent_;
+  ObDirectLoadType direct_load_type_;
   bool is_major_sstable_exist_;
   int complement_data_ret_;
   ObSpinLock lock_;
   int64_t concurrent_cnt_;
-  ObDDLRedoLogWriter data_sstable_redo_writer_;
-  blocksstable::ObSSTableIndexBuilder *index_builder_;
-  share::SCN start_scn_;
-  ObTabletDirectLoadMgrHandle tablet_direct_load_mgr_handle_;
   int64_t row_scanned_;
   int64_t row_inserted_;
+  int64_t cg_row_inserted_; // unused now.
   int64_t context_id_;
+  int64_t lob_cols_cnt_;
   ObArray<int64_t> report_col_checksums_;
   ObArray<int64_t> report_col_ids_;
-private:
-  common::ObArenaAllocator allocator_;
 };
 
 class ObComplementPrepareTask;
@@ -222,24 +214,13 @@ private:
   int do_local_scan();
   int do_remote_scan();
   int append_row(ObScan *scan);
-  int append_lob(
-      const int64_t schema_rowkey_cnt,
-      const int64_t extra_rowkey_cnt,
-      ObDDLInsertRowIterator &iterator,
-      ObArenaAllocator &lob_allocator);
-  int add_extra_rowkey(const int64_t rowkey_cnt,
-                       const int64_t extra_rowkey_cnt,
-                       const blocksstable::ObDatumRow &row,
-                       const int64_t sql_no = 0);
 
 private:
   static const int64_t RETRY_INTERVAL = 100 * 1000; // 100ms
-  common::ObArenaAllocator allocator_;
   bool is_inited_;
   int64_t task_id_;
   ObComplementDataParam *param_;
   ObComplementDataContext *context_;
-  blocksstable::ObDatumRow write_row_;
   ObArray<ObColDesc> col_ids_;
   ObArray<ObColDesc> org_col_ids_;
   ObArray<int32_t> output_projector_;
@@ -254,8 +235,6 @@ public:
   int init(ObComplementDataParam &param, ObComplementDataContext &context);
   int process() override;
 private:
-  int add_build_hidden_table_sstable();
-private:
   bool is_inited_;
   ObComplementDataParam *param_;
   ObComplementDataContext *context_;
@@ -266,29 +245,38 @@ struct ObExtendedGCParam final
 {
 public:
   ObExtendedGCParam():
-    col_ids_(), org_col_ids_(), extended_col_ids_(), org_extended_col_ids_(), dependent_exprs_(), output_projector_()
+    col_ids_(), org_col_ids_(), extended_col_ids_(), org_extended_col_ids_(), output_projector_()
   {}
   ~ObExtendedGCParam() {}
   common::ObArray<share::schema::ObColDesc> col_ids_;
   common::ObArray<share::schema::ObColDesc> org_col_ids_;
   common::ObArray<share::schema::ObColDesc> extended_col_ids_;
   common::ObArray<share::schema::ObColDesc> org_extended_col_ids_;
-  ObArray<sql::ObTempExpr *> dependent_exprs_;
   common::ObArray<int32_t> output_projector_;
-  TO_STRING_KV(K_(col_ids), K_(org_col_ids), K_(extended_col_ids), K_(org_extended_col_ids),
-      K_(dependent_exprs), K_(output_projector));
+  TO_STRING_KV(K_(col_ids), K_(org_col_ids), K_(extended_col_ids), K_(org_extended_col_ids), K_(output_projector));
 };
 
-class ObScan
+class ObScan : public ObIStoreRowIterator
 {
 public:
-  ObScan() = default;
+  ObScan() :
+    schema_rowkey_cnt_(0),
+    snapshot_version_(0),
+    mult_version_cols_desc_(),
+    checksum_calculator_()
+  { }
   virtual ~ObScan() = default;
-  virtual int get_next_row(
-      const blocksstable::ObDatumRow *&tmp_row,
-      const blocksstable::ObDatumRow *&tmp_row_after_reshape) = 0;
-  virtual compaction::ObColumnChecksumCalculator *get_checksum_calculator() = 0;
   virtual int get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids) = 0;
+protected:
+  int64_t storaged_index_with_extra_rowkey(const int64_t i)
+  {
+    return i < schema_rowkey_cnt_ ? i : i + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  }
+protected:
+  int64_t schema_rowkey_cnt_;
+  int64_t snapshot_version_;
+  common::ObArray<share::schema::ObColDesc> mult_version_cols_desc_; // for checksum calculate, with extra rowkey.
+  compaction::ObColumnChecksumCalculator checksum_calculator_;
 };
 
 class ObLocalScan : public ObScan
@@ -301,24 +289,18 @@ public:
            const common::ObIArray<int32_t> &projector,
            const share::schema::ObTableSchema &data_table_schema,
            const int64_t snapshot_version,
-           transaction::ObTransService *txs,
            const share::schema::ObTableSchema &hidden_table_schema,
-           const bool output_org_cols_only);
+           const bool unique_index_checking);
   int table_scan(const share::schema::ObTableSchema &data_table_schema,
                  const share::ObLSID &ls_id,
                  const ObTabletID &tablet_id,
                  ObTabletTableIterator &table_iter,
                  common::ObQueryFlag &query_flag,
-                 blocksstable::ObDatumRange &range,
-                 transaction::ObTxDesc *tx_desc);
-  virtual int get_next_row(
-      const blocksstable::ObDatumRow *&tmp_row,
-      const blocksstable::ObDatumRow *&tmp_row_after_reshape) override;
+                 blocksstable::ObDatumRange &range);
+  virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
   int get_origin_table_checksum(
       ObArray<int64_t> &report_col_checksums,
       ObArray<int64_t> &report_col_ids) override;
-  compaction::ObColumnChecksumCalculator *get_checksum_calculator() override
-    {return &checksum_calculator_;}
 private:
   int get_output_columns(
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -334,7 +316,7 @@ private:
   int construct_access_param(
       const share::schema::ObTableSchema &data_table_schema,
       const ObTabletID &tablet_id);
-  int construct_range_ctx(common::ObQueryFlag &query_flag, const share::ObLSID &ls_id, transaction::ObTxDesc *tx_desc);
+  int construct_range_ctx(common::ObQueryFlag &query_flag, const share::ObLSID &ls_id);
   int construct_multiple_scan_merge(ObTablet &tablet, blocksstable::ObDatumRange &range);
   int construct_multiple_scan_merge(
       ObTabletTableIterator &table_iter,
@@ -346,10 +328,9 @@ private:
   uint64_t dest_table_id_;
   int64_t schema_version_;
   ObExtendedGCParam extended_gc_;
-  int64_t snapshot_version_;
   transaction::ObTransService *txs_;
   blocksstable::ObDatumRow default_row_;
-  blocksstable::ObDatumRow tmp_row_;
+  blocksstable::ObDatumRow write_row_; // with extra rowkey.
   ObIStoreRowIterator *row_iter_;
   ObMultipleScanMerge *scan_merge_;
   ObStoreCtx ctx_;
@@ -362,8 +343,7 @@ private:
   common::ObArray<share::schema::ObColumnParam *> col_params_;
   ObTableReadInfo read_info_;
   common::ObBitmap exist_column_mapping_;
-  compaction::ObColumnChecksumCalculator checksum_calculator_;
-  bool output_org_cols_only_;
+  bool unique_index_checking_;
 };
 
 class ObRemoteScan : public ObScan
@@ -377,13 +357,10 @@ public:
            const int64_t dest_table_id,
            const int64_t schema_version,
            const int64_t dest_schema_version,
+           const int64_t snapshot_version,
            const common::ObTabletID &src_tablet_id);
   void reset();
-  virtual int get_next_row(
-      const blocksstable::ObDatumRow *&tmp_row,
-      const blocksstable::ObDatumRow *&tmp_row_after_reshape) override;
-  compaction::ObColumnChecksumCalculator *get_checksum_calculator() override
-    {return &checksum_calculator_;}
+  virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
   int get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids) override;
 private:
   int prepare_iter(const ObSqlString &sql_string, common::ObCommonSqlProxy *sql_proxy);
@@ -401,7 +378,6 @@ private:
                                ObSqlString &sql_string);
 private:
   bool is_inited_;
-  int64_t current_;
   uint64_t tenant_id_;
   int64_t table_id_;
   uint64_t dest_tenant_id_;
@@ -409,14 +385,12 @@ private:
   int64_t schema_version_;
   int64_t dest_schema_version_;
   common::ObTabletID src_tablet_id_;
-  blocksstable::ObDatumRow row_without_reshape_;
   blocksstable::ObDatumRow row_with_reshape_; // for checksum calculate only.
+  blocksstable::ObDatumRow write_row_; // with extra rowkey.
   ObMySQLProxy::MySQLResult res_;
   sqlclient::ObMySQLResult *result_;
   common::ObArenaAllocator allocator_;
   ObArray<ObColDesc> org_col_ids_;
-  common::ObArray<share::ObColumnNameInfo> column_names_;
-  compaction::ObColumnChecksumCalculator checksum_calculator_;
 };
 
 }  // end namespace storage

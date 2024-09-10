@@ -211,7 +211,7 @@ int ObServerUtils::calc_auto_extend_size(int64_t &actual_extend_size)
   const int64_t datafile_maxsize = GCONF.datafile_maxsize;
   const int64_t datafile_next = GCONF.datafile_next;
   const int64_t datafile_size =
-    OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
 
   if (OB_UNLIKELY(datafile_maxsize <= 0) ||
       OB_UNLIKELY(datafile_size) <= 0 ||

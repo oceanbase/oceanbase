@@ -118,6 +118,7 @@ void TestLobCommon::build_data_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
 #define ADD_COLUMN(column_id, column_name, data_type, collation_type, is_row_key) \
   { \
@@ -166,6 +167,7 @@ void TestLobCommon::build_lob_meta_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
   // add lob_id
   {
@@ -259,6 +261,7 @@ void TestLobCommon::build_lob_piece_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema_.set_micro_index_clustered(false);
 
   // add piece_id
   {

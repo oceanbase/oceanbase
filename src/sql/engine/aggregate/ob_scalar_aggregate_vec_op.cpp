@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_scalar_aggregate_vec_op.h"
+#include "sql/engine/px/ob_px_util.h"
 
 namespace oceanbase
 {
@@ -30,13 +31,14 @@ int ObScalarAggregateVecOp::inner_open()
     LOG_WARN("failed to allocate dir id", K(ret));
   } else if (OB_FAIL(init_mem_context())) {
     LOG_WARN("init memory context failed", K(ret));
+  } else if (OB_FAIL(init_hp_infras_group_mgr())) {
+    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else {
     aggr_processor_.set_dir_id(dir_id_);
     aggr_processor_.set_io_event_observer(&io_event_observer_);
     aggr_processor_.set_op_monitor_info(&op_monitor_info_);
-    if (OB_FAIL(aggr_processor_.init_scalar_aggregate_row(row_, row_meta_,
-                                                          mem_context_->get_arena_allocator()))) {
-      LOG_WARN("init scalar aggregate row failed", K(ret));
+    if (OB_FAIL(init_one_aggregate_row())) {
+      LOG_WARN("failed to init aggregate row", K(ret));
     } else {
       started_ = false;
     }
@@ -44,20 +46,35 @@ int ObScalarAggregateVecOp::inner_open()
   return ret;
 }
 
+int ObScalarAggregateVecOp::init_one_aggregate_row()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(aggr_processor_.init_aggr_row_meta(row_meta_))) {
+    LOG_WARN("failed to init aggregate row meta", K(ret));
+  } else if (OB_FAIL(aggr_processor_.init_one_aggr_row(row_meta_, row_,
+                                                       mem_context_->get_arena_allocator()))) {
+    LOG_WARN("init scalar aggregate row failed", K(ret));
+  }
+  return ret;
+}
+
 int ObScalarAggregateVecOp::inner_close()
 {
   started_ = false;
+  sql_mem_processor_.unregister_profile();
   return ObGroupByVecOp::inner_close();
 }
 
 void ObScalarAggregateVecOp::destroy()
 {
   started_ = false;
+  sql_mem_processor_.unregister_profile_if_necessary();
   if (OB_NOT_NULL(mem_context_)) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
   }
   row_meta_.reset();
+  hp_infras_mgr_.destroy();
   ObGroupByVecOp::destroy();
 }
 
@@ -66,8 +83,7 @@ int ObScalarAggregateVecOp::inner_switch_iterator()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObGroupByVecOp::inner_switch_iterator())) {
     LOG_WARN("failed to switch iterator", K(ret));
-  } else if (OB_FAIL(aggr_processor_.init_scalar_aggregate_row(
-               row_, row_meta_, mem_context_->get_arena_allocator()))) {
+  } else if (OB_FAIL(init_one_aggregate_row())) {
     LOG_WARN("failed to init scalar aggregate row", K(ret));
   } else {
     started_ = false;
@@ -80,8 +96,7 @@ int ObScalarAggregateVecOp::inner_rescan()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObGroupByVecOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
-  } else if (OB_FAIL(aggr_processor_.init_scalar_aggregate_row(
-               row_, row_meta_, mem_context_->get_arena_allocator()))) {
+  } else if (OB_FAIL(init_one_aggregate_row())) {
     LOG_WARN("failed to init scalar aggregate row", K(ret));
   } else {
     started_ = false;
@@ -201,6 +216,37 @@ int ObScalarAggregateVecOp::init_mem_context()
         ObCtxIds::WORK_AREA);
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       LOG_WARN("memory entity create failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObScalarAggregateVecOp::init_hp_infras_group_mgr()
+{
+  int ret = OB_SUCCESS;
+  int64_t distinct_cnt = 0;
+  uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+  if (aggr_processor_.has_distinct()) {
+    int64_t est_rows = MY_SPEC.rows_;
+    aggr_processor_.set_io_event_observer(&io_event_observer_);
+    if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(&ctx_, MY_SPEC.px_est_size_factor_, est_rows,
+                                                  est_rows))) {
+      LOG_WARN("failed to get px size", K(ret));
+    } else if (OB_FAIL(sql_mem_processor_.init(&ctx_.get_allocator(), tenant_id,
+                                               est_rows * MY_SPEC.width_, MY_SPEC.type_,
+                                               MY_SPEC.id_, &ctx_))) {
+      LOG_WARN("failed to init sql mem processor", K(ret));
+    } else if (OB_FAIL(hp_infras_mgr_.init(tenant_id, GCONF.is_sql_operator_dump_enabled(),
+                                           est_rows, MY_SPEC.width_, true /*unique*/, 1 /*ways*/,
+                                           &eval_ctx_, &sql_mem_processor_, &io_event_observer_,
+                                           MY_SPEC.compress_type_))) {
+      LOG_WARN("failed to init hash infras group", K(ret));
+    } else if (FALSE_IT(distinct_cnt = aggr_processor_.get_distinct_count())) {
+    } else if (aggr_processor_.has_distinct() && distinct_cnt > 0
+        && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(distinct_cnt))) {
+      LOG_WARN("failed to reserve", K(ret), K(distinct_cnt));
+    } else {
+      aggr_processor_.set_hp_infras_mgr(&hp_infras_mgr_);
     }
   }
   return ret;

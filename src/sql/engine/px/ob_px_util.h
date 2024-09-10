@@ -60,6 +60,34 @@ public:
   common::ObFixedArray<uint64_t, common::ObIAllocator> *last_refresh_scns_;
 };
 
+class ObBaseOrderMap
+{
+public:
+  struct ClearMapFunc
+  {
+    int operator()(const hash::HashMapPair<int64_t, ObIArray<int64_t> *> &entry) {
+      entry.second->destroy();
+      return OB_SUCCESS;
+    }
+  };
+  ObBaseOrderMap() {
+  }
+  ~ObBaseOrderMap();
+  int init(int64_t count);
+  inline hash::ObHashMap<int64_t, ObIArray<int64_t> *, hash::NoPthreadDefendMode> &get_map()
+  {
+    return map_;
+  }
+  int add_base_partition_order(int64_t pwj_group_id, const TabletIdArray &tablet_id_array,
+                               const DASTabletLocIArray &dst_locations);
+  int reorder_partition_as_base_order(int64_t pwj_group_id,
+                                      const TabletIdArray &tablet_id_array,
+                                      DASTabletLocIArray &dst_locations);
+private:
+  ObArenaAllocator allocator_;
+  hash::ObHashMap<int64_t, ObIArray<int64_t> *, hash::NoPthreadDefendMode> map_;
+};
+
 class ObPxSqcUtil
 {
 public:
@@ -182,11 +210,10 @@ private:
       int64_t tenant_id,
       uint64_t ref_table_id,
       ObTabletIdxMap &idx_map);
-  static int reorder_all_partitions(int64_t location_key,
-      int64_t ref_table_id,
-      const DASTabletLocList &src_locations,
-      DASTabletLocIArray &tsc_locations,
-      bool asc, ObExecContext &exec_ctx, ObIArray<int64_t> &base_order);
+  static int reorder_all_partitions(
+      int64_t location_key, int64_t ref_table_id, const DASTabletLocList &src_locations,
+      DASTabletLocIArray &tsc_locations, bool asc, ObExecContext &exec_ctx,
+      ObBaseOrderMap &base_order_map);
   static int build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec*> &scan_ops,
       const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo);
 
@@ -215,12 +242,10 @@ private:
    * Add the partition information (table_loc) involved in the
    * current phy_op to the corresponding SQC access location
    */
-  static int set_sqcs_accessed_location(ObExecContext &ctx,
-                                        int64_t base_table_location_key,
-                                        ObDfo &dfo,
-                                        ObIArray<int64_t> &base_order,
-                                        const ObDASTableLoc *table_loc,
-                                        const ObOpSpec *phy_op);
+  static int set_sqcs_accessed_location(
+      ObExecContext &ctx, int64_t base_table_location_key, ObDfo &dfo,
+      ObBaseOrderMap &base_order_map,
+      const ObDASTableLoc *table_loc, const ObOpSpec *phy_op);
   /**
    * Get the access sequence of the partition of the current phy_op,
    * the access sequence of the phy_op partition is determined by

@@ -81,13 +81,19 @@ int ObTmpFileBatchFlushContext::prepare_flush_ctx(
   } else if (OB_ISNULL(prio_mgr) || OB_ISNULL(flush_monitor)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(prio_mgr), KP(flush_monitor));
-  } else if (OB_FAIL(iter_.init(prio_mgr))) {
-    LOG_WARN("failed to init iterator", KR(ret), K(*this));
   } else if (OB_FAIL(flush_failed_array_.reserve(MAX_COPY_FAIL_COUNT))) {
     LOG_WARN("fail to reserve flush filed array", KR(ret), K(*this));
+  } else if (OB_FAIL(iter_.init(prio_mgr))) {
+    LOG_WARN("failed to init iterator", KR(ret), K(*this));
   } else {
     expect_flush_size_ = expect_flush_size;
     flush_monitor_ptr_ = flush_monitor;
+  }
+
+  if (OB_FAIL(ret)) {
+    flush_failed_array_.reset();
+    iter_.reset();
+    LOG_INFO("failed to prepare flush ctx, rollback ctx", KR(ret), KPC(this));
   }
   return ret;
 }
@@ -197,7 +203,9 @@ void ObTmpFileBatchFlushContext::try_update_prepare_finished_cnt(const ObTmpFile
   if (OB_UNLIKELY(flush_seq_ctx_.prepare_finished_cnt_ >= flush_seq_ctx_.create_flush_task_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected flush_seq_ctx_", KPC(this));
-  } else if (ObTmpFileFlushTask::TFFT_WAIT == flush_task.get_state() || flush_task.get_data_length() == 0) {
+  } else if (ObTmpFileFlushTask::TFFT_WAIT == flush_task.get_state() ||
+      ObTmpFileFlushTask::TFFT_ABORT == flush_task.get_state() ||
+      flush_task.get_data_length() == 0) {
     ++flush_seq_ctx_.prepare_finished_cnt_;
     recorded = true;
   }
@@ -231,6 +239,7 @@ ObTmpFileFlushTask::ObTmpFileFlushTask()
   : inst_handle_(),
     kvpair_(nullptr),
     block_handle_(),
+    write_block_ret_code_(OB_SUCCESS),
     ret_code_(OB_SUCCESS),
     data_length_(0),
     block_index_(-1),
@@ -252,6 +261,7 @@ void ObTmpFileFlushTask::destroy()
   block_handle_.reset();
   inst_handle_.reset();
   kvpair_ = nullptr;
+  write_block_ret_code_ = OB_SUCCESS;
   ret_code_ = OB_SUCCESS;
   data_length_ = 0;
   block_index_ = -1;
@@ -287,7 +297,7 @@ int ObTmpFileFlushTask::write_one_block()
   write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
   write_info.buffer_ = get_data_buf();
-  write_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  write_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   write_info.offset_ = 0;
 
   if (FAILEDx(blocksstable::ObBlockManager::async_write_block(write_info, handle_))) {
@@ -296,6 +306,8 @@ int ObTmpFileFlushTask::write_one_block()
       true/*update_to_max_time)*/))){ // update to max time to skip bad block inspect
     LOG_WARN("failed to update write time", KR(ret), K(handle_));
   }
+  atomic_set_write_block_ret_code(ret);
+
   return ret;
 }
 

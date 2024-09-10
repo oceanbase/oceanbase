@@ -97,6 +97,20 @@ public:
     }
     return ret;
   }
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    const char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const uint64_t &curr_data = *reinterpret_cast<const uint64_t *>(curr_agg_cell);
+    uint64_t &rollup_data = *reinterpret_cast<uint64_t *>(rollup_agg_cell);
+    rollup_data = curr_data;
+    return ret;
+  }
   TO_STRING_KV("aggregate", "sysbit_ops", K(in_tc), K(out_tc), K(agg_func));
 private:
   void setup_inital_value(RuntimeContext &agg_ctx, char *agg_cell, const int32_t agg_col_id)

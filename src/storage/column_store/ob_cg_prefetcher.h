@@ -17,7 +17,7 @@
 
 namespace oceanbase {
 namespace storage {
-class ObCGAggCells;
+class ObAggGroupBase;
 class ObCGPrefetcher : public ObIndexTreeMultiPassPrefetcher<>
 {
 public:
@@ -32,7 +32,7 @@ public:
       filter_bitmap_(nullptr),
       micro_data_prewarm_idx_(0),
       cur_micro_data_read_idx_(-1),
-      cg_agg_cells_(nullptr),
+      agg_group_(nullptr),
       sstable_index_filter_(nullptr)
   {}
   virtual ~ObCGPrefetcher()
@@ -74,13 +74,13 @@ public:
     return index_info.has_agg_data() && index_info.is_filter_uncertain();
   }
   void recycle_block_data();
-  void set_cg_agg_cells(ObCGAggCells &cg_agg_cells) { cg_agg_cells_ = &cg_agg_cells; }
+  void set_agg_group(ObAggGroupBase *agg_group) { agg_group_ = agg_group; }
   void set_project_type(const bool project_without_filter) { is_project_without_filter_ = project_without_filter; }
   INHERIT_TO_STRING_KV("ObCGPrefetcher", ObIndexTreeMultiPassPrefetcher,
                        K_(is_reverse_scan), K_(is_project_without_filter), K_(need_prewarm),
                        K_(query_index_range), K_(query_range), K_(cg_iter_type),
                        K_(micro_data_prewarm_idx), K_(cur_micro_data_read_idx), KP_(filter_bitmap),
-                       KP_(cg_agg_cells), KP_(sstable_index_filter));
+                       KP_(agg_group), KP_(sstable_index_filter));
 protected:
   int get_prefetch_depth(int64_t &depth, const int64_t prefetching_idx);
 private:
@@ -122,7 +122,7 @@ private:
   int64_t micro_data_prewarm_idx_;
 public:
   int64_t cur_micro_data_read_idx_;
-  ObCGAggCells *cg_agg_cells_;
+  ObAggGroupBase *agg_group_;
   ObSSTableIndexFilter *sstable_index_filter_;
 };
 

@@ -33,6 +33,7 @@ int ObTmpFileSwapJob::init(int64_t expect_swap_size, uint32_t timeout_ms)
     STORAGE_LOG(WARN, "ObTmpFileSwapJob init cond failed", KR(ret));
   } else {
     is_inited_ = true;
+    ret_code_ = OB_SUCCESS;
     is_finished_ = false;
     expect_swap_size_ = expect_swap_size;
     timeout_ms_ = timeout_ms;
@@ -45,6 +46,7 @@ int ObTmpFileSwapJob::init(int64_t expect_swap_size, uint32_t timeout_ms)
 void ObTmpFileSwapJob::reset()
 {
   is_inited_ = false;
+  ret_code_ = OB_SUCCESS;
   is_finished_ = false;
   expect_swap_size_ = 0;
   timeout_ms_ = DEFAULT_TIMEOUT_MS;
@@ -78,7 +80,7 @@ int ObTmpFileSwapJob::wait_swap_complete()
 }
 
 // set swap job is_finished, wake up threads that invoke swap job
-int ObTmpFileSwapJob::signal_swap_complete()
+int ObTmpFileSwapJob::signal_swap_complete(int ret_code)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -86,6 +88,7 @@ int ObTmpFileSwapJob::signal_swap_complete()
     STORAGE_LOG(WARN, "ObTmpFileSwapJob not init", KR(ret));
   } else {
     ObThreadCondGuard guard(swap_cond_);
+    ATOMIC_SET(&ret_code_, ret_code);
     ATOMIC_SET(&is_finished_, true);
     if (OB_FAIL(swap_cond_.signal())) {
       STORAGE_LOG(WARN, "ObTmpFileSwapJob signal swap complete failed", KR(ret));

@@ -55,6 +55,19 @@ void fin_oss_env()
   ObOssEnvIniter::get_instance().global_destroy();
 }
 
+int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src)
+{
+  int ret = OB_SUCCESS;
+  if (src == nullptr || len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "oss str assign argument is invalid", K(ret), KP(src), K(len));
+  } else {
+    dst.len = len;
+    dst.data = (char *)src;
+  }
+  return ret;
+}
+
 ObStorageOssStaticVar::ObStorageOssStaticVar()
   : compressor_(NULL),
     compress_type_(INVALID_COMPRESSOR)
@@ -112,9 +125,21 @@ ObCompressorType ObStorageOssStaticVar::get_compressor_type()
 {
   return compress_type_;
 }
+template <typename AllocatorT>
+int get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &object, AllocatorT &allocator) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_get_bucket_object_name(uri, bucket, object, allocator))) {
+    OB_LOG(WARN, "get bucket object name error", K(uri), K(ret));
+  } else if (object.length() <= OSS_INVALID_OBJECT_LENGTH) {
+    ret = OB_URI_ERROR;
+    OB_LOG(WARN, "object name is NULL", K(uri), K(object), K(ret));
+  }
+  return ret;
+}
 
 template <typename AllocatorT>
-int get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &object,
+// this function allow the object name is null.
+int inner_get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &object,
     AllocatorT &allocator)
 {
   int ret = OB_SUCCESS;
@@ -176,22 +201,28 @@ int get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &obje
   }
   //get object name
   if (OB_SUCC(ret)) {
-    if (bucket_end + 1 >= uri.length()) {
+    object_start = bucket_end + 1;
+    ObString::obstr_size_t object_length = uri.length() - object_start;
+    // It is impossible to find object_length < 0.
+    if (object_length < 0) {
       ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "object name is NULL", K(uri), K(ret));
-    } else {
-      object_start = bucket_end + 1;
-      ObString::obstr_size_t object_length = uri.length() - object_start;
+      OB_LOG(WARN, "uri is invalid", K(uri), K(ret), K(bucket_end), K(uri.length()));
+    } else if (object_length == 0) {
+      // When object_length == 0, which means no object is given.
+      // e.g. uri == "s3://bucket/", at this time, bucket_end == 1.
+    } else if (object_length > 0) {
+      // We only allocate memory when object_length > 0.
       if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(OB_MAX_URI_LENGTH)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "fail to allocator memory", K(OB_MAX_URI_LENGTH), K(ret));
       } else {
         //must end with '\0'
         int n = snprintf(buf, OB_MAX_URI_LENGTH, "%.*s", object_length, uri.ptr() + object_start);
+        // only assign object when object_name is not null.
         if (n <= 0 || n >= OB_MAX_URI_LENGTH) {
           ret = OB_SIZE_OVERFLOW;
           OB_LOG(WARN, "fail to deep copy object", K(uri), K(object_start), K(object_length),
-              K(n), K(OB_MAX_URI_LENGTH), K(ret));
+            K(n), K(OB_MAX_URI_LENGTH), K(ret));
         } else {
           object.assign_ptr(buf, n + 1);//must include '\0'
         }
@@ -202,7 +233,6 @@ int get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &obje
   if (OB_SUCC(ret)) {
     OB_LOG(DEBUG, "get bucket object name ", K(uri), K(bucket), K(object));
   }
-
   return ret;
 }
 
@@ -218,7 +248,12 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       }
 
       case OSS_OBJECT_NOT_EXIST: {
-        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        if (OB_NOT_NULL(aos_ret->error_code)
+            && (0 == STRCMP("NoSuchBucket", aos_ret->error_code))) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+        } else {
+          ob_errcode = OB_OBJECT_NOT_EXIST;
+        }
         break;
       }
 
@@ -239,6 +274,11 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
           ob_errcode = OB_CHECKSUM_ERROR;
         } else if (0 == STRCMP("InvalidBucketName", aos_ret->error_code)) {
           ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+        }
+        // When the object name exceeds the limitation, oss will report 'InvalidObjectName' when use
+        // put/delete operation.
+        else if (0 == STRCMP("InvalidObjectName", aos_ret->error_code)) {
+          ob_errcode = OB_INVALID_ARGUMENT;
         } else {
           ob_errcode = OB_OSS_ERROR;
         }
@@ -246,7 +286,19 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       }
 
       default: {
-        ob_errcode = OB_OSS_ERROR;
+        if (OB_ISNULL(aos_ret->error_code)) {
+          ob_errcode = OB_OSS_ERROR;
+        } else if (0 == STRCMP("BucketNameInvalidError", aos_ret->error_code)) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+        }
+        // When the object name exceeds the limitation, an error will be reported in err_msg when use
+        // list operation.
+        else if (OB_NOT_NULL(aos_ret->error_msg)
+            && OB_NOT_NULL(STRSTR(aos_ret->error_msg, "invalid argument"))) {
+          ob_errcode = OB_INVALID_ARGUMENT;
+        } else {
+          ob_errcode = OB_OSS_ERROR;
+        }
         break;
       }
     } // end swtich
@@ -308,7 +360,7 @@ int ObOssEnvIniter::global_init()
 
   common::SpinWLockGuard guard(lock_);
   apr_thread_mutex_t *mutex = nullptr;
-  ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "OSS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
 
   if (is_global_inited_) {
     ret = OB_INIT_TWICE;
@@ -365,9 +417,10 @@ int ObOssEnvIniter::global_init()
 
 void ObOssEnvIniter::global_destroy()
 {
+  int ret = OB_SUCCESS;
   common::SpinWLockGuard guard(lock_);
   if (is_global_inited_) {
-    ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+    OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "OSS_GLOBAL_DESTROY", IO_HANDLED_SIZE_ZERO);
     if (OB_NOT_NULL(OSS_GLOBAL_APR_POOL)) {
       // After successful initialization,
       // the owner of OSS_GLOBAL_APR_ALLOCATOR is set to OSS_GLOBAL_APR_POOL.
@@ -387,7 +440,8 @@ void ObOssAccount::reset_account()
   memset(oss_domain_, 0, MAX_OSS_ENDPOINT_LENGTH);
   memset(oss_id_, 0, MAX_OSS_ID_LENGTH);
   memset(oss_key_, 0, MAX_OSS_KEY_LENGTH);
-  delete_mode_ = ObIStorageUtil::DELETE;
+  oss_sts_token_ = nullptr;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   is_inited_ = false;
 }
 
@@ -474,9 +528,9 @@ int ObOssAccount::set_delete_mode(const char *parameter)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid args", K(ret), KP(parameter));
   } else if (0 == strcmp(parameter, "delete")) {
-    delete_mode_ = ObIStorageUtil::DELETE;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   } else if (0 == strcmp(parameter, "tagging")) {
-    delete_mode_ = ObIStorageUtil::TAGGING;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(parameter));
@@ -495,13 +549,14 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is too long", K(ret), K(storage_info.length()));
   } else {
-    // host=xxxx&access_id=xxx&access_key=xxx
+    // host=xxxx&access_id=xxx&access_key=xxx&sts_token=xxx
     char tmp[OB_MAX_URI_LENGTH];
     char *token = NULL;
     char *saved_ptr = NULL;
     const char *HOST = "host=";
     const char *ACCESS_ID = "access_id=";
     const char *ACCESS_KEY = "access_key=";
+    const char *STS_TOKEN_KEY = "sts_token=";
     const char *DELETE_MODE = "delete_mode=";
 
     MEMCPY(tmp, storage_info.ptr(), storage_info.length());
@@ -522,6 +577,16 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_oss_field(token + strlen(ACCESS_KEY), oss_key_, sizeof(oss_key_)))) {
           OB_LOG(WARN, "failed to set oss_key_", K(ret));
+        }
+      } else if (0 == strncmp(STS_TOKEN_KEY, token, strlen(STS_TOKEN_KEY))) {
+        // "阿里云STS服务返回的安全令牌（STS Token）的长度不固定，强烈建议您不要假设安全令牌的最大长度。"
+        // therefore, use allocator to alloc mem for sts_token dynamically
+        const int64_t sts_token_len = strlen(token) - strlen(STS_TOKEN_KEY);
+        if (OB_ISNULL(oss_sts_token_ = reinterpret_cast<char*>(allocator_.alloc(sts_token_len + 1)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          OB_LOG(WARN, "fail to alloc memory", K(ret), K(sts_token_len));
+        } else if (OB_FAIL(set_oss_field(token + strlen(STS_TOKEN_KEY), oss_sts_token_, sts_token_len + 1))) {
+          OB_LOG(WARN, "failed to set oss_sts_token_", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (OB_FAIL(set_delete_mode(token + strlen(DELETE_MODE)))) {
@@ -593,6 +658,9 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     aos_str_set(&oss_option->config->endpoint, oss_endpoint_);
     aos_str_set(&oss_option->config->access_key_id, oss_account_.oss_id_);
     aos_str_set(&oss_option->config->access_key_secret, oss_account_.oss_key_);
+    if (OB_NOT_NULL(oss_account_.oss_sts_token_)) {
+      aos_str_set(&oss_option->config->sts_token, oss_account_.oss_sts_token_);
+    }
     oss_option->config->is_cname = 0;
 
     // Set connection timeout, the default value is 10s
@@ -608,22 +676,6 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     oss_option->ctl->options->speed_time = 60;
 
     oss_option->ctl->options->enable_crc = false;
-  }
-  return ret;
-}
-
-int ObStorageOssBase::reinit_oss_option()
-{
-  int ret = OB_SUCCESS;
-
-  if (!is_inited()) {
-    ret = OB_NOT_INIT;
-    OB_LOG(WARN, "please init first", K(ret));
-  } else if (OB_FAIL(init_oss_endpoint())) {
-    OB_LOG(WARN, "fail to init oss endpoint", K(ret));
-  } else {
-    //reset oss_option endpoint
-    aos_str_set(&oss_option_->config->endpoint, oss_endpoint_);
   }
   return ret;
 }
@@ -774,6 +826,8 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStora
     OB_LOG(WARN, "failed to init oss", K(ret));
   } else if (OB_FAIL(get_bucket_object_name(uri, bucket_, object_, allocator_))) {
     OB_LOG(WARN, "get bucket object error", K(uri), K(ret));
+  } else if (OB_FAIL(ObStoragePartInfoHandler::init())) {
+    OB_LOG(WARN, "fail to init part info handler", K(ret), K(uri));
   } else {
     aos_string_t bucket;
     aos_string_t object;
@@ -859,11 +913,12 @@ static int add_content_md5(oss_request_options_t *options, const char *buf, cons
   } else {
     unsigned char *md5 = nullptr;
     char *b64_value = nullptr;    // store the base64-encoded MD5 value
-    const int in_len = APR_MD5_DIGESTSIZE + 1;  // including trailing '\0'
+    // in_len indicates encoding only for an MD5 of 16 bytes in length, excluding the trailing '\0'.
+    const int in_len = APR_MD5_DIGESTSIZE;
     // Calculate the buffer size needed for the base64-encoded string including the null terminator.
     // Base64 encoding represents every 3 bytes of input with 4 bytes of output,
     // so allocate enough space based on this ratio and add extra byte for the null terminator.
-    const int b64_buf_len = (in_len + 1) * 4 / 3 + 1;
+    const int b64_buf_len = (in_len + 2) * 4 / 3 + 1;
 
     if (OB_ISNULL(md5 = aos_md5(options->pool, buf, (apr_size_t)size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -875,6 +930,48 @@ static int add_content_md5(oss_request_options_t *options, const char *buf, cons
       int b64_len = aos_base64_encode(md5, in_len, b64_value);
       b64_value[b64_len] = '\0';
       apr_table_set(headers, OSS_CONTENT_MD5, b64_value);
+    }
+  }
+  return ret;
+}
+
+static int construct_complete_part_list(
+    aos_pool_t *pool,
+    const ObStoragePartInfoHandler::PartInfoMap &part_info_map,
+    aos_list_t &complete_part_list)
+{
+  int ret = OB_SUCCESS;
+  aos_list_init(&complete_part_list);
+  const char *partnum_str = nullptr;
+  const int64_t max_part_id = part_info_map.size();
+  ObStoragePartInfoHandler::PartInfo tmp_part_info;
+  oss_complete_part_content_t *complete_part_content = nullptr;
+
+  // allow to be empty parts
+  if (OB_ISNULL(pool) || OB_UNLIKELY(max_part_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(pool), K(max_part_id));
+  }
+  for (int64_t i = 1; OB_SUCC(ret) && i <= max_part_id; i++) {
+    if (OB_FAIL(part_info_map.get_refactored(i, tmp_part_info))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        OB_LOG(WARN, "part ids should be 1 ~ max_part_id", K(ret), K(i), K(max_part_id));
+      } else {
+        OB_LOG(WARN, "fail to get part info", K(ret), K(i), K(max_part_id));
+      }
+    } else if (OB_ISNULL(tmp_part_info.first)) {  // etag
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "etag is null", K(ret), K(i), K(max_part_id));
+    } else if (OB_ISNULL(complete_part_content = oss_create_complete_part_content(pool))) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to create complete part content", K(ret), KP(pool), K(i), K(max_part_id));
+    } else if (OB_ISNULL(partnum_str = apr_psprintf(pool, "%ld", i))) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to construct partnum_str", K(ret), KP(pool), K(i), K(max_part_id));
+    } else {
+      aos_str_set(&complete_part_content->part_number, partnum_str);
+      aos_str_set(&complete_part_content->etag, tmp_part_info.first);
+      aos_list_add_tail(&complete_part_content->node, &complete_part_list);
     }
   }
   return ret;
@@ -923,6 +1020,7 @@ int ObStorageOssMultiPartWriter::write_single_part()
       OB_LOG(WARN, "fail to add content md5 when uploading part", K(ret));
     } else {
       aos_list_add_tail(&content->node, &buffer);
+      const char *etag_header_str = nullptr;
 
       if (NULL == (aos_ret = oss_do_upload_part_from_buffer(oss_option_, &bucket, &object,
                                                             &upload_id_, partnum_, &buffer, nullptr,
@@ -932,16 +1030,18 @@ int ObStorageOssMultiPartWriter::write_single_part()
         OB_LOG(WARN, "fail to upload one part from buffer",
             K_(base_buf_pos), K_(bucket), K_(object), K(ret));
         print_oss_info(resp_headers, aos_ret, ret);
+      } else if (OB_ISNULL(etag_header_str = apr_table_get(resp_headers, "ETag"))) {
+        ret = OB_OSS_ERROR;
+        OB_LOG(WARN, "etag is null", K(ret), K_(bucket), K_(object), K_(partnum));
+        print_oss_info(resp_headers, aos_ret, ret);
+      } else if (OB_FAIL(add_part_info(partnum_, etag_header_str, nullptr/*checksum*/))) {
+        OB_LOG(WARN, "fail to add part info", K(ret),
+            K_(bucket), K_(object), K_(partnum), K(etag_header_str));
       }
       bool is_slow = false;
       print_access_storage_log("oss upload one part ", object_, start_time, base_buf_pos_, &is_slow);
-      int tmp_ret = OB_SUCCESS;
       if (OB_SUCC(ret) && is_slow) {
         print_oss_info(resp_headers, aos_ret, ret);
-        if (OB_SUCCESS != (tmp_ret = reinit_oss_option())) {
-          OB_LOG(WARN, "fail to reinit oss option", K(tmp_ret));
-          ret = tmp_ret;
-        }
       }
     }
   }
@@ -969,7 +1069,6 @@ int ObStorageOssMultiPartWriter::complete()
   }
 
   if (OB_SUCC(ret)) {
-    int64_t total_parts = 0;
     aos_string_t bucket;
     aos_string_t object;
     aos_str_set(&bucket, bucket_.ptr());
@@ -979,76 +1078,19 @@ int ObStorageOssMultiPartWriter::complete()
     aos_table_t *complete_headers = NULL;
     aos_list_t complete_part_list;
     aos_list_init(&complete_part_list);
-    oss_list_upload_part_params_t *params = NULL;
-    oss_list_part_content_t *part_content = NULL;
-    oss_complete_part_content_t *complete_part_content = NULL;
-
-    //add all parts to complete_part_list
-    if (OB_ISNULL(params = oss_create_list_upload_part_params(aos_pool_))) {
-      ret = OB_OSS_ERROR;
-      OB_LOG(WARN, "fail to create oss upload params", K_(bucket), K_(object), K(ret));
-    } else {
-      params->max_ret = OB_STORAGE_LIST_MAX_NUM;
-      do {
-        if (OB_ISNULL(aos_ret = oss_list_upload_part(oss_option_, &bucket, &object, &upload_id_,
-            params, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
-          convert_io_error(aos_ret, ret);
-          OB_LOG(WARN, "fail to list oss upload parts", K_(bucket), K_(object), K(ret));
-          print_oss_info(resp_headers, aos_ret, ret);
-        } else {
-          aos_list_for_each_entry(oss_list_part_content_t, part_content, &params->part_list, node) {
-            if (OB_ISNULL(complete_part_content = oss_create_complete_part_content(aos_pool_))) {
-              ret = OB_OSS_ERROR;
-              OB_LOG(WARN, "fail to create complete part content", K_(bucket), K_(object), K(ret));
-            } else if (OB_ISNULL(part_content->part_number.data)
-                      || OB_ISNULL(part_content->etag.data)) {
-              ret = OB_OSS_ERROR;
-              OB_LOG(WARN, "invalid part_number or etag",
-                  K(ret), KP(part_content->part_number.data), KP(part_content->etag.data));
-            } else {
-              aos_str_set(&complete_part_content->part_number, part_content->part_number.data);
-              aos_str_set(&complete_part_content->etag, part_content->etag.data);
-              aos_list_add_tail(&complete_part_content->node, &complete_part_list);
-            }
-
-            if (OB_FAIL(ret)) {
-              break;
-            } else {
-              total_parts++;
-            }
-          }
-
-          if (OB_SUCC(ret) && AOS_TRUE == params->truncated) {
-            const char *next_part_number_marker = NULL;
-            if (OB_ISNULL(params->next_part_number_marker.data)
-                || OB_UNLIKELY(params->next_part_number_marker.len <= 0)) {
-              ret = OB_OSS_ERROR;
-              OB_LOG(WARN, "next_part_number_marker is invalid", K(ret),
-                  K(params->next_part_number_marker.data), K(params->next_part_number_marker.len));
-            } else if (OB_ISNULL(next_part_number_marker =
-                apr_psprintf(aos_pool_, "%.*s",
-                             params->next_part_number_marker.len,
-                             params->next_part_number_marker.data))) {
-              ret = OB_OSS_ERROR;
-              OB_LOG(WARN, "next part number marker is NULL", K(ret),
-                  K(params->next_part_number_marker.data), K(params->next_part_number_marker.len));
-            } else {
-              aos_str_set(&params->part_number_marker, next_part_number_marker);
-              aos_list_init(&params->part_list);
-            }
-          }
-        }
-      } while (OB_SUCC(ret) && AOS_TRUE == params->truncated);
-    }
 
     //complete multipart upload
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(construct_complete_part_list(aos_pool_, part_info_map_, complete_part_list))) {
+      OB_LOG(WARN, "fail to construct complete part list", K(ret),
+          K_(bucket), K_(object), K_(partnum), K(upload_id_.data));
     //  If 'complete' without uploading any data (total_parts == 0), OSS will create an object with a size of 0
     } else {
       if (OB_ISNULL(aos_ret = oss_complete_multipart_upload(oss_option_, &bucket, &object, &upload_id_,
           &complete_part_list, complete_headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
-        OB_LOG(WARN, "fail to complete multipart upload", K_(bucket), K_(object), K(ret));
+        OB_LOG(WARN, "fail to complete multipart upload",
+            K(ret), K_(bucket), K_(object), K(upload_id_.data), K_(partnum), K(size()));
         print_oss_info(resp_headers, aos_ret, ret);
       }
     }
@@ -1077,6 +1119,7 @@ int ObStorageOssMultiPartWriter::close()
   upload_id_.len = -1;
   upload_id_.data = NULL;
   reset();
+  reset_part_info();
   return ret;
 }
 
@@ -1106,6 +1149,233 @@ int ObStorageOssMultiPartWriter::abort()
   return ret;
 }
 
+ObStorageParallelOssMultiPartWriter::ObStorageParallelOssMultiPartWriter()
+  : is_opened_(false),
+    bucket_(),
+    object_(),
+    allocator_(OB_STORAGE_OSS_ALLOCATOR)
+{
+  upload_id_.len = -1;
+  upload_id_.data = nullptr;
+}
+
+ObStorageParallelOssMultiPartWriter::~ObStorageParallelOssMultiPartWriter()
+{
+}
+
+int ObStorageParallelOssMultiPartWriter::open(const ObString &uri, ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  if (OB_UNLIKELY(is_opened_)) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "oss multipart writer already opened, cannot open again", K(ret), K(uri));
+  } else if (OB_UNLIKELY(uri.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "uri is empty", K(ret), K(uri));
+  } else if (OB_FAIL(init_with_storage_info(storage_info))) {
+    OB_LOG(WARN, "failed to init oss", K(ret), KPC(storage_info));
+  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_, object_, allocator_))) {
+    OB_LOG(WARN, "get bucket object error", K(uri), K(ret));
+  } else if (OB_FAIL(ObStoragePartInfoHandler::init())) {
+    OB_LOG(WARN, "fail to init part info handler", K(ret), K(uri));
+  } else {
+    aos_string_t bucket;
+    aos_string_t object;
+    aos_str_set(&bucket, bucket_.ptr());
+    aos_str_set(&object, object_.ptr());
+    aos_table_t *headers = nullptr;
+    aos_table_t *resp_headers = nullptr;
+    aos_status_t *aos_ret = nullptr;
+
+    if (OB_ISNULL(headers = aos_table_make(aos_pool_, AOS_TABLE_INIT_SIZE))) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to make apr table", K(ret), K(uri));
+    } else if (OB_ISNULL(aos_ret = oss_init_multipart_upload(oss_option_, &bucket, &object,
+                                                             &upload_id_, headers, &resp_headers))
+               || !aos_status_is_ok(aos_ret)) {
+      convert_io_error(aos_ret, ret);
+      OB_LOG(WARN, "oss init multipart upload error", K(uri), K(ret));
+      print_oss_info(resp_headers, aos_ret, ret);
+    } else if (OB_ISNULL(upload_id_.data) || OB_UNLIKELY(upload_id_.len <= 0)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "upload id is invalid", K(ret), KP(upload_id_.data), K(upload_id_.len));
+    } else {
+      is_opened_ = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObStorageParallelOssMultiPartWriter::upload_part(
+    const char *buf, const int64_t size, const int64_t part_id)
+{
+  int ret = OB_SUCCESS;
+  aos_pool_t *aos_pool = nullptr;
+  oss_request_options_t *oss_option = nullptr;
+  ObExternalIOCounterGuard io_guard;
+
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss client not inited", K(ret));
+  } else if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "multipart write oss should open first", K(ret));
+  } else if (OB_UNLIKELY(part_id < 1 || part_id > OSS_MAX_PART_NUM)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "out of oss part num effective range", K(ret), K(part_id), K(OSS_MAX_PART_NUM));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size));
+    // The aos_pool is not suitable for concurrent scenarios,
+    // thus it needs to be recreated for each upload_part operation.
+  } else if (OB_FAIL(init_oss_options(aos_pool, oss_option))) {
+    OB_LOG(WARN, "fail to init oss options", K(aos_pool), K(oss_option), K(ret));
+  } else if (OB_ISNULL(aos_pool) || OB_ISNULL(oss_option)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "aos pool or oss option is NULL", KP(aos_pool), KP(oss_option), K(ret));
+  } else {
+    //upload data
+    aos_string_t bucket;
+    aos_string_t object;
+    aos_str_set(&bucket, bucket_.ptr());
+    aos_str_set(&object, object_.ptr());
+    aos_table_t *headers = nullptr;
+    aos_table_t *resp_headers = nullptr;
+    aos_status_t *aos_ret = nullptr;
+    aos_list_t buffer;
+    aos_buf_t *content = nullptr;
+    aos_list_init(&buffer);
+
+    const int64_t start_time = ObTimeUtility::current_time();
+    if (OB_ISNULL(headers = aos_table_make(aos_pool, AOS_TABLE_INIT_SIZE))) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to make apr table", K(ret), K_(bucket), K_(object));
+    } else if (OB_ISNULL(content = aos_buf_pack(aos_pool, buf, static_cast<int32_t>(size)))) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to pack buf", K(size), K(ret), K_(bucket), K_(object));
+    } else if ((checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO)
+        && OB_FAIL(add_content_md5(oss_option, buf, size, headers))) {
+      OB_LOG(WARN, "fail to add content md5 when uploading part", K(ret), K_(bucket), K_(object));
+    } else {
+      aos_list_add_tail(&content->node, &buffer);
+      const char *etag_header_str = nullptr;
+
+      if (OB_ISNULL(aos_ret = oss_do_upload_part_from_buffer(oss_option, &bucket, &object,
+                                                             &upload_id_, part_id, &buffer,
+                                                             nullptr/*progress_callback*/,
+                                                             headers, nullptr/*params*/,
+                                                             &resp_headers, nullptr/*resp_body*/))
+          || !aos_status_is_ok(aos_ret)) {
+        convert_io_error(aos_ret, ret);
+        OB_LOG(WARN, "fail to upload one part from buffer",
+            K(ret), K(size), K_(bucket), K_(object));
+        print_oss_info(resp_headers, aos_ret, ret);
+      } else if (OB_ISNULL(etag_header_str = apr_table_get(resp_headers, "ETag"))) {
+        ret = OB_OSS_ERROR;
+        OB_LOG(WARN, "etag is null", K(ret), K_(bucket), K_(object), K(part_id));
+        print_oss_info(resp_headers, aos_ret, ret);
+      } else if (OB_FAIL(add_part_info(part_id, etag_header_str, nullptr/*checksum*/))) {
+          OB_LOG(WARN, "fail to add part info", K(ret),
+              K_(bucket), K_(object), K(part_id), K(etag_header_str));
+      }
+
+      bool is_slow = false;
+      print_access_storage_log("oss upload one part ", object_, start_time, size, &is_slow);
+      if (OB_SUCC(ret) && is_slow) {
+        print_oss_info(resp_headers, aos_ret, ret);
+      }
+
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelOssMultiPartWriter::complete()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss client not inited", K(ret));
+  } else if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "oss multipart writer not opened", K(ret));
+  } else {
+    aos_string_t bucket;
+    aos_string_t object;
+    aos_str_set(&bucket, bucket_.ptr());
+    aos_str_set(&object, object_.ptr());
+    aos_table_t *resp_headers = nullptr;
+    aos_status_t *aos_ret = nullptr;
+    aos_table_t *complete_headers = nullptr;
+    aos_list_t complete_part_list;
+    aos_list_init(&complete_part_list);
+
+    //complete multipart upload
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(construct_complete_part_list(aos_pool_, part_info_map_, complete_part_list))) {
+      OB_LOG(WARN, "fail to construct complete part list", K(ret),
+          K_(bucket), K_(object), K(upload_id_.data));
+    // If 'complete' without uploading any data, OSS will create an object with a size of 0
+    } else {
+      if (OB_ISNULL(aos_ret = oss_complete_multipart_upload(oss_option_, &bucket, &object,
+                                                            &upload_id_, &complete_part_list,
+                                                            complete_headers, &resp_headers))
+          || !aos_status_is_ok(aos_ret)) {
+        convert_io_error(aos_ret, ret);
+        OB_LOG(WARN, "fail to complete multipart upload", K_(bucket), K_(object), K(ret));
+        print_oss_info(resp_headers, aos_ret, ret);
+      }
+    }
+
+  }
+  return ret;
+}
+
+int ObStorageParallelOssMultiPartWriter::abort()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss client not inited", K(ret));
+  } else if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "oss multipart writer cannot abort before it is opened", K(ret));
+  } else {
+    aos_string_t bucket;
+    aos_string_t object;
+    aos_str_set(&bucket, bucket_.ptr());
+    aos_str_set(&object, object_.ptr());
+    aos_table_t *resp_headers = nullptr;
+    aos_status_t *aos_ret = nullptr;
+
+    if (OB_ISNULL(aos_ret = oss_abort_multipart_upload(oss_option_, &bucket, &object,
+                                                       &upload_id_, &resp_headers))
+        || !aos_status_is_ok(aos_ret)) {
+      convert_io_error(aos_ret, ret);
+      OB_LOG(WARN, "Abort the multipart error", K_(bucket), K_(object), K(ret));
+      print_oss_info(resp_headers, aos_ret, ret);
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelOssMultiPartWriter::close()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  is_opened_ = false;
+  upload_id_.len = -1;
+  upload_id_.data = nullptr;
+  reset();
+  reset_part_info();
+  return ret;
+}
+
 ObStorageOssReader::ObStorageOssReader():
     bucket_(),
     object_(),
@@ -1125,7 +1395,7 @@ int ObStorageOssReader::open(const ObString &uri,
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  bool is_file_exist = false;
+  bool is_exist = false;
   char *remote_md5 = NULL;
   int64_t file_length = -1;
 
@@ -1141,12 +1411,12 @@ int ObStorageOssReader::open(const ObString &uri,
     OB_LOG(WARN, "bucket name of object name is empty", K(ret));
   } else {
     if (head_meta) {
-      if (OB_SUCCESS != (ret = get_oss_file_meta(bucket_, object_, is_file_exist,
+      if (OB_SUCCESS != (ret = get_oss_file_meta(bucket_, object_, is_exist,
           remote_md5, file_length))) {
         OB_LOG(WARN, "fail to get file meta", K(bucket_), K(object_), K(ret));
-      } else if (!is_file_exist) {
-        ret = OB_BACKUP_FILE_NOT_EXIST;
-        OB_LOG(WARN, "backup file is not exist", K(bucket_), K(object_), K(ret));
+      } else if (!is_exist) {
+        ret = OB_OBJECT_NOT_EXIST;
+        OB_LOG(WARN, "object is not exist", K(bucket_), K(object_), K(ret));
       } else {
         file_length_ = file_length;
         has_meta_ = true;
@@ -1255,7 +1525,8 @@ int ObStorageOssReader::pread(
           // Therefore, if it's not a range read, the data read could exceed the expected amount to be read
           if (is_range_read && len > get_data_size) {
             ret = OB_OSS_ERROR;
-            OB_LOG(WARN, "get data size error", K(get_data_size), K(len), K_(bucket),
+            OB_LOG(WARN, "get data size error, range header may be invalid",
+                K(get_data_size), K(len), K_(bucket),
                 K_(object), K(ret), K_(has_meta), K(offset));
           } else {
             //copy to buf
@@ -1367,8 +1638,8 @@ int ObStorageOssUtil::get_file_length(const common::ObString &uri, int64_t &file
   if (OB_FAIL(head_object_meta(uri, obj_meta))) {
     OB_LOG(WARN, "fail to head object meta", K(uri), K(ret));
   } else if (!obj_meta.is_exist_) {
-    ret = OB_BACKUP_FILE_NOT_EXIST;
-    OB_LOG(WARN, "backup file is not exist", K(uri), K(ret));
+    ret = OB_OBJECT_NOT_EXIST;
+    OB_LOG(WARN, "object is not exist", K(uri), K(ret));
   } else {
     file_length = obj_meta.length_;
   }
@@ -1561,17 +1832,110 @@ int ObStorageOssUtil::del_file(const common::ObString &uri)
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri));
   } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
-  } else if (ObIStorageUtil::DELETE == oss_base.oss_account_.delete_mode_) {
+  } else if (ObStorageDeleteMode::STORAGE_DELETE_MODE == oss_base.oss_account_.delete_mode_) {
     if (OB_FAIL(delete_object_(uri, oss_base, bucket_str, object_str))) {
       OB_LOG(WARN, "failed to delete object", K(ret), K(uri));
     }
-  } else if (ObIStorageUtil::TAGGING == oss_base.oss_account_.delete_mode_) {
+  } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == oss_base.oss_account_.delete_mode_) {
     if (OB_FAIL(tagging_object_(uri, oss_base, bucket_str, object_str))) {
       OB_LOG(WARN, "failed to tagging file", K(ret), K(uri));
     }
   } else {
     ret = OB_INVALID_ARGUMENT; 
     OB_LOG(WARN, "delete mode invalid", K(ret), K(uri)); 
+  }
+  return ret;
+}
+
+int ObStorageOssUtil::batch_del_files(
+    const ObString &uri,
+    hash::ObHashMap<ObString, int64_t> &files_to_delete,
+    ObIArray<int64_t> &failed_files_idx)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR);
+  ObString bucket_str;
+  ObString object_str;
+  ObStorageOssBase oss_base;
+  const int64_t n_files_to_delete = files_to_delete.size();
+  ObExternalIOCounterGuard io_guard;
+
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss util is not inited", K(ret), K(uri));
+  } else if (OB_FAIL(check_files_map_validity(files_to_delete))) {
+    OB_LOG(WARN, "files_to_delete is invalid", K(ret), K(uri));
+  } else if (OB_FAIL(oss_base.init_with_storage_info(storage_info_))) {
+    OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri), KPC_(storage_info));
+  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
+    OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri));
+  } else if (OB_UNLIKELY(ObStorageDeleteMode::STORAGE_TAGGING_MODE == oss_base.oss_account_.delete_mode_)) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "batch tagging is not supported", K(ret), K(uri), K(oss_base.oss_account_));
+  } else {
+    aos_status_t *aos_ret = nullptr;
+    aos_table_t *resp_headers = nullptr;
+    aos_string_t bucket;
+    int is_quiet = AOS_FALSE;
+    aos_list_t object_list;
+    aos_list_t deleted_object_list;
+    aos_list_init(&object_list);
+    aos_list_init(&deleted_object_list);
+    aos_str_set(&bucket, bucket_str.ptr());
+
+    hash::ObHashMap<ObString, int64_t>::const_iterator iter = files_to_delete.begin();
+    while (OB_SUCC(ret) && iter != files_to_delete.end()) {
+      oss_object_key_t *content = oss_create_oss_object_key(oss_base.aos_pool_);
+      if (OB_FAIL(ob_oss_str_assign(content->key, iter->first.length(), iter->first.ptr()))) {
+        OB_LOG(WARN, "failed to assign key", K(ret), K(iter->first.length()), KCSTRING(iter->first.ptr()));
+      } else {
+        aos_list_add_tail(&content->node, &object_list);
+      }
+      iter++;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(aos_ret = oss_delete_objects(oss_base.oss_option_,
+                                                      &bucket, &object_list,
+                                                      is_quiet, &resp_headers,
+                                                      &deleted_object_list))
+        || !aos_status_is_ok(aos_ret)) {
+      convert_io_error(aos_ret, ret);
+      OB_LOG(WARN, "fail to delete objects", K(ret),
+          K(uri), K(n_files_to_delete), KPC_(storage_info));
+      oss_base.print_oss_info(resp_headers, aos_ret, ret);
+    } else {
+      // The deleted_object_list contains all the objects that were successfully deleted.
+      // By comparing it to files_to_delete, we can identify the objects that failed to be deleted.
+      oss_object_key_t *object_key = nullptr;
+      aos_list_for_each_entry(oss_object_key_t, object_key, &deleted_object_list, node) {
+        if (OB_ISNULL(object_key->key.data) || OB_UNLIKELY(object_key->key.len <= 0)) {
+          ret = OB_OSS_ERROR;
+          OB_LOG(WARN, "returned object key is null",
+              K(ret), KP(object_key->key.data), K(object_key->key.len), K(uri));
+          oss_base.print_oss_info(resp_headers, aos_ret, ret);
+        }
+        // OSS returns the successfully deleted object in the structure of aos_string_t.
+        // Since the data string in aos_string_t does not necessarily end with '\0',
+        // we need to use the len in aos_string_t to construct ObString.
+        else if (OB_FAIL(files_to_delete.erase_refactored(ObString(object_key->key.len, object_key->key.data)))) {
+          OB_LOG(WARN, "fail to erase succeed deleted object",
+              K(ret), K(object_key->key.data), K(object_key->key.len), K(uri));
+          oss_base.print_oss_info(resp_headers, aos_ret, ret);
+        } else {
+          OB_LOG(DEBUG, "succeed deleting object", K(object_key->key.data), K(object_key->key.len));
+        }
+
+        if (OB_FAIL(ret)) {
+          break;
+        }
+      } // end aos_list_for_each_entry
+
+      if (FAILEDx(record_failed_files_idx(files_to_delete, failed_files_idx))) {
+        OB_LOG(WARN, "fail to record failed del",
+            K(ret), K(uri), K(n_files_to_delete), K(files_to_delete.size()));
+      }
+    }
   }
   return ret;
 }
@@ -1612,7 +1976,7 @@ int ObStorageOssUtil::do_list_(ObStorageOssBase &oss_base,
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "oss util is not inited", K(ret));
   } else if (OB_UNLIKELY(!oss_base.is_inited()
-                        || bucket_str.empty() || !is_end_with_slash(full_dir_path)
+                        || bucket_str.empty() || !is_null_or_end_with_slash(full_dir_path)
                         || max_ret <= 0 || max_ret > OB_STORAGE_LIST_MAX_NUM)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret),
@@ -1632,7 +1996,10 @@ int ObStorageOssUtil::do_list_(ObStorageOssBase &oss_base,
     if (OB_SUCC(ret)) {
       params->max_ret = max_ret;
       aos_str_set(&bucket, bucket_str.ptr());
-      aos_str_set(&params->prefix, full_dir_path);
+      if (NULL != full_dir_path && strlen(full_dir_path) > 0) {
+        // if full_dir_path is not empty, set prefix
+        aos_str_set(&params->prefix, full_dir_path);
+      }
       if (NULL != next_marker && strlen(next_marker) > 0) {
         aos_str_set(&params->marker, next_marker);
       }
@@ -1673,16 +2040,16 @@ int ObStorageOssUtil::list_files(
     OB_LOG(WARN, "oss util is not inited", K(ret), K(uri));
   } else if (OB_FAIL(oss_base.init_with_storage_info(storage_info_))) {
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri), KPC_(storage_info));
-  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
+  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
   } else if (FALSE_IT(full_dir_path = object_str.ptr())) {
-  } else if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+  } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
   } else {
     ObString object_path;
     const char *next_marker = "";
-    const int64_t full_dir_path_len = strlen(full_dir_path);
+    const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     oss_list_object_content_t *content = NULL;
     oss_list_object_params_t *params = NULL;
     do {
@@ -1697,7 +2064,7 @@ int ObStorageOssUtil::list_files(
           object_path.assign(content->key.data, content->key.len);
           int64_t object_size = -1;
 
-          if (OB_UNLIKELY(false == object_path.prefix_match(full_dir_path))) {
+          if (OB_ISNULL(object_path) || OB_UNLIKELY(false == object_path.prefix_match(full_dir_path))) {
             ret = OB_OSS_ERROR;
             OB_LOG(WARN, "returned object prefix not match",
                 K(ret), K(object_path), K(full_dir_path), K(uri));
@@ -1705,7 +2072,7 @@ int ObStorageOssUtil::list_files(
             // skip
             OB_LOG(INFO, "exist object path length is same with dir path length",
                 K(object_path), K(full_dir_path), K(full_dir_path_len));
-          } else if (OB_FAIL(c_str_to_int(content->size.data, object_size))) {
+          } else if (OB_FAIL(c_str_to_int(content->size.data, content->size.len, object_size))) {
             OB_LOG(WARN, "fail to get object size", K(ret), K(content->size.data), K(object_path));
           } else if (OB_FAIL(handle_listed_object(op, content->key.data + full_dir_path_len,
                                                   content->key.len - full_dir_path_len,
@@ -1758,15 +2125,15 @@ int ObStorageOssUtil::list_files(
     OB_LOG(WARN, "oss util is not inited", K(ret), K(uri));
   } else if (OB_FAIL(oss_base.init_with_storage_info(storage_info_))) {
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri), KPC_(storage_info));
-  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
+  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
   } else if (FALSE_IT(full_dir_path = object_str.ptr())) {
-  } else if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+  } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
   } else {
     ObString object_path;
-    const int64_t full_dir_path_len = strlen(full_dir_path);
+    const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     oss_list_object_content_t *content = NULL;
     oss_list_object_params_t *params = NULL;
     const char *next_marker = "";
@@ -1791,7 +2158,7 @@ int ObStorageOssUtil::list_files(
         object_path.assign(content->key.data, content->key.len);
         int64_t object_size = -1;
 
-        if (OB_UNLIKELY(false == object_path.prefix_match(full_dir_path))) {
+        if (OB_ISNULL(object_path) || OB_UNLIKELY(false == object_path.prefix_match(full_dir_path))) {
           ret = OB_OSS_ERROR;
           OB_LOG(WARN, "returned object prefix not match",
               K(ret), K(object_path), K(full_dir_path), K(uri));
@@ -1799,7 +2166,7 @@ int ObStorageOssUtil::list_files(
           // skip
           OB_LOG(INFO, "exist object path length is same with dir path length",
               K(object_path), K(full_dir_path), K(full_dir_path_len));
-        } else if (OB_FAIL(c_str_to_int(content->size.data, object_size))) {
+        } else if (OB_FAIL(c_str_to_int(content->size.data, content->size.len, object_size))) {
           OB_LOG(WARN, "fail to get object size", K(ret), K(content->size.data), K(object_path));
         } else if (OB_FAIL(list_ctx.handle_object(content->key.data,
                                                   content->key.len,
@@ -1866,17 +2233,17 @@ int ObStorageOssUtil::list_directories(
     OB_LOG(WARN, "oss util is not inited", K(ret), K(uri));
   } else if (OB_FAIL(oss_base.init_with_storage_info(storage_info_))) {
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri));
-  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
+  } else if (OB_FAIL(inner_get_bucket_object_name(uri, bucket_str, object_str, tmp_allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
   } else if (FALSE_IT(full_dir_path = object_str.ptr())) {
-  } else if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+  } else if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
   } else {
     ObString listed_dir_full_path;
     const char *next_marker = "";
     const char *delimiter = "/";
-    const int64_t full_dir_path_len = strlen(full_dir_path);
+    const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     oss_list_object_common_prefix_t *common_prefix = NULL;
     oss_list_object_params_t *params = NULL;
 
@@ -1894,7 +2261,7 @@ int ObStorageOssUtil::list_directories(
           // if we list directories in 'dir1', then full_dir_path == 'dir1/'
           // and listed_dir_full_path == 'dir1/dir11/', which represents the full directory path of 'dir11'
           listed_dir_full_path.assign(common_prefix->prefix.data, common_prefix->prefix.len);
-          if (OB_UNLIKELY(false == listed_dir_full_path.prefix_match(full_dir_path))) {
+          if (OB_ISNULL(listed_dir_full_path) || OB_UNLIKELY(false == listed_dir_full_path.prefix_match(full_dir_path))) {
             ret = OB_OSS_ERROR;
             OB_LOG(WARN, "returned object prefix not match",
                 K(ret), K(listed_dir_full_path), K(full_dir_path), K(uri));
@@ -2036,7 +2403,6 @@ int ObStorageOssUtil::del_unmerged_parts(const ObString &uri)
   return ret;
 }
 
-
 ObStorageOssAppendWriter::ObStorageOssAppendWriter()
   : is_opened_(false),
     file_length_(-1),
@@ -2078,20 +2444,9 @@ int ObStorageOssAppendWriter::open(
 int ObStorageOssAppendWriter::write(const char *buf,
     const int64_t size)
 {
-  int ret = OB_SUCCESS;
-  ObExternalIOCounterGuard io_guard;
-  const int64_t fake_offset = 0;
-  const bool is_pwrite = false;
-
-  if (!is_inited()) {
-    ret = OB_NOT_INIT;
-    OB_LOG(WARN, "oss client not inited", K(ret));
-  } else if (NULL == buf || size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "buf is NULL or size is invalid", KP(buf), K(size), K(ret));
-  } else if (OB_FAIL(do_write(buf, size, fake_offset, is_pwrite))) {
-    OB_LOG(WARN, "failed to do write", K(ret), KP(buf), K(size));
-  }
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(buf);
+  UNUSED(size);
   return ret;
 }
 
@@ -2364,8 +2719,6 @@ int ObStorageOssWriter::write(const char *buf, const int64_t size)
   }
   return ret; 
 }
-
-
 
 }//tools
 }//oceanbase

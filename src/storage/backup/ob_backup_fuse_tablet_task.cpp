@@ -683,12 +683,17 @@ int ObBackupTabletFuseTask::fetch_tablet_meta_in_user_data_(
   backup_data_type.set_user_data_backup();
   share::ObBackupPath backup_path;
   ObBackupTabletMeta backup_tablet_meta;
+  common::ObStorageIdMod mod;
+
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+
   if (!meta_index.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arg", K(ret), K(meta_index));
   } else if (OB_ISNULL(fuse_ctx_)) {
     ret = OB_ERR_UNDEFINED;
     LOG_WARN("fuse ctx should not be null", K(ret));
+  } else if (FALSE_IT(mod.storage_id_ = fuse_ctx_->param_.dest_id_)) {
   } else if (OB_FAIL(ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(fuse_ctx_->param_.backup_dest_,
                                                                           fuse_ctx_->param_.backup_set_desc_,
                                                                           meta_index.ls_id_,
@@ -700,6 +705,7 @@ int ObBackupTabletFuseTask::fetch_tablet_meta_in_user_data_(
     LOG_WARN("failed to get macro block backup path", K(ret), K(meta_index));
   } else if (OB_FAIL(ObLSBackupRestoreUtil::read_tablet_meta(backup_path.get_obstr(),
                                                              fuse_ctx_->param_.backup_dest_.get_storage_info(),
+                                                             mod,
                                                              meta_index,
                                                              backup_tablet_meta))) {
     LOG_WARN("failed to read tablet meta", K(ret), K(backup_path), K(meta_index));

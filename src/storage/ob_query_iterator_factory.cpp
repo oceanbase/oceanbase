@@ -113,7 +113,7 @@ void ObQueryIteratorFactory::free_table_scan_iter(common::ObNewRowIterator *iter
   }
 }
 
-void ObQueryIteratorFactory::free_insert_dup_iter(common::ObNewRowIterator *iter)
+void ObQueryIteratorFactory::free_insert_dup_iter(blocksstable::ObDatumRowIterator *iter)
 {
   if (OB_LIKELY(NULL != iter)) {
     (void)ATOMIC_FAA(&insert_dup_release_count_, 1);

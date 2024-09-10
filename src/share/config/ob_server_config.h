@@ -69,6 +69,7 @@ const char* const BALANCER_IDLE_TIME = "balancer_idle_time";
 const char* const LOG_DISK_UTILIZATION_LIMIT_THRESHOLD = "log_disk_utilization_limit_threshold";
 const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percentage";
 const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
+const char* const OB_VECTOR_MEMORY_LIMIT_PERCENTAGE = "ob_vector_memory_limit_percentage";
 
 class ObServerMemoryConfig;
 

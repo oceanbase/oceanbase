@@ -33,7 +33,6 @@ class ObTableHandleV2;
 class ObICGIterator;
 class ObCOSSTableV2;
 
-
 /*
  * ObSSTableWrapper is used for guaranteeing the lifetime of cg sstable
  * ONLY CG SSTables need to be guarded by meta_handle
@@ -167,6 +166,7 @@ public:
         && base_type_ > ObCOSSTableBaseType::INVALID_TYPE && base_type_ < ObCOSSTableBaseType::MAX_TYPE
         && key_.column_group_idx_ < cs_meta_.column_group_cnt_;
   }
+  int64_t get_data_checksum() const override;
   int fetch_cg_sstable(
       const uint32_t cg_idx,
       ObSSTableWrapper &cg_wrapper) const;
@@ -223,6 +223,7 @@ public:
       ObTableAccessContext &context,
       const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
+  int fill_column_ckm_array(const ObStorageSchema &storage_schema, ObIArray<int64_t> &column_checksums) const;
   INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta),
       K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:

@@ -33,6 +33,7 @@ public:
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_ = true;
+bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 
 bool check_dir_exist(const char *base_dir, const int64_t id)
@@ -168,10 +169,10 @@ TEST_F(TestObSimpleMutilArbServer, out_interface)
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1000));
   palflite::PalfEnvLite *palf_env_lite = NULL;
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.get_palf_env_lite(
-        palflite::PalfEnvKey(cluster_id, OB_SERVER_TENANT_ID), palf_env_lite));
+        palflite::PalfEnvKey(cluster_id, ObISimpleLogServer::DEFAULT_TENANT_ID), palf_env_lite));
   arb_server->palf_env_mgr_.revert_palf_env_lite(palf_env_lite);
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.remove_palf_env_lite(
-        palflite::PalfEnvKey(cluster_id, OB_SERVER_TENANT_ID)));
+        palflite::PalfEnvKey(cluster_id, ObISimpleLogServer::DEFAULT_TENANT_ID)));
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.delete_arbitration_instance(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1000));
   CLOG_LOG(INFO, "end test out_interface");

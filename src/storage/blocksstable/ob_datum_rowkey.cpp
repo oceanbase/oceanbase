@@ -616,6 +616,25 @@ int ObDatumRowkeyHelper::convert_store_rowkey(const ObDatumRowkey &datum_rowkey,
   return ret;
 }
 
+int ObDatumRowkeyHelper::prepare_datum_rowkey(const ObDatumRow &datum_row,
+                                              const int key_datum_cnt,
+                                              const ObIArray<share::schema::ObColDesc> &col_descs,
+                                              ObDatumRowkey &datum_rowkey)
+{
+  int ret = OB_SUCCESS;
+
+  if (!datum_row.is_valid() || col_descs.count() < datum_row.get_column_count()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Get invalid datum row", K(ret), K(datum_row), K(col_descs));
+  } else if (OB_FAIL(datum_rowkey.assign(datum_row.storage_datums_, key_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to assign datum rowkey", K(ret), K(datum_row), K(key_datum_cnt));
+  } else if (OB_FAIL(convert_store_rowkey(datum_rowkey, col_descs, datum_rowkey.store_rowkey_))) {
+    STORAGE_LOG(WARN, "Failed to convert store rowkeyy", K(ret), K(datum_rowkey));
+  }
+
+  return ret;
+}
+
 
 int ObDatumRowkeyHelper::reserve(const int64_t rowkey_cnt)
 {

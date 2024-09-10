@@ -72,11 +72,6 @@ int MdsCtx::set_writer(const MdsWriter &writer)
   } else {
     writer_.writer_type_ = writer.writer_type_;
     writer_.writer_id_ = writer.writer_id_;
-    if (WriterType::TRANSACTION != writer_.writer_type_) {
-      if (OB_FAIL(inc_seq_no())) {
-        MDS_LOG(WARN, "fail to inc seq no", K(ret), KPC(this));
-      }
-    }
   }
   return ret;
 }

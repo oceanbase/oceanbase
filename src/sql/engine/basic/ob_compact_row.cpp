@@ -17,6 +17,7 @@
 #include "share/vector/ob_uniform_vector.h"
 #include "share/vector/ob_discrete_vector.h"
 #include "share/vector/ob_fixed_length_vector.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -45,6 +46,9 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
         fixed_cnt_++;
       }
     }
+  }
+  if (!use_local_allocator() && nullptr == allocator_) {
+    fixed_cnt_ = 0;
   }
   const int64_t var_col_cnt = get_var_col_cnt();
   extra_off_ = var_offsets_off_;
@@ -97,6 +101,46 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   return ret;
 }
 
+int RowMeta::assign(const RowMeta &row_meta)
+{
+  int ret = OB_SUCCESS;
+  allocator_ = row_meta.allocator_;
+  col_cnt_ = row_meta.col_cnt_;
+  extra_size_ = row_meta.extra_size_;
+
+  fixed_cnt_ = row_meta.fixed_cnt_;
+  nulls_off_ = row_meta.nulls_off_;
+  var_offsets_off_ = row_meta.var_offsets_off_;
+  extra_off_ = row_meta.extra_off_;
+  fix_data_off_ = row_meta.fix_data_off_;
+  var_data_off_ = row_meta.var_data_off_;
+
+  if (fixed_cnt_ > 0) {
+    ObDataBuffer local_alloc(buf_, MAX_LOCAL_BUF_LEN);
+    ObIAllocator *alloc = use_local_allocator() ? &local_alloc : allocator_;
+    if (OB_ISNULL(alloc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret), K(lbt()));
+    } else if (OB_ISNULL(projector_ =
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * col_cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
+    } else if (OB_ISNULL(fixed_offsets_ =
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc fixed_offsets_ failed", K(ret), K(col_cnt_));
+    } else {
+      memcpy(projector_, row_meta.projector_, sizeof(int32_t) * col_cnt_);
+      memcpy(fixed_offsets_, row_meta.fixed_offsets_, sizeof(int32_t) * (fixed_cnt_ + 1));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("row meta assgin failed", K(ret));
+      reset();
+    }
+  }
+  return ret;
+}
+
 void RowMeta::reset()
 {
   if (!use_local_allocator() && NULL != allocator_) {
@@ -107,6 +151,7 @@ void RowMeta::reset()
       allocator_->free(projector_);
     }
   }
+  col_cnt_ = 0;
   fixed_offsets_ = NULL;
   projector_ = NULL;
 }
@@ -166,6 +211,13 @@ int ObCompactRow::calc_row_size(const RowMeta &row_meta, const common::ObIArray<
       SQL_ENG_LOG(WARN, "fail to evel vector", K(ret), K(expr));
     } else if (reordered && row_meta.project_idx(col_idx) < row_meta.fixed_cnt_) {
       // continue, the size is computed in `fixed_size`
+    } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(ctx))) {
+      int64_t len = 0;
+      if (OB_FAIL(ObArrayExprUtils::calc_nested_expr_data_size(*expr, ctx, row_idx, len))) {
+        SQL_ENG_LOG(WARN, "fail to calc nested expr data size", K(ret));
+      } else {
+        size += len;
+      }
     } else {
       ObIVector *vec = expr->get_vector(ctx);
       const VectorFormat format = vec->get_format();
@@ -347,6 +399,61 @@ int64_t ToStrCompactRow::to_string(char *buf, const int64_t buf_len) const
   }
   J_ARRAY_END();
   return pos;
+}
+
+int ObCompactRow::nested_vec_to_row(const ObExpr &expr, ObEvalCtx &ctx, const sql::RowMeta &row_meta,
+                                        sql::ObCompactRow *stored_row, const uint64_t row_idx, const int64_t col_idx)
+{
+  int ret = OB_SUCCESS;
+  ObIVector *root_vec = expr.get_vector(ctx);
+  if (root_vec->is_null(row_idx)) {
+    stored_row->set_null(row_meta, col_idx);
+  } else {
+    int64_t offset = stored_row->offset(row_meta, col_idx);
+    char *row_buf = stored_row->payload();
+    int64_t cell_len = 0;
+    if (OB_FAIL(ObArrayExprUtils::nested_expr_to_row(expr, ctx, row_buf, offset, row_idx, cell_len))) {
+      LOG_WARN("nested expr to row failed", K(ret));
+    } else {
+      stored_row->update_var_offset(row_meta, col_idx, cell_len);
+    }
+  }
+  return ret;
+}
+
+int ObCompactRow::nested_vec_to_row(const ObExpr &expr, ObEvalCtx &ctx, const sql::RowMeta &row_meta,
+                                    sql::ObCompactRow *stored_row, const uint64_t row_idx, const int64_t col_idx,
+                                    const int64_t remain_size, int64_t &row_size)
+{
+  int ret = OB_SUCCESS;
+  ObIVector *root_vec = expr.get_vector(ctx);
+  if (root_vec->is_null(row_idx)) {
+    stored_row->set_null(row_meta, col_idx);
+  } else {
+    int64_t offset = stored_row->offset(row_meta, col_idx);
+    char *row_buf = stored_row->payload();
+    int64_t cell_len = 0;
+    if (OB_FAIL(ObArrayExprUtils::nested_expr_to_row(expr, ctx, row_buf, offset, row_idx, cell_len, &remain_size))) {
+      LOG_WARN("nested expr to row failed", K(ret));
+    } else {
+      stored_row->update_var_offset(row_meta, col_idx, cell_len);
+      row_size += cell_len;
+    }
+  }
+  return ret;
+}
+
+int ObCompactRow::nested_vec_to_rows(const ObExpr &expr, ObEvalCtx &ctx, const RowMeta &row_meta,
+                                     ObCompactRow **stored_rows, const uint16_t selector[], const int64_t size, const int64_t col_idx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < size && OB_SUCC(ret); i++) {
+    int64_t row_idx = selector[i];
+    if (OB_FAIL(nested_vec_to_row(expr, ctx, row_meta, stored_rows[i], row_idx, col_idx))) {
+      LOG_WARN("nested expr to row failed", K(ret), K(row_idx), K(size), K(col_idx));
+    }
+  }
+  return ret;
 }
 
 } // end namespace sql

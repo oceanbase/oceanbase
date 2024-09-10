@@ -29,6 +29,44 @@ bool is_end_with_slash(const char *str)
   return bret;
 }
 
+bool is_null_or_end_with_slash(const char *str)
+{
+  bool bret = false;
+  if (OB_ISNULL(str)) {
+    bret = true;
+  } else {
+    bret = is_end_with_slash(str);
+  }
+  return bret;
+}
+
+// get the length of a string safely even the it is NULL
+int get_safe_str_len(const char *str)
+{
+  return OB_ISNULL(str) ? 0 : strlen(str);
+}
+
+int c_str_to_int(const char *str, const int64_t length, int64_t &num)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("C_STR_TO_INT");
+  char *tmp_str = nullptr;
+  if (OB_ISNULL(str) || OB_UNLIKELY(length <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KCSTRING(str), K(length));
+  } else if (OB_ISNULL(tmp_str = static_cast<char *>(allocator.alloc(length + 1)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc memory", K(ret), KCSTRING(str), K(length));
+  } else {
+    MEMCPY(tmp_str, str, length);
+    tmp_str[length] = '\0';
+    if(OB_FAIL(c_str_to_int(tmp_str, num))) {
+      OB_LOG(WARN, "fail to c_str_to_int", K(ret), KCSTRING(str), K(length));
+    }
+  }
+  return ret;
+}
+
 int c_str_to_int(const char *str, int64_t &num)
 {
   int ret = OB_SUCCESS;
@@ -164,10 +202,7 @@ int build_bucket_and_object_name(ObIAllocator &allocator,
         if (OB_UNLIKELY(bucket_length <= 0)) {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "bucket name is empty", K(ret), K(uri), K(bucket_start), K(bucket_length));
-        } else if (OB_UNLIKELY(bucket_end + 1 >= uri.length())) {
-          ret = OB_INVALID_ARGUMENT;
-          OB_LOG(WARN, "object name is empty", K(uri), K(ret), K(bucket_end));
-        }  else if (OB_ISNULL(bucket_name_buff =
+        } else if (OB_ISNULL(bucket_name_buff =
             static_cast<char *>(allocator.alloc(bucket_length + 1)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           OB_LOG(WARN, "failed to alloc bucket name buff", K(ret), K(uri), K(bucket_length));
@@ -185,12 +220,18 @@ int build_bucket_and_object_name(ObIAllocator &allocator,
     if (OB_SUCC(ret)) {
       object_start = bucket_end + 1;
       ObString::obstr_size_t object_length = uri.length() - object_start;
-      //must end with '\0'
-      if (OB_UNLIKELY(object_length <= 0)) {
+      // must end with '\0'
+      // It is impossible to find object_length < 0 here.
+      if (OB_UNLIKELY(object_length < 0)) {
         ret = OB_INVALID_ARGUMENT;
-        OB_LOG(WARN, "bucket name is empty", K(ret), K(uri), K(object_start), K(object_length));
-      } else if (OB_FAIL(ob_write_string(allocator, uri.ptr() + object_start, object, true/*c_style*/))) {
-        OB_LOG(WARN, "fail to deep copy object", K(uri), K(object_start), K(object_length), K(ret));
+        OB_LOG(WARN, "uri is invalid", K(ret), K(uri), K(object_start), K(object_length));
+      } else if (object_length == 0) {
+        // When object_length == 0, it means no object is given in the uri.
+      } else if (object_length > 0) {
+        // And we only allocate memory to object when object_length > 0
+        if (OB_FAIL(ob_write_string(allocator, uri.ptr() + object_start, object, true/*c_style*/))) {
+          OB_LOG(WARN, "fail to deep copy object", K(uri), K(object_start), K(object_length), K(ret));
+        }
       }
     }
   }
@@ -256,6 +297,44 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
                                                   fragment_name, name_buf, name_buf_len))) {
     OB_LOG(WARN, "failed to construct mock append object fragment name",
         K(ret), K(start), K(end), K(fragment_name), K(logical_appendable_object_name));
+  }
+  return ret;
+}
+
+int check_files_map_validity(const hash::ObHashMap<ObString, int64_t> &files_to_delete)
+{
+  int ret = OB_SUCCESS;
+  const int64_t n_files_to_delete = files_to_delete.size();
+  if (OB_UNLIKELY(0 >= n_files_to_delete)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "files to delete is empty", K(ret), K(n_files_to_delete));
+  } else if (OB_UNLIKELY(OB_STORAGE_DEL_MAX_NUM < n_files_to_delete)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "too many files to delete", K(ret), K(n_files_to_delete));
+  } else {
+    hash::ObHashMap<ObString, int64_t>::const_iterator iter = files_to_delete.begin();
+    while (OB_SUCC(ret) && iter != files_to_delete.end()) {
+      if (OB_UNLIKELY(iter->first.empty() || iter->second < 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "object name is null or object name idx invalid",
+            K(ret), K(iter->first), K(iter->second));
+      }
+      iter++;
+    }
+  }
+  return ret;
+}
+
+int record_failed_files_idx(const hash::ObHashMap<ObString, int64_t> &files_to_delete,
+                            ObIArray<int64_t> &failed_files_idx)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<ObString, int64_t>::const_iterator iter = files_to_delete.begin();
+  while (OB_SUCC(ret) && iter != files_to_delete.end()) {
+    if (OB_FAIL(failed_files_idx.push_back(iter->second))) {
+      OB_LOG(WARN, "fail to record failed del", K(ret), K(iter->first), K(iter->second));
+    }
+    iter++;
   }
   return ret;
 }
@@ -496,6 +575,8 @@ void ObStorageListCtxBase::reset()
   has_next_ = false;
   need_size_ = false;
   size_arr_ = NULL;
+  cur_listed_count_ = 0;
+  total_list_limit_ = -1;
 }
 
 bool ObStorageListCtxBase::is_valid() const
@@ -507,12 +588,32 @@ bool ObStorageListCtxBase::is_valid() const
   return bret;
 }
 
+void ObStorageListCtxBase::set_total_list_limit(const int64_t limit)
+{
+  total_list_limit_ = limit;
+}
+
+void ObStorageListCtxBase::inc_cur_listed_count()
+{
+  cur_listed_count_++;
+}
+
+bool ObStorageListCtxBase::has_reached_list_limit() const
+{
+  bool bret = false;
+  if (total_list_limit_ > 0) {
+    bret = (cur_listed_count_ >= total_list_limit_);
+  }
+  return bret;
+}
+
 /*--------------------------------ObStorageListObjectsCtx--------------------------------*/
 void ObStorageListObjectsCtx::reset()
 {
   next_token_ = NULL;
   next_token_buf_len_ = 0;
   cur_appendable_full_obj_path_ = NULL;
+  marker_ = nullptr;
   ObStorageListCtxBase::reset();
 }
 
@@ -573,6 +674,18 @@ int ObStorageListObjectsCtx::set_next_token(
   return ret;
 }
 
+int ObStorageListObjectsCtx::set_marker(const char *marker)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(marker)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "marker is null", K(ret), K(marker));
+  } else {
+    marker_ = marker;
+  }
+  return ret;
+}
+
 int ObStorageListObjectsCtx::handle_object(
     const char *obj_path,
     const int obj_path_len,
@@ -615,7 +728,74 @@ void ObStorageListFilesCtx::reset()
   ObStorageListCtxBase::reset();
 }
 
-/*--------------------------------ObObjectStorageMallocHookGuard--------------------------------*/
+/*--------------------------------ObStoragePartInfoHandler--------------------------------*/
+ObStoragePartInfoHandler::ObStoragePartInfoHandler()
+    : is_inited_(false),
+      part_info_allocator_(PART_INFO_ALLOCATOR_TAG),
+      part_info_map_(),
+      lock_(ObLatchIds::OBJECT_DEVICE_LOCK)
+{
+}
+
+ObStoragePartInfoHandler::~ObStoragePartInfoHandler()
+{
+  reset_part_info();
+}
+
+void ObStoragePartInfoHandler::reset_part_info()
+{
+  SpinWLockGuard guard(lock_);
+  is_inited_ = false;
+  part_info_map_.destroy();
+  part_info_allocator_.clear();
+}
+
+int ObStoragePartInfoHandler::init()
+{
+  SpinWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  const int64_t PART_INFO_MAP_BUCKET_NUM = 509;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    OB_LOG(WARN, "ObStoragePartInfoHandler has been inited", K(ret));
+  } else if (OB_FAIL(part_info_map_.create(PART_INFO_MAP_BUCKET_NUM, PART_INFO_MAP_TAG))) {
+    OB_LOG(WARN, "fail to create part info map", K(ret), K(PART_INFO_MAP_BUCKET_NUM));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObStoragePartInfoHandler::add_part_info(
+    const int64_t part_id, const char *etag, const char *checksum)
+{
+  SpinWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  char *copied_etag_str = nullptr;
+  char *copied_checksum_str = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "ObStoragePartInfoHandler not inited", K(ret));
+  // checksum is allowed to be null
+  // e.g. S3 use md5 | OSS | COS | OBS
+  } else if (OB_UNLIKELY(part_id < 1) || OB_ISNULL(etag)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), K(part_id), KP(etag));
+  } else if (OB_FAIL(ob_dup_cstring(part_info_allocator_, etag, copied_etag_str))) {
+    OB_LOG(WARN, "fail to deep copy etag", K(ret), K(etag), K(checksum));
+  } else if (OB_NOT_NULL(checksum)
+      && OB_FAIL(ob_dup_cstring(part_info_allocator_, checksum, copied_checksum_str))) {
+    OB_LOG(WARN, "fail to deep copy checksum", K(ret), K(etag), K(checksum));
+  // 'set_refactored' is thread safe
+  } else if (OB_FAIL(part_info_map_.set_refactored(
+      part_id, PartInfo(copied_etag_str, copied_checksum_str)))) {
+    OB_LOG(WARN, "fail to store part info", K(ret), K(etag), K(checksum));
+  }
+  return ret;
+}
+
+/*--------------------------------ObObjectStorageGuard--------------------------------*/
+
 static lib::ObMemAttr get_mem_attr_from_storage_info(const ObObjectStorageInfo *storage_info)
 {
   static lib::ObMemAttr oss_attr;
@@ -645,13 +825,47 @@ static lib::ObMemAttr get_mem_attr_from_storage_info(const ObObjectStorageInfo *
   return ret_attr;
 }
 
-ObObjectStorageMallocHookGuard::ObObjectStorageMallocHookGuard(const ObObjectStorageInfo *storage_info)
-    : lib::ObMallocHookAttrGuard(get_mem_attr_from_storage_info(storage_info))
+ObObjectStorageGuard::ObObjectStorageGuard(
+    const char *file, const int64_t line, const char *func,
+    const int &ob_errcode,
+    const ObObjectStorageInfo *storage_info,
+    const ObString &uri,
+    const int64_t &handled_size)
+    : lib::ObMallocHookAttrGuard(get_mem_attr_from_storage_info(storage_info)),
+      file_name_(file), line_(line), func_name_(func),
+      ob_errcode_(ob_errcode),
+      storage_info_(storage_info),
+      start_time_us_(ObTimeUtility::current_time()),
+      uri_(uri),
+      handled_size_(handled_size)
 {
+  if (OB_ISNULL(file_name_)) {
+    file_name_ = "";
+  } else if (OB_NOT_NULL(strrchr(file_name_, '/'))) {
+    file_name_ = strrchr(file_name_, '/') + 1;
+  }
 }
 
-ObObjectStorageMallocHookGuard::~ObObjectStorageMallocHookGuard()
+void ObObjectStorageGuard::print_access_storage_log_()
 {
+  const int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us_;
+  // MB/s
+  const double speed = ((double)handled_size_ / 1024 / 1024)
+                     / ((double)cost_time_us / 1000 / 1000);
+  const bool is_slow = cost_time_us >= WARN_THRESHOLD_TIME_US * 1000; // 1s
+  if (cost_time_us > WARN_THRESHOLD_TIME_US
+      || (handled_size_ > 0 && speed <= WARN_THRESHOLD_SPEED_MB_S)) {
+    _STORAGE_LOG_RET(WARN, ob_errcode_,
+        "access object storage cost too much time: %s (%s:%ld), "
+        "uri=%.*s, size=%ld byte, start_time=%ld, cost_ts=%ld us, speed=%.2f MB/s, is_slow=%d",
+        func_name_, file_name_, line_,
+        uri_.length(), uri_.ptr(), handled_size_, start_time_us_, cost_time_us, speed, is_slow);
+  }
+}
+
+ObObjectStorageGuard::~ObObjectStorageGuard()
+{
+  print_access_storage_log_();
   lib::ObMallocHookAttrGuard::~ObMallocHookAttrGuard();
 }
 

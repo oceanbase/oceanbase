@@ -911,6 +911,37 @@ int ObIndexBlockTreeCursor::get_macro_block_id(MacroBlockId &macro_id)
   return ret;
 }
 
+int ObIndexBlockTreeCursor::get_current_node_macro_id(MacroBlockId &macro_id)
+{
+  int ret = OB_SUCCESS;
+  const ObIndexBlockRowHeader *idx_header = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret));
+  } else if (OB_FAIL(idx_row_parser_.get_header(idx_header))) {
+    LOG_WARN("Fail to get index block row header", K(ret));
+  } else if (OB_ISNULL(idx_header)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Got null pointer for index block row header", K(ret));
+  } else {
+    macro_id = idx_header->get_macro_id();
+  }
+  return ret;
+}
+
+int ObIndexBlockTreeCursor::get_parent_node_macro_id(MacroBlockId &macro_id)
+{
+  int ret = OB_SUCCESS;
+  const ObIndexBlockRowHeader *idx_header = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret));
+  } else {
+    macro_id = curr_path_item_->macro_block_id_;
+  }
+  return ret;
+}
+
 int ObIndexBlockTreeCursor::get_child_micro_infos(
     const ObDatumRange &range,
     ObArenaAllocator &endkey_allocator,
@@ -931,7 +962,7 @@ int ObIndexBlockTreeCursor::get_child_micro_infos(
     LOG_WARN("Failed to get micro block endkeys", K(ret));
   } else if (FALSE_IT(hold_item = *curr_path_item_)) {
   } else if (FALSE_IT(curr_path_item_->is_block_data_held_ = true)) {
-  } else if (OB_FAIL(pull_up())) {
+  } else if (OB_FAIL(pull_up(false /* cascade */, false /* is_reverse_scan */))) {
     LOG_WARN("Failed to pull up to previous micro block", K(ret));
   }
   return ret;
@@ -1060,29 +1091,28 @@ int ObIndexBlockTreeCursor::get_next_level_block(
     absolute_offset = sstable_meta_handle_.get_sstable_meta().get_macro_info().get_nested_offset()
         + idx_row_header.get_block_offset();
   }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(index_block_cache_->get_cache_block(
-      tenant_id_,
-      macro_block_id,
-      absolute_offset,
-      idx_row_header.get_block_size(),
-      curr_path_item_->cache_handle_))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-      LOG_WARN("Fail to get micro block handle from block cache",
-        K(ret), K(macro_block_id), K(idx_row_header));
-    } else if (OB_FAIL(load_micro_block_data(macro_block_id, absolute_offset, idx_row_header))) {
-      LOG_WARN("fail to load micro block data",
-          K(ret), K(macro_block_id), K(absolute_offset), K(idx_row_header));
+  if (OB_SUCC(ret)) {
+    ObMicroBlockCacheKey key;
+    idx_row_header.has_valid_logic_micro_id() ?
+      key.set(tenant_id_, idx_row_header.get_logic_micro_id(), idx_row_header.get_data_checksum()) :
+      key.set(tenant_id_, macro_block_id, absolute_offset, idx_row_header.get_block_size());
+    if (OB_FAIL(index_block_cache_->get_cache_block(key, curr_path_item_->cache_handle_))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("Fail to get micro block handle from block cache",
+          K(ret), K(macro_block_id), K(idx_row_header));
+      } else if (OB_FAIL(load_micro_block_data(macro_block_id, absolute_offset, idx_row_header))) {
+        LOG_WARN("fail to load micro block data",
+            K(ret), K(macro_block_id), K(absolute_offset), K(idx_row_header));
+      }
+    } else {
+      curr_path_item_->block_data_ = *curr_path_item_->cache_handle_.get_block_data();
+      curr_path_item_->block_from_cache_ = true;
+      curr_path_item_->is_block_transformed_ = curr_path_item_->block_data_.get_extra_buf() != nullptr;
+      // curr_path_item_->is_block_transformed_ = false;
     }
-  } else {
-    curr_path_item_->block_data_ = *curr_path_item_->cache_handle_.get_block_data();
-    curr_path_item_->block_from_cache_ = true;
-    curr_path_item_->is_block_transformed_ = curr_path_item_->block_data_.get_extra_buf() != nullptr;
-    // curr_path_item_->is_block_transformed_ = false;
+    curr_path_item_->start_row_offset_ = 0;
+    LOG_DEBUG("get cache block", K(ret), K(key), K(idx_row_header));
   }
-  curr_path_item_->start_row_offset_ = 0;
   if (OB_SUCC(ret) && TreeType::INDEX_BLOCK == tree_type_ && (idx_row_header.is_leaf_block() || idx_row_header.is_data_block())) {
     curr_path_item_->start_row_offset_ = curr_row_offset - idx_row_header.row_count_ + 1;
   }
@@ -1096,17 +1126,21 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
   // TODO: optimize with prefetch
   // Cache miss, read in sync IO
   int ret = OB_SUCCESS;
-  ObMacroBlockHandle macro_handle;
+  ObStorageObjectHandle macro_handle;
   ObMacroBlockReader macro_reader;
-  ObMacroBlockReadInfo read_info;
+  ObStorageObjectReadInfo read_info;
   ObMicroBlockDesMeta block_des_meta;
+
   read_info.macro_block_id_ = macro_block_id;
   read_info.offset_ = block_offset;
   read_info.size_ = idx_row_header.get_block_size();
+  read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_TREE_CURSOR_IO);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+  read_info.mtl_tenant_id_ = MTL_ID();
+
   idx_row_header.fill_deserialize_meta(block_des_meta);
   ObArenaAllocator io_allocator("IBTC_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   if (OB_ISNULL(read_info.buf_ =
@@ -1114,7 +1148,7 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
   } else {
-    if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
+    if (OB_FAIL(ObObjectManager::read_object(read_info, macro_handle))) {
       LOG_WARN("Fail to read micro block from sync io", K(ret));
     } else {
       const char *src_block_buf = macro_handle.get_buffer();

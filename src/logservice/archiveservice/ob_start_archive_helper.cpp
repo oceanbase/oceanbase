@@ -205,16 +205,25 @@ ERRSIM_POINT_DEF(ERRSIM_LOG_EXIST_GAP);
 int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
 {
   int ret = OB_SUCCESS;
-  palf::PalfHandleGuard guard;
-  if (OB_FAIL(MTL(logservice::ObLogService*)->open_palf(id_, guard))) {
-    ARCHIVE_LOG(WARN, "open palf failed", K(ret), KPC(this));
-  } else if (OB_FAIL(guard.locate_by_scn_coarsely(min_scn_, lsn))) {
+  ObLS *ls = NULL;
+  ObLSHandle ls_handle;
+  ObLogHandler *log_handler = NULL;
+  ObLSService *ls_service = MTL(ObLSService*);
+  if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "ls_service is NULL", K(ret), K_(id), KP(ls), KP(log_handler));
+  } else if (OB_FAIL(ls_service->get_ls(id_, ls_handle, ObLSGetMod::ARCHIVE_MOD))) {
+    ARCHIVE_LOG(WARN, "get_ls failed", K_(id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "ls or log_handle is NULL", K(ret), K_(id), KP(ls), KP(log_handler));
+  } else if (OB_FAIL(log_handler->locate_by_scn_coarsely(min_scn_, lsn))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_EAGAIN;
       ARCHIVE_LOG(WARN, "no log bigger than min_scn_, wait next turn", K(ret), K_(id), K_(min_scn));
     } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = guard.get_begin_lsn(lsn))) {
+      if (OB_SUCCESS != (tmp_ret = log_handler->get_begin_lsn(lsn))) {
         ARCHIVE_LOG(WARN, "get begin lsn failed", K(tmp_ret), KPC(this));
         ret = OB_EAGAIN;
       } else if (lsn == LSN(palf::PALF_INITIAL_LSN_VAL)) {

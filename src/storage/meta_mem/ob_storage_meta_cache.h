@@ -16,7 +16,7 @@
 #include "lib/literals/ob_literals.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/blockstore/ob_shared_block_reader_writer.h"
+#include "storage/blockstore/ob_shared_object_reader_writer.h"
 
 namespace oceanbase
 {
@@ -192,7 +192,7 @@ private:
 private:
   friend class ObStorageMetaCache;
   ObMetaDiskAddr phy_addr_;
-  ObSharedBlockReadHandle io_handle_;
+  ObSharedObjectReadHandle io_handle_;
   ObStorageMetaValueHandle cache_handle_;
 };
 
@@ -222,7 +222,7 @@ public:
       common::ObSafeArenaAllocator &allocator,
       common::ObIArray<ObStorageMetaHandle> &meta_handles);
 private:
-  class ObStorageMetaIOCallback : public ObSharedBlockIOCallback
+  class ObStorageMetaIOCallback : public ObSharedObjectIOCallback
   {
   public:
     ObStorageMetaIOCallback(
@@ -237,7 +237,7 @@ private:
     virtual int64_t size() const override;
     bool is_valid() const;
 
-    INHERIT_TO_STRING_KV("ObSharedBlockIOCallback", ObSharedBlockIOCallback,
+    INHERIT_TO_STRING_KV("ObSharedObjectIOCallback", ObSharedObjectIOCallback,
         K_(key), KP_(tablet), KP_(arena_allocator));
 
   private:

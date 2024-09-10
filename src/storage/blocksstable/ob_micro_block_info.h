@@ -14,6 +14,7 @@
 #define SRC_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_INFO_H_
 
 #include "lib/utility/ob_print_utils.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -36,14 +37,16 @@ struct ObMicroBlockInfo
     bool mark_deletion_ : SF_BIT_MARK_DELETION;
     uint16_t reserved_: SF_BIT_RESERVED;
   };
-  ObMicroBlockInfo() : offset_(0), size_(0), mark_deletion_(false), reserved_(0) {}
+  ObLogicMicroBlockId logic_micro_id_;
+  int64_t data_checksum_;
+  ObMicroBlockInfo() : offset_(0), size_(0), mark_deletion_(false), reserved_(0), logic_micro_id_(), data_checksum_(0) {}
 
   int64_t get_block_size() const
   { return size_; }
   int64_t get_block_offset() const
   { return  offset_; }
-  void reset() { offset_ = 0; size_ = 0; mark_deletion_ = false; reserved_ = 0; }
-  int set(const int32_t offset, const int32_t size, bool mark_deletion = false)
+  void reset() { offset_ = 0; size_ = 0; mark_deletion_ = false; reserved_ = 0; logic_micro_id_.reset(); data_checksum_ = 0; }
+  int set(const int32_t offset, const int32_t size, const ObLogicMicroBlockId &logic_micro_id, const int64_t data_checksum, bool mark_deletion = false)
   {
     int ret = common::OB_SUCCESS;
     if (!is_offset_valid(offset) || !is_size_valid(size)) {
@@ -54,6 +57,8 @@ struct ObMicroBlockInfo
       offset_ = offset & MAX_OFFSET;
       size_ = size & MAX_SIZE;
       mark_deletion_ = mark_deletion & MAX_MARK_DELETION;
+      logic_micro_id_ = logic_micro_id;
+      data_checksum_ = data_checksum;
     }
     return ret;
   }
@@ -66,7 +71,7 @@ struct ObMicroBlockInfo
     return size > 0 && size <= MAX_SIZE;
   }
   bool is_valid() const { return offset_ >=0 && size_ > 0; }
-  TO_STRING_KV(K_(offset), K_(size), K_(mark_deletion));
+  TO_STRING_KV(K_(offset), K_(size), K_(mark_deletion), K_(logic_micro_id), K_(data_checksum));
 };
 }
 }

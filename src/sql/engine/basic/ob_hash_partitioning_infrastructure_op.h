@@ -93,6 +93,8 @@ template <typename Item>
 class ObHashPartitionExtendHashTable
 {
 public:
+  using MemBoundCalcFunc = std::function<int64_t ()>;
+  const static int64_t SLICE_HT_INITIAL_SIZE = 8;
   const static int64_t INITIAL_SIZE = 128;
   const static int64_t SIZE_BUCKET_PERCENT = 80;
   const static int64_t MAX_MEM_PERCENT = 40;
@@ -103,8 +105,8 @@ public:
     size_(0), bucket_num_(0), min_bucket_num_(INITIAL_SIZE), max_bucket_num_(INT64_MAX),
     buckets_(nullptr), allocator_(nullptr),
     hash_funcs_(nullptr), sort_collations_(nullptr), cmp_funcs_(nullptr),
-    eval_ctx_(nullptr), sql_mem_processor_(nullptr), is_push_down_(false),
-    exprs_(nullptr)
+    eval_ctx_(nullptr), is_push_down_(false),
+    exprs_(nullptr), is_slice_ht_(false)
   {
   }
   ~ObHashPartitionExtendHashTable() { destroy(); }
@@ -112,10 +114,11 @@ public:
   int init(
     common::ObIAllocator *alloctor,
     const int64_t initial_size,
-    ObSqlMemMgrProcessor *sql_mem_processor,
+    MemBoundCalcFunc mem_bound_func,
     const int64_t min_bucket,
     const int64_t max_bucket,
-    bool is_push_down = false);
+    bool is_push_down = false,
+    bool is_slice_ht = false);
   // return the first item which equal to, NULL for none exist.
   int get(uint64_t hash_value, const Item &part_cols, const Item *&res) const;
   // Link item to hash table, extend buckets if needed.
@@ -140,7 +143,7 @@ public:
   int resize(
     common::ObIAllocator *allocator,
     int64_t bucket_num,
-    ObSqlMemMgrProcessor *sql_mem_processor);
+    MemBoundCalcFunc mem_bound_func);
 
   void destroy()
   {
@@ -201,8 +204,6 @@ public:
     cmp_funcs_ = sort_cmp_funs;
     eval_ctx_ = eval_ctx;
   }
-  void set_sql_mem_processor(ObSqlMemMgrProcessor *sql_mem_processor)
-  { sql_mem_processor_ = sql_mem_processor; }
   ObEvalCtx *get_eval_ctx() { return eval_ctx_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHashPartitionExtendHashTable);
@@ -211,7 +212,8 @@ private:
   static int64_t estimate_bucket_num(
     const int64_t bucket_num,
     const int64_t max_hash_mem,
-    const int64_t min_bucket);
+    const int64_t min_bucket,
+    const bool is_slice_ht = false);
   int create_bucket_array(const int64_t bucket_num, BucketArray *&new_buckets);
 public:
   int64_t size_;
@@ -224,21 +226,22 @@ public:
   const common::ObIArray<ObSortFieldCollation> *sort_collations_;
   const common::ObIArray<ObCmpFunc> *cmp_funcs_;
   ObEvalCtx *eval_ctx_;
-  ObSqlMemMgrProcessor *sql_mem_processor_;
   bool is_push_down_;
   const common::ObIArray<ObExpr*> *exprs_;
+  bool is_slice_ht_;
+  MemBoundCalcFunc mem_bound_calc_func_;
 };
 
 template<typename HashCol, typename HashRowStore>
-class ObHashPartInfrastructure
+class ObHashPartInfrastructure :public common::ObDLinkBase<ObHashPartInfrastructure<HashCol, HashRowStore>>
 {
 public:
   ObHashPartInfrastructure() :
     tenant_id_(UINT64_MAX), mem_context_(nullptr), alloc_(nullptr), arena_alloc_(nullptr),
-    hash_table_(), preprocess_part_(), left_part_list_(), right_part_list_(),
-    left_part_map_(), right_part_map_(), io_event_observer_(nullptr), sql_mem_processor_(nullptr),
-    hash_funcs_(nullptr), sort_collations_(nullptr), cmp_funcs_(nullptr), eval_ctx_(nullptr),
-    cur_left_part_(nullptr), cur_right_part_(nullptr),
+    hash_table_(), preprocess_part_(), left_part_list_(), right_part_list_(), rewind_part_list_(),
+    left_part_map_(), right_part_map_(), io_event_observer_(nullptr),
+    sql_mem_processor_(nullptr), hash_funcs_(nullptr), sort_collations_(nullptr), cmp_funcs_(nullptr),
+    eval_ctx_(nullptr), cur_left_part_(nullptr), cur_right_part_(nullptr),
     left_dumped_parts_(nullptr), right_dumped_parts_(nullptr),
     cur_dumped_parts_(nullptr), left_row_store_iter_(), right_row_store_iter_(),
     hash_table_row_store_iter_(),
@@ -250,7 +253,9 @@ public:
     left_part_cur_id_(0), right_part_cur_id_(0), my_skip_(nullptr),
     items_(nullptr), distinct_map_(), hash_col_buffer_(nullptr),
     hash_col_buffer_idx_(MAX_HASH_COL_CNT), is_push_down_(false),
-    store_row_buffer_(nullptr), store_row_buffer_cnt_(0)
+    store_row_buffer_(nullptr), store_row_buffer_cnt_(0),
+    need_rewind_(false), is_inited_pre_part_(false), has_dump_preprocess_part_(false),
+    is_destroyed_(false)
   {}
   ~ObHashPartInfrastructure();
 public:
@@ -330,6 +335,9 @@ public:
   };
 
 private:
+  using HpGroupSliceCntCalcFunc = std::function<int64_t ()>;
+  using HpGroupMemUsedCalcFunc = std::function<int64_t ()>;
+  using HpGroupAggrFunc = std::function<int64_t ()>;
   bool is_left() const { return InputSide::LEFT == cur_side_; }
   bool is_right() const { return InputSide::RIGHT == cur_side_; }
   inline int init_mem_context(uint64_t tenant_id);
@@ -359,16 +367,37 @@ private:
   int get_cur_matched_partition(InputSide input_side);
 
   void est_partition_count();
+  void dump_hp_infras_group_info()
+  {
+    int ret = OB_SUCCESS;
+    int64_t slice_cnt = 1;
+    int64_t total_mem_used = get_total_mem_used();
+    int64_t mem_bound = sql_mem_processor_->get_mem_bound();
+    int64_t data_size = sql_mem_processor_->get_data_size();
+    if (slice_cnt_func_) {
+      slice_cnt = slice_cnt_func_();
+    }
+    if (total_mem_used_func_) {
+      total_mem_used = total_mem_used_func_();
+    }
+    SQL_ENG_LOG(INFO, "dump hp infras group info", K(period_row_cnt_), K(est_part_cnt_), K(slice_cnt),
+      K(mem_bound), K(data_size), K(total_mem_used));
+  }
   bool need_dump()
   {
+    int64_t slice_cnt = 1;
+    if (slice_cnt_func_) {
+      slice_cnt = slice_cnt_func_();
+    }
     if (INT64_MAX == est_part_cnt_) {
       est_partition_count();
     }
-    return (sql_mem_processor_->get_mem_bound() <= est_part_cnt_ * BLOCK_SIZE + get_mem_used());
+    int64_t avg_mem_bound = get_each_slice_avg_size(sql_mem_processor_->get_mem_bound());
+    avg_mem_bound = avg_mem_bound > MIN_MEM_BOUND ? avg_mem_bound : MIN_MEM_BOUND;
+    SQL_ENG_LOG(TRACE, "check need dump", K(period_row_cnt_), K(est_part_cnt_), K(slice_cnt),
+      K(avg_mem_bound), K(sql_mem_processor_->get_mem_bound()));
+    return (avg_mem_bound <= est_part_cnt_ * BLOCK_SIZE + get_mem_used()) && (period_row_cnt_ > MIN_PERIOD_ROW_CNT);
   }
-
-  int64_t get_mem_used() { return (nullptr == mem_context_) ? 0 : mem_context_->used();}
-
   OB_INLINE int64_t get_bucket_idx(const uint64_t hash_value)
   {
     return hash_value & (hash_table_.get_bucket_num() - 1);
@@ -383,7 +412,6 @@ private:
   int append_all_dump_parts();
 
   void set_insert_row_func();
-  void destroy();
   void destroy_cur_parts();
   void clean_dumped_partitions();
   void clean_cur_dumping_partitions();
@@ -391,9 +419,11 @@ private:
   int update_mem_status_periodically();
 public:
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
-    int64_t ways, ObSqlMemMgrProcessor *sql_mem_processor);
+    int64_t ways, ObSqlMemMgrProcessor *sql_mem_processor, bool need_rewind = false);
 
   void reset();
+  void reuse();
+  int set_need_rewind(bool need_rewind);
   void switch_left()
   { cur_side_ = InputSide::LEFT; }
   void switch_right()
@@ -553,7 +583,7 @@ public:
   // 目前直接从store中拿数据，后续如果有需要，可以扩展该接口
   int get_next_hash_table_row(
     const ObChunkDatumStore::StoredRow *&store_row,
-    const common::ObIArray<ObExpr*> *exprs);
+    const common::ObIArray<ObExpr*> *exprs = nullptr);
   int get_next_hash_table_batch(const common::ObIArray<ObExpr *> &exprs,
                                 const int64_t max_row_cnt,
                                 int64_t &read_rows,
@@ -656,6 +686,7 @@ public:
   }
   void reset_hash_table_for_by_pass()
   {
+    is_inited_pre_part_ = false;
     hash_table_.reuse();
     hash_table_row_store_iter_.reset();
     preprocess_part_.store_.reset();
@@ -673,12 +704,73 @@ public:
   {
     io_event_observer_ = observer;
   }
+  void destroy();
+  int rewind();
+  int dump_preprocess_part();
+  int64_t get_mem_used() { return (nullptr == mem_context_) ? 0 : mem_context_->used();}
+  int64_t get_total_mem_used()
+  {
+    int ret = OB_SUCCESS;
+    if (INT64_MAX == est_part_cnt_) {
+      est_partition_count();
+    }
+    return est_part_cnt_ * BLOCK_SIZE + get_mem_used();
+  }
+  void set_hp_infras_group_func(HpGroupAggrFunc total_mem_used_func,
+                                HpGroupAggrFunc slice_cnt_func)
+  {
+    total_mem_used_func_ = total_mem_used_func;
+    slice_cnt_func_ = slice_cnt_func;
+  }
+  int64_t get_each_slice_avg_size(int64_t total_size) const
+  {
+    int64_t slice_cnt = 1;
+    if (slice_cnt_func_) {
+      slice_cnt = slice_cnt_func_();
+    }
+    return total_size / slice_cnt;
+  }
+  int64_t get_slice_count() const
+  {
+    int64_t slice_cnt = 1;
+    if (slice_cnt_func_) {
+      slice_cnt = slice_cnt_func_();
+    }
+    return slice_cnt;
+  }
+  bool is_destroyed() const { return is_destroyed_; }
+  bool is_slice_ht() const
+  {
+    return slice_cnt_func_ ? true : false;
+  }
+  TO_STRING_KV(K_(tenant_id),
+               K_(preprocess_part),
+               K_(enable_sql_dumped),
+               K_(unique),
+               K_(need_pre_part),
+               K_(cur_part_start_id),
+               K_(start_round),
+               K_(cur_side),
+               K_(has_cur_part_dumped),
+               K_(has_create_part_map),
+               K_(est_part_cnt),
+               K_(cur_level),
+               K_(part_shift),
+               K_(period_row_cnt),
+               K_(left_part_cur_id),
+               K_(right_part_cur_id),
+               K_(is_push_down),
+               K_(store_row_buffer_cnt),
+               K_(need_rewind),
+               K_(has_dump_preprocess_part));
 private:
   static const int64_t BLOCK_SIZE = 64 * 1024;
   static const int64_t MIN_BUCKET_NUM = 128;
   static const int64_t MAX_BUCKET_NUM = 131072;   // 1M = 131072 * 8
   static const int64_t MAX_PART_LEVEL = 4;
   static const int64_t MAX_HASH_COL_CNT = 16;
+  static const int64_t MIN_MEM_BOUND = 2 * 1024 * 1024; // 2M
+  static const int64_t MIN_PERIOD_ROW_CNT = 16;
   const int64_t EXTEND_BKT_NUM_PUSH_DOWN = INIT_L3_CACHE_SIZE / sizeof(ObHashPartCols);
   uint64_t tenant_id_;
   lib::MemoryContext mem_context_;
@@ -688,6 +780,7 @@ private:
   ObIntraPartition preprocess_part_;
   common::ObDList<ObIntraPartition> left_part_list_;
   common::ObDList<ObIntraPartition> right_part_list_;
+  common::ObDList<ObIntraPartition> rewind_part_list_;
   common::hash::ObHashMap<ObIntraPartKey, ObIntraPartition*, common::hash::NoPthreadDefendMode>
                                                                                     left_part_map_;
   common::hash::ObHashMap<ObIntraPartKey, ObIntraPartition*, common::hash::NoPthreadDefendMode>
@@ -734,6 +827,12 @@ private:
   bool is_push_down_;
   ObChunkDatumStore::StoredRow **store_row_buffer_;
   int64_t store_row_buffer_cnt_;
+  bool need_rewind_;
+  bool is_inited_pre_part_;
+  bool has_dump_preprocess_part_;
+  bool is_destroyed_;
+  HpGroupAggrFunc total_mem_used_func_;
+  HpGroupAggrFunc slice_cnt_func_;
 };
 
 //////////////////// start ObHashPartInfrastructure //////////////////
@@ -773,17 +872,21 @@ inline int ObHashPartInfrastructure<HashCol, HashRowStore>::init_mem_context(uin
 
 template<typename HashCol, typename HashRowStore>
 int ObHashPartInfrastructure<HashCol, HashRowStore>::init(
-  uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part, int64_t ways,
-  ObSqlMemMgrProcessor *sql_mem_processor)
+  uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
+  int64_t ways, ObSqlMemMgrProcessor *sql_mem_processor, bool need_rewind)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_mem_context(tenant_id))) {
     SQL_ENG_LOG(WARN, "failed to init mem_context", K(ret), K(tenant_id));
+  } else if (need_rewind && 2 == ways) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_ENG_LOG(WARN, "Two-way input does not support rewind", K(ret), K(need_rewind), K(ways));
   } else {
     tenant_id_ = tenant_id;
     enable_sql_dumped_ = enable_sql_dumped;
     unique_ = unique;
     need_pre_part_ = need_pre_part;
+    need_rewind_ = need_rewind;
     if (1 == ways) {
       ways_ = InputWays::ONE;
     } else if (2 == ways) {
@@ -806,6 +909,19 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::init(
     } else {
       hash_col_buffer_idx_ = 0;
     }
+  }
+  return ret;
+}
+
+template<typename HashCol, typename HashRowStore>
+int ObHashPartInfrastructure<HashCol, HashRowStore>::set_need_rewind(bool need_rewind)
+{
+  int ret = OB_SUCCESS;
+  if (need_rewind && InputWays::TWO == ways_) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_ENG_LOG(WARN, "Two-way input does not support rewind", K(ret), K(need_rewind), K(ways_));
+  } else {
+    need_rewind_ = need_rewind;
   }
   return ret;
 }
@@ -842,34 +958,33 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::clean_cur_dumping_partitio
 template<typename HashCol, typename HashRowStore>
 void ObHashPartInfrastructure<HashCol, HashRowStore>::clean_dumped_partitions()
 {
+#define CLEAN_DUMPED_PARTITIONS(part_list, part_map)                                              \
+  DLIST_FOREACH_REMOVESAFE_X(node, part_list, OB_SUCC(ret)) {                                     \
+    ObIntraPartition *part = node;                                                                \
+    ObIntraPartition *tmp_part = part_list.remove(part);                                          \
+    if (tmp_part != part) {                                                                       \
+      ret = OB_ERR_UNEXPECTED;                                                                    \
+      SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));   \
+    } else if (OB_FAIL(part_map.erase_refactored(part->part_key_, &tmp_part))) {                  \
+      SQL_ENG_LOG(WARN, "failed to remove part from map", K(ret), K(part->part_key_));            \
+    } else if (part != tmp_part) {                                                                \
+      ret = OB_ERR_UNEXPECTED;                                                                    \
+      SQL_ENG_LOG(ERROR, "unexepcted status: part is not match", K(ret), K(part), K(tmp_part));   \
+    }                                                                                             \
+    part->~ObIntraPartition();                                                                    \
+    alloc_->free(part);                                                                           \
+    part = nullptr;                                                                               \
+  }                                                                                               \
+
   int ret = OB_SUCCESS;
-  DLIST_FOREACH_REMOVESAFE_X(node, left_part_list_, OB_SUCC(ret)) {
+  CLEAN_DUMPED_PARTITIONS(left_part_list_, left_part_map_);
+  CLEAN_DUMPED_PARTITIONS(right_part_list_, right_part_map_);
+  DLIST_FOREACH_REMOVESAFE_X(node, rewind_part_list_, OB_SUCC(ret)) {
     ObIntraPartition *part = node;
-    ObIntraPartition *tmp_part = left_part_list_.remove(part);
+    ObIntraPartition *tmp_part = rewind_part_list_.remove(part);
     if (tmp_part != part) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));
-    } else if (OB_FAIL(left_part_map_.erase_refactored(part->part_key_, &tmp_part))) {
-      SQL_ENG_LOG(WARN, "failed to remove part from map", K(ret), K(part->part_key_));
-    } else if (part != tmp_part) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(ERROR, "unexepcted status: part is not match", K(ret), K(part), K(tmp_part));
-    }
-    part->~ObIntraPartition();
-    alloc_->free(part);
-    part = nullptr;
-  }
-  DLIST_FOREACH_REMOVESAFE_X(node, right_part_list_, OB_SUCC(ret)) {
-    ObIntraPartition *part = node;
-    ObIntraPartition *tmp_part = right_part_list_.remove(part);
-    if (tmp_part != part) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));
-    } else if (OB_FAIL(right_part_map_.erase_refactored(part->part_key_, &tmp_part))) {
-      SQL_ENG_LOG(WARN, "failed to remove part from map", K(ret), K(part->part_key_));
-    } else if (part != tmp_part) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(ERROR, "unexepcted status: part is not match", K(ret), K(part), K(tmp_part));
     }
     part->~ObIntraPartition();
     alloc_->free(part);
@@ -877,6 +992,7 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::clean_dumped_partitions()
   }
   left_part_list_.reset();
   right_part_list_.reset();
+  rewind_part_list_.reset();
   left_part_map_.destroy();
   right_part_map_.destroy();
   has_create_part_map_ = false;
@@ -920,6 +1036,7 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::destroy()
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;
   }
+  is_destroyed_ = true;
 }
 
 template<typename HashCol, typename HashRowStore>
@@ -958,6 +1075,49 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::reset()
   store_row_buffer_ = nullptr;
   store_row_buffer_cnt_ = 0;
   io_event_observer_ = nullptr;
+  need_rewind_ = false;
+  is_inited_pre_part_ = false;
+  has_dump_preprocess_part_ = false;
+  if (OB_NOT_NULL(arena_alloc_)) {
+    arena_alloc_->reset();
+  }
+}
+
+template<typename HashCol, typename HashRowStore>
+void ObHashPartInfrastructure<HashCol, HashRowStore>::reuse()
+{
+  left_row_store_iter_.reset();
+  right_row_store_iter_.reset();
+  hash_table_row_store_iter_.reset();
+  destroy_cur_parts();
+  clean_cur_dumping_partitions();
+  clean_dumped_partitions();
+  hash_table_.reuse();
+  preprocess_part_.store_.reset();
+  left_part_map_.clear();
+  right_part_map_.clear();
+  cur_left_part_ = nullptr;
+  cur_right_part_ = nullptr;
+  left_dumped_parts_ = nullptr;
+  right_dumped_parts_ = nullptr;
+  cur_dumped_parts_ = nullptr;
+  cur_part_start_id_ = 0;
+  start_round_ = false;
+  need_rewind_ = false;
+  cur_side_ = InputSide::LEFT;
+  has_cur_part_dumped_ = false;
+  est_part_cnt_ = INT64_MAX;
+  cur_level_ = 0;
+  part_shift_ = sizeof(uint64_t) * CHAR_BIT / 2;
+  period_row_cnt_ = 0;
+  left_part_cur_id_ = 0;
+  right_part_cur_id_ = 0;
+  hash_col_buffer_ = nullptr;
+  hash_col_buffer_idx_ = MAX_HASH_COL_CNT;
+  store_row_buffer_ = nullptr;
+  store_row_buffer_cnt_ = 0;
+  is_inited_pre_part_ = false;
+  has_dump_preprocess_part_ = false;
   if (OB_NOT_NULL(arena_alloc_)) {
     arena_alloc_->reset();
   }
@@ -1014,6 +1174,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::init_set_part(
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "sql_mem_processor_ is null", K(ret));
     } else {
+      is_inited_pre_part_ = true;
       part->store_.set_dir_id(sql_mem_processor_->get_dir_id());
       part->store_.set_allocator(*alloc_);
       part->store_.set_callback(sql_mem_processor_);
@@ -1061,8 +1222,9 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::init_hash_table(
   if (OB_ISNULL(alloc_) || !start_round_) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "allocator is null or it don'e start to round", K(ret), K(start_round_));
-  } else if (OB_FAIL(hash_table_.init(alloc_, bucket_cnt, sql_mem_processor_,
-                                      min_bucket, max_bucket, is_push_down_))) {
+  } else if (OB_FAIL(hash_table_.init(alloc_, bucket_cnt,
+    [this] () { return get_each_slice_avg_size(sql_mem_processor_->get_mem_bound()); },
+    min_bucket, max_bucket, is_push_down_, is_slice_ht()))) {
     SQL_ENG_LOG(WARN, "failed to init hash table", K(ret), K(bucket_cnt));
   }
   return ret;
@@ -1075,7 +1237,8 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::resize(int64_t bucket_cnt)
   if (OB_ISNULL(alloc_) || !start_round_) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "allocator is null or it don'e start to round", K(ret), K(start_round_));
-  } else if (OB_FAIL(hash_table_.resize(alloc_, max(2, bucket_cnt), sql_mem_processor_))) {
+  } else if (OB_FAIL(hash_table_.resize(alloc_, max(2, bucket_cnt),
+    [this] () { return get_each_slice_avg_size(sql_mem_processor_->get_mem_bound()); }))) {
     SQL_ENG_LOG(WARN, "failed to init hash table", K(ret), K(bucket_cnt));
   }
   return ret;
@@ -1089,7 +1252,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::start_round()
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "current rount is not finish", K(ret));
   } else {
-    if (need_pre_part_) {
+    if (need_pre_part_ && !is_inited_pre_part_) {
       if (OB_FAIL((this->*init_part_func_)(&preprocess_part_, 0, INT64_MAX, 0))) {
         SQL_ENG_LOG(WARN, "failed to init preprocess part", K(ret));
       }
@@ -1102,6 +1265,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::start_round()
     has_cur_part_dumped_ = false;
     est_part_cnt_ = INT64_MAX;
     period_row_cnt_ = 0;
+    has_dump_preprocess_part_ = false;
   }
   return ret;
 }
@@ -1200,18 +1364,22 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::end_round()
     left_row_store_iter_.reset();
     right_row_store_iter_.reset();
     hash_table_row_store_iter_.reset();
-    preprocess_part_.store_.reset();
     start_round_ = false;
     cur_left_part_ = nullptr;
     cur_right_part_ = nullptr;
     cur_dumped_parts_ = nullptr;
     period_row_cnt_ = 0;
     hash_col_buffer_idx_ = MAX_HASH_COL_CNT;
-    hash_col_buffer_ = nullptr;
     store_row_buffer_ = nullptr;
     store_row_buffer_cnt_ = 0;
-    if (OB_NOT_NULL(arena_alloc_)) {
-      arena_alloc_->reset();
+    has_dump_preprocess_part_ = false;
+    if (!need_rewind_ || has_create_part_map_) {
+      is_inited_pre_part_ = false;
+      preprocess_part_.store_.reset();
+      hash_col_buffer_ = nullptr;
+      if (OB_NOT_NULL(arena_alloc_)) {
+        arena_alloc_->reset();
+      }
     }
   }
   return ret;
@@ -1271,6 +1439,9 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::est_partition_count()
     ds = max_mem_size - tmp_part_cnt * BLOCK_SIZE - es;
     tmp_max_f = tmp_part_cnt * tmp_part_cnt * ds;
   }
+  if (slice_cnt_func_) {
+    est_part_cnt_ = est_part_cnt_ / slice_cnt_func_();
+  }
   est_part_cnt_ = est_part_cnt_ < MIN_PART_CNT ? MIN_PART_CNT : est_part_cnt_;
 }
 
@@ -1286,12 +1457,16 @@ int64_t ObHashPartInfrastructure<HashCol, HashRowStore>::est_bucket_count(
   }
   int64_t est_bucket_mem_size = next_pow2(rows) * sizeof(void*);
   int64_t est_data_mem_size = rows * width;
-  int64_t max_remain_mem_size = std::max(0l, sql_mem_processor_->get_mem_bound() - est_part_cnt_ * BLOCK_SIZE);
+  int64_t max_remain_mem_size =
+    std::max(0l, sql_mem_processor_->get_mem_bound() - est_part_cnt_ * BLOCK_SIZE);
   int64_t est_bucket_num = rows;
   while (est_bucket_mem_size + est_data_mem_size > max_remain_mem_size && est_bucket_num > 0) {
     est_bucket_num >>= 1;
     est_bucket_mem_size = next_pow2(est_bucket_num) * sizeof(void*);
     est_data_mem_size = est_bucket_num * width;
+  }
+  if (slice_cnt_func_) {
+    est_bucket_num = est_bucket_num / slice_cnt_func_();
   }
   est_bucket_num = est_bucket_num < min_bucket_cnt ? min_bucket_cnt :
                     (est_bucket_num > max_bucket_cnt ? max_bucket_cnt : est_bucket_num);
@@ -1799,8 +1974,12 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::update_mem_status_periodica
                     updated))) {
     SQL_ENG_LOG(WARN, "failed to update usable memory size periodically", K(ret));
   } else if (updated) {
+    int64_t total_mem_used = get_mem_used();
+    if (total_mem_used_func_) {
+      total_mem_used = total_mem_used_func_();
+    }
     //no error no will return , do not check
-    sql_mem_processor_->update_used_mem_size(get_mem_used());
+    sql_mem_processor_->update_used_mem_size(total_mem_used);
     est_partition_count();
   }
   return ret;
@@ -1819,6 +1998,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::insert_row_with_unique_hash
   if (OB_FAIL(calc_hash_value(exprs, hash_value))) {
     SQL_ENG_LOG(WARN, "failed to calc hash value", K(ret));
   } else if (OB_FAIL(do_insert_row_with_unique_hash_table(exprs, hash_value, exists, inserted))) {
+    dump_hp_infras_group_info();
     SQL_ENG_LOG(WARN, "failed to insert row into hash table", K(ret));
   }
   return ret;
@@ -2122,7 +2302,11 @@ template<typename HashCol, typename HashRowStore>
 int ObHashPartInfrastructure<HashCol, HashRowStore>::finish_insert_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(cur_dumped_parts_)) {
+  if (need_rewind_ && has_cur_part_dumped_ &&
+      OB_FAIL(dump_preprocess_part())) {
+    SQL_ENG_LOG(WARN, "failed to dump preprocess part", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(cur_dumped_parts_)) {
     for (int64_t i = 0; i < est_part_cnt_ && OB_SUCC(ret); ++i) {
       SQL_ENG_LOG(TRACE, "trace dumped partition",
         K(cur_dumped_parts_[i]->store_.get_row_cnt_in_memory()),
@@ -2229,7 +2413,9 @@ template<typename HashCol, typename HashRowStore>
 int ObHashPartInfrastructure<HashCol, HashRowStore>::open_hash_table_part()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(hash_table_row_store_iter_.init(&preprocess_part_.store_))) {
+  if (has_dump_preprocess_part_) {
+    // do nothing
+  } else if (OB_FAIL(hash_table_row_store_iter_.init(&preprocess_part_.store_))) {
     SQL_ENG_LOG(WARN, "failed to init row store iterator", K(ret));
   }
   return ret;
@@ -2284,7 +2470,6 @@ template<typename HashCol, typename HashRowStore>
 int ObHashPartInfrastructure<HashCol, HashRowStore>::close_cur_part(InputSide input_side)
 {
   int ret = OB_SUCCESS;
-  has_cur_part_dumped_ = false;
   ObIntraPartition *tmp_part = nullptr;
   if (!start_round_) {
     ret = OB_ERR_UNEXPECTED;
@@ -2302,10 +2487,17 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::close_cur_part(InputSide in
     cur_right_part_ = nullptr;
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(tmp_part)) {
-    tmp_part->~ObIntraPartition();
-    alloc_->free(tmp_part);
-    tmp_part = nullptr;
+    // If has_cur_part_dumped_ is false, the partition is a leaf node.
+    // hold is required in scenarios where rewind is required
+    if (need_rewind_ && !has_cur_part_dumped_) {
+      rewind_part_list_.add_last(tmp_part);
+    } else {
+      tmp_part->~ObIntraPartition();
+      alloc_->free(tmp_part);
+      tmp_part = nullptr;
+    }
   }
+  has_cur_part_dumped_ = false;
   return ret;
 }
 
@@ -2473,7 +2665,10 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::get_next_hash_table_row(
   const common::ObIArray<ObExpr*> *exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(hash_table_row_store_iter_.get_next_row(store_row))) {
+  if (has_dump_preprocess_part_) {
+    ret = OB_ITER_END;
+    SQL_ENG_LOG(TRACE, "has dump preprocess part", K(ret), K(has_dump_preprocess_part_));
+  } else if (OB_FAIL(hash_table_row_store_iter_.get_next_row(store_row))) {
     if (OB_ITER_END != ret) {
       SQL_ENG_LOG(WARN, "failed to get next row", K(ret));
     }
@@ -2495,6 +2690,9 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::get_next_hash_table_batch(
   if (OB_ISNULL(eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "eval ctx is nullptr", K(ret));
+  } else if (has_dump_preprocess_part_) {
+    ret = OB_ITER_END;
+    SQL_ENG_LOG(TRACE, "has dump preprocess part", K(ret), K(has_dump_preprocess_part_));
   } else if (OB_FAIL(hash_table_row_store_iter_.get_next_batch(exprs,
                                                                *eval_ctx_,
                                                                max_row_cnt,
@@ -2556,7 +2754,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::process_dump(bool is_block,
         alloc_,
         [&](int64_t max_memory_size)
         { UNUSED(max_memory_size); return need_dump(); },
-        dumped, sql_mem_processor_->get_data_size()))) {
+        dumped, get_each_slice_avg_size(sql_mem_processor_->get_data_size())))) {
       SQL_ENG_LOG(WARN, "failed to extend max memory size", K(ret));
     } else if (dumped) {
       full_by_pass = true;
@@ -2577,30 +2775,103 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::process_dump(bool is_block,
   }
   return ret;
 }
+
+template<typename HashCol, typename HashRowStore>
+int ObHashPartInfrastructure<HashCol, HashRowStore>::rewind()
+{
+  int ret = OB_SUCCESS;
+  if (!need_rewind_ || InputWays::TWO == ways_ || !left_part_list_.is_empty()) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_ENG_LOG(WARN, "rewind is not supported if the condition is not met", K(ret),
+      K(need_rewind_), K(ways_), K(left_part_list_.get_size()));
+  } else {
+    has_dump_preprocess_part_ = has_create_part_map_ ? true : false;
+    has_cur_part_dumped_ = false;
+    left_row_store_iter_.reset();
+    hash_table_row_store_iter_.reset();
+    start_round_ = false;
+    cur_left_part_ = nullptr;
+    cur_dumped_parts_ = nullptr;
+    hash_table_.reuse();
+    period_row_cnt_ = 0;
+    hash_col_buffer_idx_ = MAX_HASH_COL_CNT;
+    hash_col_buffer_ = nullptr;
+    store_row_buffer_ = nullptr;
+    store_row_buffer_cnt_ = 0;
+    DLIST_FOREACH_REMOVESAFE_X(node, rewind_part_list_, OB_SUCC(ret)) {
+      ObIntraPartition *part = node;
+      ObIntraPartition *tmp_part = rewind_part_list_.remove(part);
+      if (tmp_part != part) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_ENG_LOG(ERROR, "unexpected status: part it not match", K(ret), K(part), K(tmp_part));
+      } else if (OB_FAIL(left_part_map_.set_refactored(tmp_part->part_key_, tmp_part))) {
+        SQL_ENG_LOG(WARN, "failed to push into hash table", K(ret), K(tmp_part->part_key_));
+      } else {
+        left_part_list_.add_last(tmp_part);
+      }
+    }
+  }
+  return ret;
+}
+
+template<typename HashCol, typename HashRowStore>
+int ObHashPartInfrastructure<HashCol, HashRowStore>::dump_preprocess_part()
+{
+  int ret = OB_SUCCESS;
+  auto func = [this] (const HashCol &part_cols) -> int {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(cur_dumped_parts_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "unexpected status: cur dumped partitions is null", K(ret));
+    } else {
+      const uint64_t hash_value = part_cols.hash();
+      ObChunkDatumStore::StoredRow *sr = nullptr;
+      int64_t part_idx = get_part_idx(hash_value);
+      if (OB_FAIL(cur_dumped_parts_[part_idx]->store_.add_row(
+          static_cast<ObChunkDatumStore::StoredRow&>(*part_cols.store_row_), &sr))) {
+        SQL_ENG_LOG(WARN, "failed to add row", K(ret));
+      } else {
+        HashRowStore *store_row = static_cast<HashRowStore*>(sr);
+        store_row->set_hash_value(hash_value);
+        store_row->set_is_match(false);
+      }
+    }
+    return ret;
+  };
+  if (OB_FAIL(hash_table_.foreach(func))) {
+    SQL_ENG_LOG(WARN, "failed to do foreach", K(ret));
+  } else {
+    has_dump_preprocess_part_ = true;
+  }
+  return ret;
+}
 //////////////////// end ObHashPartInfrastructure //////////////////
 
 template <typename Item>
 int ObHashPartitionExtendHashTable<Item>::init(
   common::ObIAllocator *allocator,
   const int64_t initial_size,
-  ObSqlMemMgrProcessor *sql_mem_processor,
+  MemBoundCalcFunc mem_bound_func,
   const int64_t min_bucket,
   const int64_t max_bucket,
-  bool is_push_down)
+  bool is_push_down,
+  bool is_slice_ht)
 {
   int ret = common::OB_SUCCESS;
-  sql_mem_processor_ = sql_mem_processor;
+  mem_bound_calc_func_ = mem_bound_func;
   min_bucket_num_ = min_bucket;
   max_bucket_num_ = max_bucket;
   is_push_down_ = is_push_down;
-  if (initial_size < 2 || nullptr == allocator || OB_ISNULL(sql_mem_processor)) {
+  is_slice_ht_ = is_slice_ht;
+  if (initial_size < 2 || nullptr == allocator) {
     ret = common::OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "invalid argument", K(ret), K(initial_size), K(allocator));
   } else {
     // because extend hash table when the element table reach one percent of hash table size(50% now)
     int64_t est_bucket_num = std::min(estimate_bucket_num(initial_size * EXTENDED_RATIO,
-                                                    sql_mem_processor->get_mem_bound(),
-                                                    min_bucket), static_cast<int64_t> (INT_MAX));
+                                                    mem_bound_func(),
+                                                    min_bucket,
+                                                    is_slice_ht_), static_cast<int64_t> (INT_MAX));
     allocator_ = OB_NEW(ModulePageAllocator, ObModIds::OB_SQL_HASH_SET, ObModIds::OB_SQL_HASH_SET);
     if (OB_ISNULL(allocator_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2611,7 +2882,7 @@ int ObHashPartitionExtendHashTable<Item>::init(
       SQL_ENG_LOG(WARN, "failed to create bucket array", K(ret), K(est_bucket_num));
     } else {
       SQL_ENG_LOG(DEBUG, "debug init hash part table", K(ret),
-        K(est_bucket_num), K(initial_size), K(sql_mem_processor->get_mem_bound()));
+        K(est_bucket_num), K(initial_size), K(mem_bound_func()));
       size_ = 0;
     }
     if (OB_FAIL(ret)) {
@@ -2626,7 +2897,8 @@ template <typename Item>
 int64_t ObHashPartitionExtendHashTable<Item>::estimate_bucket_num(
   const int64_t bucket_num,
   const int64_t max_hash_mem,
-  const int64_t min_bucket)
+  const int64_t min_bucket,
+  const bool is_slice_ht)
 {
   int64_t max_bound_size = std::max(0l, max_hash_mem * MAX_MEM_PERCENT / 100);
   int64_t est_bucket_num = common::next_pow2(bucket_num);
@@ -2635,8 +2907,10 @@ int64_t ObHashPartitionExtendHashTable<Item>::estimate_bucket_num(
     est_bucket_num >>= 1;
     est_size = est_bucket_num * sizeof(void*);
   }
-  if (est_bucket_num < INITIAL_SIZE) {
-    est_bucket_num = INITIAL_SIZE;
+  if (is_slice_ht) {
+    est_bucket_num = est_bucket_num < SLICE_HT_INITIAL_SIZE ? SLICE_HT_INITIAL_SIZE : est_bucket_num;
+  } else {
+    est_bucket_num = est_bucket_num < INITIAL_SIZE ? INITIAL_SIZE : est_bucket_num;
   }
   if (est_bucket_num < min_bucket) {
     est_bucket_num = min_bucket;
@@ -2673,21 +2947,19 @@ int ObHashPartitionExtendHashTable<Item>::create_bucket_array(
 
 template <typename Item>
 int ObHashPartitionExtendHashTable<Item>::resize(
-  common::ObIAllocator *allocator, int64_t bucket_num, ObSqlMemMgrProcessor *sql_mem_processor)
+  common::ObIAllocator *allocator, int64_t bucket_num, MemBoundCalcFunc mem_bound_func)
 {
   int ret = OB_SUCCESS;
   int64_t est_max_bucket_num = 0;
-  if (OB_ISNULL(sql_mem_processor_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "sql mem processor is null", K(ret));
-  } else if (FALSE_IT(est_max_bucket_num = estimate_bucket_num(bucket_num * EXTENDED_RATIO,
-      sql_mem_processor->get_mem_bound(), min_bucket_num_))) {
+  mem_bound_calc_func_ = mem_bound_func;
+  if (FALSE_IT(est_max_bucket_num = estimate_bucket_num(bucket_num * EXTENDED_RATIO,
+      mem_bound_func(), min_bucket_num_, is_slice_ht_))) {
   } else if (est_max_bucket_num >= get_bucket_num()) {
     // 估算的bucket大于等于现在的，则重用
     reuse();
   } else {
     destroy();
-    if (OB_FAIL(init(allocator, bucket_num, sql_mem_processor, min_bucket_num_, max_bucket_num_))) {
+    if (OB_FAIL(init(allocator, bucket_num, mem_bound_func, min_bucket_num_, max_bucket_num_))) {
       SQL_ENG_LOG(WARN, "failed to reuse with bucket", K(bucket_num), K(ret));
     }
   }
@@ -2734,8 +3006,8 @@ int ObHashPartitionExtendHashTable<Item>::set(Item &item)
   common::hash::hash_func<Item> hf;
   if (!is_push_down_ && size_ >= get_bucket_num() * SIZE_BUCKET_PERCENT / 100) {
     int64_t extend_bucket_num =
-      estimate_bucket_num(get_bucket_num() * 2, sql_mem_processor_->get_mem_bound(),
-        min_bucket_num_);
+      estimate_bucket_num(get_bucket_num() * 2, mem_bound_calc_func_(),
+        min_bucket_num_, is_slice_ht_);
     if (extend_bucket_num <= get_bucket_num()) {
     } else if (OB_FAIL(extend(get_bucket_num() * 2))) {
       SQL_ENG_LOG(WARN, "extend failed", K(ret));
@@ -2803,14 +3075,14 @@ int ObHashPartitionExtendHashTable<Item>::check_and_extend()
   int ret = OB_SUCCESS;
   if (size_ >= get_bucket_num() * 0.8) {
     int64_t extend_bucket_num =
-      estimate_bucket_num(get_bucket_num() * 2, sql_mem_processor_->get_mem_bound(),
-        min_bucket_num_);
+      estimate_bucket_num(get_bucket_num() * 2, mem_bound_calc_func_(),
+        min_bucket_num_, is_slice_ht_);
     if (extend_bucket_num <= get_bucket_num()) {
     } else if (OB_FAIL(extend(get_bucket_num() * 2))) {
       SQL_ENG_LOG(WARN, "extend failed", K(ret));
     } else {
       SQL_ENG_LOG(DEBUG, "trace hash part extend", K(ret),
-        K(size_), K(get_bucket_num()), K(sql_mem_processor_->get_mem_bound()));
+        K(size_), K(get_bucket_num()), K(mem_bound_calc_func_()));
     }
   }
   if (OB_SUCC(ret) && OB_ISNULL(buckets_)) {
@@ -2876,6 +3148,8 @@ int ObHashPartitionExtendHashTable<Item>::extend(const int64_t new_bucket_num)
   return ret;
 }
 ///////////////////////////////////////////////////////////////////////////////////
+
+using HashPartInfras = ObHashPartInfrastructure<ObHashPartCols, ObHashPartStoredRow>;
 
 
 }  // namespace sql

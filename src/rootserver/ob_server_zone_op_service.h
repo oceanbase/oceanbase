@@ -29,11 +29,13 @@ struct ObRsListArg;
 struct ObWaitMasterKeyInSyncArg;
 #endif
 // struct ObAdminServerArg;
+class ObAdminStorageArg;
 }
 namespace share
 {
 class ObLSTableOperator;
 class ObAllServerTracer;
+struct ObRootKey;
 }
 namespace rootserver
 {
@@ -71,7 +73,9 @@ public:
   // @ret OB_ENTRY_EXIST           there exists servers which are already added
   //
   // @ret other error code		     failure
-  int add_servers(const ObIArray<ObAddr> &servers, const ObZone &zone, bool is_bootstrap = false);
+  int add_servers(const ObIArray<ObAddr> &servers,
+      const ObZone &zone,
+      const bool is_bootstrap = false);
   int construct_rs_list_arg(obrpc::ObRsListArg &rs_list_arg);
   // Try to delete the given servers from the cluster (logically).
   // In this func, we only set their statuses in __all_server table be OB_SERVER_DELETING.
@@ -175,8 +179,8 @@ public:
       const ObIArray<ObAddr> &servers,
       const obrpc::ObAdminServerArg::AdminServerOp &op);
 private:
+  int check_startup_mode_match_(const share::ObServerMode startup_mode);
   int zone_checking_for_adding_server_(
-      const common::ObZone &command_zone,
       const common::ObZone &rpc_zone,
       ObZone &picked_zone);
   int add_server_(
@@ -184,7 +188,8 @@ private:
       const uint64_t server_id,
       const common::ObZone &zone,
       const int64_t sql_port,
-      const share::ObServerInfoInTable::ObBuildVersion &build_version);
+      const share::ObServerInfoInTable::ObBuildVersion &build_version,
+      const ObIArray<share::ObZoneStorageTableInfo> &storage_infos);
   int delete_server_(
       const common::ObAddr &server,
       const common::ObZone &zone);
@@ -215,6 +220,20 @@ private:
       const common::ObAddr &server,
       const common::ObZone &zone,
       const int64_t start_time);
+  int get_and_check_storage_infos_by_zone_(const ObZone &zone,
+      ObIArray<share::ObZoneStorageTableInfo> &result);
+  int check_storage_infos_not_changed_(common::ObISQLClient &proxy, const ObZone &zone,
+      const ObIArray<share::ObZoneStorageTableInfo> &storage_infos);
+  int precheck_server_empty_and_get_zone_(const ObAddr &server,
+      const ObTimeoutCtx &timeout,
+      const bool is_bootstrap,
+      ObZone &zone);
+  int prepare_server_for_adding_server_(const ObAddr &server,
+      const ObTimeoutCtx &timeout,
+      const bool &is_bootstrap,
+      ObZone &picked_zone,
+      obrpc::ObPrepareServerForAddingServerArg &rpc_arg,
+      obrpc::ObPrepareServerForAddingServerResult &rpc_result);
   bool is_inited_;
   ObIServerChangeCallback *server_change_callback_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

@@ -93,7 +93,7 @@ private:
   ObMacroBlockDataIterator data_iter_;
   blocksstable::ObDatumRange range_;
   blocksstable::ObMicroBlock micro_block_;
-  blocksstable::ObMacroBlockHandle macro_handle_;
+  blocksstable::ObStorageObjectHandle macro_handle_;
   blocksstable::ObCGRowKeyTransHelper rowkey_helper_;
   common::ObArenaAllocator allocator_;
   bool is_inited_;

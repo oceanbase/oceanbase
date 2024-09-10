@@ -110,6 +110,9 @@ private:
       common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,
       const common::ObIArray<common::ObZone> &zone_list);
 
+  // check all zone regions the same as region
+  int check_all_zone_regions_the_same_(const common::ObRegion &region);
+
 protected:
   common::SpinRWLock lock_;
   // only used for copying data to/from shadow_

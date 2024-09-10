@@ -54,6 +54,11 @@ public:
   int init();
   void destroy();
   void reuse();
+  int assign(const ObLSColumnReplicaCache &other);
+  int deep_fetch(
+      hash::ObHashSet<ObLSID> &target_ls_id_set,
+      hash::ObHashSet<ObLSReplicaUniItem> &target_ls_replica_set,
+      common::ObIArray<ObLSInfo> &target_ls_infos) const;
   int update(const ObLSID &ls_id);
   int update_with_ls_info(const ObLSInfo &ls_info);
   int check_is_cs_replica(const ObLSReplicaUniItem &ls_item, bool &is_cs_replica) const;
@@ -68,8 +73,8 @@ private:
   const static int64_t BUCKET_NUM_OF_LS_REPLICA_SET = 31;
 private:
   bool is_inited_;
-  hash::ObHashSet<ObLSID, hash::NoPthreadDefendMode> ls_id_set_; // record looped ls id
-  hash::ObHashSet<ObLSReplicaUniItem, hash::NoPthreadDefendMode> ls_replica_set_; // cs-prelica ls
+  hash::ObHashSet<ObLSID> ls_id_set_; // record looped ls id
+  hash::ObHashSet<ObLSReplicaUniItem> ls_replica_set_; // cs-prelica ls
   common::ObSEArray<ObLSInfo, 4> ls_infos_; // used for check member list and learner list
 };
 
@@ -107,6 +112,21 @@ private:
   rootserver::ObMajorMergeInfoManager *merge_info_mgr_;
   common::hash::ObHashMap<share::ObLSID, share::ObLSInfo> ls_infos_map_;
   share::ObLSColumnReplicaCache ls_cs_replica_cache_;
+};
+
+struct ObMemberListInfo
+{
+  ObMemberListInfo(const uint64_t tenant_id)
+    : member_list_array_()
+  {
+    member_list_array_.set_attr(ObMemAttr(tenant_id, "MemListInfo"));
+  }
+  ~ObMemberListInfo() {}
+  int build(const ObLSReplica &tmp_replica);
+  bool check_exist(const common::ObAddr &addr);
+  bool empty() { return member_list_array_.empty(); }
+  TO_STRING_KV("member_list_cnt", member_list_array_.count(), K(member_list_array_));
+  ObSEArray<common::ObAddr, 6> member_list_array_; // including member_list & learner_list
 };
 
 } // namespace share

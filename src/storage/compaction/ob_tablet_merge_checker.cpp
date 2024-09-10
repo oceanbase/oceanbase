@@ -47,7 +47,7 @@ int ObTabletMergeChecker::check_need_merge(const ObMergeType merge_type, const O
     bool is_empty_shell = tablet.is_empty_shell();
     if (is_minor_merge(merge_type) || is_mini_merge(merge_type)) {
       need_merge = !is_empty_shell;
-    } else if (is_major_or_meta_merge_type(merge_type) || is_medium_merge(merge_type)) {
+    } else if (is_major_or_meta_merge_type(merge_type)) {
       need_merge = tablet.is_data_complete();
     }
 
@@ -124,6 +124,23 @@ int ObTabletMergeChecker::check_ls_state_in_major(ObLS &ls, bool &need_merge)
     need_merge = true;
   }
   return ret;
+}
+
+bool ObTabletMergeChecker::check_weak_read_ts_ready(
+    const int64_t &merge_version,
+    ObLS &ls)
+{
+  bool is_ready_for_compaction = false;
+  SCN weak_read_scn;
+
+  if (FALSE_IT(weak_read_scn = ls.get_ls_wrs_handler()->get_ls_weak_read_ts())) {
+  } else if (weak_read_scn.get_val_for_tx() < merge_version) {
+    FLOG_INFO("current slave_read_ts is smaller than freeze_ts, try later",
+              "ls_id", ls.get_ls_id(), K(merge_version), K(weak_read_scn));
+  } else {
+    is_ready_for_compaction = true;
+  }
+  return is_ready_for_compaction;
 }
 
 int ObTabletMergeChecker::check_mtl_tenant_is_remote(bool &is_remote)

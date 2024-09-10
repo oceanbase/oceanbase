@@ -14,6 +14,7 @@
 #include "lib/function/ob_function.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_utility.h"
+#include "share/rc/ob_tenant_base.h"
 #include "log_storage_interface.h"
 #include "log_define.h"
 #include "log_reader_utils.h"
@@ -54,6 +55,10 @@ int IteratorStorage::init(
     is_inited_ = true;
     PALF_LOG(TRACE, "IteratorStorage init success", KPC(this));
   }
+  if (OB_SUCC(ret) && !get_file_end_lsn_.is_valid()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    destroy();
+  }
   return ret;
 }
 
@@ -62,8 +67,10 @@ void IteratorStorage::destroy()
   is_inited_ = false;
   start_lsn_.reset();
   end_lsn_.reset();
-  read_buf_.reset();
   block_size_ = 0;
+  if (NULL != log_storage_ && !is_memory_storage_()) {
+    free_read_buf(read_buf_);
+  }
   log_storage_ = NULL;
 }
 
@@ -107,7 +114,89 @@ int IteratorStorage::pread(
   return ret;
 }
 
-MemoryStorage::MemoryStorage() : buf_(NULL),
+int IteratorStorage::read_data_from_storage_(
+    int64_t &pos,
+    const int64_t in_read_size,
+    char *&buf,
+    int64_t &out_read_size,
+    LogIOContext &io_ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t remain_valid_data_size = 0;
+  if (OB_FAIL(ensure_memory_layout_correct_(pos, in_read_size, remain_valid_data_size))) {
+    PALF_LOG(WARN, "ensure_memory_layout_correct_ failed", K(ret), K(pos), K(in_read_size), KPC(this));
+  } else {
+    // avoid read repeated data from disk
+    const LSN curr_round_read_lsn = start_lsn_ + pos + remain_valid_data_size;
+    const int64_t real_in_read_size = in_read_size - remain_valid_data_size;
+    read_buf_.buf_ += remain_valid_data_size;
+    if (0ul == real_in_read_size) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "real read size is zero, unexpected error!!!", K(ret), K(real_in_read_size));
+    } else if (OB_FAIL(log_storage_->pread(curr_round_read_lsn,
+            real_in_read_size,
+            read_buf_, out_read_size, io_ctx))) {
+      PALF_LOG(WARN, "ILogStorage pread failed", K(ret), K(pos), K(in_read_size), KPC(this));
+    }
+    read_buf_.buf_ -= remain_valid_data_size;
+    if (OB_SUCC(ret)) {
+      buf = read_buf_.buf_;
+      out_read_size += remain_valid_data_size;
+      // check the 'read_buf_' whether has LogBlockHeader, if has, the return LSN need decrese MAX_INFO_BLOCK_SIZE
+      PALF_LOG(TRACE, "read_data_from_storage_ success", K(ret), KPC(this), K(pos), K(in_read_size),
+          K(curr_round_read_lsn), K(remain_valid_data_size), K(real_in_read_size), K(out_read_size));
+    }
+  }
+  return ret;
+}
+
+int IteratorStorage::ensure_memory_layout_correct_(
+    const int64_t pos,
+    const int64_t in_read_size,
+    int64_t &remain_valid_data_size)
+{
+  int ret = OB_SUCCESS;
+  remain_valid_data_size = 0;
+  // NB: For memory storage, no need alloc_read_buf.
+  if (!is_memory_storage_()) {
+    const int64_t max_valid_buf_len = read_buf_.buf_len_ - LOG_DIO_ALIGN_SIZE - LOG_CACHE_ALIGN_SIZE;
+    ReadBuf tmp_read_buf = read_buf_;
+    // buf not enough, need alloc or expand
+    if (in_read_size > max_valid_buf_len) {
+      ret = alloc_read_buf("IteratorStorage", in_read_size, tmp_read_buf);
+      PALF_LOG(TRACE, "need alloc read buf", K(ret), KPC(this), K(tmp_read_buf));
+    }
+    if (OB_SUCC(ret)) {
+      PALF_LOG(TRACE, "before ensure_memory_layout_correct_", KPC(this), K(in_read_size), K(remain_valid_data_size));
+      // memmove tail valid part data to header
+      do_memove_(tmp_read_buf, pos, remain_valid_data_size);
+      read_buf_ = tmp_read_buf;
+      PALF_LOG(TRACE, "after ensure_memory_layout_correct_", KPC(this), K(in_read_size), K(remain_valid_data_size));
+    }
+  }
+  return ret;
+}
+
+void IteratorStorage::do_memove_(ReadBuf &dst, const int64_t pos, int64_t &valid_tail_part_size)
+{
+  valid_tail_part_size = lower_align(get_valid_data_len_() - pos, LOG_DIO_ALIGN_SIZE);
+  OB_ASSERT(valid_tail_part_size >= 0);
+  if (false == read_buf_.is_valid()) {
+    // do nothing
+    PALF_LOG(TRACE, "src is invalid, no need memove", K(dst), K(read_buf_), KPC(this), K(pos));
+  } else {
+    OB_ASSERT(valid_tail_part_size < dst.buf_len_);
+    MEMMOVE(dst.buf_, read_buf_.buf_ + pos, valid_tail_part_size);
+    PALF_LOG(TRACE, "do_memove_ success", K(dst), KPC(this), K(valid_tail_part_size), K(pos));
+    if (read_buf_ != dst) {
+      PALF_LOG(TRACE, "src is not same as dst, need free src", K(dst), KPC(this));
+      free_read_buf(read_buf_);
+    }
+  }
+}
+
+MemoryStorage::MemoryStorage() : ILogStorage(ILogStorageType::MEMORY_STORAGE),
+                                 buf_(NULL),
                                  buf_len_(0),
                                  start_lsn_(),
                                  log_tail_(),
@@ -164,7 +253,11 @@ int MemoryStorage::append(const char *buf, const int64_t buf_len)
   return ret;
 }
 
-int MemoryStorage::pread(const LSN &lsn, const int64_t in_read_size, ReadBuf &read_buf, int64_t &out_read_size, LogIOContext &io_ctx)
+int MemoryStorage::pread(const LSN &lsn,
+			 const int64_t in_read_size,
+			 ReadBuf &read_buf,
+			 int64_t &out_read_size,
+			 LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   UNUSED(io_ctx);
@@ -186,120 +279,5 @@ int MemoryStorage::pread(const LSN &lsn, const int64_t in_read_size, ReadBuf &re
   return ret;
 }
 
-MemoryIteratorStorage:: ~MemoryIteratorStorage()
-{
-  destroy();
-}
-
-void MemoryIteratorStorage::destroy()
-{
-  IteratorStorage::destroy();
-}
-
-int MemoryIteratorStorage::read_data_from_storage_(
-    int64_t &pos,
-    const int64_t in_read_size,
-    char *&buf,
-    int64_t &out_read_size,
-    LogIOContext &io_ctx)
-{
-  int ret = OB_SUCCESS;
-  const LSN start_lsn = start_lsn_ + pos;
-  if (OB_FAIL(log_storage_->pread(start_lsn, in_read_size, read_buf_, out_read_size, io_ctx))) {
-    PALF_LOG(WARN, "MemoryIteratorStorage pread failed", K(ret), KPC(this), K(start_lsn));
-  } else {
-    PALF_LOG(TRACE, "MemoryIteratorStorage read_data_from_storage_ success", K(ret), KPC(this), K(start_lsn));
-    buf = read_buf_.buf_;
-  }
-  return ret;
-}
-
-DiskIteratorStorage::~DiskIteratorStorage()
-{
-  destroy();
-}
-
-void DiskIteratorStorage::destroy()
-{
-  free_read_buf(read_buf_);
-  IteratorStorage::destroy();
-}
-
-int DiskIteratorStorage::read_data_from_storage_(
-    int64_t &pos,
-    const int64_t in_read_size,
-    char *&buf,
-    int64_t &out_read_size,
-    LogIOContext &io_ctx)
-{
-  int ret = OB_SUCCESS;
-  int64_t remain_valid_data_size = 0;
-  if (OB_FAIL(ensure_memory_layout_correct_(pos, in_read_size, remain_valid_data_size))) {
-    PALF_LOG(WARN, "ensure_memory_layout_correct_ failed", K(ret), K(pos), K(in_read_size), KPC(this));
-  } else {
-    // avoid read repeated data from disk
-    const LSN curr_round_read_lsn = start_lsn_ + pos + remain_valid_data_size;
-    const int64_t real_in_read_size = in_read_size - remain_valid_data_size;
-    read_buf_.buf_ += remain_valid_data_size;
-    if (0ul == real_in_read_size) {
-      ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "real read size is zero, unexpected error!!!", K(ret), K(real_in_read_size));
-    } else if (OB_FAIL(log_storage_->pread(curr_round_read_lsn,
-            real_in_read_size,
-            read_buf_, out_read_size, io_ctx))) {
-      PALF_LOG(WARN, "ILogStorage pread failed", K(ret), K(pos), K(in_read_size), KPC(this));
-    }
-    read_buf_.buf_ -= remain_valid_data_size;
-    if (OB_SUCC(ret)) {
-      buf = read_buf_.buf_;
-      out_read_size += remain_valid_data_size;
-      // check the 'read_buf_' whether has LogBlockHeader, if has, the return LSN need decrese MAX_INFO_BLOCK_SIZE
-      PALF_LOG(TRACE, "read_data_from_storage_ success", K(ret), KPC(this), K(pos), K(in_read_size),
-          K(curr_round_read_lsn), K(remain_valid_data_size), K(real_in_read_size), K(out_read_size));
-    }
-  }
-  return ret;
-}
-
-int DiskIteratorStorage::ensure_memory_layout_correct_(
-    const int64_t pos,
-    const int64_t in_read_size,
-    int64_t &remain_valid_data_size)
-{
-  int ret = OB_SUCCESS;
-  const int64_t max_valid_buf_len = read_buf_.buf_len_ - LOG_DIO_ALIGN_SIZE - LOG_CACHE_ALIGN_SIZE;
-  ReadBuf tmp_read_buf = read_buf_;
-  // buf not enough, need alloc or expand
-  if (in_read_size > max_valid_buf_len) {
-    ret = alloc_read_buf("DiskIteratorStorage", in_read_size, tmp_read_buf);
-    PALF_LOG(TRACE, "need alloc read buf", K(ret), KPC(this), K(tmp_read_buf));
-  }
-  if (OB_SUCC(ret)) {
-    PALF_LOG(TRACE, "before ensure_memory_layout_correct_", KPC(this), K(in_read_size), K(remain_valid_data_size));
-    // memmove tail valid part data to header
-    do_memove_(tmp_read_buf, pos, remain_valid_data_size);
-    read_buf_ = tmp_read_buf;
-    PALF_LOG(TRACE, "after ensure_memory_layout_correct_", KPC(this), K(in_read_size), K(remain_valid_data_size));
-  }
-  return ret;
-}
-
-void DiskIteratorStorage::do_memove_(ReadBuf &dst, const int64_t pos, int64_t &valid_tail_part_size)
-{
-  valid_tail_part_size = lower_align(get_valid_data_len_() - pos, LOG_DIO_ALIGN_SIZE);
-  OB_ASSERT(valid_tail_part_size >= 0);
-  if (false == read_buf_.is_valid()) {
-    // do nothing
-    PALF_LOG(TRACE, "src is invalid, no need memove", K(dst), K(read_buf_), KPC(this), K(pos));
-  } else {
-    OB_ASSERT(valid_tail_part_size < dst.buf_len_);
-    MEMMOVE(dst.buf_, read_buf_.buf_ + pos, valid_tail_part_size);
-    PALF_LOG(TRACE, "do_memove_ success", K(dst), KPC(this), K(valid_tail_part_size), K(pos));
-    if (read_buf_ != dst) {
-      PALF_LOG(TRACE, "src is not same as dst, need free src", K(dst), KPC(this));
-      free_read_buf(read_buf_);
-    }
-  }
-}
 } // end namespace palf
 } // end namespace oceanbase

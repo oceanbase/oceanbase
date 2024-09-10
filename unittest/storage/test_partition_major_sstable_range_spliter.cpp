@@ -258,7 +258,7 @@ void TestPartitionMajorSSTableRangeSliter::SetUp()
 {
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   if (!is_inited_) {
-    OB_SERVER_BLOCK_MGR.super_block_.body_.macro_block_size_ = 1;
+    OB_STORAGE_OBJECT_MGR.super_block_.body_.macro_block_size_ = 1;
 
     // major sstable
     major_sstable_.set_table_type(ObITable::MAJOR_SSTABLE);
@@ -359,7 +359,7 @@ void TestPartitionMajorSSTableRangeSliter::inner_test_split_ranges(
   ObMockPartitionMajorSSTableRangeSpliter range_spliter;
 
   // set macro block meta
-  int64_t occupy_size = macro_block_count * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t occupy_size = macro_block_count * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   set_major_sstable_meta(macro_block_count, occupy_size, row_count);
   if (macro_block_count > 0) {
     ASSERT_EQ(OB_SUCCESS, set_major_sstable_macro_blocks(macro_block_str));

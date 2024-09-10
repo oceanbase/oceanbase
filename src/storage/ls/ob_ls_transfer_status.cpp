@@ -245,7 +245,8 @@ int ObLSTransferStatus::enable_upper_trans_calculation_(const share::SCN op_scn)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx data table in tx table is nullptr.", K(ret));
   } else {
-    tx_table->enable_upper_trans_calculation(op_scn);
+    (void)ls_->clear_keep_alive_smaller_scn_info();
+    (void)tx_table->enable_upper_trans_calculation(op_scn);
     TRANS_LOG(INFO, "enable upper trans calculation", KPC(ls_), K(guard), KPC(this));
   }
 

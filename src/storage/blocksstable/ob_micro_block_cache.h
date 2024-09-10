@@ -35,20 +35,23 @@ namespace blocksstable
 {
 
 class ObIMicroBlockIOCallback;
+
+enum class ObMicroBlockCacheKeyMode : int8_t
+{
+  PHYSICAL_KEY_MODE = 0,
+  LOGICAL_KEY_MODE = 1,
+  MAX_MODE
+};
+
 class ObMicroBlockCacheKey : public common::ObIKVCacheKey
 {
 public:
-  ObMicroBlockCacheKey(
-      const uint64_t tenant_id,
-      const MacroBlockId &macro_id,
-      const int64_t offset,
-      const int64_t size);
-  ObMicroBlockCacheKey(
-      const uint64_t tenant_id,
-      const ObMicroBlockId &block_id);
   ObMicroBlockCacheKey();
+  ObMicroBlockCacheKey(uint64_t tenant_id, const blocksstable::ObMicroIndexInfo &micro_index_info);
   ObMicroBlockCacheKey(const ObMicroBlockCacheKey &other);
   virtual ~ObMicroBlockCacheKey();
+  ObMicroBlockCacheKey &operator=(const ObMicroBlockCacheKey&) = delete;
+  int assign(const ObMicroBlockCacheKey &other);
   virtual bool operator ==(const ObIKVCacheKey &other) const;
   virtual uint64_t get_tenant_id() const;
   virtual uint64_t hash() const;
@@ -58,11 +61,38 @@ public:
            const MacroBlockId &block_id,
            const int64_t offset,
            const int64_t size);
-  const ObMicroBlockId &get_micro_block_id() const { return block_id_; }
-  TO_STRING_KV(K_(tenant_id), K_(block_id));
+  void set(const uint64_t tenant_id,
+           const ObMicroBlockId &micro_id);
+  void set(const uint64_t tenant_id,
+           const ObLogicMicroBlockId &logic_micro_id,
+           const int64_t data_checksum);
+  inline bool is_valid() const
+  {
+    return (ObMicroBlockCacheKeyMode::PHYSICAL_KEY_MODE == mode_ && tenant_id_ > 0 && block_id_.is_valid()) ||
+           (ObMicroBlockCacheKeyMode::LOGICAL_KEY_MODE == mode_ && tenant_id_ > 0 && logic_micro_id_.is_valid());
+  }
+  inline bool is_logic_key() const { return ObMicroBlockCacheKeyMode::LOGICAL_KEY_MODE == mode_; }
+  inline ObMicroBlockCacheKeyMode get_mode() const{ return mode_; }
+  inline const ObMicroBlockId& get_micro_block_id() const
+  {
+    OB_ASSERT(ObMicroBlockCacheKeyMode::PHYSICAL_KEY_MODE == mode_);
+    return block_id_;
+  }
+  inline const ObLogicMicroBlockId& get_logic_micro_id() const
+  {
+    OB_ASSERT(ObMicroBlockCacheKeyMode::LOGICAL_KEY_MODE == mode_);
+    return logic_micro_id_;
+  }
+  inline int64_t get_data_checksum() const { return data_checksum_; }
+  TO_STRING_KV(K_(mode), K_(tenant_id), K_(block_id), K_(logic_micro_id), K_(data_checksum));
 private:
+  ObMicroBlockCacheKeyMode mode_;
   uint64_t tenant_id_;
-  ObMicroBlockId block_id_;
+  union {
+    ObMicroBlockId block_id_;
+    ObLogicMicroBlockId logic_micro_id_;
+  };
+  int64_t data_checksum_;
 };
 
 class ObMicroBlockCacheValue : public common::ObIKVCacheValue
@@ -80,12 +110,9 @@ public:
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const;
   inline const ObMicroBlockData& get_block_data() const { return block_data_; }
   inline ObMicroBlockData& get_block_data() { return block_data_; }
-  bool need_free() const {return alloc_by_block_io_; }
-  void set_alloc_by_block_io() { alloc_by_block_io_ = true; }
   TO_STRING_KV(K_(block_data));
 private:
   ObMicroBlockData block_data_;
-  bool alloc_by_block_io_;  // TODO: @lvling to be removed
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockCacheValue);
 };
@@ -211,11 +238,16 @@ public:
 class ObIMicroBlockIOCallback : public common::ObIOCallback
 {
 public:
-  ObIMicroBlockIOCallback();
+  ObIMicroBlockIOCallback(const common::ObIOCallbackType type);
   virtual ~ObIMicroBlockIOCallback();
   virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size);
   virtual ObIAllocator *get_allocator() { return allocator_; }
   void set_micro_des_meta(const ObIndexBlockRowHeader *idx_row_header);
+  OB_INLINE void set_logic_micro_id_and_checksum(const ObLogicMicroBlockId &logic_micro_id, const int64_t data_checksum)
+  {
+    logic_micro_id_ = logic_micro_id;
+    data_checksum_ = data_checksum;
+  }
   OB_INLINE void set_rowkey_col_descs(const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
   {
     rowkey_col_descs_ = rowkey_col_descs;
@@ -228,8 +260,11 @@ protected:
       const char *buffer,
       const int64_t offset,
       const int64_t size,
+      const ObLogicMicroBlockId &logic_micro_id,
+      const int64_t data_checksum,
       const ObMicroBlockCacheValue *&micro_block,
       common::ObKVCacheHandle &cache_handle);
+  int get_macro_block_reader(const bool use_tl_reader, ObMacroBlockReader *&reader);
 private:
   int read_block_and_copy(
       const ObMicroBlockHeader &header,
@@ -249,6 +284,8 @@ protected:
   uint64_t tenant_id_;
   MacroBlockId block_id_;
   int64_t offset_;
+  ObLogicMicroBlockId logic_micro_id_;
+  int64_t data_checksum_;
   ObMicroBlockDesMeta block_des_meta_;
   bool use_block_cache_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
@@ -264,7 +301,10 @@ public:
   virtual int64_t size() const;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual const char *get_data() override;
+  int process_without_tl_reader(const char *data_buffer, const int64_t size);
   TO_STRING_KV("callback_type:", "ObAsyncSingleMicroBlockIOCallback", KP_(micro_block), K_(cache_handle), K_(offset), K_(block_des_meta));
+private:
+  int process(const char *data_buffer, const int64_t size, const bool use_tl_reader);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAsyncSingleMicroBlockIOCallback);
   friend class ObIMicroBlockCache;
@@ -281,7 +321,10 @@ public:
   virtual int64_t size() const;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual const char *get_data() override;
+  int process_without_tl_reader(const char *data_buffer, const int64_t size);
   TO_STRING_KV("callback_type:", "ObMultiDataBlockIOCallback", K_(io_ctx), K_(offset));
+private:
+  int process(const char *data_buffer, const int64_t size, const bool use_tl_reader);
 private:
   friend class ObDataMicroBlockCache;
   int set_io_ctx(const ObMultiBlockIOParam &io_param);
@@ -341,21 +384,21 @@ public:
   ObIMicroBlockCache() {}
   virtual ~ObIMicroBlockCache() {}
   int get_cache_block(
-      const uint64_t tenant_id,
-      const MacroBlockId block_id,
-      const int64_t offset,
-      const int64_t size,
+      const ObMicroBlockCacheKey &key,
       ObMicroBlockBufferHandle &handle);
   int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
       const ObMicroIndexInfo& idx_row,
       const bool use_cache,
-      ObMacroBlockHandle &macro_handle,
-      ObIAllocator *allocator);
+      ObStorageObjectHandle &macro_handle,
+      ObIAllocator *allocator,
+      const bool is_major_macro_preread = false);
   virtual int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
+      const ObLogicMicroBlockId &logic_micro_id,
+      const int64_t data_checksum,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) = 0;
@@ -365,6 +408,7 @@ public:
   virtual int put_cache_block(
       const ObMicroBlockDesMeta &des_meta,
       const char *raw_block_buf,
+      const int64_t buf_size,
       const ObMicroBlockCacheKey &key,
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
@@ -388,14 +432,15 @@ protected:
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
       const ObMicroIndexInfo& idx_row,
-      ObMacroBlockHandle &macro_handle,
-      ObIMicroBlockIOCallback &callback);
+      ObStorageObjectHandle &macro_handle,
+      ObIMicroBlockIOCallback &callback,
+      const bool is_major_macro_preread = false);
   int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
       const ObMultiBlockIOParam &io_param,
       const bool use_cache,
-      ObMacroBlockHandle &macro_handle,
+      ObStorageObjectHandle &macro_handle,
       ObIMicroBlockIOCallback &callback);
 private:
   OB_INLINE virtual void inc_cache_miss() = 0;
@@ -416,10 +461,12 @@ public:
       const MacroBlockId &macro_id,
       const ObMultiBlockIOParam &io_param,
       const bool use_cache,
-      ObMacroBlockHandle &macro_handle);
+      ObStorageObjectHandle &macro_handle);
   int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
+      const ObLogicMicroBlockId &logic_micro_id,
+      const int64_t data_checksum,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) override;
@@ -428,6 +475,7 @@ public:
   virtual int put_cache_block(
       const ObMicroBlockDesMeta &des_meta,
       const char *raw_block_buf,
+      const int64_t buf_size,
       const ObMicroBlockCacheKey &key,
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
@@ -467,12 +515,15 @@ public:
   int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
+      const ObLogicMicroBlockId &logic_micro_id,
+      const int64_t data_checksum,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) override;
   virtual int put_cache_block(
       const ObMicroBlockDesMeta &des_meta,
       const char *raw_block_buf,
+      const int64_t buf_size,
       const ObMicroBlockCacheKey &key,
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,

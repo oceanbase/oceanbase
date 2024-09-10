@@ -198,7 +198,7 @@ int ObIMicroBlockReader::filter_white_filter(
       }
       case sql::WHITE_OP_IN: {
         bool is_existed = false;
-        if (OB_FAIL(filter.exist_in_datum_set(datum, is_existed))) {
+        if (OB_FAIL(filter.exist_in_set(datum, is_existed))) {
           LOG_WARN("Failed to check object in hashset", K(ret), K(datum));
         } else if (is_existed) {
           filtered = false;

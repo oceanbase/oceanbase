@@ -518,43 +518,45 @@ int ObSSTableSecMetaIterator::get_micro_block(
     LOG_WARN("Invalid parameters to locate micro block", K(ret), K(macro_id), K(idx_row_header));
   }
 
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(block_cache_->get_cache_block(
-      tenant_id_,
-      macro_id,
-      idx_row_header.get_block_offset() + nested_offset,
-      idx_row_header.get_block_size(),
-      data_handle.cache_handle_))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-      LOG_WARN("Fail to get micro block handle from cache", K(ret), K(idx_row_header));
-    } else {
-      // Cache miss, async IO
-      ObMicroIndexInfo idx_info;
-      idx_info.row_header_ = &idx_row_header;
-      idx_info.nested_offset_ = nested_offset;
-      data_handle.allocator_ = &io_allocator_;
-      // TODO: @saitong.zst not safe here, remove tablet_handle from SecMeta prefetch interface, disable cache decoders
-      if (OB_FAIL(block_cache_->prefetch(
-          tenant_id_,
-          macro_id,
-          idx_info,
-          prefetch_flag_.is_use_block_cache(),
-          data_handle.io_handle_,
-          &io_allocator_))) {
-        LOG_WARN("Fail to prefetch with async io", K(ret));
+  if (OB_SUCC(ret)) {
+    ObMicroBlockCacheKey key;
+    idx_row_header.has_valid_logic_micro_id() ?
+      key.set(tenant_id_, idx_row_header.get_logic_micro_id(), idx_row_header.get_data_checksum()) :
+      key.set(tenant_id_, macro_id, idx_row_header.get_block_offset() + nested_offset, idx_row_header.get_block_size());
+    if (OB_FAIL(block_cache_->get_cache_block(key, data_handle.cache_handle_))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("Fail to get micro block handle from cache", K(ret), K(idx_row_header));
       } else {
-        data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
+        // Cache miss, async IO
+        ObMicroIndexInfo idx_info;
+        idx_info.row_header_ = &idx_row_header;
+        idx_info.nested_offset_ = nested_offset;
+        data_handle.allocator_ = &io_allocator_;
+        // TODO: @saitong.zst not safe here, remove tablet_handle from SecMeta prefetch interface, disable cache decoders
+        if (OB_FAIL(block_cache_->prefetch(
+            tenant_id_,
+            macro_id,
+            idx_info,
+            prefetch_flag_.is_use_block_cache(),
+            data_handle.io_handle_,
+            &io_allocator_))) {
+          LOG_WARN("Fail to prefetch with async io", K(ret));
+        } else {
+          data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
+        }
       }
+    } else {
+      data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
     }
-  } else {
-    data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
+    LOG_DEBUG("get cache block", K(ret), K(key), K(macro_id), K(idx_row_header));
   }
 
   if (OB_SUCC(ret)) {
     data_handle.macro_block_id_ = macro_id;
-    data_handle.micro_info_.offset_ = idx_row_header.get_block_offset() + nested_offset;
-    data_handle.micro_info_.size_ = idx_row_header.get_block_size();
+    data_handle.micro_info_.set(idx_row_header.get_block_offset() + nested_offset,
+                                idx_row_header.get_block_size(),
+                                idx_row_header.get_logic_micro_id(),
+                                idx_row_header.get_data_checksum());
     const bool deep_copy_key = true;
     if (OB_FAIL(idx_row_header.fill_micro_des_meta(deep_copy_key, data_handle.des_meta_))) {
       LOG_WARN("Fail to fill deserialize meta", K(ret));

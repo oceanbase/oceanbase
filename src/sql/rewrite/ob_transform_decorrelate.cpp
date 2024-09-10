@@ -491,17 +491,10 @@ int ObTransformDecorrelate::check_lateral_inline_view_validity(TableItem *table_
   } else if (check_status) {
     is_valid = false;
     OPT_TRACE("lateral inline view select expr contain subquery");
-  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(table_item->exec_params_,
-                                                                     ref_query,
-                                                                     check_status))) {
-    LOG_WARN("failed to is joined table conditions correlated", K(ret));
-  } else if (check_status) {
-    is_valid = false;
-    OPT_TRACE("lateral inline view contain correlated on condition");
-  } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(table_item->exec_params_,
-                                                                *ref_query,
-                                                                check_status))) {
-    LOG_WARN("failed to check if subquery contain correlated subquery", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::is_from_item_correlated(table_item->exec_params_,
+                                                               *ref_query,
+                                                               check_status))) {
+    LOG_WARN("failed to check if from items contains correlated subquery", K(ret));
   } else if (check_status) {
     is_valid = false;
     OPT_TRACE("lateral inline view contain correlated table item");

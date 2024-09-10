@@ -28,6 +28,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/scn.h"
+#include "share/ob_kv_parser.h"
 
 namespace oceanbase
 {
@@ -425,6 +426,9 @@ const char *const OB_STR_SRC_TENANT_NAME = "src_tenant_name";
 const char *const OB_STR_AUX_TENANT_NAME = "aux_tenant_name";
 const char *const OB_STR_TARGET_TENANT_NAME = "target_tenant_name";
 const char *const OB_STR_TARGET_TENANT_ID = "target_tenant_id";
+const char *const OB_STR_MAX_IOPS = "max_iops";
+const char *const OB_STR_MAX_BANDWIDTH = "max_bandwidth";
+const char *const OB_STR_MAX_IOPS_AND_MAX_BANDWIDTH = "max_iops, max_bandwidth";
 const char *const OB_STR_TABLE_LIST = "table_list";
 const char *const OB_STR_TABLE_LIST_META_INFO = "table_list_meta_info";
 
@@ -911,6 +915,7 @@ public:
       const char *authorization,
       const char *extension);
   int get_authorization_info(char *authorization, const int64_t length) const;
+  int get_unencrypted_authorization_info(char *authorization, const int64_t length) const;
 
 private:
 #ifdef OB_BUILD_TDE_SECURITY
@@ -938,6 +943,9 @@ public:
   int set(const char *root_path, const ObBackupStorageInfo *storage_info);
   int set_without_decryption(const common::ObString &backup_dest);
   void reset();
+  int reset_access_id_and_access_key(
+      const char *access_id, const char *access_key);
+  ObStorageType get_device_type() const;
   bool is_valid() const;
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
@@ -1570,6 +1578,8 @@ public:
   {
     return compatible >= COMPATIBLE_VERSION_1 && compatible < COMPATIBLE_VERSION_4;
   }
+  static bool is_allow_quick_restore(const Compatible &compatible);
+  static bool is_not_allow_quick_restore(const Compatible &compatible);
   void reset();
   bool is_key_valid() const;
   bool is_valid() const;
@@ -1588,6 +1598,15 @@ public:
   bool is_backup_set_not_support_quick_restore() const
   {
     return is_backup_set_not_support_quick_restore(backup_compatible_);
+  }
+
+  bool is_allow_quick_restore() const
+  {
+    return is_allow_quick_restore(backup_compatible_);
+  }
+  bool is_not_allow_quick_restore() const
+  {
+    return is_not_allow_quick_restore(backup_compatible_);
   }
 
   TO_STRING_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
@@ -1780,6 +1799,60 @@ int backup_time_to_strftime(const int64_t &ts_s, char *buf, const int64_t buf_le
 int backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos);
 
 inline uint64_t trans_scn_to_second(const SCN &scn) { return scn.convert_to_ts() / 1000 / 1000; }
+
+struct ObBackupDestAttribute
+{
+  ObBackupDestAttribute() { reset(); }
+  void reset()
+  {
+    MEMSET(access_id_, 0, sizeof(access_id_));
+    MEMSET(access_key_, 0, sizeof(access_key_));
+    max_iops_ = 0;
+    max_bandwidth_ = 0;
+  }
+
+  TO_STRING_KV(K_(max_iops), K_(max_bandwidth));
+  char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
+  char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];
+  int64_t max_iops_;
+  int64_t max_bandwidth_;
+};
+
+class ObBackupDestAttributeParser
+{
+public:
+  static int parse(const common::ObString &str, ObBackupDestAttribute &option);
+
+private:
+  static int parse_(const char *str, ObBackupDestAttribute &option);
+public:
+  class ExtraArgsCb : public share::ObKVMatchCb
+  {
+  public:
+    ExtraArgsCb(ObBackupDestAttribute &option);
+    int match(const char *key, const char *value);
+    bool check() const;
+  private:
+    typedef int (*Setter)(const char *val, ObBackupDestAttribute &option);
+    static int set_access_id_(const char *val, ObBackupDestAttribute &option);
+    static int set_access_key_(const char *val, ObBackupDestAttribute &option);
+    static int set_max_iops_(const char *val, ObBackupDestAttribute &option);
+    static int set_max_bandwidth_(const char *val, ObBackupDestAttribute &option);
+  private:
+    ObBackupDestAttribute &option_;
+    struct Action {
+      const char *key_;
+      Setter setter_;
+      bool required_;
+    };
+    const static int ACTION_CNT = 4;
+    static Action actions_[ACTION_CNT];
+    bool is_set_[ACTION_CNT];
+  };
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDestAttributeParser);
+};
 
 struct ObBackupTableListItem final
 {

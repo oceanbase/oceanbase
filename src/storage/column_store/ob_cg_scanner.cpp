@@ -393,7 +393,6 @@ int ObCGScanner::inner_filter(
         }
       }
     }
-
     if (OB_SUCC(ret)) {
       ObMicroIndexInfo &index_info = prefetcher_.current_micro_info();
       const ObCSRange &row_range = index_info.get_row_range();
@@ -494,7 +493,7 @@ int ObCGRowScanner::init(
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc len_array_buf", K(ret), K(sql_batch_size));
     } else if (FALSE_IT(len_array_ = reinterpret_cast<uint32_t *>(len_array_buf))) {
-    } else if (!iter_param.enable_pd_aggregate()) {
+    } else if (!iter_param.enable_pd_aggregate() || use_new_format) {
       bool need_padding = common::is_pad_char_to_full_length(access_ctx.sql_mode_);
       for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; i++) {
         col_param = nullptr;
@@ -590,14 +589,14 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
   }
   if (count > 0 && datum_infos_.count() > 0) {
     if (iter_param_->op_->enable_rich_format_) {
-      LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
+      LOG_DEBUG("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
                 "new format datums",
                 sql::ToStrVectorHeader(*datum_infos_.at(0).expr_,
                                        iter_param_->op_->get_eval_ctx(),
                                        nullptr,
                                        sql::EvalBound(datum_offset + count, true)));
     } else {
-      LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
+      LOG_DEBUG("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
                 "datums", ObArrayWrap<ObDatum>(datum_infos_.at(0).datum_ptr_, datum_offset + count));
     }
   }

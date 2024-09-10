@@ -613,6 +613,15 @@ inline bool is_available_index_status(const ObIndexStatus index_status)
 
 const char *ob_index_status_str(ObIndexStatus status);
 
+inline bool is_local_vec_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_VEC_ROWKEY_VID_LOCAL ||
+         index_type == INDEX_TYPE_VEC_VID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL ||
+         index_type == INDEX_TYPE_VEC_INDEX_ID_LOCAL ||
+         index_type == INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL;
+}
+
 inline bool is_local_fts_index(const ObIndexType index_type)
 {
   return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL ||
@@ -737,13 +746,19 @@ inline bool is_built_in_vec_index(const ObIndexType index_type)
 {
   return is_vec_rowkey_vid_type(index_type) ||
          is_vec_vid_rowkey_type(index_type) ||
-         is_vec_delta_buffer_type(index_type) ||
+         is_vec_index_id_type(index_type) ||
          is_vec_index_snapshot_data_type(index_type);
 }
 
 inline bool is_vec_index(const ObIndexType index_type)
 {
-  return is_vec_index_id_type(index_type) || is_built_in_vec_index(index_type);
+  return is_vec_delta_buffer_type(index_type) || is_built_in_vec_index(index_type);
+}
+
+inline bool is_built_in_index(const ObIndexType index_type)
+{
+  return is_built_in_vec_index(index_type) ||
+         is_built_in_fts_index(index_type);
 }
 
 inline bool is_index_local_storage(ObIndexType index_type)
@@ -757,6 +772,7 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_SPATIAL_LOCAL == index_type
            || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
            || is_local_fts_index(index_type)
+           || is_local_vec_index(index_type)
            || is_global_local_fts_index(index_type)
            || is_local_multivalue_index(index_type);
 }
@@ -782,7 +798,8 @@ inline bool index_has_tablet(const ObIndexType &index_type)
         || INDEX_TYPE_SPATIAL_GLOBAL == index_type
         || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
         || is_fts_index(index_type)
-        || is_multivalue_index(index_type);
+        || is_multivalue_index(index_type)
+        || is_vec_index(index_type);
 }
 
 struct ObTenantTableId
@@ -3416,6 +3433,30 @@ int ObPartitionUtils::get_end_(
   }
   return ret;
 }
+
+enum class ObVectorRefreshMethod : int64_t
+{
+  REFRESH_COMPLETE = 0,
+  REFRESH_DELTA = 1,
+  REBUILD_COMPLETE = 2,
+  MAX,
+};
+
+enum class ObVectorIndexOrganization : int64_t
+{
+  IN_MEMORY_NEIGHBOR_GRAPH = 0,
+  NEIGHBOR_PARTITION = 1,
+};
+
+enum class ObVetcorIndexDistanceMetric : int64_t
+{
+  EUCLIDEAN = 0,
+  EUCLIDEAN_SQUARED = 1,
+  DOT = 2,
+  COSINE = 3,
+  MANHATTAN = 4,
+  HAMMING = 5,
+};
 
 enum class ObMLogPurgeMode : int64_t
 {

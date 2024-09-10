@@ -280,6 +280,8 @@ int ObAdminServerExecutor::execute(int argc, char *argv[])
 #endif
   } else if (OB_FAIL(client_.get_proxy(srv_proxy_))) {
     COMMON_LOG(WARN, "get_proxy failed", K(ret));
+  } else if (OB_FAIL(prepare_decoder())) {
+    COMMON_LOG(WARN, "fail to prepare_decoder", K(ret));
   } else {
     srv_proxy_.set_server(dst_server_);
     srv_proxy_.set_timeout(timeout_);

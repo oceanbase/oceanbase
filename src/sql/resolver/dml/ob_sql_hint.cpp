@@ -2438,8 +2438,8 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
                  OB_ISNULL(index_schema)) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
-      } else if (index_schema->is_fts_index()) {
-        // just ignore domain index
+      } else if (index_schema->is_fts_index() || index_schema->is_vec_index()) {
+        // just ignore fts && vector index
       } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
         LOG_WARN("fail to get index name", K(index_name), K(ret));
       }

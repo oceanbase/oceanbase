@@ -50,7 +50,9 @@ ObLSRestoreTaskMgr::ObLSRestoreTaskMgr()
     high_pri_wait_tablet_set_(),
     restore_state_handler_(nullptr),
     force_reload_(false),
-    final_reload_(false)
+    final_reload_(false),
+    has_checked_leader_done_(false),
+    is_follower_restore_from_leader_(false)
 {
 }
 
@@ -76,6 +78,8 @@ int ObLSRestoreTaskMgr::init(ObILSRestoreState *state_handler, const share::ObLS
   } else {
     restore_state_handler_ = state_handler;
     ls_id_ = ls_id;
+    is_follower_restore_from_leader_ = GCTX.is_shared_storage_mode()
+                                       && state_handler->get_restore_status().is_restore_major_data();
     is_inited_ = true;
   }
 
@@ -475,6 +479,7 @@ void ObLSRestoreTaskMgr::switch_to_leader()
   clear_tablets_to_restore();
   set_force_reload();
   final_reload_ = false;
+  has_checked_leader_done_ = false;
   LOG_INFO("handle switch to leader", K_(ls_id));
 }
 
@@ -484,6 +489,7 @@ void ObLSRestoreTaskMgr::switch_to_follower()
   clear_tablets_to_restore();
   set_noneed_redo_failed_tablets_();
   final_reload_ = false;
+  has_checked_leader_done_ = false;
   LOG_INFO("handle switch to follower", K_(ls_id));
 }
 
@@ -493,6 +499,7 @@ void ObLSRestoreTaskMgr::leader_switched()
   clear_tablets_to_restore();
   set_noneed_redo_failed_tablets_();
   final_reload_ = false;
+  has_checked_leader_done_ = false;
   LOG_INFO("handle leader switched", K_(ls_id));
 }
 
@@ -592,6 +599,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
   int ret = OB_SUCCESS;
   ObLSTabletService *ls_tablet_svr = nullptr;
   ObLS *ls = nullptr;
+  bool is_follower = is_follower_();
   int64_t unfinished_tablet_cnt = 0;
   if (OB_ISNULL(ls = restore_state_handler_->get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -669,7 +677,8 @@ int ObLSRestoreTaskMgr::reload_tablets_()
 
   if (OB_SUCC(ret)) {
     // If no tablets to restore are found, mark 'final_reload_' true.
-    if (has_no_tablets_to_restore()) {
+    if (has_no_tablets_to_restore()
+        && (!is_follower || !is_follower_restore_from_leader_ || has_checked_leader_done_)) {
       final_reload_ = true;
       LOG_INFO("no tablets to restore are found, set final reload", K_(ls_id));
     } else {
@@ -705,6 +714,19 @@ int ObLSRestoreTaskMgr::check_need_reload_tablets_(bool &reload)
   } else if (!has_no_tablets_to_restore() || !has_no_tablets_restoring()) {
   } else if (final_reload_) {
     LOG_DEBUG("final reload is set, need not reload", K_(ls_id), K(ls_restore_status), "is_follower", is_follower_());
+  } else if (is_follower_() && is_follower_restore_from_leader_) {
+    // follower can reload tablets only if leader has been restored except at RESTORE_MAJOR.
+    bool finish = true;
+    if (OB_FAIL(restore_state_handler_->check_leader_restore_finish(finish))) {
+      LOG_WARN("fail to check leader restore finish", K(ret), KPC_(restore_state_handler));
+    } else if (!finish) {
+      has_checked_leader_done_ = false;
+      LOG_DEBUG("wait leader restore finish", K_(ls_id), K(ls_restore_status));
+    } else {
+      has_checked_leader_done_ = true;
+      reload = true;
+      LOG_INFO("follower need reload tablets", K_(ls_id), K(ls_restore_status));
+    }
   } else {
     reload = true;
     LOG_INFO("leader need reload tablets", K_(ls_id), K(ls_restore_status));
@@ -728,6 +750,7 @@ int ObLSRestoreTaskMgr::check_tablet_need_discard_when_reload_(
     // 1. inner tablet
     // 2. restored tablet
     // 3. empty shell tablet
+    bool is_follower = is_follower_();
     bool is_finish = false;
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     const ObTabletID &tablet_id = tablet_meta.tablet_id_;
@@ -745,6 +768,11 @@ int ObLSRestoreTaskMgr::check_tablet_need_discard_when_reload_(
     } else if (is_finish) {
       discard = true;
       LOG_DEBUG("skip restored tablet", K(tablet_id), K(ls_restore_status), "ha_status", tablet_meta.ha_status_);
+    } else if (!is_follower_restore_from_leader_) {
+    } else if (is_follower && !has_checked_leader_done_) {
+      // The follower does not load tablets to restore before leader has been restored.
+      discard = true;
+      LOG_DEBUG("skip tablet to restore before leader has been restored.", K(tablet_id), K(ls_restore_status), "ha_status", tablet_meta.ha_status_);
     }
   }
 

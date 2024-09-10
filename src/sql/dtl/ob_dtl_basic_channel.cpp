@@ -182,7 +182,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
       write_buf_use_time_(0),
       send_use_time_(0),
       msg_count_(0),
-      result_info_guard_()
+      result_info_guard_(),
+      meta_(nullptr)
 {
   ObRandom rand;
   hash_val_ = rand.get();
@@ -218,7 +219,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
           times_(0),
           write_buf_use_time_(0),
           send_use_time_(0),
-          msg_count_(0)
+          msg_count_(0),
+          meta_(nullptr)
 {
   // dtl创建时候的server版本决定发送老的ser方式还是新的chunk row store方式
   use_crs_writer_ = true;
@@ -987,6 +989,7 @@ int ObDtlBasicChannel::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &vector_fixed_msg_writer_;
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_row_msg_writer_.set_row_meta(meta_);
         msg_writer_ = &vector_row_msg_writer_;
       } else if (DtlWriterType::VECTOR_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &vector_msg_writer_;
@@ -1100,6 +1103,9 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
       write_buffer_ = nullptr;
       LOG_WARN("failed to init message writer", K(ret));
     } else {
+      if (VECTOR_ROW_WRITER == msg_writer_->type()) {
+        (static_cast<ObDtlVectorRowMsgWriter *> (msg_writer_))->set_row_meta(meta_);
+      }
       if (OB_NOT_NULL(dfc_)) {
         write_buffer_->set_dfo_key(dfc_->get_dfo_key());
         write_buffer_->set_sqc_id(dfc_->get_sender_sqc_info().sqc_id_);
@@ -1358,7 +1364,7 @@ int ObDtlDatumMsgWriter::serialize()
 //-----------------start ObDtlVectorRowMsgWrite-------------
 ObDtlVectorRowMsgWriter::ObDtlVectorRowMsgWriter() :
   type_(VECTOR_ROW_WRITER), write_buffer_(nullptr), block_(nullptr),
-  block_buffer_(nullptr), row_meta_(), row_cnt_(0), write_ret_(OB_SUCCESS)
+  block_buffer_(nullptr), meta_(nullptr), row_cnt_(0), write_ret_(OB_SUCCESS)
 {}
 
 ObDtlVectorRowMsgWriter::~ObDtlVectorRowMsgWriter()
@@ -1402,7 +1408,10 @@ int ObDtlVectorRowMsgWriter::need_new_buffer(
       serialize_need_size = ObTempRowStore::Block::min_blk_size<true>(0);
       need_size = serialize_need_size;
     } else {
-      if (OB_FAIL(ObTempRowStore::RowBlock::calc_row_size(*row, row_meta_, *ctx, serialize_need_size))) {
+      if (OB_ISNULL(meta_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get meta", K(ret));
+      } else if (OB_FAIL(ObTempRowStore::RowBlock::calc_row_size(*row, *meta_, *ctx, serialize_need_size))) {
         LOG_WARN("failed to calc row store size", K(ret));
       }
       need_size = ObTempRowStore::Block::min_blk_size<true>(serialize_need_size);
@@ -1422,7 +1431,7 @@ void ObDtlVectorRowMsgWriter::reset()
   write_buffer_ = nullptr;
   row_cnt_ = 0;
   block_buffer_ = nullptr;
-  row_meta_.reset();
+  meta_ = nullptr;
 }
 
 int ObDtlVectorRowMsgWriter::serialize()

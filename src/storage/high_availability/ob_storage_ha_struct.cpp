@@ -870,8 +870,8 @@ bool ObMigrationOpArg::is_valid() const
       && src_.is_valid()
       && dst_.is_valid()
       && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_)
-      && ObMigrationOpType::MIGRATE_LS_OP == type_ ?
-         (src_.get_server() != dst_.get_server()) : true;
+      && (ObMigrationOpType::MIGRATE_LS_OP == type_ ?
+         (src_.get_server() != dst_.get_server()) : true);
 }
 
 void ObMigrationOpArg::reset()
@@ -2034,6 +2034,83 @@ bool ObLogicTabletID::operator != (const ObLogicTabletID &other) const
   return !(*this == other);
 }
 
+ObLSMemberListInfo::ObLSMemberListInfo()
+  : learner_list_(),
+    leader_addr_(),
+    member_list_()
+{
+}
+
+void ObLSMemberListInfo::reset()
+{
+  learner_list_.reset();
+  leader_addr_.reset();
+  member_list_.reset();
+}
+
+bool ObLSMemberListInfo::is_valid() const
+{
+  return leader_addr_.is_valid() && !member_list_.empty();
+}
+
+int ObLSMemberListInfo::assign(const ObLSMemberListInfo &info)
+{
+  int ret = OB_SUCCESS;
+  if (!info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(info));
+  } else if (OB_FAIL(member_list_.assign(info.member_list_))) {
+    LOG_WARN("failed to assign member list", K(ret), K(info));
+  } else {
+    learner_list_ = info.learner_list_;
+    leader_addr_ = info.leader_addr_;
+  }
+  return ret;
+}
+
+ObMigrationChooseSrcHelperInitParam::ObMigrationChooseSrcHelperInitParam()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    local_clog_checkpoint_scn_(),
+    arg_(),
+    info_()
+{
+}
+
+void ObMigrationChooseSrcHelperInitParam::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  local_clog_checkpoint_scn_.reset();
+  arg_.reset();
+  info_.reset();
+}
+
+bool ObMigrationChooseSrcHelperInitParam::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && ls_id_.is_valid()
+      && local_clog_checkpoint_scn_.is_valid()
+      && arg_.is_valid()
+      && info_.is_valid();
+}
+
+int ObMigrationChooseSrcHelperInitParam::assign(const ObMigrationChooseSrcHelperInitParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(param));
+  } else if (OB_FAIL(info_.assign(param.info_))) {
+    LOG_WARN("failed to assign param", K(ret), K(param));
+  } else {
+    tenant_id_ = param.tenant_id_;
+    ls_id_ = param.ls_id_;
+    local_clog_checkpoint_scn_ = param.local_clog_checkpoint_scn_;
+    arg_ = param.arg_;
+  }
+  return ret;
+}
 }
 }
 

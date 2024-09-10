@@ -161,6 +161,7 @@ private:
                             ObRawExpr *&date_unit_expr);
   int process_geo_func_node(const ParseNode *node, ObRawExpr *&expr);
   int set_geo_func_name(ObSysFunRawExpr *func_expr, const ObItemType func_type);
+  int process_vector_func_node(const ParseNode *node, ObRawExpr *&expr);
   bool is_win_expr_valid_scope(ObStmtScope scope) const;
   int check_and_canonicalize_window_expr(ObRawExpr *expr);
   int process_ident_node(const ParseNode &node, ObRawExpr *&expr);
@@ -217,7 +218,7 @@ private:
   int resolve_dblink_udf_expr(const ParseNode *node,
                               ObQualifiedName &column_ref,
                               ObRawExpr *&expr);
-
+  int process_array_contains_node(const ParseNode *node, ObRawExpr *&expr);
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);

@@ -471,7 +471,6 @@ int ObTabletBackfillTXDag::init_tablet_handle()
   return ret;
 }
 
-
 /******************ObTabletBackfillTXTask*********************/
 ObTabletBackfillTXTask::ObTabletBackfillTXTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
@@ -825,6 +824,8 @@ int ObTabletBackfillTXTask::check_major_sstable_(
   } else if (OB_ISNULL(tablet) || !table_store_wrapper.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check major sstable get invalid argument", K(ret), KP(tablet), K(table_store_wrapper));
+  } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+    //skip check tablet sstable when tablet in restore status
   } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
     // do nothing
   } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {
@@ -873,6 +874,7 @@ int ObTabletBackfillTXTask::split_sstable_array_by_backfill_(
   int ret = OB_SUCCESS;
   non_backfill_sstable.reset();
   backfill_sstable.reset();
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   max_end_major_scn.set_min();
   DEBUG_SYNC(STOP_TRANSFER_LS_LOGICAL_TABLE_REPLACED);
 
@@ -897,9 +899,10 @@ int ObTabletBackfillTXTask::split_sstable_array_by_backfill_(
         if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
         } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
           LOG_WARN("failed to get sstable meta handle", K(ret));
-        } else if (!sstable->contain_uncommitted_row()
+        } else if (!is_shared_storage
+            && (!sstable->contain_uncommitted_row()
               || (!sst_meta_hdl.get_sstable_meta().get_filled_tx_scn().is_max()
-                && sst_meta_hdl.get_sstable_meta().get_filled_tx_scn() >= backfill_tx_ctx_->backfill_scn_)) {
+                && sst_meta_hdl.get_sstable_meta().get_filled_tx_scn() >= backfill_tx_ctx_->backfill_scn_))) {
           FLOG_INFO("sstable do not contain uncommitted row, no need backfill tx", KPC(sstable),
               "backfill scn", backfill_tx_ctx_->backfill_scn_);
           if (OB_FAIL(non_backfill_sstable.push_back(table_handle))) {
@@ -1878,8 +1881,8 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
     // init tablet merge dag param
     static_param.dag_param_.ls_id_ = ls_id_;
     static_param.dag_param_.merge_type_ = compaction::ObMergeType::MDS_MINI_MERGE;
-    static_param.report_ = nullptr;
     static_param.dag_param_.tablet_id_ = tablet_info_.tablet_id_;
+    static_param.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
     // init version range and sstable
     tablet_merge_ctx.tablet_handle_ = tablet_handle_;
     static_param.scn_range_.start_scn_ = tablet->get_mds_checkpoint_scn();
@@ -1890,7 +1893,7 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
     static_param.create_snapshot_version_ = 0;
     static_param.need_parallel_minor_merge_ = false;
 
-    if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info(false/*need_check*/))) {
+    if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_id_), K(tablet_info_), K(tablet_merge_ctx));
     }
   }
@@ -2001,6 +2004,8 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
   int ret = OB_SUCCESS;
   ObLSService *ls_service = nullptr;
   compaction::ObStaticMergeParam &static_param = tablet_merge_ctx.static_param_;
+  bool unused_finish_flag = false;
+  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2017,7 +2022,6 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
     // init tablet merge dag param
     static_param.dag_param_.ls_id_ = ls_id_;
     static_param.dag_param_.merge_type_ = compaction::ObMergeType::MDS_MINOR_MERGE;
-    static_param.report_ = nullptr;
     static_param.dag_param_.tablet_id_ = tablet_info_.tablet_id_;
     // init version range and sstable
     tablet_merge_ctx.tablet_handle_ = tablet_handle_;
@@ -2032,11 +2036,13 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
       LOG_WARN("failed to prepare merge tables", K(ret), K(mds_sstable_array));
     } else if (OB_FAIL(tablet_merge_ctx.prepare_schema())) {
       LOG_WARN("failed to prepare schema", K(ret), K(tablet_merge_ctx));
-    } else if (OB_FAIL(tablet_merge_ctx.build_ctx_after_init())) {
+    } else if (OB_FAIL(tablet_merge_ctx.build_ctx_after_init(unused_finish_flag))) {
       LOG_WARN("fail to build ctx after init", K(ret), K(tablet_merge_ctx));
     } else if (1 != tablet_merge_ctx.parallel_merge_ctx_.get_concurrent_cnt()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("parallel merge concurrent cnt should be 1", K(ret), K(tablet_merge_ctx));
+    } else if (is_shared_storage_mode) {
+      static_param.set_full_merge_and_level(true/*is_full_merge*/);
     }
   }
   return ret;
@@ -2255,7 +2261,21 @@ int ObTabletBackfillMergeCtx::prepare_schema()
   return ret;
 }
 
+int ObTabletBackfillMergeCtx::cal_merge_param()
+{
+  int ret = OB_SUCCESS;
+  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet backfill merge ctx do not init", K(ret));
+  } else if (is_shared_storage_mode) {
+    static_param_.set_full_merge_and_level(true/*is_full_merge*/);
+  } else {
+    static_param_.set_full_merge_and_level(false/*is_full_merge*/);
+  }
+  return ret;
+}
 
 }
 }
-

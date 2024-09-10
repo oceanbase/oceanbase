@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_WRITE_BUFFER_POOL_H_
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_WRITE_BUFFER_POOL_H_
 
-#include "lib/lock/ob_spin_rwlock.h"
+#include "lib/lock/ob_tc_rwlock.h"
 #include "lib/container/ob_array.h"
 #include "lib/queue/ob_link.h"
 #include "lib/queue/ob_link_queue.h"
@@ -241,11 +241,14 @@ public:
   int64_t get_max_page_num();
   int64_t get_data_page_num();
   int64_t get_dirty_page_num();
+  int64_t get_write_back_page_num();
   int64_t get_dirty_meta_page_num();
   int64_t get_dirty_data_page_num();
   int64_t get_dirty_page_percentage();
+  int64_t get_cannot_be_evicted_page_percentage();
   int64_t get_max_data_page_num();
   int64_t get_meta_page_num();
+  int64_t get_free_data_page_num();
   void print_statistics();
 private:
   static double MAX_DATA_PAGE_USAGE_RATIO; // control data pages ratio, can be preempted by meta pages

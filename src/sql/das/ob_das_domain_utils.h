@@ -84,7 +84,7 @@ class ObDomainDMLIterator
 {
 public:
   static const int64_t DEFAULT_DOMAIN_ROW_COUNT = 32;
-  typedef common::ObSEArray<common::ObNewRow, DEFAULT_DOMAIN_ROW_COUNT> ObDomainIndexRow;
+  typedef common::ObSEArray<blocksstable::ObDatumRow*, DEFAULT_DOMAIN_ROW_COUNT> ObDomainIndexRow;
 
   static int create_domain_dml_iterator(
       common::ObIAllocator &allocator,
@@ -104,8 +104,8 @@ public:
   }
   void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef, const IntFixedArray *row_projector);
   void set_row_projector(const IntFixedArray *row_projector) { row_projector_ = row_projector; }
-  int get_next_domain_row(ObNewRow *&row);
-  int get_next_domain_rows(ObNewRow *&row, int64_t &row_count);
+  int get_next_domain_row(blocksstable::ObDatumRow *&row);
+  int get_next_domain_rows(blocksstable::ObDatumRow *&row, int64_t &row_count);
   bool is_same_domain_type(const ObDASDMLBaseCtDef *das_ctdef) const;
 
   TO_STRING_KV(K_(row_idx), K_(rows), KPC_(row_projector), KPC_(das_ctdef), K_(main_ctdef));

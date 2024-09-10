@@ -70,6 +70,7 @@ int ObInnerTableSchema::user_mvref_stmt_stats_ora_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -120,6 +121,7 @@ int ObInnerTableSchema::proxy_users_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;
@@ -170,6 +172,58 @@ int ObInnerTableSchema::dba_ob_services_ora_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_storage_io_usage_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_STORAGE_IO_USAGE_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_STORAGE_IO_USAGE_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   (   SELECT     NVL(B.PATH, 'LOCAL://') AS PATH,     NVL(B.ENDPOINT, '') AS ENDPOINT,      A.TYPE AS TYPE,     A.TOTAL AS TOTAL   FROM     SYS.ALL_VIRTUAL_STORAGE_IO_USAGE A   LEFT JOIN     SYS.ALL_VIRTUAL_BACKUP_STORAGE_INFO B   ON     A.DEST_ID = B.DEST_ID     AND     A.TENANT_ID = B.TENANT_ID   WHERE     A.TENANT_ID = EFFECTIVE_TENANT_ID()     AND     A.STORAGE_MOD ='BACKUP/ARCHIVE/RESTORE'   )   UNION   (   SELECT     NVL(D.PATH, 'LOCAL://') AS PATH,     NVL(D.ENDPOINT, '') AS ENDPOINT,     C.TYPE AS TYPE,     C.TOTAL AS TOTAL   FROM     SYS.ALL_VIRTUAL_STORAGE_IO_USAGE C   LEFT JOIN     SYS.ALL_VIRTUAL_ZONE_STORAGE_SYS_AGENT D   ON     C.STORAGE_ID = D.STORAGE_ID   WHERE     C.TENANT_ID = EFFECTIVE_TENANT_ID()     AND     C.STORAGE_MOD ='CLOG/DATA'   ) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;

@@ -111,12 +111,16 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_LABEL_SECURITY ON)
   # SPM功能
   ob_define(OB_BUILD_SPM ON)
+  # share storage
+  ob_define(OB_BUILD_SHARED_STORAGE ON)
 
   # oralce
   ob_define(OB_BUILD_ORACLE_PARSER ON)
   ob_define(OB_BUILD_ORACLE_PL ON)
   # dblink
   ob_define(OB_BUILD_DBLINK ON)
+  # odps
+  ob_define(OB_BUILD_CPP_ODPS ON)
   # 仲裁功能
   ob_define(OB_BUILD_ARBITRATION ON)
 
@@ -148,6 +152,10 @@ if(OB_BUILD_LABEL_SECURITY)
   add_definitions(-DOB_BUILD_LABEL_SECURITY)
 endif()
 
+if(OB_BUILD_SHARED_STORAGE)
+  add_definitions(-DOB_BUILD_SHARED_STORAGE)
+endif()
+
 if(OB_BUILD_SPM)
   add_definitions(-DOB_BUILD_SPM)
 endif()
@@ -170,6 +178,10 @@ endif()
 
 if(OB_BUILD_DBLINK)
   add_definitions(-DOB_BUILD_DBLINK)
+endif()
+
+if(OB_BUILD_CPP_ODPS)
+  add_definitions(-DOB_BUILD_CPP_ODPS)
 endif()
 
 # should not use initial-exec for tls-model if building OBCDC.

@@ -42,7 +42,7 @@ private:
   int read_macro_block(const MacroBlockId &macro_id);
 private:
   ObMacroBlockReader macro_reader_;
-  ObMacroBlockHandle macro_handle_;
+  ObStorageObjectHandle macro_handle_;
   ObMacroBlockCommonHeader common_header_;
   const ObBloomFilterMacroBlockHeader *bf_macro_header_;
   bool is_sys_read_;

@@ -21,12 +21,14 @@
 #include "common/row/ob_row.h"
 #include "lib/ob_define.h"
 #include "share/schema/ob_part_mgr_util.h"
+#include "storage/ddl/ob_ddl_seq_generator.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
+using namespace oceanbase::storage;
 
 #define DEFINE_GET_SLICE_FUNCTION(type) \
 template int ObSliceIdxCalc::get_slice_indexes<ObSliceIdxCalc::type, true>(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array, ObBitVector *skip);  \
@@ -1149,6 +1151,22 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*> 
   } else if (OB_FAIL(setup_slice_indexes(eval_ctx))) {
     LOG_WARN("setup slice indexes failed", K(ret));
   } else {
+    if (use_special_null_dist()) {
+      if (nullptr == malloc_alloc_ && OB_FAIL(eval_ctx.exec_ctx_.get_malloc_allocator(malloc_alloc_))) {
+        LOG_WARN("failed to get alloc", K(ret));
+      } else if (nullptr == null_bitmap_) {
+        void *mem = nullptr;
+        if (OB_ISNULL(mem = malloc_alloc_->alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc bitmap", K(ret), K(eval_ctx.max_batch_size_));
+        } else {
+          null_bitmap_ = to_bit_vector(mem);
+          null_bitmap_->reset(batch_size);
+        }
+      } else {
+        null_bitmap_->reset(batch_size);
+      }
+    }
     uint64_t *hash_val = reinterpret_cast<uint64_t *>(slice_indexes_);
     uint64_t default_seed = SLICE_CALC_HASH_SEED;
     for (int64_t i = 0; OB_SUCC(ret) && i < n_keys_; i++) {
@@ -1157,19 +1175,39 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*> 
         LOG_WARN("eval batch failed", K(ret));
       } else {
         const bool is_batch_seed = i > 0;
+        ObDatum *datums = e->locate_batch_datums(eval_ctx);
         hash_funcs_->at(i).batch_hash_func_(hash_val,
-                                            e->locate_batch_datums(eval_ctx),
+                                            datums,
                                             e->is_batch_result(),
                                             skip,
                                             batch_size,
                                             is_batch_seed ? hash_val : &default_seed,
                                             is_batch_seed);
+        for (int64_t i = 0; use_special_null_dist() && i < batch_size; ++i) {
+          if (datums[i].is_null()) {
+            null_bitmap_->set(i);
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      for (int64_t i = 0; i < batch_size; i++) {
-        if (!skip.at(i)) {
-          slice_indexes_[i] = hash_val[i] % task_cnt_;
+      if (!use_special_null_dist()) {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            slice_indexes_[i] = hash_val[i] % task_cnt_;
+          }
+        }
+      } else {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            if (!null_bitmap_->at(i)) {
+              slice_indexes_[i] = hash_val[i] % task_cnt_;
+            } else {
+              slice_indexes_[i] = ObNullDistributeMethod::DROP == null_row_dist_method_
+                                  ? ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW
+                                    : (round_robin_idx_++ % task_cnt_);
+            }
+          }
         }
       }
       indexes = slice_indexes_;
@@ -1196,6 +1234,23 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> &
     ObIVector *vec = NULL;
     const bool all_rows_active = false;
     EvalBound eval_bound(batch_size, all_rows_active);
+    bool has_null = false;
+    if (use_special_null_dist()) {
+      if (nullptr == malloc_alloc_ && OB_FAIL(eval_ctx.exec_ctx_.get_malloc_allocator(malloc_alloc_))) {
+        LOG_WARN("failed to get alloc", K(ret));
+      } else if (nullptr == null_bitmap_) {
+        void *mem = nullptr;
+        if (OB_ISNULL(mem = malloc_alloc_->alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc bitmap", K(ret), K(eval_ctx.max_batch_size_));
+        } else {
+          null_bitmap_ = to_bit_vector(mem);
+          null_bitmap_->reset(batch_size);
+        }
+      } else {
+        null_bitmap_->reset(batch_size);
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < n_keys_; i++) {
       ObExpr *e = hash_dist_exprs_->at(i);
       const bool is_batch_seed = i > 0;
@@ -1206,12 +1261,46 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> &
                                              is_batch_seed ? hash_val : &default_seed,
                                              is_batch_seed))) {
         LOG_WARN("calc murmur hash failed", K(ret));
+      } else if (use_special_null_dist()) {
+        if (vec->has_null()) {
+          if (vec->get_format() == VEC_UNIFORM_CONST) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get invalid foramt", K(ret));
+          } else if (vec->get_format() == VEC_UNIFORM) {
+            ObUniformBase *vec_base = static_cast<ObUniformBase *> (vec);
+            ObDatum *datums = vec_base->get_datums();
+            for (int64_t i = 0; i < batch_size; ++i) {
+              if (datums[i].is_null()) {
+                has_null = true;
+                null_bitmap_->set(i);
+              }
+            }
+          } else {
+            has_null = true;
+            ObBitmapNullVectorBase *vec_base = static_cast<ObBitmapNullVectorBase *> (vec);
+            null_bitmap_->bit_or(*vec_base->get_nulls(), 0, batch_size);
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      for (int64_t i = 0; i < batch_size; i++) {
-        if (!skip.at(i)) {
-          slice_indexes_[i] = hash_val[i] % task_cnt_;
+      if (!use_special_null_dist() || !has_null) {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            slice_indexes_[i] = hash_val[i] % task_cnt_;
+          }
+        }
+      } else {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            if (!null_bitmap_->at(i)) {
+              slice_indexes_[i] = hash_val[i] % task_cnt_;
+            } else {
+              slice_indexes_[i] = ObNullDistributeMethod::DROP == null_row_dist_method_
+                                  ? ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW
+                                    : (round_robin_idx_++ % task_cnt_);
+            }
+          }
         }
       }
       indexes = slice_indexes_;
@@ -1400,6 +1489,7 @@ bool ObSlaveMapPkeyRangeIdxCalc::Compare::operator()(
 int ObSlaveMapPkeyRangeIdxCalc::get_task_idx(
     const int64_t tablet_id,
     const ObPxTabletRange::DatumKey &sort_key,
+    ObEvalCtx &eval_ctx,
     int64_t &task_idx)
 {
   int ret = OB_SUCCESS;
@@ -1426,6 +1516,10 @@ int ObSlaveMapPkeyRangeIdxCalc::get_task_idx(
       LOG_WARN("sort compare failed", K(ret));
     } else {
       const int64_t range_idx = found_it - range_cut.begin();
+      if (nullptr != ddl_slice_id_expr_) {
+        ObTabletSliceParam slice_param(range_cut.count() + 1, range_idx);
+        ddl_slice_id_expr_->locate_datum_for_write(eval_ctx).set_int(slice_param.slice_id_);
+      }
       int64_t ch_idx = -1;
       if (OB_FAIL(calc_ch_idx(range_cut.count() + 1, item->channels_.count(), range_idx, ch_idx))) {
         LOG_WARN("get channel idx failed", K(ret), K(*item), K(range_idx));
@@ -1477,7 +1571,7 @@ int ObSlaveMapPkeyRangeIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> 
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(get_task_idx(tablet_id, sort_key_, slice_idx_array.at(0)))) {
+      if (OB_FAIL(get_task_idx(tablet_id, sort_key_, eval_ctx, slice_idx_array.at(0)))) {
         LOG_WARN("get task idx failed", K(ret), K(tablet_id), K(sort_key_));
       }
     }
@@ -1625,6 +1719,10 @@ int ObRangeSliceIdCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs,
     LOG_WARN("unexpected dist exprs", K(ret));
   } else if (OB_ISNULL(range_) || range_->range_cut_.empty()) {
     slice_idx_array.at(0) = 0;
+    if (nullptr != ddl_slice_id_expr_) {
+      ObTabletSliceParam slice_param(1, 0);
+      ddl_slice_id_expr_->locate_datum_for_write(eval_ctx).set_int(slice_param.slice_id_);
+    }
   } else {
     ObPxTabletRange::DatumKey sort_key;
     ObDatum *datum = nullptr;
@@ -1645,6 +1743,10 @@ int ObRangeSliceIdCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs,
         range_cut.begin(), range_cut.end(), sort_key, sort_cmp);
       const int64_t range_idx = found_it - range_cut.begin();
       slice_idx_array.at(0) = range_idx % task_cnt_;
+      if (nullptr != ddl_slice_id_expr_) {
+        ObTabletSliceParam slice_param(range_->range_cut_.count() + 1, range_idx);
+        ddl_slice_id_expr_->locate_datum_for_write(eval_ctx).set_int(slice_param.slice_id_);
+      }
     }
   }
   return ret;
@@ -1668,6 +1770,13 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*>
       slice_indexes_[idx] = 0;
     }
     indexes = slice_indexes_;
+    if (nullptr != ddl_slice_id_expr_) {
+      ObDatum *ddl_slice_id_datums = ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size);
+      ObTabletSliceParam slice_param(1, 0);
+      for (int64_t idx = 0; idx < batch_size; ++idx) {
+        ddl_slice_id_datums[idx].set_int(slice_param.slice_id_);
+      }
+    }
   } else {
     Compare sort_cmp(&sort_cmp_funs_, &sort_collations_);
     ObPxTabletRange::DatumKey sort_key;
@@ -1679,6 +1788,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*>
       } else {
         batch_info_guard.set_batch_idx(idx);
         ObDatum *datum = nullptr;
+        ObDatum *ddl_slice_id_datum = nullptr;
+        if (nullptr != ddl_slice_id_expr_) {
+          ddl_slice_id_datum = &ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size)[idx];
+        }
         for (int64_t i = 0; i < dist_exprs_->count() && OB_SUCC(ret); ++i) {
           if (OB_ISNULL(dist_exprs_->at(i))) {
             ret = OB_ERR_UNEXPECTED;
@@ -1695,6 +1808,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*>
             range_cut.begin(), range_cut.end(), sort_key, sort_cmp);
           int64_t range_idx = found_it - range_cut.begin();
           slice_indexes_[idx] = range_idx % task_cnt_;
+          if (nullptr != ddl_slice_id_datum) {
+            ObTabletSliceParam slice_param(range_->range_cut_.count() + 1, range_idx);
+            ddl_slice_id_datum->set_int(slice_param.slice_id_);
+          }
         }
         sort_key.reuse();
       }
@@ -1722,6 +1839,13 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> 
       slice_indexes_[idx] = 0;
     }
     indexes = slice_indexes_;
+    if (nullptr != ddl_slice_id_expr_) {
+      ObDatum *ddl_slice_id_datums = ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size);
+      ObTabletSliceParam slice_param(1, 0);
+      for (int64_t idx = 0; idx < batch_size; ++idx) {
+        ddl_slice_id_datums[idx].set_int(slice_param.slice_id_);
+      }
+    }
   } else {
     Compare sort_cmp(&sort_cmp_funs_, &sort_collations_);
     ObPxTabletRange::DatumKey sort_key;
@@ -1739,6 +1863,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> 
       if (skip.at(idx)) {
         continue;
       } else {
+        ObDatum *ddl_slice_id_datum = nullptr;
+        if (nullptr != ddl_slice_id_expr_) {
+          ddl_slice_id_datum = &ddl_slice_id_expr_->locate_datums_for_update(eval_ctx, batch_size)[idx];
+        }
         for (int64_t i = 0; i < dist_exprs_->count() && OB_SUCC(ret); ++i) {
           ObIVector *vec = dist_exprs_->at(i)->get_vector(eval_ctx);
           const char *payload = NULL;
@@ -1755,6 +1883,10 @@ int ObRangeSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> 
             range_cut.begin(), range_cut.end(), sort_key, sort_cmp);
           int64_t range_idx = found_it - range_cut.begin();
           slice_indexes_[idx] = range_idx % task_cnt_;
+          if (nullptr != ddl_slice_id_datum) {
+            ObTabletSliceParam slice_param(range_->range_cut_.count() + 1, range_idx);
+            ddl_slice_id_datum->set_int(slice_param.slice_id_);
+          }
         }
         sort_key.reuse();
       }

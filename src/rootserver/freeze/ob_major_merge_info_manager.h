@@ -20,6 +20,7 @@
 #include "common/storage/ob_freeze_define.h"
 #include "share/ob_rpc_struct.h"
 #include "share/scn.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 
 namespace oceanbase
 {
@@ -65,7 +66,7 @@ public:
     freeze_info_mgr_.reset_freeze_info();
   };
 
-  int set_freeze_info();
+  int set_freeze_info(const ObMajorFreezeReason freeze_reason);
   int get_freeze_info(const share::SCN &frozen_scn,
                       share::ObFreezeInfo &frozen_status);
 

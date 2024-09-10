@@ -62,6 +62,77 @@ typedef common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> ObPwjCo
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> ObPlanPwjConstraint;
 class ObShardingInfo;
 
+struct ObPCResourceMapRule
+{
+public:
+  ObPCResourceMapRule() :
+    resource_group_(),
+    res_map_rule_id_(common::OB_INVALID_ID),
+    res_map_rule_param_idx_(common::OB_INVALID_INDEX)
+  {}
+
+  void reset()
+  {
+    resource_group_.reset();
+    res_map_rule_id_ = common::OB_INVALID_ID;
+    res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
+  }
+
+  void shadow_copy(const ObPCResourceMapRule &resource_map_rule)
+  {
+    resource_group_ = resource_map_rule.resource_group_;
+    res_map_rule_id_ = resource_map_rule.res_map_rule_id_;
+    res_map_rule_param_idx_ = resource_map_rule.res_map_rule_param_idx_;
+  }
+  int deep_copy(const ObPCResourceMapRule &resource_map_rule, ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    common::ob_write_string(allocator, resource_map_rule.get_resource_group(), resource_group_);
+    res_map_rule_id_ = resource_map_rule.res_map_rule_id_;
+    res_map_rule_param_idx_ = resource_map_rule.res_map_rule_param_idx_;
+    return ret;
+  }
+
+  void set_resource_group(const common::ObString &resource_group)
+  {
+    resource_group_ = resource_group;
+  }
+
+  void set_column_map_rule(uint64_t res_map_rule_id, int64_t res_map_rule_param_idx)
+  {
+    res_map_rule_id_ = res_map_rule_id;
+    res_map_rule_param_idx_ = res_map_rule_param_idx;
+  }
+
+  inline bool use_hint_control_resource()
+  {
+    return !resource_group_.empty();
+  }
+
+  inline const ObString &get_resource_group() const
+  {
+    return resource_group_;
+  }
+  inline uint64_t get_res_map_rule_id() const
+  {
+    return res_map_rule_id_;
+  }
+  inline int64_t get_res_map_rule_param_idx() const
+  {
+    return res_map_rule_param_idx_;
+  }
+
+  TO_STRING_KV(K_(resource_group), K_(res_map_rule_id), K_(res_map_rule_param_idx));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPCResourceMapRule);
+  // currently only PlanSet in plan cache module will have a deep copy version string to classify
+  // plan
+  common::ObString resource_group_;
+  uint64_t res_map_rule_id_;
+  int64_t res_map_rule_param_idx_;
+};
+
 struct LocationConstraint
 {
   enum InclusionType {
@@ -404,7 +475,8 @@ public:
                                bool with_mv,
                                bool with_global_index = true,
                                bool with_domain_index = true,
-                               bool with_spatial_index = true);
+                               bool with_spatial_index = true,
+                               bool with_vector_index = true);
   int get_table_mlog_schema(const uint64_t table_id, const ObTableSchema *&mlog_schema);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;
@@ -630,8 +702,7 @@ public:
   ObSpmCacheCtx spm_ctx_;
   bool is_execute_call_stmt_;
   bool enable_sql_resource_manage_;
-  uint64_t res_map_rule_id_;
-  int64_t res_map_rule_param_idx_;
+  ObPCResourceMapRule resource_map_rule_;
   uint64_t res_map_rule_version_;
   bool is_text_ps_mode_;
   uint64_t first_plan_hash_;
@@ -689,8 +760,6 @@ public:
       is_prepare_stmt_(false),
       has_nested_sql_(false),
       tz_info_(NULL),
-      res_map_rule_id_(common::OB_INVALID_ID),
-      res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
       optimizer_features_enable_version_(0),
       udf_flag_(0),
@@ -736,8 +805,6 @@ public:
     is_prepare_stmt_ = false;
     has_nested_sql_ = false;
     tz_info_ = NULL;
-    res_map_rule_id_ = common::OB_INVALID_ID;
-    res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
     root_stmt_ = NULL;
     udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
@@ -834,8 +901,6 @@ public:
   bool is_prepare_stmt_;
   bool has_nested_sql_;
   const common::ObTimeZoneInfo *tz_info_;
-  uint64_t res_map_rule_id_;
-  int64_t res_map_rule_param_idx_;
   ObDMLStmt *root_stmt_;
   uint64_t optimizer_features_enable_version_;
   union {

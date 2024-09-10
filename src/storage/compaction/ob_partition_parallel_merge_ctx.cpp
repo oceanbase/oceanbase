@@ -428,7 +428,7 @@ int ObParallelMergeCtx::get_concurrent_cnt(
   } else if (0 == tablet_size) {
     concurrent_cnt = 1;
   } else {
-    const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    const int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     if (((macro_block_cnt * macro_block_size + tablet_size - 1) / tablet_size) <= max_merge_thread) {
       concurrent_cnt = (macro_block_cnt * macro_block_size + tablet_size - 1) /
                        tablet_size;

@@ -59,10 +59,12 @@ public:
   ObMicroBlockReader()
     : ObIMicroBlockFlatReader(),
       ObIMicroBlockReader()
-  {}
+  {
+    reader_type_ = Reader;
+  }
   virtual ~ObMicroBlockReader()
   { reset(); }
-  virtual ObReaderType get_type() override { return Reader; }
+  // virtual ObReaderType get_type() override { return Reader; }
   virtual void reset();
   virtual int init(
       const ObMicroBlockData &block_data,
@@ -170,7 +172,8 @@ public:
       const int64_t row_cap,
       ObDatumRow &row_buf,
       sql::ObExprPtrIArray &exprs,
-      sql::ObEvalCtx &eval_ctx);
+      sql::ObEvalCtx &eval_ctx,
+      const bool need_init_vector);
   virtual bool has_lob_out_row() const override final
   { return nullptr != header_ && header_->has_lob_out_row(); }
 

@@ -1180,6 +1180,12 @@ int ObLogMetaManager::set_column_meta_(
         mysql_type = obmysql::MYSQL_TYPE_ORA_XML;
       } else if (ObRoaringBitmapType == col_type) {
         mysql_type = obmysql::MYSQL_TYPE_ROARINGBITMAP;
+      } else if (ObCollectionSQLType == col_type) {
+        // get extended_type_info from column schema and determine it is array or vector
+        const ObIArray<ObString> &extended_type_info = column_schema.get_extended_type_info();
+        if (OB_FAIL(ObArrayUtil::get_mysql_type(extended_type_info, mysql_type))) {
+          LOG_ERROR("get_mysql_type fail", KR(ret));
+        }
       }
 
       col_meta->setScale(column_schema.get_data_scale());

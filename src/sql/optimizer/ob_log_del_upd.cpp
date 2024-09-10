@@ -309,6 +309,7 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     table_location_uncertain_(false),
     is_pdml_update_split_(false),
     pdml_partition_id_expr_(NULL),
+    ddl_slice_id_expr_(NULL),
     pdml_is_returning_(false),
     err_log_define_(),
     need_alloc_part_id_expr_(false),
@@ -518,6 +519,28 @@ int ObLogDelUpd::generate_pdml_partition_id_expr()
   return ret;
 }
 
+int ObLogDelUpd::generate_ddl_slice_id_expr()
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *ddl_slice_expr = nullptr;
+  ObLogicalOperator *sort_op = nullptr;
+  ObLogicalOperator *consumer = nullptr;
+  ObLogExchange *producer = nullptr;
+  ObOptimizerContext &ctx = get_plan()->get_optimizer_context();
+  if (OB_FAIL(ObRawExprUtils::build_pseudo_ddl_slice_id(ctx.get_expr_factory(), *ctx.get_session_info(), ddl_slice_expr))) {
+    LOG_WARN("build pseudo ddl slice id expr failed", K(ret));
+  } else if (OB_ISNULL(sort_op = get_child(ObLogicalOperator::first_child)) || sort_op->get_type() != log_op_def::LOG_SORT // sort op
+      || OB_ISNULL(consumer = sort_op->get_child(ObLogicalOperator::first_child)) || consumer->get_type() != log_op_def::LOG_EXCHANGE // exchange consumer
+      || OB_ISNULL(producer = static_cast<ObLogExchange *>(consumer->get_child(ObLogicalOperator::first_child))) || !producer->is_producer()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get ddl slice id producer failed", K(ret), KPC(sort_op), KPC(consumer), KPC(producer));
+  } else {
+    ddl_slice_id_expr_ = ddl_slice_expr;
+    producer->set_ddl_slice_id_expr(ddl_slice_expr);
+  }
+  return ret;
+}
+
 int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator *op,
                                             const uint64_t loc_tid,
                                             const uint64_t ref_tid,
@@ -656,6 +679,11 @@ int ObLogDelUpd::inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_c
   } else if (is_pdml() && need_alloc_part_id_expr_ &&
              OB_FAIL(generate_pdml_partition_id_expr())) {
     LOG_WARN("failed to allocate partition id expr", K(ret));
+  } else if (get_plan()->get_optimizer_context().is_online_ddl()
+      && !get_plan()->get_optimizer_context().is_heap_table_ddl()
+      && GCTX.is_shared_storage_mode()
+      && OB_FAIL(generate_ddl_slice_id_expr())) {
+    LOG_WARN("failed to allocate ddl slice id expr", K(ret));
   } else if (OB_FAIL(find_trans_info_producer())) {
     LOG_WARN("failed to find trasn info producer", K(ret));
   } else if (OB_FAIL(generate_rowid_expr_for_trigger())) {
@@ -667,6 +695,8 @@ int ObLogDelUpd::inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_c
   } else if (OB_FAIL(append(all_exprs, view_check_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (NULL != pdml_partition_id_expr_ && OB_FAIL(all_exprs.push_back(pdml_partition_id_expr_))) {
+    LOG_WARN("failed to push back exprs", K(ret));
+  } else if (NULL != ddl_slice_id_expr_ && OB_FAIL(all_exprs.push_back(ddl_slice_id_expr_))) {
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(all_exprs, produced_trans_exprs_))) {
     LOG_WARN("failed to push back exprs", K(ret), K(produced_trans_exprs_));
@@ -1592,6 +1622,9 @@ int ObLogDelUpd::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   } else if (NULL != pdml_partition_id_expr_ &&
     OB_FAIL(replace_expr_action(replacer, pdml_partition_id_expr_))) {
     LOG_WARN("failed to replace pdml partition id expr", K(ret));
+  } else if (NULL != ddl_slice_id_expr_ &&
+    OB_FAIL(replace_expr_action(replacer, ddl_slice_id_expr_))) {
+    LOG_WARN("failed to replace ddl slice id expr", K(ret));
   }
   return ret;
 }
@@ -1624,8 +1657,14 @@ int ObLogDelUpd::replace_dml_info_exprs(
     } else if (NULL != index_dml_info->new_rowid_expr_ &&
       OB_FAIL(replace_expr_action(replacer, index_dml_info->new_rowid_expr_))) {
       LOG_WARN("failed to replace new rowid expr", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(replacer, index_dml_info->column_old_values_exprs_))) {
-      LOG_WARN("failed to replace column old values exprs ", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->column_old_values_exprs_.count(); ++i) {
+      ObRawExpr *&expr = index_dml_info->column_old_values_exprs_.at(i);
+      if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_vid_column()) {
+        // just skip, nothing to do.
+      } else if (OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
+        LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->assignments_.count(); ++i) {
       if (OB_FAIL(replace_expr_action(replacer, index_dml_info->assignments_.at(i).expr_))) {

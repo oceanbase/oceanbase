@@ -113,6 +113,11 @@ public:
                                   const int64_t old_log_disk_size,
                                   const int64_t new_log_disk_size,
                                   int64_t &allowed_log_disk_size);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int update_tenant_data_disk_size(const uint64_t tenant_id,
+                                    const int64_t new_data_disk_size);
+  int update_safe_time_config();
+#endif
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);
   int update_tenant_config(uint64_t tenant_id);
   int update_palf_config();
@@ -161,19 +166,11 @@ public:
   inline bool has_synced() const;
 
   void set_workers_per_cpu(int64_t v);
-  int write_create_tenant_abort_slog(uint64_t tenant_id);
-  int write_delete_tenant_commit_slog(uint64_t tenant_id);
-  int clear_persistent_data(const uint64_t tenant_id);
   int check_if_unit_id_exist(const uint64_t unit_id, bool &exist);
 
 protected:
   void run1();
   int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
-
-  int write_create_tenant_prepare_slog(const ObTenantMeta &meta);
-  int write_create_tenant_commit_slog(uint64_t tenant_id);
-  int write_delete_tenant_prepare_slog(uint64_t tenant_id);
-  int write_update_tenant_unit_slog(const share::ObUnitInfoGetter::ObTenantConfig &unit);
   int construct_meta_for_hidden_sys(ObTenantMeta &meta);
   int construct_meta_for_virtual_tenant(const uint64_t tenant_id,
                                         const double min_cpu,
@@ -197,8 +194,11 @@ protected:
         STEP_BEGIN = 0, // begin
         STEP_CTX_MEM_CONFIG_SETTED = 1, // set_tenant_ctx_idle succ
         STEP_LOG_DISK_SIZE_PINNED = 2,  // pin log disk size succ
-        STEP_TENANT_NEWED = 3, // new tenant succ
-        STEP_WRITE_PREPARE_SLOG = 4, // write_prepare_create_tenant_slog succ
+#ifdef OB_BUILD_SHARED_STORAGE
+        STEP_DATA_DISK_ALLOCATED = 3, // data disk allocate succ
+#endif
+        STEP_CREATION_PREPARED = 4, // finish prepare create tenant
+        STEP_TENANT_NEWED = 5, // new tenant succ
         STEP_FINISH,
       };
 

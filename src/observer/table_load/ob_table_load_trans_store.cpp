@@ -317,7 +317,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
   return ret;
 }
 
-int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const ObNewRow &row)
+int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -330,22 +330,13 @@ int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const ObN
   } else {
     ObTableLoadSequenceNo seq_no(0); // pdml导入的行目前不存在主键冲突，先都用一个默认的seq_no
     SessionContext &session_ctx = session_ctx_array_[0];
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
-      ObStorageDatum &datum = session_ctx.datum_row_.storage_datums_[i];
-      const ObObj &obj = row.cells_[i];
-      if (OB_FAIL(datum.from_obj_enhance(obj))) {
-        LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_,
-                                           tablet_id,
-                                           seq_no,
-                                           session_ctx.datum_row_))) {
-        LOG_WARN("fail to write row", KR(ret), K(tablet_id));
-      } else {
-        ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, 1);
-      }
+    if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_,
+                                          tablet_id,
+                                          seq_no,
+                                          row))) {
+      LOG_WARN("fail to write row", KR(ret), K(tablet_id), K(row));
+    } else {
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, 1);
     }
   }
   return ret;

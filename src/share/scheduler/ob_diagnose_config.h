@@ -42,6 +42,20 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_ADD_FAILED, ObDiagnoseInfoPrio::
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task process failed",
     1, {"errno"})
+#ifdef OB_BUILD_SHARED_STORAGE
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_START_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "failed to start ss merge",
+    2, {"broadcast_version", "error_code"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "ls can't schedule merge",
+    2, {"ls_weak_read_ts_ready", "ls_state_is_abnormal"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_MERGE_HUNG, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "ls merge maybe hung",
+    2, {"compaction_scn", "ls_state"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_SCHEDULE_DAG, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "ls failed to schedule verify ckm dag",
+    3, {"compaction_scn", "dag_type", "error_code"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_TABLET_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "tablet can't schedule merge",
+    3, {"data_complete", "last_major_snapshot", "is_transfer_tablet"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_UPDATE_TALBET_STATE_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "update tablet state failed",
+    3, {"compaction_scn", "is_verified", "is_merged"})
+#endif
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif
 
@@ -79,7 +93,8 @@ enum ObDiagnoseTabletType {
   TYPE_RS_MAJOR_MERGE, // for tenant major in RS
   TYPE_TX_TABLE_MERGE,
   TYPE_MDS_MINI_MERGE,
-  TYPE_BATCH_FREEZE,
+  TYPE_BATCH_EXECUTE, // for batch execute dag
+  TYPE_S2_REFRESH, // for shared storage
   TYPE_DIAGNOSE_TABLET_MAX
 };
 

@@ -74,8 +74,10 @@ public:
   int64_t get_node_cnt() const { return node_cnt_; }
   int64_t get_member_cnt() const { return member_cnt_; }
   bool disable_hot_cache() const { return disable_hot_cache_; }
-
+  static void enable_shared_storage() { need_shared_storage_ = true; };
+  static bool has_shared_storage() { return need_shared_storage_; };
 private:
+  static int init_log_shared_storage_();
   static int generate_sorted_server_list_(const int64_t node_cnt);
   static int init_global_kv_cache_();
 protected:
@@ -98,6 +100,9 @@ public:
   static observer::ObSignalHandle *signal_handle_;
   static bool need_add_arb_server_;
   static bool disable_hot_cache_;
+  static bool need_shared_storage_;
+  static int64_t tenant_id_;
+  static ObTenantIOManager *tio_manager_;
 };
 
 } // end unittest

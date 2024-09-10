@@ -34,6 +34,8 @@ public:
     COMPACTION_REPORT,
     RS_REPAPRE_UNFINISH_TABLE_IDS,
     RS_FINISH_CUR_LOOP,
+    LS_STATE_CHANGED,
+    CHOOSE_NEW_EXEC_SVR,
     COMPACTION_EVENT_MAX,
   };
   static const char *get_comp_event_str(enum ObCompactionEvent event);
@@ -41,6 +43,8 @@ public:
   {
     TENANT_RS = 0,
     STORAGE,
+    LS_LEADER,
+    LS_SVR,
     COMPACTION_ROLE_MAX
   };
   static const char *get_comp_role_str(enum ObCompactionRole role);
@@ -134,6 +138,10 @@ PUSH_COMPACTION_EVENT(MTL_ID(), MAJOR_MERGE, compaction_scn, event, ObServerComp
 
 #define ADD_RS_COMPACTION_EVENT(compaction_scn, event, timestamp, ...) \
 PUSH_COMPACTION_EVENT(MTL_ID(), MAJOR_MERGE, compaction_scn, event, ObServerCompactionEvent::TENANT_RS, timestamp, __VA_ARGS__)
+
+#define ADD_ROLE_COMPACTION_EVENT(role, compaction_scn, event, timestamp, ...) \
+PUSH_COMPACTION_EVENT(MTL_ID(), MAJOR_MERGE, compaction_scn, event, role, timestamp, __VA_ARGS__)
+
 
 #define DEFINE_COMPACTION_EVENT_PRINT_KV(n)                                    \
   template <LOG_TYPENAME_TN##n>                                                \

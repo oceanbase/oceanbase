@@ -30,7 +30,7 @@
 #include "storage/ls/ob_ls.h"
 #include "share/ob_ls_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase
@@ -128,7 +128,8 @@ int ObSharedMacroBlockMgr::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("shared macro block handle has been inited", K(ret));
-  } else if (FALSE_IT(common_header.set_attr(ObMacroBlockCommonHeader::MacroBlockType::SharedSSTableData))) {
+  } else if (OB_FAIL(common_header.set_attr(ObMacroBlockCommonHeader::MacroBlockType::SharedSSTableData))) {
+    LOG_WARN("fail to set type for common header", K(ret), K(common_header));
   } else if (OB_ISNULL(common_header_buf_ = reinterpret_cast<char*>(ob_malloc(header_size_,
       ObMemAttr(MTL_ID(), ObModIds::OB_MACRO_FILE))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -156,6 +157,8 @@ int ObSharedMacroBlockMgr::start()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSharedMacroBlockMgr hasn't been inited", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
+    // no need to do small sstable optimization under shared-storage
   } else if (OB_FAIL(TG_START(tg_id_))) {
     LOG_WARN("fail to start sstable defragmentation thread", K(ret), K(tg_id_));
   } else if (OB_FAIL(TG_SCHEDULE(tg_id_, defragmentation_task_, DEFRAGMENT_DELAY_US, true/*repeat*/))) {
@@ -700,7 +703,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
       old_sstable.get_end_scn(),
       data_desc))) {
     LOG_WARN("fail to prepare data desc", K(ret), "merge_type", merge_type_to_str(merge_type), K(tablet.get_snapshot_version()));
-  } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(), nullptr, ObSSTableIndexBuilder::DISABLE))) {
+  } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(), ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("fail to init sstable index builder", K(ret), K(data_desc));
   } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, nullptr, old_sstable.is_ddl_merge_sstable()))) {
     LOG_WARN("fail to init index block rebuilder", K(ret));
@@ -717,6 +720,8 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     LOG_WARN("fail to close index block rebuilder", K(ret));
   } else if (OB_FAIL(sstable_index_builder.close(res))) {
     LOG_WARN("fail to close sstable index builder", K(ret));
+  } else if (FALSE_IT(res.root_macro_seq_ = old_meta_handle.get_sstable_meta().get_basic_meta().root_macro_seq_)) {
+    // not proper, but like merge, res.root_macro_seq_ is assigned after sstable index builder close
   } else if (OB_FAIL(create_new_sstable(allocator, res, old_sstable, block_info, new_sstable))) {
     LOG_WARN("fail to create new sstable", K(ret), K(tablet.get_tablet_meta()), K(old_sstable));
   } else if (OB_FAIL(new_sstable.set_upper_trans_version(allocator, old_sstable.get_upper_trans_version()))) {
@@ -788,6 +793,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           merge_type,
           snapshot_version,
           cluster_version,
+          tablet.get_tablet_meta().micro_index_clustered_,
           end_scn))) {
       LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
         K(tablet), "merge_type", merge_type_to_str(merge_type), K(snapshot_version), K(cluster_version));
@@ -818,6 +824,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           merge_type,
           snapshot_version,
           cluster_version,
+          tablet.get_tablet_meta().micro_index_clustered_,
           end_scn,
           cg_schema,
           cg_idx))) {
@@ -867,7 +874,7 @@ int ObSharedMacroBlockMgr::alloc_for_tools(
   if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSSTableIndexBuilder)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory for sstable index builder", K(ret));
-  } else if (FALSE_IT(sstable_index_builder = new (buf) ObSSTableIndexBuilder)) {
+  } else if (FALSE_IT(sstable_index_builder = new (buf) ObSSTableIndexBuilder(false /* not use writer buffer*/))) {
   } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObIndexBlockRebuilder)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
@@ -925,7 +932,7 @@ int ObSharedMacroBlockMgr::read_sstable_block(
 void ObSharedMacroBlockMgr::ObBlockDefragmentationTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  if (ObServerCheckpointSlogHandler::get_instance().is_started() && OB_FAIL(shared_mgr_.defragment())) {
+  if (SERVER_STORAGE_META_SERVICE.is_started() && OB_FAIL(shared_mgr_.defragment())) {
     LOG_WARN("fail to defragment small sstables", K(ret));
   }
 }

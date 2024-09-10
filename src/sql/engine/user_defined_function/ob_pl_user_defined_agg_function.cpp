@@ -231,7 +231,7 @@ int ObPlAggUdfFunction::build_in_params_store(ObObjParam &pl_obj,
       LOG_WARN("failed to push back param", K(ret));
     } else if (obj_params != NULL &&
                OB_FAIL(ObExprUDF::process_in_params(obj_params, param_num, params_desc,
-                                                    params_type_, *udf_params, *allocator_))) {
+                                                    params_type, *udf_params, *allocator_))) {
       LOG_WARN("failed to process in params", K(ret));
     } else {
       LOG_TRACE("succeed to build in params store", K(pl_obj), K(obj_params), K(params_desc),

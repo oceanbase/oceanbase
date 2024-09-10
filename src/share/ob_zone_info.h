@@ -125,6 +125,7 @@ public:
   enum StorageType
   {
     STORAGE_TYPE_LOCAL = 0,
+    STORAGE_TYPE_SHARED_STORAGE = 1,
     STORAGE_TYPE_MAX,
   };
   ObZoneInfo();

@@ -76,6 +76,7 @@ int ObTmpFileTestMetaTree::release_meta_page_(const ObSharedNothingTmpFileMetaIt
     if (OB_FAIL(wbp_->free_page(fd_, page_info.buffer_page_id_,
                 ObTmpFilePageUniqKey(page_info.page_level_, page_index_in_level), next_page_id))) {
       STORAGE_LOG(WARN, "fail to free meta page in write cache", KR(ret), K(fd_), K(page_info), K(page_index_in_level));
+    } else if (FALSE_IT(stat_info_.meta_page_free_cnt_++)) {
     } else if (OB_UNLIKELY(start_page_id_in_array != page_info.buffer_page_id_)) {
       //NOTE: pages must be released sequentially (from front to back in array)
       ret = OB_ERR_UNEXPECTED;
@@ -140,6 +141,7 @@ int ObTmpFileTestMetaTree::cache_page_for_write_(
         STORAGE_LOG(WARN, "unexpected page_info", KR(ret), K(fd_), K(page_info), K(level_page_range_array_));
       } else if (OB_FAIL(wbp_->alloc_page(fd_, page_key, new_page_id, new_page_buff))) {
         STORAGE_LOG(WARN, "fail to alloc meta page", KR(ret), K(fd_), K(page_info), K(level_page_range_array_));
+      } else if (FALSE_IT(stat_info_.meta_page_alloc_cnt_++)) {
       } else if (OB_ISNULL(new_page_buff)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected null page buff", KR(ret), K(fd_), KP(new_page_buff));
@@ -213,15 +215,14 @@ int ObTmpFileTestMetaTree::cache_page_for_write_(
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(wbp_->free_page(fd_, new_page_id, page_key, unused_next_page_id))) {
           STORAGE_LOG(WARN, "fail to free meta page", KR(tmp_ret), K(fd_), K(new_page_id), K(page_key));
+        } else {
+          stat_info_.meta_page_free_cnt_++;
         }
       }
       STORAGE_LOG(INFO, "load page to write cache", KR(ret), K(fd_), K(page_info), K(page_key));
     } else {
       //still in write cache
-      if (!is_page_in_write_cache(page_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected page_info", KR(ret), K(fd_), K(page_info));
-      }
+      //do nothing
     }
   }
   return ret;
@@ -1835,6 +1836,7 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert_fail)
   ASSERT_EQ(6, meta_tree_.level_page_range_array_.at(0).cached_page_num_);
   ASSERT_EQ(4, meta_tree_.level_page_range_array_.at(0).evicted_page_num_);
 
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.clear(0, 20 * 128 * ObTmpFileGlobal::PAGE_SIZE));
   delete[] block_buff_1;
   meta_tree_.reset();
   meta_tree_1_.reset();
@@ -1886,6 +1888,7 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_insert_fail_after_array_used)
   ASSERT_EQ(2, meta_tree_.data_item_array_.count());
   ASSERT_EQ(0, meta_tree_.level_page_range_array_.count());
 
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.clear(0, 2 * 128 * ObTmpFileGlobal::PAGE_SIZE));
   meta_tree_.reset();
   STORAGE_LOG(INFO, "================test_tree_insert_fail_after_array_used begin================");
 }
@@ -1909,7 +1912,7 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_insert_fail_after_tree_build)
   ObArray<ObSharedNothingTmpFileDataItem> data_items;
   generate_data_items(item_num, 0/*start virtual page id*/, data_items);
   ASSERT_EQ(item_num, data_items.count());
-  //insert 750 items (insert a array)
+  //insert 361 items (insert a array)
   ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
   ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items));
   ASSERT_EQ(6, meta_tree_.level_page_range_array_.count());
@@ -1939,6 +1942,7 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_insert_fail_after_tree_build)
   ASSERT_EQ(121, meta_tree_.level_page_range_array_.at(0).cached_page_num_);
   ASSERT_EQ(41, meta_tree_.level_page_range_array_.at(1).cached_page_num_);
 
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.clear(0, 363 * 128 * ObTmpFileGlobal::PAGE_SIZE));
   meta_tree_.reset();
   STORAGE_LOG(INFO, "================test_tree_insert_fail_after_tree_build begin================");
 }

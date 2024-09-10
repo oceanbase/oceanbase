@@ -346,52 +346,6 @@ int ObIndexBuildTask::process()
   return ret;
 }
 
-void ObIndexBuildTask::flt_set_task_span_tag() const
-{
-  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
-              ddl_data_table_id, object_id_, ddl_index_table_id, index_table_id_,
-              ddl_is_unique_index, is_unique_index_, ddl_is_global_index, is_global_index_,
-              ddl_schema_version, schema_version_);
-}
-
-void ObIndexBuildTask::flt_set_status_span_tag() const
-{
-  switch (task_status_) {
-  case ObDDLTaskStatus::PREPARE: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::WAIT_TRANS_END: {
-    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_index_table_id, index_table_id_, ddl_schema_version, schema_version_,
-                ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::REDEFINITION: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::VALIDATE_CHECKSUM: {
-    FLT_SET_TAG(ddl_check_unique_snapshot, check_unique_snapshot_, ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::TAKE_EFFECT: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::FAIL: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::SUCCESS: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  default: {
-    break;
-  }
-  }
-}
-
 int ObIndexBuildTask::init(
     const uint64_t tenant_id,
     const int64_t task_id,
@@ -1053,7 +1007,7 @@ bool ObIndexBuildTask::is_create_partitioned_local_index()
 int ObIndexBuildTask::wait_data_complement()
 {
   int ret = OB_SUCCESS;
-    // temporary bypass data complement for fts index
+  // temporary bypass data complement for fts index
   if (share::schema::is_fts_index(create_index_arg_.index_type_)) {
     (void)switch_status(ObDDLTaskStatus::VALIDATE_CHECKSUM, true, ret);
     LOG_INFO("wait data complement finished", K(ret), K(*this));
@@ -1098,7 +1052,7 @@ int ObIndexBuildTask::wait_data_complement()
         state_finished = true;
       }
     }
-    if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index()) {
+    if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index() && !create_index_arg_.is_vec_index()) {
       bool dummy_equal = false;
       bool need_verify_checksum = true;
   #ifdef ERRSIM
@@ -1159,7 +1113,7 @@ int ObIndexBuildTask::wait_local_index_data_complement()
       state_finished = true;
     }
   }
-  if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index()) {
+  if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index() && !create_index_arg_.is_vec_index()) {
     bool dummy_equal = false;
     if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum_without_execution_id(
             tenant_id_, object_id_, index_table_id_, task_id_, false/*index build*/, dummy_equal, root_service_->get_sql_proxy()))) {
@@ -1219,7 +1173,7 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
     LOG_WARN("not init", K(ret));
   } else if (is_unique_index_) {
     need_verify = true;
-  } else if (create_index_arg_.is_spatial_index()) {
+  } else if (create_index_arg_.is_spatial_index() || create_index_arg_.is_vec_index()) {
     need_verify = false;
   } else {
     ObSchemaGetterGuard schema_guard;
@@ -1529,7 +1483,12 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     if (INDEX_STATUS_AVAILABLE == new_status) {
       // For create index syntax, create_index_arg_ will record the user sql, and generate the ddl_stmt_str when nabling index.
       // For alter table add index syntax, create_index_arg_ will not record the user sql, and generate the ddl_stmt_str when generating index schema.
-      arg.ddl_stmt_str_ = create_index_arg_.ddl_stmt_str_;
+      if (index_schema.is_vec_index() && !index_schema.is_vec_delta_buffer_type()) {
+        // do nothing
+        // For create fts index, just record one ddl_stmt_str in the delta buf table which the user can see
+      } else {
+        arg.ddl_stmt_str_ = create_index_arg_.ddl_stmt_str_;
+      }
     }
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);

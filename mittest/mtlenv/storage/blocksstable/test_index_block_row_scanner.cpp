@@ -181,7 +181,7 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   ASSERT_EQ(OB_SUCCESS, raw_idx_scanner.init(
           tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
 
-  ObMacroBlockHandle macro_handle;
+  ObStorageObjectHandle macro_handle;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   int64_t root_row_id = 0;
   const char *index_data_ptr;
@@ -208,7 +208,7 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
       = &reinterpret_cast<const ObMicroBlockCacheValue *>(macro_handle.get_buffer())->get_block_data();
   ASSERT_NE(nullptr, read_block);
 
-  ObMacroBlockHandle raw_block_macro_handle;
+  ObStorageObjectHandle raw_block_macro_handle;
   ASSERT_EQ(OB_SUCCESS, index_block_cache.prefetch(
       table_schema_.get_tenant_id(),
       idx_row_header->get_macro_id(),

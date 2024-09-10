@@ -189,12 +189,13 @@ int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_for_leader_(
   } else if (can_resolve) {
     SCN new_start_scn;
     last_frozen_tablet_memtable->resolve_right_boundary();
-    last_frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
     if (new_tablet_memtable != last_frozen_tablet_memtable) {
       new_start_scn = MAX(last_frozen_tablet_memtable->get_end_scn(),
-                                     last_frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
+                          new_tablet_memtable->get_start_scn());
       if (OB_FAIL(new_tablet_memtable->resolve_left_boundary(new_start_scn))) {
         TRANS_LOG(ERROR, "resolve left boundary failed", KR(ret), K(new_start_scn), KPC(new_tablet_memtable));
+      } else {
+        last_frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
       }
     }
     TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on leader", K(ret),
@@ -271,9 +272,10 @@ int ObTabletMemtableMgr::check_boundary_memtable_(const uint32_t logstream_freez
   } else if (tablet_memtable->is_direct_load_memtable()) {
     if (tablet_memtable->get_end_scn().is_max()) {
       PAUSE();
-      // if end_scn of direct load memtable has not decided, return OB_ENTRY_EXIST and Tablet will reset it to
-      // OB_SUCCESS. Then refresh_and_protect_table(refresh_and_protect_memtable) in StorageTableGuard will retry create
-      // memtable
+      // if end_scn of direct load memtable has not decided, return
+      // OB_ENTRY_EXIST and Tablet will reset it to OB_SUCCESS. Then
+      // refresh_and_protect_memtable_for_write(refresh_and_protect_memtable_for_replay)
+      // in StorageTableGuard will retry create memtable
       ret = OB_ENTRY_EXIST;
     }
   } else if (tablet_memtable->is_data_memtable()) {
@@ -389,19 +391,19 @@ int ObTabletMemtableMgr::resolve_data_memtable_boundary_(ObITabletMemtable *froz
 {
   int ret = OB_SUCCESS;
   if (arg.for_replay_) {
-    SCN new_memtable_start_scn;
     frozen_tablet_memtable->resolve_right_boundary();
     if (new_tablet_memtable != frozen_tablet_memtable) {
-      new_memtable_start_scn =
-          MAX(frozen_tablet_memtable->get_end_scn(), frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
-      if (OB_FAIL(new_tablet_memtable->resolve_left_boundary(new_memtable_start_scn))) {
-        TRANS_LOG(WARN, "resolve left boundary fail", K(ret), K(new_tablet_memtable));
+      if (OB_FAIL(new_tablet_memtable->resolve_left_boundary(
+                    MAX(frozen_tablet_memtable->get_end_scn(),
+                        new_tablet_memtable->get_start_scn())))) {
+        TRANS_LOG(WARN, "resolve left boundary fail", K(ret), K(arg),
+                  KPC(new_tablet_memtable), KPC(frozen_tablet_memtable));
       }
     }
-    TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on replay", KPC(frozen_tablet_memtable));
-  }
-  // for leader, decide the right boundary of frozen memtable
-  else if (OB_FAIL(try_resolve_boundary_on_create_memtable_for_leader_(frozen_tablet_memtable, new_tablet_memtable))) {
+    TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on replay",
+              KPC(frozen_tablet_memtable), KPC(new_tablet_memtable), K(arg));
+  } else if (OB_FAIL(try_resolve_boundary_on_create_memtable_for_leader_(
+                       frozen_tablet_memtable, new_tablet_memtable))) {
     TRANS_LOG(WARN, "try resolve boundary fail", K(ret));
   }
   return ret;
@@ -420,7 +422,7 @@ int ObTabletMemtableMgr::resolve_direct_load_memtable_boundary_(ObITabletMemtabl
     STORAGE_LOG(ERROR, "frozen direct load memtable must have a valid end_scn", KPC(frozen_tablet_memtable));
   } else if (active_tablet_memtable != frozen_tablet_memtable) {
     new_memtable_start_scn =
-        MAX(frozen_tablet_memtable->get_end_scn(), frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
+      MAX(frozen_tablet_memtable->get_end_scn(), active_tablet_memtable->get_start_scn());
     if (OB_FAIL(active_tablet_memtable->resolve_left_boundary(new_memtable_start_scn))) {
       STORAGE_LOG(ERROR, "fail to resolve left boundary", KPC(active_tablet_memtable));
     } else {
@@ -622,8 +624,8 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObITabletMemt
   } else if (OB_FAIL(handle.get_tablet_memtable(active_tablet_memtable))) {
     LOG_WARN("fail to get active memtable", K(ret));
   } else {
-    // set the start_scn of the new memtable
-    int tmp_ret = active_tablet_memtable->resolve_left_boundary(start_scn);
+    int tmp_ret = active_tablet_memtable->resolve_left_boundary(
+      MAX(start_scn, active_tablet_memtable->get_start_scn()));
     if (OB_SUCCESS != tmp_ret) {
       TRANS_LOG(ERROR, "resolve left boundary failed", K(start_scn), KPC(active_tablet_memtable), KPC(tablet_memtable));
     }

@@ -28,12 +28,14 @@ using namespace oceanbase::common;
 /*--------------------------------GLOBAL---------------------------*/
 int init_cos_env()
 {
-  ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+  int ret = OB_SUCCESS;
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "OSS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
   return qcloud_cos::ObCosEnv::get_instance().init(ob_apr_abort_fn);
 }
 
 void fin_cos_env()
 {
+  int ret = OB_SUCCESS;
   // wait doing io finish before destroy cos env.
   const int64_t start_time = ObTimeUtility::current_time();
   const int64_t timeout = ObExternalIOCounter::FLYING_IO_WAIT_TIMEOUT;
@@ -48,7 +50,7 @@ void fin_cos_env()
     flying_io_cnt = ObExternalIOCounter::get_flying_io_cnt();
   }
 
-   ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "COS_GLOBAL_DESTROY", IO_HANDLED_SIZE_ZERO);
   qcloud_cos::ObCosEnv::get_instance().destroy();
 }
 
@@ -67,6 +69,10 @@ struct CosListFilesCbArg
       list_op_(op) {}
 
   ~CosListFilesCbArg() {}
+  int get_dir_path_len() const
+  {
+    return dir_path_.empty() ? 0 : strlen(dir_path_.ptr());
+  }
 };
 
 struct CosListFilesCtx
@@ -102,9 +108,9 @@ static int handle_object_name_cb(qcloud_cos::ObCosWrapper::CosListObjPara &para)
 
     // Returned object name is the whole object path, but we donot need the prefix dir_path.
     // So, we trim the object full path to get object name
-    const int dir_name_str_len = strlen(ctx->dir_path_.ptr());
+    const int dir_name_str_len = ctx->get_dir_path_len();
     int64_t object_size = -1;
-    if (OB_FAIL(c_str_to_int(para.cur_object_size_str_, object_size))) {
+    if (OB_FAIL(c_str_to_int(para.cur_object_size_str_, para.cur_object_size_str_len_, object_size))) {
       OB_LOG(WARN, "fail to get listed cos object size", K(ret), K(para.cur_object_size_str_));
     } else if (OB_FAIL(handle_listed_object(ctx->list_op_,
                                             para.cur_obj_full_path_ + dir_name_str_len,
@@ -138,7 +144,7 @@ static int handle_list_object_ctx(qcloud_cos::ObCosWrapper::CosListObjPara &para
       }
     } else {
       int64_t object_size = -1;
-      if (OB_FAIL(c_str_to_int(para.cur_object_size_str_, object_size))) {
+      if (OB_FAIL(c_str_to_int(para.cur_object_size_str_, para.cur_object_size_str_len_, object_size))) {
         OB_LOG(WARN, "fail to get listed cos object size", K(ret), K(para.cur_object_size_str_));
       } else if (OB_FAIL(ctx->list_ctx_.handle_object(para.cur_obj_full_path_,
                                                       para.full_path_size_,
@@ -233,8 +239,8 @@ int ObStorageCosUtil::get_file_length(const ObString &uri, int64_t &file_length)
   if (OB_FAIL(head_object_meta(uri, obj_meta))) {
     OB_LOG(WARN, "fail to head object meta", K(ret), K(uri));
   } else if (!obj_meta.is_exist_) {
-    ret = OB_BACKUP_FILE_NOT_EXIST;
-    OB_LOG(WARN, "backup file is not exist", K(ret), K(uri));
+    ret = OB_OBJECT_NOT_EXIST;
+    OB_LOG(WARN, "object is not exist", K(ret), K(uri));
   } else {
     file_length = obj_meta.length_;
   }
@@ -356,9 +362,37 @@ int ObStorageCosUtil::del_file(const ObString &uri)
     if (OB_FAIL(cos_base.open(uri, storage_info_))) {
       OB_LOG(WARN, "fail to open cos base", K(ret), K(uri));
     } else if (OB_FAIL(cos_base.delete_object(uri))) {
-      OB_LOG(WARN, "fail to get object meta", K(ret));
+      OB_LOG(WARN, "fail to delete object", K(ret), K(uri));
     } else {
       OB_LOG(DEBUG, "succ to delete object", K(uri));
+    }
+    cos_base.reset();
+  }
+  return ret;
+}
+
+int ObStorageCosUtil::batch_del_files(
+    const ObString &uri,
+    hash::ObHashMap<ObString, int64_t> &files_to_delete,
+    ObIArray<int64_t> &failed_files_idx)
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_COS_ERROR;
+    OB_LOG(WARN, "cos util not opened", K(ret));
+  } else if (OB_UNLIKELY(uri.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), K(uri));
+  } else {
+    ObStorageCosBase cos_base;
+    if (OB_FAIL(cos_base.open(uri, storage_info_))) {
+      OB_LOG(WARN, "fail to open cos base", K(ret), K(uri));
+    } else if (OB_FAIL(cos_base.delete_objects(uri, files_to_delete, failed_files_idx))) {
+      OB_LOG(WARN, "fail to batch delete objects", K(ret), K(uri));
+    } else {
+      OB_LOG(DEBUG, "succ to batch delete objects", K(uri));
     }
     cos_base.reset();
   }
@@ -380,7 +414,7 @@ int ObStorageCosUtil::list_files(
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(uri));
-  } else if (OB_FAIL(cos_base.open(uri, storage_info_))) {
+  } else if (OB_FAIL(cos_base.inner_open(uri, storage_info_))) {
     OB_LOG(WARN, "fail to open cos base", K(ret), K(uri), KPC_(storage_info));
   } else {
     const char *full_dir_path = cos_base.get_handle().get_object_name().ptr();
@@ -389,7 +423,7 @@ int ObStorageCosUtil::list_files(
 
     // Construct list object callback arg
     CosListFilesCbArg arg(allocator, full_dir_path_str, op);
-    if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+    if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
     } else if (OB_FAIL(cos_base.list_objects(uri, full_dir_path_str, arg))) {
@@ -417,7 +451,7 @@ int ObStorageCosUtil::list_files(
   } else if (OB_UNLIKELY(uri.empty() || !list_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(uri), K(list_ctx));
-  } else if (OB_FAIL(cos_base.open(uri, storage_info_))) {
+  } else if (OB_FAIL(cos_base.inner_open(uri, storage_info_))) {
     OB_LOG(WARN, "fail to open cos base", K(ret), K(uri), KPC_(storage_info));
   } else {
     const char *full_dir_path = cos_base.get_handle().get_object_name().ptr();
@@ -426,7 +460,7 @@ int ObStorageCosUtil::list_files(
 
     // Construct list object context
     CosListFilesCtx arg(allocator, full_dir_path_str, list_ctx);
-    if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+    if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
     } else if (OB_FAIL(cos_base.list_objects(uri, full_dir_path_str, list_ctx.next_token_, arg))) {
@@ -454,7 +488,7 @@ int ObStorageCosUtil::list_directories(
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(uri));
-  } else if (OB_FAIL(cos_base.open(uri, storage_info_))) {
+  } else if (OB_FAIL(cos_base.inner_open(uri, storage_info_))) {
     OB_LOG(WARN, "fail to open cos base", K(ret), K(uri), KPC_(storage_info));
   } else {
     const char *delimiter_string = "/";
@@ -464,7 +498,7 @@ int ObStorageCosUtil::list_directories(
     ObString full_dir_path_str(full_dir_path_len, full_dir_path);
 
     CosListFilesCbArg arg(allocator, full_dir_path_str, op);
-    if (OB_UNLIKELY(!is_end_with_slash(full_dir_path))) {
+    if (OB_UNLIKELY(!is_null_or_end_with_slash(full_dir_path))) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "uri is not terminated with '/'", K(ret), K(uri), K(full_dir_path));
     } else if (OB_FAIL(cos_base.list_directories(uri, full_dir_path_str,
@@ -531,8 +565,24 @@ int ObStorageCosBase::init_handle(const ObObjectStorageInfo &storage_info)
   }
   return ret;
 }
-
+// this function will check object name is empty or not
 int ObStorageCosBase::open(
+    const ObString &uri,
+    ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_open(uri, storage_info))) {
+    OB_LOG(WARN, "fail to open in cos base", K(ret), K(uri));
+  } else if (OB_UNLIKELY(handle_.get_object_name().empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "object name is NULL", K(uri), K(ret));
+      handle_.reset();
+  }
+  return ret;
+}
+// inner_open allow object name is empty
+// this function can be used directly in list cases
+int ObStorageCosBase::inner_open(
     const ObString &uri,
     ObObjectStorageInfo *storage_info)
 {
@@ -550,6 +600,9 @@ int ObStorageCosBase::open(
     OB_LOG(WARN, "failed to create cos handle", K(ret), K(uri));
   } else if (OB_FAIL(handle_.build_bucket_and_object_name(uri))) {
     OB_LOG(WARN, "failed to build bucket and object name", K(ret), K(uri));
+  }
+  if (OB_FAIL(ret)) {
+    handle_.reset();
   }
 #ifdef ERRSIM
     if (OB_NOT_NULL(storage_info) && (OB_SUCCESS != EventTable::EN_ENABLE_LOG_OBJECT_STORAGE_CHECKSUM_TYPE)) {
@@ -591,11 +644,11 @@ int ObStorageCosBase::delete_object(const ObString &uri)
     qcloud_cos::CosStringBuffer object_name = qcloud_cos::CosStringBuffer(
         handle_.get_object_name().ptr(), handle_.get_object_name().length());
 
-    if (ObIStorageUtil::DELETE == handle_.get_delete_mode()) {
+    if (ObStorageDeleteMode::STORAGE_DELETE_MODE == handle_.get_delete_mode()) {
       if (OB_FAIL(qcloud_cos::ObCosWrapper::del(handle_.get_ptr(), bucket_name, object_name))) {
         OB_LOG(WARN, "fail to delete object meta", K(ret), K(uri));
       }
-    } else if (ObIStorageUtil::TAGGING == handle_.get_delete_mode()) {
+    } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == handle_.get_delete_mode()) {
       if (OB_FAIL(qcloud_cos::ObCosWrapper::tag(handle_.get_ptr(), bucket_name, object_name))) {
         OB_LOG(WARN, "fail to tag object", K(ret), K(uri));
       }
@@ -606,6 +659,85 @@ int ObStorageCosBase::delete_object(const ObString &uri)
   } else {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "cos wrapper handle not init or create", K(ret));
+  }
+  return ret;
+}
+
+int ObStorageCosBase::delete_objects(
+    const ObString &uri,
+    hash::ObHashMap<ObString, int64_t> &files_to_delete,
+    ObIArray<int64_t> &failed_files_idx)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  qcloud_cos::CosStringBuffer *objects_to_delete_list = nullptr;
+  const char **succeed_deleted_objects_list = nullptr;
+  int64_t *succeed_deleted_object_len_list = nullptr;
+  const int64_t n_files_to_delete = files_to_delete.size();
+  const int64_t objects_to_delete_list_size = sizeof(qcloud_cos::CosStringBuffer) * n_files_to_delete;
+  const int64_t succeed_deleted_objects_list_size = sizeof(const char *) * n_files_to_delete;
+  const int64_t succeed_deleted_object_len_list_size = sizeof(int64_t) * n_files_to_delete;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "cos wrapper handle not init or create", K(ret), K(uri));
+  } else if (OB_FAIL(check_files_map_validity(files_to_delete))) {
+    OB_LOG(WARN, "files_to_delete is invalid", K(ret), K(uri));
+  } else if (OB_UNLIKELY(ObStorageDeleteMode::STORAGE_TAGGING_MODE == handle_.get_delete_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "batch tagging is not supported", K(ret), K(uri), K(handle_.get_delete_mode()));
+  } else if (OB_ISNULL(objects_to_delete_list =
+      static_cast<qcloud_cos::CosStringBuffer *>(allocator.alloc(objects_to_delete_list_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc mem for objects_to_delete_list",
+        K(ret), K(uri), K(objects_to_delete_list_size));
+  } else if (OB_ISNULL(succeed_deleted_objects_list =
+      static_cast<const char **>(allocator.alloc(succeed_deleted_objects_list_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc mem for succeed_deleted_objects_list",
+        K(ret), K(uri), K(succeed_deleted_objects_list_size));
+  } else if (OB_ISNULL(succeed_deleted_object_len_list =
+      static_cast<int64_t *>(allocator.alloc(succeed_deleted_object_len_list_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc mem for succeed_deleted_object_len_list",
+        K(ret), K(uri), K(succeed_deleted_object_len_list_size));
+  } else {
+    int64_t idx = 0;
+    hash::ObHashMap<ObString, int64_t>::const_iterator iter = files_to_delete.begin();
+    while (OB_SUCC(ret) && iter != files_to_delete.end()) {
+      objects_to_delete_list[idx].assign_ptr(iter->first.ptr(), iter->first.length());
+      iter++;
+      idx++;
+    }
+
+    int64_t n_succeed_deleted_objects = 0;
+    const qcloud_cos::CosStringBuffer &bucket_name = handle_.get_bucket_name_str_buf();
+    if (FAILEDx(qcloud_cos::ObCosWrapper::batch_del(handle_.get_ptr(),
+        bucket_name, objects_to_delete_list, succeed_deleted_objects_list, succeed_deleted_object_len_list,
+        n_files_to_delete, n_succeed_deleted_objects))) {
+      OB_LOG(WARN, "fail to batch del objects", K(ret), K(uri), K(n_files_to_delete));
+    } else if (n_succeed_deleted_objects < n_files_to_delete) {
+      // The succeed_deleted_objects_list contains all the objects that were successfully deleted.
+      // By comparing it to files_to_delete, we can identify the objects that failed to be deleted.
+      for (int64_t i = 0; OB_SUCC(ret) && i < n_succeed_deleted_objects; i++) {
+        if (OB_ISNULL(succeed_deleted_objects_list[i])) {
+          ret = OB_COS_ERROR;
+          OB_LOG(WARN, "returned object key is null",
+              K(ret), K(i), K(n_succeed_deleted_objects), K(n_files_to_delete));
+        }
+        // COS returns the successfully deleted object in the structure of cos_string_t.
+        // Since the data string in cos_string_t does not necessarily end with '\0',
+        // we need to use the len in cos_string_t to construct ObString.
+        else if (OB_FAIL(files_to_delete.erase_refactored(ObString(succeed_deleted_object_len_list[i], succeed_deleted_objects_list[i])))) {
+          OB_LOG(WARN, "fail to erase succeed deleted object", K(ret),
+              K(uri), K(i), K(succeed_deleted_objects_list[i]), K(succeed_deleted_object_len_list[i]), K(n_succeed_deleted_objects));
+        }
+      }
+
+      if (FAILEDx(record_failed_files_idx(files_to_delete, failed_files_idx))) {
+        OB_LOG(WARN, "fail to record failed del",
+            K(ret), K(uri), K(n_files_to_delete), K(n_succeed_deleted_objects));
+      }
+    }
   }
   return ret;
 }
@@ -764,8 +896,8 @@ int ObStorageCosReader::open(const ObString &uri,
           object_name, is_file_exist, obj_meta))) {
         OB_LOG(WARN, "fail to get object meta", K(ret), K(bucket_str), K(object_str));
       } else if (!is_file_exist) {
-        ret = OB_BACKUP_FILE_NOT_EXIST;
-        OB_LOG(WARN, "backup file is not exist", K(ret), K(bucket_str), K(object_str));
+        ret = OB_OBJECT_NOT_EXIST;
+        OB_LOG(WARN, "object is not exist", K(ret), K(bucket_str), K(object_str));
       } else {
         file_length_ = obj_meta.file_length_;
         has_meta_ = true;
@@ -965,20 +1097,9 @@ int ObStorageCosAppendWriter::write(
     const char *buf,
     const int64_t size)
 {
-  int ret = OB_SUCCESS;
-  ObExternalIOCounterGuard io_guard;
-  const int64_t fake_offset = 0;
-  const bool is_pwrite = false;
-
-  if(OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
-    OB_LOG(WARN, "cos append writer cannot write before it is not opened", K(ret));
-  } else if(NULL == buf || size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "buf is NULL or size is invalid", KP(buf), K(size), K(ret));
-  } else if (OB_FAIL(do_write(buf, size, fake_offset, is_pwrite))) {
-    OB_LOG(WARN, "failed to do write", K(ret), KP(buf), K(size));
-  }
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(buf);
+  UNUSED(size);
   return ret;
 }
 
@@ -1076,7 +1197,8 @@ ObStorageCosMultiPartWriter::ObStorageCosMultiPartWriter()
     base_buf_pos_(0),
     upload_id_(NULL),
     partnum_(0),
-    file_length_(-1)
+    file_length_(-1),
+    complete_part_list_(nullptr)
 {}
 
 ObStorageCosMultiPartWriter::~ObStorageCosMultiPartWriter()
@@ -1098,6 +1220,8 @@ void ObStorageCosMultiPartWriter::reuse()
   base_buf_ = nullptr;
   partnum_ = 0;
   file_length_ = -1;
+  complete_part_list_ = nullptr;
+  reset_part_info();
   ObStorageCosBase::reset();
 }
 
@@ -1113,6 +1237,8 @@ int ObStorageCosMultiPartWriter::open(const ObString &uri, common::ObObjectStora
     OB_LOG(WARN, "uri is empty", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageCosBase::open(uri, storage_info))) {
     OB_LOG(WARN, "fail to open in cos_base", K(ret), K(uri));
+  } else if (OB_FAIL(ObStoragePartInfoHandler::init())) {
+    OB_LOG(WARN, "fail to init part info handler", K(ret), K(uri));
   } else {
     const ObString &bucket_name_str = handle_.get_bucket_name();
     const ObString &object_name_str = handle_.get_object_name();
@@ -1122,7 +1248,7 @@ int ObStorageCosMultiPartWriter::open(const ObString &uri, common::ObObjectStora
         object_name_str.ptr(), handle_.get_object_name().length());
 
     if (OB_FAIL(qcloud_cos::ObCosWrapper::init_multipart_upload(handle_.get_ptr(),
-        bucket_name, object_name, upload_id_))) {
+        bucket_name, object_name, upload_id_, complete_part_list_))) {
       OB_LOG(WARN, "fail to init multipartupload", K(ret), K(bucket_name_str), K(object_name_str));
     } else {
       if (OB_ISNULL(upload_id_)) {
@@ -1189,6 +1315,7 @@ int ObStorageCosMultiPartWriter::write_single_part()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
+  const char *etag_header_str = nullptr;
 
   ++partnum_;
   if (partnum_ > COS_MAX_PART_NUM) {
@@ -1205,8 +1332,45 @@ int ObStorageCosMultiPartWriter::write_single_part()
     qcloud_cos::CosStringBuffer upload_id_str = qcloud_cos::CosStringBuffer(
         upload_id_, strlen(upload_id_));
     if (OB_FAIL(qcloud_cos::ObCosWrapper::upload_part_from_buffer(handle_.get_ptr(), bucket_name,
-        object_name, upload_id_str, partnum_, base_buf_, base_buf_pos_))) {
-      OB_LOG(WARN, "fail to upload part to cos", K(ret), KP_(upload_id));
+        object_name, upload_id_str, partnum_, base_buf_, base_buf_pos_, etag_header_str))) {
+      OB_LOG(WARN, "fail to upload part to cos", K(ret),
+          KP_(upload_id), K(handle_.get_bucket_name()), K(handle_.get_object_name()), K_(partnum));
+    } else if (OB_FAIL(add_part_info(partnum_, etag_header_str, nullptr/*checksum*/))) {
+      OB_LOG(WARN, "fail to add part info", K(ret), K_(upload_id), K_(partnum), K(etag_header_str),
+          K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+    }
+  }
+  return ret;
+}
+
+static int construct_complete_part_list(
+    qcloud_cos::ObCosWrapper::Handle *h,
+    const ObStoragePartInfoHandler::PartInfoMap &part_info_map,
+    void *complete_part_list)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_part_id = part_info_map.size();
+  ObStoragePartInfoHandler::PartInfo tmp_part_info;
+
+  // allow to be empty parts
+  if (OB_ISNULL(h) || OB_UNLIKELY(max_part_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(h), K(max_part_id));
+  }
+  for (int64_t i = 1; OB_SUCC(ret) && i <= max_part_id; i++) {
+    if (OB_FAIL(part_info_map.get_refactored(i, tmp_part_info))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        OB_LOG(WARN, "part ids should be 1 ~ max_part_id", K(ret), K(i), K(max_part_id));
+      } else {
+        OB_LOG(WARN, "fail to get part info", K(ret), K(i), K(max_part_id));
+      }
+    } else if (OB_ISNULL(tmp_part_info.first)) {  // etag
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "etag is null", K(ret), K(i), K(max_part_id));
+    } else if (OB_FAIL(qcloud_cos::ObCosWrapper::add_part_info(
+          h, complete_part_list, i, tmp_part_info.first))) {
+      OB_LOG(WARN, "fail to add part info to cos",
+          K(ret), K(i), K(max_part_id), K(tmp_part_info.first));
     }
   }
   return ret;
@@ -1228,7 +1392,11 @@ int ObStorageCosMultiPartWriter::complete()
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (FAILEDx(construct_complete_part_list(handle_.get_ptr(), part_info_map_, complete_part_list_))) {
+    OB_LOG(WARN, "fail to construct complete part list",
+          K(ret), K_(upload_id), KP_(complete_part_list),
+          K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+  } else {
     qcloud_cos::CosStringBuffer bucket_name = qcloud_cos::CosStringBuffer(
         handle_.get_bucket_name().ptr(), handle_.get_bucket_name().length());
     qcloud_cos::CosStringBuffer object_name = qcloud_cos::CosStringBuffer(
@@ -1237,8 +1405,10 @@ int ObStorageCosMultiPartWriter::complete()
         upload_id_, strlen(upload_id_));
 
     if (OB_FAIL(qcloud_cos::ObCosWrapper::complete_multipart_upload(handle_.get_ptr(), bucket_name,
-        object_name, upload_id_str))) {
-      OB_LOG(WARN, "fail to complete multipart upload", K(ret), K_(upload_id));
+        object_name, upload_id_str, complete_part_list_))) {
+      OB_LOG(WARN, "fail to complete multipart upload",
+          K(ret), K_(upload_id), KP_(complete_part_list),
+          K(handle_.get_bucket_name()), K(handle_.get_object_name()));
     }
   }
 
@@ -1277,6 +1447,169 @@ int ObStorageCosMultiPartWriter::abort()
       OB_LOG(WARN, "fail to abort multipart upload", K(ret), KP_(upload_id));
     }
   }
+  return ret;
+}
+
+ObStorageParallelCosMultiPartWriter::ObStorageParallelCosMultiPartWriter()
+  : ObStorageCosBase(),
+    upload_id_(nullptr),
+    upload_id_str_buf_(),
+    complete_part_list_(nullptr)
+{}
+
+ObStorageParallelCosMultiPartWriter::~ObStorageParallelCosMultiPartWriter()
+{
+  destroy_();
+}
+
+void ObStorageParallelCosMultiPartWriter::reuse_()
+{
+  if (is_opened_) {
+    if (OB_NOT_NULL(upload_id_)) {
+      handle_.free_mem(static_cast<void *>(upload_id_));
+    }
+  }
+  upload_id_ = nullptr;
+  upload_id_str_buf_.assign_ptr(nullptr, 0);
+  complete_part_list_ = nullptr;
+  reset_part_info();
+  ObStorageCosBase::reset();
+}
+
+int ObStorageParallelCosMultiPartWriter::open(const ObString &uri, ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+
+  if (OB_UNLIKELY(is_opened_)) {
+    ret = OB_COS_ERROR;
+    OB_LOG(WARN, "already open, cannot open again", K(ret));
+  } else if (OB_FAIL(ObStorageCosBase::open(uri, storage_info))) {
+    OB_LOG(WARN, "fail to open in cos_base", K(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(ObStoragePartInfoHandler::init())) {
+    OB_LOG(WARN, "fail to init part info handler", K(ret), K(uri));
+  } else {
+    if (OB_FAIL(qcloud_cos::ObCosWrapper::init_multipart_upload(
+        handle_.get_ptr(),
+        handle_.get_bucket_name_str_buf(),
+        handle_.get_object_name_str_buf(),
+        upload_id_, complete_part_list_))) {
+      OB_LOG(WARN, "fail to init multipartupload",
+          K(ret), K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+    } else {
+      if (OB_ISNULL(upload_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "upload_id should not be null",
+            K(ret), K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+      } else {
+        is_opened_ = true;
+        upload_id_str_buf_.assign_ptr(upload_id_, strlen(upload_id_));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    reuse_();
+  }
+  return ret;
+}
+
+int ObStorageParallelCosMultiPartWriter::upload_part(
+    const char *buf, const int64_t size, const int64_t part_id)
+{
+  int ret = OB_SUCCESS;
+  ObCosMemAllocator allocator;
+  qcloud_cos::ObCosWrapper::Handle *tmp_cos_handle = nullptr;
+  ObExternalIOCounterGuard io_guard;
+  const char *etag_header_str = nullptr;
+
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_COS_ERROR;
+    OB_LOG(WARN, "write cos should open first", K(ret));
+  } else if (OB_UNLIKELY(part_id < 1 || part_id > COS_MAX_PART_NUM)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "out of cos part num effective range", K(ret), K(part_id));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size));
+    // The cos_handle is not suitable for concurrent scenarios,
+    // thus it needs to be recreated for each upload_part operation.
+  } else if (OB_FAIL(handle_.create_tmp_cos_handle(
+      allocator, checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO, tmp_cos_handle))) {
+    OB_LOG(WARN, "fail to create tmp cos handle", K(ret), K_(checksum_type));
+  } else if (OB_FAIL(qcloud_cos::ObCosWrapper::upload_part_from_buffer(
+      tmp_cos_handle,
+      handle_.get_bucket_name_str_buf(),
+      handle_.get_object_name_str_buf(),
+      upload_id_str_buf_, part_id, buf, size, etag_header_str))) {
+    OB_LOG(WARN, "fail to upload part to cos",
+        K(ret), K_(upload_id), K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+  } else if (OB_FAIL(add_part_info(part_id, etag_header_str, nullptr/*checksum*/))) {
+    OB_LOG(WARN, "fail to add part info", K(ret), K_(upload_id), K(part_id), K(etag_header_str),
+        K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+  }
+
+  if (OB_NOT_NULL(tmp_cos_handle)) {
+    qcloud_cos::ObCosWrapper::destroy_cos_handle(tmp_cos_handle);
+  }
+  allocator.reuse();
+  return ret;
+}
+
+int ObStorageParallelCosMultiPartWriter::complete()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_COS_ERROR;
+    OB_LOG(WARN, "cos multipart writer cannot close before it is opened", K(ret));
+  } else if (FAILEDx(construct_complete_part_list(handle_.get_ptr(),
+                                                  part_info_map_,
+                                                  complete_part_list_))) {
+    OB_LOG(WARN, "fail to construct complete part list",
+          K(ret), K_(upload_id), KP_(complete_part_list),
+          K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+  } else {
+    if (OB_FAIL(qcloud_cos::ObCosWrapper::complete_multipart_upload(
+        handle_.get_ptr(),
+        handle_.get_bucket_name_str_buf(),
+        handle_.get_object_name_str_buf(),
+        upload_id_str_buf_, complete_part_list_))) {
+      OB_LOG(WARN, "fail to complete multipart upload",
+          K(ret), K_(upload_id), KP_(complete_part_list),
+          K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+    }
+  }
+
+  return ret;
+}
+
+int ObStorageParallelCosMultiPartWriter::abort()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_COS_ERROR;
+    OB_LOG(WARN, "cos multipart writer cannot abort before it is opened", K(ret));
+  } else {
+    if (OB_FAIL(qcloud_cos::ObCosWrapper::abort_multipart_upload(
+        handle_.get_ptr(),
+        handle_.get_bucket_name_str_buf(),
+        handle_.get_object_name_str_buf(),
+        upload_id_str_buf_))) {
+      OB_LOG(WARN, "fail to abort multipart upload",
+          K(ret), K_(upload_id), K(handle_.get_bucket_name()), K(handle_.get_object_name()));
+    }
+  }
+  return ret;
+}
+
+int ObStorageParallelCosMultiPartWriter::close()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  reuse_();
   return ret;
 }
 

@@ -12,6 +12,9 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_virtual_cg_scanner.h"
 #include "storage/access/ob_table_access_context.h"
+#include "storage/access/ob_aggregate_base.h"
+#include "storage/access/ob_aggregated_store.h"
+#include "storage/access/ob_aggregated_store_vec.h"
 #include "storage/access/ob_vector_store.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
@@ -27,7 +30,7 @@ ObVirtualCGScanner::ObVirtualCGScanner()
     iter_param_(nullptr),
     access_ctx_(nullptr),
     current_group_size_(0),
-    cg_agg_cells_(nullptr)
+    agg_group_(nullptr)
 {
 }
 
@@ -37,8 +40,13 @@ void ObVirtualCGScanner::reset()
   is_reverse_scan_ = false;
   iter_param_ = nullptr;
   current_group_size_ = 0;
-  FREE_PTR_FROM_CONTEXT(access_ctx_, cg_agg_cells_, ObCGAggCells);
-  cg_agg_cells_ = nullptr;
+  if (nullptr != agg_group_) {
+    if (OB_UNLIKELY(!agg_group_->is_vec())) {
+      FREE_PTR_FROM_CONTEXT(access_ctx_, agg_group_, ObAggGroupBase);
+    } else {
+      agg_group_ = nullptr;
+    }
+  }
   access_ctx_ = nullptr;
 }
 
@@ -57,10 +65,10 @@ int ObVirtualCGScanner::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGScanner has been inited", K(ret));
-  } else if (iter_param.enable_pd_aggregate() &&
-             OB_FAIL(init_agg_cells(iter_param, access_ctx))) {
-    LOG_WARN("Fail to get agg cells", K(ret));
-  } else {
+  } else if (OB_FAIL(init_agg_group(iter_param, access_ctx))) {
+    LOG_WARN("Fail to int agg group", K(ret));
+  }
+  if (OB_SUCC(ret)) {
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
     is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
@@ -118,9 +126,9 @@ int ObVirtualCGScanner::apply_filter(
   } else if (OB_UNLIKELY(0 >= row_count || row_count != result_bitmap.size() || nullptr == filter_info.filter_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(row_count), K(result_bitmap.size()), KP(filter_info.filter_));
-  } else if (OB_NOT_NULL(cg_agg_cells_)) {
+  } else if (OB_NOT_NULL(agg_group_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected state, not supported now", K(ret));
+    LOG_WARN("Unexpected state, not supported now", K(ret), KP_(agg_group));
   } else {
     int64_t capacity = row_count;
     const common::ObBitmap *bitmap = nullptr;
@@ -152,16 +160,16 @@ int ObVirtualCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObVirtualCGScanner is not init", K(ret));
-  } else if (OB_ISNULL(cg_agg_cells_)) {
+  } else if (OB_ISNULL(agg_group_)) {
     count = current_group_size_ > capacity ? capacity : current_group_size_;
     current_group_size_ -= count;
     if (0 == current_group_size_) {
       ret = OB_ITER_END;
     }
   } else {
-    if (OB_FAIL(cg_agg_cells_->process(*iter_param_, *access_ctx_, 0/*col_idx*/, nullptr/*reader*/, nullptr/*row_ids*/,
-                                       current_group_size_))) {
-      LOG_WARN("Fail to process agg cells", K(ret));
+    if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_idx*/, nullptr/*reader*/,
+                                       nullptr/*row_ids*/, current_group_size_, false))) {
+      LOG_WARN("Fail to eval batch rows", K(ret));
     } else {
       count = current_group_size_;
       current_group_size_ = 0;
@@ -171,31 +179,55 @@ int ObVirtualCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
   return ret;
 }
 
-int ObVirtualCGScanner::init_agg_cells(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx)
+int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == access_ctx.block_row_store_ ||
-                  nullptr == iter_param.output_exprs_ ||
-                  0 == iter_param.output_exprs_->count())) {
+  if (!iter_param.enable_pd_aggregate()) {
+  } else if (OB_UNLIKELY(nullptr == access_ctx.block_row_store_ ||
+                  nullptr == iter_param.aggregate_exprs_ ||
+                  1 != iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.output_exprs_));
-  } else if (nullptr == cg_agg_cells_) {
-    void *buf = nullptr;
-    if (OB_ISNULL(cg_agg_cells_ = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("Fail to alloc cg agg cells", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < iter_param.output_exprs_->count(); ++i) {
-    ObAggCell *cell = nullptr;
-    if (OB_FAIL(static_cast<ObAggregatedStore*>(access_ctx.block_row_store_)->get_agg_cell(
-        iter_param.output_exprs_->at(i), cell))) {
-      LOG_WARN("Fail to get agg cell", K(ret));
-    } else if (OB_UNLIKELY(cell->need_access_data())) {
+    LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
+  } else if (access_ctx.block_row_store_->is_vec2()) {
+    ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
+    ObAggGroupVec *agg_group_vec = nullptr;
+    if (OB_FAIL(agg_store_vec->get_agg_group(nullptr, agg_group_vec))){
+      LOG_WARN("Fail to get aggregate group", K(ret));
+    } else if (OB_UNLIKELY(agg_group_vec->need_access_data_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected agg cell", K(ret), KPC(cell));
-    } else if (OB_FAIL(cg_agg_cells_->add_agg_cell(cell))) {
-      LOG_WARN("Fail to push back", K(ret));
+      LOG_WARN("Unexpected agg group", K(ret));
+    } else {
+      agg_group_vec->set_cg_offset_and_index();
+      agg_group_ = agg_group_vec;
+    }
+  } else {
+    ObAggregatedStore *agg_store = static_cast<ObAggregatedStore *>(access_ctx.block_row_store_);
+    ObCGAggCells *agg_cells = nullptr;
+    agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    if (OB_ISNULL(agg_cells)) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc memory", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < iter_param.aggregate_exprs_->count(); ++i) {
+        ObAggCell *cell = nullptr;
+        if (OB_FAIL(agg_store->get_agg_cell(iter_param.aggregate_exprs_->at(i), cell))) {
+          LOG_WARN("Fail to get agg cell", K(ret));
+        } else if (OB_UNLIKELY(cell->need_access_data())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected agg cell", K(ret), KPC(cell));
+        } else if (OB_FAIL(agg_cells->add_agg_cell(cell))) {
+          LOG_WARN("Fail to push back", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(agg_cells)) {
+        agg_cells->~ObCGAggCells();
+        access_ctx.stmt_allocator_->free(agg_cells);
+        agg_cells = nullptr;
+      }
+    } else {
+      agg_group_ = agg_cells;
     }
   }
   return ret;
@@ -203,12 +235,16 @@ int ObVirtualCGScanner::init_agg_cells(const ObTableIterParam &iter_param, ObTab
 
 void ObDefaultCGScanner::reset()
 {
-  if (cg_agg_cells_ != nullptr) {
-    cg_agg_cells_->~ObCGAggCells();
-    if (stmt_allocator_ != nullptr ) {
-      stmt_allocator_->free(cg_agg_cells_);
+  if (nullptr != agg_group_) {
+    if (agg_group_->is_vec()) {
+      agg_group_->~ObAggGroupBase();
+      if (stmt_allocator_ != nullptr ) {
+        stmt_allocator_->free(agg_group_);
+      }
+      agg_group_ = nullptr;
+    } else {
+      agg_group_ = nullptr;
     }
-    cg_agg_cells_ = nullptr;
   }
   total_row_count_ = 0;
   query_range_valid_row_count_ = 0;
@@ -246,8 +282,8 @@ int ObDefaultCGScanner::init(
     STORAGE_LOG(WARN, "unexpected argument", K(ret), K(wrapper), K(iter_param), K(access_ctx));
   } else if (OB_FAIL(init_datum_infos_and_default_row(iter_param, access_ctx))) {
     STORAGE_LOG(WARN, "Failed to init_datum_infos_and_default_row", K(ret), K(iter_param), K(access_ctx));
-  } else if (OB_FAIL(init_cg_agg_cells(iter_param, access_ctx))) {
-    STORAGE_LOG(WARN, "failed to init cg_add_cells", K(ret), K(iter_param), K(access_ctx));
+  } else if (OB_FAIL(init_agg_group(iter_param, access_ctx))) {
+    STORAGE_LOG(WARN, "failed to init agg group", K(ret), K(iter_param), K(access_ctx));
   } else if (OB_FAIL(wrapper.get_merge_row_cnt(iter_param, total_row_count_))) {
     STORAGE_LOG(WARN, "fail to get merge row cnt", K(ret), K(iter_param), K(total_row_count_), K(wrapper));
   } else {
@@ -263,35 +299,59 @@ int ObDefaultCGScanner::init(
   return ret;
 }
 
-int ObDefaultCGScanner::init_cg_agg_cells(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx)
+int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx)
 {
   int ret = OB_SUCCESS;
-  cg_agg_cells_ = nullptr;
-
-  if (iter_param.enable_pd_aggregate()) {
+  if (!iter_param.enable_pd_aggregate()) {
+  } else if (OB_UNLIKELY(nullptr == access_ctx.block_row_store_ ||
+                  nullptr == iter_param.aggregate_exprs_ ||
+                  0 == iter_param.aggregate_exprs_->count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
+  } else if (access_ctx.block_row_store_->is_vec2()) {
+    const sql::ObExpr *output_expr = nullptr;
+    ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
+    ObAggGroupVec *agg_group_vec = nullptr;
+    if (OB_UNLIKELY(iter_param.output_exprs_->count() > 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid output expr count", K(iter_param.output_exprs_->count()));
+    } else if (iter_param.output_exprs_->count() == 1) {
+      output_expr = iter_param.output_exprs_->at(0);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(agg_store_vec->get_agg_group(output_expr, agg_group_vec))) {
+      LOG_WARN("Failed to get aggregate group", K(ret));
+    } else {
+      agg_group_vec->set_cg_offset_and_index();
+      agg_group_ = agg_group_vec;
+    }
+  } else {
     ObAggregatedStore *agg_store = static_cast<ObAggregatedStore *>(access_ctx.block_row_store_);
-    cg_agg_cells_ = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
-    if (OB_ISNULL(cg_agg_cells_)) {
+    ObCGAggCells *agg_cells = nullptr;
+    agg_cells = OB_NEWx(ObCGAggCells, access_ctx.stmt_allocator_);
+    if (OB_ISNULL(agg_cells)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc mermory", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < iter_param.output_exprs_->count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < iter_param.aggregate_exprs_->count(); ++i) {
         ObAggCell *cell = nullptr;
-        if (OB_FAIL(agg_store->get_agg_cell(iter_param.output_exprs_->at(i), cell))) {
+        if (OB_FAIL(agg_store->get_agg_cell(iter_param.aggregate_exprs_->at(i), cell))) {
           LOG_WARN("Fail to get agg cell", K(ret));
-        } else if (OB_FAIL(cg_agg_cells_->add_agg_cell(cell))) {
+        } else if (OB_FAIL(agg_cells->add_agg_cell(cell))) {
           LOG_WARN("Fail to push back", K(ret));
         }
       }
     }
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(agg_cells)) {
+        agg_cells->~ObCGAggCells();
+        access_ctx.stmt_allocator_->free(agg_cells);
+        agg_cells = nullptr;
+      }
+    } else {
+      agg_group_ = agg_cells;
+    }
   }
-
-  if (OB_FAIL(ret) && OB_NOT_NULL(cg_agg_cells_)) {
-    cg_agg_cells_->~ObCGAggCells();
-    access_ctx.stmt_allocator_->free(cg_agg_cells_);
-    cg_agg_cells_ = nullptr;
-  }
-
   return ret;
 }
 
@@ -448,10 +508,10 @@ int ObDefaultCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
     STORAGE_LOG(WARN, "ObDefaultCGScanner not init", K(ret));
   } else if (OB_UNLIKELY(query_range_valid_row_count_ == 0)) {
     ret = OB_ITER_END;
-  } else if (cg_agg_cells_ != nullptr) {
+  } else if (agg_group_ != nullptr) {
     count = query_range_valid_row_count_;
-    if(OB_FAIL(cg_agg_cells_->process(default_row_.storage_datums_[0], count))) {
-      STORAGE_LOG(WARN, "failed to process cg_agg_cells", K(ret), K(default_row_), K(count));
+    if (OB_FAIL(agg_group_->eval(default_row_.storage_datums_[0], count))) {
+      STORAGE_LOG(WARN, "failed to eval default datum", K(ret), K_(default_row), K(count));
     }
   } else {
     count = query_range_valid_row_count_ > capacity ? capacity : query_range_valid_row_count_;

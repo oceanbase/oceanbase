@@ -67,6 +67,18 @@ char *ObSelfBufferWriter::alloc(const int64_t size)
   return data;
 }
 
+int ObSelfBufferWriter::clean()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(data_) || capacity_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "do not clean ", KR(ret), KP(data_), K(capacity_));
+  } else {
+    MEMSET(data_, 0, capacity_);
+  }
+  return ret;
+}
+
 int ObSelfBufferWriter::ensure_space(int64_t size)
 {
   int ret = OB_SUCCESS;

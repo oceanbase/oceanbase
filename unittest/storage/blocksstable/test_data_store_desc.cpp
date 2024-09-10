@@ -35,13 +35,29 @@ class TestObDataStoreDesc : public blocksstable::TestDataFilePrepare
 public:
   TestObDataStoreDesc()
     : blocksstable::TestDataFilePrepare(&getter, "test_data_store_desc"),
+      tenant_base_(1),
       mock_ls_id_(1),
       mock_tablet_id_(1)
   {}
   ~TestObDataStoreDesc() = default;
+  virtual void SetUp();
+  virtual void TearDown();
+
+  ObTenantBase tenant_base_;
   share::ObLSID mock_ls_id_;
   ObTabletID mock_tablet_id_;
 };
+
+void TestObDataStoreDesc::SetUp()
+{
+  TestDataFilePrepare::SetUp();
+  ObTenantEnv::set_tenant(&tenant_base_);
+}
+
+void TestObDataStoreDesc::TearDown()
+{
+  TestDataFilePrepare::TearDown();
+}
 
 TEST_F(TestObDataStoreDesc, test_static_desc)
 {
@@ -56,8 +72,12 @@ TEST_F(TestObDataStoreDesc, test_static_desc)
   scn.convert_for_tx(100);
   ASSERT_EQ(OB_INVALID_ARGUMENT,
             static_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
-                             MINI_MERGE, snapshot, share::SCN::invalid_scn(), 1/*cluster_version*/));
-  ASSERT_EQ(OB_SUCCESS, static_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_, MINI_MERGE, snapshot, scn, 1/*cluster_version*/));
+                             MINI_MERGE, snapshot, share::SCN::invalid_scn(),
+                             1 /*cluster_version*/, EXEC_MODE_LOCAL, false /* micro_index_clustered */));
+  ASSERT_EQ(OB_SUCCESS,
+            static_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
+                             MINI_MERGE, snapshot, scn, 1 /*cluster_version*/,
+                             EXEC_MODE_LOCAL, false /* micro_index_clustered */));
   ASSERT_TRUE(static_desc.is_valid());
 
   ASSERT_EQ(static_desc.is_ddl_, false);
@@ -75,7 +95,7 @@ TEST_F(TestObDataStoreDesc, test_static_desc)
   ObStaticDataStoreDesc static_desc2;
   ASSERT_EQ(OB_SUCCESS,
             static_desc2.init(true/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
-                             MAJOR_MERGE, snapshot, scn, DATA_VERSION_4_2_0_0));
+                             MAJOR_MERGE, snapshot, scn, DATA_VERSION_4_2_0_0, EXEC_MODE_LOCAL, false /* micro_index_clustered */));
   ASSERT_TRUE(static_desc2.is_valid());
 
   ASSERT_EQ(static_desc2.is_ddl_, true);
@@ -133,6 +153,7 @@ TEST_F(TestObDataStoreDesc, test_whole_data_desc)
   ASSERT_EQ(OB_SUCCESS,
             whole_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
                             MAJOR_MERGE, snapshot, DATA_VERSION_4_2_0_0,
+                            table_schema.get_micro_index_clustered(),
                             share::SCN::invalid_scn()));
   ASSERT_TRUE(whole_desc.is_valid());
 
@@ -141,11 +162,11 @@ TEST_F(TestObDataStoreDesc, test_whole_data_desc)
   ASSERT_EQ(OB_INVALID_ARGUMENT,
             static_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
                              MINI_MERGE, snapshot,
-                             share::SCN::invalid_scn(), 0/*cluster_version*/));
+                             share::SCN::invalid_scn(), 0/*cluster_version*/, EXEC_MODE_LOCAL, false /* micro_index_clustered */));
   ASSERT_EQ(OB_SUCCESS,
             static_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
                              MAJOR_MERGE, snapshot,
-                             share::SCN::invalid_scn(), DATA_VERSION_4_2_0_0));
+                             share::SCN::invalid_scn(), DATA_VERSION_4_2_0_0, EXEC_MODE_LOCAL, false /* micro_index_clustered */));
   whole_desc.desc_.static_desc_ = &static_desc;
   ASSERT_FALSE(whole_desc.is_valid());
 }
@@ -162,7 +183,8 @@ TEST_F(TestObDataStoreDesc, gen_index_desc)
   scn.convert_for_tx(100);
   ASSERT_EQ(OB_SUCCESS,
             data_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
-                             MAJOR_MERGE, snapshot, 1/*clsuter_version*/));
+                             MAJOR_MERGE, snapshot, 1/*clsuter_version*/,
+                             table_schema.get_micro_index_clustered()));
   ASSERT_TRUE(data_desc.is_valid());
   const ObDataStoreDesc &data_store_desc = data_desc.get_desc();
 
@@ -194,7 +216,8 @@ TEST_F(TestObDataStoreDesc, test_cg)
   scn.convert_for_tx(100);
   ASSERT_EQ(OB_SUCCESS,
             static_desc.init(false/*is_ddl*/, table_schema, mock_ls_id_, mock_tablet_id_,
-                             MAJOR_MERGE, snapshot, share::SCN::invalid_scn(), DATA_VERSION_4_3_2_0/*cluster_version*/));
+                             MAJOR_MERGE, snapshot, share::SCN::invalid_scn(),
+                             DATA_VERSION_4_3_2_0/*cluster_version*/, EXEC_MODE_LOCAL, false /* micro_index_clustered */));
   ASSERT_TRUE(static_desc.is_valid());
 
   const ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();

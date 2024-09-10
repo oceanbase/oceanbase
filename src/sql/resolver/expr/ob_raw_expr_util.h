@@ -23,6 +23,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/allocator/ob_allocator.h"
+#include "lib/udt/ob_array_type.h"
 #include "share/schema/ob_trigger_info.h"
 
 namespace oceanbase
@@ -138,6 +139,7 @@ private:
                                 bool need_flatten_gen_col = true,
                                 std::function<bool(ObRawExpr *)> filter
                                   = [](ObRawExpr *e){ return NULL != e;});
+  int flatten_and_add_attr_exprs(ObRawExpr *raw_expr);
   DISALLOW_COPY_AND_ASSIGN(ObRawExprUniqueSet);
 private:
   ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> expr_array_;
@@ -483,6 +485,12 @@ public:
   static int implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factory,
                                             const ObSQLSessionInfo *session,
                                             ObRawExpr* &real_ref_expr);
+  template<typename RawExprType>
+  static int create_attr_expr(ObRawExprFactory *expr_factory,
+                              const ObSQLSessionInfo *session,
+                              ObItemType expr_type,
+                              ArrayAttr attr_type,
+                              RawExprType* &attr_expr);
   // new engine: may create more cast exprs to handle non-system-collation string.
   //             e.g.: utf16->number: utf16->utf8->number (two cast expr)
   //                   utf8_bin->number: utf8->number (just one cat expr)
@@ -1001,6 +1009,9 @@ public:
   static int build_pseudo_rollup_id(ObRawExprFactory &factory,
                                     const ObSQLSessionInfo &session_info,
                                     ObRawExpr *&out);
+  static int build_pseudo_ddl_slice_id(ObRawExprFactory &factory,
+                                       const ObSQLSessionInfo &session_info,
+                                       ObRawExpr *&out);
   static int build_pseudo_random(ObRawExprFactory &factory,
                                  const ObSQLSessionInfo &session_info,
                                  ObRawExpr *&out);

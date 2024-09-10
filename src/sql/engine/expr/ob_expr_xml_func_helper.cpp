@@ -1288,36 +1288,48 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
     if (OB_FAIL(ret)) {
     } else {
       const uint16_t subschema_id = value.get_meta().get_subschema_id();
-      ObSqlUDTMeta udt_meta;
+      ObSubSchemaValue sub_meta;
       if (OB_ISNULL(exec_context->get_physical_plan_ctx())) {
         // build temp subschema id
-      } else if (OB_FAIL(exec_context->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+      } else if (OB_FAIL(exec_context->get_sqludt_meta_by_subschema_id(subschema_id, sub_meta))) {
         LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
       }
       if (OB_FAIL(ret)) {
-      } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
-      } else if (!is_ps_protocol) {
-        ObSqlUDT sql_udt;
-        sql_udt.set_udt_meta(udt_meta);
+      } else if (sub_meta.type_ == ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
+        // array
+        ObSqlCollectionInfo *coll_meta = reinterpret_cast<ObSqlCollectionInfo *>(sub_meta.value_);
         ObString res_str;
-        if (OB_FAIL(sql::ObSqlUdtUtils::convert_sql_udt_to_string(value, allocator, exec_context,
-                                                                  sql_udt, res_str))) {
+        if (OB_FAIL(sql::ObSqlUdtUtils::convert_collection_to_string(value, *coll_meta, allocator, res_str))) {
           LOG_WARN("failed to convert udt to string", K(ret), K(subschema_id));
         } else {
           value.set_udt_value(res_str.ptr(), res_str.length());
         }
       } else {
-        ObString udt_data = value.get_string();
-        ObObj result;
-        if (OB_FAIL(ObSqlUdtUtils::cast_sql_record_to_pl_record(exec_context,
-                                                                result,
-                                                                udt_data,
-                                                                udt_meta))) {
-          LOG_WARN("failed to cast sql collection to pl collection", K(ret), K(udt_meta.udt_id_));
+        ObSqlUDTMeta udt_meta = *(reinterpret_cast<ObSqlUDTMeta *>(sub_meta.value_));
+        if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
+        } else if (!is_ps_protocol) {
+          ObSqlUDT sql_udt;
+          sql_udt.set_udt_meta(udt_meta);
+          ObString res_str;
+          if (OB_FAIL(sql::ObSqlUdtUtils::convert_sql_udt_to_string(value, allocator, exec_context,
+                                                                    sql_udt, res_str))) {
+            LOG_WARN("failed to convert udt to string", K(ret), K(subschema_id));
+          } else {
+            value.set_udt_value(res_str.ptr(), res_str.length());
+          }
         } else {
-          value = result;
+          ObString udt_data = value.get_string();
+          ObObj result;
+          if (OB_FAIL(ObSqlUdtUtils::cast_sql_record_to_pl_record(exec_context,
+                                                                  result,
+                                                                  udt_data,
+                                                                  udt_meta))) {
+            LOG_WARN("failed to cast sql collection to pl collection", K(ret), K(udt_meta.udt_id_));
+          } else {
+            value = result;
+          }
         }
       }
     }

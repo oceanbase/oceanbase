@@ -37,12 +37,10 @@ public:
 TEST_F(TestMacroBlockId, local_mode)
 {
   int ret = OB_SUCCESS;
-  MacroBlockId m_local;
-  m_local.write_seq_ = 77;
-  m_local.block_index_ = (1L << 33);
+  MacroBlockId m_local(77, (1L << 33), 0);
   OB_LOG(INFO, "local", K(m_local));
   OB_LOG(INFO, "raw", K(m_local.write_seq_), K(m_local.second_id_));
-  ASSERT_TRUE(MacroBlockId::MACRO_BLOCK_ID_VERSION == m_local.version_);
+  ASSERT_TRUE(MacroBlockId::MACRO_BLOCK_ID_VERSION_V2 == m_local.version_);
   ASSERT_EQ((uint64_t)ObMacroBlockIdMode::ID_MODE_LOCAL, m_local.id_mode_);
   ASSERT_EQ(77, m_local.write_seq_);
   ASSERT_EQ((1L << 33), m_local.block_index_);
@@ -64,7 +62,7 @@ TEST_F(TestMacroBlockId, local_mode)
   OB_LOG(INFO, "raw", K(m_local_des.write_seq_), K(m_local_des.second_id_));
   ASSERT_TRUE(m_local.get_serialize_size() == pos);
 
-  ASSERT_TRUE(MacroBlockId::MACRO_BLOCK_ID_VERSION == m_local_des.version_);
+  ASSERT_TRUE(MacroBlockId::MACRO_BLOCK_ID_VERSION_V2 == m_local_des.version_);
   ASSERT_EQ((uint64_t)ObMacroBlockIdMode::ID_MODE_LOCAL, m_local_des.id_mode_);
   ASSERT_EQ(m_local.write_seq_, m_local_des.write_seq_);
   ASSERT_EQ((1L << 33), m_local_des.block_index_);
@@ -82,7 +80,7 @@ TEST_F(TestMacroBlockId, verification)
   ASSERT_TRUE(test_id.is_valid());
 
   test_id.third_id_ = 1;
-  ASSERT_FALSE(test_id.is_valid());
+  ASSERT_TRUE(test_id.is_valid());
   test_id.third_id_ = -1;
   ASSERT_FALSE(test_id.is_valid());
 

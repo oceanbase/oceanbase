@@ -142,6 +142,30 @@ int ObSubPlanScanOp::next_batch(const int64_t max_row_cnt)
   return ret;
 }
 
+int ObSubPlanScanOp::nested_next_vector(ObExpr &from, ObExpr &to)
+{
+  int ret = OB_SUCCESS;
+  if (!from.is_nested_expr() || !to.is_nested_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected expr type", K(ret));
+  } else if (from.attrs_cnt_ != to.attrs_cnt_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected expr type", K(ret), K(from.attrs_cnt_), K(to.attrs_cnt_ ));
+  }
+  for (uint32_t i = 0; OB_SUCC(ret) && i < from.attrs_cnt_; ++i) {
+    VectorHeader &from_attr_vec_header = from.attrs_[i]->get_vector_header(eval_ctx_);
+    VectorHeader &to_attr_vec_header = to.attrs_[i]->get_vector_header(eval_ctx_);
+    if (is_uniform_format(from_attr_vec_header.format_)
+        || is_uniform_format(to_attr_vec_header.format_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected format type", K(ret), K(from_attr_vec_header.format_), K(to_attr_vec_header.format_));
+    } else {
+      to_attr_vec_header = from_attr_vec_header;
+    }
+  }
+  return ret;
+}
+
 int ObSubPlanScanOp::next_vector(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
@@ -181,6 +205,9 @@ int ObSubPlanScanOp::next_vector(const int64_t max_row_cnt)
           OZ(to->init_vector(eval_ctx_, VEC_UNIFORM, brs_.size_));
         } else {
           to_vec_header = from_vec_header;
+          if (from->is_nested_expr()) {
+            OZ(nested_next_vector(*from, *to));
+          }
         }
         // init eval info
         if (OB_SUCC(ret)) {

@@ -20,7 +20,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "mittest/mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 #include "storage/slog_ckpt/ob_tenant_meta_snapshot_handler.h"
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/tablet/ob_tablet_persister.h"
 
 namespace oceanbase
@@ -82,23 +82,28 @@ int TestMetaSnapshot::persist_tablet(ObTabletHandle &new_tablet_handle)
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ObMacroBlockHandle macro_handle;
+  ObStorageObjectHandle object_handle;
   ObUpdateTabletPointerParam param;
+  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
+  blocksstable::ObStorageObjectOpt default_opt;
 
   if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("fail to get ls", K(ret), K(ls_id));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
-  } else if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer().switch_block(macro_handle))) {
+  } else if (OB_FAIL(meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt))) {
     LOG_WARN("fail to switch shared meta block", K(ret));
-  } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*(tablet_handle.get_obj()), new_tablet_handle))) {
-    LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(new_tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
-    LOG_WARN("fail to get updating tablet pointer parameters", K(ret));
-  } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(ObTabletMapKey(ls_id, tablet_id), tablet_handle, new_tablet_handle, param))) {
-    LOG_WARN("fail to cas tablet", K(ret), K(ls_id), K(tablet_id), K(tablet_handle), K(new_tablet_handle), K(param));
-  } else if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer().switch_block(macro_handle))) {
-    LOG_WARN("fail to switch shared meta block", K(ret));
+  } else {
+    ObTabletPersisterParam persister_param(ls_id, ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+    if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(persister_param, *(tablet_handle.get_obj()), new_tablet_handle))) {
+      LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_handle));
+    } else if (OB_FAIL(new_tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
+      LOG_WARN("fail to get updating tablet pointer parameters", K(ret));
+    } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(ObTabletMapKey(ls_id, tablet_id), tablet_handle, new_tablet_handle, param))) {
+      LOG_WARN("fail to cas tablet", K(ret), K(ls_id), K(tablet_id), K(tablet_handle), K(new_tablet_handle), K(param));
+    } else if (OB_FAIL(meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt))) {
+      LOG_WARN("fail to switch shared meta block", K(ret));
+    }
   }
   return ret;
 }

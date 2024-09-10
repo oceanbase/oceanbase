@@ -12,9 +12,9 @@
 
 #include "observer/virtual_table/ob_all_disk_stat.h"
 
-#include "storage/blocksstable/ob_block_manager.h"
+#include "storage/blocksstable/ob_object_manager.h"
 #include "observer/ob_server.h"
-#include "storage/slog/ob_storage_logger_manager.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::common;
@@ -104,24 +104,24 @@ int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow *&row)
             break;
           }
           case TOTAL_SIZE:{
-            int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
-            if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
-              SERVER_LOG(WARN, "fail to get reserved size", K(ret));
+            int64_t reserved_size = 0;
+            if (OB_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(reserved_size))) {
+              SERVER_LOG(WARN, "fail to get slog reserved size", K(ret), K(reserved_size));
             } else {
-              cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_max_macro_block_count(reserved_size) * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+              cells[cell_idx].set_int(OB_STORAGE_OBJECT_MGR.get_max_macro_block_count(reserved_size) *OB_STORAGE_OBJECT_MGR.get_macro_block_size());
             }
             break;
           }
           case ALLOCATED_SIZE: {
-            cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+            cells[cell_idx].set_int(OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() *OB_STORAGE_OBJECT_MGR.get_macro_block_size());
             break;
           }
           case USED_SIZE: {
-            cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+            cells[cell_idx].set_int(OB_STORAGE_OBJECT_MGR.get_used_macro_block_count() *OB_STORAGE_OBJECT_MGR.get_macro_block_size());
             break;
           }
           case FREE_SIZE: {
-            cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_free_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+            cells[cell_idx].set_int(OB_STORAGE_OBJECT_MGR.get_free_macro_block_count() *OB_STORAGE_OBJECT_MGR.get_macro_block_size());
             break;
           }
           case IS_DISK_VALID: {

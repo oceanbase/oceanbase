@@ -22,7 +22,8 @@ namespace storage
 class ObDirectLoadDataBlock
 {
 public:
-  static const int64_t DEFAULT_DATA_BLOCK_SIZE = 128 * 1024; // 128K
+  static const int64_t SN_DEFAULT_DATA_BLOCK_SIZE = 128 * 1024; // 128K
+  static const int64_t SS_DEFAULT_DATA_BLOCK_SIZE = 2 * 1024 * 1024; // 2M
   struct Header
   {
     OB_UNIS_VERSION(1);

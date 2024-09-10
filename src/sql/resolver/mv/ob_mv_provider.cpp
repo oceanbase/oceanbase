@@ -92,6 +92,7 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
         } else {
           LOG_WARN("failed to check mv column type", K(ret));
         }
+      } else if (OB_FALSE_IT(query_ctx->get_query_hint_for_update().reset())) { // reset hint from mview definition
       } else if (OB_FAIL(ObMVPrinter::print_mv_operators(*mv_schema, *view_stmt, for_rt_expand_,
                                                          last_refresh_scn, refresh_scn,
                                                          alloc, inner_alloc_,

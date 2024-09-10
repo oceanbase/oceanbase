@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 
 namespace oceanbase
@@ -148,6 +149,14 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
     } else if (ObIntervalTC == type.get_type_class()) {
       type.set_scale(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][type.get_type()].get_scale());
       type.set_precision(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][type.get_type()].get_precision());
+    } else if (ObCollectionSQLTC == result_tc) {
+      // only support vector / int now
+      if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type1, type_ctx, true/*only_vector*/))) { // here only to avoid type1 cast
+        LOG_WARN("failed to calc cast type", K(ret), K(type1));
+      } else {
+        type.set_collection(type1.get_subschema_id());
+        type2.set_calc_type(ObFloatType);
+      }
     }
     type.unset_result_flag(NOT_NULL_FLAG); // divided by zero
   }
@@ -681,6 +690,17 @@ int ObExprDiv::div_double_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   const bool is_oracle = lib::is_oracle_mode();
   return def_fixed_len_vector_arith_op_func<ObDoubleVectorDivFunc, ObArithTypedBase<double, double, double>>(
     VECTOR_EVAL_FUNC_ARG_LIST, expr, is_oracle);
+}
+
+int ObExprDiv::div_vec(EVAL_FUNC_ARG_DECL)
+{
+  ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::DIV;
+  return def_arith_eval_func<ObVectorFloatArithFunc>(EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+}
+int ObExprDiv::div_vec_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::DIV;
+  return def_batch_arith_op_by_datum_func<ObVectorFloatArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
 }
 
 struct ObNumberDivFunc
@@ -1252,6 +1272,10 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     case ObDecimalIntType: {
       set_decimalint_div_func_ptr(rt_expr);
+      break;
+    }
+    case ObCollectionSQLType: {
+      SET_DIV_FUNC_PTR(div_vec);
       break;
     }
     default: {

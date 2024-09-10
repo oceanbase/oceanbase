@@ -15,6 +15,7 @@
 #include "lib/ob_running_mode.h"
 #include "share/config/ob_server_config.h"
 #include "common/ob_clock_generator.h"
+#include "storage/blocksstable/ob_micro_block_cache.h"
 
 namespace oceanbase
 {
@@ -26,6 +27,7 @@ namespace common
 ObKVCacheMap::ObKVCacheMap()
     : is_inited_(false),
       bucket_allocator_(ObMemAttr(OB_SERVER_TENANT_ID, "CACHE_MAP_BKT", ObCtxIds::UNEXPECTED_IN_500)),
+      bucket_start_pos_(0),
       bucket_num_(0),
       bucket_size_(0),
       buckets_(NULL),
@@ -127,6 +129,39 @@ void ObKVCacheMap::destroy()
   bucket_size_ = 0;
   store_ = NULL;
   is_inited_ = false;
+}
+
+int ObKVCacheMap::get_batch_data_block_cache_key(
+  const int bucket_count,
+  ObIArray<blocksstable::ObMicroBlockCacheKey> &keys)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_pos = bucket_start_pos_;
+  const int64_t end_pos = MIN(bucket_start_pos_ + bucket_count, bucket_num_);
+
+  ObKVCacheHazardGuard hazard_guard(global_hazard_station_);
+  if (OB_FAIL(hazard_guard.get_ret())) {
+    COMMON_LOG(WARN, "Fail to acquire hazard version", K(ret));
+  } else {
+    for (int64_t i = start_pos; i < end_pos && OB_SUCC(ret); i++) {
+      Node *iter = get_bucket_node(i);
+      char *buf = nullptr;
+      while (OB_SUCC(ret) && nullptr != iter) {
+        if (iter->inst_->is_block_cache_ && store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
+          if (OB_FAIL(keys.push_back(*static_cast<const blocksstable::ObMicroBlockCacheKey *>(iter->key_)))) {
+            COMMON_LOG(WARN, "Fail to push back micro data cachekey", K(ret), K(keys.count()), KPC(iter));
+          }
+          store_->de_handle_ref(iter->mb_handle_);
+        }
+        iter = iter->next_;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      bucket_start_pos_ = end_pos >= bucket_num_ ? 0 : end_pos;
+    }
+  }
+
+  return ret;
 }
 
 int ObKVCacheMap::put(

@@ -30,6 +30,8 @@ public:
   ~LogBlockHeader();
   bool is_valid() const;
   void reset();
+  int generate(const int64_t palf_id, const block_id_t curr_block_id,
+               const LSN &min_lsn, const share::SCN &min_scn);
   // NB: not thread safe
   void update_lsn_and_scn(const LSN &lsn, const share::SCN &scn);
   void update_palf_id_and_curr_block_id(const int64_t palf_id, const block_id_t curr_block_id);

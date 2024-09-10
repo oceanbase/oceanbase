@@ -32,7 +32,6 @@ int ObSSTableMacroBlockChecker::check(
   int ret = OB_SUCCESS;
   const bool need_logic_check = CHECK_LEVEL_LOGICAL == check_level;
   int64_t pos = 0;
-  ObMacroBlockCommonHeader common_header;
   if (OB_ISNULL(macro_block_buf)
       || OB_UNLIKELY(macro_block_buf_size <= 0) || check_level >= CHECK_LEVEL_MAX) {
     ret = OB_INVALID_ARGUMENT;
@@ -40,25 +39,47 @@ int ObSSTableMacroBlockChecker::check(
         K(check_level));
   } else if (ObMacroBlockCheckLevel::CHECK_LEVEL_NONE == check_level) {
     //do nothing
-  } else if (OB_FAIL(common_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
-    STORAGE_LOG(ERROR, "fail to deserialize common header", K(ret), KP(macro_block_buf),
-        K(macro_block_buf_size), K(pos), K(common_header));
-  } else if (common_header.is_shared_macro_block()) {
-    // skip the check
-  } else if (OB_FAIL(common_header.check_integrity())) {
-    ret = OB_INVALID_DATA;
-    STORAGE_LOG(ERROR, "Invalid common header", K(ret), K(common_header));
-  } else if (OB_FAIL(check_physical_checksum(common_header, macro_block_buf,
+  } else if (ObMacroBlockCommonHeader::MACRO_BLOCK_COMMON_HEADER_MAGIC ==
+             reinterpret_cast<const ObMacroBlockCommonHeader*>(macro_block_buf + pos)->get_magic()) {
+    ObMacroBlockCommonHeader common_header;
+    if (OB_FAIL(common_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
+      STORAGE_LOG(ERROR, "fail to deserialize common header", K(ret), KP(macro_block_buf),
+          K(macro_block_buf_size), K(pos), K(common_header));
+    } else if (common_header.is_shared_macro_block()) {
+      // skip the check
+    } else if (OB_FAIL(common_header.check_integrity())) {
+      ret = OB_INVALID_DATA;
+      STORAGE_LOG(ERROR, "Invalid common header", K(ret), K(common_header));
+    } else if (OB_FAIL(check_physical_checksum(common_header, macro_block_buf,
+        macro_block_buf_size))) {
+      STORAGE_LOG(WARN, "fail to check physical checksum", K(ret), K(common_header),
+          KP(macro_block_buf), K(macro_block_buf_size));
+    } else if (!common_header.is_sstable_data_block()
+            && !common_header.is_sstable_index_block()) {
+      //no need logic check
+    } else if (need_logic_check && OB_FAIL(check_logical_checksum(common_header, macro_block_buf,
       macro_block_buf_size))) {
-    STORAGE_LOG(WARN, "fail to check physical checksum", K(ret), K(common_header),
-        KP(macro_block_buf), K(macro_block_buf_size));
-  } else if (!common_header.is_sstable_data_block()
-          && !common_header.is_sstable_index_block()) {
-    //no need logic check
-  } else if (need_logic_check && OB_FAIL(check_logical_checksum(common_header, macro_block_buf,
-      macro_block_buf_size))) {
-    STORAGE_LOG(WARN, "fail to check logical checksum", K(ret), K(common_header),
-        KP(macro_block_buf), K(macro_block_buf_size));
+      STORAGE_LOG(WARN, "fail to check logical checksum", K(ret), K(common_header),
+          KP(macro_block_buf), K(macro_block_buf_size));
+    }
+  } else if (ObSharedObjectHeader::OB_SHARED_BLOCK_HEADER_MAGIC ==
+             reinterpret_cast<const ObSharedObjectHeader*>(macro_block_buf + pos)->magic_) {
+    ObSharedObjectHeader shared_obj_header;
+    if (OB_FAIL(shared_obj_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
+      STORAGE_LOG(ERROR, "fail to deserialize shared object header", K(ret), KP(macro_block_buf),
+          K(macro_block_buf_size), K(pos), K(shared_obj_header));
+    } else if (!shared_obj_header.is_valid()) {
+      ret = OB_INVALID_DATA;
+      STORAGE_LOG(ERROR, "Invalid shared object header", K(ret), K(shared_obj_header));
+    } else if (OB_FAIL(check_physical_checksum(shared_obj_header, macro_block_buf,
+        macro_block_buf_size))) {
+      STORAGE_LOG(WARN, "fail to check physical checksum", K(ret), K(shared_obj_header),
+          KP(macro_block_buf), K(macro_block_buf_size));
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(ERROR, "BlockHeader should be ObMacroBlockCommonHeader or OB_SHARED_BLOCK_HEADER_MAGIC",
+              K(ret), KP(macro_block_buf), K(macro_block_buf_size), K(pos));
   }
   return ret;
 }
@@ -181,6 +202,34 @@ int ObSSTableMacroBlockChecker::get_sstable_header_and_column_checksum(
         K(macro_block_buf_size), K(pos));
   } else {
     column_checksum = header.column_checksum_;
+  }
+  return ret;
+}
+
+int ObSSTableMacroBlockChecker::check_physical_checksum(
+    const ObSharedObjectHeader &shared_obj_header,
+    const char *macro_block_buf,
+    const int64_t macro_block_buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(macro_block_buf_size <= 0 || !shared_obj_header.is_valid())
+      || OB_ISNULL(macro_block_buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument", KR(ret), KP(macro_block_buf), K(macro_block_buf_size),
+        K(shared_obj_header));
+  } else if (shared_obj_header.data_size_ != 0) {
+    const int64_t header_size = shared_obj_header.header_size_;
+    if (shared_obj_header.data_size_ > (macro_block_buf_size - header_size)) {
+      ret = OB_INVALID_DATA;
+      STORAGE_LOG(ERROR, "Invalid payload size", KR(ret), K(shared_obj_header), K(macro_block_buf_size));
+    } else {
+      const int64_t physical_checksum = ob_crc64_sse42(macro_block_buf + header_size, shared_obj_header.data_size_);
+      if (physical_checksum != shared_obj_header.checksum_) {
+        ret = OB_PHYSIC_CHECKSUM_ERROR;
+        LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg", "Invalid physical checksum", K(ret), K(physical_checksum),
+            K(shared_obj_header));
+      }
+    }
   }
   return ret;
 }

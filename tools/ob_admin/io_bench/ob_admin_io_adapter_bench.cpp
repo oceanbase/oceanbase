@@ -17,6 +17,8 @@
 #include "src/logservice/archiveservice/ob_archive_file_utils.h"
 #include "src/share/backup/ob_backup_path.h"
 #include "src/share/backup/ob_backup_clean_util.h"
+#include "src/share/io/ob_io_manager.h"
+#include "src/share/ob_device_manager.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -39,7 +41,27 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
   lib::set_memory_limit(16 * 1024 * 1024 * 1024LL);
   lib::set_tenant_memory_limit(500, 16 * 1024 * 1024 * 1024LL);
   OB_LOGGER.set_log_level("INFO");
-  if (OB_FAIL(parse_cmd_(argc, argv))) {
+
+  ObTenantBase *tenant_base = new ObTenantBase(OB_SERVER_TENANT_ID);
+  ObMallocAllocator *malloc = ObMallocAllocator::get_instance();
+  if (OB_ISNULL(malloc->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, 0))) {
+    if (OB_FAIL(malloc->create_and_add_tenant_allocator(OB_SERVER_TENANT_ID))) {
+      STORAGE_LOG(WARN, "failed to create_and_add_tenant_allocator", K(ret));
+    }
+  }
+
+  if (FAILEDx(tenant_base->init())) {
+    STORAGE_LOG(WARN, "failed to init tenant base", K(ret));
+  } else if (FALSE_IT(ObTenantEnv::set_tenant(tenant_base))) {
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().init())) {
+    STORAGE_LOG(WARN, "failed to init io manager", K(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+    STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+  }
+
+  if (FAILEDx(parse_cmd_(argc, argv))) {
     OB_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
   } else if (OB_FAIL(run_all_tests_())) {
     OB_LOG(WARN, "failed to pass all tests", K(ret), K_(base_path));

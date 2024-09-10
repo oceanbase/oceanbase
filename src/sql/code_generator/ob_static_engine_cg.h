@@ -67,6 +67,7 @@ class ObHashJoinVecSpec;
 class ObNestedLoopJoinSpec;
 class ObBasicNestedLoopJoinSpec;
 class ObMergeJoinSpec;
+class ObMergeJoinVecSpec;
 class ObJoinSpec;
 class ObMonitoringDumpSpec;
 class ObLogSequence;
@@ -138,6 +139,7 @@ class ObSortVecSpec;
 class ObLogValuesTableAccess;
 class ObValuesTableAccessSpec;
 
+class ObMergeGroupByVecSpec;
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
@@ -207,6 +209,11 @@ public:
   //set is json constraint type is strict or relax
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
+
+  static int check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
+                                    const ObPhyOperatorType phy_type, bool &disable_vectorize);
+  static int exist_registered_vec_op(ObLogicalOperator &op, const bool is_root_job, bool &exist);
+
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   int init_encrypt_metas(
@@ -327,6 +334,7 @@ private:
   int generate_spec(ObLogGroupBy &op, ObScalarAggregateSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGroupBy &op, ObScalarAggregateVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec, const bool in_root_job);
+  int generate_spec(ObLogGroupBy &op, ObMergeGroupByVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec, const bool in_root_job);
   int generate_spec(ObLogGroupBy &op, ObHashGroupByVecSpec &spec, const bool in_root_job);
   int generate_dist_aggr_distinct_columns(ObLogGroupBy &op, ObHashGroupBySpec &spec);
@@ -359,6 +367,7 @@ private:
   int generate_spec(ObLogJoin &op, ObNestedLoopJoinSpec &spec, const bool in_root_job);
   // generate merge join
   int generate_spec(ObLogJoin &op, ObMergeJoinSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogJoin &op, ObMergeJoinVecSpec &spec, const bool in_root_job);
 
   int generate_join_spec(ObLogJoin &op, ObJoinSpec &spec);
 

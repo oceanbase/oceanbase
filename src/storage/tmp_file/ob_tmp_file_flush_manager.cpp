@@ -59,7 +59,7 @@ int ObTmpFileFlushManager::alloc_flush_task(ObTmpFileFlushTask *&flush_task)
   int ret = OB_SUCCESS;
   flush_task = nullptr;
 
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   void *task_buf = nullptr;
   if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileFlushTask)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -428,7 +428,7 @@ int ObTmpFileFlushManager::inner_fill_block_buf_(
     const bool flush_tail)
 {
   int ret = OB_SUCCESS;
-  const int64_t BLOCK_SIZE = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   bool fail_too_many = false;
 
   ObArray<ObTmpFileBatchFlushContext::ObTmpFileFlushFailRecord> &flush_failed_array = flush_ctx_.get_flush_failed_array();
@@ -650,6 +650,27 @@ int ObTmpFileFlushManager::drive_flush_task_prepare_(ObTmpFileFlushTask &flush_t
   return ret;
 }
 
+void ObTmpFileFlushManager::try_remove_unused_flush_info_(ObTmpFileFlushTask &flush_task)
+{
+  int ret = OB_SUCCESS;
+
+  ObArray<ObTmpFileFlushInfo> &flush_infos = flush_task.get_flush_infos();
+  for (int64_t i = 0; OB_SUCC(ret) && i >= 0 && i < flush_infos.count(); ++i) {
+    ObTmpFileFlushInfo &flush_info = flush_infos.at(i);
+    ObSharedNothingTmpFile *file = flush_info.file_handle_.get();
+    if (OB_ISNULL(file)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "file is nullptr", KR(ret), K(flush_info));
+    } else if (file->is_deleting()) {
+      STORAGE_LOG(INFO, "the file is deleting, abort this flush info",
+          KR(ret), K(flush_info), K(flush_task));
+      flush_info.reset();
+      flush_infos.remove(i);
+      --i;
+    }
+  }
+}
+
 int ObTmpFileFlushManager::drive_flush_task_retry_(
     ObTmpFileFlushTask &flush_task,
     const FlushState state,
@@ -664,7 +685,11 @@ int ObTmpFileFlushManager::drive_flush_task_retry_(
       }
       break;
     case FlushState::TFFT_ASYNC_WRITE:
-      if (OB_FAIL(handle_async_write_(flush_task, next_state))) {
+      try_remove_unused_flush_info_(flush_task);
+      if (0 == flush_task.get_flush_infos().count()) {
+        STORAGE_LOG(INFO, "all flush info is aborted", KR(ret), K(flush_task));
+        next_state = FlushState::TFFT_ABORT;
+      } else if (OB_FAIL(handle_async_write_(flush_task, next_state))) {
         STORAGE_LOG(WARN, "fail to handle flush task async write", KR(ret), K(flush_task));
       }
       break;
@@ -710,7 +735,7 @@ int ObTmpFileFlushManager::retry(ObTmpFileFlushTask &flush_task)
     } else if (OB_FAIL(advance_status_(flush_task, next_state))) {
       STORAGE_LOG(WARN, "fail to advance status", KR(ret), K(state), K(next_state), K(flush_task));
     }
-  } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state);
+  } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state && FlushState::TFFT_ABORT != next_state);
 
   if (!flush_task.get_recorded_as_prepare_finished()) {
     if (flush_task.get_flush_seq() != flush_ctx_.get_flush_sequence()) {
@@ -965,16 +990,10 @@ int ObTmpFileFlushManager::update_meta_data_after_flush_for_files_(ObTmpFileFlus
       } else if (OB_FAIL(file->update_meta_after_flush(flush_info.batch_flush_idx_, is_meta, reset_ctx))){
         STORAGE_LOG(WARN, "fail to update meta data", KR(ret), K(is_meta), K(flush_info));
       } else {
-        if (reset_ctx) {
+        if (reset_ctx && flush_task.get_flush_seq() == flush_ctx_.get_flush_sequence()) {
           int tmp_ret = OB_SUCCESS;
-          // reset data/meta flush ctx after file update meta complete to prevent
-          // flush use stale flushed_page_id to copy data after the page is evicted.
-          // use empty ctx here because we have inserted ctx for every file when flushing begins.
-          ResetFlushCtxOp reset_op(is_meta);
-          ObTmpFileSingleFlushContext empty_ctx;
-          if (flush_task.get_flush_seq() == flush_ctx_.get_flush_sequence() &&
-              OB_TMP_FAIL(flush_ctx_.get_file_ctx_hash().set_or_update(file->get_fd(), empty_ctx, reset_op))) {
-            STORAGE_LOG(ERROR, "fail to clean file ctx from hash", KR(tmp_ret), K(file));
+          if (OB_TMP_FAIL(reset_flush_ctx_for_file_(file, is_meta))) {
+            STORAGE_LOG(WARN, "fail to reset flush ctx", KR(tmp_ret), K(file));
           }
         }
         flush_info.update_meta_data_done_ = true;
@@ -982,6 +1001,70 @@ int ObTmpFileFlushManager::update_meta_data_after_flush_for_files_(ObTmpFileFlus
     }
   }
   return ret;
+}
+
+// reset data/meta flush ctx after file update meta complete to prevent
+// flush use stale flushed_page_id to copy data after the page is evicted
+int ObTmpFileFlushManager::reset_flush_ctx_for_file_(const ObSharedNothingTmpFile *file, const bool is_meta)
+{
+  int ret = OB_SUCCESS;
+  ObTmpFileSingleFlushContext update_ctx;
+  if (OB_ISNULL(file)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "tmp file ptr is null", KR(ret), K(file));
+  } else if (OB_FAIL(flush_ctx_.get_file_ctx_hash().get_refactored(file->get_fd(), update_ctx))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      // do nothing
+    } else {
+      STORAGE_LOG(WARN, "fail to get file ctx from hash", KR(ret), K(file));
+    }
+  } else if (OB_ISNULL(update_ctx.file_handle_.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "file handle in flush context is null", KR(ret), K(file));
+  } else {
+    if (is_meta) {
+      update_ctx.meta_ctx_.reset();
+    } else {
+      update_ctx.data_ctx_.reset();
+    }
+
+    if (OB_FAIL(flush_ctx_.get_file_ctx_hash().set_refactored(file->get_fd(), update_ctx, 1/*cover_object*/))) {
+      STORAGE_LOG(ERROR, "fail to set file ctx into hash", KR(ret), K(file));
+    }
+  }
+  return ret;
+}
+
+void ObTmpFileFlushManager::try_remove_unused_file_flush_ctx()
+{
+  int ret = OB_SUCCESS;
+
+  ObArray<int64_t> deleted_fd_arr;
+  ObTmpFileBatchFlushContext::ObTmpFileFlushCtxHash& file_ctx_hash = flush_ctx_.get_file_ctx_hash();
+  for (ObTmpFileBatchFlushContext::ObTmpFileFlushCtxHash::iterator iter = file_ctx_hash.begin();
+       OB_SUCC(ret) && iter != file_ctx_hash.end();
+       ++iter) {
+    int64_t fd = iter->first;
+    ObTmpFileSingleFlushContext &file_flush_ctx = iter->second;
+    ObSharedNothingTmpFile *file = file_flush_ctx.file_handle_.get();
+    if (OB_ISNULL(file)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "file is nullptr", KR(ret), K(fd), K(file_flush_ctx));
+    } else if (file->is_deleting()) {
+      STORAGE_LOG(INFO, "the file is deleting, delete unused file flush ctx",
+          KR(ret), K(fd), K(file_flush_ctx));
+      if (OB_FAIL(deleted_fd_arr.push_back(fd))) {
+        STORAGE_LOG(WARN, "fail to deleted_fd_arr.push_back", KR(ret), K(fd), K(file_flush_ctx));
+      }
+    }
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < deleted_fd_arr.count(); ++i) {
+    if (OB_TMP_FAIL(flush_ctx_.get_file_ctx_hash().erase_refactored(deleted_fd_arr[i]))) {
+      STORAGE_LOG(ERROR, "fail to erase file ctx from hash", KR(tmp_ret), K(deleted_fd_arr[i]));
+    }
+  }
 }
 
 }  // end namespace tmp_file

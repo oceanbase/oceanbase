@@ -25,6 +25,10 @@
 #include "share/ob_balance_define.h" // ObBalanceTaskID
 #include "share/location_cache/ob_location_service.h"   // location_service_
 #include "share/ob_srv_rpc_proxy.h" // srv_rpc_proxy_
+#include "share/ob_global_merge_table_operator.h" // ObGlobalMergeTableOperator
+#include "share/ob_zone_merge_info.h" // ObGlobalMergeInfo
+#include "share/ob_freeze_info_proxy.h" // ObFreezeInfoProxy
+#include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
 #include "share/ob_share_util.h" // ObShareUtil
 #include "storage/ob_common_id_utils.h" // ObCommonIDUtils
 #include "storage/tablelock/ob_table_lock_service.h" // ObTableLockService
@@ -225,6 +229,16 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
     ret = OB_NEED_RETRY;
     TTS_INFO("last task failed, need to process task later",
         KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+      && OB_FAIL(lock_and_check_tenant_merge_status_(trans, need_wait))) {
+    LOG_WARN("lock and check tenant merge status failed", KR(ret));
+  } else if (need_wait) {
+    result_comment = WAIT_FOR_MAJOR_COMPACTION;
+    ret = OB_NEED_WAIT;
+    TTS_INFO("tenant is merging, need wait",
+        KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
+#endif
   } else if (OB_FAIL(check_ls_member_list_(
       *sql_proxy_,
       task.get_src_ls(),
@@ -1713,7 +1727,7 @@ int ObTenantTransferService::update_comment_for_expected_errors_(
     LOG_WARN("invalid task_id", KR(ret), K(task_id));
   } else if (OB_TRANS_TIMEOUT == err || OB_TIMEOUT == err) {
     actual_comment = TRANSACTION_TIMEOUT;
-  } else if (OB_NEED_RETRY == err) {
+  } else if (OB_NEED_RETRY == err || OB_NEED_WAIT == err) {
     if (result_comment < EMPTY_COMMENT || result_comment >= MAX_COMMENT) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected comment with err", KR(ret), K(err), K(result_comment));
@@ -1747,6 +1761,43 @@ int64_t ObTenantTransferService::get_tablet_count_threshold_() const
   }
   return tablet_count_threshold;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObTenantTransferService::lock_and_check_tenant_merge_status_(
+    ObMySQLTransaction &trans,
+    bool &need_wait)
+{
+  int ret = OB_SUCCESS;
+  need_wait = false;
+  SCN snapshot_gc_scn;
+  ObGlobalMergeInfo merge_info;
+  ObFreezeInfo max_frozen_status;
+  ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(sql_proxy_));
+  } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
+      trans,
+      tenant_id_,
+      snapshot_gc_scn))) { // lock snapshot_gc_ts to ensure that freeze_info has not changed
+    LOG_WARN("select snapshot_gc_scn for update failed", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(freeze_info_proxy.get_max_freeze_info(*sql_proxy_, max_frozen_status))) {
+    LOG_WARN("fail to get freeze info with max frozen_scn", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(
+      *sql_proxy_,
+      tenant_id_,
+      merge_info))) {
+    LOG_WARN("fail to get global merge info", KR(ret), K(tenant_id_));
+  } else if (max_frozen_status.frozen_scn_ != merge_info.frozen_scn()
+      || merge_info.frozen_scn() != merge_info.global_broadcast_scn()
+      || merge_info.frozen_scn() != merge_info.last_merged_scn()) {
+    need_wait = true;
+    TTS_INFO("tenant needs merge or in merge process, can not do transfer",
+        K(tenant_id_), K(need_wait), K(merge_info), K(max_frozen_status));
+  }
+  return ret;
+}
+#endif
 
 #undef TTS_INFO
 } // end namespace rootserver

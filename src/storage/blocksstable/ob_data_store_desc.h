@@ -21,7 +21,6 @@
 namespace oceanbase
 {
 namespace storage {
-struct ObSSTableMergeInfo;
 struct ObStorageColumnGroupSchema;
 }
 namespace share
@@ -59,6 +58,8 @@ public:
     const int64_t snapshot_version,
     const share::SCN &end_scn,
     const int64_t cluster_version,
+    const compaction::ObExecMode exec_mode,
+    const bool micro_index_clustered,
     const bool need_submit_io = true);
   bool is_valid() const;
   void reset();
@@ -69,6 +70,7 @@ public:
       "merge_type", merge_type_to_str(merge_type_),
       K_(snapshot_version),
       K_(end_scn),
+      "exec_mode", exec_mode_to_str(exec_mode_),
       K_(is_ddl),
       K_(compressor_type),
       K_(macro_block_size),
@@ -79,6 +81,7 @@ public:
       K_(master_key_id),
       KPHEX_(encrypt_key, sizeof(encrypt_key_)),
       K_(major_working_cluster_version),
+      K_(micro_index_clustered),
       K_(progressive_merge_round),
       K_(need_submit_io));
 private:
@@ -108,6 +111,8 @@ public:
   int64_t encrypt_id_;
   int64_t master_key_id_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
+  compaction::ObExecMode exec_mode_;
+  bool micro_index_clustered_;
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.
   bool need_submit_io_;
@@ -201,6 +206,19 @@ public:
     is_force_flat_store_type_ = true;
   }
   bool is_store_type_valid() const;
+  OB_INLINE bool is_for_index_or_meta() const
+  {
+    return data_store_type_ == ObMacroBlockCommonHeader::SSTableIndex ||
+           data_store_type_ == ObMacroBlockCommonHeader::SSTableMacroMeta;
+  }
+  OB_INLINE bool is_for_index() const
+  {
+    return data_store_type_ == ObMacroBlockCommonHeader::SSTableIndex;
+  }
+  OB_INLINE bool is_for_meta() const
+  {
+    return data_store_type_ == ObMacroBlockCommonHeader::SSTableMacroMeta;
+  }
   OB_INLINE bool is_major_merge_type() const { return compaction::is_major_merge_type(get_merge_type()); }
   OB_INLINE bool is_major_or_meta_merge_type() const { return compaction::is_major_or_meta_merge_type(get_merge_type()); }
   OB_INLINE bool is_use_pct_free() const { return get_macro_block_size() != get_macro_store_size(); }
@@ -234,6 +252,7 @@ public:
   {
     return use_old_version_macro_header() ? col_desc_->row_column_count_ : col_desc_->rowkey_column_count_;
   }
+  bool micro_index_clustered() const;
   int update_basic_info_from_macro_meta(const ObSSTableBasicMeta &meta);
   /* GET FUNC */
   #define STORE_DESC_DEFINE_POINT_FUNC(var_type, desc, var_name) \
@@ -258,6 +277,7 @@ public:
   STATIC_DESC_FUNC(ObCompressorType, compressor_type);
   STATIC_DESC_FUNC(int64_t, major_working_cluster_version);
   STATIC_DESC_FUNC(const char *, encrypt_key);
+  STATIC_DESC_FUNC(compaction::ObExecMode, exec_mode);
   STATIC_DESC_FUNC(bool, need_submit_io);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
@@ -287,8 +307,10 @@ public:
       "row_store_type", ObStoreFormat::get_row_store_name(row_store_type_),
       KPC_(col_desc),
       K_(encoder_opt),
-      KP_(merge_info),
       KP_(sstable_index_builder),
+      K_(need_pre_warm),
+      K_(need_build_hash_index_for_micro_block),
+      K_(data_store_type),
       K_(micro_block_size));
 
 private:
@@ -305,9 +327,12 @@ public:
   int64_t micro_block_size_;
   ObRowStoreType row_store_type_;
   ObMicroBlockEncoderOpt encoder_opt_; // binding to row_store_type_
-  storage::ObSSTableMergeInfo *merge_info_;
   ObSSTableIndexBuilder *sstable_index_builder_;
+  // we can use `data_store_type_` to distinguish data_macro or meta_macro in macro writer
+  ObMacroBlockCommonHeader::MacroBlockType data_store_type_;
+  bool need_pre_warm_;
   bool is_force_flat_store_type_;
+  bool need_build_hash_index_for_micro_block_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataStoreDesc);
 };
@@ -339,9 +364,11 @@ struct ObWholeDataStoreDesc
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const int64_t cluster_version,
+    const bool micro_index_clustered,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0,
+    const compaction::ObExecMode exec_mode = compaction::ObExecMode::EXEC_MODE_LOCAL,
     const bool need_submit_io = true);
   int gen_index_store_desc(const ObDataStoreDesc &data_desc);
   int assign(const ObDataStoreDesc &desc);

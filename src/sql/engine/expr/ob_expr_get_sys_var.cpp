@@ -276,14 +276,59 @@ int ObExprGetSysVar::calc_get_sys_val_expr(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("invalid arg cnt", K(ret), K(expr.arg_cnt_));
   } else if (OB_FAIL(expr.eval_param_value(ctx, name, scope))) {
     LOG_WARN("eval param failed", K(ret));
+  } else if (OB_ISNULL(name) || OB_ISNULL(scope)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL name or scope", K(ret), KPC(name), KPC(scope), K(expr));
   } else {
     const ObString &var_name = name->get_string();
-    int64_t var_scope = scope->get_int();
+    int64_t var_scope = OB_INVALID_COUNT;
+    ObObjType scope_type = expr.args_[1]->datum_meta_.get_type();
     ObObj result;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-    if (OB_FAIL(calc_(result, var_name, var_scope, ctx.exec_ctx_.get_my_session(),
-                      &ctx.exec_ctx_, calc_alloc))) {
+
+    if (ObIntType == scope_type) {
+      var_scope = scope->get_int();
+    } else if (ObDecimalIntType == scope_type) {
+      int32_t int_bytes = scope->get_int_bytes();
+      const ObDecimalInt *dec_int = scope->get_decimal_int();
+      switch (int_bytes) {
+      case sizeof(int32_t): {
+        var_scope = *dec_int->int32_v_;
+        break;
+      }
+      case sizeof(int64_t): {
+        var_scope = *dec_int->int64_v_;
+        break;
+      }
+      case sizeof(int128_t): {
+        var_scope = *dec_int->int128_v_;
+        break;
+      }
+      case sizeof(int256_t): {
+        var_scope = *dec_int->int256_v_;
+        break;
+      }
+      case sizeof(int512_t): {
+        var_scope = *dec_int->int512_v_;
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected decimalint bytes",
+                 K(ret), K(int_bytes), KPC(scope));
+      }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected scope type",
+               K(ret), K(scope_type), KPC(scope), K(expr), K(lbt()));
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(calc_(result, var_name, var_scope, ctx.exec_ctx_.get_my_session(),
+                             &ctx.exec_ctx_, calc_alloc))) {
       LOG_WARN("calc_ failed", K(ret), K(name), K(scope));
     } else {
       const ObObjType &obj_type = result.get_type();

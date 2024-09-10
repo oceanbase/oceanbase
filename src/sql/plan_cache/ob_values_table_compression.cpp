@@ -28,14 +28,16 @@ const char *ObValuesTableCompression::lower_[ObParser::S_MAX] = {
   "", "", "", "", "", "", "", "", "", "", /* 0 ~9 */
   "", "", "", "update", "", "", "", "", "", "", /* 10 ~19 */
   "", "", "", "", "", "", "", "", "", "", /* 20 ~29 */
-  "", "", "", "select", "insert", "delete", "values", "table", "into" /* 30 ~38 */
+  "", "", "", "select", "insert", "delete", "values", "table", "into", "", /* 30 ~39 */
+  "", "" /* 40 ~41 */
 };
 
 const char *ObValuesTableCompression::upper_[ObParser::S_MAX] = {
   "", "", "", "", "", "", "", "", "", "", /* 0 ~9 */
   "", "", "", "UPDATE", "", "", "", "", "", "", /* 10 ~19 */
   "", "", "", "", "", "", "", "", "", "", /* 20 ~29 */
-  "", "", "", "SELECT", "INSERT", "DELETE", "VALUES", "TABLE", "INTO" /* 30 ~38 */
+  "", "", "", "SELECT", "INSERT", "DELETE", "VALUES", "TABLE", "INTO", "", /* 30 ~39 */
+  "", "" /* 40 ~41 */
 };
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')

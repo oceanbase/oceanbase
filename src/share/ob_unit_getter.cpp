@@ -14,6 +14,10 @@
 
 #include "share/ob_unit_getter.h"
 #include "share/ob_get_compat_mode.h"
+#include "share/ob_server_struct.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
 
 namespace oceanbase
 {
@@ -63,7 +67,8 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     lib::Worker::CompatMode compat_mode,
     const int64_t create_timestamp,
     const bool has_memstore,
-    const bool is_remove)
+    const bool is_remove,
+    const int64_t hidden_sys_data_disk_config_size)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(config_.assign(config))) {
@@ -76,6 +81,7 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     create_timestamp_ = create_timestamp;
     has_memstore_ = has_memstore;
     is_removed_ = is_remove;
+    hidden_sys_data_disk_config_size_ = hidden_sys_data_disk_config_size;
   }
   return ret;
 }
@@ -116,7 +122,8 @@ int ObUnitInfoGetter::ObTenantConfig::divide_meta_tenant(ObTenantConfig& meta_te
       lib::Worker::CompatMode::MYSQL,       // always MYSQL mode
       create_timestamp_,
       has_memstore_,
-      is_removed_))) {
+      is_removed_,
+      hidden_sys_data_disk_config_size_))) {
     LOG_WARN("init meta tenant config fail", KR(ret), KPC(this), K(meta_config));
   }
   // update self unit resource
@@ -136,6 +143,7 @@ void ObUnitInfoGetter::ObTenantConfig::reset()
   mode_ = lib::Worker::CompatMode::INVALID;
   create_timestamp_ = 0;
   is_removed_ = false;
+  hidden_sys_data_disk_config_size_ = 0;
 }
 
 bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) const
@@ -147,7 +155,8 @@ bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) c
           mode_ == other.mode_ &&
           create_timestamp_ == other.create_timestamp_ &&
           has_memstore_ == other.has_memstore_ &&
-          is_removed_ == other.is_removed_);
+          is_removed_ == other.is_removed_ &&
+          hidden_sys_data_disk_config_size_ == other.hidden_sys_data_disk_config_size_);
 }
 
 int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantConfig &other)
@@ -165,6 +174,7 @@ int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantCon
     create_timestamp_ = other.create_timestamp_;
     has_memstore_ = other.has_memstore_;
     is_removed_ = other.is_removed_;
+    hidden_sys_data_disk_config_size_ = other.hidden_sys_data_disk_config_size_;
   }
   return ret;
 }
@@ -251,6 +261,12 @@ int ObUnitInfoGetter::get_server_tenant_configs(const common::ObAddr &server,
       } else {
         tenant_config.has_memstore_ = true;
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+      if ((OB_SYS_TENANT_ID == tenant_id) &&
+          GCTX.is_shared_storage_mode()) {  // only sys_tenant_unit_meta record hidden_sys_data_disk_config_size value
+        tenant_config.hidden_sys_data_disk_config_size_ = OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
+      }
+#endif
       build_unit_stat(server, unit_infos.at(i).unit_, tenant_config.unit_status_);
       tenant_config.config_ = unit_infos.at(i).config_;
       if (OB_FAIL(get_compat_mode(tenant_id, tenant_config.mode_))) {

@@ -318,10 +318,6 @@ void ObPartTransCtx::destroy()
     trace_info_.reset();
     block_frozen_memtable_ = nullptr;
 
-    last_rollback_to_request_id_ = 0;
-    last_rollback_to_timestamp_ = 0;
-    last_transfer_in_timestamp_ = 0;
-
     is_inited_ = false;
   }
 }
@@ -386,9 +382,6 @@ void ObPartTransCtx::default_init_()
   standby_part_collected_.reset();
   trace_log_.reset();
   transfer_deleted_ = false;
-  last_rollback_to_request_id_ = 0;
-  last_rollback_to_timestamp_ = 0;
-  last_transfer_in_timestamp_ = 0;
 }
 
 int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
@@ -8627,6 +8620,18 @@ int ObPartTransCtx::end_access()
   return ret;
 }
 
+int64_t ObPartTransCtx::get_max_transfer_epoch_()
+{
+  int64_t max_transfer_epoch = 0;
+
+  for (int64_t i = 0; i < exec_info_.transfer_parts_.count(); i++) {
+    max_transfer_epoch = MAX(max_transfer_epoch,
+                             exec_info_.transfer_parts_[i].transfer_epoch_);
+  }
+
+  return max_transfer_epoch;
+}
+
 /*
  * rollback_to_savepoint - rollback to savepoint
  *
@@ -8657,7 +8662,8 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
                                           ObTxSEQ from_scn,
                                           const ObTxSEQ to_scn,
                                           const int64_t seq_base,
-                                          const int64_t request_id,
+                                          const int64_t input_transfer_epoch,
+                                          int64_t &output_transfer_epoch,
                                           ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
@@ -8697,25 +8703,16 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
 
   if (OB_SUCC(ret)) {
     bool need_downstream = true;
-    int64_t current_rollback_to_timestamp = ObTimeUtility::current_time();
-    if (request_id != 0 && // come from rollback to request
-        request_id == last_rollback_to_request_id_) { // the same rollback to with the last one
-      if (last_transfer_in_timestamp_ != 0 &&
-          last_rollback_to_timestamp_ != 0 &&
-          // encounter transfer between two same rollback to
-          last_transfer_in_timestamp_ > last_rollback_to_timestamp_) {
-        need_downstream = true;
-        TRANS_LOG(INFO, "transfer between rollback to happened", K(ret), K(request_id),
-                  K(last_rollback_to_timestamp_), K(last_transfer_in_timestamp_),
-                  K(last_rollback_to_request_id_), KPC(this));
-      } else {
-        need_downstream = false;
-        TRANS_LOG(INFO, "no transfer between rollback to happened", K(ret), K(request_id),
-                  K(last_rollback_to_timestamp_), K(last_transfer_in_timestamp_),
-                  K(last_rollback_to_request_id_), KPC(this));
-      }
-    } else {
+    output_transfer_epoch = get_max_transfer_epoch_();
+
+    if (input_transfer_epoch != output_transfer_epoch) {
       need_downstream = true;
+      TRANS_LOG(INFO, "transfer between rollback to happened", K(ret),
+                K(input_transfer_epoch), K(output_transfer_epoch), KPC(this));
+    } else {
+      need_downstream = false;
+      TRANS_LOG(INFO, "no transfer between rollback to happened", K(ret),
+                K(input_transfer_epoch), K(output_transfer_epoch), KPC(this));
     }
 
     // must add downstream parts when return success
@@ -8729,11 +8726,6 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
                                     exec_info_.intermediate_participants_.at(idx).transfer_epoch_)))) {
         TRANS_LOG(WARN, "push parts to array failed", K(ret), KPC(this));
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      last_rollback_to_request_id_ = request_id;
-      last_rollback_to_timestamp_ = current_rollback_to_timestamp;
     }
   }
 
@@ -10266,21 +10258,22 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         ctx_tx_data_.set_state(ObTxData::ABORT);
       }
 
-      if (!arg.happened_before_) {
-        bool epoch_exist = false;
-        for (int64_t idx = 0; idx < exec_info_.transfer_parts_.count(); idx++) {
-          if (exec_info_.transfer_parts_.at(idx).ls_id_ == move_tx_param.src_ls_id_ &&
-              exec_info_.transfer_parts_.at(idx).transfer_epoch_ == move_tx_param.transfer_epoch_) {
-            epoch_exist = true;
-            break;
-          }
-        }
-        if (!epoch_exist) {
-          if (OB_FAIL(exec_info_.transfer_parts_.push_back(ObTxExecPart(move_tx_param.src_ls_id_, -1, move_tx_param.transfer_epoch_)))) {
-            TRANS_LOG(WARN, "epochs push failed", K(ret));
-          }
+      bool epoch_exist = false;
+      for (int64_t idx = 0; idx < exec_info_.transfer_parts_.count(); idx++) {
+        if (exec_info_.transfer_parts_.at(idx).ls_id_ == move_tx_param.src_ls_id_ &&
+            exec_info_.transfer_parts_.at(idx).transfer_epoch_ == move_tx_param.transfer_epoch_) {
+          epoch_exist = true;
+          break;
         }
       }
+      if (!epoch_exist) {
+        if (OB_FAIL(exec_info_.transfer_parts_.push_back(ObTxExecPart(move_tx_param.src_ls_id_,
+                                                                      -1, /*exec_epoch*/
+                                                                      move_tx_param.transfer_epoch_)))) {
+          TRANS_LOG(WARN, "epochs push failed", K(ret));
+        }
+      }
+
       if (OB_FAIL(ret)) {
       } else if (exec_info_.state_ < ObTxState::COMMIT
         && OB_FAIL(mt_ctx_.recover_from_table_lock_durable_info(arg.table_lock_info_, true))) {
@@ -10296,8 +10289,6 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         exec_info_.is_transfer_blocking_ = false;
         if (OB_FAIL(transfer_op_log_cb_(move_tx_param.op_scn_, move_tx_param.op_type_))) {
           TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(move_tx_param));
-        } else {
-          last_transfer_in_timestamp_ = ObTimeUtility::current_time();
         }
       }
     }

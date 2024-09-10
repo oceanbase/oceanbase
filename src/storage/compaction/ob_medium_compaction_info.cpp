@@ -184,7 +184,7 @@ int ObParallelMergeInfo::generate_from_range_array(
       list_size_ = sum_range_cnt - 1;
       allocator_ = &allocator;
       uint64_t compat_version = 0;
-      if (OB_FAIL(MTL(ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
+      if (OB_FAIL(MERGE_SCHEDULER_PTR->get_min_data_version(compat_version))) {
         LOG_WARN("failed to get min data version", KR(ret));
       } else if (compat_version < DATA_VERSION_4_2_0_0) { // sync store_rowkey_list
         ret = generate_store_rowkey_list(allocator, paral_range);
@@ -401,7 +401,8 @@ int ObMediumCompactionInfo::init(
   if (OB_UNLIKELY(!medium_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(medium_info));
-  } else if (OB_FAIL(storage_schema_.init(allocator, medium_info.storage_schema_))) {
+  } else if (medium_info.contain_storage_schema()
+          && OB_FAIL(storage_schema_.init(allocator, medium_info.storage_schema_))) {
     LOG_WARN("failed to init storage schema", K(ret), K(medium_info));
   } else if (OB_FAIL(parallel_merge_info_.init(allocator, medium_info.parallel_merge_info_))) {
     LOG_WARN("failed to init parallel merge info", K(ret), K(medium_info));
@@ -444,7 +445,7 @@ bool ObMediumCompactionInfo::is_valid() const
   return COMPACTION_TYPE_MAX != compaction_type_
       && medium_snapshot_ > 0
       && data_version_ > 0
-      && storage_schema_.is_valid()
+      && (!contain_storage_schema() || storage_schema_.is_valid())
       && parallel_merge_info_.is_valid()
       && (MEDIUM_COMPAT_VERSION == medium_compat_version_
         || (MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_ && last_medium_snapshot_ != 0));
@@ -498,6 +499,18 @@ int ObMediumCompactionInfo::gene_parallel_info(
   return ret;
 }
 
+bool ObMediumCompactionInfo::contain_storage_schema() const
+{
+  bool contain_schema = true;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode() &&
+      ObAdaptiveMergePolicy::is_skip_merge_reason((ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_merge_reason_)) {
+    contain_schema = false;
+  }
+#endif
+  return contain_schema;
+}
+
 int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -510,8 +523,12 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
         info_,
         cluster_id_,
         medium_snapshot_,
-        data_version_,
-        storage_schema_);
+        data_version_);
+
+    if (OB_SUCC(ret) && contain_storage_schema()) {
+      LST_DO_CODE(OB_UNIS_ENCODE, storage_schema_);
+    }
+
     if (OB_SUCC(ret) && contain_parallel_range_) {
       LST_DO_CODE(
           OB_UNIS_ENCODE,
@@ -544,7 +561,7 @@ int ObMediumCompactionInfo::deserialize(
         medium_snapshot_,
         data_version_);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(storage_schema_.deserialize(allocator, buf, data_len, pos))) {
+    } else if (contain_storage_schema() && OB_FAIL(storage_schema_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("failed to deserialize storage schema", K(ret), K(buf), K(data_len), K(pos));
     } else if (contain_parallel_range_) {
       if (OB_FAIL(parallel_merge_info_.deserialize(allocator, buf, data_len, pos))) {
@@ -571,8 +588,10 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
       info_,
       cluster_id_,
       medium_snapshot_,
-      data_version_,
-      storage_schema_);
+      data_version_);
+  if (contain_storage_schema()) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, storage_schema_);
+  }
   if (contain_parallel_range_) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, parallel_merge_info_);
   }

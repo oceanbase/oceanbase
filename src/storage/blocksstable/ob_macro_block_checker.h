@@ -55,6 +55,10 @@ private:
       const ObMacroBlockCommonHeader &common_header,
       const char *macro_block_buf,
       const int64_t macro_block_buf_size);
+  static int check_physical_checksum(
+      const ObSharedObjectHeader &shared_obj_header,
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size);
   static int get_sstable_header_and_column_checksum(
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,

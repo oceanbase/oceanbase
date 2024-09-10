@@ -90,6 +90,8 @@ public:
       const char *name,
       const int64_t service_epoch);
 
+  static int check_and_update_server_zone_op_service_epoch(ObMySQLTransaction &trans);
+
 public:
   constexpr static const char * const FREEZE_SERVICE_EPOCH = "freeze_service_epoch";
   constexpr static const char * const ARBITRATION_SERVICE_EPOCH = "arbitration_service_epoch";

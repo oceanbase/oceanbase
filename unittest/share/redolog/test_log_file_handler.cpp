@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "lib/file/ob_file.h"
 #include "share/ob_simple_mem_limit_getter.h"
+#include "share/ob_device_manager.h"
 
 #define private public
 #include "share/redolog/ob_log_file_handler.h"
@@ -44,6 +45,7 @@ public:
   }
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase();
 
 public:
   static const int64_t LOG_FILE_SIZE;
@@ -84,6 +86,11 @@ void TestLogFileHandler::TearDown()
   TP_SET_EVENT(EventTable::EN_IO_SUBMIT, OB_SUCCESS, 0, 1);
   usleep(100 * 1000);
 #endif
+}
+
+void TestLogFileHandler::SetUpTestCase()
+{
+  ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
 }
 
 TEST_F(TestLogFileHandler, simple)

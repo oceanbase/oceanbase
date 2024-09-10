@@ -10,6 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifndef OB_TEST_DML_COMMON_H_
+#define OB_TEST_DML_COMMON_H_
+
 #include <gtest/gtest.h>
 
 #define protected public
@@ -27,7 +30,7 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "share/schema/ob_table_param.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
-#include "mtlenv/mock_tenant_module_env.h"
+#include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
@@ -465,6 +468,7 @@ void TestDmlCommon::build_data_table_schema(
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(ObRowStoreType::ENCODING_ROW_STORE);
   table_schema.set_storage_format_version(ObStorageFormatVersion::OB_STORAGE_FORMAT_VERSION_V4);
+  table_schema.set_micro_index_clustered(false);
 
 #define ADD_COLUMN(column_id, column_name, data_type, collation_type, is_row_key) \
   { \
@@ -644,3 +648,5 @@ int TestDmlCommon::build_mixed_tablets_arg(
 }
 } // namespace storage
 } // namespace oceanbase
+
+#endif // OB_TEST_DML_COMMON_H_

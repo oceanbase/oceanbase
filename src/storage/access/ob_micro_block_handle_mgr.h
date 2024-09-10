@@ -37,7 +37,8 @@ struct ObSSTableMicroBlockState {
 
 struct ObTableScanStoreStat;
 class ObMicroBlockHandleMgr;
-struct ObMicroBlockDataHandle {
+struct ObMicroBlockDataHandle
+{
   ObMicroBlockDataHandle();
   virtual ~ObMicroBlockDataHandle();
   void init(
@@ -45,6 +46,8 @@ struct ObMicroBlockDataHandle {
       const blocksstable::MacroBlockId &macro_id,
       const int64_t offset,
       const int64_t size,
+      const ObLogicMicroBlockId &logic_micro_id,
+      const int64_t data_checksum,
       ObMicroBlockHandleMgr *handle_mgr);
   void reset();
   bool match(const blocksstable::MacroBlockId &macro_id,
@@ -71,7 +74,7 @@ struct ObMicroBlockDataHandle {
   blocksstable::ObMicroBlockDesMeta des_meta_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   blocksstable::ObMicroBlockBufferHandle cache_handle_;
-  blocksstable::ObMacroBlockHandle io_handle_;
+  blocksstable::ObStorageObjectHandle io_handle_;
   ObMicroBlockHandleMgr *handle_mgr_;
   ObIAllocator *allocator_;
   blocksstable::ObMicroBlockData loaded_block_data_;

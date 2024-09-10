@@ -60,7 +60,7 @@ public:
   virtual ~ObIBackupIndexIterator();
   ObIBackupIndexIterator(const int64_t task_id, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id);
+      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id, const int64_t dest_id);
   virtual ObBackupIndexIteratorType get_type() const = 0;
   virtual int next() = 0;
   virtual bool is_iter_end() const = 0;
@@ -72,13 +72,13 @@ protected:
   static int get_backup_file_length_(
       const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info, int64_t &file_length);
   static int pread_file_(const common::ObString &backup_path, const share::ObBackupStorageInfo *storage_info,
-      const int64_t offset, const int64_t read_size, char *buf);
+      const ObStorageIdMod &mod, const int64_t offset, const int64_t read_size, char *buf);
   static int read_data_file_trailer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info,
-      ObBackupDataFileTrailer &data_file_trailer);
+      const ObStorageIdMod &mod, ObBackupDataFileTrailer &data_file_trailer);
   static int read_index_file_trailer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info,
-      ObBackupMultiLevelIndexTrailer &index_file_trailer);
+      const ObStorageIdMod &mod, ObBackupMultiLevelIndexTrailer &index_file_trailer);
   static int read_backup_index_block_(const share::ObBackupPath &backup_path,
-      const share::ObBackupStorageInfo *storage_info, const int64_t offset, const int64_t length,
+      const share::ObBackupStorageInfo *storage_info, const ObStorageIdMod &mod, const int64_t offset, const int64_t length,
       common::ObIAllocator &allocator, blocksstable::ObBufferReader &buffer);
   template <class IndexType>
   static int parse_from_index_blocks_impl_(const int64_t offset, blocksstable::ObBufferReader &buffer_reader,
@@ -96,10 +96,12 @@ protected:
   share::ObBackupDataType backup_data_type_;
   int64_t turn_id_;
   int64_t retry_id_;
+  int64_t dest_id_;
   int64_t cur_file_id_;
   common::ObArray<int64_t> file_id_list_;
   common::ObArray<ObBackupIndexBlockDesc> block_desc_list_;
   common::ObArenaAllocator allocator_;
+  common::ObStorageIdMod mod_;
   DISALLOW_COPY_AND_ASSIGN(ObIBackupIndexIterator);
 };
 
@@ -124,7 +126,7 @@ public:
   int init(const int64_t task_id, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
       const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
-      const bool need_read_inner_table);
+      const int64_t dest_id, const bool need_read_inner_table);
   virtual int next() override;
   virtual bool is_iter_end() const override;
   virtual int get_cur_index(ObBackupMacroRangeIndex &index) override;
@@ -160,7 +162,8 @@ public:
   virtual ~ObBackupMacroRangeIndexIterator();
   int init(const int64_t task_id, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id);
+      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
+      const int64_t dest_id);
   virtual int next() override;
   virtual bool is_iter_end() const override;
   virtual int get_cur_index(ObBackupMacroRangeIndex &index) override;
@@ -205,7 +208,7 @@ public:
   int init(const int64_t task_id, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
       const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
-      const bool need_read_inner_table = true);
+      const int64_t dest_id, const bool need_read_inner_table = true);
   virtual int next() override;
   virtual bool is_iter_end() const override;
   int get_cur_index(ObBackupMetaIndex &meta_index);
@@ -384,6 +387,8 @@ public:
   VIRTUAL_TO_STRING_KV(KP(this), K_(idx));
 protected:
   int64_t idx_;
+  // TODO:yangyi.yyy, adapt mod
+  common::ObStorageIdMod mod_;
 };
 
 // iterate from tablet_info file

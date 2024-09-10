@@ -59,6 +59,7 @@ void TestSchemaUtils::prepare_data_schema(share::schema::ObTableSchema &table_sc
   table_schema.set_block_size(micro_block_size);
   table_schema.set_compress_func_name("none");
   table_schema.set_row_store_type(common::ObRowStoreType::FLAT_ROW_STORE);
+  table_schema.set_micro_index_clustered(false);
   //init column
   char name[common::OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
@@ -109,6 +110,7 @@ void TestSchemaUtils::prepare_index_schema(share::schema::ObTableSchema &index_s
   index_schema.set_block_size(micro_block_size);
   index_schema.set_compress_func_name("none");
   index_schema.set_row_store_type(FLAT_ROW_STORE);
+  index_schema.set_micro_index_clustered(false);
 
   //init column
   char name[OB_MAX_FILE_NAME_LENGTH];

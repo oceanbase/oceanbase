@@ -101,7 +101,7 @@ public:
 public:
   ObBlockInfoSet()
     : meta_block_info_set_(), data_block_info_set_(), backup_block_info_set_(),
-    shared_meta_block_info_set_(), shared_data_block_info_map_()
+    shared_meta_block_info_set_(), clustered_data_block_info_map_()
   {
   }
   ~ObBlockInfoSet()
@@ -110,7 +110,7 @@ public:
     data_block_info_set_.reuse();
     backup_block_info_set_.reuse();
     shared_meta_block_info_set_.reuse();
-    shared_data_block_info_map_.reuse();
+    clustered_data_block_info_map_.reuse();
   }
   int init(
       const int64_t meta_bucket_num = EXCLUSIVE_BLOCK_BUCKET_NUM,
@@ -119,11 +119,14 @@ public:
       const int64_t shared_data_bucket_num = SHARED_BLOCK_BUCKET_NUM);
 
 public:
-  TabletMacroSet meta_block_info_set_;
-  TabletMacroSet data_block_info_set_;
+  TabletMacroSet meta_block_info_set_; // MacroBlockID of small_sstable->addr, other_block & linked_block in normal sstable
+  TabletMacroSet data_block_info_set_; // only data block of sstable, not include index_block and meta_block
   TabletMacroSet backup_block_info_set_;
-  TabletMacroSet shared_meta_block_info_set_;
-  TabletMacroMap shared_data_block_info_map_;
+  TabletMacroSet shared_meta_block_info_set_; // MacroBlockID of
+                                              // (sstable [stable.serialize], sstable->addr[->block_id()],
+                                              //  table_store, auto_inc_seq, storage_schema, dump_kvs, medium_info_list)
+  TabletMacroMap clustered_data_block_info_map_; // map<macro_id, used_size (sum of nest_size, less than 2MB)>
+                                                 // small_sstable->meta->macro_info_->nested_size
 };
 
 class ObTabletMacroInfo final
@@ -160,7 +163,10 @@ public:
   ObTabletMacroInfo();
   ~ObTabletMacroInfo();
   void reset();
-  int init(ObArenaAllocator &allocator, const ObBlockInfoSet &id_set, ObLinkedMacroBlockItemWriter &linked_writer);
+  int init(
+    ObArenaAllocator &allocator,
+    const ObBlockInfoSet &id_set,
+    ObLinkedMacroBlockItemWriter *linked_writer);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;

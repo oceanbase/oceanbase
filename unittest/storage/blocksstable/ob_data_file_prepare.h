@@ -24,6 +24,7 @@
 #include "common/log/ob_log_cursor.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "share/ob_io_device_helper.h"
+#include "share/ob_device_manager.h"
 #include "share/redolog/ob_log_file_handler.h"
 #include "storage/ob_file_system_router.h"
 #include "share/ob_force_print_log.h"
@@ -32,6 +33,7 @@
 #include "share/ob_simple_mem_limit_getter.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/slog/ob_storage_logger_manager.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -160,6 +162,8 @@ int TestDataFilePrepareUtil::init(
     STORAGE_LOG(WARN, "failed to gen slog dir", K(ret));
   } else if (OB_FAIL(databuff_printf(clog_dir_, OB_MAX_FILE_NAME_LENGTH, "%s/clog/", data_dir_))) {
     STORAGE_LOG(WARN, "failed to gen clog dir", K(ret));
+  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_instance().init(data_dir_))) {
+    STORAGE_LOG(WARN, "fail to init file system router", K(ret));
   } else {
     storage_env_.data_dir_ = data_dir_;
     storage_env_.sstable_dir_ = file_dir_;
@@ -198,6 +202,7 @@ int TestDataFilePrepareUtil::init(
     getter_ = getter;
     is_inited_ = true;
   }
+
   return ret;
 }
 
@@ -212,6 +217,7 @@ int TestDataFilePrepareUtil::open()
   const int64_t max_cache_size = 1024L * 1024L * 512;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   const int64_t mem_limit = 10 * 1024L * 1024L * 1024L;
+  const int64_t data_disk_size = 4 * 1024L * 1024L * 1024L;
   lib::set_memory_limit(mem_limit);
 
   const int64_t default_partition_cnt = 1000;
@@ -234,11 +240,6 @@ int TestDataFilePrepareUtil::open()
     STORAGE_LOG(WARN, "failed to create slog dir", K(ret), K(slog_dir_));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir_))) {
     STORAGE_LOG(WARN, "failed to create file dir", K(ret), K(file_dir_));
-  } else if (OB_FAIL(SLOGGERMGR.init(storage_env_.log_spec_.log_dir_,
-      storage_env_.log_spec_.log_dir_,
-      storage_env_.log_spec_.max_log_file_size_, storage_env_.slog_file_spec_))) {
-    STORAGE_LOG(WARN, "ObStorageLoggerManager init failed", KR(ret));
-  } else if (FALSE_IT(SLOGGERMGR.need_reserved_ = false)) {
   } else if (OB_FAIL(ObKVGlobalCache::get_instance().init(getter_,
                                                           bucket_num,
                                                           max_cache_size,
@@ -252,7 +253,7 @@ int TestDataFilePrepareUtil::open()
         STORAGE_LOG(WARN, "Failed to init link_name", K(ret));
       } else if (OB_FAIL(FileDirectoryUtils::create_full_path(dirname))) {
         STORAGE_LOG(WARN, "failed to create sstable sub dir", K(ret), K(dirname));
-      }else if (OB_FAIL(FileDirectoryUtils::symlink(dirname, link_name))) {
+      } else if (OB_FAIL(FileDirectoryUtils::symlink(dirname, link_name))) {
         STORAGE_LOG(WARN, "failed to create sstable sub dir", K(ret), K(dirname));
       } else {
         STORAGE_LOG(INFO, "succeed to create full path", K(ret), K(dirname));
@@ -265,9 +266,11 @@ int TestDataFilePrepareUtil::open()
     const int64_t async_io_thread_count = 8;
     const int64_t sync_io_thread_count = 2;
     const int64_t max_io_depth = 256;
-    static ObTenantBase tenant_ctx(OB_SERVER_TENANT_ID);
-    ObTenantEnv::set_tenant(&tenant_ctx);
-    if (OB_FAIL(ObIODeviceWrapper::get_instance().init(
+
+    bool need_format = false;
+    if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+    } else if (OB_FAIL(ObIODeviceWrapper::get_instance().init(
           storage_env_.data_dir_,
           storage_env_.sstable_dir_,
           storage_env_.default_block_size_,
@@ -276,14 +279,16 @@ int TestDataFilePrepareUtil::open()
       STORAGE_LOG(WARN, "init io device fail", K(ret), K(storage_env_));
     } else if (OB_FAIL(ObIOManager::get_instance().init())) {
       STORAGE_LOG(WARN, "failed to init io manager", K(ret));
-    } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE,
+    } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(&LOCAL_DEVICE_INSTANCE,
                                                                       async_io_thread_count,
                                                                       sync_io_thread_count,
                                                                       max_io_depth))) {
       STORAGE_LOG(WARN, "add device channel failed", K(ret));
     } else {
-      if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE,
-          storage_env_.default_block_size_))) {
+      if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(false/*is_shared_storage*/))) {
+        STORAGE_LOG(WARN, "fail to init storage meta service", K(ret));
+      } else if (FALSE_IT(SERVER_STORAGE_META_SERVICE.get_slogger_manager().need_reserved_ = false)) {
+      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.init(false, storage_env_.default_block_size_))) {
         STORAGE_LOG(WARN, "init block manager fail", K(ret));
       } else if (OB_FAIL(OB_STORE_CACHE.init(
           storage_env_.index_block_cache_priority_,
@@ -296,10 +301,12 @@ int TestDataFilePrepareUtil::open()
         STORAGE_LOG(WARN, "Fail to init OB_STORE_CACHE, ", K(ret), K(storage_env_.data_dir_));
       } else if (OB_FAIL(ObIOManager::get_instance().start())) {
         STORAGE_LOG(WARN, "Fail to star io mgr", K(ret));
-      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0/*reserver_size*/))) {
+      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(0/*reserved_size*/))) {
         STORAGE_LOG(WARN, "Fail to start server block mgr", K(ret));
       } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.first_mark_device())) {
         STORAGE_LOG(WARN, "Fail to start first mark device", K(ret));
+      } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.get_slogger_manager().start())) {
+        STORAGE_LOG(WARN, "fail to start slogger manager", K(ret));
       } else if (OB_FAIL(ObClusterVersion::get_instance().init(CLUSTER_VERSION_2100))) {
         STORAGE_LOG(WARN, "Fail to init cluster version", K(ret));
       } else if (OB_FAIL(clog_file_handler_.init(storage_env_.clog_dir_, storage_env_.log_spec_.max_log_file_size_))) {
@@ -312,21 +319,22 @@ int TestDataFilePrepareUtil::open()
 
 void TestDataFilePrepareUtil::destory()
 {
-  OB_SERVER_BLOCK_MGR.destroy();
+  OB_FILE_SYSTEM_ROUTER.get_instance().reset();
+  SERVER_STORAGE_META_SERVICE.destroy();
+  OB_STORAGE_OBJECT_MGR.destroy();
   OB_STORE_CACHE.destroy();
   ObIOManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
-  SLOGGERMGR.destroy();
   ObClusterVersion::get_instance().destroy();
   ObIODeviceWrapper::get_instance().destroy();
+  ObDeviceManager::get_instance().destroy();
   allocator_.reuse();
-
   if (is_inited_) {
     char cmd[OB_MAX_FILE_NAME_LENGTH];
     if (OB_SUCCESS != databuff_printf(cmd, OB_MAX_FILE_NAME_LENGTH, "rm -rf %s", data_dir_)) {
       STORAGE_LOG_RET(ERROR, OB_ERROR, "failed to gen cmd", K(data_dir_));
     } else if (0 != system(cmd)) {
-      STORAGE_LOG_RET(ERROR, OB_ERR_SYS, "failed to  rm data dir", K(cmd), K(errno), KERRMSG);
+      STORAGE_LOG_RET(ERROR, OB_ERR_SYS, "failed to rm data dir", K(cmd), K(errno), KERRMSG);
     }
   }
   getter_ = nullptr;

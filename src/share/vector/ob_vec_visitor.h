@@ -69,6 +69,32 @@ struct FixedLengthVecVisitor {
 };
 
 template<typename T>
+class ObVectorVisitor
+{
+public:
+  ObVectorVisitor(T &vector);
+  void get_payload(const int64_t idx,
+                   const char *&payload,
+                   ObLength &length) const;
+  void get_payload(const int64_t idx,
+                   bool &is_null,
+                   const char *&payload,
+                   ObLength &length) const;
+  const char *get_payload(const int64_t idx) const;
+  ObLength get_length(const int64_t idx) const;
+  bool has_null() const;
+  int null_first_cmp(VECTOR_ONE_COMPARE_ARGS) const;
+  int null_last_cmp(VECTOR_ONE_COMPARE_ARGS) const;
+  int null_first_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const;
+  int null_last_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const;
+
+private:
+  T vector_;
+};
+
+
+
+template<typename T>
 class ObVectorCellVisitor
 {
 public:

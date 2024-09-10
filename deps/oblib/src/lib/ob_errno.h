@@ -453,6 +453,15 @@ constexpr int OB_HDFS_MALFORMED_URI = -11042;
 constexpr int OB_HDFS_INVALID_ARGUMENT = -11043;
 constexpr int OB_HDFS_NOT_IMPLEMENT = -11044;
 constexpr int OB_HDFS_ERROR = -11045;
+constexpr int OB_JNI_ERROR = -11053;
+constexpr int OB_JNI_CLASS_NOT_FOUND_ERROR = -11054;
+constexpr int OB_JNI_METHOD_NOT_FOUND_ERROR = -11055;
+constexpr int OB_JNI_ENV_ERROR = -11056;
+constexpr int OB_JNI_DELETE_REF_ERROR = -11057;
+constexpr int OB_JNI_JAVA_HOME_NOT_FOUND_ERROR = -11058;
+constexpr int OB_JNI_ENSURE_CAPACTIY_ERROR = -11059;
+constexpr int OB_JNI_FIELD_NOT_FOUND_ERROR = -11060;
+constexpr int OB_JNI_OBJECT_NOT_FOUND_ERROR = -11061;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR         = -20000;
 constexpr int OB_MIN_RAISE_APPLICATION_ERROR         = -20999;
 

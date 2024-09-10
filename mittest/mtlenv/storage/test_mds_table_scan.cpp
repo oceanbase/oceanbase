@@ -71,7 +71,7 @@ void TestMdsTableScan::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  ObServerStorageMetaService::get_instance().is_started_ = true;
 
   // create ls
   ObLSHandle ls_handle;
@@ -1373,7 +1373,7 @@ TEST_F(TestMdsTableScan, test_range_cross)
   ASSERT_EQ(OB_SUCCESS, mini_ctx.get_ls_and_tablet());
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_NE(nullptr, ls = mini_ctx.get_ls());
-  ASSERT_EQ(OB_SUCCESS, mini_ctx.init_tablet_merge_info(false/*need_check*/));
+  ASSERT_EQ(OB_SUCCESS, mini_ctx.init_tablet_merge_info());
   mini_ctx.static_param_.ls_rebuild_seq_ = ls->ls_meta_.get_rebuild_seq();
   ASSERT_EQ(OB_MINOR_SSTABLE_RANGE_CROSS, ls->build_new_tablet_from_mds_table(mini_ctx, tablet_id, mds_mini_handle, flush_scn, new_tablet_handle));
 }

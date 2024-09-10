@@ -105,6 +105,7 @@ public:
   int print_semi_info_to_subquery();
   int print_where();
   int print_order_by();
+  int print_approx();
   int print_limit();
   int print_fetch();
   int print_returning();

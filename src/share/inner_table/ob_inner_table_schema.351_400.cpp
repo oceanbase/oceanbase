@@ -493,6 +493,7 @@ int ObInnerTableSchema::all_log_archive_piece_files_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_LOG_ARCHIVE_PIECE_FILES_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_LOG_ARCHIVE_PIECE_FILES_AUX_LOB_PIECE_TID);
 
@@ -850,6 +851,7 @@ int ObInnerTableSchema::all_ls_log_archive_progress_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_LS_LOG_ARCHIVE_PROGRESS_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_LS_LOG_ARCHIVE_PROGRESS_AUX_LOB_PIECE_TID);
 
@@ -1017,6 +1019,7 @@ int ObInnerTableSchema::all_ls_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_LS_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_LS_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_LS_AUX_LOB_PIECE_TID);
 
@@ -1298,6 +1301,7 @@ int ObInnerTableSchema::all_backup_storage_info_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_STORAGE_INFO_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_STORAGE_INFO_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_STORAGE_INFO_AUX_LOB_PIECE_TID);
 
@@ -1455,6 +1459,7 @@ int ObInnerTableSchema::all_dam_last_arch_ts_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_DAM_LAST_ARCH_TS_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_DAM_LAST_ARCH_TS_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_DAM_LAST_ARCH_TS_AUX_LOB_PIECE_TID);
 
@@ -1679,6 +1684,7 @@ int ObInnerTableSchema::all_dam_cleanup_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_DAM_CLEANUP_JOBS_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_DAM_CLEANUP_JOBS_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_DAM_CLEANUP_JOBS_AUX_LOB_PIECE_TID);
 
@@ -2107,6 +2113,7 @@ int ObInnerTableSchema::all_backup_job_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_JOB_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_JOB_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_JOB_AUX_LOB_PIECE_TID);
 
@@ -2535,6 +2542,7 @@ int ObInnerTableSchema::all_backup_job_history_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_JOB_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_JOB_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_JOB_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -3153,6 +3161,7 @@ int ObInnerTableSchema::all_backup_task_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_TASK_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_TASK_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_TASK_AUX_LOB_PIECE_TID);
 
@@ -3771,6 +3780,7 @@ int ObInnerTableSchema::all_backup_task_history_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_TASK_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_TASK_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_TASK_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -4396,6 +4406,7 @@ int ObInnerTableSchema::all_backup_ls_task_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_LS_TASK_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_LS_TASK_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_LS_TASK_AUX_LOB_PIECE_TID);
 
@@ -5021,6 +5032,7 @@ int ObInnerTableSchema::all_backup_ls_task_history_schema(ObTableSchema &table_s
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_LS_TASK_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_LS_TASK_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_LS_TASK_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -5380,6 +5392,7 @@ int ObInnerTableSchema::all_backup_ls_task_info_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_LS_TASK_INFO_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_LS_TASK_INFO_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_LS_TASK_INFO_AUX_LOB_PIECE_TID);
 
@@ -5611,6 +5624,7 @@ int ObInnerTableSchema::all_backup_skipped_tablet_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_SKIPPED_TABLET_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_SKIPPED_TABLET_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_SKIPPED_TABLET_AUX_LOB_PIECE_TID);
 
@@ -5842,6 +5856,7 @@ int ObInnerTableSchema::all_backup_skipped_tablet_history_schema(ObTableSchema &
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_SKIPPED_TABLET_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_SKIPPED_TABLET_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_SKIPPED_TABLET_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -6115,6 +6130,7 @@ int ObInnerTableSchema::all_tenant_info_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_INFO_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TENANT_INFO_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TENANT_INFO_AUX_LOB_PIECE_TID);
 
@@ -6282,6 +6298,7 @@ int ObInnerTableSchema::all_tablet_to_table_history_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TABLET_TO_TABLE_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TABLET_TO_TABLE_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TABLET_TO_TABLE_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -6518,6 +6535,7 @@ int ObInnerTableSchema::all_ls_recovery_stat_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_LS_RECOVERY_STAT_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_LS_RECOVERY_STAT_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_LS_RECOVERY_STAT_AUX_LOB_PIECE_TID);
 
@@ -6877,6 +6895,7 @@ int ObInnerTableSchema::all_backup_ls_task_info_history_schema(ObTableSchema &ta
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_LS_TASK_INFO_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_LS_TASK_INFO_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_LS_TASK_INFO_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -7119,6 +7138,7 @@ int ObInnerTableSchema::all_tablet_replica_checksum_schema(ObTableSchema &table_
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TABLET_REPLICA_CHECKSUM_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TABLET_REPLICA_CHECKSUM_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TABLET_REPLICA_CHECKSUM_AUX_LOB_PIECE_TID);
 
@@ -7316,6 +7336,7 @@ int ObInnerTableSchema::all_tablet_checksum_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TABLET_CHECKSUM_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TABLET_CHECKSUM_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TABLET_CHECKSUM_AUX_LOB_PIECE_TID);
 
@@ -7762,6 +7783,7 @@ int ObInnerTableSchema::all_ls_replica_task_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_LS_REPLICA_TASK_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_LS_REPLICA_TASK_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_LS_REPLICA_TASK_AUX_LOB_PIECE_TID);
 
@@ -8053,6 +8075,7 @@ int ObInnerTableSchema::all_pending_transaction_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_PENDING_TRANSACTION_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_PENDING_TRANSACTION_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_PENDING_TRANSACTION_AUX_LOB_PIECE_TID);
 
@@ -8243,6 +8266,7 @@ int ObInnerTableSchema::all_balance_group_ls_stat_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BALANCE_GROUP_LS_STAT_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BALANCE_GROUP_LS_STAT_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BALANCE_GROUP_LS_STAT_AUX_LOB_PIECE_TID);
 
@@ -8994,6 +9018,7 @@ int ObInnerTableSchema::all_tenant_scheduler_job_schema(ObTableSchema &table_sch
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SCHEDULER_JOB_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TENANT_SCHEDULER_JOB_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TENANT_SCHEDULER_JOB_AUX_LOB_PIECE_TID);
 
@@ -9181,6 +9206,7 @@ int ObInnerTableSchema::all_tenant_scheduler_job_run_detail_schema(ObTableSchema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_AUX_LOB_PIECE_TID);
 
@@ -9543,6 +9569,7 @@ int ObInnerTableSchema::all_tenant_scheduler_program_schema(ObTableSchema &table
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SCHEDULER_PROGRAM_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TENANT_SCHEDULER_PROGRAM_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TENANT_SCHEDULER_PROGRAM_AUX_LOB_PIECE_TID);
 
@@ -9785,6 +9812,7 @@ int ObInnerTableSchema::all_tenant_scheduler_program_argument_schema(ObTableSche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_TENANT_SCHEDULER_PROGRAM_ARGUMENT_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_TENANT_SCHEDULER_PROGRAM_ARGUMENT_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_TENANT_SCHEDULER_PROGRAM_ARGUMENT_AUX_LOB_PIECE_TID);
 
@@ -10040,6 +10068,7 @@ int ObInnerTableSchema::all_context_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_CONTEXT_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_CONTEXT_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_CONTEXT_AUX_LOB_PIECE_TID);
 
@@ -10306,6 +10335,7 @@ int ObInnerTableSchema::all_context_history_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_CONTEXT_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_CONTEXT_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_CONTEXT_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -10534,6 +10564,7 @@ int ObInnerTableSchema::all_global_context_value_schema(ObTableSchema &table_sch
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_GLOBAL_CONTEXT_VALUE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_GLOBAL_CONTEXT_VALUE_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_GLOBAL_CONTEXT_VALUE_AUX_LOB_PIECE_TID);
 
@@ -10701,6 +10732,7 @@ int ObInnerTableSchema::all_ls_election_reference_info_schema(ObTableSchema &tab
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_LS_ELECTION_REFERENCE_INFO_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_LS_ELECTION_REFERENCE_INFO_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_LS_ELECTION_REFERENCE_INFO_AUX_LOB_PIECE_TID);
 
@@ -11159,6 +11191,7 @@ int ObInnerTableSchema::all_backup_delete_job_schema(ObTableSchema &table_schema
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_DELETE_JOB_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_DELETE_JOB_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_DELETE_JOB_AUX_LOB_PIECE_TID);
 
@@ -11617,6 +11650,7 @@ int ObInnerTableSchema::all_backup_delete_job_history_schema(ObTableSchema &tabl
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_DELETE_JOB_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_DELETE_JOB_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_DELETE_JOB_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -12041,6 +12075,7 @@ int ObInnerTableSchema::all_backup_delete_task_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_DELETE_TASK_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_DELETE_TASK_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_DELETE_TASK_AUX_LOB_PIECE_TID);
 
@@ -12465,6 +12500,7 @@ int ObInnerTableSchema::all_backup_delete_task_history_schema(ObTableSchema &tab
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_DELETE_TASK_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_DELETE_TASK_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_DELETE_TASK_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -12897,6 +12933,7 @@ int ObInnerTableSchema::all_backup_delete_ls_task_schema(ObTableSchema &table_sc
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_DELETE_LS_TASK_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_DELETE_LS_TASK_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_DELETE_LS_TASK_AUX_LOB_PIECE_TID);
 
@@ -13329,6 +13366,7 @@ int ObInnerTableSchema::all_backup_delete_ls_task_history_schema(ObTableSchema &
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_BACKUP_DELETE_LS_TASK_HISTORY_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_BACKUP_DELETE_LS_TASK_HISTORY_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_BACKUP_DELETE_LS_TASK_HISTORY_AUX_LOB_PIECE_TID);
 
@@ -13571,6 +13609,7 @@ int ObInnerTableSchema::all_zone_merge_info_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_ZONE_MERGE_INFO_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_ZONE_MERGE_INFO_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_ZONE_MERGE_INFO_AUX_LOB_PIECE_TID);
 
@@ -13828,6 +13867,7 @@ int ObInnerTableSchema::all_merge_info_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_MERGE_INFO_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_MERGE_INFO_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_MERGE_INFO_AUX_LOB_PIECE_TID);
 
@@ -13965,6 +14005,7 @@ int ObInnerTableSchema::all_freeze_info_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_FREEZE_INFO_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_FREEZE_INFO_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_FREEZE_INFO_AUX_LOB_PIECE_TID);
 
@@ -14181,6 +14222,7 @@ int ObInnerTableSchema::all_disk_io_calibration_schema(ObTableSchema &table_sche
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_DISK_IO_CALIBRATION_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_DISK_IO_CALIBRATION_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_DISK_IO_CALIBRATION_AUX_LOB_PIECE_TID);
 
@@ -14333,6 +14375,7 @@ int ObInnerTableSchema::all_plan_baseline_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_PLAN_BASELINE_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_PLAN_BASELINE_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_PLAN_BASELINE_AUX_LOB_PIECE_TID);
 
@@ -14703,6 +14746,7 @@ int ObInnerTableSchema::all_plan_baseline_item_schema(ObTableSchema &table_schem
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_PLAN_BASELINE_ITEM_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_PLAN_BASELINE_ITEM_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_PLAN_BASELINE_ITEM_AUX_LOB_PIECE_TID);
 
@@ -14863,6 +14907,7 @@ int ObInnerTableSchema::all_spm_config_schema(ObTableSchema &table_schema)
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_SPM_CONFIG_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_SPM_CONFIG_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_SPM_CONFIG_AUX_LOB_PIECE_TID);
 
@@ -15015,6 +15060,7 @@ int ObInnerTableSchema::all_log_archive_dest_parameter_schema(ObTableSchema &tab
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
   table_schema.set_tablet_id(OB_ALL_LOG_ARCHIVE_DEST_PARAMETER_TID);
+  table_schema.set_micro_index_clustered(false);
   table_schema.set_aux_lob_meta_tid(OB_ALL_LOG_ARCHIVE_DEST_PARAMETER_AUX_LOB_META_TID);
   table_schema.set_aux_lob_piece_tid(OB_ALL_LOG_ARCHIVE_DEST_PARAMETER_AUX_LOB_PIECE_TID);
 

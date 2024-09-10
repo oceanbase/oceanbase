@@ -373,21 +373,21 @@ int ObCOMergeDagNet::create_dag(
   // create dag and connections
   if (OB_UNLIKELY(start_cg_idx > end_cg_idx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid start/end cg idx", K(ret), K(start_cg_idx), K(end_cg_idx));
+    STORAGE_LOG(WARN, "invalid start/end cg idx", K(ret), K(start_cg_idx), K(end_cg_idx));
   } else {
     // start/end cg idx are meaningless for DagNet
     basic_param_.start_cg_idx_ = start_cg_idx;
     basic_param_.end_cg_idx_ = end_cg_idx;
     if (OB_FAIL(MTL(share::ObTenantDagScheduler*)->alloc_dag(dag))) {
-      LOG_WARN("fail to alloc dag", K(ret));
+      STORAGE_LOG(WARN, "fail to alloc dag", K(ret));
     } else if (OB_FAIL(dag->init_by_param(&basic_param_))) {
-      LOG_WARN("Fail to init prepare dag", K(ret));
+      STORAGE_LOG(WARN, "Fail to init prepare dag", K(ret));
     } else if (nullptr != parent && OB_FAIL(parent->add_child(*dag))) {
-      LOG_WARN("failed to add child", K(ret), KPC(parent), KPC(dag));
+      STORAGE_LOG(WARN, "failed to add child", K(ret), KPC(parent), KPC(dag));
     } else if (nullptr == parent && OB_FAIL(add_dag_into_dag_net(*dag))) {
-      LOG_WARN("fail to add dag into dag_net", K(ret));
+      STORAGE_LOG(WARN, "fail to add dag into dag_net", K(ret));
     } else if (OB_FAIL(dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret), KPC(dag));
+      STORAGE_LOG(WARN, "failed to create first task", K(ret), KPC(dag));
     } else if (share::ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE == dag->get_type()) {
 #ifdef ERRSIM
       dag->set_max_retry_times(30);
@@ -396,12 +396,12 @@ int ObCOMergeDagNet::create_dag(
 #endif
     }
     if (OB_SUCC(ret)) {
-      LOG_INFO("success to create dag", K(ret), K_(basic_param), KP(dag),
+      STORAGE_LOG(INFO, "success to create dag", K(ret), K_(basic_param), KP(dag),
         "dag_type", ObIDag::get_dag_type_str(dag->get_type()), K(add_scheduler_flag), KP(parent));
     }
     if (OB_FAIL(ret) || !add_scheduler_flag) {
     } else if (OB_FAIL(MTL(share::ObTenantDagScheduler*)->add_dag(dag))) {
-      LOG_WARN("Fail to add dag into dag_scheduler", K(ret));
+      STORAGE_LOG(WARN, "Fail to add dag into dag_scheduler", K(ret));
     }
   }
   if (OB_FAIL(ret) && nullptr != dag) {

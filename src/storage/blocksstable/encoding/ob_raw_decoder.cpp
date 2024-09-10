@@ -1296,7 +1296,7 @@ int ObRawDecoder::ObRawDecoderFilterInFunc::operator()(
     bool &result) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(filter.exist_in_datum_set(cur_datum, result))) {
+  if (OB_FAIL(filter.exist_in_set(cur_datum, result))) {
     LOG_WARN("Failed to check datum in hashset", K(ret), K(cur_datum));
   }
   return ret;
@@ -1651,10 +1651,14 @@ class RawAggFunctionImpl
     const DataType *start_pos = reinterpret_cast<const DataType *>(raw_data);
     const DataType *a_end = start_pos + to;
     const DataType * __restrict a_pos = start_pos + from;
-    DataType res_value = *(start_pos + from);
+    DataType res_value = null_value;
     while (a_pos < a_end) {
-      if (*a_pos != null_value && Op::apply(*a_pos, res_value)) {
-        res_value = *a_pos;
+      if (*a_pos != null_value) {
+        if (res_value == null_value) {
+          res_value = *a_pos;
+        } else if (Op::apply(*a_pos, res_value)) {
+          res_value = *a_pos;
+        }
       }
       ++a_pos;
     }
@@ -1662,6 +1666,7 @@ class RawAggFunctionImpl
   }))
 
   // can use SIMD
+  // Make sure that: res = 0 for min, res = UINT64_MAX for max
   OB_MULTITARGET_FUNCTION_AVX2_SSE42(
   OB_MULTITARGET_FUNCTION_HEADER(static void), raw_min_max_function_with_null_bitmap, OB_MULTITARGET_FUNCTION_BODY((
       const unsigned char* raw_data,
@@ -1674,15 +1679,13 @@ class RawAggFunctionImpl
     const DataType *a_end = start_pos + to;
     const DataType * __restrict a_pos = start_pos + from;
     const uint8_t * __restrict b_pos = null_bitmap;
-    DataType res_value = *(start_pos + from);
     while (a_pos < a_end) {
-      if (!*b_pos && Op::apply(*a_pos, res_value)) {
-        res_value = *a_pos;
+      if (!*b_pos && Op::apply(*a_pos, res)) {
+        res = *a_pos;
       }
       ++a_pos;
       ++b_pos;
     }
-    res = res_value;
   }))
 };
 

@@ -27,7 +27,9 @@ using namespace share;
 static const char *type_strs[] = {
     "backup_data",
     "archive_log",
-    "backup_key"
+    "backup_key",
+    "restore_data",
+    "restore_log",
 };
 
 const char *ObBackupDestType::get_str(const TYPE &type)
@@ -329,7 +331,9 @@ int ObBackupStore::write_single_file(const ObBackupPathString &full_path, const 
     LOG_WARN("serialized size not match.", K(ret), K(pos), K(buf_size), K(full_path), K(serializer));
   } else if (OB_FAIL(util.mk_parent_dir(full_path.str(), storage_info))) {
     LOG_WARN("failed to mk dir.", K(ret), K(full_path), K(serializer));
-  } else if (OB_FAIL(util.write_single_file(full_path.str(), storage_info, buf, buf_size))) {
+  // TODO(yangyi.yyy & zhaoyongheng.zyh) use valid dest_id for QoS, including ObBackupDataStore & ObArchiveStore
+  } else if (OB_FAIL(util.write_single_file(full_path.str(), storage_info, buf, buf_size,
+                                            ObStorageIdMod::get_default_backup_id_mod()))) {
     LOG_WARN("failed to write single file.", K(ret), K(full_path), K(serializer));
   } else {
     FLOG_INFO("succeed to write single file.", K(full_path), K(serializer));
@@ -352,7 +356,7 @@ int ObBackupStore::read_single_file(const ObBackupPathString &full_path, ObIBack
   const ObBackupStorageInfo *storage_info = get_storage_info();
 
   if (OB_FAIL(util.get_file_length(full_path.ptr(), storage_info, file_length))) {
-    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+    if (OB_OBJECT_NOT_EXIST != ret) {
       LOG_WARN("failed to get file length.", K(ret), K(full_path));
     } else {
       LOG_INFO("file not exist.", K(ret), K(full_path));
@@ -363,7 +367,9 @@ int ObBackupStore::read_single_file(const ObBackupPathString &full_path, ObIBack
   } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(full_path), K(file_length));
-  } else if (OB_FAIL(util.read_single_file(full_path.str(), storage_info, buf, file_length, read_size))) {
+  // TODO(yangyi.yyy & zhaoyongheng.zyh) use valid dest_id for QoS, including ObBackupDataStore & ObArchiveStore
+  } else if (OB_FAIL(util.read_single_file(full_path.str(), storage_info, buf, file_length, read_size,
+                                           ObStorageIdMod::get_default_backup_id_mod()))) {
     LOG_WARN("failed to read file.", K(ret), K(full_path), K(file_length));
   } else if (file_length != read_size) {
     ret = OB_ERR_UNEXPECTED;
@@ -380,6 +386,8 @@ int ObBackupStore::read_single_file(const ObBackupPathString &full_path, ObIBack
 ObBackupDestMgr::ObBackupDestMgr()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    max_iops_(),
+    max_bandwidth_(),
     dest_type_(ObBackupDestType::TYPE::DEST_TYPE_MAX),
     backup_dest_(),
     sql_proxy_(NULL)
@@ -403,6 +411,8 @@ int ObBackupDestMgr::init(
     LOG_WARN("invalid backup dest", K(ret), K(dest_type));
   } else {
     tenant_id_ = tenant_id;
+    max_iops_ = backup_dest_.get_storage_info()->max_iops_;
+    max_bandwidth_ = backup_dest_.get_storage_info()->max_bandwidth_;
     dest_type_ = dest_type;
     sql_proxy_ = &sql_proxy;
     is_inited_ = true;
@@ -420,7 +430,7 @@ int ObBackupDestMgr::check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy)
   } else if (OB_FAIL(check_mgr.init(tenant_id_, rpc_proxy, *sql_proxy_))) {
     LOG_WARN("fail to init connectivity check mgr", K(ret), K_(tenant_id));
   } else if (OB_FAIL(check_mgr.check_backup_dest_connectivity(backup_dest_))) {
-    LOG_WARN("fail to check backup dest connectivity", K(ret), K_(tenant_id));
+    LOG_WARN("fail to check backup dest connectivity", K(ret), K_(tenant_id), K_(backup_dest));
   }
   return ret;
 }
@@ -600,7 +610,8 @@ int ObBackupDestMgr::write_format_file()
     LOG_WARN("fail to generate format desc", K(ret), K(dest_id));
   } else if (OB_FAIL(store.write_format_file(format_desc))) {
     LOG_WARN("fail to write format file", K(ret), K(format_desc));
-  } else if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(*sql_proxy_, tenant_id_, backup_dest_, dest_type_, dest_id))) {
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(
+      *sql_proxy_, tenant_id_, backup_dest_, dest_type_, dest_id, max_iops_, max_bandwidth_))) {
     LOG_WARN("fail to insert backup storage info", K(ret), K(backup_dest_)); 
   }
   return ret;

@@ -271,18 +271,26 @@ int ObBackupDataFileTrailer::check_valid() const
 
 ObBackupMacroBlockId::ObBackupMacroBlockId()
  : table_key_(), logic_id_(), macro_block_id_(),
-   nested_offset_(0), nested_size_(0), absolute_row_offset_(0)
+   nested_offset_(0), nested_size_(0),
+   is_ss_ddl_other_block_(false), absolute_row_offset_(0)
 {}
 
 bool ObBackupMacroBlockId::is_valid() const
 {
-  bool bret = true;
-  bret = table_key_.is_valid()
-      && logic_id_.is_valid()
-      && macro_block_id_.is_valid()
-      && nested_offset_ >= 0
-      && nested_size_ >= 0
-      && absolute_row_offset_ >= 0;
+  bool bret = false;
+  if (!is_ss_ddl_other_block_) {
+    bret = table_key_.is_valid()
+        && logic_id_.is_valid()
+        && macro_block_id_.is_valid()
+        && nested_offset_ >= 0
+        && nested_size_ >= 0
+        && absolute_row_offset_ >= 0;
+  } else {
+    // other block has no logic id
+    bret = macro_block_id_.is_valid()
+        && nested_offset_ >= 0
+        && nested_size_ >= 0;
+  }
   return bret;
 }
 
@@ -299,6 +307,7 @@ int ObBackupMacroBlockId::assign(const ObBackupMacroBlockId &other)
     nested_offset_ = other.nested_offset_;
     nested_size_ = other.nested_size_;
     absolute_row_offset_ = other.absolute_row_offset_;
+    is_ss_ddl_other_block_ = other.is_ss_ddl_other_block_;
   }
   return ret;
 }
@@ -311,6 +320,7 @@ void ObBackupMacroBlockId::reset()
   nested_offset_ = 0;
   nested_size_ = 0;
   absolute_row_offset_ = 0;
+  is_ss_ddl_other_block_ = false;
 }
 
 /* ObBackupPhysicalID */
@@ -327,7 +337,7 @@ void ObBackupPhysicalID::reset()
 
 bool ObBackupPhysicalID::is_valid() const
 {
-  return backup_set_id_ > 0 && ls_id_ > 0 && turn_id_ > 0 && file_id_ >= 0 && offset_ >= 0 && length_ > 0;
+  return backup_set_id_ > 0 && ls_id_ > 0 && turn_id_ > 0 && file_id_ >= 0 && aligned_offset_ >= 0 && aligned_length_ > 0;
 }
 
 int ObBackupPhysicalID::get_backup_macro_block_index(
@@ -345,8 +355,8 @@ int ObBackupPhysicalID::get_backup_macro_block_index(
     macro_index.turn_id_ = turn_id_;
     macro_index.retry_id_ = retry_id_;
     macro_index.file_id_ = file_id_;
-    macro_index.offset_ = static_cast<int64_t>(offset_) * DIO_READ_ALIGN_SIZE;
-    macro_index.length_ = static_cast<int64_t>(length_) * DIO_READ_ALIGN_SIZE;
+    macro_index.offset_ = static_cast<int64_t>(aligned_offset_) * DIO_READ_ALIGN_SIZE;
+    macro_index.length_ = static_cast<int64_t>(aligned_length_) * DIO_READ_ALIGN_SIZE;
   }
   return ret;
 }
@@ -377,8 +387,8 @@ const ObBackupPhysicalID ObBackupPhysicalID::get_default()
   default_value.turn_id_ = MAX_BACKUP_TURN_ID;
   default_value.retry_id_ = MAX_BACKUP_RETRY_ID;
   default_value.file_id_ = MAX_BACKUP_FILE_ID;
-  default_value.offset_ = MAX_BACKUP_FILE_SIZE;
-  default_value.length_ = MAX_BACKUP_BLOCK_SIZE;
+  default_value.aligned_offset_ = MAX_BACKUP_FILE_SIZE;
+  default_value.aligned_length_ = MAX_BACKUP_BLOCK_SIZE;
   return default_value;
 }
 
@@ -496,8 +506,8 @@ int ObBackupMacroBlockIndex::get_backup_physical_id(ObBackupPhysicalID &physical
     physical_id.retry_id_ = retry_id_;
     physical_id.file_id_ = file_id_;
     physical_id.backup_set_id_ = backup_set_id_;
-    physical_id.offset_ = offset_ / DIO_READ_ALIGN_SIZE;
-    physical_id.length_ = length_ / DIO_READ_ALIGN_SIZE;
+    physical_id.aligned_offset_ = offset_ / DIO_READ_ALIGN_SIZE;
+    physical_id.aligned_length_ = length_ / DIO_READ_ALIGN_SIZE;
   }
   return ret;
 }
@@ -522,7 +532,7 @@ int ObBackupMacroBlockIndex::get_backup_physical_id(
     physical_id.length_ = length_ / DIO_READ_ALIGN_SIZE;
     physical_id.reserved_ = 0;
     physical_id.id_mode_ = static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP);
-    physical_id.version_ = ObBackupDeviceMacroBlockId::BACKUP_MACRO_BLOCK_ID_VERSION;
+    physical_id.version_ = blocksstable::MacroBlockId::MACRO_BLOCK_ID_VERSION_V2;
   }
   return ret;
 }
@@ -762,10 +772,13 @@ void ObBackupTabletMeta::reset()
 
 /* ObBackupSSTableMeta */
 
-OB_SERIALIZE_MEMBER(ObBackupSSTableMeta, tablet_id_, sstable_meta_, logic_id_list_);
+OB_SERIALIZE_MEMBER(ObBackupSSTableMeta, tablet_id_, sstable_meta_, logic_id_list_,
+    entry_block_addr_for_other_block_, // FARM COMPAT WHITELIST
+    total_other_block_count_           // FARM COMPAT WHITELIST
+    );
 
-ObBackupSSTableMeta::ObBackupSSTableMeta()
-  : tablet_id_(), sstable_meta_(), logic_id_list_()
+ObBackupSSTableMeta::ObBackupSSTableMeta() : tablet_id_(), sstable_meta_(), logic_id_list_(),
+    entry_block_addr_for_other_block_(), total_other_block_count_(0)
 {}
 
 bool ObBackupSSTableMeta::is_valid() const
@@ -778,6 +791,8 @@ void ObBackupSSTableMeta::reset()
   tablet_id_.reset();
   sstable_meta_.reset();
   logic_id_list_.reset();
+  entry_block_addr_for_other_block_.reset();
+  total_other_block_count_ = 0;
 }
 
 int ObBackupSSTableMeta::assign(const ObBackupSSTableMeta &backup_sstable_meta)
@@ -791,6 +806,8 @@ int ObBackupSSTableMeta::assign(const ObBackupSSTableMeta &backup_sstable_meta)
   } else if (OB_FAIL(logic_id_list_.assign(backup_sstable_meta.logic_id_list_))) {
     LOG_WARN("failed to assign logic id list", K(ret), K(backup_sstable_meta));
   } else {
+    entry_block_addr_for_other_block_ = backup_sstable_meta.entry_block_addr_for_other_block_;
+    total_other_block_count_ = backup_sstable_meta.total_other_block_count_;
     tablet_id_ = backup_sstable_meta.tablet_id_;
   }
   return ret;
@@ -1508,7 +1525,7 @@ int ObBackupDeviceMacroBlockId::set(const int64_t backup_set_id, const int64_t l
 
 blocksstable::MacroBlockId ObBackupDeviceMacroBlockId::get_macro_id() const
 {
-  return blocksstable::MacroBlockId(first_id_, second_id_, third_id_);
+  return blocksstable::MacroBlockId(first_id_, second_id_, third_id_, 0/*forth_id*/);
 }
 
 int ObBackupDeviceMacroBlockId::set(const blocksstable::MacroBlockId &macro_id)

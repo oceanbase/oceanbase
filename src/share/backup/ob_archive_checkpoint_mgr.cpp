@@ -139,7 +139,7 @@ int ObArchiveCheckpointMgr::check_is_tagging_(const ObBackupStorageInfo *storage
   if (OB_ISNULL(storage_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("storage info is nullptr", K(ret));
-  } else if (ObIStorageUtil::TAGGING == storage_info->get_delete_mode()) {
+  } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == storage_info->get_delete_mode()) {
     is_tagging = true;
   }
   return ret;
@@ -252,7 +252,8 @@ int ObArchiveCheckpointMgr::write_checkpoint_file_(const ObBackupPath &path) con
   const int64_t buf_size = 0;
   if (OB_FAIL(io_util.mk_parent_dir(path.get_ptr(), storage_info_))) {
     LOG_WARN("failed to mk dir.", K(ret), K(path));
-  } else if (OB_FAIL(io_util.write_single_file(path.get_ptr(), storage_info_, &buf, buf_size))) {
+  } else if (OB_FAIL(io_util.write_single_file(path.get_ptr(), storage_info_, &buf, buf_size,
+                                               ObStorageIdMod::get_default_archive_id_mod()))) {
     LOG_WARN("failed to write single file.", K(ret), K(path));
   } else {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {

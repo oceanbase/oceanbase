@@ -45,7 +45,7 @@ void ObTabletCreateMdsCtx::on_abort(const share::SCN &abort_scn)
 {
   mds::MdsCtx::on_abort(abort_scn);
 
-  // TODO(@bowen.gbw): feature branch transfer_dml_ctrl_42x patch to master,
+  // TODO(@gaishun.gs): feature branch transfer_dml_ctrl_42x patch to master,
   // then add more logic, currently this code is just for compat
 }
 

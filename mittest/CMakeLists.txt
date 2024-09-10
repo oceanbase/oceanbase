@@ -6,7 +6,7 @@ target_include_directories(mit_env PUBLIC
   ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
 
 target_link_libraries(mit_env PUBLIC
-  oceanbase
+  oceanbase ${HYPERSCAN_LIB}
 )
 
 add_subdirectory(logservice)

@@ -64,6 +64,7 @@ ObSimpleArbServer::~ObSimpleArbServer()
 int ObSimpleArbServer::simple_init(const std::string &cluster_name,
                                    const common::ObAddr &addr,
                                    const int64_t node_id,
+                                   ObTenantIOManager *tio_manager,
                                    LogMemberRegionMap *region_map,
                                    bool is_bootstrap)
 {
@@ -91,6 +92,7 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
     malloc->create_and_add_tenant_allocator(node_id);
   }
   tenant_base_->init();
+  tenant_base_->set(tio_manager);
   ObTenantEnv::set_tenant(tenant_base_);
   std::vector<std::string> dirs{logserver_dir, clog_dir};
 
@@ -160,7 +162,7 @@ void ObSimpleArbServer::destroy()
 int ObSimpleArbServer::simple_start(const bool is_bootstrat)
 {
   int ret = OB_SUCCESS;
-  palflite::PalfEnvKey key(cluster_id_, OB_SERVER_TENANT_ID);
+  palflite::PalfEnvKey key(cluster_id_, ObISimpleLogServer::DEFAULT_TENANT_ID);
   arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
   if (OB_FAIL(srv_network_frame_.start())) {
     CLOG_LOG(WARN, "start ObArbSrvNetWorkFrame failed", K(ret));
@@ -186,13 +188,14 @@ int ObSimpleArbServer::simple_close(const bool is_shutdown)
 }
 
 int ObSimpleArbServer::simple_restart(const std::string &cluster_name,
-                                      const int64_t node_idx)
+                                      const int64_t node_idx,
+                                      ObTenantIOManager *tio_manager)
 {
   int ret = OB_SUCCESS;
   srv_network_frame_.deliver_.stop();
   palf_env_mgr_.destroy();
   timer_.destroy();
-  if (OB_FAIL(simple_init(cluster_name, self_, node_idx, NULL, false))) {
+  if (OB_FAIL(simple_init(cluster_name, self_, node_idx, tio_manager, nullptr, false))) {
     CLOG_LOG(WARN, "simple_init failed", K(ret));
   } else if (OB_FAIL(srv_network_frame_.deliver_.start(srv_network_frame_.normal_rpc_qhandler_,
       srv_network_frame_.server_rpc_qhandler_))) {
@@ -245,6 +248,39 @@ int ObSimpleArbServer::get_palf_env_lite(const int64_t tenant_id, PalfEnvLiteGua
     guard.palf_env_mgr_ = &palf_env_mgr_;
     guard.palf_env_lite_ = palf_env_impl;
   }
+  return ret;
+}
+
+int ObSimpleArbServer::create_ls(const int64_t palf_id,
+                                 const AccessMode &access_mode,
+                                 const PalfBaseInfo &base_info,
+                                 IPalfHandleImpl *&palf_handle_impl)
+{
+  int ret = OB_SUCCESS;
+  IPalfEnvImpl *palf_env_impl = get_palf_env();
+  if (OB_ISNULL(palf_env_impl)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(palf_env_impl->create_palf_handle_impl(palf_id, palf::AccessMode::APPEND, base_info, palf_handle_impl))) {
+    CLOG_LOG(WARN, "create_palf_handle_impl failed", K(palf_id), K(ret));
+  }
+  revert_palf_env(palf_env_impl);
+  return ret;
+}
+
+int ObSimpleArbServer::remove_ls(const int64_t palf_id)
+{
+  int ret = OB_SUCCESS;
+
+  IPalfEnvImpl *palf_env_impl = get_palf_env();
+  if (OB_ISNULL(palf_env_impl)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "unexpected error", K(ret), K(palf_id));
+  } else if (OB_FAIL(palf_env_impl->remove_palf_handle_impl(palf_id))) {
+    CLOG_LOG(WARN, "create palf handle impll failed", K(ret), K(palf_id));
+  } else {
+    CLOG_LOG(INFO, "remove ls success", K(ret), K(palf_id));
+  }
+  revert_palf_env(palf_env_impl);
   return ret;
 }
 }

@@ -14,12 +14,12 @@
 #define OB_STORAGE_CKPT_TENANT_CHECKPOINT_SLOG_HANDLER_H_
 
 #include "common/log/ob_log_cursor.h"
+#include "observer/ob_server_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/slog_ckpt/ob_tenant_storage_checkpoint_reader.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/ob_super_block_struct.h"
 #include "storage/slog/ob_storage_log_replayer.h"
-#include "storage/blockstore/ob_shared_block_reader_writer.h"
 #include "storage/ls/ob_ls_meta.h"
 #include "storage/tx/ob_dup_table_base.h"
 
@@ -68,7 +68,6 @@ public:
 class ObTenantCheckpointSlogHandler : public ObIRedoModule
 {
 public:
-  #define SLOG_CKPT_READ_GUARD TCRLockGuard guard(MTL(ObTenantCheckpointSlogHandler*)->get_slog_ckpt_lock());
   class ObWriteCheckpointTask : public common::ObTimerTask
   {
   public:
@@ -87,18 +86,31 @@ public:
   private:
     ObTenantCheckpointSlogHandler *handler_;
   };
+  class ObCkptSlogROptLockGuard
+  {
+  public:
+    [[nodiscard]] explicit ObCkptSlogROptLockGuard(const ObTenantCheckpointSlogHandler &ckpt_slog_hdl);
+    ~ObCkptSlogROptLockGuard();
+    inline int get_ret() const { return ret_; }
+  private:
+    const ObTenantCheckpointSlogHandler &ckpt_slog_hdl_;
+    int ret_;
+    int64_t slot_id_;
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObCkptSlogROptLockGuard);
+  };
 
   ObTenantCheckpointSlogHandler();
   ~ObTenantCheckpointSlogHandler() = default;
   ObTenantCheckpointSlogHandler(const ObTenantCheckpointSlogHandler &) = delete;
   ObTenantCheckpointSlogHandler &operator=(const ObTenantCheckpointSlogHandler &) = delete;
 
-  static int mtl_init(ObTenantCheckpointSlogHandler *&handler);
-  int init();
+  int init(ObStorageLogger &slogger);
   int start();
   void stop();
   void wait();
   void destroy();
+  int start_replay(const ObTenantSuperBlock &super_block);
 
   int add_macro_blocks(
       const common::ObIArray<blocksstable::MacroBlockId> &ls_block_list,
@@ -112,24 +124,16 @@ public:
     const ObMetaDiskAddr &addr, char *item_buf, int64_t &item_buf_len);
 
   int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list);
-  ObSharedBlockReaderWriter &get_shared_block_reader_writer() { return shared_block_rwriter_; }
-  ObSharedBlockReaderWriter &get_shared_block_raw_reader_writer() { return shared_block_raw_rwriter_; }
-  // only used by MACRO
-  common::TCRWLock &get_slog_ckpt_lock() { return slog_ckpt_lock_; }
   virtual int replay(const ObRedoModuleReplayParam &param) override;
   virtual int replay_over() override;
   int write_checkpoint(bool is_force);
-  int read_from_disk(
-      const ObMetaDiskAddr &addr,
-      common::ObArenaAllocator &allocator,
-      char *&buf,
-      int64_t &buf_len);
+  int read_empty_shell_file(const ObMetaDiskAddr &phy_addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
+  int read_from_disk_addr(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, char *&r_buf, int64_t &r_len);
   int clone_ls(
       observer::ObStartupAccelTaskHandler* startup_accel_handler,
       const blocksstable::MacroBlockId &tablet_meta_entry);
 private:
   int clone_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
-  int read_from_share_blk(const ObMetaDiskAddr &addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
   int get_cur_cursor();
   void clean_copy_status();
   virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
@@ -167,10 +171,8 @@ private:
   int inner_replay_gts_record(const ObRedoModuleReplayParam &param);
   int inner_replay_gti_record(const ObRedoModuleReplayParam &param);
   int inner_replay_das_record(const ObRedoModuleReplayParam &param);
-  int read_from_disk_addr(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, char *&r_buf, int64_t &r_len);
   int read_from_ckpt(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, int64_t &r_len);
   int read_from_slog(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, int64_t &pos);
-  int read_empty_shell_file(const ObMetaDiskAddr &phy_addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
   int remove_tablets_from_replay_map_(const share::ObLSID &ls_id);
 
   int inner_replay_deserialize(
@@ -191,6 +193,7 @@ private:
   bool is_writing_checkpoint_;
   int64_t last_ckpt_time_;
   int64_t last_frozen_version_;
+  ObStorageLogger *slogger_;
   common::TCRWLock lock_;  // protect block_handle
   common::TCRWLock slog_ckpt_lock_; // protect is_copying_tablets_
   common::hash::ObHashSet<ObTabletMapKey> tablet_key_set_;
@@ -202,10 +205,8 @@ private:
   int tg_id_;
   ObWriteCheckpointTask write_ckpt_task_;
   ReplayTabletDiskAddrMap replay_tablet_disk_addr_map_;
-  ObSharedBlockReaderWriter shared_block_rwriter_;
   lib::ObMutex super_block_mutex_;
   bool is_trivial_version_;
-  ObSharedBlockReaderWriter shared_block_raw_rwriter_;
 };
 
 }  // end namespace storage
