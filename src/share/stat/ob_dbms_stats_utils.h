@@ -180,6 +180,46 @@ public:
   static int check_all_cols_range_skew(const ObIArray<ObColumnStatParam> &column_params,
                                        ObIArray<ObOptStat> &opt_stats);
 
+  static int build_index_part_to_table_part_maps(share::schema::ObSchemaGetterGuard *schema_guard,
+                                                 uint64_t tenant_id,
+                                                 uint64_t index_table_id,
+                                                 common::hash::ObHashMap<ObObjectID, ObObjectID> &part_id_map);
+
+  static int deduce_index_column_stat_to_table(share::schema::ObSchemaGetterGuard *schema_guard,
+                                               uint64_t tenant_id,
+                                               uint64_t index_table_id,
+                                               uint64_t data_table_id,
+                                               ObPartitionLevel part_level,
+                                               ObIArray<ObOptColumnStat *> &all_column_stats);
+
+  static int get_prefix_index_substr_length(const share::schema::ObColumnSchemaV2 &col,
+                                            int64_t &length);
+
+  static int get_prefix_index_text_pairs(share::schema::ObSchemaGetterGuard *schema_guard,
+                                         uint64_t tenant_id,
+                                         uint64_t data_table_id,
+                                         ObIArray<uint64_t> &func_idxs,
+                                         ObIArray<uint64_t> &ignore_cols,
+                                         ObIArray<PrefixColumnPair> &pairs);
+  static int get_all_prefix_index_text_pairs(const share::schema::ObTableSchema &table_schema,
+                                             ObIArray<PrefixColumnPair> &filter_pairs);
+
+  static int copy_local_index_prefix_stats_to_text(ObIAllocator &allocator,
+                                                   const ObIArray<ObOptColumnStat*> &column_stats,
+                                                   const ObIArray<PrefixColumnPair> &pairs,
+                                                   ObIArray<ObOptColumnStat*> &copy_stats);
+  static int copy_global_index_prefix_stats_to_text(share::schema::ObSchemaGetterGuard *schema_guard,
+                                                    ObIAllocator &allocator,
+                                                    const ObIArray<ObOptColumnStat*> &column_stats,
+                                                    const ObIArray<PrefixColumnPair> &pairs,
+                                                    uint64_t tenant_id,
+                                                    uint64_t data_table_id,
+                                                    ObIArray<ObOptColumnStat *> &all_column_stats);
+  static int copy_prefix_column_stat_to_text(ObIAllocator &allocator,
+                                             const ObOptColumnStat &col_stat,
+                                             const ObObjMeta &text_col_meta,
+                                             ObOptColumnStat *&text_column_stat);
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,
@@ -190,6 +230,13 @@ private:
                          const bool is_index_stat,
                          const bool is_online_stat = false,
                          const ObObjPrintParams &print_params = ObObjPrintParams());
+
+  static int build_sub_part_maps(const ObTableSchema* table_schema,
+                                 const ObTableSchema* index_schema,
+                                 const ObPartition *index_part,
+                                 const ObPartition *table_part,
+                                 ObCheckPartitionMode mode,
+                                 common::hash::ObHashMap<ObObjectID, ObObjectID> &part_id_map);
 
 };
 

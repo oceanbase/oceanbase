@@ -264,7 +264,7 @@ public:
   int add_column_meta_no_dup(const uint64_t column_id, const OptSelectivityCtx &ctx);
 
   const OptColumnMeta* get_column_meta(const uint64_t column_id) const;
-
+  OptColumnMeta* get_column_meta(const uint64_t column_id);
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(const uint64_t &table_id) { table_id_ = table_id; }
   uint64_t get_ref_table_id() const { return ref_table_id_; }
@@ -302,6 +302,11 @@ public:
     base_meta_info_ = NULL;
     real_rows_ = -1.0;
   }
+
+  static int refine_column_stat(const ObGlobalColumnStat &stat,
+                                double rows,
+                                int64_t &global_ndv,
+                                int64_t &num_null);
 
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(table_type), K_(rows), K_(stat_type), K_(ds_level),
                K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas),

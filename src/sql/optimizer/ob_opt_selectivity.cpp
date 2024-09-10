@@ -184,15 +184,8 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                                                                  scale_ratio_,
                                                                  stat))) {
     LOG_WARN("failed to get column stats", K(ret));
-  } else if (0 == stat.ndv_val_ && 0 == stat.null_val_) {
-    global_ndv = std::min(rows_, 100.0);
-    num_null = rows_ * EST_DEF_COL_NULL_RATIO;
-  } else if (0 == stat.ndv_val_ && stat.null_val_ > 0) {
-    global_ndv = 1;
-    num_null = stat.null_val_;
-  } else {
-    global_ndv = stat.ndv_val_;
-    num_null = stat.null_val_;
+  } else if (OB_FAIL(refine_column_stat(stat, rows_, global_ndv, num_null))) {
+    LOG_WARN("failed to refine column stat", K(ret));
   }
 
   if (OB_SUCC(ret)) {
@@ -254,6 +247,36 @@ const OptColumnMeta* OptTableMeta::get_column_meta(const uint64_t column_id) con
     }
   }
   return column_meta;
+}
+
+OptColumnMeta* OptTableMeta::get_column_meta(const uint64_t column_id)
+{
+  OptColumnMeta* column_meta = NULL;
+  for (int64_t i = 0; NULL == column_meta && i < column_metas_.count(); ++i) {
+    if (column_metas_.at(i).get_column_id() == column_id) {
+      column_meta = &column_metas_.at(i);
+    }
+  }
+  return column_meta;
+}
+
+int OptTableMeta::refine_column_stat(const ObGlobalColumnStat &stat,
+                                     double rows,
+                                     int64_t &global_ndv,
+                                     int64_t &num_null)
+{
+  int ret = OB_SUCCESS;
+  if (0 == stat.ndv_val_ && 0 == stat.null_val_) {
+    global_ndv = std::min(rows, 100.0);
+    num_null = rows * EST_DEF_COL_NULL_RATIO;
+  } else if (0 == stat.ndv_val_ && stat.null_val_ > 0) {
+    global_ndv = 1;
+    num_null = stat.null_val_;
+  } else {
+    global_ndv = stat.ndv_val_;
+    num_null = stat.null_val_;
+  }
+  return ret;
 }
 
 int OptTableMetas::copy_table_meta_info(const OptTableMeta &src_meta, OptTableMeta *&dst_meta)

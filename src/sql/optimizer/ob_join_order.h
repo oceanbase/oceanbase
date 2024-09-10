@@ -1484,7 +1484,8 @@ struct NullAwareAntiJoinInfo {
                                           const uint64_t ref_table_id,
                                           const share::schema::ObTableSchema &table_schema);
 
-    int init_est_info_for_index(const uint64_t index_id,
+    int init_est_info_for_index(const uint64_t table_id,
+                                const uint64_t index_id,
                                 ObIndexMetaInfo &meta_info,
                                 ObTablePartitionInfo *table_partition_info,
                                 const share::schema::ObTableSchema &index_schema,
