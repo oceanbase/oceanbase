@@ -1737,7 +1737,7 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
           } else {
             ObJsonInType to_type = flags.to_bin_ ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
             if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_TREE,
-                                                        to_type, json_node, parse_flag))) {
+                                                        to_type, json_node, parse_flag, ObJsonExprHelper::get_json_max_depth_config()))) {
               if (flags.is_schema_ && ret == OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA) {
               } else {
                 ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;

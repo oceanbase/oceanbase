@@ -7339,7 +7339,8 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
                                                       buff->string(),
                                                       ObJsonInType::JSON_BIN,
                                                       ObJsonInType::JSON_BIN,
-                                                      j_base))) {
+                                                      j_base, 0,
+                                                      ObJsonExprHelper::get_json_max_depth_config()))) {
           LOG_WARN("fail to get real data.", K(ret), K(buff));
         } else if (OB_FAIL(j_base->print(string_buffer, true, buff->length(), false))) {
           LOG_WARN("failed: get json string text", K(ret));
@@ -7950,7 +7951,8 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
                                                       buff->string(),
                                                       ObJsonInType::JSON_BIN,
                                                       ObJsonInType::JSON_BIN,
-                                                      j_base))) {
+                                                      j_base, 0,
+                                                      ObJsonExprHelper::get_json_max_depth_config()))) {
           LOG_WARN("fail to get real data.", K(ret), K(buff));
         } else if (OB_FAIL(j_base->print(string_buffer, true, buff->length(), false))) {
           LOG_WARN("failed: get json string text", K(ret));

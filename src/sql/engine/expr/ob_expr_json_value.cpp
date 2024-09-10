@@ -738,7 +738,7 @@ int ObExprJsonValue::doc_do_seek(ObJsonSeekResult &hits, bool &is_null_result, O
       if (OB_FAIL(deal_item_method_in_seek(data, is_null_result, json_param->json_path_,
                         &temp_allocator, is_type_mismatch))) {
         LOG_WARN("fail to deal item method and special case", K(ret));
-} else {
+      } else {
         hits.set_node(0, data);
       }
     } else if (hits.size() == 0) {
