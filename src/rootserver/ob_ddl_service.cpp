@@ -19862,8 +19862,6 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           ObTableSchema new_table_schema;
           if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
             LOG_WARN("fail to assign schema", K(ret));
-          } else if (OB_FAIL(reorder_column_after_add_column_instant_(*orig_table_schema, new_table_schema))) {
-            LOG_WARN("fail to reorder column after add column instant", KR(ret));
           } else if (OB_FAIL(schema_service->fetch_new_table_id(tenant_id, new_table_id))) {
             LOG_WARN("failed to fetch_new_table_id", K(ret));
           } else {
@@ -20206,8 +20204,6 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
   bool is_oracle_mode = false;
   if (OB_FAIL(new_table_schema.assign(orig_table_schema))) {
     LOG_WARN("fail to assign schema", K(ret));
-  } else if (OB_FAIL(reorder_column_after_add_column_instant_(orig_table_schema, new_table_schema))) {
-    LOG_WARN("fail to reorder column after add column instant", KR(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else if (OB_FAIL(check_inner_stat())) {
