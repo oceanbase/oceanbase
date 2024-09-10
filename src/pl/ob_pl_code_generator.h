@@ -116,6 +116,7 @@ public:
       jit::ObLLVMBasicBlock exception_;
       jit::ObLLVMBasicBlock exit_;
       int64_t level_;
+      jit::ObLLVMBasicBlock raising_block_;
     };
 
     EHStack() : exceptions_(), cur_(0) {}
@@ -386,6 +387,7 @@ public:
       exception_stack_.exceptions_[exception_stack_.cur_].exception_ = block;
       exception_stack_.exceptions_[exception_stack_.cur_].exit_ = exit;
       exception_stack_.exceptions_[exception_stack_.cur_].level_ = level;
+      exception_stack_.exceptions_[exception_stack_.cur_].raising_block_.reset();
       ++exception_stack_.cur_;
     } else {
       ret = common::OB_ERR_UNEXPECTED;
@@ -499,6 +501,13 @@ public:
     }
     return ret;
   }
+
+  inline jit::ObLLVMBasicBlock &get_current_exception_block() {
+    EHStack::EHInfo *curr = const_cast<EHStack::EHInfo*>(get_current_exception());
+    return nullptr != curr ? curr->raising_block_
+                           : default_raise_block_;
+  }
+
   inline ObPLADTService &get_adt_service() { return adt_service_; }
   inline ObPLEHService &get_eh_service() { return eh_service_; }
   inline ObPLSPIService &get_spi_service() { return spi_service_; }
@@ -784,7 +793,17 @@ private:
   // key: stmt id, value: pair(key: index, -1,)
   goto_label_map goto_label_map_;
 
+  // an unreachable block, used to tell LLVM there is no successor block after this
+  jit::ObLLVMBasicBlock unreachable_;
+
+  // current stmt_id, updated when throw an exception
+  jit::ObLLVMValue stmt_id_;
+
+  // if there is no current_exception, use this block to throw an exception to PL engine
+  jit::ObLLVMBasicBlock default_raise_block_;
+
 public:
+  int get_unreachable_block(jit::ObLLVMBasicBlock &unreachable);
   inline goto_label_map &get_goto_label_map() { return goto_label_map_; }
   // debug.
 public:

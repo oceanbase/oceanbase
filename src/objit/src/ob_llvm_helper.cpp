@@ -1086,7 +1086,7 @@ int ObLLVMHelper::create_icmp_eq(ObLLVMValue &value, int64_t i, ObLLVMValue &res
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(create_icmp(value, i, ICMP_EQ, result))) {
-    LOG_WARN("failed to get int64", K(i), K(ret));
+    LOG_WARN("failed to create_icmp", K(value), K(i), K(ret));
   }
   return ret;
 }
@@ -1095,7 +1095,7 @@ int ObLLVMHelper::create_icmp_slt(ObLLVMValue &value, int64_t i, ObLLVMValue &re
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(create_icmp(value, i, ICMP_SLT, result))) {
-    LOG_WARN("failed to get int64", K(i), K(ret));
+    LOG_WARN("failed to create_icmp", K(value), K(i), K(ret));
   }
   return ret;
 }
