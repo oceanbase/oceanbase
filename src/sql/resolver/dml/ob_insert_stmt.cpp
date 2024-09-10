@@ -254,7 +254,7 @@ int ObInsertStmt::get_value_exprs(ObIArray<ObRawExpr *> &value_exprs) const
       if (OB_ISNULL(param)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param expr is null", K(ret));
-      } else if (ObRawExprUtils::need_column_conv(column_expr->get_result_type(), *param)) {
+      } else if (ObRawExprUtils::need_column_conv(column_expr->get_result_type(), *param, false)) {
         param = column_conv_expr;
       }
     }

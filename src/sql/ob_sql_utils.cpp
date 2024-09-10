@@ -871,7 +871,7 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString &expr_
       ObExprResType dest_type;
       dest_type.set_meta(gen_col.get_meta_type());
       dest_type.set_accuracy(gen_col.get_accuracy());
-      if (ObRawExprUtils::need_column_conv(dest_type, *expr)) {
+      if (ObRawExprUtils::need_column_conv(dest_type, *expr, true)) {
         if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(expr_factory, &gen_col, expr, &session))) {
           LOG_WARN("create column convert expr failed", K(ret));
         }

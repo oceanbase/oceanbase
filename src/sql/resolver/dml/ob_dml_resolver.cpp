@@ -7472,7 +7472,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       LOG_WARN("build padding expr for self failed", K(ret));
     } else if (OB_FAIL(ref_expr->formalize(session_info))) {
       LOG_WARN("formailize column reference expr failed", K(ret));
-    } else if (ObRawExprUtils::need_column_conv(column.get_result_type(), *ref_expr)) {
+    } else if (ObRawExprUtils::need_column_conv(column.get_result_type(), *ref_expr, true)) {
       if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*expr_factory, *allocator_,
                                                          column, ref_expr, session_info, used_for_generated_column))) {
         LOG_WARN("build column convert expr failed", K(ret));

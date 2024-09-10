@@ -548,13 +548,14 @@ public:
                              ObRawExprFactory &expr_factory,
                              const ObSQLSessionInfo *session_info,
                              ObRawExpr *&expr);
-  static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
                             const share::schema::ObColumnSchemaV2 *column_schema,
                             ObRawExpr *&expr,
                             const sql::ObSQLSessionInfo *session_info);
-  static bool need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr);
+  static bool need_column_conv(const ObExprResType &expected_type,
+                               const ObRawExpr &expr,
+                               bool strict_type_check);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
                                     const share::schema::ObColumnSchemaV2 *column_schema,

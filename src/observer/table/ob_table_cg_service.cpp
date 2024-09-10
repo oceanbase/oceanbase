@@ -341,7 +341,7 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(gen_expr->formalize(&sess_info))) {
           LOG_WARN("fail to formailize column reference expr", K(ret));
-        } else if (ObRawExprUtils::need_column_conv(item.expr_->get_result_type(), *gen_expr)
+        } else if (ObRawExprUtils::need_column_conv(item.expr_->get_result_type(), *gen_expr, true)
             && OB_FAIL(ObRawExprUtils::build_column_conv_expr(expr_factory,
                                                               ctx.get_allocator(),
                                                               *item.expr_,
