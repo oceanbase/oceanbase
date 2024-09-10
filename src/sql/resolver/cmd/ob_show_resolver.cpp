@@ -22,6 +22,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/virtual_table/ob_tenant_all_tables.h"
 #include "sql/resolver/dcl/ob_grant_resolver.h"
+#include "storage/tx/ob_xa_define.h"
 #include "share/schema/ob_schema_printer.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -156,6 +157,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_PROFILE)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_PROCEDURE_CODE)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_FUNCTION_CODE)
+            && OB_UNLIKELY(parse_tree.type_ != T_XA_RECOVER)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_ENGINE)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_OPEN_TABLES)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_USER)
@@ -1723,6 +1725,41 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                          OB_SYS_DATABASE_NAME,
                          OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TNAME);
         }
+        break;
+      }
+      case T_XA_RECOVER: {
+          if (is_oracle_mode) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "xa recover in oracle mode is");
+          } else if (OB_UNLIKELY(parse_tree.num_child_ != 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong",
+                K(ret),
+                K(parse_tree.num_child_),
+                K(parse_tree.children_));
+          } else {
+            if(parse_tree.children_[0] == NULL) {
+                  GEN_SQL_STEP_1(ObShowSqlSet::XA_RECOVER);
+                  GEN_SQL_STEP_2(ObShowSqlSet::XA_RECOVER,
+                                 OB_SYS_DATABASE_NAME,
+                                 OB_ALL_VIRTUAL_GLOBAL_TRANSACTION_TNAME,
+                                 transaction::ObXATransState::PREPARED);
+            } else {
+              if(parse_tree.children_[0]->value_ != 0) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("parse tree is wrong",
+                  K(ret),
+                  K(parse_tree.num_child_),
+                  K(parse_tree.children_));
+              } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::XA_RECOVER_CONVERT_XID);
+                  GEN_SQL_STEP_2(ObShowSqlSet::XA_RECOVER_CONVERT_XID,
+                                 OB_SYS_DATABASE_NAME,
+                                 OB_ALL_VIRTUAL_GLOBAL_TRANSACTION_TNAME,
+                                 transaction::ObXATransState::PREPARED);
+              }
+            }
+          }
         break;
       }
       default:
@@ -3717,6 +3754,16 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_SEQUENCES_LIKE,
                        "SELECT sequence_name FROM %s.%s WHERE database_id = %ld ORDER BY sequence_name COLLATE utf8mb4_bin ASC",
                        NULL,
                        "sequence_name");
+DEFINE_SHOW_CLAUSE_SET(XA_RECOVER,
+                       NULL,
+                       "SELECT format_id as formatID, length(gtrid) as gtrid_length, length(bqual) as bqual_length, concat(gtrid,bqual) as data from %s.%s where state =  %ld",
+                       NULL,
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(XA_RECOVER_CONVERT_XID,
+                       NULL,
+                       "SELECT format_id as formatID, length(gtrid) as gtrid_length, length(bqual) as bqual_length, concat('0x',hex(concat(gtrid,bqual))) as data from %s.%s where state = %ld",
+                       NULL,
+                       NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_USER,
                        NULL,
                        "SELECT \"%.*s\" AS `CREATE USER for %.*s@%.*s` FROM DUAL",

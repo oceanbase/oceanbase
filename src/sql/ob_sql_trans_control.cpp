@@ -389,8 +389,13 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
         auto xas = MTL(transaction::ObXAService *);
         CK (OB_NOT_NULL(xas));
         if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
-          OZ (xas->handle_terminate_for_xa_branch(session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()),
-              xid, global_tx_type, session_id, tx_id);
+          if (lib::is_mysql_mode()) {
+            OZ (xas->handle_terminate_for_mysql(session->get_xid(), tx_desc),
+                xid, global_tx_type, session_id, tx_id);
+          } else {
+            OZ (xas->handle_terminate_for_xa_branch(session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()),
+                xid, global_tx_type, session_id, tx_id);
+          }
           // currently, tx_desc is NULL
         } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
           OZ (xas->rollback_for_dblink_trans(tx_desc), ret, xid, global_tx_type, tx_id);

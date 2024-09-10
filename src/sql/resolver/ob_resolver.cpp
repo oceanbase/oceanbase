@@ -752,6 +752,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_ENGINE:
       case T_SHOW_OPEN_TABLES:
       case T_SHOW_SEQUENCES:
+      case T_XA_RECOVER:
       case T_SHOW_CREATE_USER:
       case T_SHOW_CHECK_TABLE: {
         REGISTER_STMT_RESOLVER(Show);

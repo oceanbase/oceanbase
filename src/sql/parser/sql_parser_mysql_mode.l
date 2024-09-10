@@ -817,7 +817,7 @@ B'([01])*'|0B([01])+ {
     STORE_PARAM_NODE();
   } else {
     yylval->node->sql_str_off_ = yylloc->first_column - 1;
-    return HEX_STRING_VALUE;
+    return BIN_STRING_VALUE;
   }
 }
 

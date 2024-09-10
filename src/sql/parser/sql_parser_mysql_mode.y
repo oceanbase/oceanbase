@@ -69,6 +69,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %token <node> CLIENT_VERSION
 %token <node> MYSQL_DRIVER
 %token <node> HEX_STRING_VALUE
+%token <node> BIN_STRING_VALUE
 %token <node> REMAP_TABLE_NAME
 %token <node> REMAP_DATABASE_TABLE_NAME
 %token <node> OUTLINE_DEFAULT_TOKEN/*use for outline parser to just filter hint of query_sql*/
@@ -363,7 +364,7 @@ END_P SET_VAR DELIMITER
 
         WAIT WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WITH_ROWID WORK WRAPPER WINDOW WEAK
 
-        X509 XA XML
+        X509 XA XID XML
 
         YEAR
 
@@ -449,7 +450,7 @@ END_P SET_VAR DELIMITER
 %type <node> parameterized_trim
 %type <ival> opt_with_consistent_snapshot opt_config_scope opt_index_keyname opt_full opt_extended opt_extended_or_full
 %type <node> opt_priority opt_low_priority delete_option delete_option_list opt_delete_option_list
-%type <node> opt_work begin_stmt commit_stmt rollback_stmt opt_ignore opt_ignore_or_replace xa_begin_stmt xa_end_stmt xa_prepare_stmt xa_commit_stmt xa_rollback_stmt
+%type <node> opt_work begin_stmt commit_stmt rollback_stmt opt_ignore opt_ignore_or_replace xa_begin_stmt xa_end_stmt xa_prepare_stmt xa_commit_stmt xa_rollback_stmt xa_recover_stmt xa_xid opt_join_or_resume opt_suspend opt_one_phase opt_convert_xid
 %type <node> alter_table_stmt alter_table_actions alter_table_action_list alter_table_action alter_column_option alter_index_option alter_constraint_option standalone_alter_action alter_partition_option opt_to alter_tablegroup_option opt_table opt_tablegroup_option_list alter_tg_partition_option
 %type <node> tablegroup_option_list tablegroup_option alter_tablegroup_actions alter_tablegroup_action tablegroup_option_list_space_seperated
 %type <node> opt_tg_partition_option tg_hash_partition_option tg_key_partition_option tg_range_partition_option tg_subpartition_option tg_list_partition_option
@@ -488,7 +489,7 @@ END_P SET_VAR DELIMITER
 %type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
 %type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var
-%type <node> string_list text_string string_val_list
+%type <node> string_list text_string string_val_list ulong_num
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list
@@ -699,6 +700,7 @@ stmt:
   | xa_prepare_stmt         { $$ = $1; check_question_mark($$, result); }
   | xa_commit_stmt          { $$ = $1; check_question_mark($$, result); }
   | xa_rollback_stmt        { $$ = $1; check_question_mark($$, result); }
+  | xa_recover_stmt         { $$ = $1; check_question_mark($$, result); }
   | optimize_stmt     { $$ = $1; check_question_mark($$, result); }
   | dump_memory_stmt  { $$ = $1; check_question_mark($$, result); }
   | get_diagnostics_stmt    { $$ = $1; question_mark_issue($$, result); }
@@ -1036,6 +1038,17 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->sql_str_off_ = $2->sql_str_off_;
   $$->is_forbid_parameter_ = $2->is_forbid_parameter_;
 }
+| charset_introducer BIN_STRING_VALUE
+{
+  /* _utf8mb4 0x42 作为字符串处理 */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 1, $1);
+  $$->str_value_ = $2->str_value_;
+  $$->str_len_ = $2->str_len_;
+  $$->raw_text_ = $2->raw_text_;
+  $$->text_len_ = $2->text_len_;
+  $$->sql_str_off_ = $2->sql_str_off_;
+  $$->is_forbid_parameter_ = $2->is_forbid_parameter_;
+}
 | STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
   ParseNode *str_node = NULL;
@@ -1219,6 +1232,11 @@ complex_string_literal { $$ = $1; }
 | BOOL_VALUE { $$ = $1; }
 | NULLX { $$ = $1; }
 | HEX_STRING_VALUE
+{
+  $$ = $1;
+  $$->type_ = T_HEX_STRING;
+}
+| BIN_STRING_VALUE
 {
   $$ = $1;
   $$->type_ = T_HEX_STRING;
@@ -6039,8 +6057,34 @@ STRING_VALUE
 | HEX_STRING_VALUE
 {
   $$ = $1;
+}
+| BIN_STRING_VALUE
+{
+  $$ = $1;
 };
 
+
+ulong_num:
+INTNUM
+{
+  if(T_UINT64 == $1->type_) {
+    yyerror(&@1, result, "formatID should not greater than INT64_MAX\n");
+    YYERROR;
+  }
+  $$ = $1;
+}
+| HEX_STRING_VALUE
+{
+  int err_no = 0;
+  uint64_t val = 0;
+  val = ob_strntoull($1->raw_text_ + 2, $1->text_len_ - 2, 16, NULL, &err_no);
+  if(val > INT64_MAX || ERANGE == errno) {
+    YYABORT;
+  } else {
+    $1->value_ = val;
+    $$ = $1;
+  }
+};
 
 int_type_i:
 TINYINT     { $$[0] = T_TINYINT; }
@@ -14651,43 +14695,142 @@ BEGI opt_hint_value opt_work
  ******************************************************************************/
 
 xa_begin_stmt:
-XA START STRING_VALUE
+XA START xa_xid opt_join_or_resume
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_START, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_START, 2, $3, $4);
 }
-| XA BEGI STRING_VALUE
+| XA BEGI xa_xid opt_join_or_resume
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_START, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_START, 2, $3, $4);
 }
 ;
 
 xa_end_stmt:
-XA END STRING_VALUE
+XA END xa_xid opt_suspend
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_END, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_END, 2, $3, $4);
 }
 ;
 
 xa_prepare_stmt:
-XA PREPARE STRING_VALUE
+XA PREPARE xa_xid
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_XA_PREPARE, 1, $3);
 }
 ;
 
 xa_commit_stmt:
-XA COMMIT STRING_VALUE
+XA COMMIT xa_xid opt_one_phase
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_COMMIT, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_COMMIT, 2, $3, $4);
 }
 ;
 
 xa_rollback_stmt:
-XA ROLLBACK STRING_VALUE
+XA ROLLBACK xa_xid
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_XA_ROLLBACK, 1, $3);
 }
 ;
+
+xa_recover_stmt:
+XA RECOVER opt_convert_xid
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_XA_RECOVER, 1, $3);
+}
+;
+
+xa_xid:
+text_string
+{
+  if(64 < $1->str_len_) {
+    yyerror(&@1, result, "gtrid length should not greater than 64\n");
+    YYERROR;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 1, $1);
+}
+| text_string ',' text_string
+{
+  if(64 < $1->str_len_) {
+    yyerror(&@1, result, "gtrid length should not greater than 64\n");
+    YYERROR;
+  }
+  if(64 < $3->str_len_) {
+    yyerror(&@3, result, "bqual length should not greater than 64\n");
+    YYERROR;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+| text_string ',' text_string ',' ulong_num
+{
+  if(64 < $1->str_len_) {
+    yyerror(&@1, result, "gtrid length should not greater than 64\n");
+    YYERROR;
+  }
+  if(64 < $3->str_len_) {
+    yyerror(&@3, result, "bqual length should not greater than 64\n");
+    YYERROR;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 3, $1, $3, $5);
+}
+
+opt_join_or_resume:
+/* empty */
+{
+  $$= NULL;
+}
+| JOIN
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+
+}
+| RESUME
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+;
+
+opt_suspend:
+/* empty */
+{
+  $$= NULL;
+}
+| SUSPEND
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+}
+| SUSPEND FOR MIGRATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+;
+
+opt_one_phase:
+/* empty */
+{
+ $$= NULL;
+}
+| ONE PHASE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+}
+;
+
+opt_convert_xid:
+/* empty */
+{
+  $$= NULL;
+}
+| CONVERT XID
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+}
 
 /*****************************************************************************
  *
@@ -21892,6 +22035,7 @@ ACCOUNT
 |       WRAPPER
 |       X509
 |       XA
+|       XID
 |       XML
 |       YEAR
 |       ZONE

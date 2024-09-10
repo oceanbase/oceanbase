@@ -889,11 +889,11 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_XA_COMMIT: {
-        DEFINE_EXECUTE_CMD(ObXaCommitStmt, ObXaEndTransExecutor);
+        DEFINE_EXECUTE_CMD(ObXaCommitStmt, ObXaCommitExecutor);
         break;
       }
       case stmt::T_XA_ROLLBACK: {
-        DEFINE_EXECUTE_CMD(ObXaRollBackStmt, ObXaEndTransExecutor);
+        DEFINE_EXECUTE_CMD(ObXaRollBackStmt, ObXaRollbackExecutor);
         break;
       }
       case stmt::T_ALTER_DISKGROUP_ADD_DISK: {

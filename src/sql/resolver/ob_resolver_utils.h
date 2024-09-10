@@ -662,7 +662,12 @@ public:
                                        ParseNode *&func_udf);
   static int set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item);
   static int resolve_string(const ParseNode *node, common::ObString &string);
-
+  static int resolve_xid(const ParseNode *node, common::ObString &gtrid_string, common::ObString &bqual_string, int64_t & format_id);
+  static int resolve_text(const ParseNode *node, common::ObString &string);
+  static int resolve_ulong(const ParseNode *node, int64_t & format_id);
+  static int resolve_opt_join_or_resume(const ParseNode *node, int64_t & flag);
+  static int resolve_opt_suspend(const ParseNode *node, int64_t & flag);
+  static int resolve_opt_one_phase(const ParseNode *node, int64_t & flag);
   // check some kind of the non-updatable view, which is forbidden for all dml statement:
   // mysql:
   //    aggregate
