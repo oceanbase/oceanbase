@@ -1113,6 +1113,9 @@
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
 #define N_ARRAY                             "array"
 #define N_ARRAY_CONTAINS                    "array_contains"
+#define N_ST_COLLECT                        "st_collect"
+#define N_ST_VALIDATE                       "st_validate"
+#define N_ST_GEOMETRYN                      "st_geometryn"
 
 // for lock function
 #define N_GET_LOCK                          "get_lock"

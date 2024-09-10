@@ -1085,6 +1085,12 @@ private:
                         const ObObj *tmp_obj,
                         uint32_t obj_cnt,
                         mvt_agg_result &mvt_res);
+
+  int get_st_collect_result(const ObAggrInfo &aggr_info,
+                            ObEvalCtx &ctx,
+                            GroupConcatExtraResult *&extra,
+                            ObDatum &concat_result);
+
   int get_rb_build_agg_result(const ObAggrInfo &aggr_info,
                               GroupConcatExtraResult *&extra,
                               ObDatum &concat_result);
@@ -1217,6 +1223,7 @@ public:
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
       case T_FUN_SYS_RB_AND_AGG:
+      case T_FUN_SYS_ST_COLLECT:
       {
         need_id = true;
         break;
@@ -1373,6 +1380,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUN_SYS_ST_COLLECT:
     {
       need_extra = true;
       break;

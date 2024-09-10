@@ -17,6 +17,7 @@
 #include "ob_geo_func_register.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
+#include "lib/geo/ob_geo_normalize_visitor.h"
 #include "common/ob_smart_call.h"
 
 namespace oceanbase
@@ -63,6 +64,8 @@ public:
   static int simplify_geo_collection(ObGeometry *&geo, common::ObIAllocator &allocator, const ObSrsItem *srs);
   template<typename GcType>
   static int simplify_multi_geo(ObGeometry *&geo, common::ObIAllocator &allocator);
+  template<typename GcTreeType>
+  static int narrow_st_collect_result(ObIAllocator &allocator, ObGeometry *&geo, const ObSrsItem *srs);
 
 private:
   template<typename GcTreeType>
@@ -595,6 +598,35 @@ int ObGeoFuncUtils::remove_duplicate_multi_geo(ObGeometry *&geo, common::ObIAllo
   }
   return ret;
 }
+
+// narrow tree gc to tree multipoint / multilinestring / multipolygon
+template<typename GcTreeType>
+int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
+                                             ObGeometry *&geo,
+                                             const ObSrsItem *srs) {
+  int ret = OB_SUCCESS;
+  typename GcTreeType::sub_mpt_type *mpt = NULL;
+  typename GcTreeType::sub_ml_type *mls = NULL;
+  typename GcTreeType::sub_mp_type *mpy = NULL;
+
+  if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_split(allocator, *static_cast<const GcTreeType *>(geo), 
+                                              mpt, mls, mpy))) {
+    LOG_WARN("failed to do gc split", K(ret));
+  } else {
+    bool mpt_empty = mpt->is_empty();
+    bool mls_empty = mls->is_empty();
+    bool mpy_empty = mpy->is_empty();
+    if (!mpt_empty && mls_empty && mpy_empty) {
+      geo = mpt;
+    } else if (mpt_empty && !mls_empty && mpy_empty) {
+      geo = mls;
+    } else if (mpt_empty && mls_empty && !mpy_empty) {
+      geo = mpy;
+    }
+  }
+  return ret;
+}
+
 } // sql
 } // oceanbase
 #endif // OCEANBASE_LIB_OB_GEO_FUNC_UTILS_H_
