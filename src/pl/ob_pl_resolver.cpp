@@ -8520,8 +8520,8 @@ int ObPLResolver::convert_cursor_actual_params(
     } else if (convert_expr->get_result_type().is_ext()) {
       CK (OB_NOT_NULL(current_block_));
       OZ (check_composite_compatible(current_block_->get_namespace(),
-                                     pl_data_type.get_user_type_id(),
                                      convert_expr->get_result_type().get_udt_id(),
+                                     pl_data_type.get_user_type_id(),
                                      is_compatible));
     }
     if (OB_SUCC(ret) && !is_compatible) {
