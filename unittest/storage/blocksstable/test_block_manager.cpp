@@ -14,6 +14,7 @@
 #include <sys/statvfs.h>
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <iostream>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -22,6 +23,7 @@
 
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "observer/omt/ob_worker_processor.h"
 #include "observer/ob_srv_network_frame.h"
@@ -140,7 +142,8 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   }
   ret = FILE_MANAGER_INSTANCE_V2.init();
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
+
+  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
   ASSERT_EQ(0, OB_SERVER_BLOCK_MGR.block_map_.count());
 
@@ -185,6 +188,67 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   ASSERT_EQ(blk_cnt - 1, mark_info.count());
 
   OB_SERVER_BLOCK_MGR.mark_and_sweep();
+
+  macro_handle.reset();
+
+  FILE_MANAGER_INSTANCE_V2.destroy();
+  ObKVGlobalCache::get_instance().destroy();
+}
+
+TEST_F(TestBlockManager, test_mark_and_sweep_skip_mark)
+{
+  int ret = OB_SUCCESS;
+  ObBlockManager::BlockInfo block_info;
+  ObMacroBlockHandle macro_handle;
+
+  ASSERT_EQ(0, OB_SERVER_BLOCK_MGR.block_map_.count());
+
+  const int64_t bucket_num = 1024;
+  const int64_t max_cache_size = 1024 * 1024 * 1024;
+  const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
+
+  ret = ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
+  if (OB_INIT_TWICE == ret) {
+    ret = common::OB_SUCCESS;
+  } else {
+    ASSERT_EQ(common::OB_SUCCESS, ret);
+  }
+  ret = FILE_MANAGER_INSTANCE_V2.init();
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+
+  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+
+  ASSERT_EQ(0, OB_SERVER_BLOCK_MGR.block_map_.count());
+
+  ObBlockManager::MacroBlkIdMap mark_info;
+  ret = mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> macro_id_set;
+  ret = macro_id_set.create(MAX(2, OB_SERVER_BLOCK_MGR.block_map_.count()));
+  ASSERT_EQ(OB_SUCCESS, ret);
+  int64_t safe_ts = ObTimeUtility::current_time();
+  int64_t hold_cnt = 0;
+  ObBlockManager::GetPendingFreeBlockFunctor functor(1000000, mark_info, hold_cnt);
+  ret = OB_SERVER_BLOCK_MGR.block_map_.for_each(functor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, mark_info.count());
+
+  // first mark_and_sweep, should update start_time_
+  OB_SERVER_BLOCK_MGR.mark_and_sweep();
+  ASSERT_EQ(false, OB_SERVER_BLOCK_MGR.marker_status_.mark_finished_);
+  int64_t first_start_time = OB_SERVER_BLOCK_MGR.marker_status_.start_time_;
+  int64_t first_last_end_time = OB_SERVER_BLOCK_MGR.marker_status_.last_end_time_;
+
+  std::cout << ObTimeUtility::fast_current_time() << std::endl;
+  sleep(1);
+  std::cout << ObTimeUtility::fast_current_time() << std::endl;
+
+  // second mark_and_sweep, should update start_time_, should not update last_end_time_
+  OB_SERVER_BLOCK_MGR.mark_and_sweep();
+  ASSERT_EQ(false, OB_SERVER_BLOCK_MGR.marker_status_.mark_finished_);
+  ASSERT_NE(first_start_time, OB_SERVER_BLOCK_MGR.marker_status_.start_time_);
+  ASSERT_EQ(first_last_end_time, OB_SERVER_BLOCK_MGR.marker_status_.last_end_time_);
 
   macro_handle.reset();
 

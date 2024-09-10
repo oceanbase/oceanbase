@@ -841,9 +841,9 @@ void ObBlockManager::update_marker_status(const ObMacroBlockMarkerStatus &tmp_st
   marker_status_.mark_cost_time_ = tmp_status.mark_cost_time_;
   marker_status_.sweep_cost_time_ = tmp_status.sweep_cost_time_;
   marker_status_.start_time_ = tmp_status.start_time_;
-  marker_status_.last_end_time_ = tmp_status.last_end_time_;
   marker_status_.mark_finished_ = tmp_status.mark_finished_;
   if (tmp_status.mark_finished_) {
+    marker_status_.last_end_time_ = tmp_status.last_end_time_;
     marker_status_.linked_block_count_ = tmp_status.linked_block_count_;
     marker_status_.index_block_count_ = tmp_status.index_block_count_;
     marker_status_.ids_block_count_ = tmp_status.ids_block_count_;
@@ -983,7 +983,6 @@ void ObBlockManager::mark_and_sweep()
   ObHashSet<MacroBlockId, NoPthreadDefendMode> macro_id_set;
   MacroBlkIdMap mark_info;
   ObMacroBlockMarkerStatus tmp_status;
-  bool skip_mark = false;
   // we must assign alloc_num_ before mark_macro_blocks, because it will be set to 0 in this func
   int64_t alloc_num = 0;
   // recycle maximum 200 GB space, but no more than 6MB memory consumption for mark_info
@@ -1022,7 +1021,7 @@ void ObBlockManager::mark_and_sweep()
 
       if (OB_FAIL(ret)) {
       } else if (0 == mark_info.count()) {
-        skip_mark = true;
+        tmp_status.mark_finished_ = false;
         LOG_INFO("no block alloc/free, no need to mark blocks", K(ret));
       } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {//mark
         if (OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
@@ -1046,7 +1045,7 @@ void ObBlockManager::mark_and_sweep()
         SpinWLockGuard guard(sweep_lock_);
         if (OB_FAIL(do_sweep(mark_info))) {
           LOG_WARN("do sweep fail", K(ret));
-        } else if (!skip_mark) {
+        } else if (tmp_status.mark_finished_) {
           tmp_status.last_end_time_ = ObTimeUtility::fast_current_time();
           tmp_status.sweep_cost_time_ = tmp_status.last_end_time_ - tmp_status.start_time_ - tmp_status.mark_cost_time_;
 
@@ -1054,10 +1053,12 @@ void ObBlockManager::mark_and_sweep()
           if (OB_FAIL(block_map_.for_each(hold_info_functor))) {
             ret = hold_info_functor.get_ret_code();
             LOG_WARN("fail to get oldest hold block", K(ret));
-          } else {
-            update_marker_status(tmp_status);
           }
         }
+      }
+
+      if (OB_SUCC(ret)) {
+        update_marker_status(tmp_status);
       }
       FLOG_INFO("finish once mark and sweep", K(ret), K(alloc_num), K_(marker_status), "map_cnt", block_map_.count());
     }
