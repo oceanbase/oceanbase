@@ -92,7 +92,7 @@ private:
                             const int64_t seq_num);
 
   virtual void runTimerTask();
-  typedef common::hash::ObHashMap<ObDiskUsageReportKey, int64_t> ReportResultMap;
+  typedef common::hash::ObHashMap<ObDiskUsageReportKey, std::pair<int64_t, int64_t>> ReportResultMap; // pair<occupy_size, required_size>
 private:
   bool is_inited_;
   ReportResultMap result_map_;

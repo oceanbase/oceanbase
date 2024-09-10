@@ -51,7 +51,9 @@ private:
     WASH_SCORE,
     TABLET_PTR,
     INITIAL_STATE,
-    OLD_CHAIN
+    OLD_CHAIN,
+    DATA_OCCUPIED,
+    DATA_REQUIRED
   };
 public:
   ObAllVirtualTabletPtr();

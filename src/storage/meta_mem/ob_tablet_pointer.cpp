@@ -45,10 +45,11 @@ ObTabletPointer::ObTabletPointer()
     initial_state_(true),
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
-    old_version_chain_(nullptr)
+    old_version_chain_(nullptr),
+    space_usage_()
 {
 #if defined(__x86_64__)
-    static_assert(sizeof(ObTabletPointer) == 272, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+    static_assert(sizeof(ObTabletPointer) == 288, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
