@@ -726,6 +726,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12482	__all_virtual_tenant_resource_limit_detail	2	201001	1
 12488	__all_virtual_scheduler_job_run_detail_v2	2	201001	1
 12489	__all_virtual_deadlock_detector_stat	2	201001	1
+12491	__all_virtual_log_transport_dest_stat	2	201001	1
 12493	__all_virtual_kv_group_commit_status	2	201001	1
 12497	__all_virtual_pkg_type	2	201001	1
 12498	__all_virtual_pkg_type_attr	2	201001	1
@@ -1188,6 +1189,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21588	V$OB_QUERY_RESPONSE_TIME_HISTOGRAM	1	201001	1
 21589	DBA_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
 21590	CDB_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
+21597	GV$OB_LOG_TRANSPORT_DEST_STAT	1	201001	1
+21598	V$OB_LOG_TRANSPORT_DEST_STAT	1	201001	1
 21601	GV$OB_KV_GROUP_COMMIT_STATUS	1	201001	1
 21602	V$OB_KV_GROUP_COMMIT_STATUS	1	201001	1
 21603	INNODB_SYS_FIELDS	1	201002	1

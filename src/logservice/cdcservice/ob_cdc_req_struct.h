@@ -16,6 +16,7 @@
 #include <cstdint>
 #include "lib/net/ob_addr.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "logservice/logfetcher/ob_log_fetcher_user.h"
 #include "share/ob_errno.h"
 
 namespace oceanbase
@@ -31,6 +32,13 @@ enum class FeedbackType
   LS_OFFLINED = 2,             // LS offlined
   ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF = 3,   // Reach Max LSN in archive log but cannot switch
                                 // to palf because ls not exists in current server
+};
+
+enum ObCdcClientType: uint8_t
+{
+  CLIENT_TYPE_UNKNOWN = 0,
+  CLIENT_TYPE_CDC = 1,
+  CLIENT_TYPE_STANDBY = 2,
 };
 
 class ObCdcRpcTestFlag {
@@ -90,7 +98,7 @@ private:
 
 enum ObCdcFetchLogProtocolType
 {
-  Unknown = -1,
+  UnknownProto = -1,
   LogGroupEntryProto = 0,
   RawLogDataProto = 1,
 };
@@ -106,6 +114,12 @@ inline bool is_v1_fetch_log_protocol(const ObCdcFetchLogProtocolType type) {
 inline bool is_v2_fetch_log_protocol(const ObCdcFetchLogProtocolType type) {
   return ObCdcFetchLogProtocolType::RawLogDataProto == type;
 }
+
+const char *cdc_client_type_str(const ObCdcClientType type);
+
+const char *feedback_type_str(const FeedbackType feedback);
+
+ObCdcClientType get_client_type_from_user_type(const logfetcher::LogFetcherUser user_type);
 
 }
 }

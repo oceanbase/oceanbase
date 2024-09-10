@@ -109,7 +109,7 @@ private:
   share::ObLSID ls_id_;
 };
 
-enum class FetchMode {
+enum FetchMode {
   FETCHMODE_UNKNOWN = 0,
 
   FETCHMODE_ONLINE,
@@ -118,14 +118,215 @@ enum class FetchMode {
   FETCHMODE_MAX
 };
 
+struct ClientLSTimeStat
+{
+  ClientLSTimeStat() { reset(); }
+  ~ClientLSTimeStat() { reset(); }
+  void reset() {
+    rpc_process_time_ = 0;
+    queue_time_ = 0;
+    read_log_time_ = 0;
+    read_log_size_ = 0;
+  }
+
+  void add_time(const int64_t rpc_process_time,
+      const int64_t queue_time,
+      const int64_t read_log_time,
+      const int64_t read_log_size)
+  {
+    rpc_process_time_ += rpc_process_time;
+    queue_time_ += queue_time;
+    read_log_time_ += read_log_time;
+    read_log_size_ += read_log_size;
+  }
+
+  void snapshot(ClientLSTimeStat &stat)
+  {
+    stat.rpc_process_time_ = rpc_process_time_;
+    stat.queue_time_ = queue_time_;
+    stat.read_log_time_ = read_log_time_;
+    stat.read_log_size_ = read_log_size_;
+  }
+
+  ClientLSTimeStat operator-(const ClientLSTimeStat &rhs) const
+  {
+    ClientLSTimeStat rs;
+    rs.rpc_process_time_ = rpc_process_time_ - rhs.rpc_process_time_;
+    rs.queue_time_ = queue_time_ - rhs.queue_time_;
+    rs.read_log_time_ = read_log_time_ - rhs.read_log_time_;
+    rs.read_log_size_ = read_log_size_ - rhs.read_log_size_;
+    return rs;
+  }
+
+  ClientLSTimeStat &operator=(const ClientLSTimeStat &that)
+  {
+    rpc_process_time_ = that.rpc_process_time_;
+    queue_time_ = that.queue_time_;
+    read_log_time_ = that.read_log_time_;
+    read_log_size_ = that.read_log_size_;
+    return *this;
+  }
+
+  TO_STRING_KV(K(rpc_process_time_), K(queue_time_), K(read_log_time_), K(read_log_size_));
+
+  int64_t rpc_process_time_;
+  int64_t queue_time_;
+  int64_t read_log_time_;
+  int64_t read_log_size_;
+};
+
+struct ClientLSTrafficStat
+{
+  ClientLSTrafficStat() { reset(); }
+  ~ClientLSTrafficStat() { reset(); }
+  void reset()
+  {
+    last_snapshot_time_ = ObTimeUtility::current_time();
+    rpc_cnt_ = 0;
+    time_stat_.reset();
+  }
+  void record_rpc(const int64_t rpc_process_time,
+      const int64_t queue_time,
+      const int64_t read_log_time,
+      const int64_t read_log_size);
+
+  ClientLSTrafficStat& operator=(const ClientLSTrafficStat& that);
+
+  void snapshot(ClientLSTrafficStat &that)
+  {
+    that = *this;
+    that.last_snapshot_time_ = ObTimeUtility::current_time();
+  }
+
+  int64_t last_snapshot_time_;
+  int64_t rpc_cnt_;
+  ClientLSTimeStat time_stat_;
+};
+
 class ClientLSCtx: public common::LinkHashValue<ClientLSKey>
 {
 public:
   ClientLSCtx();
   ~ClientLSCtx();
 
+  class RpcRequestInfo
+  {
+  public:
+    RpcRequestInfo():
+      req_lock_() { reset(); }
+    ~RpcRequestInfo() { reset(); }
+    void reset()
+    {
+      req_start_time_ = OB_INVALID_TIMESTAMP;
+      trace_id_.reset();
+      req_ret_ = OB_SUCCESS;
+      req_feed_back_ = obrpc::FeedbackType::INVALID_FEEDBACK;
+    }
+
+    bool is_valid() const {
+      SpinRLockGuard guard(req_lock_);
+      return req_start_time_ != OB_INVALID_TIMESTAMP;
+    }
+
+    void invalidate(const int64_t req_start_time,
+        const ObCurTraceId::TraceId &trace_id,
+        const int req_ret,
+        const obrpc::FeedbackType feed_back) {
+      SpinWLockGuard guard(req_lock_);
+      if (trace_id_ != trace_id) {
+        reset();
+      }
+    }
+
+    void record_rpc(const int64_t req_start_time,
+        const ObCurTraceId::TraceId &trace_id,
+        const int req_ret,
+        const obrpc::FeedbackType feed_back)
+    {
+      SpinWLockGuard guard(req_lock_);
+      req_start_time_ = req_start_time;
+      trace_id_ = trace_id;
+      req_ret_ = req_ret;
+      req_feed_back_ = feed_back;
+    }
+
+    void get_req_info(int64_t &req_start_time,
+        ObCurTraceId::TraceId &trace_id,
+        int &req_ret,
+        obrpc::FeedbackType &feed_back) const
+    {
+      SpinRLockGuard guard(req_lock_);
+      req_start_time = req_start_time_;
+      trace_id = trace_id_;
+      req_ret = req_ret_;
+      feed_back = req_feed_back_;
+    }
+
+    int to_string_rdlock(char *buf, const int64_t buf_len) const
+    {
+      int ret = OB_SUCCESS;
+      int64_t pos = 0;
+
+      SpinRLockGuard guard(req_lock_);
+
+      if (OB_FAIL(databuff_print_kv(buf, buf_len, pos,
+          "request_start_time", req_start_time_,
+          "trace_id", trace_id_,
+          "request_ret", req_ret_,
+          "request_feedback", obrpc::feedback_type_str(req_feed_back_)))) {
+      }
+
+      return ret;
+    }
+
+  private:
+    SpinRWLock req_lock_;
+    int64_t req_start_time_;
+    ObCurTraceId::TraceId trace_id_;
+    int req_ret_;
+    obrpc::FeedbackType req_feed_back_;
+  };
+
+  class TrafficStatInfo
+  {
+  public:
+    static constexpr int SNAPSHOT_NUM = 2;
+    TrafficStatInfo():
+      traffic_lock_()
+    { reset(); }
+    ~TrafficStatInfo() { reset(); }
+    void reset()
+    {
+      cur_snapshot_idx_ = 0;
+      for (int i = 0; i < SNAPSHOT_NUM; i++) {
+        traffic_stat_snapshot_[i].reset();
+      }
+      cur_traffic_stat_.reset();
+    }
+
+    void record_rpc(const int64_t rpc_process_time,
+        const int64_t queue_time,
+        const int64_t read_log_time,
+        const int64_t read_log_size);
+    void snapshot();
+
+    void calc_avg_traffic_stat(int64_t &avg_process_time,
+        int64_t &avg_queue_time,
+        int64_t &avg_read_log_time,
+        int64_t &avg_read_log_size,
+        int64_t &avg_log_transport_bandwidth) const;
+
+  private:
+    SpinRWLock traffic_lock_;
+    int64_t cur_snapshot_idx_;
+    ClientLSTrafficStat traffic_stat_snapshot_[SNAPSHOT_NUM];
+    ClientLSTrafficStat cur_traffic_stat_;
+  };
+
 public:
-  int init(const int64_t client_progress, const obrpc::ObCdcFetchLogProtocolType proto);
+  int init(const int64_t client_progress,
+      const obrpc::ObCdcFetchLogProtocolType proto,
+      const obrpc::ObCdcClientType client_type);
 
   // thread safe method,
   // OB_INIT_TWICE: archive source has been inited;
@@ -163,43 +364,101 @@ public:
 
   void set_proto_type(const obrpc::ObCdcFetchLogProtocolType type) {
     obrpc::ObCdcFetchLogProtocolType from = proto_type_, to = type;
-    proto_type_ = type;
-    EXTLOG_LOG(INFO, "set fetch protocol ", K(from), K(to));
+    ATOMIC_STORE(&proto_type_, type);
+    if (from != to) {
+      EXTLOG_LOG(INFO, "set fetch protocol ", K(from), K(to));
+    }
   }
 
   // non-thread safe method
   obrpc::ObCdcFetchLogProtocolType get_proto_type() const {
-    return proto_type_;
+    return ATOMIC_LOAD(&proto_type_);
   }
 
   // non-thread safe method
   void set_fetch_mode(FetchMode mode, const char *reason) {
     FetchMode from = fetch_mode_, to = mode;
-    fetch_mode_ = mode;
+    ATOMIC_STORE(&fetch_mode_, mode);
     EXTLOG_LOG(INFO, "set fetch mode ", K(from), K(to), K(reason));
   }
 
   // non-thread safe method
-  FetchMode get_fetch_mode() const { return fetch_mode_; }
+  FetchMode get_fetch_mode() const { return ATOMIC_LOAD(&fetch_mode_); }
 
   // non-thread safe method
-  void update_touch_ts() { last_touch_ts_ = ObTimeUtility::current_time(); }
+  void update_touch_ts() { ATOMIC_STORE(&last_touch_ts_, ObTimeUtility::current_time()); }
 
   // non-thread safe method
-  int64_t get_touch_ts() const { return last_touch_ts_; }
+  int64_t get_touch_ts() const { return ATOMIC_LOAD(&last_touch_ts_); }
 
   // non-thread safe method
-  void set_progress(int64_t progress) { client_progress_ = progress; }
+  void set_progress(int64_t progress) { ATOMIC_STORE(&client_progress_, progress); }
 
   // non-thread safe method
-  int64_t get_progress() const { return client_progress_; }
+  int64_t get_progress() const { return ATOMIC_LOAD(&client_progress_); }
 
-  TO_STRING_KV(KP_(source),
-               K_(source_version),
-               K_(proto_type),
-               K_(fetch_mode),
-               K_(last_touch_ts),
-               K_(client_progress))
+  void record_rpc_stat(const int64_t queue_time,
+      const int64_t process_time,
+      const int64_t read_log_time,
+      const int64_t read_log_size)
+  {
+    traffic_stat_info_.record_rpc(process_time, queue_time, read_log_time, read_log_size);
+  }
+
+  void record_rpc_info(const int64_t rpc_start_time,
+      const ObCurTraceId::TraceId &trace_id,
+      const int ret_code,
+      const obrpc::FeedbackType feed_back)
+  {
+    if (OB_SUCCESS == ret_code && feed_back == obrpc::FeedbackType::INVALID_FEEDBACK) {
+      if (failed_rpc_info_.is_valid()) {
+        failed_rpc_info_.invalidate(rpc_start_time, trace_id, ret_code, feed_back);
+      }
+    } else {
+      failed_rpc_info_.record_rpc(rpc_start_time, trace_id, ret_code, feed_back);
+    }
+  }
+
+  void set_client_type(const obrpc::ObCdcClientType client_type) {
+    ATOMIC_STORE(&client_type_, client_type);
+  }
+
+  obrpc::ObCdcClientType get_client_type() const {
+    return client_type_;
+  }
+
+  int64_t get_create_ts() const {
+    return create_ts_;
+  }
+
+  void set_req_lsn(const palf::LSN lsn) {
+    ATOMIC_STORE(&client_lsn_.val_, lsn.val_);
+  }
+
+  palf::LSN get_req_lsn() const {
+    return palf::LSN(ATOMIC_LOAD(&client_lsn_.val_));
+  }
+
+  const RpcRequestInfo &get_failed_rpc_info() const {
+    return failed_rpc_info_;
+  }
+
+  const TrafficStatInfo &get_traffic_stat_info() const {
+    return traffic_stat_info_;
+  }
+
+  void snapshot_for_traffic_stat() {
+    traffic_stat_info_.snapshot();
+  }
+
+  TO_STRING_KV(KP(source_),
+               K(source_version_),
+               K(proto_type_),
+               K(fetch_mode_),
+               K(last_touch_ts_),
+               K(client_progress_),
+               K(create_ts_),
+               K(client_lsn_))
 
 private:
   // caller need to hold source_lock_ before invoke this method
@@ -225,6 +484,14 @@ private:
   int64_t last_touch_ts_;
   // for fetch_raw_log protocol, it's not used.
   int64_t client_progress_;
+  const int64_t create_ts_;
+  obrpc::ObCdcClientType client_type_;
+
+  palf::LSN client_lsn_;
+
+  RpcRequestInfo failed_rpc_info_;
+
+  TrafficStatInfo traffic_stat_info_;
 };
 
 typedef common::ObSEArray<std::pair<int64_t, share::ObBackupPathString>, 1> ObArchiveDestInfo;

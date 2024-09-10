@@ -14303,6 +14303,41 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+def_table_schema(
+  owner = 'wenyue.zxl',
+  table_name     = '__all_virtual_log_transport_dest_stat',
+  table_id       = '12491',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+  ],
+
+  in_tenant_space = True,
+  normal_columns = [
+  ('tenant_id', 'int'),
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('ls_id', 'int'),
+  ('client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('client_pid', 'int'),
+  ('client_tenant_id', 'int'),
+  ('client_type', 'int'),
+  ('start_serve_time', 'timestamp'),
+  ('last_serve_time', 'timestamp'),
+  ('last_read_source', 'int'),
+  ('last_request_type', 'int'),
+  ('last_request_log_lsn', 'uint'),
+  ('last_request_log_scn', 'uint'),
+  ('last_failed_request', 'longtext'),
+  ('avg_request_process_time', 'int'),
+  ('avg_request_queue_time', 'int'),
+  ('avg_request_read_log_time', 'int'),
+  ('avg_request_read_log_size', 'int'),
+  ('avg_log_transport_bandwidth', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner      = 'wuguangxin.wgx',
@@ -14830,6 +14865,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451', all_def_keywords['__all_virtual_tenant_resource_limit_detail'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15457', all_def_keywords['__all_virtual_query_response_time'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_keywords['__all_scheduler_job_run_detail_v2']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15461', all_def_keywords['__all_virtual_log_transport_dest_stat'])))
 
 def_table_schema(**gen_sys_agent_virtual_table_def('15468', all_def_keywords['__all_pkg_type']))
 def_table_schema(**gen_sys_agent_virtual_table_def('15469', all_def_keywords['__all_pkg_type_attr']))
@@ -35580,6 +35616,99 @@ SELECT
                         GMT_MODIFIED
                        FROM OCEANBASE.__ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2
 )
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wenyue.zxl',
+  table_name     = 'GV$OB_LOG_TRANSPORT_DEST_STAT',
+  table_id       = '21597',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+          TENANT_ID,
+          SVR_IP,
+          SVR_PORT,
+          LS_ID,
+          CLIENT_IP,
+          CLIENT_PID,
+          CLIENT_TENANT_ID,
+          CASE CLIENT_TYPE
+            WHEN 1 THEN 'CDC'
+            WHEN 2 THEN 'STANDBY'
+            ELSE 'UNKNOWN'
+          END AS CLIENT_TYPE,
+          START_SERVE_TIME,
+          LAST_SERVE_TIME,
+          CASE LAST_READ_SOURCE
+            WHEN 1 THEN 'ONLINE'
+            WHEN 2 THEN 'ARCHIVE'
+            ELSE 'UNKNOWN'
+          END AS LAST_READ_SOURCE,
+          CASE LAST_REQUEST_TYPE
+            WHEN 0 THEN 'SEQUENTIAL_READ_SERIAL'
+            WHEN 1 THEN 'SEQUENTIAL_READ_PARALLEL'
+            WHEN 2 THEN 'SCATTERED_READ'
+            ELSE 'UNKNOWN'
+          END AS LAST_REQUEST_TYPE,
+          LAST_REQUEST_LOG_LSN,
+          LAST_REQUEST_LOG_SCN,
+          LAST_FAILED_REQUEST,
+          AVG_REQUEST_PROCESS_TIME,
+          AVG_REQUEST_QUEUE_TIME,
+          AVG_REQUEST_READ_LOG_TIME,
+          AVG_REQUEST_READ_LOG_SIZE,
+          CASE
+            WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 * 1024 * 1024 THEN
+              CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024/1024/1024, 2), 'GB/S')
+            WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 * 1024  THEN
+              CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024/1024, 2), 'MB/S')
+            WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 THEN
+              CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024, 2), 'KB/S')
+            ELSE
+              CONCAT(AVG_LOG_TRANSPORT_BANDWIDTH, 'B/s')
+          END AS AVG_LOG_TRANSPORT_BANDWIDTH
+    FROM OCEANBASE.__ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wenyue.zxl',
+  table_name     = 'V$OB_LOG_TRANSPORT_DEST_STAT',
+  table_id       = '21598',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+          TENANT_ID,
+          SVR_IP,
+          SVR_PORT,
+          LS_ID,
+          CLIENT_IP,
+          CLIENT_PID,
+          CLIENT_TENANT_ID,
+          CLIENT_TYPE,
+          START_SERVE_TIME,
+          LAST_SERVE_TIME,
+          LAST_READ_SOURCE,
+          LAST_REQUEST_TYPE,
+          LAST_REQUEST_LOG_LSN,
+          LAST_REQUEST_LOG_SCN,
+          LAST_FAILED_REQUEST,
+          AVG_REQUEST_PROCESS_TIME,
+          AVG_REQUEST_QUEUE_TIME,
+          AVG_REQUEST_READ_LOG_TIME,
+          AVG_REQUEST_READ_LOG_SIZE,
+          AVG_LOG_TRANSPORT_BANDWIDTH
+    FROM OCEANBASE.GV$OB_LOG_TRANSPORT_DEST_STAT
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -63162,6 +63291,103 @@ def_table_schema(
 
     normal_columns = [
     ],
+)
+
+def_table_schema(
+  owner = 'wenyue.zxl',
+  table_name     = 'GV$OB_LOG_TRANSPORT_DEST_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28238',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+          TENANT_ID,
+          SVR_IP,
+          SVR_PORT,
+          LS_ID,
+          CLIENT_IP,
+          CLIENT_PID,
+          CLIENT_TENANT_ID,
+          CASE CLIENT_TYPE
+            WHEN 1 THEN 'CDC'
+            WHEN 2 THEN 'STANDBY'
+            ELSE 'UNKNOWN'
+          END AS CLIENT_TYPE,
+          START_SERVE_TIME,
+          LAST_SERVE_TIME,
+          CASE LAST_READ_SOURCE
+            WHEN 1 THEN 'ONLINE'
+            WHEN 2 THEN 'ARCHIVE'
+            ELSE 'UNKNOWN'
+          END AS LAST_READ_SOURCE,
+          CASE LAST_REQUEST_TYPE
+            WHEN 0 THEN 'SEQUENTIAL_READ_SERIAL'
+            WHEN 1 THEN 'SEQUENTIAL_READ_PARALLEL'
+            WHEN 2 THEN 'SCATTERED_READ'
+            ELSE 'UNKNOWN'
+          END AS LAST_REQUEST_TYPE,
+          LAST_REQUEST_LOG_LSN,
+          LAST_REQUEST_LOG_SCN,
+          LAST_FAILED_REQUEST,
+          AVG_REQUEST_PROCESS_TIME,
+          AVG_REQUEST_QUEUE_TIME,
+          AVG_REQUEST_READ_LOG_TIME,
+          AVG_REQUEST_READ_LOG_SIZE,
+          CASE
+            WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 * 1024 * 1024 THEN
+              CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024/1024/1024, 2), 'GB/S')
+            WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 * 1024  THEN
+              CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024/1024, 2), 'MB/S')
+            WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 THEN
+              CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024, 2), 'KB/S')
+            ELSE
+              CONCAT(AVG_LOG_TRANSPORT_BANDWIDTH, 'B/s')
+          END AS AVG_LOG_TRANSPORT_BANDWIDTH
+    FROM SYS.ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wenyue.zxl',
+  table_name     = 'V$OB_LOG_TRANSPORT_DEST_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28239',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+          TENANT_ID,
+          SVR_IP,
+          SVR_PORT,
+          LS_ID,
+          CLIENT_IP,
+          CLIENT_PID,
+          CLIENT_TENANT_ID,
+          CLIENT_TYPE,
+          START_SERVE_TIME,
+          LAST_SERVE_TIME,
+          LAST_READ_SOURCE,
+          LAST_REQUEST_TYPE,
+          LAST_REQUEST_LOG_LSN,
+          LAST_REQUEST_LOG_SCN,
+          LAST_FAILED_REQUEST,
+          AVG_REQUEST_PROCESS_TIME,
+          AVG_REQUEST_QUEUE_TIME,
+          AVG_REQUEST_READ_LOG_TIME,
+          AVG_REQUEST_READ_LOG_SIZE,
+          AVG_LOG_TRANSPORT_BANDWIDTH
+    FROM SYS.GV$OB_LOG_TRANSPORT_DEST_STAT
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
 )
 
 def_table_schema(

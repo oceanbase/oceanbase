@@ -277,7 +277,7 @@ FetchLogARpc::FetchLogARpc(FetchStream &host) :
     cur_req_(NULL),
     flying_req_list_(),
     res_queue_(),
-    proto_type_(obrpc::ObCdcFetchLogProtocolType::Unknown),
+    proto_type_(obrpc::ObCdcFetchLogProtocolType::UnknownProto),
     splitter_(NULL),
     lock_(ObLatchIds::OBCDC_FETCHLOG_ARPC_LOCK)
 {
@@ -309,7 +309,7 @@ void FetchLogARpc::reset()
   cur_req_ = NULL;
   flying_req_list_.reset();
   (void)res_queue_.reset();
-  proto_type_ = obrpc::ObCdcFetchLogProtocolType::Unknown;
+  proto_type_ = obrpc::ObCdcFetchLogProtocolType::UnknownProto;
   if (NULL != splitter_) {
     OB_DELETE(IFetchLogRpcSplitter, "FetcherRpcSplit", splitter_);
     splitter_ = NULL;

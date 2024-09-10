@@ -123,6 +123,14 @@ public:
     return flag_;
   }
 
+  void set_client_type(const obrpc::ObCdcClientType client_type) {
+    client_type_ = client_type;
+  }
+
+  obrpc::ObCdcClientType get_client_type() const {
+    return client_type_;
+  }
+
   TO_STRING_KV(
     K(client_id_),
     K(tenant_id_),
@@ -150,6 +158,7 @@ private:
 	int32_t cur_round_rpc_count_;
 	ObCompressorType compressor_type_;
 	int8_t flag_;
+  ObCdcClientType client_type_;
 };
 
 enum class ObCdcFetchRawSource

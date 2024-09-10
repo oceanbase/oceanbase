@@ -96,16 +96,102 @@ void ClientLSKey::reset()
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_ = ObLSID::INVALID_LS_ID;
 }
+
+///////////////////////////////////////////ClientLSTrafficStat///////////////////////////////////////////
+
+void ClientLSTrafficStat::record_rpc(const int64_t rpc_process_time,
+    const int64_t queue_time,
+    const int64_t read_log_time,
+    const int64_t read_log_size)
+{
+  rpc_cnt_++;
+  time_stat_.add_time(rpc_process_time, queue_time, read_log_time, read_log_size);
+}
+
+ClientLSTrafficStat& ClientLSTrafficStat::operator=(const ClientLSTrafficStat &that)
+{
+  last_snapshot_time_ = that.last_snapshot_time_;
+  rpc_cnt_ = that.rpc_cnt_;
+  time_stat_ = that.time_stat_;
+  return *this;
+}
+
 ///////////////////////////////////////////ClientLSCtx///////////////////////////////////////////
+
+void ClientLSCtx::TrafficStatInfo::record_rpc(const int64_t rpc_process_time,
+    const int64_t queue_time,
+    const int64_t read_log_time,
+    const int64_t read_log_size)
+{
+  SpinWLockGuard guard(traffic_lock_);
+  cur_traffic_stat_.record_rpc(rpc_process_time, queue_time, read_log_time, read_log_size);
+}
+
+void ClientLSCtx::TrafficStatInfo::snapshot()
+{
+  SpinWLockGuard guard(traffic_lock_);
+  cur_snapshot_idx_ = (cur_snapshot_idx_ + 1) % SNAPSHOT_NUM;
+  cur_traffic_stat_.snapshot(traffic_stat_snapshot_[cur_snapshot_idx_]);
+}
+
+void ClientLSCtx::TrafficStatInfo::calc_avg_traffic_stat(
+    int64_t &avg_process_time,
+    int64_t &avg_queue_time,
+    int64_t &avg_read_log_time,
+    int64_t &avg_read_log_size,
+    int64_t &avg_log_transport_bandwidth) const
+{
+  SpinRLockGuard guard(traffic_lock_);
+  constexpr int64_t SECOND = 1000L * 1000;
+  int64_t last_snapshot_idx = (cur_snapshot_idx_ + SNAPSHOT_NUM - 1) % SNAPSHOT_NUM;
+  const ClientLSTrafficStat &cur_snapshot_info = traffic_stat_snapshot_[cur_snapshot_idx_];
+  const ClientLSTrafficStat &last_snapshot_info = traffic_stat_snapshot_[last_snapshot_idx];
+  const ClientLSTimeStat &cur_time_stat = cur_snapshot_info.time_stat_;
+  const ClientLSTimeStat &last_time_stat = last_snapshot_info.time_stat_;
+  const int64_t time_delta = cur_snapshot_info.last_snapshot_time_ - last_snapshot_info.last_snapshot_time_;
+  const int64_t rpc_cnt_delta = cur_snapshot_info.rpc_cnt_ - last_snapshot_info.rpc_cnt_;
+  const ClientLSTimeStat time_stat_delta = cur_time_stat - last_time_stat;
+  if (0 == rpc_cnt_delta) {
+    avg_process_time = 0;
+    avg_queue_time = 0;
+    avg_read_log_time = 0;
+    avg_read_log_size = 0;
+    avg_log_transport_bandwidth = 0;
+    LOG_TRACE("rpc_cnt_delta is zero", K(cur_snapshot_idx_), K(last_snapshot_idx),
+        "cur_snapshot_rpc_cnt", cur_snapshot_info.rpc_cnt_,
+        "last_snapshot_rpc_cnt", last_snapshot_info.rpc_cnt_,
+        "cur_snapshot_time", cur_snapshot_info.last_snapshot_time_,
+        "last_snapshot_time", last_snapshot_info.last_snapshot_time_);
+  } else if (0 < rpc_cnt_delta) {
+    avg_process_time = time_stat_delta.rpc_process_time_ / rpc_cnt_delta;
+    avg_queue_time = time_stat_delta.queue_time_ / rpc_cnt_delta;
+    avg_read_log_time = time_stat_delta.read_log_time_ / rpc_cnt_delta;
+    avg_read_log_size = time_stat_delta.read_log_size_ / rpc_cnt_delta;
+    avg_log_transport_bandwidth = 0 >= time_delta ? 0 : time_stat_delta.read_log_size_ * SECOND / time_delta ;
+    LOG_TRACE("finish calc_avg_traffic_stat",
+        K(cur_time_stat), K(last_time_stat), K(time_stat_delta), K(cur_snapshot_idx_), K(last_snapshot_idx),
+        "cur_snapshot_rpc_cnt", cur_snapshot_info.rpc_cnt_,
+        "last_snapshot_rpc_cnt", last_snapshot_info.rpc_cnt_,
+        "cur_snapshot_time", cur_snapshot_info.last_snapshot_time_,
+        "last_snapshot_time", last_snapshot_info.last_snapshot_time_);
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "negtive rpc_cnt_delta, unexpected", K(rpc_cnt_delta));
+  }
+}
 
 ClientLSCtx::ClientLSCtx()
   : source_lock_(ObLatchIds::CDC_SERVICE_LS_CTX_LOCK),
     source_version_(0),
     source_(NULL),
-    proto_type_(obrpc::ObCdcFetchLogProtocolType::Unknown),
+    proto_type_(obrpc::ObCdcFetchLogProtocolType::UnknownProto),
     fetch_mode_(FetchMode::FETCHMODE_UNKNOWN),
     last_touch_ts_(OB_INVALID_TIMESTAMP),
-    client_progress_(OB_INVALID_TIMESTAMP)
+    client_progress_(OB_INVALID_TIMESTAMP),
+    create_ts_(ObTimeUtility::current_time()),
+    client_type_(obrpc::ObCdcClientType::CLIENT_TYPE_UNKNOWN),
+    client_lsn_(palf::LOG_INVALID_LSN_VAL),
+    failed_rpc_info_(),
+    traffic_stat_info_()
 {
   update_touch_ts();
 }
@@ -115,14 +201,17 @@ ClientLSCtx::~ClientLSCtx()
   reset();
 }
 
-int ClientLSCtx::init(int64_t client_progress, const obrpc::ObCdcFetchLogProtocolType type)
+int ClientLSCtx::init(int64_t client_progress,
+    const obrpc::ObCdcFetchLogProtocolType type,
+    const obrpc::ObCdcClientType client_type)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TIMESTAMP != client_progress) {
     set_progress(client_progress);
-    set_proto_type(type);
     set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ClientLSCtxInit");
+    set_client_type(client_type);
     update_touch_ts();
+    set_proto_type(type);
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("client progress is invalid", KR(ret), K(client_progress));
@@ -279,10 +368,14 @@ void ClientLSCtx::reset()
     source_ = NULL;
     source_version_ = 0;
   }
-  proto_type_ = obrpc::ObCdcFetchLogProtocolType::Unknown;
+  proto_type_ = obrpc::ObCdcFetchLogProtocolType::UnknownProto;
   fetch_mode_ = FetchMode::FETCHMODE_UNKNOWN;
   last_touch_ts_ = OB_INVALID_TIMESTAMP;
   client_progress_ = OB_INVALID_TIMESTAMP;
+  client_type_ = obrpc::ObCdcClientType::CLIENT_TYPE_UNKNOWN;
+  client_lsn_.reset();
+  failed_rpc_info_.reset();
+  traffic_stat_info_.reset();
 }
 
 void ClientLSCtx::set_source_(logservice::ObRemoteLogParent *source)

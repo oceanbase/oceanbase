@@ -465,6 +465,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_tenant_resource_limit.cpp
   virtual_table/ob_all_virtual_tenant_resource_limit_detail.cpp
+  virtual_table/ob_all_virtual_log_transport_dest_stat.cpp
   virtual_table/ob_all_virtual_kv_group_commit_info.cpp
   virtual_table/ob_all_virtual_kv_client_info.cpp
 )

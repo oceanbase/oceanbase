@@ -143,6 +143,15 @@ public:
   void inc_prefill_resp_time(int64_t time_cost) {
     prefill_resp_time_ += time_cost;
   }
+
+  int64_t get_fetch_log_time() const {
+    return fetch_log_time_;
+  }
+
+  int64_t get_read_log_time() const {
+    return fetch_palf_time_ + fetch_archive_time_;
+  }
+
   //  total_time (fetch_log)
   //   ├-- fetch_log_time (ls_fetch_log)
   //   |    ├-- fetch_palf_time (fetch_log_in_palf)

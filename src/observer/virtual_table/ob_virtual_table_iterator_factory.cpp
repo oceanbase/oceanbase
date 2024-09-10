@@ -228,6 +228,7 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit_detail.h"
+#include "observer/virtual_table/ob_all_virtual_log_transport_dest_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_deadlock_detector_stat.h"
@@ -2720,6 +2721,19 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               {
                 LOG_WARN("set addr failed", K(ret), K(addr_));
               }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TID:
+          {
+            ObAllVirtualLogTransportDestStat *all_virtual_log_transport_dest_stat = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLogTransportDestStat,
+                                          all_virtual_log_transport_dest_stat, omt))) {
+              SERVER_LOG(ERROR, "ObAllVirtualLogTransportDestStat construct fail", K(ret));
+            } else {
+              all_virtual_log_transport_dest_stat->set_allocator(&allocator);
+              vt_iter = all_virtual_log_transport_dest_stat;
             }
             break;
           }
