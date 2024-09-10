@@ -545,6 +545,7 @@ private:
   int get_tablet_and_acquire_new(
       const ObTabletMapKey &key,
       ObTabletHandle &old_tablet,
+      ObMetaDiskAddr &old_tablet_addr,
       ObTabletHandle &new_tablet,
       ObTimeGuard &time_guard);
 private:

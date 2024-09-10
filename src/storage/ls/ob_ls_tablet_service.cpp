@@ -1131,6 +1131,7 @@ int ObLSTabletService::update_tablet_table_store(
   ObTabletHandle old_tablet_hdl;
   ObTabletHandle tmp_tablet_hdl;
   ObTabletHandle new_tablet_hdl;
+  ObMetaDiskAddr old_tablet_addr;
   ObTimeGuard time_guard("ObLSTabletService::UpdateTableStore", 1_s);
 
   if (IS_NOT_INIT) {
@@ -1146,7 +1147,7 @@ int ObLSTabletService::update_tablet_table_store(
       LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
     }
   } else if (FALSE_IT(time_guard.click("AcqTmpTab"))) {
-  } else if (OB_FAIL(get_tablet_and_acquire_new(key, old_tablet_hdl, new_tablet_hdl, time_guard))) {
+  } else if (OB_FAIL(get_tablet_and_acquire_new(key, old_tablet_hdl, old_tablet_addr, new_tablet_hdl, time_guard))) {
     LOG_WARN("fail to get old tablet and acquire new tablet buffer", K(ret), K(key));
   } else if (old_tablet_hdl.get_obj()->is_empty_shell()) {
     handle = old_tablet_hdl;
@@ -1167,10 +1168,10 @@ int ObLSTabletService::update_tablet_table_store(
       ObMetaDiskAddr cur_addr;
       if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet_addr(key, cur_addr))) {
         LOG_WARN("fail to get tablet addr from t3m", K(ret), K(key));
-      } else if (old_tablet->tablet_addr_ != cur_addr) {
+      } else if (old_tablet_addr != cur_addr) {
         ret = OB_EAGAIN;
         LOG_INFO("The tablet address in tablet pointer has changed, please try again", K(ret), K(cur_addr),
-            KPC(old_tablet));
+            K(old_tablet_addr), KPC(old_tablet));
       } else if (OB_FAIL(ObTabletSlogHelper::write_update_tablet_slog(ls_id, tablet_id, new_addr))) {
         LOG_WARN("fail to write update tablet slog", K(ret), K(ls_id), K(tablet_id), K(new_addr));
       } else if (FALSE_IT(time_guard.click("WrSlog"))) {
@@ -1181,7 +1182,7 @@ int ObLSTabletService::update_tablet_table_store(
       } else {
         handle = new_tablet_hdl;
         time_guard.click("SLOGAndCAS");
-        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(new_addr), K(param), K(handle));
+        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(old_tablet_addr), K(cur_addr), K(new_addr), K(param), K(handle));
       }
     }
   }
@@ -7276,6 +7277,7 @@ int ObLSTabletService::check_tablet_no_active_memtable(const ObIArray<ObTabletID
 int ObLSTabletService::get_tablet_and_acquire_new(
     const ObTabletMapKey &key,
     ObTabletHandle &old_tablet,
+    ObMetaDiskAddr &old_tablet_addr,
     ObTabletHandle &new_tablet,
     ObTimeGuard &time_guard)
 {
@@ -7285,6 +7287,7 @@ int ObLSTabletService::get_tablet_and_acquire_new(
   time_guard.click("RLock");
   if (OB_FAIL(direct_get_tablet(key.tablet_id_, old_tablet))) {
     LOG_WARN("failed to get tablet", K(ret), K(key));
+  } else if (FALSE_IT(old_tablet_addr = old_tablet.get_obj()->tablet_addr_)) {
   } else if (FALSE_IT(time_guard.click("GetTablet"))) {
   } else if (old_tablet.get_obj()->is_empty_shell()) {
     LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", old_tablet.get_obj());
