@@ -373,10 +373,12 @@ private:
 };
 
 int64_t global_addr = 0;
-VMMgr vm_mgr;
+VMMgr *g_vm_mgr = NULL;
 
 bool init_sanity()
 {
+  static VMMgr vm_mgr;
+  g_vm_mgr = &vm_mgr;
   set_ob_mem_mgr_path();
   DEFER(unset_ob_mem_mgr_path(););
   bool succ = false;
@@ -436,7 +438,7 @@ void *sanity_mmap(size_t size)
   if (0 == global_addr) return NULL;
   void *ret = NULL;
   int64_t addr;
-  void *ref = vm_mgr.alloc_addr(size, addr);
+  void *ref = g_vm_mgr->alloc_addr(size, addr);
   if (!ref) {
   } else {
     void *ptr = (void*)addr;
@@ -479,7 +481,7 @@ void sanity_munmap(void *ptr, size_t size)
   if (-1 == do_madvise(shadow_ptr, shadow_size, MADV_DONTDUMP)) {
     LOG_WARN_RET(OB_ERR_SYS, "madvise shadow failed", K(errno));
   }
-  vm_mgr.free_addr(ref);
+  g_vm_mgr->free_addr(ref);
 }
 
 struct t_vip {
