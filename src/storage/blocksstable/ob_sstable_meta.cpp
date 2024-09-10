@@ -849,6 +849,11 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
   } else if (pos < data_len && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &is_small_sstable_))) {
     LOG_WARN("fail to deserialize is_small_sstable_", K(ret), KP(buf), K(data_len), K(pos));
   }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, basic_meta_.filled_tx_scn_))) {
+    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(basic_meta_));
+  }
+
   return ret;
 }
 
@@ -1006,6 +1011,23 @@ int ObSSTableMetaChecker::check_sstable_column_checksum_(
   }
   return ret;
 }
+
+int ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
+    const ObITable::TableKey &table_key,
+    share::SCN &filled_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  if (table_key.tablet_id_.is_ls_inner_tablet()) {
+    //do nothing
+  } else if (table_key.is_major_sstable()) {
+    //do nothing
+  } else if (filled_tx_scn.is_min()) {
+    filled_tx_scn = table_key.get_end_scn();
+    LOG_WARN("fix filled tx scn value for compact", K(table_key), K(filled_tx_scn));
+  }
+  return ret;
+}
+
 
 } // namespace blocksstable
 } // namespace oceanbase

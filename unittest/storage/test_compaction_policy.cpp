@@ -294,6 +294,7 @@ int TestCompactionPolicy::mock_sstable(
   } else {
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
+    param.filled_tx_scn_ = table_key.get_end_scn();
   }
 
   void *buf = nullptr;
