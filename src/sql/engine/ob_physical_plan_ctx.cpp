@@ -117,12 +117,16 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       spm_ts_timeout_us_(0),
       subschema_ctx_(allocator_),
       all_local_session_vars_(allocator),
+      mview_ids_(allocator),
+      last_refresh_scns_(allocator),
       total_memstore_read_row_count_(0),
       total_ssstore_read_row_count_(0),
       tx_id_(0),
       tm_sessid_(0),
       hint_xa_trans_stop_check_lock_(false),
-      main_xa_trans_branch_(false)
+      main_xa_trans_branch_(false),
+      is_direct_insert_plan_(false),
+      check_pdml_affected_rows_(false)
 {
 }
 
@@ -371,6 +375,23 @@ int ObPhysicalPlanCtx::merge_implicit_cursor_info(const ObImplicitCursorInfo &im
                      merge_cursor(implicit_cursor))) {
     LOG_WARN("merge implicit cursor info failed", K(ret),
              K(implicit_cursor), K(implicit_cursor_infos_));
+  }
+  LOG_DEBUG("merge implicit cursor info", K(ret), K(implicit_cursor), K(lbt()));
+  return ret;
+}
+
+int ObPhysicalPlanCtx::replace_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(implicit_cursor.stmt_id_ < 0)
+      || OB_UNLIKELY(implicit_cursor.stmt_id_ >= implicit_cursor_infos_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("implicit cursor is invalid", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()));
+  } else if (OB_FAIL(implicit_cursor_infos_.at(implicit_cursor.stmt_id_).
+      replace_cursor(implicit_cursor))) {
+    LOG_WARN("merge implicit cursor info failed", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()), K(implicit_cursor));
   }
   LOG_DEBUG("merge implicit cursor info", K(ret), K(implicit_cursor), K(lbt()));
   return ret;
@@ -753,6 +774,11 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
       OB_UNIS_ENCODE(*all_local_session_vars_.at(i).get_local_vars());
     }
   }
+
+  OB_UNIS_ENCODE(mview_ids_);
+  OB_UNIS_ENCODE(last_refresh_scns_);
+  OB_UNIS_ENCODE(is_direct_insert_plan_);
+  OB_UNIS_ENCODE(check_pdml_affected_rows_);
   return ret;
 }
 
@@ -849,6 +875,10 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
       OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i).get_local_vars());
     }
   }
+  OB_UNIS_ADD_LEN(mview_ids_);
+  OB_UNIS_ADD_LEN(last_refresh_scns_);
+  OB_UNIS_ADD_LEN(is_direct_insert_plan_);
+  OB_UNIS_ADD_LEN(check_pdml_affected_rows_);
   return len;
 }
 
@@ -962,7 +992,6 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       OB_UNIS_DECODE(*local_vars);
     }
   }
-
   // following is not deserialize, please add deserialize ahead.
   if (OB_SUCC(ret) && array_group_count > 0 &&
       datum_param_store_.count() == 0 &&
@@ -971,6 +1000,10 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       LOG_WARN("failed to deserialize param store", K(ret));
     }
   }
+  OB_UNIS_DECODE(mview_ids_);
+  OB_UNIS_DECODE(last_refresh_scns_);
+  OB_UNIS_DECODE(is_direct_insert_plan_);
+  OB_UNIS_DECODE(check_pdml_affected_rows_);
   return ret;
 }
 

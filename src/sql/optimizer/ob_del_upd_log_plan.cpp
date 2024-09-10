@@ -541,7 +541,11 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_del_upd(ObExchangeInfo &ex
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> rowkey_exprs;
-  if (OB_UNLIKELY(dml_info.get_real_uk_cnt() > dml_info.column_exprs_.count())) {
+  const ObDelUpdStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_UNLIKELY(dml_info.get_real_uk_cnt() > dml_info.column_exprs_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected count", K(dml_info.get_real_uk_cnt()), K(dml_info.column_exprs_), K(ret));
   } else {
@@ -551,7 +555,8 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_del_upd(ObExchangeInfo &ex
       // 那么就选择更新后的值，否则选择更新前的值。
       // 对于 delete，因为 assignment 为空，所以会直接 push rowkey
       ObRawExpr *target_expr = dml_info.column_exprs_.at(i);
-      if (OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
+      if (!(stmt->is_merge_stmt()) &&
+          OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
         LOG_WARN("failed to replace assignment expr", K(ret));
       } else if (OB_FAIL(rowkey_exprs.push_back(target_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -890,7 +895,8 @@ int ObDelUpdLogPlan::build_merge_stmt_hash_dist_exprs(const IndexDMLInfo &dml_in
   } else if (OB_ISNULL(when_expr)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dml_info.get_real_uk_cnt(); i++) {
       ObRawExpr *target_expr = dml_info.column_exprs_.at(i);
-      if (OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
+      if (!(stmt->is_merge_stmt()) &&
+          OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
         LOG_WARN("failed to replace assignment expr", K(ret));
       } else if (OB_FAIL(rowkey_exprs.push_back(target_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -907,7 +913,8 @@ int ObDelUpdLogPlan::build_merge_stmt_hash_dist_exprs(const IndexDMLInfo &dml_in
     for (int64_t i = 0; OB_SUCC(ret) && i < dml_info.get_real_uk_cnt(); i++) {
       ObRawExpr *raw_expr = NULL;
       ObRawExpr *target_expr = dml_info.column_exprs_.at(i);
-      if (OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
+      if (!(stmt->is_merge_stmt()) &&
+          OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
         LOG_WARN("failed to replace assignment expr", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(get_optimizer_context().get_expr_factory(),
                                                               when_expr,

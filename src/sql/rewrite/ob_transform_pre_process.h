@@ -507,9 +507,14 @@ private:
   int create_inner_view_stmt(ObDMLStmt *batch_stmt, ObSelectStmt*& inner_view_stmt);
 
   int transform_for_ins_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
+
+  int transform_for_insertup_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
+
   int transform_for_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
 
   int check_insert_can_batch(ObInsertStmt *insert_stmt, bool &can_batch);
+
+  bool check_insertup_support_batch_opt(ObInsertStmt *insert_stmt, bool &can_batch);
 
   int formalize_batch_stmt(ObDMLStmt *batch_stmt,
                           ObSelectStmt* inner_view_stmt,

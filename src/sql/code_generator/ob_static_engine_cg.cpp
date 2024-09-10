@@ -2536,6 +2536,27 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
     }
   }
 
+  // for replace_into multi_query batch_dml_optimization
+  if (OB_SUCC(ret) && op.get_stmt_id_expr() != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*op.get_stmt_id_expr(), spec.ab_stmt_id_))) {
+      LOG_WARN("generate ab stmt id expr failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObRawExpr *, 32> all_need_save_exprs;
+    ObRawExpr *stmt_id_expr = const_cast<ObRawExpr *>(op.get_stmt_id_expr());
+    if (OB_FAIL(append(all_need_save_exprs, primary_dml_info->column_convert_exprs_))) {
+      LOG_WARN("fail to append expr to array", K(ret));
+    } else if (stmt_id_expr != nullptr && OB_FAIL(all_need_save_exprs.push_back(stmt_id_expr))) {
+      LOG_WARN("fail to append stmt_id_expr to array", K(ret));
+    } else if (OB_FAIL(generate_rt_exprs(all_need_save_exprs, spec.all_saved_exprs_))) {
+      LOG_WARN("fail to generate all_saved_expr", K(ret), K(all_need_save_exprs));
+    } else {
+      LOG_TRACE("print all_need_save_exprs", K(all_need_save_exprs));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     spec.is_ignore_ = op.is_ignore();
     spec.plan_->need_drive_dml_query_ = true;
@@ -2751,6 +2772,13 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("update dml info is empty", K(ret));
   }
+  // for insertup multi_query batch_dml_optimization
+  if (OB_SUCC(ret) && op.get_stmt_id_expr() != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*op.get_stmt_id_expr(), spec.ab_stmt_id_))) {
+      LOG_WARN("generate ab stmt id expr failed", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     const ObIArray<IndexDMLInfo *> &insert_dml_infos = op.get_index_dml_infos();
     const ObIArray<IndexDMLInfo *> &upd_dml_infos = op.get_insert_up_index_dml_infos();
@@ -2820,10 +2848,13 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
         }
       }
       if (OB_SUCC(ret)) {
+        ObRawExpr *stmt_id_expr = const_cast<ObRawExpr *>(op.get_stmt_id_expr());
         if (OB_FAIL(append(all_need_save_exprs, ins_pri_dml_info->column_convert_exprs_))) {
           LOG_WARN("fail to append expr to array", K(ret));
         } else if (OB_FAIL(append(all_need_save_exprs, contain_exprs))) {
           LOG_WARN("fail to append expr to array", K(ret));
+        } else if (stmt_id_expr != nullptr && OB_FAIL(all_need_save_exprs.push_back(stmt_id_expr))) {
+          LOG_WARN("fail to append stmt_id_expr to array", K(ret));
         } else if (OB_FAIL(generate_rt_exprs(all_need_save_exprs, spec.all_saved_exprs_))) {
           LOG_WARN("fail to generate all_saved_expr", K(ret), K(all_need_save_exprs));
         } else {

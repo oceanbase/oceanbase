@@ -25,7 +25,8 @@ OB_SERIALIZE_MEMBER(ObExecFeedbackNode,
                     op_last_row_time_,
                     db_time_,
                     block_time_,
-                    worker_count_);
+                    worker_count_,
+                    pdml_op_write_rows_);
 
 OB_SERIALIZE_MEMBER(ObExecFeedbackInfo,
                     nodes_,
@@ -56,6 +57,7 @@ int ObExecFeedbackInfo::merge_feedback_info(const ObExecFeedbackInfo &feedback_i
             max(fb_nodes.at(right).op_close_time_, nodes_.at(left).op_close_time_);
         nodes_.at(left).db_time_ = max(fb_nodes.at(right).db_time_, nodes_.at(left).db_time_);
         nodes_.at(left).output_row_count_ += fb_nodes.at(right).output_row_count_;
+        nodes_.at(left).pdml_op_write_rows_ += fb_nodes.at(right).pdml_op_write_rows_;
         nodes_.at(left).worker_count_ += fb_nodes.at(right).worker_count_;
         left++;
         right++;

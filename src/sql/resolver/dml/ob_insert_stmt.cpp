@@ -96,6 +96,21 @@ int ObInsertStmt::assign(const ObInsertStmt &other)
   return ret;
 }
 
+int ObInsertStmt::get_all_assignment_exprs(common::ObIArray<ObRawExpr*> &assignment_exprs)
+{
+  int ret = OB_SUCCESS;
+  common::ObIArray<ObAssignment> &assignments = get_table_assignments();
+  for (int64_t i = 0; OB_SUCC(ret) && i < assignments.count(); i++) {
+    if (OB_ISNULL(assignments.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else if (OB_FAIL(assignment_exprs.push_back(assignments.at(i).expr_))) {
+      LOG_WARN("fail to push back assignment expr", K(ret), KPC(assignments.at(i).expr_));
+    }
+  }
+  return ret;
+}
+
 int ObInsertStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
 {
   is_modified = table_info_.ref_table_id_ == ref_table_id;

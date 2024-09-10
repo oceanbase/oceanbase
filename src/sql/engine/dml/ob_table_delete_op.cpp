@@ -289,7 +289,7 @@ OB_INLINE int ObTableDeleteOp::delete_row_to_das()
     }
     if (OB_SUCC(ret)) {
       int64_t delete_rows = is_skipped ? 0 : 1;
-      if (OB_FAIL(merge_implict_cursor(0, 0, delete_rows, 0))) {
+      if (OB_FAIL(merge_implict_cursor(delete_rows, 0, 0, 0))) {
         LOG_WARN("merge implict cursor failed", K(ret));
       }
     }

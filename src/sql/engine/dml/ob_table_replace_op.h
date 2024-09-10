@@ -32,6 +32,7 @@ public:
       only_one_unique_key_(false),
       conflict_checker_ctdef_(alloc),
       has_global_unique_index_(false),
+      all_saved_exprs_(alloc),
       alloc_(alloc)
   {
   }
@@ -54,6 +55,8 @@ public:
   bool only_one_unique_key_;
   ObConflictCheckerCtdef conflict_checker_ctdef_;
   bool has_global_unique_index_;
+  // insert_row(new_row) + dependency child_output
+  ExprFixedArray all_saved_exprs_;
 protected:
   common::ObIAllocator &alloc_;
 private:
@@ -124,7 +127,7 @@ protected:
   int post_all_dml_das_task(ObDMLRtCtx &dml_rtctx);
 
   // batch的执行插入 process_row and then write to das,
-  int insert_row_to_das(bool need_do_trigger);
+  int insert_row_to_das(bool &is_skipped);
 
   int final_insert_row_to_das();
 

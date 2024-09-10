@@ -203,7 +203,7 @@ protected:
   int post_all_try_insert_das_task(ObDMLRtCtx &dml_rtctx);
 
   // batch的执行插入 process_row and then write to das,
-  int try_insert_row();
+  int try_insert_row(bool &is_skipped);
 
   // batch的执行插入 process_row and then write to das,
   int update_row_to_das(bool need_do_trigger);
