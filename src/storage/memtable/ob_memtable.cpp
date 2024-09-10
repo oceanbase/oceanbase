@@ -147,9 +147,7 @@ ObMemtable::ObMemtable()
       encrypt_meta_(nullptr),
       encrypt_meta_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
       max_column_cnt_(0)
-{
-  migration_clog_checkpoint_scn_.set_min();
-}
+{}
 
 ObMemtable::~ObMemtable()
 {
@@ -284,7 +282,6 @@ void ObMemtable::destroy()
   transfer_freeze_flag_ = false;
   recommend_snapshot_version_.reset();
   max_end_scn_ = ObScnRange::MIN_SCN;
-  migration_clog_checkpoint_scn_.set_min();
   rec_scn_ = SCN::max_scn();
   read_barrier_ = false;
   is_tablet_freeze_ = false;
@@ -1821,11 +1818,13 @@ void ObMemtable::resolve_left_boundary_for_active_memtable()
 {
   int ret = OB_SUCCESS;
   storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr_();
-  const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
 
   if (OB_NOT_NULL(memtable_mgr)) {
     do {
-      if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, new_start_scn, get_snapshot_version_scn()))) {
+      if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(
+                    this,
+                    get_end_scn(),
+                    get_snapshot_version_scn()))) {
         TRANS_LOG(ERROR, "fail to set start log ts for active memtable", K(ret), K(ls_id_), KPC(this));
         ob_usleep(100);
       }
@@ -1906,23 +1905,6 @@ int ObMemtable::get_frozen_schema_version(int64_t &schema_version) const
 {
   UNUSED(schema_version);
   return OB_NOT_SUPPORTED;
-}
-
-int ObMemtable::set_migration_clog_checkpoint_scn(const SCN &clog_checkpoint_scn)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (clog_checkpoint_scn <= ObScnRange::MIN_SCN) {
-    ret = OB_SCN_OUT_OF_BOUND;
-    TRANS_LOG(WARN, "invalid clog_checkpoint_ts", K(ret));
-  } else {
-    (void)migration_clog_checkpoint_scn_.atomic_store(clog_checkpoint_scn);
-  }
-
-  return ret;
 }
 
 int ObMemtable::set_snapshot_version(const SCN snapshot_version)

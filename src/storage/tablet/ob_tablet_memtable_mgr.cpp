@@ -212,7 +212,8 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     }
   } else if (for_replay && clog_checkpoint_scn != new_clog_checkpoint_scn) {
     ret = OB_EAGAIN;
-    LOG_INFO("clog_checkpoint_scn changed, need retry to replay", K(ls_id), K(tablet_id_), K(clog_checkpoint_scn), K(new_clog_checkpoint_scn));
+    LOG_INFO("clog_checkpoint_scn changed, need retry to replay", K(ls_id), K(tablet_id_),
+             K(clog_checkpoint_scn), K(new_clog_checkpoint_scn));
   } else {
     ObITable::TableKey table_key;
     table_key.table_type_ = ObITable::DATA_MEMTABLE;
@@ -277,9 +278,11 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
           // for leader, decide the boundary of frozen memtable that meets ready_for_flush
           if (for_replay || (0 == write_ref && 0 == unsynced_cnt)) {
             last_frozen_memtable->resolve_right_boundary();
-            TRANS_LOG(INFO, "[resolve_right_boundary] last_frozen_memtable in create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
+            TRANS_LOG(INFO, "[resolve_right_boundary] last_frozen_memtable in create_memtable",
+                      K(for_replay), K(ls_id), KPC(last_frozen_memtable));
             if (memtable != last_frozen_memtable) {
-              const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
+              const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(),
+                                             memtable->get_start_scn());
               memtable->resolve_left_boundary(new_start_scn);
             }
           }
@@ -472,7 +475,8 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(memtable::ObI
     LOG_WARN("fail to get active memtable", K(ret));
   } else {
     // set the start_scn of the new memtable
-    static_cast<ObMemtable*>(active_memtable)->resolve_left_boundary(start_scn);
+    static_cast<ObMemtable*>(active_memtable)->resolve_left_boundary(
+      MAX(start_scn, active_memtable->get_start_scn()));
   }
   if (OB_ENTRY_NOT_EXIST== ret) {
     ret = OB_SUCCESS;

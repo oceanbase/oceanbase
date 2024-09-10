@@ -258,7 +258,7 @@ int ObSingleRowGetter::open(const ObDatumRowkey &rowkey, bool use_fuse_row_cache
   } else {
     {
       ObStorageTableGuard guard(tablet_, *store_ctx_, false);
-      if (OB_FAIL(guard.refresh_and_protect_table(*relative_table_))) {
+      if (OB_FAIL(guard.refresh_and_protect_memtable_for_write(*relative_table_))) {
         STORAGE_LOG(WARN, "fail to protect table", K(ret));
       }
     }

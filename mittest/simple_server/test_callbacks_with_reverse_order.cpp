@@ -105,8 +105,7 @@ int ObLSTabletService::insert_tablet_rows(
   return ret;
 }
 
-
-int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_table)
+int ObStorageTableGuard::refresh_and_protect_memtable_for_write(ObRelativeTable &relative_table)
 {
   int ret = OB_SUCCESS;
   ObTabletTableIterator &iter = relative_table.tablet_iter_;
