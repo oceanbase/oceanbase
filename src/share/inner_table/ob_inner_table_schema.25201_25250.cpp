@@ -1760,7 +1760,7 @@ int ObInnerTableSchema::dba_ob_balance_jobs_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT JOB_ID,          GMT_CREATE AS CREATE_TIME,          GMT_MODIFIED AS MODIFY_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          "COMMENT"   FROM SYS.ALL_VIRTUAL_BALANCE_JOB_REAL_AGENT   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT JOB_ID,          GMT_CREATE AS CREATE_TIME,          GMT_MODIFIED AS MODIFY_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          "COMMENT",          MAX_END_TIME   FROM SYS.ALL_VIRTUAL_BALANCE_JOB_REAL_AGENT   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1810,7 +1810,7 @@ int ObInnerTableSchema::dba_ob_balance_job_history_ora_schema(ObTableSchema &tab
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT JOB_ID,          CREATE_TIME,          FINISH_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          "COMMENT"   FROM SYS.ALL_VIRTUAL_BALANCE_JOB_HISTORY_REAL_AGENT   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT JOB_ID,          CREATE_TIME,          FINISH_TIME,          BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,          JOB_TYPE,          TARGET_UNIT_NUM,          TARGET_PRIMARY_ZONE_NUM,          STATUS,          "COMMENT",          MAX_END_TIME   FROM SYS.ALL_VIRTUAL_BALANCE_JOB_HISTORY_REAL_AGENT   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1860,7 +1860,7 @@ int ObInnerTableSchema::dba_ob_balance_tasks_ora_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TASK_ID,          GMT_CREATE AS CREATE_TIME,          GMT_MODIFIED AS MODIFY_TIME,          TASK_TYPE,          SRC_LS,          DEST_LS,          PART_LIST,          FINISHED_PART_LIST,          PART_COUNT,          FINISHED_PART_COUNT,          LS_GROUP_ID,          STATUS,          PARENT_LIST,          CHILD_LIST,          CURRENT_TRANSFER_TASK_ID,          JOB_ID,          "COMMENT"   FROM SYS.ALL_VIRTUAL_BALANCE_TASK_REAL_AGENT   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TASK_ID,          GMT_CREATE AS CREATE_TIME,          GMT_MODIFIED AS MODIFY_TIME,          TASK_TYPE,          SRC_LS,          DEST_LS,          PART_LIST,          FINISHED_PART_LIST,          PART_COUNT,          FINISHED_PART_COUNT,          LS_GROUP_ID,          STATUS,          PARENT_LIST,          CHILD_LIST,          CURRENT_TRANSFER_TASK_ID,          JOB_ID,          "COMMENT",          BALANCE_STRATEGY   FROM SYS.ALL_VIRTUAL_BALANCE_TASK_REAL_AGENT   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1910,7 +1910,7 @@ int ObInnerTableSchema::dba_ob_balance_task_history_ora_schema(ObTableSchema &ta
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TASK_ID,          CREATE_TIME,          FINISH_TIME,          TASK_TYPE,          SRC_LS,          DEST_LS,          PART_LIST,          FINISHED_PART_LIST,          PART_COUNT,          FINISHED_PART_COUNT,          LS_GROUP_ID,          STATUS,          PARENT_LIST,          CHILD_LIST,          CURRENT_TRANSFER_TASK_ID,          JOB_ID,          "COMMENT"   FROM SYS.ALL_VIRTUAL_BALANCE_TASK_HISTORY_REAL_AGENT   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TASK_ID,          CREATE_TIME,          FINISH_TIME,          TASK_TYPE,          SRC_LS,          DEST_LS,          PART_LIST,          FINISHED_PART_LIST,          PART_COUNT,          FINISHED_PART_COUNT,          LS_GROUP_ID,          STATUS,          PARENT_LIST,          CHILD_LIST,          CURRENT_TRANSFER_TASK_ID,          JOB_ID,          "COMMENT",          BALANCE_STRATEGY   FROM SYS.ALL_VIRTUAL_BALANCE_TASK_HISTORY_REAL_AGENT   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

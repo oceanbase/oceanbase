@@ -151,6 +151,8 @@ struct ObLSStatusInfo
     return ls_id_;
   }
 
+  uint64_t get_ls_group_id() const { return ls_group_id_; }
+
   ObLSFlag get_flag() const
   {
     return flag_;

@@ -23157,12 +23157,16 @@ int ObDDLService::add_extra_tenant_init_config_(
   bool find = false;
   ObString config_name("_enable_parallel_table_creation");
   ObString config_value("true");
+  ObString config_name_pb("partition_balance_schedule_interval");
+  ObString config_value_pb("0");
   for (int index = 0 ; !find && OB_SUCC(ret) && index < init_configs.count(); ++index) {
     if (tenant_id == init_configs.at(index).get_tenant_id()) {
       find = true;
-      common::ObConfigPairs &parallel_table_config = init_configs.at(index);
-      if (OB_FAIL(parallel_table_config.add_config(config_name, config_value))) {
+      common::ObConfigPairs &tenant_init_config = init_configs.at(index);
+      if (OB_FAIL(tenant_init_config.add_config(config_name, config_value))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name), K(config_value));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_pb, config_value_pb))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_pb), K(config_value_pb));
       }
     }
   }

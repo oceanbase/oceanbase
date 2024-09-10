@@ -258,6 +258,7 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"dbms_udr", "dbms_udr.sql", "dbms_udr_body.sql"},
   {"json_element_t", "json_element_type.sql", "json_element_type_body.sql"},
   {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
+  {"dbms_balance", "dbms_balance.sql", "dbms_balance_body.sql"},
 #endif
 };
 
@@ -273,7 +274,8 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
 #endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
-  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"}
+  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
+  {"dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"},
 };
 
 int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy, ObString &package_name, ObCompatibilityMode compa_mode)

@@ -152,6 +152,49 @@ typedef ObArray<ObSplitLSParam> ObSplitLSParamArray;
 
 class ObLSBalanceTaskHelper
 {
+/////////////////// static functions ///////////////////
+public:
+  static int add_ls_alter_task(
+      const uint64_t tenant_id,
+      const share::ObBalanceJobID &balance_job_id,
+      const uint64_t ls_group_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObBalanceStrategy &balance_strategy,
+      common::ObIArray<share::ObBalanceTask> &task_array);
+  static int add_ls_transfer_task(
+      const uint64_t tenant_id,
+      const share::ObBalanceJobID &balance_job_id,
+      const uint64_t ls_group_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id,
+      const share::ObTransferPartList &part_list,
+      const share::ObBalanceStrategy &balance_strategy,
+      common::ObIArray<share::ObBalanceTask> &task_array);
+  static int add_ls_split_task(
+      common::ObMySQLProxy *sql_proxy,
+      const uint64_t tenant_id,
+      const share::ObBalanceJobID &balance_job_id,
+      const uint64_t ls_group_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObTransferPartList &part_list,
+      const share::ObBalanceStrategy &balance_strategy,
+      share::ObLSID &new_ls_id,
+      common::ObIArray<share::ObBalanceTask> &task_array);
+  static int add_ls_merge_task(
+      const uint64_t tenant_id,
+      const share::ObBalanceJobID &balance_job_id,
+      const uint64_t ls_group_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id,
+      const share::ObBalanceStrategy &balance_strategy,
+      common::ObIArray<share::ObBalanceTask> &task_array);
+  static int choose_ls_group_id_for_transfer_between_dup_ls(
+      const uint64_t src_ls_group_id,
+      const uint64_t dest_ls_group_id,
+      const uint64_t other_ls_group_id,
+      uint64_t &chosen_ls_group_id);
+/////////////////// static functions end ///////////////////
+
 public:
   ObLSBalanceTaskHelper ();
   ~ObLSBalanceTaskHelper() {}

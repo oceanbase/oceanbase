@@ -5312,7 +5312,7 @@ def_table_schema(**all_transfer_task_def)
 
 def_table_schema(**gen_history_table_def_of_task(424, all_transfer_task_def))
 
-all_balance_job_def= dict(
+def_table_schema(
   owner = 'msy164651',
   table_name    = '__all_balance_job',
   table_id = '425',
@@ -5333,13 +5333,38 @@ all_balance_job_def= dict(
     ('target_primary_zone_num', 'int', 'false'),
     ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
     ('comment', 'longtext', 'true'),
+    ('max_end_time', 'timestamp', 'true'),
   ],
 )
 
-def_table_schema(**all_balance_job_def)
-def_table_schema(**gen_history_table_def_of_task(426, all_balance_job_def))
+def_table_schema(
+  owner = 'msy164651',
+  table_name    = '__all_balance_job_history',
+  table_id = '426',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_id', 'int'),
+  ],
 
-all_balance_task_def= dict(
+  in_tenant_space = True,
+  is_cluster_private = False,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('balance_strategy_name', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+    ('job_type', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+    ('target_unit_num', 'int', 'false'),
+    ('target_primary_zone_num', 'int', 'false'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+    ('comment', 'longtext', 'true'),
+    ('create_time', 'timestamp', 'false'),
+    ('finish_time', 'timestamp', 'false'),
+    ('max_end_time', 'timestamp', 'true'),
+  ],
+)
+
+def_table_schema(
     owner = 'msy164651',
     table_name    = '__all_balance_task',
     table_id = '427',
@@ -5368,11 +5393,44 @@ all_balance_task_def= dict(
         ('current_transfer_task_id', 'int', 'false'),
         ('job_id', 'int', 'false'),
         ('comment', 'longtext', 'true'),
+        ('balance_strategy', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true'),
     ],
 )
-def_table_schema(**all_balance_task_def)
 
-def_table_schema(**gen_history_table_def_of_task(428, all_balance_task_def))
+def_table_schema(
+    owner = 'msy164651',
+    table_name    = '__all_balance_task_history',
+    table_id = '428',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('task_id', 'int'),
+    ],
+
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('task_type', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+        ('src_ls', 'int', 'false'),
+        ('dest_ls', 'int', 'false'),
+        ('part_list', 'longtext', 'true'),
+        ('finished_part_list', 'longtext', 'true'),
+        ('part_count', 'int', 'true'),
+        ('finished_part_count', 'int', 'true'),
+        ('ls_group_id','int', 'false'),
+        ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+        ('parent_list', 'varchar:OB_MAX_SYS_PARAM_VALUE_LENGTH', 'true'),
+        ('child_list', 'varchar:OB_MAX_SYS_PARAM_VALUE_LENGTH', 'true'),
+        ('current_transfer_task_id', 'int', 'false'),
+        ('job_id', 'int', 'false'),
+        ('comment', 'longtext', 'true'),
+        ('create_time', 'timestamp', 'false'),
+        ('finish_time', 'timestamp', 'false'),
+        ('balance_strategy', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true'),
+    ],
+)
 
 
 def_table_schema(
@@ -28577,7 +28635,8 @@ def_table_schema(
          TARGET_UNIT_NUM,
          TARGET_PRIMARY_ZONE_NUM,
          STATUS,
-         COMMENT
+         COMMENT,
+         MAX_END_TIME
   FROM OCEANBASE.__ALL_BALANCE_JOB
   """.replace("\n", " "),
 )
@@ -28602,7 +28661,8 @@ def_table_schema(
          TARGET_UNIT_NUM,
          TARGET_PRIMARY_ZONE_NUM,
          STATUS,
-         COMMENT
+         COMMENT,
+         MAX_END_TIME
   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB
   """.replace("\n", " "),
 )
@@ -28626,7 +28686,8 @@ def_table_schema(
          TARGET_UNIT_NUM,
          TARGET_PRIMARY_ZONE_NUM,
          STATUS,
-         COMMENT
+         COMMENT,
+         MAX_END_TIME
   FROM OCEANBASE.__ALL_BALANCE_JOB_HISTORY
   """.replace("\n", " "),
 )
@@ -28650,7 +28711,8 @@ def_table_schema(
          TARGET_UNIT_NUM,
          TARGET_PRIMARY_ZONE_NUM,
          STATUS,
-         COMMENT
+         COMMENT,
+         MAX_END_TIME
   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_HISTORY
   """.replace("\n", " "),
 )
@@ -28682,7 +28744,8 @@ def_table_schema(
          CHILD_LIST,
          CURRENT_TRANSFER_TASK_ID,
          JOB_ID,
-         COMMENT
+         COMMENT,
+         BALANCE_STRATEGY
   FROM OCEANBASE.__ALL_BALANCE_TASK
   """.replace("\n", " "),
 )
@@ -28714,7 +28777,8 @@ def_table_schema(
          CHILD_LIST,
          CURRENT_TRANSFER_TASK_ID,
          JOB_ID,
-         COMMENT
+         COMMENT,
+         BALANCE_STRATEGY
   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_TASK
   """.replace("\n", " "),
 )
@@ -28746,7 +28810,8 @@ def_table_schema(
          CHILD_LIST,
          CURRENT_TRANSFER_TASK_ID,
          JOB_ID,
-         COMMENT
+         COMMENT,
+         BALANCE_STRATEGY
   FROM OCEANBASE.__ALL_BALANCE_TASK_HISTORY
   """.replace("\n", " "),
 )
@@ -28778,7 +28843,8 @@ def_table_schema(
          CHILD_LIST,
          CURRENT_TRANSFER_TASK_ID,
          JOB_ID,
-         COMMENT
+         COMMENT,
+         BALANCE_STRATEGY
   FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_TASK_HISTORY
   """.replace("\n", " "),
 )
@@ -48726,7 +48792,8 @@ def_table_schema(
          TARGET_UNIT_NUM,
          TARGET_PRIMARY_ZONE_NUM,
          STATUS,
-         "COMMENT"
+         "COMMENT",
+         MAX_END_TIME
   FROM SYS.ALL_VIRTUAL_BALANCE_JOB_REAL_AGENT
   """.replace("\n", " "),
 )
@@ -48752,7 +48819,8 @@ def_table_schema(
          TARGET_UNIT_NUM,
          TARGET_PRIMARY_ZONE_NUM,
          STATUS,
-         "COMMENT"
+         "COMMENT",
+         MAX_END_TIME
   FROM SYS.ALL_VIRTUAL_BALANCE_JOB_HISTORY_REAL_AGENT
   """.replace("\n", " "),
 )
@@ -48786,7 +48854,8 @@ def_table_schema(
          CHILD_LIST,
          CURRENT_TRANSFER_TASK_ID,
          JOB_ID,
-         "COMMENT"
+         "COMMENT",
+         BALANCE_STRATEGY
   FROM SYS.ALL_VIRTUAL_BALANCE_TASK_REAL_AGENT
   """.replace("\n", " "),
 )
@@ -48820,7 +48889,8 @@ def_table_schema(
          CHILD_LIST,
          CURRENT_TRANSFER_TASK_ID,
          JOB_ID,
-         "COMMENT"
+         "COMMENT",
+         BALANCE_STRATEGY
   FROM SYS.ALL_VIRTUAL_BALANCE_TASK_HISTORY_REAL_AGENT
   """.replace("\n", " "),
 )

@@ -45,5 +45,65 @@ bool check_if_need_balance_table(
   return need_balance;
 }
 
+ObBalanceStrategy &ObBalanceStrategy::operator=(const STRATEGY &val)
+{
+  val_ = val;
+  return *this;
+}
+
+const char* ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY + 1] =
+{
+  "LS balance by migrate",
+  "LS balance by alter",
+  "LS balance by expand",
+  "LS balance by shrink",
+  "manual transfer partition",
+  "partition balance", // compatible with old versions
+  "partition attribution alignment",
+  "intragroup partition count balance",
+  "intergroup partition count balance",
+  "partition disk balance",
+  "invalid", // MAX_STRATEGY
+};
+
+const char *ObBalanceStrategy::str() const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(BALANCE_STRATEGY_STR_ARRAY) == static_cast<int64_t>(MAX_STRATEGY + 1),
+      "BALANCE_STRATEGY_STR_ARRAY size mismatch STRATEGY count");
+  const char *str = "unknown";
+  if (OB_UNLIKELY(val_ < LB_MIGRATE || val_ > MAX_STRATEGY)) {
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "fatal error, unknown balance strategy", K(val_));
+  } else {
+    str = BALANCE_STRATEGY_STR_ARRAY[val_];
+  }
+  return str;
+}
+
+int ObBalanceStrategy::parse_from_str(const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  val_ = MAX_STRATEGY;
+  for (int64_t i = LB_MIGRATE; i < ARRAYSIZEOF(BALANCE_STRATEGY_STR_ARRAY); ++i) {
+    if (0 == str.case_compare(BALANCE_STRATEGY_STR_ARRAY[i])) {
+      val_ = static_cast<STRATEGY>(i);
+      break;
+    }
+  }
+  if (MAX_STRATEGY == val_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid str", KR(ret), K(str), K(val_));
+  }
+  return ret;
+}
+
+bool ObBalanceStrategy::can_be_next_partition_balance_strategy(const ObBalanceStrategy &old_strategy) const
+{
+  return is_partition_balance_strategy()
+      && old_strategy.is_partition_balance_strategy()
+      && !is_partition_balance_compatible_strategy()
+      && !old_strategy.is_partition_balance_compatible_strategy()
+      && val_ > old_strategy.val_;
+}
+
 }
 }

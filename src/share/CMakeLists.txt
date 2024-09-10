@@ -504,6 +504,7 @@ ob_set_subtarget(ob_share balance
   balance/ob_balance_task_table_operator.cpp
   balance/ob_balance_task_helper_operator.cpp
   balance/ob_transfer_partition_task_table_operator.cpp
+  balance/ob_scheduled_trigger_partition_balance.cpp
 )
 
 if (OB_ERRSIM)

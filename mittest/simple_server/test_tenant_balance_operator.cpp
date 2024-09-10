@@ -65,7 +65,7 @@ TEST_F(TestBalanceOperator, BalanceJob)
   int64_t primary_zone_num = 0;
   int64_t unit_group_num = 0;
   ObString comment;
-  ObString balance_strategy(share::LS_BALANCE_BY_EXPAND);
+  ObBalanceStrategy balance_strategy(ObBalanceStrategy::LB_EXPAND);
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, job.init(0, job_id, job_type, job_status, primary_zone_num, unit_group_num, comment, balance_strategy));
   job_type = ObBalanceJobType(ObString("LS_BALANCE"));
@@ -113,6 +113,17 @@ TEST_F(TestBalanceOperator, BalanceJob)
     ASSERT_EQ(OB_SUCCESS, result->get_time("finish_time", finish_time));
     LOG_INFO("[MITTEST]job status", K(start_time), K(finish_time));
   }
+
+  // test ObBalanceStrategy
+  ObBalanceStrategy strategy;
+  for(int64_t i = 0; i <= ObBalanceStrategy::MAX_STRATEGY; ++i) {
+    strategy = static_cast<ObBalanceStrategy::STRATEGY>(i);
+    ASSERT_TRUE(0 == strcmp(strategy.str(), ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[i]));
+    LOG_INFO("TEST: ObBalanceStrategy", K(i), K(strategy));
+  }
+  strategy = static_cast<ObBalanceStrategy::STRATEGY>(-1);
+  ASSERT_TRUE(0 == strcmp(strategy.str(), "unknown"));
+  LOG_INFO("TEST: ObBalanceStrategy unknown", K(strategy));
 }
 
 TEST_F(TestBalanceOperator, BalanceTask)
@@ -136,13 +147,14 @@ TEST_F(TestBalanceOperator, BalanceTask)
   ObTransferPartList part_list, finished_part_list;
   ObBalanceTaskIDList parent_list, child_list;
   ObString comment;
+  ObString balance_strategy_str;
   ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(
       tenant_id, job_id, task_id,
       ObBalanceTaskType(task_type),
       ObBalanceTaskStatus(task_status), ls_group_id,
       ObLSID(src_ls_id), ObLSID(dest_ls_id),
-      transfer_task_id, part_list, finished_part_list,
-      parent_list, child_list, comment));
+      transfer_task_id, part_list_str, finished_part_list_str,
+      parent_list_str, child_list_str, comment, balance_strategy_str));
   job_id = 1;
   task_id = 2;
   ASSERT_EQ(OB_INVALID_ARGUMENT, task.init(
@@ -150,8 +162,8 @@ TEST_F(TestBalanceOperator, BalanceTask)
       ObBalanceTaskType(task_type),
       ObBalanceTaskStatus(task_status), ls_group_id,
       ObLSID(src_ls_id), ObLSID(dest_ls_id),
-      transfer_task_id, part_list, finished_part_list,
-      parent_list, child_list, comment));
+      transfer_task_id, part_list_str, finished_part_list_str,
+      parent_list_str, child_list_str, comment, balance_strategy_str));
   start_time = 1;
   src_ls_id = 1;
   dest_ls_id = 1;
@@ -159,6 +171,8 @@ TEST_F(TestBalanceOperator, BalanceTask)
   task_status = ObString("CREATE_LS");
   ObTransferPartInfo part_info;
   ObObjectID obj_id = 1;
+  part_list_str = ObString("1:1");
+  parent_list_str = ObString("1");
   ASSERT_EQ(OB_SUCCESS, part_info.init(obj_id, obj_id));
   ObBalanceTaskID parent_task_id(1);
   ASSERT_EQ(OB_SUCCESS, parent_list.push_back(parent_task_id));
@@ -168,8 +182,8 @@ TEST_F(TestBalanceOperator, BalanceTask)
       ObBalanceTaskType(task_type),
       ObBalanceTaskStatus(task_status), ls_group_id,
       ObLSID(src_ls_id), ObLSID(dest_ls_id),
-      transfer_task_id, part_list, finished_part_list,
-      parent_list, child_list, comment));
+      transfer_task_id, part_list_str, finished_part_list_str,
+      parent_list_str, child_list_str, comment, balance_strategy_str));
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
 
  //insert
@@ -494,6 +508,7 @@ TEST_F(TestBalanceOperator, merge_task)
   task_type = ObString("LS_MERGE");
   task_status = ObString("TRANSFER");
   ObString comment;
+  ObString balance_strategy_str;
   //防止后台线程结束这个任务
   ASSERT_EQ(OB_SUCCESS, parent_list.push_back(task_id));
   ASSERT_EQ(OB_SUCCESS, task.init(
@@ -501,21 +516,22 @@ TEST_F(TestBalanceOperator, merge_task)
       ObBalanceTaskType(task_type),
       ObBalanceTaskStatus(task_status), ls_group_id,
       ObLSID(src_ls_id), ObLSID(dest_ls_id),
-      transfer_task_id, part_list, finished_part_list,
-      parent_list, child_list, comment));
+      transfer_task_id, part_list_str, finished_part_list_str,
+      parent_list_str, child_list_str, comment, balance_strategy_str));
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::insert_new_task(task, sql_proxy));
   //设置part_list
   ObTransferPartInfo part_info(50001, 50001);
   ASSERT_EQ(OB_SUCCESS, part_list.push_back(part_info));
+  part_list_str = ObString("50001:50001");
   transfer_task_id = ObTransferTaskID(1);
   ASSERT_EQ(OB_SUCCESS, task.init(
       tenant_id, job_id, task_id,
       ObBalanceTaskType(task_type),
       ObBalanceTaskStatus(task_status), ls_group_id,
       ObLSID(src_ls_id), ObLSID(dest_ls_id),
-      transfer_task_id, part_list, finished_part_list,
-      parent_list, child_list, comment));
+      transfer_task_id, part_list_str, finished_part_list_str,
+      parent_list_str, child_list_str, comment, balance_strategy_str));
   LOG_INFO("testtest7: start set part list");
   common::ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&sql_proxy, tenant_id));

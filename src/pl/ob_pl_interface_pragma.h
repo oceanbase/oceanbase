@@ -65,6 +65,7 @@
 #endif
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
+#include "pl/sys_package/ob_dbms_balance.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -678,6 +679,10 @@
   INTERFACE_DEF(INTERFACE_DBMS_GENERATE_ASH_REPORT_TEXT, "GENERATE_ASH_REPORT_TEXT", (ObDbmsWorkloadRepository::generate_ash_report_text))
   // end of dbms_workload_repository
   /****************************************************************************/
+
+  // start of dbms_balance
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_TRIGGER_PARTITION_BALANCE, "DBMS_BALANCE_TRIGGER_PARTITION_BALANCE", (ObDBMSBalance::trigger_partition_balance))
+  // end of dbms_balance
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

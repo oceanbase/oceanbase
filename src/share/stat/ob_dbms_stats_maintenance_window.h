@@ -57,7 +57,16 @@ public:
 
   static bool is_stats_job(const ObString &job_name);
 
-  static int reset_opt_stats_user_infos(ObIArray<const ObUserInfo *> &user_infos);
+  static int get_time_zone_offset(
+      const share::schema::ObSysVariableSchema &sys_variable,
+      const uint64_t tenant_id,
+      int32_t &offset_sec);
+
+  static int parse_next_date(
+      const sql::ObSQLSessionInfo *session,
+      const common::ObString &next_date_str,
+      int32_t &offset_sec,
+      int64_t &next_date_ts);
 
 private:
   static int get_window_job_info(const int64_t current_time,
@@ -87,9 +96,6 @@ private:
 
   static bool is_work_day(int64_t now_wday) { return now_wday >= 1 && now_wday <= MAX_OF_WORK_DAY; }
 
-  static int get_time_zone_offset(const share::schema::ObSysVariableSchema &sys_variable,
-                                  const uint64_t tenant_id,
-                                  int32_t &offset_sec);
   static int check_date_validate(const ObString &job_name,
                                  const int64_t specify_time,
                                  const int64_t current_time,

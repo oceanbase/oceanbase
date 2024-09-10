@@ -141,8 +141,8 @@ public:
 
   common::ObString &get_what() { return what_; }
   common::ObString &get_exec_env() { return exec_env_; }
-  common::ObString &get_powner() { return powner_; }
   common::ObString &get_lowner() { return lowner_; }
+  common::ObString &get_powner() { return powner_; }
   common::ObString &get_cowner() { return cowner_; }
   common::ObString &get_zone() { return field1_; }
   common::ObString &get_interval() { return interval_; }
@@ -240,6 +240,12 @@ public:
   uint64_t log_history_;
   common::ObString comments_;
   bool is_oracle_tenant_;
+};
+
+class ObDBMSSchedJobUtils
+{
+public:
+  static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos);
 };
 
 }

@@ -248,6 +248,7 @@ public:
   virtual int post_upgrade() override;
 private:
   int post_upgrade_for_service_name();
+  int post_upgrade_for_scheduled_trigger_partition_balance();
 };
 /* =========== special upgrade processor end   ============= */
 

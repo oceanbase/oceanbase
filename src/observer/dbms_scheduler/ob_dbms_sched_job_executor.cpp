@@ -129,17 +129,37 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
   CK (job_info.valid());
   OZ (schema_service_->get_tenant_schema_guard(job_info.get_tenant_id(), schema_guard));
   OZ (schema_guard.get_tenant_info(job_info.get_tenant_id(), tenant_info));
-  OZ (schema_guard.get_user_info(
-    job_info.get_tenant_id(), job_info.get_powner(), user_infos));
   OZ (schema_guard.get_database_schema(
     job_info.get_tenant_id(), job_info.get_cowner(), database_schema));
-  if (OB_SUCC(ret) &&
-      user_infos.count() > 1 &&
-      ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) {
-    OZ(ObDbmsStatsMaintenanceWindow::reset_opt_stats_user_infos(user_infos));
+  if (OB_SUCC(ret)) {
+    if (job_info.is_oracle_tenant()) {
+      OZ (schema_guard.get_user_info(
+        job_info.get_tenant_id(), job_info.get_powner(), user_infos));
+      OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+      CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+    } else {
+      ObString user = job_info.get_powner();
+      if (OB_SUCC(ret)) {
+        const char *c = user.reverse_find('@');
+        if (OB_ISNULL(c)) {
+          OZ (schema_guard.get_user_info(
+            job_info.get_tenant_id(), user, user_infos));
+          if (OB_SUCC(ret) && user_infos.count() > 1) {
+            OZ(ObDBMSSchedJobUtils::reserve_user_with_minimun_id(user_infos));
+          }
+          OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+          CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+        } else {
+          ObString user_name;
+          ObString host_name;
+          user_name = user.split_on(c);
+          host_name = user;
+          OZ (schema_guard.get_user_info(
+            job_info.get_tenant_id(), user_name, host_name, user_info));
+        }
+      }
+    }
   }
-  OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
-  CK (OB_NOT_NULL(user_info = user_infos.at(0)));
   CK (OB_NOT_NULL(user_info));
   CK (OB_NOT_NULL(tenant_info));
   CK (OB_NOT_NULL(database_schema));

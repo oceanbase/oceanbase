@@ -27,6 +27,48 @@ namespace oceanbase
 {
 namespace rootserver
 {
+class ObPartitionHelper
+{
+public:
+  class ObPartInfo {
+  public:
+    ObPartInfo() {}
+    int init(common::ObTabletID tablet_id, common::ObObjectID part_id)
+    {
+      int ret = OB_SUCCESS;
+      tablet_id_ = tablet_id;
+      part_id_ = part_id;
+      return ret;
+    }
+    common::ObTabletID get_tablet_id() { return tablet_id_; }
+    common::ObObjectID get_part_id() { return part_id_; }
+    TO_STRING_KV(K_(tablet_id), K_(part_id));
+  private:
+    common::ObTabletID tablet_id_;
+    common::ObObjectID part_id_;
+  };
+  static int get_part_info(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      ObPartInfo &part_info);
+  static int get_sub_part_num(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      int64_t &sub_part_num);
+  static int get_sub_part_info(
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
+      int64_t part_idx,
+      int64_t sub_part_idx,
+      ObPartInfo &part_info);
+  static int check_partition_option(
+      const share::schema::ObSimpleTableSchemaV2 &t1,
+      const share::schema::ObSimpleTableSchemaV2 &t2,
+      bool is_subpart, bool &is_matched);
+  static int check_partition_match(
+      const share::schema::ObSimpleTableSchemaV2 &t1,
+      const share::schema::ObSimpleTableSchemaV2 &t2,
+      bool &match);
+};
 
 // Tenant all balance group builder
 //

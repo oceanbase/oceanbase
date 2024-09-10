@@ -38,6 +38,60 @@ using namespace share::schema;
 using namespace common;
 namespace rootserver
 {
+int ObPartitionHelper::check_partition_option(const schema::ObSimpleTableSchemaV2 &t1, const schema::ObSimpleTableSchemaV2 &t2, bool is_subpart, bool &is_matched)
+{
+  int ret = OB_SUCCESS;
+  is_matched = false;
+  if (OB_FAIL(share::schema::ObSimpleTableSchemaV2::compare_partition_option(t1, t2, is_subpart, is_matched))) {
+    LOG_WARN("fail to compare partition optition", KR(ret));
+  }
+  return ret;
+}
+
+int ObPartitionHelper::get_part_info(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, ObPartInfo &part_info)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id;
+  ObObjectID part_id;
+  ObObjectID first_level_part_id;
+  if (OB_FAIL(table_schema.get_tablet_and_object_id_by_index(part_idx, -1, tablet_id, part_id, first_level_part_id))) {
+    LOG_WARN("fail to get_tablet_and_object_id_by_index", KR(ret), K(table_schema), K(part_idx));
+  } else if (OB_FAIL(part_info.init(tablet_id, part_id))) {
+    LOG_WARN("fail init part_info", KR(ret), K(tablet_id), K(part_id));
+  }
+  return ret;
+}
+
+int ObPartitionHelper::get_sub_part_num(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t &sub_part_num)
+{
+  int ret = OB_SUCCESS;
+  const schema::ObPartition *partition = NULL;
+  if (OB_FAIL(table_schema.get_partition_by_partition_index(part_idx, schema::CHECK_PARTITION_MODE_NORMAL, partition))) {
+    LOG_WARN("fail to get partition by part_idx", KR(ret), K(part_idx));
+  } else if (OB_ISNULL(partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition not exist", KR(ret), K(table_schema), K(part_idx));
+  } else {
+    sub_part_num = partition->get_sub_part_num();
+  }
+  return ret;
+}
+
+int ObPartitionHelper::get_sub_part_info(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t sub_part_idx, ObPartInfo &part_info)
+{
+  int ret = OB_SUCCESS;
+
+  ObTabletID tablet_id;
+  ObObjectID part_id;
+  ObObjectID first_level_part_id;
+  if (OB_FAIL(table_schema.get_tablet_and_object_id_by_index(part_idx, sub_part_idx, tablet_id, part_id, first_level_part_id))) {
+    LOG_WARN("fail to get_tablet_and_object_id_by_index", KR(ret), K(table_schema), K(part_idx), K(sub_part_idx));
+  } else if (OB_FAIL(part_info.init(tablet_id, part_id))) {
+    LOG_WARN("fail init part_info", KR(ret), K(tablet_id), K(part_id));
+  }
+  return ret;
+}
+
 ObAllBalanceGroupBuilder::ObAllBalanceGroupBuilder() :
     inited_(false),
     mod_(""),
