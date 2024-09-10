@@ -3353,17 +3353,32 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[237].default_value_ = "0" ;
-      ObSysVars[237].info_ = "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode." ;
-      ObSysVars[237].name_ = "ob_kv_mode" ;
+      ObSysVars[237].default_value_ = "2" ;
+      ObSysVars[237].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
+      ObSysVars[237].name_ = "plsql_optimize_level" ;
       ObSysVars[237].data_type_ = ObIntType ;
-      ObSysVars[237].enum_names_ = "[u'ALL', u'TABLEAPI', u'HBASE', u'REDIS', u'NONE']" ;
-      ObSysVars[237].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
-      ObSysVars[237].id_ = SYS_VAR_OB_KV_MODE ;
+      ObSysVars[237].min_val_ = "1" ;
+      ObSysVars[237].max_val_ = "3" ;
+      ObSysVars[237].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[237].id_ = SYS_VAR_PLSQL_OPTIMIZE_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_OPTIMIZE_LEVEL] = 237 ;
+      ObSysVars[237].base_value_ = "2" ;
+    ObSysVars[237].alias_ = "OB_SV_PLSQL_OPTIMIZE_LEVEL" ;
+    }();
+
+    [&] (){
+      ObSysVars[238].default_value_ = "0" ;
+      ObSysVars[238].info_ = "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode." ;
+      ObSysVars[238].name_ = "ob_kv_mode" ;
+      ObSysVars[238].data_type_ = ObIntType ;
+      ObSysVars[238].enum_names_ = "[u'ALL', u'TABLEAPI', u'HBASE', u'REDIS', u'NONE']" ;
+      ObSysVars[238].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
+      ObSysVars[238].id_ = SYS_VAR_OB_KV_MODE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_KV_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_KV_MODE] = 237 ;
-      ObSysVars[237].base_value_ = "0" ;
-    ObSysVars[237].alias_ = "OB_SV_KV_MODE" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_KV_MODE] = 238 ;
+      ObSysVars[238].base_value_ = "0" ;
+    ObSysVars[238].alias_ = "OB_SV_KV_MODE" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -3372,7 +3387,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 238;
+static int64_t var_amount = 239;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

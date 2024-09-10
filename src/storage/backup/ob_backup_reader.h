@@ -223,13 +223,14 @@ class ObITabletMetaBackupReader {
 public:
   ObITabletMetaBackupReader();
   virtual ~ObITabletMetaBackupReader();
-  virtual int init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
+  virtual int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
       storage::ObTabletHandle &tablet_handle) = 0;
   virtual int get_meta_data(blocksstable::ObBufferReader &buffer_reader) = 0;
   virtual ObTabletMetaReaderType get_type() const = 0;
 
 protected:
   bool is_inited_;
+  share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   share::ObBackupDataType backup_data_type_;
   storage::ObTabletHandle *tablet_handle_;
@@ -240,7 +241,7 @@ class ObTabletMetaBackupReader : public ObITabletMetaBackupReader {
 public:
   ObTabletMetaBackupReader();
   virtual ~ObTabletMetaBackupReader();
-  virtual int init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
+  virtual int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
       storage::ObTabletHandle &tablet_handle) override;
   virtual int get_meta_data(blocksstable::ObBufferReader &buffer_reader) override;
   virtual ObTabletMetaReaderType get_type() const
@@ -257,7 +258,7 @@ class ObSSTableMetaBackupReader : public ObITabletMetaBackupReader {
 public:
   ObSSTableMetaBackupReader();
   virtual ~ObSSTableMetaBackupReader();
-  virtual int init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
+  virtual int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
       storage::ObTabletHandle &tablet_handle) override;
   virtual int get_meta_data(blocksstable::ObBufferReader &buffer_reader) override;
   virtual ObTabletMetaReaderType get_type() const

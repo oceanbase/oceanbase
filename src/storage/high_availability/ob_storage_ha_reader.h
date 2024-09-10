@@ -340,7 +340,8 @@ public:
       const ObRestoreBaseInfo &restore_base_info,
       const ObTabletRestoreAction::ACTION &restore_action,
       const common::ObIArray<common::ObTabletID> &tablet_id_array,
-      backup::ObBackupMetaIndexStoreWrapper &meta_index_store);
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+      backup::ObBackupMetaIndexStoreWrapper &sec_meta_index_store);
   virtual int get_next_sstable_info(
       obrpc::ObCopyTabletSSTableInfo &sstable_info);
   virtual int get_next_tablet_sstable_header(
@@ -357,6 +358,10 @@ private:
       const common::ObTabletID &tablet_id,
       const share::ObBackupDataType data_type,
       common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
+  int check_sec_meta_contain_sstable_(
+      const common::ObTabletID &tablet_id,
+      const share::ObBackupDataType data_type,
+      bool &contain);
   int set_backup_sstable_meta_array_(
       const common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
   int get_backup_tablet_meta_(
@@ -389,6 +394,7 @@ private:
   ObTabletRestoreAction::ACTION restore_action_;
   common::ObArray<common::ObTabletID> tablet_id_array_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
+  backup::ObBackupMetaIndexStoreWrapper *sec_meta_index_store_;
   int64_t tablet_index_;
   int64_t sstable_index_;
   bool is_sstable_iter_end_;

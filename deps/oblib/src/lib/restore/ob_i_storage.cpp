@@ -103,7 +103,7 @@ int handle_listed_directory(ObBaseDirEntryOperator &op,
   return ret;
 }
 
-static int get_storage_prefix_from_path(const common::ObString &uri, const char *&prefix)
+int get_storage_prefix_from_path(const common::ObString &uri, const char *&prefix)
 {
   int ret = OB_SUCCESS;
   if (uri.prefix_match(OB_OSS_PREFIX)) {

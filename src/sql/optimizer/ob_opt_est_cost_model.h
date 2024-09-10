@@ -195,7 +195,8 @@ struct ObCostTableScanInfo
      ss_prefix_ndv_(1.0),
      ss_postfix_range_filters_sel_(1.0),
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
-     at_most_one_range_(false)
+     at_most_one_range_(false),
+     limit_rows_(-1.0)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -209,7 +210,8 @@ struct ObCostTableScanInfo
                K_(is_inner_path), K_(can_use_batch_nlj),
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
-               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel));
+               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
+               K_(limit_rows));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -249,6 +251,7 @@ struct ObCostTableScanInfo
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
   bool at_most_one_range_;
+  double limit_rows_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
@@ -1011,12 +1014,14 @@ protected:
   int cost_table_scan_one_batch(const ObCostTableScanInfo &est_cost_info,
 																const double logical_output_row_count,
 																const double physical_output_row_count,
+                                const double limit_count,
 																double &cost,
 																double &index_back_cost);
 
   //estimate one batch table get cost
   int cost_table_get_one_batch(const ObCostTableScanInfo &est_cost_info,
 															const double output_row_count,
+                              const double limit_count,
 															double &cost,
 															double &index_back_cost);
 

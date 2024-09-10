@@ -1307,7 +1307,7 @@ int ObSysTabletsRestoreTask::init()
         ctx_->arg_.tenant_id_, ctx_->sys_tablet_id_array_, ctx_->arg_.is_leader_,
         ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
         ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, restore_action,
-        meta_index_store_, &ctx_->ha_table_info_mgr_,
+        meta_index_store_, second_meta_index_store_, &ctx_->ha_table_info_mgr_,
         ha_tablets_builder_))) {
       LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
     } else {

@@ -59,6 +59,7 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const char *fragment_name, char *name_buf, const int64_t name_buf_len);
 int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const int64_t start, const int64_t end, char *name_buf, const int64_t name_buf_len);
+int get_storage_prefix_from_path(const common::ObString &uri, const char *&prefix);
 
 struct ObStorageObjectMetaBase
 {

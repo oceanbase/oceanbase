@@ -300,6 +300,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "parallel_servers_target",
   "performance_schema",
   "plsql_ccflags",
+  "plsql_optimize_level",
   "plsql_warnings",
   "plugin_dir",
   "protocol_version",
@@ -541,6 +542,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PARALLEL_SERVERS_TARGET,
   SYS_VAR_PERFORMANCE_SCHEMA,
   SYS_VAR_PLSQL_CCFLAGS,
+  SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
   SYS_VAR_PLSQL_WARNINGS,
   SYS_VAR_PLUGIN_DIR,
   SYS_VAR_PROTOCOL_VERSION,
@@ -850,6 +852,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ncharacter_set_connection",
   "ob_default_lob_inrow_threshold",
   "_oracle_sql_select_limit",
+  "plsql_optimize_level",
   "ob_kv_mode"
 };
 
@@ -1256,6 +1259,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarNcharacterSetConnection)
         + sizeof(ObSysVarObDefaultLobInrowThreshold)
         + sizeof(ObSysVarOracleSqlSelectLimit)
+        + sizeof(ObSysVarPlsqlOptimizeLevel)
         + sizeof(ObSysVarObKvMode)
         ;
     void *ptr = NULL;
@@ -3396,6 +3400,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ORACLE_SQL_SELECT_LIMIT))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarOracleSqlSelectLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlOptimizeLevel));
       }
     }
     if (OB_SUCC(ret)) {
@@ -6021,6 +6034,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOracleSqlSelectLimit())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarOracleSqlSelectLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPlsqlOptimizeLevel)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPlsqlOptimizeLevel)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
       }
       break;
     }

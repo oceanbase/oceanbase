@@ -591,6 +591,11 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       } else if (err_msg.find("region") != std::string::npos
                  && err_msg.find("is wrong; expecting") != std::string::npos) {
         ob_errcode = OB_S3_REGION_MISMATCH;
+      } else if (exception == "InvalidRegionName" || exception == "InvalidBucketName") {
+        // When accessing COS and OSS using the S3 SDK, if the endpoint parameter is incorrect,
+        // S3 does not capture the exception. Instead, we need to set ob_errorcode individually
+        // based on the HTTP response code and the exception name.
+        ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
       } else {
         ob_errcode = OB_S3_ERROR;
       }

@@ -84,7 +84,12 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
         break;
       }
       case COS_OBJECT_NOT_EXIST: {
-        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        if (nullptr != cos_ret->error_code
+            && (0 == strcmp("NoSuchBucket", cos_ret->error_code))) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+        } else {
+          ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        }
         break;
       }
       case COS_APPEND_POSITION_ERROR: {

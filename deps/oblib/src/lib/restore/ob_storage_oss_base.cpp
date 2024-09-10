@@ -212,7 +212,12 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       }
 
       case OSS_OBJECT_NOT_EXIST: {
-        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        if (OB_NOT_NULL(aos_ret->error_code)
+            && (0 == STRCMP("NoSuchBucket", aos_ret->error_code))) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+        } else {
+          ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        }
         break;
       }
 

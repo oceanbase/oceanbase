@@ -344,10 +344,14 @@ int ObExprNvlUtil::calc_nvl_expr(const ObExpr &expr, ObEvalCtx &ctx,
   // nvl(arg0, arg1)
   ObDatum *arg0 = NULL;
   ObDatum *arg1 = NULL;
+  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
+  bool v = false;
 
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1))) {
     LOG_WARN("eval args failed", K(ret));
-  } else if (!(arg0->is_null())) {
+  } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+    LOG_WARN("check complex value is null not support");
+  } else if (!v) {
     res_datum.set_datum(*arg0);
   } else {
     res_datum.set_datum(*arg1);
@@ -365,6 +369,8 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObDatumVector args0;
   ObDatumVector args1;
+  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
+  bool v = false;
   if (OB_FAIL(expr.eval_batch_param_value(ctx, skip, batch_size, args0,
                                           args1))) {
     LOG_WARN("eval batch args failed", K(ret));
@@ -376,7 +382,9 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
       eval_flags.set(i);
       ObDatum *arg0 = args0.at(i);
       ObDatum *arg1 = args1.at(i);
-      if (!(arg0->is_null())) {
+      if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+        LOG_WARN("check complex value is null not support");
+      } else if (!v) {
         results[i].set_datum(*arg0);
       } else {
         results[i].set_datum(*arg1);
@@ -395,10 +403,14 @@ int ObExprNvlUtil::calc_nvl_expr2(const ObExpr &expr, ObEvalCtx &ctx,
   ObDatum *arg0 = NULL;
   ObDatum *arg1 = NULL;
   ObDatum *arg2 = NULL;
+  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
+  bool v = false;
 
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1, arg2))) {
     LOG_WARN("eval args failed", K(ret));
-  } else if (!(arg0->is_null())) {
+  } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+    LOG_WARN("check complex value is null not support");
+  } else if (!v) {
     res_datum.set_datum(*arg1);
   } else {
     res_datum.set_datum(*arg2);

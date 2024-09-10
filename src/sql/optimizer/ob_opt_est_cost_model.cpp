@@ -61,6 +61,7 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     batch_type_ = est_cost_info.batch_type_;
     sample_info_ = est_cost_info.sample_info_;
     at_most_one_range_ = est_cost_info.at_most_one_range_;
+    limit_rows_ = est_cost_info.limit_rows_;
     // no need to copy table scan param
   }
   return ret;
@@ -1286,6 +1287,9 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
   int64_t part_cnt = est_cost_info.index_meta_info_.index_part_count_;
   double per_part_log_cnt = logical_row_count / part_cnt;
   double per_part_phy_cnt = physical_row_count / part_cnt;
+  double per_part_limit_cnt = est_cost_info.limit_rows_ >= 0 ?
+                              est_cost_info.limit_rows_ / part_cnt :
+                              est_cost_info.limit_rows_;
   if (OB_UNLIKELY(logical_row_count < 0.0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected error", K(logical_row_count), K(ret));
@@ -1301,6 +1305,7 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
     } else if (ObSimpleBatch::T_MULTI_GET == type
                && OB_FAIL(cost_table_get_one_batch(est_cost_info,
                                                    per_part_log_cnt,
+                                                   per_part_limit_cnt,
                                                    cost,
                                                    index_back_cost))) {
       LOG_WARN("Failed to estimate get cost", K(ret));
@@ -1308,6 +1313,7 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
                && OB_FAIL(cost_table_scan_one_batch(est_cost_info,
                                                     per_part_log_cnt,
                                                     per_part_phy_cnt,
+                                                    per_part_limit_cnt,
                                                     cost,
                                                     index_back_cost))) {
       LOG_WARN("Failed to estimate scan cost", K(ret));
@@ -1327,6 +1333,7 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
   } else if (ObSimpleBatch::T_GET == type || ObSimpleBatch::T_MULTI_GET == type) {
     if (OB_FAIL(cost_table_get_one_batch(est_cost_info,
                                           per_part_log_cnt,
+                                          per_part_limit_cnt,
                                           cost,
                                           index_back_cost))) {
       LOG_WARN("Failed to estimate get cost", K(ret));
@@ -1338,6 +1345,7 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
     if (OB_FAIL(cost_table_scan_one_batch(est_cost_info,
                                           per_part_log_cnt,
                                           per_part_phy_cnt,
+                                          per_part_limit_cnt,
                                           cost,
                                           index_back_cost))) {
       LOG_WARN("Failed to estimate scan cost", K(ret));
@@ -1354,6 +1362,7 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
 
 int ObOptEstCostModel::cost_table_get_one_batch(const ObCostTableScanInfo &est_cost_info,
 																								const double output_row_count,
+                                                const double limit_count,
 																								double &cost,
 																								double &index_back_cost)
 {
@@ -1391,6 +1400,9 @@ int ObOptEstCostModel::cost_table_get_one_batch(const ObCostTableScanInfo &est_c
 
         //回表主表get代价和网络代价
         index_back_row_count = index_back_row_count * est_cost_info.postfix_filter_sel_;
+        if (est_cost_info.table_filters_.empty() && limit_count >= 0.0) {
+          index_back_row_count = std::min(index_back_row_count, limit_count);
+        }
         if (OB_FAIL(cost_table_get_one_batch_inner(index_back_row_count,
                                                    est_cost_info,
                                                    false,
@@ -1429,6 +1441,7 @@ int ObOptEstCostModel::cost_table_get_one_batch(const ObCostTableScanInfo &est_c
 int ObOptEstCostModel::cost_table_scan_one_batch(const ObCostTableScanInfo &est_cost_info,
 																								const double logical_output_row_count,
 																								const double physical_output_row_count,
+                                                const double limit_count,
 																								double &cost,
 																								double &index_back_cost)
 {
@@ -1471,6 +1484,9 @@ int ObOptEstCostModel::cost_table_scan_one_batch(const ObCostTableScanInfo &est_
         }
         LOG_TRACE("OPT:[COST SCAN SIMPLE ROW COUNT]", K(index_back_row_count));
         index_back_row_count = index_back_row_count * est_cost_info.postfix_filter_sel_;
+        if (est_cost_info.table_filters_.empty() && limit_count >= 0.0) {
+          index_back_row_count = std::min(index_back_row_count, limit_count);
+        }
         if (OB_FAIL(cost_table_get_one_batch_inner(index_back_row_count,
                                                    est_cost_info,
                                                    false,

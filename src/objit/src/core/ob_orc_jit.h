@@ -31,6 +31,16 @@
 
 namespace oceanbase {
 namespace jit {
+
+enum class ObPLOptLevel : int
+{
+  INVALID = -1,
+  O0 = 0,
+  O1 = 1,
+  O2 = 2,
+  O3 = 3
+};
+
 namespace core {
 using namespace llvm;
 
@@ -79,6 +89,8 @@ public:
 
   char* get_debug_info_data() { return DebugBuf; }
   int64_t get_debug_info_size() { return DebugLen; }
+
+  int set_optimize_level(ObPLOptLevel level);
 
 private:
   std::string mangle(const std::string &Name)

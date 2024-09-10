@@ -42,6 +42,7 @@ namespace oceanbase
 {
 namespace jit
 {
+enum class ObPLOptLevel : int;
 
 namespace core {
 class JitContext;
@@ -359,7 +360,7 @@ public:
   int init();
   void final();
   static int initialize();
-  void compile_module(bool optimization = true);
+  int compile_module(jit::ObPLOptLevel optimization);
   void dump_module();
   void dump_debuginfo();
   int verify_module();

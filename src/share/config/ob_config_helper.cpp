@@ -1176,5 +1176,28 @@ bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
   return 0 == tmp_str.case_compare("LS_POLICY") || 0 == tmp_str.case_compare("CLUSTER_POLICY");
 }
 
+bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
+{
+  // When compliantRfc3986Encoding is set to true:
+  // - Adhere to RFC 3986 by supporting the encoding of reserved characters
+  //   such as '-', '_', '.', '$', '@', etc.
+  // - This approach mitigates inconsistencies in server behavior when accessing
+  //   COS using the S3 SDK.
+  // Otherwise, the reserved characters will not be encoded,
+  // following the default behavior of the S3 SDK.
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  if (0 == tmp_str.case_compare("default")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(false);
+  } else if (0 == tmp_str.case_compare("compliantRfc3986Encoding")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(true);
+  } else {
+    bret = false;
+  }
+  return bret;
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

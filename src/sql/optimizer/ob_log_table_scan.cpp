@@ -129,6 +129,7 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     param.need_row_count_ = 0 > param.need_row_count_ ? card : param.need_row_count_;
     if (0 <= limit_count) {
       param.need_row_count_ = std::min(param.need_row_count_, limit_count_double * param.need_parallel_);
+      est_cost_info_->limit_rows_ = limit_count_double;
     }
     param.need_row_count_ = std::min(param.need_row_count_, card);
     param.need_row_count_ += offset_count_double;
