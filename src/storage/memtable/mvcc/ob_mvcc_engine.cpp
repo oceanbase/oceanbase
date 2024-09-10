@@ -594,6 +594,7 @@ int ObMvccEngine::init_tx_node_(const ObTxNodeArg &arg,
     node->version_ = arg.memstore_version_;
     node->scn_ = arg.scn_;
     node->seq_no_ = arg.seq_no_;
+    node->write_epoch_ = arg.write_epoch_;
     node->prev_ = NULL;
     node->next_ = NULL;
 
