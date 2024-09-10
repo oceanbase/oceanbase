@@ -17,6 +17,7 @@
 
 #include "logservice/common_util/ob_log_ls_define.h"
 #include "storage/tx/ob_tx_log.h"             // ObTransID
+#include "share/schema/ob_schema_struct.h"    // ObTenantStatus
 
 namespace oceanbase
 {
@@ -70,6 +71,47 @@ struct PartTransID
 
   TO_STRING_KV(K_(tls_id), K_(trans_id));
 };
+
+struct TenantInfo {
+public:
+  TenantInfo():
+      tenant_id_(OB_INVALID_TENANT_ID),
+      tenant_name_(),
+      tenant_status_(share::schema::ObTenantStatus::TENANT_STATUS_MAX) {}
+  TenantInfo(
+      const uint64_t tenant_id,
+      const ObString &tenant_name,
+      const share::schema::ObTenantStatus &tenant_status)
+    : tenant_id_(tenant_id), tenant_name_(tenant_name), tenant_status_(tenant_status) {}
+  ~TenantInfo() { reset(); }
+  void reset()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    tenant_name_.reset();
+    tenant_status_ = share::schema::ObTenantStatus::TENANT_STATUS_MAX;
+  }
+
+  int reset(
+      const uint64_t tenant_id,
+      const ObString &tenant_name,
+      const share::schema::ObTenantStatus &tenant_status);
+
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_
+        && !tenant_name_.is_empty()
+        && share::schema::ObTenantStatus::TENANT_STATUS_MAX != tenant_status_;
+  }
+
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const share::schema::ObTenantStatus& get_tenant_status() const { return tenant_status_; }
+  const char *get_tenant_name() const { return tenant_name_.ptr(); }
+
+  uint64_t tenant_id_;
+  ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
+  share::schema::ObTenantStatus tenant_status_;
+  TO_STRING_KV(K_(tenant_id), K_(tenant_name), "tenant_status", ob_tenant_status_str(tenant_status_));
+}; // TenantInfo
 
 } // end namespace libobcdc
 } // end namespace oceanbase

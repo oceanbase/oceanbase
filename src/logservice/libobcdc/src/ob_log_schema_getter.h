@@ -88,10 +88,9 @@ struct TenantSchemaInfo
   uint64_t tenant_id_;
   int64_t  version_;
   const char *name_;
-  // tenant whether in restore state or not at specified version
-  bool is_restore_;
+  share::schema::ObTenantStatus tenant_status_;
 
-  TO_STRING_KV(K_(tenant_id), K_(version), K_(name), K(is_restore_));
+  TO_STRING_KV(K_(tenant_id), K_(version), K_(name), "tenant_status", ob_tenant_status_str(tenant_status_));
 
   TenantSchemaInfo() { reset(); }
 
@@ -100,15 +99,15 @@ struct TenantSchemaInfo
     tenant_id_ = common::OB_INVALID_TENANT_ID;
     version_ = common::OB_INVALID_VERSION;
     name_ = NULL;
-    is_restore_ = false;
+    tenant_status_ = share::schema::ObTenantStatus::TENANT_STATUS_MAX;
   }
 
-  void reset(const uint64_t tenant_id, const int64_t version, const char *name, const bool is_restore)
+  void reset(const uint64_t tenant_id, const int64_t version, const char *name, const share::schema::ObTenantStatus tenant_status)
   {
     tenant_id_ = tenant_id;
     version_ = version;
     name_ = name;
-    is_restore_ = is_restore;
+    tenant_status_ = tenant_status;
   }
 
   bool is_valid() const
@@ -116,8 +115,14 @@ struct TenantSchemaInfo
     // Only the most basic information is verified here
     return common::OB_INVALID_TENANT_ID != tenant_id_
         && common::OB_INVALID_VERSION != version_
-        && NULL != name_;
+        && NULL != name_
+        && share::schema::ObTenantStatus::TENANT_STATUS_MAX != tenant_status_;
   }
+
+  uint64_t get_tenant_id() const { return tenant_id_; }
+
+  const share::schema::ObTenantStatus& get_tenant_status() const { return tenant_status_; }
+  const char* get_tenant_name() const { return name_; }
 };
 
 ///////////////////////////////////// IObLogSchemaGuard /////////////////////////////////
@@ -469,7 +474,7 @@ public:
   /// @retval OB_SUCCESS                   success
   /// @retval OB_TENANT_HAS_BEEN_DROPPED   tenent has been dropped
   /// @retval other error code             fail
-  virtual int get_tenant_refreshed_schema_version(const uint64_t tenant_id, int64_t &version) = 0;
+  virtual int get_tenant_refreshed_schema_version(const uint64_t tenant_id, int64_t &version, const int64_t timeout) = 0;
 
   // Check the tenant is dropping or dropped
   ///
@@ -619,7 +624,7 @@ public:
   {
     (void)schema_service_.try_eliminate_schema_mgr();
   }
-  int get_tenant_refreshed_schema_version(const uint64_t tenant_id, int64_t &version);
+  int get_tenant_refreshed_schema_version(const uint64_t tenant_id, int64_t &version, const int64_t timeout);
 
   int check_if_tenant_is_dropping_or_dropped(
       const uint64_t tenant_id,
@@ -630,7 +635,8 @@ public:
   int init(common::ObMySQLProxy &mysql_proxy,
       common::ObCommonConfig *config,
       const int64_t max_cached_schema_version_count,
-      const int64_t max_history_schema_version_count);
+      const int64_t max_history_schema_version_count,
+      const int64_t timeout);
   void destroy();
 
 private:
@@ -657,6 +663,8 @@ private:
       const int64_t expected_version,
       const int64_t timeout,
       int64_t &latest_version);
+  // @deprecated: row in clog doesn't record table_version, cdc check version by tenant_schema_version,
+  // thus don't need check tenant_version is suitable for table;
   int check_schema_guard_suitable_for_table_(
       IObLogSchemaGuard &schema_guard,
       const uint64_t tenant_id,

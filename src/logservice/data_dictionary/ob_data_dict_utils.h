@@ -61,7 +61,7 @@ namespace datadict
         }\
         _retry_func_on_error_cur_print_time = common::ObClockGenerator::getClock();\
         if (_retry_func_on_error_cur_print_time - _retry_func_on_error_last_print_time >= _PRINT_RETRY_FUNC_INTERVAL) {\
-          _DDLOG(INFO, "It has been %ld us since last print, last_print_time=%ld, func_name=%s", \
+          _DATA_DICT_LOG(INFO, "It has been %ld us since last print, last_print_time=%ld, func_name=%s", \
               _PRINT_RETRY_FUNC_INTERVAL, _retry_func_on_error_last_print_time, #func);\
           _retry_func_on_error_last_print_time = _retry_func_on_error_cur_print_time;\
         }\

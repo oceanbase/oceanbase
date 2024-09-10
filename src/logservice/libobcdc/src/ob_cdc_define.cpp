@@ -122,5 +122,18 @@ int PartTransID::hash(uint64_t &hash_val) const
   return OB_SUCCESS;
 }
 
+int TenantInfo::reset(
+    const uint64_t tenant_id,
+    const ObString &tenant_name,
+    const share::schema::ObTenantStatus &tenant_status)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  tenant_id_ = tenant_id;
+  tenant_status_ = tenant_status;
+  ret = tenant_name_.assign(tenant_name);
+  return ret;
+}
+
 } // end namespace libobcdc
 } // end namespace oceanbase

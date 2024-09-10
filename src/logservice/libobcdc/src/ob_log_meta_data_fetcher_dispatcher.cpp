@@ -8,7 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#define USING_LOG_PREFIX OBLOG_FETCHER
+#define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_log_meta_data_fetcher_dispatcher.h"  // ObLogMetaDataFetcherDispatcher
 

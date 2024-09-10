@@ -31,7 +31,7 @@ enum RefreshMode
   MAX_REFRESH_MODE
 };
 const char *print_refresh_mode(const RefreshMode mode);
-RefreshMode get_refresh_mode(const char *refresh_mode_str);
+RefreshMode parse_refresh_mode(const char *refresh_mode_str);
 
 bool is_refresh_mode_valid(RefreshMode mode);
 bool is_data_dict_refresh_mode(const RefreshMode mode);

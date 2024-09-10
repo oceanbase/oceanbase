@@ -47,8 +47,13 @@ template<typename T>
 class ObCDCTenantQuery
 {
 public:
-  ObCDCTenantQuery(common::ObMySQLProxy &sql_proxy) : sql_proxy_(&sql_proxy) {}
-  virtual ~ObCDCTenantQuery() { sql_proxy_ = nullptr; }
+  ObCDCTenantQuery(const bool is_tenant_sql_proxy, common::ObMySQLProxy &sql_proxy)
+    : is_tenant_sql_proxy_(is_tenant_sql_proxy), sql_proxy_(&sql_proxy) {}
+  virtual ~ObCDCTenantQuery()
+  {
+    is_tenant_sql_proxy_ = false;
+    sql_proxy_ = nullptr;
+  }
 public:
   int query(const uint64_t tenant_id, ObCDCQueryResult<T> &query_result, const int64_t retry_timeout);
   int query(ObCDCQueryResult<T> &result, const int64_t retry_timeout)
@@ -67,6 +72,8 @@ private:
   static const int64_t DEFAULT_RETRY_TIMEOUT = 1000;
 
 private:
+  bool is_tenant_sql_proxy_;
+  // true if the sql_proxy can access user tenant, query via the sql_proxy will switch to specified tenant then execute
   common::ObMySQLProxy *sql_proxy_;
 };
 
@@ -75,6 +82,10 @@ int ObCDCTenantQuery<T>::query(const uint64_t tenant_id, ObCDCQueryResult<T> &qu
 {
   int ret = OB_SUCCESS;
   common::ObSqlString sql;
+  // ObMySQLConnection::create_statement will switch to specified tenant to execute sql, thus we use SYS_TENANT_ID
+  const uint64_t query_tenant_id = is_tenant_sql_proxy_ ? tenant_id : OB_SYS_TENANT_ID;
+  // change tenant to specified tenant if sys_sql_proxy is provided;
+  // otherwise query sql directly by set query_tenant_id = 1 in case of change tenant;
 
   if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -93,8 +104,8 @@ int ObCDCTenantQuery<T>::query(const uint64_t tenant_id, ObCDCQueryResult<T> &qu
       common::sqlclient::ObMySQLResult *sql_result = nullptr;
 
       SMART_VAR(ObISQLClient::ReadResult, result) {
-        if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
-          OBLOG_LOG(ERROR, "sql read failed from sql_proxy", KR(ret), K(tenant_id), K(sql));
+        if (OB_FAIL(sql_proxy_->read(result, query_tenant_id, sql.ptr()))) {
+          OBLOG_LOG(ERROR, "sql read failed from sql_proxy", KR(ret), K(tenant_id), K(query_tenant_id), K_(is_tenant_sql_proxy), K(sql));
         } else if (OB_ISNULL(sql_result = result.get_result())) {
           ret = OB_ERR_UNEXPECTED;
           OBLOG_LOG(ERROR, "invalid sql_result", KR(ret), K(tenant_id), K(sql));
@@ -102,7 +113,7 @@ int ObCDCTenantQuery<T>::query(const uint64_t tenant_id, ObCDCQueryResult<T> &qu
           query_done = true;
 
           if (OB_FAIL(parse_sql_result_(*sql_result, query_result))) {
-            OBLOG_LOG(ERROR, "parse_sql_result_ failed", KR(ret), K(tenant_id));
+            OBLOG_LOG(ERROR, "parse_sql_result_ failed", KR(ret), K(tenant_id), K(query_tenant_id), K_(is_tenant_sql_proxy));
           }
         }
       }
@@ -120,7 +131,7 @@ int ObCDCTenantQuery<T>::query(const uint64_t tenant_id, ObCDCQueryResult<T> &qu
         } else {
           // query_done but failed.
           query_done = true;
-          OBLOG_LOG(WARN, "tenant query failed after retry", KR(ret), K(tenant_id), K(sql), K(retry_cnt));
+          OBLOG_LOG(WARN, "tenant query failed after retry", KR(ret), K(tenant_id), K(query_tenant_id), K_(is_tenant_sql_proxy), K(sql), K(retry_cnt));
         }
       }
     }

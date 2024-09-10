@@ -54,6 +54,7 @@ private:
 // | factor                            | 11    | 12    | 13    | 14    | 15    | 17    |
 // | auto_queue_length                 | 256   | 512   | 1024  | 2048  | 4096  | 16384 |
 // | br_queue_length                   | 8192  | 16384 | 32768 | 65536 | 10W   | 10W   |
+// | sequencer_queue_length            | 5570  | 11141 | 22282 | 44564 | 89128 | 35.6W |
 // | part_trans_task_prealloc_count    | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
 // | auto_part_trans_task_upper_bound  | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
 // | redo_dispatcher_memory_limit      | 32M   | 64M   | 128M  | 256M  | 512M  | 2G    |

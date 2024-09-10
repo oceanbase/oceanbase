@@ -518,6 +518,9 @@ int LSFetchCtx::read_log(
                 LOG_INFO("[DataDictionary] The last log of the baseline data "
                          "has been fetched",
                          K(tls_id_), K(lsn), K(log_entry));
+                if (OB_FAIL(GLOGMETADATASERVICE.finish_fetch_tenant_baseline_meta_data(tls_id_.get_tenant_id()))) {
+                  LOG_ERROR("finish_fetch_tenant_baseline_meta_data failed", KR(ret));
+                }
               }
             } else {
               // do nothing
