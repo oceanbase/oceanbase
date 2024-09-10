@@ -1370,23 +1370,14 @@ int ObTableCtx::init_delete()
   return ret;
 }
 
-int ObTableCtx::init_ttl_delete(ObRowkey &start_key)
+int ObTableCtx::init_ttl_delete(const ObIArray<ObNewRange> &scan_ranges)
 {
   int ret = OB_SUCCESS;
-  ObTableQuery query;
-  ObNewRange range;
-  ObRowkey real_start_key;
-  range.end_key_.set_max_row();
   set_is_ttl_table(false);
-  if (!start_key.is_valid()) {
-    real_start_key.set_min_row();
-  } else {
-    real_start_key = start_key;
-  }
-
-  range.start_key_ = real_start_key;
-  if (OB_FAIL(query.add_scan_range(range))) {
-    LOG_WARN("fail to generate key ranges", KR(ret), K(range));
+  ObTableQuery query;
+  ObIArray<ObNewRange> &query_scan_ranges = query.get_scan_ranges();
+  if (OB_FAIL(query_scan_ranges.assign(scan_ranges))) {
+    LOG_WARN("fail to assign scan ranges", KR(ret), K(query_scan_ranges));
   } else if (OB_FAIL(init_scan(query, false/* is_weak_read */, index_table_id_))) {
     LOG_WARN("fail to init scan ctx", KR(ret), K(query));
   } else {

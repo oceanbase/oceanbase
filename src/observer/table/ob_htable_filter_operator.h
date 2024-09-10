@@ -75,34 +75,30 @@ public:
   ObHTableColumnTracker()
       :max_versions_(1),
        min_versions_(0),
-       oldest_stamp_(0)
+       oldest_stamp_(0),
+       column_has_expired_(false)
   {}
   virtual ~ObHTableColumnTracker() {}
-  virtual int init(const table::ObHTableFilter &htable_filter,
-                   common::ObQueryFlag::ScanOrder &scan_order) = 0;
+  virtual int init(const table::ObHTableFilter &htable_filter) = 0;
   virtual int check_column(const ObHTableCell &cell, ObHTableMatchCode &match_code) = 0;
   virtual int check_versions(const ObHTableCell &cell, ObHTableMatchCode &match_code) = 0;
   virtual const ColumnCount *get_curr_column() const = 0;
   virtual void reset() = 0;
   virtual bool done() const = 0;
   virtual int get_next_column_or_row(const ObHTableCell &cell, ObHTableMatchCode &match_code) = 0;
-  virtual common::ObQueryFlag::ScanOrder get_scan_order() { return tracker_scan_order_; }
-  virtual void set_scan_order(common::ObQueryFlag::ScanOrder tracker_scan_order)
-  {
-    tracker_scan_order_ = tracker_scan_order;
-  }
   // Give the tracker a chance to declare it's done based on only the timestamp.
   bool is_done(int64_t timestamp) const;
   void set_ttl(int32_t ttl_value);
   void set_max_version(int32_t max_version);
   int32_t get_max_version() { return max_versions_; }
+  virtual int32_t get_cur_version() = 0;
+  bool is_expired(int64_t timestamp) const { return (-timestamp) < oldest_stamp_; }
+  virtual bool check_column_expired() const { return column_has_expired_; }
 protected:
   int32_t max_versions_;  // default: 1
   int32_t min_versions_;  // default: 0
   int64_t oldest_stamp_;  // default: 0
-  common::ObQueryFlag::ScanOrder tracker_scan_order_;
-protected:
-  bool is_expired(int64_t timestamp) const { return (-timestamp) < oldest_stamp_; }
+  bool column_has_expired_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHTableColumnTracker);
@@ -113,8 +109,7 @@ class ObHTableExplicitColumnTracker: public ObHTableColumnTracker
 public:
   ObHTableExplicitColumnTracker();
   virtual ~ObHTableExplicitColumnTracker() {}
-  virtual int init(const table::ObHTableFilter &htable_filter,
-                   common::ObQueryFlag::ScanOrder &scan_order) override;
+  virtual int init(const table::ObHTableFilter &htable_filter) override;
 
   virtual int check_column(const ObHTableCell &cell,
                            ObHTableMatchCode &match_code) override;
@@ -125,6 +120,7 @@ public:
   virtual const ColumnCount *get_curr_column() const override { return curr_column_; }
   virtual void reset() override;
   virtual bool done() const override;
+  virtual int32_t get_cur_version() override;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHTableExplicitColumnTracker);
@@ -144,8 +140,7 @@ class ObHTableWildcardColumnTracker: public ObHTableColumnTracker
 public:
   ObHTableWildcardColumnTracker();
   virtual ~ObHTableWildcardColumnTracker() {}
-  virtual int init(const table::ObHTableFilter &htable_filter,
-                   common::ObQueryFlag::ScanOrder &scan_order) override;
+  virtual int init(const table::ObHTableFilter &htable_filter) override;
   virtual int check_column(const ObHTableCell &cell,
                            ObHTableMatchCode &match_code) override;
   virtual int check_versions(const ObHTableCell &cell,
@@ -155,6 +150,7 @@ public:
   virtual const ColumnCount *get_curr_column() const override { return NULL; }
   virtual void reset() override;
   virtual bool done() const override { return false; }
+  virtual int32_t get_cur_version() override;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHTableWildcardColumnTracker);
@@ -215,6 +211,7 @@ public:
   virtual int get_next_result(ObTableQueryResult *&one_row) override;
 
   int seek(const ObHTableCell &key);
+  int seek(const ObHTableCell &key, int32_t &skipped_count);
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) override
   {
     child_op_ = scan_result;
@@ -241,6 +238,14 @@ private:
   virtual bool reach_size_limit() const;
   virtual int append_family(const ObNewRow &row);
   virtual int add_new_row(const ObNewRow &row, ObTableQueryResult *&out_result);
+
+protected:
+  // try record expired rowkey accord cell's timestamp
+  virtual void try_record_expired_rowkey(const ObHTableCellEntity &cell);
+  // try record expired rowkey accord cell's versions
+  virtual void try_record_expired_rowkey(const int32_t versions, const ObString &rowkey);
+  // try record expired rowkey
+  virtual void try_record_expired_rowkey(const ObString &rowkey);
 
 protected:
   common::ObArenaAllocator allocator_;  // used for deep copy of curr_cell_
@@ -274,6 +279,7 @@ private:
   bool is_table_group_inited_;
   bool is_table_group_req_;
   ObString family_name_;
+  bool is_cur_row_expired_;
 };
 
 class ObHTableReversedRowIterator : public ObHTableRowIterator {

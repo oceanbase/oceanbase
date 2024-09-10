@@ -148,6 +148,7 @@ int ObTTLUtil::transform_tenant_state(const common::ObTTLTaskStatus& tenant_stat
 }
 
 int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
+                                  uint64_t table_id,
                                   common::ObISQLClient& proxy,
                                   const ObTTLTaskStatus local_state,
                                   const int64_t local_task_id,
@@ -157,7 +158,7 @@ int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
 
   ObTTLStatus tenant_task;
   ObTTLTaskStatus tenant_state;
-  if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id, proxy, tenant_task, true))) {
+  if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id, table_id, proxy, tenant_task, true))) {
     if (OB_ITER_END == ret) {
       // tenant task maybe remove
       ret = OB_ERR_UNEXPECTED;
@@ -191,16 +192,17 @@ int ObTTLUtil::insert_ttl_task(uint64_t tenant_id,
   if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
               "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
               "task_id, task_start_time, task_update_time, trigger_type, status,"
-              " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, row_key)"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, task_type, row_key)"
               " VALUE "
               "(now(), now(), %ld, %ld, %ld,"
               " %ld, %ld, %ld, %ld, %ld, "
-              " %ld, %ld, %ld,'%.*s', ",
+              " %ld, %ld, %ld,'%.*s', %ld, ",
               tname,
               tenant_id, task.table_id_, task.tablet_id_,
               task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_,
               task.status_, task.ttl_del_cnt_, task.max_version_del_cnt_,
-              task.scan_cnt_, task.ret_code_.length(), task.ret_code_.ptr()))) {
+              task.scan_cnt_, task.ret_code_.length(), task.ret_code_.ptr(),
+              static_cast<int64_t>(task.task_type_)))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   } else if (OB_FAIL(sql_append_hex_escape_str(task.row_key_, sql))) {
     LOG_WARN("fail to append rowkey", K(ret));
@@ -432,6 +434,7 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
               EXTRACT_INT_FIELD_MYSQL(*result, "ttl_del_cnt", result_arr.at(idx).ttl_del_cnt_, uint64_t);
               EXTRACT_INT_FIELD_MYSQL(*result, "max_version_del_cnt", result_arr.at(idx).max_version_del_cnt_, uint64_t);
               EXTRACT_INT_FIELD_MYSQL(*result, "scan_cnt", result_arr.at(idx).scan_cnt_, uint64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "task_type", result_arr.at(idx).task_type_, ObTTLType);
               if (OB_SUCC(ret) && OB_NOT_NULL(allocator)) {
                 ObString rowkey;
                 char *rowkey_buf = nullptr;
@@ -472,6 +475,7 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
 }
 
 int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
+                                    uint64_t table_id,
                                     common::ObISQLClient& sql_client,
                                     ObTTLStatus& ttl_record,
                                     const bool for_update,
@@ -482,7 +486,7 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE table_id = '%ld'%s", OB_ALL_KV_TTL_TASK_TNAME, TTL_TENNAT_TASK_TABLE_ID, for_update ? " FOR UPDATE" : ""))) {
+  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE table_id = '%ld'%s", OB_ALL_KV_TTL_TASK_TNAME, table_id, for_update ? " FOR UPDATE" : ""))) {
     LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
@@ -508,6 +512,7 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
         EXTRACT_INT_FIELD_MYSQL(*result, "ttl_del_cnt", ttl_record.ttl_del_cnt_, uint64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "max_version_del_cnt", ttl_record.max_version_del_cnt_, uint64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "scan_cnt", ttl_record.scan_cnt_, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "task_type", ttl_record.task_type_, ObTTLType);
         if (OB_SUCC(ret) && OB_NOT_NULL(allocator)) {
           ObString rowkey;
           char *rowkey_buf = nullptr;
@@ -606,8 +611,8 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
   if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
               " tenant_id, task_id, table_id, tablet_id, task_start_time,"
               " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
-              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code from %s"
-              " where task_id = %ld and tablet_id != -1  and table_id != -1"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type from %s"
+              " where task_id = %ld and tablet_id >= 0  and table_id >= 0"
               " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
               share::OB_ALL_KV_TTL_TASK_TNAME,
@@ -616,7 +621,7 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), insert_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
   } else if (OB_FAIL(sql.assign_fmt("delete from %s"
-          " where task_id = %ld and tablet_id != -1 and table_id != -1"
+          " where task_id = %ld and tablet_id >= 0 and table_id >= 0"
           " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld ",
           share::OB_ALL_KV_TTL_TASK_TNAME,
           task_id, batch_size))) {
@@ -632,7 +637,7 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
 }
 
 // only one record left in this situation
-int ObTTLUtil::move_tenant_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
+int ObTTLUtil::move_tenant_task_to_history_table(const ObTTLStatusKey &key,
                                                  common::ObMySQLTransaction& proxy)
 {
   int ret = OB_SUCCESS;
@@ -643,19 +648,19 @@ int ObTTLUtil::move_tenant_task_to_history_table(uint64_t tenant_id, uint64_t ta
               " where task_id = %ld and tablet_id = %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
               share::OB_ALL_KV_TTL_TASK_TNAME,
-              task_id, TTL_TENNAT_TASK_TABLET_ID))) {
+              key.task_id_, key.tablet_id_))) {
     LOG_WARN("sql assign fmt failed", K(ret));
-  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), insert_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
+  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(key.tenant_id_), sql.ptr(), insert_rows))) {
+    LOG_WARN("fail to execute sql", K(ret), K(sql), K(key.tenant_id_));
   } else if (OB_FAIL(sql.assign_fmt("delete from %s"
           " where task_id = %ld and tablet_id = %ld",
           share::OB_ALL_KV_TTL_TASK_TNAME,
-          task_id, TTL_TENNAT_TASK_TABLET_ID))) {
+          key.task_id_, key.tablet_id_))) {
     LOG_WARN("sql assign fmt failed", K(ret));
-  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), delete_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
+  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(key.tenant_id_), sql.ptr(), delete_rows))) {
+    LOG_WARN("fail to execute sql", K(ret), K(sql), K(key.tenant_id_));
   } else {
-    LOG_INFO("success to execute sql", K(ret), K(tenant_id), K(sql), K(insert_rows), K(delete_rows));
+    LOG_INFO("success to execute sql", K(ret), K(key.tenant_id_), K(sql), K(insert_rows), K(delete_rows));
   }
 
   return ret;
@@ -1223,15 +1228,36 @@ int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_tt
   if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
     if (!table_schema.get_ttl_definition().empty()) {
       is_ttl_table = true;
-    } else if (!table_schema.get_kv_attributes().empty()) {
-      // htable ttl table should have at least one of max_version and time_to_live
-      int32_t time_to_live = 0;
-      int32_t max_version = 0;
-      if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), max_version, time_to_live))) {
-        LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
-      } else if (time_to_live > 0 || max_version > 0) {
-        is_ttl_table = true;
-      }
+    } else if (OB_FAIL(check_is_htable_ttl_(table_schema, is_ttl_table))) {
+      LOG_WARN("fail to check is htable ttl", K(ret));
+    }
+  }
+  return ret;
+}
+int ObTTLUtil::check_is_htable_ttl(const ObTableSchema &table_schema, bool &is_ttl_table)
+{
+  int ret = OB_SUCCESS;
+  is_ttl_table = false;
+  if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
+    if (OB_FAIL(check_is_htable_ttl_(table_schema, is_ttl_table))) {
+      LOG_WARN("fail to check is htable ttl", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_ttl_table)
+{
+  int ret = OB_SUCCESS;
+  is_ttl_table = false;
+  if (!table_schema.get_kv_attributes().empty()) {
+    // htable ttl table should have at least one of max_version and time_to_live
+    int32_t time_to_live = 0;
+    int32_t max_version = 0;
+    if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), max_version, time_to_live))) {
+      LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
+    } else if (time_to_live > 0 || max_version > 0) {
+      is_ttl_table = true;
     }
   }
   return ret;
@@ -1289,7 +1315,9 @@ int ObTTLUtil::check_task_status_from_sys_table(uint64_t tenant_id, common::ObIS
 bool ObTTLUtil::is_enable_ttl(uint64_t tenant_id)
 {
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  return tenant_config.is_valid() && tenant_config->enable_kv_ttl;
+  return tenant_config.is_valid() &&
+         tenant_config->enable_kv_ttl &&
+         ObKVFeatureModeUitl::is_ttl_enable();
 }
 
 const char * ObTTLUtil::get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status)

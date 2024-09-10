@@ -913,7 +913,10 @@ public:
   int add_aggregation(ObTableAggregation &aggregation);
 
   const ObIArray<ObString> &get_select_columns() const { return select_columns_; }
+
   const ObIArray<common::ObNewRange> &get_scan_ranges() const { return key_ranges_; }
+
+  ObIArray<common::ObNewRange> &get_scan_ranges() { return key_ranges_; }
   int32_t get_limit() const { return limit_; }
   int32_t get_offset() const { return offset_; }
   common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }

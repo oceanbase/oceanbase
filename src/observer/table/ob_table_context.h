@@ -615,7 +615,7 @@ public:
   bool is_ttl_table() const { return is_ttl_table_; }
 
   void set_is_ttl_table(bool is_ttl_table) { is_ttl_table_ = is_ttl_table; }
-  int init_ttl_delete(ObRowkey &start_key);
+  int init_ttl_delete(const ObIArray<ObNewRange> &scan_range);
   int get_column_item_by_column_id(uint64_t column_id, const ObTableColumnItem *&item) const;
   int get_column_item_by_expr(sql::ObRawExpr *raw_expr, const ObTableColumnItem *&item) const;
   int get_column_item_by_expr(sql::ObColumnRefRawExpr *expr, const ObTableColumnItem *&item) const;
