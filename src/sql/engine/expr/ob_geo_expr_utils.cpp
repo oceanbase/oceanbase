@@ -1087,7 +1087,8 @@ ObGeoConstParamCache* ObGeoExprUtils::get_geo_constParam_cache(const uint64_t& i
   INIT_SUCC(ret);
   ObGeoConstParamCache* cache_ctx = NULL;
   uint64_t data_version = 0;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2) {
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2
+  || (GET_MIN_CLUSTER_VERSION() >=  CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_3_0)) {
     // geo para cache not available, return null
   }  else if (ObExpr::INVALID_EXP_CTX_ID != id) {
     cache_ctx = static_cast<ObGeoConstParamCache*>(exec_ctx->get_expr_op_ctx(id));

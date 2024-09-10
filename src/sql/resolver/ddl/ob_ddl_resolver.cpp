@@ -6787,6 +6787,8 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     LOG_WARN("unexpected null", K(ret), K(session_info_), K(allocator_));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check oracle compat mode failed", K(ret));
+  } else if (is_oracle_mode) {
+    // oracle mode not support geometry
   } else if (is_func_index && is_mysql_mode()) {
     ObRawExprFactory expr_factory(*allocator_);
     ObRawExpr *expr = NULL;
@@ -6817,14 +6819,15 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     // if current col in resolved_cols, means it has been altered, use col schema in alter table schema
     if (OB_NOT_NULL(resolved_cols) && resolved_cols->count() > 0) {
       bool found = false;
+      ObColumnSchemaHashWrapper cmp_col_name(column_name);
       for (int i = 0; i < resolved_cols->count() && !found && OB_SUCC(ret); ++i) {
         ObColumnSchemaV2* tmp_col_schema = resolved_cols->at(i);
         if (OB_ISNULL(tmp_col_schema)) {
           ret = OB_BAD_NULL_ERROR;
           LOG_WARN("should not be null.", K(i), K(resolved_cols->count()), K(ret));
         } else {
-          ObCompareNameWithTenantID column_name_cmp(table_schema.get_tenant_id());
-          if (0 == column_name_cmp.compare(column_name, tmp_col_schema->get_column_name_str())) {
+          ObColumnSchemaHashWrapper tmp_col_name(tmp_col_schema->get_column_name_str());
+          if (cmp_col_name == tmp_col_name) {
             found = true;
             column_schema = tmp_col_schema;
           }
