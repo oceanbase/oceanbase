@@ -267,7 +267,7 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
                                         (udf_expr->get_database_name().empty() || (0 == udf_expr->get_database_name().case_compare(OB_SYS_DATABASE_NAME)))
                                         ? session_info->get_database_name() : udf_expr->get_database_name(),
                                         database_id));
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && udf_expr->is_standalone_udf()) {
         bool exist = false;
         uint64_t object_db_id = OB_INVALID_ID;
         ObSchemaChecker schema_checker;
@@ -281,21 +281,30 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
                                                                 udf_expr->get_func_name(),
                                                                 object_db_id, object_name, exist));
         if (OB_SUCC(ret) && exist) {
-          for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
-            int64_t schema_version = OB_INVALID_VERSION;
-            uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
-            uint64_t dep_db_id = synonym_checker.get_database_ids().at(i);
-            ObSchemaObjVersion syn_version;
-            OZ (schema_guard.get_schema_version(SYNONYM_SCHEMA,
-                                                  session_info->get_effective_tenant_id(),
-                                                  obj_id,
-                                                  schema_version));
-            OX (syn_version.object_id_ = obj_id);
-            OX (syn_version.version_ = schema_version);
-            OX (syn_version.object_type_ = DEPENDENCY_SYNONYM);
-            OZ (dependency_objects.push_back(syn_version));
-            if (OB_NOT_NULL(dep_db_array)) {
-              OZ (dep_db_array->push_back(dep_db_id));
+          bool exist_non_syn_object= false;
+          bool is_private_syn = false;
+          OZ (schema_checker.check_exist_same_name_object_with_synonym(session_info->get_effective_tenant_id(),
+                                                                        database_id,
+                                                                        udf_expr->get_func_name(),
+                                                                        exist_non_syn_object,
+                                                                        is_private_syn));
+          if (OB_SUCC(ret) && (!exist_non_syn_object || is_private_syn)) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
+              int64_t schema_version = OB_INVALID_VERSION;
+              uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
+              uint64_t dep_db_id = synonym_checker.get_database_ids().at(i);
+              ObSchemaObjVersion syn_version;
+              OZ (schema_guard.get_schema_version(SYNONYM_SCHEMA,
+                                                    session_info->get_effective_tenant_id(),
+                                                    obj_id,
+                                                    schema_version));
+              OX (syn_version.object_id_ = obj_id);
+              OX (syn_version.version_ = schema_version);
+              OX (syn_version.object_type_ = DEPENDENCY_SYNONYM);
+              OZ (dependency_objects.push_back(syn_version));
+              if (OB_NOT_NULL(dep_db_array)) {
+                OZ (dep_db_array->push_back(dep_db_id));
+              }
             }
           }
         }
