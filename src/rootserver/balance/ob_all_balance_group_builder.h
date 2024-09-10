@@ -191,8 +191,16 @@ private:
   int check_table_schemas_in_tablegroup_(
       const ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas);
   int get_dup_to_normal_dest_ls_id_(share::ObLSID &dest_ls_id);
+  int add_part_to_bg_for_tablegroup_sharding_none_(
+      const ObBalanceGroup &bg,
+      const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
+      bool &in_new_pg);
+  int get_global_indexes_of_tables_(
+      const ObArray<const ObSimpleTableSchemaV2 *> &table_schemas,
+      ObIArray<const ObSimpleTableSchemaV2 *> &global_index_schemas);
 private:
   static const int64_t MAP_BUCKET_NUM = 40960;
+  static const int64_t SET_BUCKET_NUM = 1024;
 
   bool inited_;
   const char* mod_;
@@ -214,6 +222,7 @@ private:
   hash::ObHashMap<ObTabletID, uint64_t> tablet_data_size_;
   ObArenaAllocator allocator_;
   hash::ObHashMap<ObTabletID, common::ObIArray<ObTabletID> *> related_tablets_map_;
+  hash::ObHashSet<uint64_t> sharding_none_tg_global_indexes_; // global indexes of the primary table in tablegroup sharding none
 };
 
 }

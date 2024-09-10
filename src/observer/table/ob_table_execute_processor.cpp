@@ -29,6 +29,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::sql;
 using namespace oceanbase::omt;
 
+void __attribute__((weak)) request_finish_callback();
 int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &entity)
 {
   int ret = OB_SUCCESS;
@@ -492,6 +493,8 @@ int ObTableApiExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
   if (!need_retry_in_queue_ && !had_do_response()) {
+    // clear thread local variables used to wait in queue
+    request_finish_callback();
     if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
       // @note modify the value of timestamp to be positive
       ret = ObTableRpcProcessorUtil::negate_htable_timestamp(result_entity_);

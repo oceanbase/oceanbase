@@ -3773,6 +3773,24 @@ int ObCharset::copy_zh_cs(ObCharsetInfo *from_cs, ObCharsetType charset_type, Ob
   return ret;
 }
 
+int ObCharset::init_charset_info_coll_info(ObCharsetInfo *cs, ObCharsetLoader& loader)
+{
+  int ret = OB_SUCCESS;
+  ObCharsetHandler *charset_handler = cs->cset;
+  ObCollationHandler *coll_handler = cs->coll;
+  if (OB_ISNULL(cs) || OB_ISNULL(coll_handler) || OB_ISNULL(charset_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ptr", K(cs));
+  } else if(OB_NOT_NULL(charset_handler->init) &&
+            charset_handler->init(cs, &loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to init charset handler", K(ret));
+  } else if (OB_NOT_NULL(coll_handler->init) && OB_FAIL(coll_handler->init(cs, &loader))) {
+    LOG_WARN("fail to init collation", K(ret));
+  }
+  return ret;
+}
+
 /*
   charset_arr is depend on this init process
   all func use charset_arr should after init charset
@@ -3813,28 +3831,19 @@ int ObCharset::init_charset_and_arr() {
 
   if (OB_SUCC(ret)) {
     for (int i = 0; OB_SUCC(ret) && i < array_elements(euro_collations); ++i) {
-      if (euro_collations[i] == NULL || euro_collations[i]->coll == NULL) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null ptr", K(euro_collations[i]));
-      } else if (euro_collations[i]->coll->init && OB_FAIL(euro_collations[i]->coll->init(euro_collations[i], &loader))) {
+      ObCharsetInfo *cs = euro_collations[i];
+      if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
         LOG_WARN("fail to init collation", K(ret));
       } else {
-        add_coll((ObCollationType)euro_collations[i]->number, euro_collations[i]);
+        add_coll((ObCollationType)cs->number, cs);
       }
     }
   }
   if (OB_SUCC(ret)) {
     for (int i = 0; OB_SUCC(ret) && i < array_elements(uca900_collations); ++i) {
       ObCharsetInfo *cs = uca900_collations[i];
-      ObCharsetHandler *charset_handler = cs->cset;
-      ObCollationHandler *coll_handler = cs->coll;
-      if  (OB_ISNULL(charset_handler) || OB_ISNULL(coll_handler)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null pointer", K(charset_handler), K(coll_handler), K(ret));
-      } else if (charset_handler->init &&
-                charset_handler->init(cs, &loader)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to init charset handler", K(ret));
+      if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
+        LOG_WARN("fail to init collation", K(ret));
       } else {
         add_coll((ObCollationType)cs->number, cs);
       }
@@ -3844,15 +3853,8 @@ int ObCharset::init_charset_and_arr() {
   ObCharsetInfo *special_charset[] = {&ob_charset_ascii,&ob_charset_ascii_bin,&ob_charset_dec8_swedish_ci,&ob_charset_dec8_bin};
   for (int i = 0; OB_SUCC(ret) && i < array_elements(special_charset); ++i) {
     ObCharsetInfo *cs = special_charset[i];
-    ObCharsetHandler *charset_handler = cs->cset;
-    ObCollationHandler *coll_handler = cs->coll;
-    if  (OB_ISNULL(charset_handler) || OB_ISNULL(coll_handler)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null pointer", K(charset_handler), K(coll_handler), K(ret));
-    } else if (charset_handler->init &&
-               charset_handler->init(cs, &loader)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to init charset handler", K(ret));
+    if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
+        LOG_WARN("fail to init collation", K(ret));
     } else {
       add_coll((ObCollationType)cs->number, cs);
     }

@@ -44,6 +44,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::sql;
 
+void __attribute__((weak)) request_finish_callback();
 int ObTableLoginP::process()
 {
   int ret = OB_SUCCESS;
@@ -706,6 +707,8 @@ int ObTableRpcProcessor<T>::response(int error_code)
   int ret = OB_SUCCESS;
   // if it is waiting for retry in queue, the response can NOT be sent.
   if (!need_retry_in_queue_ && !had_do_response()) {
+    // clear thread local variables used to wait in queue
+    request_finish_callback();
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(this->req_->get_packet());
     if (ObTableRpcProcessorUtil::need_do_move_response(error_code, *rpc_pkt)) {
       // response rerouting packet

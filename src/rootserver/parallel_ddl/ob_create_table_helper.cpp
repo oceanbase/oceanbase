@@ -2211,6 +2211,7 @@ int ObCreateTableHelper::create_tablets_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table cnt", KR(ret), K(new_tables_.count()));
   } else {
+    const ObTableSchema &data_table = new_tables_.at(0);
     ObTableCreator table_creator(
                    tenant_id_,
                    frozen_scn,
@@ -2223,6 +2224,7 @@ int ObCreateTableHelper::create_tablets_()
                               schema_guard,
                               sql_proxy_,
                               true /*use parallel ddl*/);
+    const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
     int64_t last_schema_version = OB_INVALID_VERSION;
     ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
@@ -2237,6 +2239,17 @@ int ObCreateTableHelper::create_tablets_()
     } else if (OB_UNLIKELY(last_schema_version <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("last schema version is invalid", KR(ret), K_(tenant_id), K(last_schema_version));
+    } else if (OB_INVALID_ID != data_table.get_tablegroup_id()) {
+      if (OB_FAIL(latest_schema_guard_.get_tablegroup_schema(
+          data_table.get_tablegroup_id(),
+          data_tablegroup_schema))) {
+        LOG_WARN("get tablegroup_schema failed", KR(ret), K(data_table));
+      } else if (OB_ISNULL(data_tablegroup_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data_tablegroup_schema is null", KR(ret), K(data_table));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else {
       ObArray<const ObTableSchema*> schemas;
       common::ObArray<share::ObLSID> ls_id_array;
@@ -2250,7 +2263,7 @@ int ObCreateTableHelper::create_tablets_()
             LOG_WARN("fail to push back new table", KR(ret));
           }
         } else {
-          if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, new_table))) {
+          if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, new_table, data_tablegroup_schema))) {
             LOG_WARN("fail to prepare ls for global index", KR(ret), K(new_table));
           } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
             LOG_WARN("fail to get ls id array", KR(ret));
@@ -2270,7 +2283,7 @@ int ObCreateTableHelper::create_tablets_()
       if (OB_FAIL(ret)) {
       } else if (schemas.count() > 0) {
         const ObTableSchema &data_table = new_tables_.at(0);
-        if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, data_table))) {
+        if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, data_table, data_tablegroup_schema))) {
           LOG_WARN("fail to prepare ls for data table", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));

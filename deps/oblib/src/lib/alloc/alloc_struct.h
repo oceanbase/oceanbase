@@ -255,6 +255,7 @@ struct AChunk {
       };
     };
   };
+  void *ref_;
   BlockSet *block_set_;
   uint64_t washed_blks_;
   uint64_t washed_size_;
@@ -392,6 +393,7 @@ inline uint64_t align_up2(uint64_t x, uint64_t align)
 
 AChunk::AChunk() :
     MAGIC_CODE_(ACHUNK_MAGIC_CODE),
+    ref_(nullptr),
     block_set_(nullptr),
     washed_blks_(0), washed_size_(0), alloc_bytes_(0),
     prev_(this), next_(this),

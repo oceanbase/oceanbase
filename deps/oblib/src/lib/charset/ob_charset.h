@@ -721,6 +721,7 @@ public:
                                                         const ObString &nlssort_param);
 private:
   static int init_charset_and_arr();
+  static int init_charset_info_coll_info(ObCharsetInfo *cs, ObCharsetLoader& loader);
   static bool is_argument_valid(const ObCharsetInfo *charset_info, const char *str, int64_t str_len);
   static bool is_argument_valid(const ObCollationType collation_type, const char *str1, int64_t str_len1, const char *str2, int64_t str_len2);
   static int copy_zh_cs(ObCharsetInfo *from_cs, ObCollationType to_coll_type, ObCharsetInfo *&to_cs);

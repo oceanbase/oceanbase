@@ -17,6 +17,15 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/utility.h"
 
+int do_madvise(void *addr, size_t length, int advice)
+{
+  int result = 0;
+  do {
+    result = ::madvise(addr, length, advice);
+  } while (result == -1 && errno == EAGAIN);
+  return result;
+}
+
 bool is_range_mapped(int64_t start, int64_t end)
 {
   FILE *maps_file = fopen("/proc/self/maps", "r");
@@ -42,47 +51,329 @@ bool is_range_mapped(int64_t start, int64_t end)
   return false;
 }
 
-int64_t global_addr = 0;
-
-void *sanity_mmap(size_t size)
+class ISegMgr
 {
-  if (0 == global_addr) return NULL;
-  void *ret = NULL;
-  void *ptr = (void*)ATOMIC_FAA(&global_addr, size);
-  if (!sanity_addr_in_range(ptr, size)) {
-    ATOMIC_FAA(&global_addr, -size);
-    LOG_WARN_RET(OB_ERR_SYS, "sanity address exhausted", KP(ptr));
-  } else {
-    void *shadow_ptr = sanity_to_shadow(ptr);
-    size_t shadow_size = sanity_to_shadow_size(size);
-    if (MAP_FAILED == mmap(ptr, size,
+public:
+  virtual void* alloc_seg(int64_t size) = 0 ;
+  virtual void free_seg(void *ptr) = 0;
+};
+
+template<int _size>
+class FixedAllocer
+{
+public:
+  FixedAllocer() : head_(NULL), using_cnt_(0), free_cnt_(0) {}
+  int64_t using_cnt() { return using_cnt_; }
+  int64_t free_cnt() { return free_cnt_; }
+  void *alloc()
+  {
+    void *ret = NULL;
+    if (!head_) {
+      int64_t alloc_size = max(get_page_size(), _size);
+      void *ptr = NULL;
+      if (MAP_FAILED == (ptr = mmap(NULL, alloc_size,
           PROT_READ | PROT_WRITE,
-          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)) {
-      LOG_WARN_RET(OB_ERR_SYS, "mmap failed", K(errno));
-    } else if (MAP_FAILED == mmap(shadow_ptr, shadow_size,
-          PROT_READ | PROT_WRITE,
-          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)) {
-      LOG_WARN_RET(OB_ERR_SYS, "mmap shadow failed", K(errno));
+          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+        LOG_WARN_RET(OB_ERR_SYS, "mmap failed", K(errno));
+      } else {
+        int64_t left = alloc_size;
+        while (left >= _size) {
+          void *obj = (void*)((char*)ptr + left - _size);
+          *(void**)obj = head_;
+          head_ = obj;
+          free_cnt_++;
+          left -= _size;
+        }
+      }
+    }
+    if (head_) {
+      void *next = *(void**)head_;
+      ret = head_;
+      head_ = next;
+      using_cnt_++;
+      free_cnt_--;
+    }
+    return ret;
+  }
+  void free(void *ptr)
+  {
+    using_cnt_--;
+    free_cnt_++;
+    if (!head_) {
+      *(void**)ptr = NULL;
+      head_ = ptr;
     } else {
-      ret = ptr;
+      *(void**)ptr = head_;
+      head_ = ptr;
     }
   }
-  return ret;
-}
+private:
+  void *head_;
+  int64_t using_cnt_;
+  int64_t free_cnt_;
+};
 
-void sanity_munmap(void *ptr, size_t size)
+class BuddyMgr
 {
-  void *shadow_ptr = sanity_to_shadow((void*)ptr);
-  size_t shadow_size = sanity_to_shadow_size(size);
-  int rc = 0;
-  if (0 == rc) while (-1 == (rc = ::madvise(ptr, size, MADV_DONTNEED)) && EAGAIN == errno);
-  if (0 == rc) while (-1 == (rc = ::madvise(ptr, size, MADV_DONTDUMP)) && EAGAIN == errno);
-  if (0 == rc) while (-1 == (rc = ::madvise(shadow_ptr, shadow_size, MADV_DONTNEED)) && EAGAIN == errno);
-  if (0 == rc) while (-1 == (rc = ::madvise(shadow_ptr, shadow_size, MADV_DONTDUMP)) && EAGAIN == errno);
-  if (rc != 0) {
-    LOG_WARN_RET(OB_ERR_SYS, "madvise failed", K(errno));
+public:
+  struct Bin
+  {
+    Bin()
+      : in_use_(0), is_large_(0), seg_(NULL), offset_(0), nbins_(0),
+        phy_prev_(NULL), phy_next_(NULL), prev_(NULL), next_(NULL)  {}
+    union {
+      uint32_t MAGIC_CODE_;
+      struct {
+        struct {
+          uint8_t in_use_ : 1;
+          uint8_t is_large_ : 1;
+        };
+      };
+    };
+    void *seg_;
+    int64_t offset_;
+    int64_t nbins_;
+    Bin *phy_prev_;
+    Bin *phy_next_;
+    Bin *prev_;
+    Bin *next_;
+  };
+  BuddyMgr(int64_t full_size, int64_t bin_size)
+    : full_size_(full_size), bin_size_(bin_size), seg_mgr_(NULL)
+  {
+    abort_unless(0 == (bin_size & (bin_size - 1)));
+    abort_unless(full_size > bin_size);
+    abort_unless(0 == full_size % bin_size);
+    max_nbins_ = full_size / bin_size;
+    max_ind_ = calc_next_ind(max_nbins_);
+    memset(freelists_, 0, sizeof(freelists_));
   }
-}
+  int64_t get_bin_size()
+  { return bin_size_; }
+  void set_seg_mgr(ISegMgr *seg_mgr)
+  { seg_mgr_ = seg_mgr; }
+  Bin *alloc(int64_t size)
+  {
+    Bin *bin = NULL;
+    int nbins = align_up2(size, bin_size_) / bin_size_;
+    int ind = calc_next_ind(nbins);
+    if (ind > max_ind_) {
+      void *seg = seg_mgr_->alloc_seg(size);
+      if (seg) {
+        bin = alloc_bin();
+        if (bin) {
+          bin->is_large_ = 1;
+          bin->seg_ = seg;
+        }
+      }
+    } else {
+      int avail_ind = -1;
+      for (int i = ind; i <= max_ind_; i++) {
+        if (freelists_[i]) {
+          avail_ind = i;
+          break;
+        }
+      }
+      if (avail_ind != -1) {
+        Bin *avail_bin = freelists_[avail_ind];
+        take_off_free_bin(avail_bin);
+        if (avail_bin->nbins_ > nbins) {
+          Bin *next_bin = split_bin(avail_bin, nbins);
+          if (next_bin) {
+            add_free_bin(next_bin);
+          }
+        }
+        bin = avail_bin;
+      }
+      if (!bin) {
+        void *seg = seg_mgr_->alloc_seg(full_size_);
+        if (seg) {
+          bin = alloc_bin();
+          if (bin) {
+            bin->seg_ = seg;
+            bin->offset_ = 0;
+            bin->nbins_ = max_nbins_;
+            Bin *next_bin = split_bin(bin, nbins);
+            if (next_bin) {
+              add_free_bin(next_bin);
+            }
+          }
+        }
+      }
+    }
+    if (bin) {
+      bin->in_use_ = 1;
+    }
+    return bin;
+  }
+  void free(Bin *bin)
+  {
+    bin->in_use_ = 0;
+    if (bin->is_large_) {
+      void *seg = bin->seg_;
+      free_bin(bin);
+      seg_mgr_->free_seg(seg);
+    } else {
+      Bin *phy_prev = bin->phy_prev_;
+      Bin *phy_next = bin->phy_next_;
+      Bin *head = bin;
+      if (phy_prev && !phy_prev->in_use_) {
+        take_off_free_bin(phy_prev);
+        head = merge_bin(phy_prev, bin);
+      }
+      if (phy_next && !phy_next->in_use_) {
+        take_off_free_bin(phy_next);
+        head = merge_bin(head, phy_next);
+      }
+      if (max_nbins_ == head->nbins_) {
+        void *seg = head->seg_;
+        free_bin(head);
+        seg_mgr_->free_seg(seg);
+      } else {
+        add_free_bin(head);
+      }
+    }
+  }
+private:
+  int calc_next_ind(int64_t nbins)
+  {
+    abort_unless(nbins > 0);
+    return (0 == nbins - 1) ? 0 : (64 - __builtin_clzll(nbins - 1));
+  }
+  int calc_prev_ind(int64_t nbins)
+  {
+    abort_unless(nbins > 0);
+    return 64 - __builtin_clzll(nbins) - 1;
+  }
+  Bin *alloc_bin()
+  {
+    Bin *bin = NULL;
+    void *ptr = bin_allocer_.alloc();
+    if (ptr) {
+      bin = new(ptr) Bin();
+    }
+    return bin;
+  }
+  void free_bin(Bin *bin)
+  {
+    bin->~Bin();
+    bin_allocer_.free((void*)bin);
+  }
+  Bin *split_bin(Bin *bin, int nbins)
+  {
+    Bin *next_bin = bin->nbins_ <= nbins ? NULL : alloc_bin();
+    if (next_bin) {
+      next_bin->seg_ = bin->seg_;
+      next_bin->offset_ = bin->offset_ + nbins;
+      next_bin->nbins_ = bin->nbins_ - nbins;
+      next_bin->phy_prev_ = bin;
+      next_bin->phy_next_ = bin->phy_next_;
+      if (bin->phy_next_) {
+       bin->phy_next_->phy_prev_ = next_bin;
+      }
+      bin->phy_next_ = next_bin;
+      bin->nbins_ = nbins;
+    }
+    return next_bin;
+  }
+  Bin *merge_bin(Bin *bin, Bin *next_bin)
+  {
+    bin->nbins_ += next_bin->nbins_;
+    bin->phy_next_ = next_bin->phy_next_;
+    if (next_bin->phy_next_) {
+      next_bin->phy_next_->phy_prev_ = bin;
+    }
+    free_bin(next_bin);
+    return bin;
+  }
+  void add_free_bin(Bin *bin)
+  {
+    Bin *&head = freelists_[calc_prev_ind(bin->nbins_)];
+    if (!head) {
+      bin->prev_ = bin->next_ = bin;
+    } else {
+      bin->prev_ = head->prev_;
+      bin->next_ = head;
+      head->prev_->next_ = bin;
+      head->prev_ = bin;
+    }
+    head = bin;
+  }
+  void take_off_free_bin(Bin *bin)
+  {
+    Bin *&head = freelists_[calc_prev_ind(bin->nbins_)];
+    if (bin == bin->next_) {
+      head = NULL;
+    } else {
+      bin->prev_->next_ = bin->next_;
+      bin->next_->prev_ = bin->prev_;
+      if (head == bin) {
+        head = head->next_;
+      }
+    }
+  }
+private:
+  int64_t full_size_;
+  int64_t bin_size_;
+  int64_t max_nbins_;
+  int max_ind_;
+  ISegMgr *seg_mgr_;
+  FixedAllocer<sizeof(Bin)> bin_allocer_;
+  // [1,2), [2,4), [4,8) ...
+  Bin *freelists_[64];
+};
+
+extern int64_t global_addr;
+class VMMgr
+{
+public:
+  VMMgr()
+    : buddy_mgr_(4L<<30, 2L<<20)
+  {
+    pthread_mutex_init(&mutex_, NULL);
+    buddy_mgr_.set_seg_mgr(&seg_mgr_);
+  }
+  class SegMgr : public ISegMgr
+  {
+  public:
+    virtual void* alloc_seg(int64_t size) override
+    {
+      void *ptr = (void*)ATOMIC_FAA(&global_addr, size);
+      if (!sanity_addr_in_range(ptr, size)) {
+        ATOMIC_FAA(&global_addr, -size);
+        LOG_WARN_RET(OB_ERR_SYS, "sanity address exhausted", KP(ptr));
+        ptr = NULL;
+      }
+      return ptr;
+    }
+    virtual void free_seg(void *ptr) override
+    {
+    }
+  };
+  void *alloc_addr(int64_t size, int64_t &addr)
+  {
+    pthread_mutex_lock(&mutex_);
+    DEFER(pthread_mutex_unlock(&mutex_));
+    BuddyMgr::Bin *bin = buddy_mgr_.alloc(size);
+    if (bin) {
+      addr = (int64_t)bin->seg_ + bin->offset_ * buddy_mgr_.get_bin_size();
+    }
+    return (void*)bin;
+  }
+  void free_addr(void *bin)
+  {
+    pthread_mutex_lock(&mutex_);
+    DEFER(pthread_mutex_unlock(&mutex_));
+    buddy_mgr_.free((BuddyMgr::Bin*)bin);
+  }
+private:
+  pthread_mutex_t mutex_;
+  SegMgr seg_mgr_;
+  BuddyMgr buddy_mgr_;
+};
+
+int64_t global_addr = 0;
+VMMgr vm_mgr;
 
 bool init_sanity()
 {
@@ -113,20 +404,24 @@ bool init_sanity()
       min = mins[i];
     }
   }
+  void *ptr = (void*)min;
+  void *shadow_ptr = sanity_to_shadow(ptr);
+  size_t size = max - min;
+  size_t shadow_size = sanity_to_shadow_size(size);
   if (0 == min) {
     LOG_WARN_RET(OB_ERR_SYS, "search region failed");
-  } else if (MAP_FAILED == mmap((void*)min, max - min,
+  } else if (MAP_FAILED == mmap(ptr, size,
                                 PROT_NONE,
                                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
     LOG_WARN_RET(OB_ERR_SYS, "reserve region failed", K(errno));
-  } else if (MAP_FAILED == mmap(sanity_to_shadow((void*)min), sanity_to_shadow_size(max - min),
+  } else if (MAP_FAILED == mmap(shadow_ptr, shadow_size,
                                 PROT_READ | PROT_WRITE,
                                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
     LOG_WARN_RET(OB_ERR_SYS, "reserve shadow region failed", K(errno));
-  } else if (-1 == madvise((void*)min, max - min, MADV_DONTDUMP)) {
-    LOG_WARN_RET(OB_ERR_SYS, "suggest region nodump failed", K(errno));
-  } else if (-1 == madvise(sanity_to_shadow((void*)min), sanity_to_shadow_size(max - min), MADV_DONTDUMP)) {
-    LOG_WARN_RET(OB_ERR_SYS, "suggest shadow region nodump failed", K(errno));
+  } else if (-1 == do_madvise(ptr, size, MADV_DONTDUMP)) {
+    LOG_WARN_RET(OB_ERR_SYS, "madvise failed", K(errno));
+  } else if (-1 == do_madvise(shadow_ptr, shadow_size, MADV_DONTDUMP)) {
+    LOG_WARN_RET(OB_ERR_SYS, "madvise shadow failed", K(errno));
   } else {
     sanity_max_addr = max;
     sanity_min_addr = min;
@@ -134,6 +429,57 @@ bool init_sanity()
     succ = true;
   }
   return succ;
+}
+
+void *sanity_mmap(size_t size)
+{
+  if (0 == global_addr) return NULL;
+  void *ret = NULL;
+  int64_t addr;
+  void *ref = vm_mgr.alloc_addr(size, addr);
+  if (!ref) {
+  } else {
+    void *ptr = (void*)addr;
+    void *shadow_ptr = sanity_to_shadow(ptr);
+    size_t shadow_size = sanity_to_shadow_size(size);
+    if (MAP_FAILED == mmap(ptr, size,
+        PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)) {
+      LOG_WARN_RET(OB_ERR_SYS, "mmap failed", K(errno));
+    } else if (MAP_FAILED == mmap(shadow_ptr, shadow_size,
+        PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)) {
+      LOG_WARN_RET(OB_ERR_SYS, "mmap shadow failed", K(errno));
+    } else {
+      *(void**)ptr = ref;
+      ret = ptr;
+    }
+  }
+  return ret;
+}
+
+void sanity_munmap(void *ptr, size_t size)
+{
+  void *ref = *(void**)ptr;
+  void *shadow_ptr = sanity_to_shadow((void*)ptr);
+  size_t shadow_size = sanity_to_shadow_size(size);
+  if (MAP_FAILED == mmap(ptr, size,
+      PROT_NONE,
+      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
+    LOG_WARN_RET(OB_ERR_SYS, "mmap failed", K(errno));
+  }
+  if (MAP_FAILED == mmap(shadow_ptr, shadow_size,
+      PROT_NONE,
+      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
+    LOG_WARN_RET(OB_ERR_SYS, "mmap shadow failed", K(errno));
+  }
+  if (-1 == do_madvise(ptr, size, MADV_DONTDUMP)) {
+    LOG_WARN_RET(OB_ERR_SYS, "madvise failed", K(errno));
+  }
+  if (-1 == do_madvise(shadow_ptr, shadow_size, MADV_DONTDUMP)) {
+    LOG_WARN_RET(OB_ERR_SYS, "madvise shadow failed", K(errno));
+  }
+  vm_mgr.free_addr(ref);
 }
 
 struct t_vip {

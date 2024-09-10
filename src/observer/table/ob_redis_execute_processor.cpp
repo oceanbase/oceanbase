@@ -21,6 +21,7 @@ using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
 
+void __attribute__((weak)) request_finish_callback();
 ObRedisExecuteP::ObRedisExecuteP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
       allocator_("TbRedExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
@@ -197,6 +198,8 @@ int ObRedisExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
   if (!need_retry_in_queue_ && !had_do_response()) {
+    // clear thread local variables used to wait in queue
+    request_finish_callback();
     // return the package
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket &>(req_->get_packet());
     if (ObTableRpcProcessorUtil::need_do_move_response(retcode, *rpc_pkt)) {

@@ -167,6 +167,9 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
 void AChunkMgr::low_free(const void *ptr, const uint64_t size)
 {
   set_ob_mem_mgr_path();
+  AChunk *chunk = (AChunk*)ptr;
+  void *ref = chunk->ref_;
+  *(void**)ptr = ref;
   if (SANITY_ADDR_IN_RANGE(ptr, size)) {
     SANITY_MUNMAP((void*)ptr, size);
   } else {
@@ -222,8 +225,10 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
     if (updated) {
       bool hugetlb_used = false;
       void *ptr = direct_alloc(all_size, true, hugetlb_used, SANITY_BOOL_EXPR(true));
+      void *ref = *(void**)ptr;
       if (ptr != nullptr) {
         chunk = new (ptr) AChunk();
+        chunk->ref_ = ref;
         chunk->is_hugetlb_ = hugetlb_used;
       } else {
         IGNORE_RETURN update_hold(-hold_size, false);

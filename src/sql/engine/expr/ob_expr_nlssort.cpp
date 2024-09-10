@@ -139,7 +139,7 @@ int ObExprNLSSort::eval_nlssort_inner(const ObExpr &expr,
   } else {
     LOG_DEBUG("check coll type", K(coll_type), K(arg0_coll_type), K(expr),
         K(arg0_obj_type), K(out.length()));
-    size_t buf_len = cs->coll->strnxfrmlen(cs, out.length());
+    size_t buf_len = cs->coll->strnxfrmlen(cs, cs->mbmaxlen*out.length());
     char *buf = NULL;
     size_t result_len = 0;
     if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {

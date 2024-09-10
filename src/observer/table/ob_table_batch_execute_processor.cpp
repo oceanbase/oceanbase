@@ -29,6 +29,7 @@ using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
 
+void __attribute__((weak)) request_finish_callback();
 ObTableBatchExecuteP::ObTableBatchExecuteP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
       default_entity_factory_("TableBatchEntFac", MTL_ID()),
@@ -133,6 +134,8 @@ int ObTableBatchExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
   if (!need_retry_in_queue_ && !had_do_response()) {
+    // clear thread local variables used to wait in queue
+    request_finish_callback();
     // For HKV table, modify the value of timetamp to be positive
     if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
       const int64_t N = result_.count();
