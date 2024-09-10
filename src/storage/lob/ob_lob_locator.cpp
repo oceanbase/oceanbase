@@ -20,6 +20,8 @@
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_lob_access_utils.h"
 #include "observer/ob_server.h"
+#include "storage/tx_storage/ob_ls_service.h"
+
 
 namespace oceanbase
 {
@@ -40,7 +42,8 @@ ObLobLocatorHelper::ObLobLocatorHelper()
     rowkey_str_(),
     enable_locator_v2_(),
     is_inited_(false),
-    scan_flag_()
+    scan_flag_(),
+    is_access_index_(false)
 {
 }
 
@@ -62,6 +65,7 @@ void ObLobLocatorHelper::reset()
   enable_locator_v2_ = false;
   is_inited_ = false;
   scan_flag_.reset();
+  is_access_index_ = false;
 }
 
 int ObLobLocatorHelper::init(const ObTableScanParam &scan_param,
@@ -100,6 +104,7 @@ int ObLobLocatorHelper::init(const ObTableScanParam &scan_param,
       read_snapshot_ = ctx.mvcc_acc_ctx_.snapshot_;
       enable_locator_v2_ = table_param.enable_lob_locator_v2();
       scan_flag_ = scan_param.scan_flag_;
+      is_access_index_ = table_param.is_vec_index();
       if (snapshot_version != read_snapshot_.version_.get_val_for_tx()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "snapshot version mismatch",
@@ -137,6 +142,7 @@ int ObLobLocatorHelper::init(const uint64_t table_id,
     enable_locator_v2_ = true; // must be called en locator v2 enabled
     OB_ASSERT(ob_enable_lob_locator_v2() == true);
     is_inited_ = true;
+    is_access_index_ = false;
     // OB_ASSERT(snapshot_version == ctx.mvcc_acc_ctx_.snapshot_.version_);
     // snapshot_version mismatch in test_multi_version_sstable_single_get
   }
@@ -576,8 +582,26 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
         if (retry_info.read_latest_) {
           tx_info.snapshot_seq_ = ObSequence::get_max_seq_no();
         }
-        ObMemLobLocationInfo location_info(tablet_id_, ls_id_, cs_type);
-        if (has_extern && OB_FAIL(locator.set_table_info(table_id_, column_id))) { // should be column idx
+        // if scan with index, get data tablet id
+        common::ObTabletID target_tablet_id(tablet_id_);
+        if (is_access_index_) {
+          share::ObLSID tmp_ls_id(ls_id_);
+          ObLSHandle ls_handle;
+          ObTabletHandle tablet_handle;
+          if (OB_FAIL(MTL(ObLSService *)->get_ls(tmp_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+            LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+          } else if (OB_ISNULL(ls_handle.get_ls())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("ls should not be null", K(ret));
+          } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(target_tablet_id, tablet_handle))) {
+            LOG_WARN("fail to get tablet handle", K(ret), K(target_tablet_id));
+          } else {
+            target_tablet_id = tablet_handle.get_obj()->get_data_tablet_id();
+          }
+        }
+        ObMemLobLocationInfo location_info(target_tablet_id.id(), ls_id_, cs_type);
+        if (OB_FAIL(ret)) {
+        } else if (has_extern && OB_FAIL(locator.set_table_info(table_id_, column_id))) { // should be column idx
           STORAGE_LOG(WARN, "Lob: set table info failed", K(ret), K(table_id_), K(column_id));
         } else if (extern_flags.has_tx_info_ && OB_FAIL(locator.set_tx_info(tx_info))) {
           STORAGE_LOG(WARN, "Lob: set transaction info failed", K(ret), K(tx_info));

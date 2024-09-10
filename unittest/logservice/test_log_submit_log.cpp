@@ -152,7 +152,7 @@ void TestLogSubmitLog::SetUp()
   const int64_t tenant_id = 1;
   ASSERT_EQ(OB_SUCCESS, TMA_MGR_INSTANCE.init());
   ObILogAllocator *tenant_allocator = NULL;
-  EXPECT_EQ(OB_SUCCESS, OB_FILE_SYSTEM_ROUTER.get_instance().init("dummy", "dummy", 1, "dummy", self));
+  EXPECT_EQ(OB_SUCCESS, OB_FILE_SYSTEM_ROUTER.get_instance().init("dummy"));
   EXPECT_EQ(OB_SUCCESS, ObTenantMutilAllocatorMgr::get_instance().get_tenant_log_allocator(tenant_id, tenant_allocator));
 
   ASSERT_EQ(OB_SUCCESS, palf_env_impl_.init(&role_change_cb_, executor,

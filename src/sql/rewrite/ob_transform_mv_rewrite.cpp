@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include <algorithm>
 #include "sql/rewrite/ob_transform_mv_rewrite.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
@@ -19,7 +18,6 @@
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_wrap_enum_set.h"
-#include "sql/privilege_check/ob_privilege_check.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "share/schema/ob_table_schema.h"
 
@@ -57,20 +55,11 @@ int ObTransformMVRewrite::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
         LOG_WARN("failed to check mv match hint", K(ret));
       } else if (!is_match_hint) {
         // do nothing
-      } else if (NULL == mv_info.view_stmt_) {
-        if (++ctx_->mv_stmt_gen_count_ > MAX_MV_STMT_GEN) {
-          OPT_TRACE("reach the mv stmt generate count limit!");
-        } else if (OB_FAIL(ObTransformMVRewritePrepare::generate_mv_stmt(mv_info, ctx_, &mv_temp_query_ctx_))) {
-          LOG_WARN("failed to generate mv stmt", K(ret), K(mv_info));
-        } else if (OB_FAIL(mv_privilege_check(mv_info, mv_info.has_select_priv_))) {
-          LOG_WARN("failed to check mv privilege", K(ret));
-        } else if (!mv_info.has_select_priv_) {
-          OPT_TRACE("SELECT command is denied to current user for", mv_info.mv_schema_->get_table_name());
-        }
-      }
-
-      if (OB_FAIL(ret) || !mv_info.has_select_priv_) {
-        // do nothing
+      } else if (NULL == mv_info.view_stmt_ && ++ctx_->mv_stmt_gen_count_ > MAX_MV_STMT_GEN) {
+        OPT_TRACE("reach the mv stmt generate count limit!");
+      } else if (NULL == mv_info.view_stmt_
+                 && OB_FAIL(ObTransformMVRewritePrepare::generate_mv_stmt(mv_info, ctx_, &mv_temp_query_ctx_))) {
+        LOG_WARN("failed to generate mv stmt", K(ret), K(mv_info));
       } else if (OB_FAIL(try_transform_with_one_mv(ori_stmt, mv_info, new_stmt, is_happened))) {
         LOG_WARN("failed to try one mv", K(ret));
       } else if (is_happened) {
@@ -456,8 +445,6 @@ int ObTransformMVRewrite::try_transform_with_one_mv(ObSelectStmt *origin_stmt,
     LOG_WARN("failed to try transform contain mode", K(ret));
   } else if (!transform_happened) {
     // do nothing
-  } else if (OB_FAIL(push_back_stmt_privilege(mv_info))) {
-    LOG_WARN("failed to push back stmt privilege", K(ret));
   } else if (OB_FAIL(add_transform_hint(*new_stmt, &mv_info))) {
     LOG_WARN("failed to add transform hint", K(ret));
   } else {
@@ -3117,61 +3104,6 @@ int ObTransformMVRewrite::add_param_constraint(MvRewriteHelper &helper)
     LOG_WARN("failed to add const param constraint", K(ret));
   } else if (OB_FAIL(append_array_no_dup(ctx_->expr_constraints_, helper.expr_cons_info_))) {
     LOG_WARN("failed to add expr param constraint", K(ret));
-  }
-  return ret;
-}
-
-int ObTransformMVRewrite::mv_privilege_check(MvInfo &mv_info,
-                                             bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  is_valid = false;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->exec_ctx_)
-      || OB_ISNULL(ctx_->exec_ctx_->get_sql_ctx()) || OB_ISNULL(mv_info.select_mv_stmt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx_), K(mv_info.select_mv_stmt_));
-  } else {
-    int tmp_ret;
-    mv_info.mv_need_privs_.need_privs_.set_allocator(ctx_->allocator_);
-    mv_info.mv_ora_need_privs_.need_privs_.set_allocator(ctx_->allocator_);
-    tmp_ret = ObPrivilegeCheck::check_privilege_new(*ctx_->exec_ctx_->get_sql_ctx(),
-                                                    mv_info.select_mv_stmt_,
-                                                    mv_info.mv_need_privs_,
-                                                    mv_info.mv_ora_need_privs_);
-    if (OB_SUCCESS == tmp_ret) {
-      is_valid = true;
-    } else if (OB_UNLIKELY(OB_ERR_NO_TABLE_PRIVILEGE != tmp_ret
-                           && OB_TABLE_NOT_EXIST != tmp_ret)) {
-      ret = tmp_ret;
-      LOG_WARN("failed to check mv privilege", K(ret));
-    }
-  }
-
-  return ret;
-}
-
-int ObTransformMVRewrite::push_back_stmt_privilege(MvInfo &mv_info) {
-  int ret = OB_SUCCESS;
-  ObSEArray<ObNeedPriv, 4> tmp_need_privs;
-  ObSEArray<ObOraNeedPriv, 4> tmp_ora_need_privs;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_need_privs_)
-      || OB_ISNULL(ctx_->stmt_ora_need_privs_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx_));
-  } else if (OB_FAIL(append(tmp_need_privs, ctx_->stmt_need_privs_->need_privs_))) {
-    LOG_WARN("failed to append stmt need privs", K(ret));
-  } else if (OB_FAIL(append(tmp_need_privs, mv_info.mv_need_privs_.need_privs_))) {
-    LOG_WARN("failed to append mv need privs", K(ret));
-  } else if (OB_FAIL(append(tmp_ora_need_privs, ctx_->stmt_ora_need_privs_->need_privs_))) {
-    LOG_WARN("failed to append stmt ora need privs", K(ret));
-  } else if (OB_FAIL(append(tmp_ora_need_privs, mv_info.mv_ora_need_privs_.need_privs_))) {
-    LOG_WARN("failed to append mv ora need privs", K(ret));
-  } else if (OB_FALSE_IT(ctx_->stmt_need_privs_->need_privs_.reset())) {
-  } else if (OB_FAIL(ctx_->stmt_need_privs_->need_privs_.assign(tmp_need_privs))) {
-    LOG_WARN("failed to assign stmt need privs", K(ret));
-  } else if (OB_FALSE_IT(ctx_->stmt_ora_need_privs_->need_privs_.reset())) {
-  } else if (OB_FAIL(ctx_->stmt_ora_need_privs_->need_privs_.assign(tmp_ora_need_privs))) {
-    LOG_WARN("failed to assign stmt ora need privs", K(ret));
   }
   return ret;
 }

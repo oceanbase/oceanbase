@@ -14,6 +14,7 @@
 #define _OB_RAW_EXPR_DEDUCE_TYPE_H 1
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "lib/container/ob_iarray.h"
+#include "lib/udt/ob_collection_type.h"
 #include "common/ob_accuracy.h"
 #include "share/ob_i_sql_expression.h"
 namespace oceanbase
@@ -84,6 +85,10 @@ private:
   int push_back_types(const ObRawExpr *param_expr, ObExprResTypes &types);
   int calc_result_type(ObNonTerminalRawExpr &expr, ObIExprResTypes &types,
                        common::ObCastMode &cast_mode, int32_t row_dimension);
+  template<typename RawExprType>
+  int construct_collecton_attr_expr(RawExprType &expr);
+  template<typename RawExprType>
+  int add_attr_exprs(const ObCollectionTypeBase *coll_meta, RawExprType &expr);
   int calc_result_type_with_const_arg(
     ObNonTerminalRawExpr &expr,
     ObIExprResTypes &types,

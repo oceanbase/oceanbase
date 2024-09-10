@@ -425,7 +425,10 @@ public:
 
   OB_INLINE void set_collation_level(ObCollationLevel cs_level) { cs_level_ = cs_level; }
   OB_INLINE void set_collation_type(ObCollationType cs_type) { cs_type_ = cs_type; }
-  OB_INLINE ObCollationType get_collation_type() { return static_cast<ObCollationType>(cs_type_); }
+  OB_INLINE ObCollationType get_collation_type() {
+    // ObUserDefinedSQLType reused cs_type as part of sub schema id, therefore always return CS_TYPE_BINARY
+    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY : static_cast<ObCollationType>(cs_type_);
+  }
   OB_INLINE void set_default_collation_type() { set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); }
   OB_INLINE ObCollationLevel get_collation_level() const { return static_cast<ObCollationLevel>(cs_level_); }
   OB_INLINE ObCollationType get_collation_type() const {
@@ -551,6 +554,9 @@ struct ObLobDataOutRowCtx
     ERASE,
     EMPTY_SQL, // lob col not change in full sql update, out row ctx is empty
     DIFF,
+    EXT_INFO_LOG,
+    VALID_OLD_VALUE_EXT_INFO_LOG,
+    VALID_OLD_VALUE,
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
@@ -572,7 +578,12 @@ struct ObLobDataOutRowCtx
   // and this field is added later when bug is found, and may be a random value
   uint32_t reserved_;
 
+  bool is_empty_sql() const { return OpType::EMPTY_SQL == op_; }
   bool is_diff() const { return OpType::DIFF == op_; }
+  bool is_ext_info_log() const { return OpType::EXT_INFO_LOG == op_; }
+  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
+  bool is_valid_old_value() const { return OpType::VALID_OLD_VALUE == op_; }
+
   int64_t get_real_chunk_size() const;
 };
 

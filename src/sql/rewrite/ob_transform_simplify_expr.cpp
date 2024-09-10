@@ -1233,6 +1233,11 @@ int ObTransformSimplifyExpr::inner_remove_dummy_case_when(ObQueryCtx* query_ctx,
       ObRawExpr *child_then = child_case_expr->get_then_param_expr(0);
       if (OB_FAIL(case_expr->replace_then_param_expr(i, child_then))) {
         LOG_WARN("failed to replace then param expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                        then,
+                                                                        case_expr->get_then_param_expr(i),
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to add cast for replace if need", K(ret));
       } else if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
         LOG_WARN("append equal param info failed", K(ret));
       } else {

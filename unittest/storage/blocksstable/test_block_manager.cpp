@@ -42,45 +42,17 @@ public:
   TestBlockManager();
   virtual ~TestBlockManager() = default;
   virtual void SetUp() override;
-  virtual void TearDown() override;
-private:
-  int init_multi_tenant();
-private:
-  common::ObAddr addr_;
-  omt::ObMultiTenant multi_tenant_;
 };
 
 TestBlockManager::TestBlockManager()
-  : TestDataFilePrepare(&getter, "TestBlockManager", OB_DEFAULT_MACRO_BLOCK_SIZE, 200),
-    addr_(ObAddr::IPV4, "127.0.0.1", 2222),
-    multi_tenant_()
+  : TestDataFilePrepare(&getter, "TestBlockManager", OB_DEFAULT_MACRO_BLOCK_SIZE, 200)
 {
-}
-
-int TestBlockManager::init_multi_tenant()
-{
-  int ret = OB_SUCCESS;
-  GCONF.cpu_count = 6;
-  if (OB_SUCCESS != (ret = multi_tenant_.init(addr_))) {
-    STORAGE_LOG(WARN, "init multi_tenant failed", K(ret));
-  } else {
-    multi_tenant_.start();
-    GCTX.omt_ = &multi_tenant_;
-  }
-  return ret;
 }
 
 void TestBlockManager::SetUp()
 {
   TestDataFilePrepare::SetUp();
-  ASSERT_EQ(OB_SUCCESS, init_multi_tenant());
   OB_SERVER_BLOCK_MGR.block_map_.reset();
-}
-
-void TestBlockManager::TearDown()
-{
-  multi_tenant_.destroy();
-  TestDataFilePrepare::TearDown();
 }
 
 TEST_F(TestBlockManager, test_inc_and_dec_ref_cnt)
@@ -140,13 +112,14 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   }
 
   ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
+
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
-  tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+  tf_mgr->get_sn_file_manager().page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
   ObTenantEnv::set_tenant(&tenant_ctx);
@@ -189,8 +162,14 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(blk_cnt - 1, mark_info.count());
 
-  ret = OB_SERVER_BLOCK_MGR.mark_tmp_file_blocks(mark_info, macro_id_set, tmp_status);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  // ret = OB_SERVER_BLOCK_MGR.mark_tmp_file_blocks(mark_info, macro_id_set, tmp_status);
+
+  ObArray<MacroBlockId> macro_block_list;
+  tf_mgr->get_sn_file_manager().get_macro_block_list(macro_block_list);
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.update_mark_info(macro_block_list, macro_id_set, mark_info));
+  tmp_status.tmp_file_count_ += macro_block_list.count();
+  tmp_status.hold_count_ -= macro_block_list.count();
+
   ASSERT_EQ(blk_cnt - 1, mark_info.count());
 
   OB_SERVER_BLOCK_MGR.mark_and_sweep();
@@ -266,19 +245,19 @@ TEST_F(TestBlockManager, test_resize_file_1)
   struct statvfs svfs;
   statvfs(util_.storage_env_.sstable_dir_, &svfs);
   int64_t free_space = svfs.f_bavail * svfs.f_bsize;
-  int used_space = OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int used_space = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
 
   double percentage = used_space * 1.0 / (used_space + free_space) + 1;
-  int ret = OB_SERVER_BLOCK_MGR.resize_file(0, percentage, 0);
+  int ret = OB_STORAGE_OBJECT_MGR.resize_local_device(0, percentage, 0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   int64_t free_blk_cnt_1 = OB_SERVER_BLOCK_MGR.io_device_->get_free_block_count();
-  ret = OB_SERVER_BLOCK_MGR.resize_file(used_space + free_space / 2, 99,  0);
+  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space + free_space / 2, 99,  0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   int64_t free_blk_cnt_2 = OB_SERVER_BLOCK_MGR.io_device_->get_free_block_count();
   ASSERT_TRUE(free_space > 0 ? free_blk_cnt_1 < free_blk_cnt_2 : free_blk_cnt_1 == free_blk_cnt_2);
 
-  ret = OB_SERVER_BLOCK_MGR.resize_file(used_space, 99, 0);
+  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space, 99, 0);
   ASSERT_EQ(common::OB_NOT_SUPPORTED, ret);
   int64_t free_blk_cnt_3 = OB_SERVER_BLOCK_MGR.io_device_->get_free_block_count();
   ASSERT_TRUE(free_blk_cnt_2 == free_blk_cnt_3);
@@ -289,14 +268,13 @@ TEST_F(TestBlockManager, test_resize_file_2)
   struct statvfs svfs;
   statvfs(util_.storage_env_.sstable_dir_, &svfs);
   int64_t free_space = svfs.f_bavail * svfs.f_bsize;
-  int used_space = OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
-
-  int ret = OB_SERVER_BLOCK_MGR.resize_file(used_space + 2 * free_space, 99, 0);
+  int used_space = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size();
+  int ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space + 2 * free_space, 99, 0);
   ASSERT_EQ(common::OB_SERVER_OUTOF_DISK_SPACE, ret);
 
   int64_t delta_space = free_space - 100 * 1024 * 1024 * 1024L;
   int64_t min_space = 0;
-  ret = OB_SERVER_BLOCK_MGR.resize_file(used_space + std::max(delta_space, min_space), 99, 0);
+  ret = OB_STORAGE_OBJECT_MGR.resize_local_device(used_space + std::max(delta_space, min_space), 99, 0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 }
 
@@ -312,7 +290,7 @@ private:
   const int GENERATE_SEQ_NUMBERS_PER_THREAD = 10000;
 
   int64_t thread_cnt_;
-  ObMacroBlockSeqGenerator macro_seq_generator;
+  ObMacroBlockRewriteSeqGenerator macro_seq_generator;
   hash::ObHashMap<uint32_t, bool, hash::SpinReadWriteDefendMode> blk_seqs_;
   bool is_inited_ = false;
 };
@@ -357,7 +335,7 @@ TEST_F(TestBlockManager, macor_block_seq)
   uint32_t restart_seq = 0;
   uint64_t blk_seq = 0;
 
-  ObMacroBlockSeqGenerator macro_seq_generator;
+  ObMacroBlockRewriteSeqGenerator macro_seq_generator;
 
   restart_seq = macro_seq_generator.rewrite_seq_;
   ASSERT_EQ(0, restart_seq);

@@ -83,6 +83,8 @@ protected:
   virtual int get_ls_and_tablet() override;
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int prepare_schema() override;
+  virtual int cal_merge_param() override;
+
 private:
   bool is_inited_;
   storage::ObTableHandleV2 backfill_table_handle_;
@@ -168,6 +170,7 @@ private:
       const share::SCN &max_major_end_scn,
       ObTablet *tablet,
       common::ObIArray<ObTableHandleV2> &non_backfill_sstable);
+
   int add_sstable_into_handles_(
       ObTableStoreIterator &sstable_iter,
       ObTablesHandleArray &sstable_handles);

@@ -16,6 +16,7 @@
 
 #include "lib/oblog/ob_log_module.h"        // *_LOG
 #include "share/config/ob_server_config.h"  // GCONF
+#include "observer/ob_server_struct.h"      // GCTX
 
 namespace oceanbase
 {
@@ -142,10 +143,15 @@ int ObUnitConfig::gen_virtual_tenant_unit_config(
     const int64_t mem_limit)
 {
   int ret = OB_SUCCESS;
-  const int64_t log_disk_size = ObUnitResource::UNIT_MIN_LOG_DISK_SIZE;
+  // virtual tenant has no log_disk or data_disk
+  const int64_t log_disk_size = GCTX.is_shared_storage_mode() ? ObUnitResource::UNIT_MIN_LOG_DISK_SIZE_SS
+                                : ObUnitResource::UNIT_MIN_LOG_DISK_SIZE_SN;
+  const int64_t data_disk_size = 0;
   const int64_t min_iops = 10000;
   const int64_t max_iops = 50000;
   const int64_t iops_weight = 0;
+  const int64_t max_net_bandwidth = ObUnitResource::DEFAULT_NET_BANDWIDTH;  // INT64_MAX
+  const int64_t net_bandwidth_weight = ObUnitResource::get_default_net_bandwidth_weight(min_cpu);
   const char *name = VIRTUAL_TENANT_UNIT_CONFIG_NAME;
   const uint64_t unit_config_id = VIRTUAL_TENANT_UNIT_CONFIG_ID;
 
@@ -154,9 +160,12 @@ int ObUnitConfig::gen_virtual_tenant_unit_config(
       min_cpu,
       mem_limit,
       log_disk_size,
+      data_disk_size,
       max_iops,
       min_iops,
-      iops_weight);
+      iops_weight,
+      max_net_bandwidth,
+      net_bandwidth_weight);
 
   if (OB_FAIL(init(unit_config_id, name, ur))) {
     LOG_WARN("init unit config for virtual tenant fail", KR(ret), K(min_cpu), K(max_cpu),

@@ -18,7 +18,10 @@
 #include "rpc/obmysql/ob_i_cs_mem_pool.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/packet/ompk_local_infile.h"
+#include "share/io/ob_io_manager.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "lib/compress/zstd_1_3_8/ob_zstd_wrapper.h"
+#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -264,7 +267,7 @@ int ObRandomOSSReader::open(const share::ObBackupStorageInfo &storage_info, cons
     ret = OB_INIT_TWICE;
     LOG_WARN("ObRandomOSSReader init twice", KR(ret), KP(this));
   } else if (OB_FAIL(
-        util.get_and_init_device(device_handle_, &storage_info, filename))) {
+        util.get_and_init_device(device_handle_, &storage_info, filename, ObStorageIdMod(table::OB_STORAGE_ID_DDL, ObStorageUsedMod::STORAGE_USED_DDL)))) {
     LOG_WARN("fail to get device manager", KR(ret), K(filename));
   } else if (OB_FAIL(util.set_access_type(&iod_opts, false, 1))) {
     LOG_WARN("fail to set access type", KR(ret));
@@ -281,15 +284,24 @@ int ObRandomOSSReader::open(const share::ObBackupStorageInfo &storage_info, cons
 int ObRandomOSSReader::read(char *buf, int64_t count, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
+  ObBackupIoAdapter io_adapter;
+  ObIOHandle io_handle;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRandomOSSReader not init", KR(ret), KP(this));
-  } else if (OB_FAIL(device_handle_->pread(fd_, offset_, count, buf, read_size))) {
-    LOG_WARN("fail to pread oss buf", KR(ret), K_(offset), K(count), K(read_size));
-  } else if (0 == read_size) {
-    eof_ = true;
-  } else {
-    offset_ += read_size;
+  } else if (OB_FAIL(io_adapter.async_pread(*device_handle_, fd_, buf, offset_, count, io_handle))) {
+    LOG_WARN("fail to async read oss buf", KR(ret), K_(offset), K(count), K(read_size));
+  } else if (OB_FAIL(io_handle.wait())) {
+    LOG_WARN("fail to wait", KR(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    read_size = io_handle.get_data_size();
+    if (0 == read_size) {
+      eof_ = true;
+    } else {
+      offset_ += read_size;
+    }
   }
   return ret;
 }

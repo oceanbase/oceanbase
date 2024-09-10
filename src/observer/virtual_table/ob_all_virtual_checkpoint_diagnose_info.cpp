@@ -21,7 +21,6 @@ using namespace share;
 using namespace storage;
 using namespace common;
 using namespace omt;
-using namespace checkpoint;
 namespace observer
 {
 
@@ -33,7 +32,7 @@ bool ObAllVirtualCheckpointDiagnoseInfo::is_need_process(uint64_t tenant_id)
   return false;
 }
 
-int GenerateTraceRow::operator()(const ObTraceInfo &trace_info) const
+int GenerateTraceRow::operator()(const storage::checkpoint::ObTraceInfo &trace_info) const
 {
   int ret = OB_SUCCESS;
   char ip_buf[common::OB_IP_STR_BUFF];
@@ -102,7 +101,7 @@ int ObAllVirtualCheckpointDiagnoseInfo::process_curr_tenant(common::ObNewRow *&r
   int ret = OB_SUCCESS;
   if (!start_to_read_) {
     SERVER_LOG(INFO, "__all_virtual_checkpoint_diagnose_info start");
-    if(OB_FAIL(MTL(ObCheckpointDiagnoseMgr*)->read_trace_info(GenerateTraceRow(*this)))) {
+    if(OB_FAIL(MTL(storage::checkpoint::ObCheckpointDiagnoseMgr*)->read_trace_info(GenerateTraceRow(*this)))) {
       SERVER_LOG(WARN, "failed to read trace info", K(ret), K(cur_row_));
 
     } else {

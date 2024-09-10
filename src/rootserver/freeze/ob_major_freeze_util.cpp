@@ -127,7 +127,6 @@ const char *major_freeze_reason_to_str(const int64_t freeze_reason)
   }
   return str;
 }
-
 bool is_valid_major_freeze_reason(const ObMajorFreezeReason &freeze_reason)
 {
   return freeze_reason >= ObMajorFreezeReason::MF_DAILY_MERGE

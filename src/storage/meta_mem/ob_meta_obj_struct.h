@@ -56,6 +56,7 @@ public:
   OB_INLINE bool is_file() const { return FILE == type_; }
   OB_INLINE bool is_memory() const { return MEM == type_; }
   OB_INLINE bool is_none() const { return NONE == type_; }
+  OB_INLINE int64_t fifth_id() const { return fifth_id_; }
   OB_INLINE void set_none_addr() { type_ = NONE; }
   OB_INLINE void set_seq(const uint64_t seq) { seq_ = seq; }
   OB_INLINE void set_size(const uint64_t size) { size_ = size; }
@@ -66,8 +67,12 @@ public:
   OB_INLINE uint64_t seq() const { return seq_; }
   OB_INLINE DiskType type() const { return static_cast<DiskType>(type_); }
   OB_INLINE void inc_seq() { seq_++; }
-  OB_INLINE blocksstable::MacroBlockId block_id() const {
-      return blocksstable::MacroBlockId(first_id_, second_id_, third_id_);}
+  OB_INLINE blocksstable::MacroBlockId block_id() const
+  {
+    blocksstable::MacroBlockId id(first_id_, second_id_, third_id_, fifth_id_);
+    id.set_version_v2();
+    return id;
+  }
 
   int get_block_addr(
       blocksstable::MacroBlockId &macro_id,
@@ -92,6 +97,9 @@ public:
   int set_mem_addr(
       const int64_t offset,
       const int64_t size);
+
+  // just for compatibility, the old version ObMetaDiskAddr is serialized directly by memcpy in some scenarios
+  int memcpy_deserialize(const char* buf, const int64_t data_len, int64_t& pos);
 
   OB_UNIS_VERSION(1);
 private:
@@ -120,8 +128,11 @@ private:
       uint64_t type_   : FOURTH_ID_BIT_TYPE;
     };
   };
+  union {
+    int64_t fifth_id_;  // for the fourth_id_ of MacroBlockId
+  };
   union { // doesn't serialize
-    int64_t fifth_id_;
+    int64_t sixth_id_;
     uint64_t seq_;
   };
 };

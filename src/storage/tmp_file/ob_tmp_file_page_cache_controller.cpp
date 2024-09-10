@@ -19,7 +19,7 @@ namespace oceanbase
 namespace tmp_file
 {
 
-int ObTmpFilePageCacheController::init(ObTenantTmpFileManager &file_mgr)
+int ObTmpFilePageCacheController::init(ObSNTenantTmpFileManager &file_mgr)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -147,11 +147,15 @@ int ObTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_size,
   }
 
   if (OB_NOT_NULL(swap_job)) {
+    if (OB_SUCCESS != swap_job->get_ret_code()) {
+      ret = swap_job->get_ret_code();
+    }
     // reset swap job to set is_finished to false in case of failure to push into queue:
     // otherwise job is not finished, but it will not be executed, so it will never become finished.
     swap_job->reset();
-    if (OB_FAIL(free_swap_job_(swap_job))) {
-      STORAGE_LOG(ERROR, "fail to free swap job", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(free_swap_job_(swap_job))) {
+      STORAGE_LOG(ERROR, "fail to free swap job", KR(ret), KR(tmp_ret));
     }
   }
   return ret;

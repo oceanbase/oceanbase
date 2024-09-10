@@ -80,10 +80,11 @@ TEST(TestLogMeta, test_log_meta) { int64_t proposal_id = INVALID_PROPOSAL_ID; pr
   EXPECT_TRUE(log_config_meta1.is_valid());
 
   // Snapshot meta
+  LogInfo log_info; log_info.generate_by_default();
   LogSnapshotMeta log_snapshot_meta1;
   LSN lsn; lsn.val_ = 1;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_snapshot_meta1.generate(LSN()));
-  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_snapshot_meta1.generate(LSN(), log_info, LSN()));
+  EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn, log_info, lsn));
   EXPECT_TRUE(log_snapshot_meta1.is_valid());
 
   // replica property meta
@@ -197,5 +198,6 @@ int main(int argc, char **argv)
   PALF_LOG(INFO, "begin unittest::test_log_meta");
   ::testing::InitGoogleTest(&argc, argv);
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

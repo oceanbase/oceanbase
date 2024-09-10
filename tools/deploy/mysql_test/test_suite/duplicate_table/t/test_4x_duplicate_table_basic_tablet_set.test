@@ -16,6 +16,7 @@ connection obsys;
 
 let $cpu = 1;
 let $memory = '2G';
+let $log_disk_size = '6G';
 
 --disable_query_log
 --disable_warnings
@@ -26,7 +27,7 @@ DROP RESOURCE UNIT IF EXISTS duptable_unit1;
 
 sleep 5;
 
-eval CREATE RESOURCE UNIT duptable_unit1 MAX_CPU=$cpu, MEMORY_SIZE=$memory;
+eval CREATE RESOURCE UNIT duptable_unit1 MAX_CPU=$cpu, MEMORY_SIZE=$memory, log_disk_size=$log_disk_size;
 eval CREATE RESOURCE POOL duptable_pool1 UNIT='duptable_unit1', UNIT_NUM=1, ZONE_LIST=('zone1', 'zone2');
 CREATE TENANT duptable_tenant1 REPLICA_NUM = 2, RESOURCE_POOL_LIST = ('duptable_pool1') set ob_tcp_invited_nodes='%', ob_compatibility_mode='mysql', lower_case_table_names = 0;
 alter tenant duptable_tenant1 set variables ob_tcp_invited_nodes='%';

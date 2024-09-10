@@ -14,6 +14,7 @@
 #define OBDEV_SRC_SQL_ENGINE_DML_OB_CONFLICT_ROW_CHECKER_H_
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "sql/das/ob_das_attach_define.h"
 #include "sql/engine/dml/ob_dml_ctx_define.h"
 
 namespace oceanbase
@@ -110,10 +111,11 @@ public:
       table_column_exprs_(alloc),
       use_dist_das_(false),
       rowkey_count_(0),
+      attach_spec_(alloc, &das_scan_ctdef_),
       alloc_(alloc)
   {}
   virtual ~ObConflictCheckerCtdef() = default;
-  TO_STRING_KV(K_(cst_ctdefs), K_(das_scan_ctdef), KPC_(calc_part_id_expr));
+  TO_STRING_KV(K_(cst_ctdefs), K_(das_scan_ctdef), KPC_(calc_part_id_expr), K_(attach_spec));
   // must constraint_infos_.count() == conflict_map_array_.count()
   // constraint_infos_ 用于生成ObConflictRowMap的key
   ObRowkeyCstCtdefArray cst_ctdefs_;
@@ -129,6 +131,7 @@ public:
   ExprFixedArray table_column_exprs_;
   bool use_dist_das_;
   int64_t rowkey_count_;
+  ObDASAttachSpec attach_spec_;
   common::ObIAllocator &alloc_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConflictCheckerCtdef);
@@ -218,6 +221,8 @@ private:
   int build_tmp_rowkey(ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info);
 
   int init_das_scan_rtdef();
+  int init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *&attach_rtdef);
+  int attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef);
 
   int get_tmp_string_buffer(common::ObIAllocator *&allocator);
 public:
@@ -225,6 +230,7 @@ public:
   ObEvalCtx &eval_ctx_; // 用于表达式的计算
   const ObConflictCheckerCtdef &checker_ctdef_;
   ObDASScanRtDef das_scan_rtdef_;
+  ObDASAttachRtInfo *attach_rtinfo_;
   // allocator用来创建hash map, 是ObExecContext内部的allocator 这个不能被reuse
   common::ObIAllocator &allocator_;
   // das_scan回表用

@@ -146,7 +146,7 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
     ls_id = key.ls_id_;
     tablet_id = key.tablet_id_;
     tablet_pointer = static_cast<const ObTabletPointer*>(ptr_hdl.get_resource_ptr());
-    ObTabletResidentInfo tablet_info(key, *tablet_pointer);
+    ObTabletResidentInfo tablet_info = tablet_pointer->get_tablet_resident_info(key);
 
     const int64_t col_cnt = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; i++) {
@@ -174,7 +174,7 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(tablet_id.id());
           break;
         case ADDRESS:
-          tablet_pointer->get_addr().to_string(address_, STR_LEN);
+          tablet_pointer->get_addr().to_string(address_, ADDR_STR_LEN);
           cur_row_.cells_[i].set_varchar(address_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;

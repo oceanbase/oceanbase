@@ -249,6 +249,8 @@ int ObExprJoinFilter::prepare_storage_white_filter_data(const ObExpr &expr,
         dynamic_filter, eval_ctx, params, is_data_prepared))) {
       LOG_WARN("fail to prepare_storage_white_filter_data", K(ret));
     } else {
+      dynamic_filter.hash_func_ =
+          join_filter_ctx->hash_funcs_.at(dynamic_filter.get_col_idx()).hash_func_;
       dynamic_filter.cmp_func_ =
           join_filter_ctx->cmp_funcs_.at(dynamic_filter.get_col_idx()).cmp_func_;
     }

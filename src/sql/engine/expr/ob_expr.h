@@ -39,6 +39,7 @@ namespace storage
 {
   // forward declaration for friends
   class ObVectorStore;
+  class ObAggregatedStoreVec;
 }
 namespace sql
 {
@@ -117,6 +118,7 @@ public:
             && (common::T_EXT_SQL_ARRAY == static_cast<uint8_t>(scale_)));
   }
   OB_INLINE common::ObObjType get_type() const { return type_; }
+  OB_INLINE uint16_t get_subschema_id() const { return static_cast<uint16_t>(cs_type_); }
 };
 
 // Expression evaluate result info
@@ -162,6 +164,7 @@ struct ObEvalCtx
   friend class ObOperator;
   friend class ObSubPlanFilterOp; // FIXME qubin.qb: remove this line from friend
   friend class oceanbase::storage::ObVectorStore;
+  friend class oceanbase::storage::ObAggregatedStoreVec;
   friend class ObDatumCaster;
   class TempAllocGuard
   {
@@ -504,7 +507,8 @@ public:
     return UINT32_MAX != vector_header_off_
            && expr_default_eval_vector_func != eval_vector_func_;
   }
-  int cast_to_uniform(const int64_t size, ObEvalCtx &ctx) const;
+  int cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObBitVector *skip = nullptr) const;
+  int nested_cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObBitVector *skip) const;
   uint64_t get_batch_idx_mask(ObEvalCtx &ctx) {
     return batch_idx_mask_;
   }
@@ -738,6 +742,16 @@ public:
   OB_INLINE void unset_null(ObEvalCtx &ctx, int64_t batch_idx) {
     get_nulls(ctx).unset(batch_idx);
   }
+  void reset_attr_datums_ptr(char *frame, const int64_t size);
+  void reset_attrs_datums(char *frame, const int64_t size) const;
+  OB_INLINE bool is_nested_expr() const { return attrs_cnt_ > 0; }
+
+
+  OB_INLINE void set_all_not_null(ObEvalCtx &ctx, const int64_t size) {
+    if (!is_uniform_format(get_format(ctx))) {
+      get_nulls(ctx).reset(size);
+    }
+  }
 
   TO_STRING_KV("type", get_type_name(type_),
               K_(datum_meta),
@@ -914,6 +928,8 @@ public:
   uint32_t null_bitmap_off_;
   VecValueTypeClass vec_value_tc_;
   int64_t local_session_var_id_;
+  ObExpr **attrs_;
+  uint32_t attrs_cnt_;
 };
 
 // helper template to access ObExpr::extra_
@@ -1318,7 +1334,7 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
   } else if (info.projected_ || NULL == eval_batch_func_) {
     // expr values is projected by child or has no evaluate func, do nothing.
     if (UINT32_MAX != vector_header_off_) {
-      ret = cast_to_uniform(size, ctx);
+      ret = cast_to_uniform(size, ctx, &skip);
     }
   } else if (size > 0) {
     ret = do_eval_batch(ctx, skip, size);
@@ -1341,7 +1357,7 @@ OB_INLINE int ObExpr::eval_vector(ObEvalCtx &ctx,
 
 OB_INLINE VectorFormat ObExpr::get_default_res_format() const {
   return !batch_result_ ? VEC_UNIFORM_CONST
-         : (datum_meta_.type_ == ObNullType ? VEC_UNIFORM
+         : ((datum_meta_.type_ == ObNullType || datum_meta_.type_ == ObCollectionSQLType) ? VEC_UNIFORM
          : (is_fixed_length_data_ ? VEC_FIXED : VEC_DISCRETE));
 }
 

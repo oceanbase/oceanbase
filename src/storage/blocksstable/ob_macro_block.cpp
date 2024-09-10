@@ -21,9 +21,8 @@
 #include "share/ob_force_print_log.h"
 #include "share/ob_task_define.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/ob_sstable_struct.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
-#include "storage/ob_sstable_struct.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "index_block/ob_index_block_row_struct.h"
 #include "ob_macro_block_struct.h"
@@ -150,6 +149,7 @@ int ObMicroBlockCompressor::decompress(const char *in, const int64_t in_size,
  */
 ObMacroBlock::ObMacroBlock()
   : spec_(NULL),
+    merge_block_info_(),
     data_("MacroBlock"),
     macro_header_(),
     data_base_offset_(0),
@@ -172,11 +172,15 @@ ObMacroBlock::~ObMacroBlock()
 }
 
 
-int ObMacroBlock::init(const ObDataStoreDesc &spec, const int64_t &cur_macro_seq)
+int ObMacroBlock::init(
+  const ObDataStoreDesc &spec,
+  const int64_t &cur_macro_seq,
+  compaction::ObMergeBlockInfo &merge_block_info)
 {
   int ret = OB_SUCCESS;
   reuse();
   spec_ = &spec;
+  merge_block_info_ = &merge_block_info;
   cur_macro_seq_ = cur_macro_seq;
   data_base_offset_ = calc_basic_micro_block_data_offset(
     spec.get_row_column_count(), spec.get_rowkey_column_count(), spec.get_fixed_header_version());
@@ -344,7 +348,7 @@ int ObMacroBlock::write_index_micro_block(
   return ret;
 }
 
-int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
+int ObMacroBlock::flush(ObStorageObjectHandle &macro_handle,
                         ObMacroBlocksWriteCtx &block_write_ctx,
                         ObIODevice *device_handle)
 {
@@ -357,32 +361,38 @@ int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
     macro_header_.fixed_header_.data_checksum_ = 0;
   }
 #endif
-  const bool need_flush_macro = spec_->get_need_submit_io();
+  const bool need_flush_macro = is_flush_macro_exec_mode(spec_->get_exec_mode()) && spec_->get_need_submit_io();
   if (OB_FAIL(write_macro_header())) {
     STORAGE_LOG(WARN, "fail to write macro header", K(ret), K_(macro_header));
-  } else if (need_flush_macro) {
-    ObMacroBlockWriteInfo write_info;
-    write_info.buffer_ = data_.data();
-    if (backup::ObBackupDeviceMacroBlockId::is_backup_block_file(macro_handle.get_macro_id().first_id())) {
-      write_info.size_ = data_.capacity();
-    } else {
-      write_info.size_ = data_.upper_align_length();
+  } else {
+    if (need_flush_macro) {
+      ObStorageObjectWriteInfo object_info;
+      object_info.buffer_ = data_.data();
+      object_info.offset_ = 0;
+      if (backup::ObBackupDeviceMacroBlockId::is_backup_block_file(macro_handle.get_macro_id().first_id())) {
+        object_info.size_ = data_.capacity();
+      } else {
+        object_info.size_ = data_.upper_align_length();
+      }
+      object_info.mtl_tenant_id_ = MTL_ID();
+      object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+      object_info.io_desc_.set_sealed();
+      object_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      object_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO);
+      object_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+      object_info.device_handle_ = device_handle;
+      object_info.has_backup_device_handle_ = OB_NOT_NULL(device_handle);
+
+      if (OB_FAIL(macro_handle.async_write(object_info))) {
+        STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(macro_handle), K(object_info));
+      }
     }
-    write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
-    write_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO);
-    write_info.device_handle_ = device_handle;
-    write_info.has_backup_device_handle_ = OB_NOT_NULL(device_handle);
-    write_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-    if (OB_FAIL(macro_handle.async_write(write_info))) {
-      STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(macro_handle), K(write_info));
-    } else if (OB_FAIL(block_write_ctx.add_macro_block_id(macro_handle.get_macro_id()))) {
+    if (FAILEDx(block_write_ctx.add_macro_block_id(macro_handle.get_macro_id()))) {
       STORAGE_LOG(WARN, "fail to add macro id", K(ret), "macro id", macro_handle.get_macro_id());
-    } else if (NULL != spec_ && NULL != spec_->merge_info_) {
-      spec_->merge_info_->macro_block_count_++;
-      spec_->merge_info_->new_flush_occupy_size_ += macro_header_.fixed_header_.occupy_size_;
-      spec_->merge_info_->occupy_size_ += macro_header_.fixed_header_.occupy_size_;
-      spec_->merge_info_->total_row_count_ += macro_header_.fixed_header_.row_count_;
+    } else if (NULL != merge_block_info_) {
+      merge_block_info_->macro_block_count_++;
+      merge_block_info_->occupy_size_ += macro_header_.fixed_header_.occupy_size_;
+      merge_block_info_->total_row_count_ += macro_header_.fixed_header_.row_count_;
     }
     const uint16_t table_cg_idx = spec_ == nullptr ? 0 : spec_->get_table_cg_idx();
 
@@ -390,7 +400,7 @@ int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
       // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
       share::ObTaskController::get().allow_next_syslog();
       STORAGE_LOG(INFO, "macro block writer succeed to flush macro block.",
-                  "block_id", macro_handle.get_macro_id(), K(common_header_), K(macro_header_),
+                  "block_id", macro_handle.get_macro_id(), K(need_flush_macro), K(common_header_), K(macro_header_),
                   K_(contain_uncommitted_row), K_(max_merged_trans_version), KP(&macro_handle), K(table_cg_idx));
     }
   }
@@ -431,13 +441,15 @@ void ObMacroBlock::reuse()
 int ObMacroBlock::reserve_header(const ObDataStoreDesc &spec, const int64_t &cur_macro_seq)
 {
   int ret = OB_SUCCESS;
+  int64_t common_header_size = 0;
   common_header_.reset();
   common_header_.set_payload_size(0);
   common_header_.set_payload_checksum(0);
-  common_header_.set_attr(cur_macro_seq);
-  const int64_t common_header_size = common_header_.get_serialize_size();
-  MEMSET(data_.data(), 0, data_.capacity());
-  if (OB_FAIL(data_.advance(common_header_size))) {
+  if (OB_FAIL(common_header_.set_attr(spec.data_store_type_))) {
+    STORAGE_LOG(WARN, "fail to set attr for common header", K(ret));
+  } else if (FALSE_IT(common_header_size = common_header_.get_serialize_size())) {
+  } else if (FALSE_IT(MEMSET(data_.data(), 0, data_.capacity()))) {
+  } else if (OB_FAIL(data_.advance(common_header_size))) {
     STORAGE_LOG(WARN, "data buffer is not enough for common header.", K(ret), K(common_header_size));
   } else {
     char *col_types_buf = data_.current()  + macro_header_.get_fixed_header_size();
@@ -554,6 +566,11 @@ int ObMacroBlock::add_column_checksum(
     }
   }
   return ret;
+}
+
+int64_t ObMacroBlock::get_compaction_scn() const
+{
+  return NULL == spec_ ? 0 : spec_->get_snapshot_version();
 }
 
 }

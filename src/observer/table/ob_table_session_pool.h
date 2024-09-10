@@ -93,7 +93,7 @@ public:
   static const int64_t SESS_UPDATE_TIME_INTERVAL = 5 * 1000 * 1000; // the update interval cannot exceed 5 seconds
 public:
   explicit ObTableApiSessPool()
-      : allocator_("TbSessPool", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      : allocator_(MTL_ID()),
         is_inited_(false),
         last_update_ts_(0)
   {}
@@ -108,14 +108,12 @@ public:
   int evict_retired_sess();
   int create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node);
   int move_node_to_retired_list(ObTableApiSessNode *node);
-  common::ObIAllocator& get_allocator() { return allocator_; };
 private:
   int replace_sess_node_safe(ObTableApiCredential &credential);
   int create_and_add_node_safe(ObTableApiCredential &credential);
   int get_sess_node(uint64_t key, ObTableApiSessNode *&node);
 private:
-  common::ObArenaAllocator allocator_;
-  ObSpinLock allocator_lock_; // for lock allocator_
+  common::ObFIFOAllocator allocator_;
   bool is_inited_;
   CacheKeyNodeMap key_node_map_;
   // 已经淘汰的node，等待被后台删除
@@ -198,6 +196,9 @@ public:
   OB_INLINE const ObTableApiCredential& get_credential() const { return credential_; }
   OB_INLINE int64_t get_last_active_ts() const { return last_active_ts_; }
   int remove_unused_sess();
+  OB_INLINE const ObString& get_tenant_name() const { return tenant_name_; }
+  OB_INLINE const ObString& get_database_name() const { return db_name_; }
+  OB_INLINE const ObString& get_user_name() const { return user_name_; }
 private:
   int extend_and_get_sess_val(ObTableApiSessGuard &guard);
 private:
@@ -206,6 +207,9 @@ private:
   SessList sess_lists_;
   int64_t last_active_ts_;
   ObTableApiCredential credential_;
+  ObString tenant_name_;
+  ObString db_name_;
+  ObString user_name_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessNode);
 };
@@ -224,11 +228,13 @@ public:
   ~ObTableApiSessGuard()
   {
     if (OB_NOT_NULL(sess_node_val_)) {
+      sess_node_val_->get_sess_info().get_trans_result().reset();
       sess_node_val_->reset_tx_desc();
       sess_node_val_->give_back_to_free_list();
       sess_node_val_ = nullptr;
     }
   }
+  TO_STRING_KV(KPC_(sess_node_val));
 public:
   ObTableApiSessNodeVal* get_sess_node_val() const { return sess_node_val_; }
   sql::ObSQLSessionInfo& get_sess_info() { return sess_node_val_->get_sess_info(); }
@@ -244,6 +250,30 @@ public:
       credential = &sess_node_val_->owner_node_->get_credential();
     }
     return ret;
+  }
+  OB_INLINE const ObString get_tenant_name() const
+  {
+    ObString tenant_name = ObString::make_empty_string();
+    if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
+      tenant_name = sess_node_val_->owner_node_->get_tenant_name();
+    }
+    return tenant_name;
+  }
+  OB_INLINE const ObString get_database_name() const
+  {
+    ObString database_name = ObString::make_empty_string();
+    if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
+      database_name = sess_node_val_->owner_node_->get_database_name();
+    }
+    return database_name;
+  }
+  OB_INLINE const ObString get_user_name() const
+  {
+    ObString user_name = ObString::make_empty_string();
+    if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
+      user_name = sess_node_val_->owner_node_->get_user_name();
+    }
+    return user_name;
   }
 private:
   ObTableApiSessNodeVal *sess_node_val_;

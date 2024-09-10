@@ -706,6 +706,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     dtl::ObDtlPacketEmptyProc<ObOptStatsGatherPieceMsg> opt_stats_gather_piece_msg_proc;
     dtl::ObDtlPacketEmptyProc<SPWinFuncPXPieceMsg> sp_winfunc_px_piece_msg_proc;
     dtl::ObDtlPacketEmptyProc<RDWinFuncPXPieceMsg> rd_winfunc_px_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObJoinFilterCountRowPieceMsg> join_filter_count_row_piece_msg_proc;
+
     // 这个注册会替换掉旧的proc.
     (void)msg_loop_.clear_all_proc();
     (void)msg_loop_
@@ -722,7 +724,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       .register_processor(reporting_wf_piece_msg_proc)
       .register_processor(opt_stats_gather_piece_msg_proc)
       .register_processor(sp_winfunc_px_piece_msg_proc)
-      .register_processor(rd_winfunc_px_piece_msg_proc);
+      .register_processor(rd_winfunc_px_piece_msg_proc)
+      .register_processor(join_filter_count_row_piece_msg_proc);
     loop.ignore_interrupt();
 
     ObPxControlChannelProc control_channels;
@@ -785,6 +788,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
           case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
           case ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG:
           case ObDtlMsgType::DH_RD_WINFUNC_PX_PIECE_MSG:
+          case ObDtlMsgType::DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG:
             break;
           default:
             ret = OB_ERR_UNEXPECTED;

@@ -85,6 +85,8 @@ private:
   ObTableHandleV2 table_handle_;
   blocksstable::ObDatumRange datum_range_;
   blocksstable::ObSSTableSecMetaIterator sec_meta_iterator_;
+  // TODO: yangyi.yyy, 适配mod
+  common::ObStorageIdMod mod_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupSSTableSecMetaIterator);
 };
 

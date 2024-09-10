@@ -28,6 +28,7 @@
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "rpc/frame/ob_req_transport.h"
 #include "logservice/logrpc/ob_log_rpc_processor.h"
+#include "logservice/logrpc/ob_log_request_handler.h"
 #include "logservice/palf/log_rpc_macros.h"
 #include "logservice/palf/log_rpc_processor.h"
 #include "logservice/palf/palf_env.h"
@@ -38,6 +39,7 @@
 #include "lib/net/ob_addr.h"
 #include "share/ob_rpc_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -49,6 +51,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "logservice/ob_net_keepalive_adapter.h"
 #include "logservice/leader_coordinator/ob_failure_detector.h"
+#include "logservice/arbserver/arb_tg_helper.h"
 #include <memory>
 #include <map>
 #include "share/ob_tenant_mem_limit_getter.h"
@@ -142,17 +145,57 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLooper);
 };
 
+class MockLogGetCkptReqP: public
+      obrpc::ObRpcProcessor<obrpc::ObLogServiceRpcProxy::ObRpc<obrpc::OB_LOG_GET_LS_CKPT>>
+{
+public:
+  MockLogGetCkptReqP(): ckpt_functor_(NULL), filter_(NULL) {}
+  virtual ~MockLogGetCkptReqP() { ckpt_functor_ = NULL; filter_ = NULL; }
+  int process()
+  {
+    int ret = OB_SUCCESS;
+    const logservice::LogGetCkptReq &req = arg_;
+    const common::ObAddr server = req.src_;                                                                       \
+    const share::ObLSID &ls_id = req.ls_id_;
+    logservice::LogGetCkptResp &resp = result_;
+    if (OB_ISNULL(ckpt_functor_)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "ckpt_functor_ is NULL", K(ret), K(req), K(resp));
+    } else if (OB_UNLIKELY(NULL != filter_ && true == (*filter_)(server))) {                                      \
+      CLOG_LOG(INFO, "need filter this packet", K(req));                                                          \
+    } else if (OB_FAIL((*ckpt_functor_)(ls_id, resp.ckpt_scn_, resp.ckpt_lsn_))) {
+      CLOG_LOG(ERROR, "ckpt_functor_ failed", K(ret), K(req), K(resp));
+    } else {
+      CLOG_LOG(INFO, "ckpt_functor_ success", K(ret), K(req), K(resp));
+    }
+    return ret;
+  }
+  void set_ckpt_functor(void *functor)
+  {
+    ckpt_functor_ = reinterpret_cast<ObFunction<int(const share::ObLSID &ls_id, share::SCN &scn, palf::LSN &lsn)> *>(functor);
+  }
+  void set_filter(void *filter)
+  {
+    filter_ = reinterpret_cast<ObFunction<bool(const ObAddr &src)> *>(filter);
+  }
+private:
+  ObFunction<int(const share::ObLSID &ls_id, share::SCN &scn, palf::LSN &lsn)> *ckpt_functor_;
+  ObFunction<bool(const ObAddr &src)> *filter_;
+};
+
 class ObLogDeliver : public rpc::frame::ObReqDeliver, public lib::TGTaskHandler, public ObMittestBlacklist
 {
 public:
 	ObLogDeliver()
       : rpc::frame::ObReqDeliver(),
-        palf_env_impl_(NULL),
+        log_server_(NULL),
         tg_id_(0),
         is_stopped_(true) {}
   ~ObLogDeliver() { destroy(true); }
   int init() override final {return OB_SUCCESS;}
-  int init(const common::ObAddr &self, const bool is_bootstrap);
+  int init(const common::ObAddr &self,
+           const bool is_bootstrap,
+           ObSimpleLogServer *log_server);
   void destroy(const bool is_shutdown);
   int deliver(rpc::ObRequest &req);
   int start();
@@ -184,7 +227,7 @@ private:
 private:
   mutable common::RWLock lock_;
   bool is_inited_;
-	PalfEnvImpl *palf_env_impl_;
+  ObSimpleLogServer *log_server_;
   int tg_id_;
   bool is_stopped_;
   int64_t node_id_;
@@ -217,9 +260,11 @@ public:
 };
 
 typedef common::ObLinkHashMap<palf::LSKey, MockElection, MockElectionAlloc> MockElectionMap;
+typedef common::ObLinearHashMap<share::ObLSID, std::pair<SCN, LSN>> MockCkptMap;
 class ObISimpleLogServer
 {
 public:
+  static const uint64_t DEFAULT_TENANT_ID = 1002;
   ObISimpleLogServer() {}
   virtual ~ObISimpleLogServer() {}
   virtual bool is_valid() const = 0;
@@ -239,11 +284,14 @@ public:
   virtual int simple_init(const std::string &cluster_name,
                           const common::ObAddr &addr,
                           const int64_t node_id,
+                          ObTenantIOManager *tio_manager,
                           LogMemberRegionMap *region_map,
                           const bool is_bootstrap) = 0;
   virtual int simple_start(const bool is_bootstrap) = 0;
   virtual int simple_close(const bool is_shutdown) = 0;
-  virtual int simple_restart(const std::string &cluster_name, const int64_t node_idx) = 0;
+  virtual int simple_restart(const std::string &cluster_name,
+                             const int64_t node_idx,
+                             ObTenantIOManager *tio_manager) = 0;
   virtual ILogBlockPool *get_block_pool() = 0;
   virtual ObILogAllocator *get_allocator() = 0;
   virtual int update_disk_opts(const PalfDiskOptions &opts) = 0;
@@ -255,15 +303,48 @@ public:
   virtual int remove_mock_election(const int64_t palf_id) = 0;
   virtual int set_leader(const int64_t palf_id, const common::ObAddr &leader, const int64_t new_epoch = 0) = 0;
   virtual int update_server_log_disk(const int64_t log_disk_size) = 0;
+  virtual int create_ls(const int64_t palf_id,
+                        const AccessMode &access_mode,
+                        const PalfBaseInfo &base_info,
+                        IPalfHandleImpl *&palf_handle_impl) = 0;
+  virtual int remove_ls(const int64_t palf_id) = 0;
   virtual MockObLocalityManager *get_locality_manager() = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
+};
+
+class ObLogMittestTenantBase : public arbserver::ArbTGHelper {
+public:
+  ObLogMittestTenantBase(int64_t cluster_id, uint64_t tenant_id, int64_t node_id)
+    : ArbTGHelper(cluster_id, tenant_id, node_id) {}
+  virtual int pre_run() override final
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(arbserver::ArbTGHelper::pre_run())) {
+      CLOG_LOG(ERROR, "ArbTGHelper pre_run failed");
+    } else if (OB_FAIL(ObTenantBase::pre_run())) {
+      CLOG_LOG(ERROR, "ObTenantBase pre_run failed");
+    }
+    return ret;
+  }
+  virtual int end_run() override final
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObTenantBase::end_run())) {
+      CLOG_LOG(ERROR, "ObTenantBase pre_run failed");
+    } else if (OB_FAIL(arbserver::ArbTGHelper::end_run())) {
+      CLOG_LOG(ERROR, "ArbTGHelper pre_run failed");
+    }
+    return ret;
+  }
 };
 
 class ObSimpleLogServer : public ObISimpleLogServer
 {
 public:
   ObSimpleLogServer()
-    : handler_(deliver_),
+    :  cluster_id_(1),
+       tenant_id_(ObISimpleLogServer::DEFAULT_TENANT_ID), // the tenant in mittest must be 1002, otherwise, arb server can not start service.
+       handler_(deliver_),
       transport_(NULL),
       batch_rpc_transport_(NULL),
       high_prio_rpc_transport_(NULL)
@@ -281,11 +362,14 @@ public:
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
                   const int64_t node_id,
+                  ObTenantIOManager *tio_manager,
                   LogMemberRegionMap *region_map,
                   const bool is_bootstrap) override final;
   int simple_start(const bool is_bootstrap) override final;
   int simple_close(const bool is_shutdown) override final;
-  int simple_restart(const std::string &cluster_name, const int64_t node_idx) override final;
+  int simple_restart(const std::string &cluster_name,
+                     const int64_t node_idx,
+                     ObTenantIOManager *tio_manager) override final;
 public:
   int64_t get_node_id() {return node_id_;}
   ILogBlockPool *get_block_pool() override final
@@ -378,23 +462,33 @@ public:
     return ret;
   }
   int update_server_log_disk(const int64_t log_disk_size);
+  int set_mock_ls_ckpt(const int64_t palf_id, const SCN scn, const LSN lsn);
+  int get_mock_ls_ckpt(const int64_t palf_id, share::SCN &scn, LSN &lsn) const;
+  int create_ls(const int64_t palf_id,
+                const AccessMode &access_mode,
+                const PalfBaseInfo &base_info,
+                IPalfHandleImpl *&palf_handle_impl) override final;
+  int remove_ls(const int64_t palf_id) override final;
   MockObLocalityManager *get_locality_manager() { return &mock_locality_manager_; }
   TO_STRING_KV(K_(node_id), K_(addr), KP(palf_env_));
 
 protected:
   int init_io_(const std::string &cluster_name);
   int init_network_(const common::ObAddr &addr, const bool is_bootstrap);
-  int init_log_service_();
+  int init_log_service_(const bool is_bootstrap);
+  int init_ls_service_(const bool is_bootstrap);
   int init_memory_dump_timer_();
   int update_tenant_log_disk_size_(const uint64_t tenant_id,
                                    const int64_t old_log_disk_size,
                                    const int64_t new_log_disk_size,
                                    int64_t &allowed_log_disk_size);
   int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
+  int add_ls_to_ls_map_(const int64_t palf_id);
   int init_log_kv_cache_();
 
-
 private:
+  int64_t cluster_id_;
+  int64_t tenant_id_;
   int64_t node_id_;
   common::ObAddr addr_;
   rpc::frame::ObNetEasy net_;
@@ -416,7 +510,7 @@ private:
   rpc::frame::ObReqTransport *transport_;
   rpc::frame::ObReqTransport *batch_rpc_transport_;
   rpc::frame::ObReqTransport *high_prio_rpc_transport_;
-  ObLSService ls_service_;
+  ObLSService *ls_service_;
   ObLocationService location_service_;
   MockMetaReporter reporter_;
   logservice::ObServerLogBlockMgr log_block_pool_;
@@ -432,9 +526,11 @@ private:
   // 内部表中记录日志盘规格
   palf::PalfDiskOptions inner_table_disk_opts_;
   ObLooper looper_;
+  MockCkptMap ckpt_map_;
   MockObLocalityManager mock_locality_manager_;
   obrpc::ObBatchRpc batch_rpc_;
   int batch_rpc_tg_id_;
+  omt::ObSharedTimer shared_timer_;
 };
 
 } // end unittest

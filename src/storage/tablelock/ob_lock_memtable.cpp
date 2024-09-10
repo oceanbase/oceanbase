@@ -302,7 +302,11 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op)
     LOG_WARN("get tablet with timeout failed", K(ret), K(ls->get_ls_id()), K(tablet_id));
   } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
       data, is_commited))) {
-    LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret));
+    LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(ls->get_ls_id()), K(tablet_id));
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(ls->get_ls_id()), K(tablet_id));
+    }
   } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
   } else if (is_commited && (ObTabletStatus::NORMAL == tablet_status
                              || ObTabletStatus::TRANSFER_IN == tablet_status)) {

@@ -251,8 +251,6 @@ int ObIndexBlockScanEstimator::goto_next_level(
   int ret = OB_SUCCESS;
   ObMicroBlockDataHandle &micro_handle = get_read_handle();
   micro_handle.reset();
-  ObMacroBlockHandle macro_handle;
-  micro_handle.io_handle_ = macro_handle;
   if (OB_FAIL(prefetch_index_block_data(micro_index_info, micro_handle))) {
     STORAGE_LOG(WARN, "Failed to prefetch index block", K(ret), K(micro_index_info));
   } else if (micro_index_info.is_data_block()) {
@@ -295,9 +293,9 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
   int ret = OB_SUCCESS;
   bool found = false;
   const MacroBlockId &macro_id = micro_index_info.get_macro_id();
-  const int64_t offset = micro_index_info.get_block_offset();
-  const int64_t size = micro_index_info.get_block_size();
   micro_handle.allocator_ = &allocator_;
+  ObMicroBlockCacheKey key(tenant_id_, micro_index_info);
+
   ObIMicroBlockCache *cache = nullptr;
   if (micro_index_info.is_data_block()) {
     cache = &blocksstable::ObStorageCacheSuite::get_instance().get_block_cache();
@@ -307,8 +305,7 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
   if (OB_ISNULL(cache)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected null block cache", K(ret), KP(cache));
-  } else if (OB_FAIL(cache->get_cache_block(
-      tenant_id_, macro_id, offset, size, micro_handle.cache_handle_))) {
+  } else if (OB_FAIL(cache->get_cache_block(key, micro_handle.cache_handle_))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "Fail to get cache block", K(ret));
     } else {
@@ -328,10 +325,13 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
       micro_handle.tenant_id_ = tenant_id_;
       micro_handle.macro_block_id_ = micro_index_info.get_macro_id();
       micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
-      micro_handle.micro_info_.offset_ = micro_index_info.get_block_offset();
-      micro_handle.micro_info_.size_ = micro_index_info.get_block_size();
+      micro_handle.micro_info_.set(micro_index_info.get_block_offset(),
+                                   micro_index_info.get_block_size(),
+                                   micro_index_info.get_logic_micro_id(),
+                                   micro_index_info.get_data_checksum());
     }
   }
+  STORAGE_LOG(DEBUG, "get cache block", K(ret), K(key), K(macro_id), K(micro_index_info));
   return ret;
 }
 

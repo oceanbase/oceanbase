@@ -12,9 +12,15 @@
 
 #ifndef OCEANBASE_STORAGE_COMPACTION_OB_SCHEDULE_DAG_FUNC_H_
 #define OCEANBASE_STORAGE_COMPACTION_OB_SCHEDULE_DAG_FUNC_H_
+#include "lib/container/ob_iarray.h"
+#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
+namespace share
+{
+class ObLSID;
+}
 namespace storage
 {
 namespace mds
@@ -28,6 +34,13 @@ namespace compaction
 {
 struct ObTabletMergeDagParam;
 struct ObCOMergeDagParam;
+struct ObTabletSchedulePair;
+struct ObBatchFreezeTabletsParam;
+#ifdef OB_BUILD_SHARED_STORAGE
+struct ObTabletsRefreshSSTableParam;
+struct ObVerifyCkmParam;
+struct ObUpdateSkipMajorParam;
+#endif
 
 class ObScheduleDagFunc
 {
@@ -46,6 +59,19 @@ public:
   static int schedule_mds_table_merge_dag(
       storage::mds::ObMdsTableMergeDagParam &param,
       const bool is_emergency = false);
+  static int schedule_batch_freeze_dag(
+    const ObBatchFreezeTabletsParam &freeze_param);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int schedule_tablet_refresh_dag(
+      ObTabletsRefreshSSTableParam &param,
+      const bool is_emergency = false);
+  static int schedule_verify_ckm_dag(ObVerifyCkmParam &param);
+  static int schedule_update_skip_major_tablet_dag(const ObUpdateSkipMajorParam &param);
+#endif
+  static int get_exec_mode(
+      const bool is_major_merge_type,
+      const share::ObLSID &ls_id,
+      ObExecMode &exec_mode);
 };
 
 }

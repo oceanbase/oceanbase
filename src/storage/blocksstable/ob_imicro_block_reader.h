@@ -38,8 +38,12 @@ using namespace storage;
 namespace storage
 {
 class ObAggDatumBuf;
+class ObAggCellBase;
 class ObAggCell;
+class ObAggCellVec;
+class ObGroupByCellBase;
 class ObGroupByCell;
+class ObGroupByCellVec;
 };
 namespace memtable {
 class ObIMvccCtx;
@@ -47,6 +51,7 @@ class ObIMvccCtx;
 namespace blocksstable
 {
 struct ObMicroIndexInfo;
+struct ObRowHeader;
 
 #define FREE_PTR_FROM_CONTEXT(ctx, ptr, T)                                  \
   do {                                                                      \
@@ -268,12 +273,14 @@ public:
     Reader,
     Decoder,
     CSDecoder,
+    MaxReaderType
   };
   ObIMicroBlockReader()
     : ObIMicroBlockReaderInfo()
-  {}
+  {
+    reader_type_ = MaxReaderType;
+  }
   virtual ~ObIMicroBlockReader() {}
-  virtual ObReaderType get_type() = 0;
   virtual void reset() { ObIMicroBlockReaderInfo::reset(); }
   virtual int init(const ObMicroBlockData &block_data, const ObITableReadInfo &read_info) = 0;
   //when there is not read_info in input parameters, it indicates reading all columns from all rows
@@ -327,6 +334,16 @@ public:
     UNUSEDx(iter_param, context, col_param, col_offset, row_index, datum);
     return OB_NOT_SUPPORTED;
   }
+  virtual bool can_pushdown_decoder(
+      const share::schema::ObColumnParam &col_param,
+      const int32_t col_offset,
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      const storage::ObAggCellBase &agg_cell)
+  {
+    UNUSEDx(col_param, col_offset, row_ids, row_cap, agg_cell);
+    return false;
+  }
   // for scalar group by pushdown
   virtual int get_aggregate_result(
       const ObTableIterParam &iter_param,
@@ -341,6 +358,15 @@ public:
     UNUSEDx(col_offset, col_param, row_ids, row_cap, datum_buf, agg_cell);
     return OB_NOT_SUPPORTED;
   }
+  virtual int get_aggregate_result(
+      const int32_t col_offset,
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      storage::ObAggCellVec &agg_cell)
+  {
+    UNUSEDx(col_offset, row_ids, row_cap, agg_cell);
+    return OB_NOT_SUPPORTED;
+  }
   // for normal group by pushdown
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const
   {
@@ -350,7 +376,7 @@ public:
   virtual int read_distinct(
       const int32_t group_by_col,
       const char **cell_datas,
-      storage::ObGroupByCell &group_by_cell) const
+      storage::ObGroupByCellBase &group_by_cell) const
   {
     UNUSEDx(group_by_col, cell_datas, group_by_cell);
     return OB_NOT_SUPPORTED;
@@ -359,7 +385,7 @@ public:
       const int32_t group_by_col,
       const int32_t *row_ids,
       const int64_t row_cap,
-      storage::ObGroupByCell &group_by_cell) const
+      storage::ObGroupByCellBase &group_by_cell) const
   {
     UNUSEDx(group_by_col, row_ids, row_cap, group_by_cell);
     return OB_NOT_SUPPORTED;
@@ -371,6 +397,18 @@ public:
       storage::ObGroupByCell &group_by_cell)
   {
     UNUSEDx(row_ids, cell_datas, row_cap, group_by_cell);
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int get_group_by_aggregate_result(
+      const int32_t *row_ids,
+      const char **cell_datas,
+      const int64_t row_cap,
+      const int64_t vec_offset,
+      uint32_t *len_array,
+      sql::ObEvalCtx &eval_ctx,
+      storage::ObGroupByCellVec &group_by_cell)
+  {
+    UNUSEDx(row_ids, cell_datas, row_cap, vec_offset, len_array, eval_ctx, group_by_cell);
     return OB_NOT_SUPPORTED;
   }
   virtual void reserve_reader_memory(bool reserve) { UNUSED(reserve); }
@@ -397,6 +435,7 @@ public:
       const common::ObDatum &datum,
       bool &filtered);
   virtual bool has_lob_out_row() const = 0;
+  OB_INLINE ObReaderType get_type() const { return reader_type_; }
 
 protected:
   virtual int find_bound(const ObDatumRange &range,
@@ -411,6 +450,7 @@ protected:
       const void* col_buf,
       const int64_t col_capacity,
       const ObMicroBlockHeader *header);
+  ObReaderType reader_type_;
 };
 
 class ObBlockReaderAllocator

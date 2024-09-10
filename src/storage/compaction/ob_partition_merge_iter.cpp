@@ -184,7 +184,6 @@ void ObPartitionMergeIter::reset()
 int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
-  ObSSTable *sstable = nullptr;
   SCN snapshot_version;
   const ObStaticMergeParam &static_param = merge_param.static_param_;
   if (OB_UNLIKELY(nullptr == read_info_)) {
@@ -216,7 +215,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
       access_context_.trans_state_mgr_ = merge_param.trans_state_mgr_;
       // 1.normal minor merge merge scn equal to end scn
       // 2.backfill may merge scn is bigger than end scn
-      access_context_.merge_scn_ = merge_param.merge_scn_;
+      access_context_.merge_scn_ = static_param.merge_scn_;
       if (!static_param.is_backfill_) {
         if (OB_UNLIKELY(access_context_.merge_scn_ != static_param.scn_range_.end_scn_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -753,6 +752,20 @@ int ObPartitionMacroMergeIter::get_curr_range(ObDatumRange &range) const
     revise_macro_range(range);
   }
   return ret;
+}
+
+int ObPartitionMacroMergeIter::get_curr_macro_block(
+    const blocksstable::ObMacroBlockDesc *&macro_desc,
+    const blocksstable::ObMicroBlockData *&micro_block_data) const
+{
+  int ret = OB_SUCCESS;
+  if (curr_block_desc_.is_clustered_index_tree_ &&
+      OB_FAIL(macro_block_iter_->get_current_clustered_index_info(micro_block_data))) {
+    LOG_WARN("fail to get clustered index info", K(ret));
+  } else {
+    macro_desc = &curr_block_desc_;
+  }
+  return OB_SUCCESS;
 }
 
 int ObPartitionMacroMergeIter::need_open_curr_range(const blocksstable::ObDatumRow &row, bool &need_open, const int64_t row_id_for_cg)
@@ -1498,7 +1511,6 @@ int ObPartitionMinorRowMergeIter::check_compact_finish(bool &finish)
       finish = true;
     }
   }
-
   return ret;
 }
 
@@ -1617,10 +1629,12 @@ int ObPartitionMinorRowMergeIter::next()
       LOG_WARN("Failed to inner next row", K(ret));
     }
   } else if (OB_FAIL(skip_ghost_row())) {
+    // will skip all ghost row, may make curr_row_ be null ptr
     if (OB_UNLIKELY(ret != OB_ITER_END)) {
       LOG_WARN("Failed to skip_ghost_row", K(ret));
     }
   } else if (OB_ISNULL(curr_row_)) {
+    // if curr_row_ is null, should skip rest operation
     if (typeid(*this) == typeid(ObPartitionMinorRowMergeIter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null current row", K(ret), K(*this));
@@ -1826,7 +1840,7 @@ int ObPartitionMinorMacroMergeIter::inner_init(const ObMergeParameter &merge_par
         allocator_,
         macro_block_iter_,
         false, /* reverse scan */
-        false, /* need micro info */
+        true, /* need micro info */
         true /* need secondary meta */))) {
       LOG_WARN("Fail to scan macro block", K(ret));
     }
@@ -2109,6 +2123,20 @@ int ObPartitionMinorMacroMergeIter::get_curr_range(ObDatumRange &range) const
     revise_macro_range(range);
     range.set_left_closed();
     range.set_right_closed();
+  }
+  return ret;
+}
+
+int ObPartitionMinorMacroMergeIter::get_curr_macro_block(
+    const blocksstable::ObMacroBlockDesc *&macro_desc,
+    const blocksstable::ObMicroBlockData *&micro_block_data) const
+{
+  int ret = OB_SUCCESS;
+  if (curr_block_desc_.is_clustered_index_tree_ &&
+      OB_FAIL(macro_block_iter_->get_current_clustered_index_info(micro_block_data))) {
+    LOG_WARN("fail to get clustered index info", K(ret));
+  } else {
+    macro_desc = &curr_block_desc_;
   }
   return ret;
 }

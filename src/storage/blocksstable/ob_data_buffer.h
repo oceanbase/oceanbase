@@ -360,6 +360,7 @@ public:
       const bool use_fixed_blk = true);
   virtual ~ObSelfBufferWriter();
   int ensure_space(const int64_t size);
+  int clean();
   bool is_dirty() const { return OB_NOT_NULL(data_) && pos_ > 0; }
   inline void reuse() { pos_ = 0; }
   inline void reset() { free(); pos_= 0; capacity_ = 0; }

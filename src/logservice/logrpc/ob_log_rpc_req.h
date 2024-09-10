@@ -256,6 +256,87 @@ public:
   share::SCN flashback_scn_;
   bool is_flashback_req_;
 };
+
+struct LogGetCkptReq {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetCkptReq(): src_(), tenant_id_(OB_INVALID_TENANT_ID), ls_id_() { }
+  LogGetCkptReq(const common::ObAddr &src,
+                const uint64_t tenant_id,
+                const share::ObLSID &ls_id);
+  ~LogGetCkptReq();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(src), K_(tenant_id), K_(ls_id));
+  common::ObAddr src_;
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct LogGetCkptResp {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetCkptResp() : ckpt_scn_(), ckpt_lsn_()  { }
+  LogGetCkptResp(const share::SCN &scn, const palf::LSN &lsn);
+  ~LogGetCkptResp();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(ckpt_scn), K_(ckpt_lsn));
+  share::SCN ckpt_scn_;
+  palf::LSN ckpt_lsn_;
+};
+
+struct LogSyncBaseLSNReq
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  LogSyncBaseLSNReq();
+  LogSyncBaseLSNReq(const common::ObAddr &src, const share::ObLSID &id,
+                    const palf::LSN &base_lsn);
+  ~LogSyncBaseLSNReq();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(src), K_(ls_id), K_(base_lsn));
+public:
+  common::ObAddr src_;
+  share::ObLSID ls_id_;
+  palf::LSN base_lsn_;
+};
+
+#ifdef OB_BUILD_SHARED_STORAGE
+enum LogRebuildType
+{
+  FULL_REBUILD = 0,
+  FAST_REBUILD = 1,
+};
+
+struct LogAcquireRebuildInfoMsg {
+  OB_UNIS_VERSION(1);
+public:
+  LogAcquireRebuildInfoMsg();
+  LogAcquireRebuildInfoMsg(const common::ObAddr &src,
+                           const int64_t palf_id,
+                           const palf::LSN &rebuild_replica_end_lsn);
+  LogAcquireRebuildInfoMsg(const common::ObAddr &src,
+                           const int64_t palf_id,
+                           const palf::LSN &rebuild_replica_end_lsn,
+                           const palf::PalfBaseInfo &base_info,
+                           const LogRebuildType &type);
+  ~LogAcquireRebuildInfoMsg();
+  bool is_valid() const;
+  void reset();
+  bool is_req() const { return is_req_; }
+  TO_STRING_KV(K_(palf_id), K_(src), K_(is_req), K_(rebuild_replica_end_lsn),
+      K_(base_info), K_(type));
+  common::ObAddr src_;
+  int64_t palf_id_;
+  bool is_req_;
+  palf::LSN rebuild_replica_end_lsn_;
+  palf::PalfBaseInfo base_info_;
+  LogRebuildType type_;
+};
+#endif
 } // end namespace logservice
 }// end namespace oceanbase
 

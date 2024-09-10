@@ -104,8 +104,6 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
   } else {
     const ObLSID &ls_id = req.get_ls_id();
     const LSN &start_lsn = req.get_start_lsn();
-    PalfHandleGuard palf_handle_guard;
-    PalfGroupBufferIterator group_iter(ls_id.id(), palf::LogIOUser::CDC);
     const ObCdcRpcId &rpc_id = req.get_client_id();
 
     ClientLSCtx *ls_ctx = NULL;
@@ -271,27 +269,6 @@ int ObCdcFetcher::init_palf_handle_guard_(const ObLSID &ls_id,
   return ret;
 }
 
-int ObCdcFetcher::init_group_iterator_(const ObLSID &ls_id,
-    const LSN &start_lsn,
-    palf::PalfHandleGuard &palf_handle_guard,
-    palf::PalfGroupBufferIterator &group_iter)
-{
-  int ret = OB_SUCCESS;
-  logservice::ObLogService *log_service = MTL(logservice::ObLogService *);
-
-  if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
-    if (OB_LS_NOT_EXIST != ret) {
-      LOG_WARN("ObLogService open_palf fail", KR(ret), K(tenant_id_), K(ls_id));
-    }
-  } else if (OB_FAIL(palf_handle_guard.seek(start_lsn, group_iter))) {
-    LOG_WARN("PalfHandleGuard seek fail", KR(ret), K(ls_id), K(start_lsn));
-  } else {
-    LOG_INFO("init_group_iterator succ", K(tenant_id_), K(ls_id), K(start_lsn));
-  }
-
-  return ret;
-}
-
 int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
     FetchRunTime &frt,
     ObCdcLSFetchLogResp &resp,
@@ -343,8 +320,7 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
 // don't block any error code here, let the caller handle the errcode for generality
 template <class LogEntryType>
 int ObCdcFetcher::fetch_log_in_palf_(const ObLSID &ls_id,
-    PalfIterator<DiskIteratorStorage, LogEntryType> &iter,
-    PalfHandleGuard &palf_guard,
+    PalfIterator<LogEntryType> &iter,
     const LSN &start_lsn,
     const bool need_init_iter,
     const SCN &replayable_point_scn,
@@ -352,8 +328,11 @@ int ObCdcFetcher::fetch_log_in_palf_(const ObLSID &ls_id,
     LSN &lsn)
 {
   int ret = OB_SUCCESS;
-  if (need_init_iter && OB_FAIL(palf_guard.seek(start_lsn, iter))) {
-    LOG_WARN("PalfHandleGuard seek fail", KR(ret), K(ls_id), K(lsn));
+  const int64_t SINGLE_READ_SIZE = 16 * 1024 * 1024L;
+  if (need_init_iter && OB_FAIL(seek_log_iterator_for_cdc(ls_id, start_lsn, SINGLE_READ_SIZE, iter))) {
+    LOG_WARN("seek_log_iterator fail", KR(ret), K(ls_id), K(lsn));
+  } else if (need_init_iter && OB_FAIL(iter.set_io_context(palf::LogIOContext(tenant_id_, ls_id.id(), palf::LogIOUser::CDC)))) {
+    LOG_WARN("set_io_context fail", KR(ret), K(ls_id), K(lsn));
   } else if (OB_FAIL(iter.next(replayable_point_scn))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("palf_iter next fail", KR(ret), K(tenant_id_), K(ls_id));
@@ -404,9 +383,12 @@ int ObCdcFetcher::fetch_log_in_archive_(
       // it interrupted last time;
       // 7. update_source_cb must be valid in this scenario;
       do {
-        if (! remote_iter.is_init() && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
+        const bool iter_inited = remote_iter.is_init();
+        if (!iter_inited && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
             start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, SINGLE_READ_SIZE))) {
           LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
+        } else if (!iter_inited && OB_FAIL(remote_iter.set_io_context(palf::LogIOContext(tenant_id_, ls_id.id(), palf::LogIOUser::CDC)))) {
+          LOG_WARN("set_io_context failed", KR(ret), K(tenant_id_), K(ls_id));
         } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
           // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
           if (OB_ITER_END != ret) {
@@ -525,7 +507,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
 {
   int ret = OB_SUCCESS;
   const int64_t start_ls_fetch_log_time = ObTimeUtility::current_time();
-  PalfGroupBufferIterator palf_iter(ls_id.id(), palf::LogIOUser::CDC);
+  PalfGroupBufferIterator palf_iter;
   PalfHandleGuard palf_guard;
   int64_t version = 0;
   // use cached remote_iter
@@ -580,7 +562,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
       LOG_INFO("fetch log quit in time", K(end_tstamp), K(frt), K(fetched_log_count));
     } // time up
     else if (FetchMode::FETCHMODE_ONLINE == fetch_mode) {
-      if (OB_FAIL(fetch_log_in_palf_(ls_id, palf_iter, palf_guard,
+      if (OB_FAIL(fetch_log_in_palf_(ls_id, palf_iter,
           resp.get_next_req_lsn(), need_init_iter, replayable_point_scn,
           log_group_entry, lsn))) {
         if (OB_ITER_END == ret) {
@@ -941,11 +923,10 @@ int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req
     } else {
       for (int64_t idx = 0; OB_SUCC(ret) && ! frt.is_stopped() && idx < miss_log_array.count(); idx++) {
         // need_init_iter should always be true, declared here to ensure need init iter be true in each loop
-        PalfBufferIterator palf_iter(ls_id.id(), palf::LogIOUser::CDC);
+        PalfBufferIterator palf_iter;
         ObRemoteLogpEntryIterator remote_iter(get_source_func, update_source_func);
         const obrpc::ObCdcLSFetchMissLogReq::MissLogParam &miss_log_info = miss_log_array[idx];
         const LSN &missing_lsn = miss_log_info.miss_lsn_;
-        palf::PalfBufferIterator log_entry_iter(ls_id.id(), palf::LogIOUser::CDC);
         LogEntry log_entry;
         LSN lsn;
         resp.set_next_miss_lsn(missing_lsn);
@@ -959,7 +940,7 @@ int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req
         } else {
           // first, try to fetch logs in palf
           if (!fetch_archive_only && ls_exist_in_palf)  {
-            if (OB_FAIL(fetch_log_in_palf_(ls_id, palf_iter, palf_guard,
+            if (OB_FAIL(fetch_log_in_palf_(ls_id, palf_iter,
                 missing_lsn, need_init_iter, replayable_point_scn,
                 log_entry, lsn))) {
               if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
@@ -1254,6 +1235,9 @@ int ObCdcFetcher::fetch_raw_log_in_palf_(const ObLSID &ls_id,
   const int64_t buffer_len = resp.get_buffer_len();
   fetch_log_succ = false;
 
+  palf::LogIOContext io_ctx(tenant_id_, ls_id.id(), palf::LogIOUser::CDC);
+  CONSUMER_GROUP_FUNC_GUARD(io_ctx.get_function_type());
+
   if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_guard))) {
     if (OB_LS_NOT_EXIST != ret) {
       LOG_WARN("failed to get palf handle guard", K(ls_id));
@@ -1269,7 +1253,7 @@ int ObCdcFetcher::fetch_raw_log_in_palf_(const ObLSID &ls_id,
     LOG_WARN("req_size is larger than buffer_len, buf not enough", K(req_size), K(buffer_len),
         K(resp));
   } else if (OB_FAIL(palf_handle->raw_read(start_lsn, resp.get_log_buffer(),
-      req_size, read_size))) {
+      req_size, read_size, io_ctx))) {
     if (OB_ERR_OUT_OF_LOWER_BOUND != ret &&
         OB_ERR_OUT_OF_UPPER_BOUND != ret &&
         OB_NEED_RETRY != ret) {

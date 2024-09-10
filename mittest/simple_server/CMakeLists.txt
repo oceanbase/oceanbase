@@ -124,6 +124,7 @@ ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
 
 ####### freeze case #######
 #ob_freeze_observer(test_frequently_freeze freeze/test_frequently_freeze.cpp)
+# ofen timeout, modify and open later(gengli)
 ob_freeze_observer(test_ob_minor_freeze freeze/test_ob_minor_freeze.cpp)
 ####### freeze case #######
 

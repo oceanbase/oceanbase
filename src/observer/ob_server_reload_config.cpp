@@ -25,15 +25,19 @@
 #include "share/ob_task_define.h"
 #include "share/ob_resource_limit.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_service.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/slog/ob_storage_logger_manager.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "share/ob_ddl_sim_point.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction/ob_tenant_ls_merge_scheduler.h"
+#include "share/compaction/ob_shared_storage_compaction_util.h"
+#include "storage/shared_storage/ob_disk_space_manager.h"
+#endif
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -131,6 +135,11 @@ int ObServerReloadConfig::operator()()
     }
   }
   {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      OB_SERVER_DISK_SPACE_MGR.reload_config(GCONF);
+    }
+#endif
     GMEMCONF.reload_config(GCONF);
     const int64_t limit_memory = GMEMCONF.get_server_memory_limit();
     OB_LOGGER.set_info_as_wdiag(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0);
@@ -159,6 +168,7 @@ int ObServerReloadConfig::operator()()
         cpu_cnt = common::get_cpu_num();
       }
       io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
+      io_config.sync_io_thread_count_ = GCONF.sync_io_thread_count;
       // In the 2.x version, reuse the sys_bkgd_io_timeout configuration item to indicate the data disk io timeout time
       // After version 3.1, use the data_storage_io_timeout configuration item.
       io_config.data_storage_io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
@@ -294,11 +304,10 @@ int ObServerReloadConfig::operator()()
     if (OB_TMP_FAIL(ObServerUtils::get_data_disk_info_in_config(data_disk_size,
                                                                 data_disk_percentage))) {
       LOG_ERROR("cal_all_part_disk_size failed", KR(tmp_ret));
-    } else if (OB_TMP_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    } else if (OB_TMP_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(reserved_size))) {
       LOG_WARN("fail to get reserved size", KR(tmp_ret), K(reserved_size));
-    } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.resize_file(data_disk_size,
-                                                           data_disk_percentage,
-                                                           reserved_size))) {
+    } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.resize_local_device(
+        data_disk_size, data_disk_percentage, reserved_size))) {
       LOG_WARN("fail to resize file", KR(tmp_ret),
           K(data_disk_size), K(data_disk_percentage), K(reserved_size));
     }
@@ -331,8 +340,14 @@ void ObServerReloadConfig::reload_tenant_scheduler_config_()
     LOG_WARN("omt should not be null", K(ret));
   } else {
     auto f = [] () {
-      (void)MTL(ObTenantDagScheduler *)->reload_config();
-      (void)MTL(compaction::ObTenantTabletScheduler *)->reload_tenant_config();
+      (void) MTL(ObTenantDagScheduler *)->reload_config();
+      (void) MTL(compaction::ObTenantTabletScheduler *)->reload_tenant_config();
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      (void) MTL(compaction::ObTenantLSMergeScheduler *)->reload_tenant_config();
+    }
+#endif
+
       return OB_SUCCESS;
     };
     omt->operate_in_each_tenant(f);

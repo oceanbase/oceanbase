@@ -35,10 +35,13 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_regexp_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_hs_regexp_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   virtual int is_valid_for_generated_column(const ObRawExpr*expr,
                                             const common::ObIArray<ObRawExpr *> &exprs,
                                             bool &is_valid) const override;
 private:
+  template<typename RegExpCtx>
+  static int regexp_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpSubstr);
 };
 }

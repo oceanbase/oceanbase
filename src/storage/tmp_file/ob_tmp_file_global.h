@@ -31,6 +31,8 @@ struct ObTmpFileGlobal final
   static const int64_t TMP_FILE_READ_BATCH_SIZE;
   static const int64_t TMP_FILE_WRITE_BATCH_PAGE_NUM;
 
+  static const int64_t TMP_FILE_MAX_LABEL_SIZE = 15;
+
   // TMP_FILE_BLOCK
   static const int64_t INVALID_TMP_FILE_BLOCK_INDEX;
 

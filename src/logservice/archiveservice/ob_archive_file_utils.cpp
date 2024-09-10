@@ -164,6 +164,7 @@ int ObArchiveFileUtils::list_files(const ObString &prefix,
 
 int ObArchiveFileUtils::read_file(const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
+    const common::ObStorageIdMod &storage_id_mod,
     char *buf,
     const int64_t file_length,
     int64_t &read_size)
@@ -171,8 +172,9 @@ int ObArchiveFileUtils::read_file(const ObString &uri,
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
 
-  if (OB_FAIL(util.adaptively_read_single_file(uri, storage_info, buf, file_length, read_size))) {
-    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+  if (OB_FAIL(util.adaptively_read_single_file(uri, storage_info, buf, file_length, read_size,
+                                               storage_id_mod))) {
+    if (OB_OBJECT_NOT_EXIST != ret) {
       ARCHIVE_LOG(WARN, "read_single_file fail", K(ret), K(uri));
     } else {
       // rewrite ret
@@ -186,6 +188,7 @@ int ObArchiveFileUtils::read_file(const ObString &uri,
 
 int ObArchiveFileUtils::range_read(const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
+    const common::ObStorageIdMod &storage_id_mod,
     char *buf,
     const int64_t buf_size,
     const int64_t offset,
@@ -196,7 +199,8 @@ int ObArchiveFileUtils::range_read(const ObString &uri,
   if (OB_UNLIKELY(NULL == buf || buf_size  < 0 || offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(buf_size), K(offset), K(uri));
-  } else if (OB_FAIL(util.adaptively_read_part_file(uri, storage_info, buf, buf_size, offset, read_size))) {
+  } else if (OB_FAIL(util.adaptively_read_part_file(uri, storage_info, buf, buf_size, offset, read_size,
+                                                    storage_id_mod))) {
     ARCHIVE_LOG(WARN, "read part file failed", K(ret), K(uri), K(buf_size), K(offset));
   }
   return ret;
@@ -204,6 +208,7 @@ int ObArchiveFileUtils::range_read(const ObString &uri,
 
 int ObArchiveFileUtils::write_file(const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
+    const common::ObStorageIdMod &storage_id_mod,
     const char *buf,
     const int64_t buf_len)
 {
@@ -212,7 +217,7 @@ int ObArchiveFileUtils::write_file(const ObString &uri,
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(buf), K(buf_len), K(uri));
-  } else if (OB_FAIL(util.write_single_file(uri, storage_info, buf, buf_len))) {
+  } else if (OB_FAIL(util.write_single_file(uri, storage_info, buf, buf_len, storage_id_mod))) {
     ARCHIVE_LOG(WARN, "write single file failed", K(ret), K(uri));
   }
   return ret;
@@ -241,7 +246,7 @@ int ObArchiveFileUtils::get_file_length(const ObString &uri,
   ObBackupIoAdapter util;
 
   if (OB_FAIL(util.adaptively_get_file_length(uri, storage_info, file_len))) {
-    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+    if (OB_OBJECT_NOT_EXIST != ret) {
       ARCHIVE_LOG(WARN, "get_file_length fail", K(ret), K(uri), KP(storage_info));
     } else {
       // rewrite ret
@@ -321,7 +326,8 @@ int ObArchiveFileUtils::locate_file_by_scn_in_piece(share::ObBackupDest &dest,
     share::ObBackupPath path;
     if (OB_FAIL(share::ObArchivePathUtil::get_ls_archive_file_path(dest, dest_id, round, piece_id, ls_id, tmp_file_id, path))) {
       ARCHIVE_LOG(WARN, "get piece dir failed", K(ret), K(dest_id), K(round), K(piece_id), K(dest));
-    } else if (OB_FAIL(extract_file_min_log_info_(path.get_obstr(), dest.get_storage_info(), lsn, scn))) {
+    } else if (OB_FAIL(extract_file_min_log_info_(path.get_obstr(), dest.get_storage_info(),
+               common::ObStorageIdMod(dest_id, ObStorageUsedMod::STORAGE_USED_ARCHIVE), lsn, scn))) {
       ARCHIVE_LOG(WARN, "extract_file_min_log_info_ failed", K(ret));
     }
     return ret;
@@ -331,6 +337,7 @@ int ObArchiveFileUtils::locate_file_by_scn_in_piece(share::ObBackupDest &dest,
 
 int ObArchiveFileUtils::extract_file_min_log_info_(const ObString &uri,
     share::ObBackupStorageInfo *storage_info,
+    const common::ObStorageIdMod &storage_id_mod,
     palf::LSN &lsn,
     SCN &scn)
 {
@@ -346,7 +353,7 @@ int ObArchiveFileUtils::extract_file_min_log_info_(const ObString &uri,
   if (OB_ISNULL(data = (char*)share::mtl_malloc(data_len, "ArcMinInfo"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     ARCHIVE_LOG(WARN, "alloc memory failed", K(ret), K(data_len));
-  } else if (OB_FAIL(range_read(uri, storage_info, data, data_len, offset, read_size))) {
+  } else if (OB_FAIL(range_read(uri, storage_info, storage_id_mod, data, data_len, offset, read_size))) {
     ARCHIVE_LOG(WARN, "read file failed", K(ret));
   } else if (OB_FAIL(file_header.deserialize(data, data_len, pos))) {
     ARCHIVE_LOG(WARN, "file header deserialize failed", K(ret), K(file_header));

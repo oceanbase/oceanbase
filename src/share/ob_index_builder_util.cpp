@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_index_builder_util.h"
 #include "ob_fts_index_builder_util.h"
+#include "ob_vec_index_builder_util.h"
 
 #include "share/ob_define.h"
 #include "lib/container/ob_array_iterator.h"
@@ -37,9 +38,11 @@ void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &co
 {
   if ((column.is_generated_column() &&
        !column.is_fulltext_column() &&
+       !column.is_vec_index_column() &&
        !column.is_spatial_generated_column() &&
        !column.is_multivalue_generated_column() &&
-       !column.is_multivalue_generated_array_column())
+       !column.is_multivalue_generated_array_column() &&
+       !column.is_vec_index_column())
       || column.is_identity_column()) {
     if (column.is_virtual_generated_column()) {
       column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
@@ -145,6 +148,16 @@ int ObIndexBuilderUtil::add_column(
           const int64_t data_length = MIN(column.get_data_length(), MIN(OB_MAX_ROW_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH));
           column.set_data_length(data_length);
         }
+        column.set_is_hidden(false);
+        if (FAILEDx(column.set_orig_default_value(default_value))) {
+          LOG_WARN("set orig default value failed", K(ret));
+        } else if (OB_FAIL(column.set_cur_default_value(default_value, column.is_default_expr_v2_column()))) {
+          LOG_WARN("set current default value failed", K(ret));
+        }
+      }
+      if (column.is_vec_index_column()) {
+        ObObj default_value;
+        column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
         column.set_is_hidden(false);
         if (FAILEDx(column.set_orig_default_value(default_value))) {
           LOG_WARN("set orig default value failed", K(ret));
@@ -370,6 +383,28 @@ int ObIndexBuilderUtil::set_index_table_columns(
   }
   // no matter what index col of data table is, columns of 4 aux fts table is fixed
   if (OB_FAIL(ret)) {
+  } else if (is_vec_index(arg.index_type_)) {
+    if (is_vec_rowkey_vid_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_rowkey_vid_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set vec rowkey vid table column", K(ret));
+      }
+    } else if (is_vec_vid_rowkey_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_vid_rowkey_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
+      }
+    } else if (is_vec_delta_buffer_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_delta_buffer_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
+      }
+    } else if (is_vec_index_id_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_index_id_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
+      }
+    } else if (is_vec_index_snapshot_data_type(arg.index_type_)) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_vec_index_snapshot_data_table_columns(arg, data_schema, index_schema))) {
+        LOG_WARN("fail to set vec vid rowkey table column", K(ret));
+      }
+    }
   } else if (is_fts_index(arg.index_type_) ||
              is_multivalue_index(arg.index_type_)) {
     if (is_doc_rowkey_aux(arg.index_type_)) {
@@ -592,6 +627,18 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("JSON column cannot be used in key specification.", "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
+          } else if (ob_is_collection_sql_type(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be collection type", "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
+          } else if (ob_is_geometry_tc(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be geometry type", "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
           } else if (OB_FAIL(add_column(data_column, is_index_column, is_rowkey,
               order_in_rowkey, row_desc, index_schema, false /* is_hidden */, is_specified_storing_col))) {
             LOG_WARN("add_column failed", "data_column", *data_column, K(is_index_column),
@@ -645,6 +692,22 @@ int ObIndexBuilderUtil::set_index_table_columns(
                 "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
+          } else if (ob_is_collection_sql_type(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
+                                                    arg.hidden_store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be collection type",
+                "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
+          } else if (ob_is_geometry_tc(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
+                                                    arg.hidden_store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be geometry type",
+                "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
           } else if (OB_FAIL(add_column(data_column, is_index_column, is_rowkey,
                                         order_in_rowkey, row_desc, index_schema, 
                                         true /* is_hidden */, false /* is_specified_storing_col */))) {
@@ -690,6 +753,12 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
       LOG_WARN("push back cellid column to gen columns failed", K(ret));
     } else if (OB_FAIL(gen_columns.push_back(spatial_cols.at(1)))) {
       LOG_WARN("push back mbr column to gen columns failed", K(ret));
+    }
+  } else if (is_vec_index(arg.index_type_)) {
+    if (OB_FAIL(ObVecIndexBuilderUtil::check_vec_index_allowed(data_schema))) {
+      LOG_WARN("fail to check vector index allowed", K(ret));
+    } else if (OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(arg, data_schema, allocator, gen_columns))) {
+      LOG_WARN("failed to adjust vec index args", K(ret));
     }
   } else if (is_fts_index(arg.index_type_)) {
     if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {

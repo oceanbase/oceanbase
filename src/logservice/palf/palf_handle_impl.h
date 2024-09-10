@@ -181,52 +181,6 @@ struct BatchFetchParams {
   int64_t has_consumed_count_;
 };
 
-struct LSKey {
-  LSKey() : id_(-1) {}
-  explicit LSKey(const int64_t id) : id_(id) {}
-  ~LSKey() {id_ = -1;}
-  LSKey(const LSKey &key) { this->id_ = key.id_; }
-  LSKey &operator=(const LSKey &other)
-  {
-    this->id_ = other.id_;
-    return *this;
-  }
-
-  bool operator==(const LSKey &palf_id) const
-  {
-    return this->compare(palf_id) == 0;
-  }
-  bool operator!=(const LSKey &palf_id) const
-  {
-    return this->compare(palf_id) != 0;
-  }
-  uint64_t hash() const
-  {
-    uint64_t hash_val = 0;
-    hash_val = common::murmurhash(&hash_val, sizeof(id_), id_);
-    return hash_val;
-  }
-  int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return OB_SUCCESS;
-  }
-  int compare(const LSKey &palf_id) const
-  {
-    if (palf_id.id_ < id_) {
-      return 1;
-    } else if (palf_id.id_ == id_) {
-      return 0;
-    } else {
-      return -1;
-    }
-  }
-  void reset() {id_ = -1;}
-  bool is_valid() const {return -1 != id_;}
-  int64_t id_;
-  TO_STRING_KV(K_(id));
-};
-
 struct RebuildMetaInfo
 {
 public:
@@ -631,6 +585,7 @@ public:
   virtual const share::SCN get_max_scn() const = 0;
   virtual const share::SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
+  virtual const LSN get_readable_end_lsn() const = 0;
   virtual int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const = 0;
   virtual const LSN &get_base_lsn_used_for_block_gc() const = 0;
   // @desc: get ack_info_array and degraded_list for judging to degrade/upgrade
@@ -641,10 +596,6 @@ public:
                                  common::GlobalLearnerList &degraded_list) const = 0;
 
   virtual int delete_block(const block_id_t &block_id) = 0;
-  virtual int read_log(const LSN &lsn,
-                       const int64_t in_read_size,
-                       ReadBuf &read_buf,
-                       int64_t &out_read_size) = 0;
   virtual int inner_after_flush_log(const FlushLogCbCtx &flush_log_cb_ctx) = 0;
   virtual int inner_after_truncate_log(const TruncateLogCbCtx &truncate_log_cb_ctx) = 0;
   virtual int inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_ctx) = 0;
@@ -751,6 +702,7 @@ public:
                                  const share::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const = 0;
   virtual int get_access_mode(AccessMode &access_mode) const = 0;
+  virtual int get_access_mode_version(int64_t &mode_version) const = 0;
   virtual int get_access_mode_ref_scn(int64_t &mode_version,
                                       AccessMode &access_mode,
                                       SCN &ref_scn) const = 0;
@@ -784,6 +736,8 @@ public:
 
   // ===================== Iterator start =======================
   virtual int alloc_palf_buffer_iterator(const LSN &offset,
+                                         PalfBufferIterator &iterator) = 0;
+  virtual int alloc_palf_buffer_iterator(const SCN &scn,
                                          PalfBufferIterator &iterator) = 0;
   virtual int alloc_palf_group_buffer_iterator(const LSN &offset,
                                                PalfGroupBufferIterator &iterator) = 0;
@@ -823,12 +777,15 @@ public:
                                     const int64_t in_read_size,
                                     char *buf,
                                     int64_t &out_read_size) const = 0;
-  virtual int try_handle_next_submit_log() = 0;
+  // =================== Callback end ===========================
 
   virtual int raw_read(const palf::LSN &lsn,
                        char *read_buf,
                        const int64_t nbytes,
-                       int64_t &read_size) = 0;
+                       int64_t &read_size,
+                       palf::LogIOContext &io_ctx) = 0;
+  virtual int try_handle_next_submit_log() = 0;
+  virtual int fill_cache_when_slide(const LSN &read_begin_lsn, const int64_t in_read_size) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -968,18 +925,15 @@ public:
                             const int64_t in_read_size,
                             char *buf,
                             int64_t &out_read_size) const;
-  int try_handle_next_submit_log();
-
   int raw_read(const palf::LSN &lsn,
                char *buffer,
                const int64_t nbytes,
-               int64_t &read_size) override final;
+               int64_t &read_size,
+               palf::LogIOContext &io_ctx) override;
+  int try_handle_next_submit_log();
+  int fill_cache_when_slide(const LSN &read_begin_lsn, const int64_t in_read_size) override;
 public:
   int delete_block(const block_id_t &block_id) override final;
-  int read_log(const LSN &lsn,
-               const int64_t in_read_size,
-               ReadBuf &read_buf,
-               int64_t &out_read_size) override final;
   int set_scan_disk_log_finished() override;
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
@@ -987,12 +941,13 @@ public:
                          const share::SCN &ref_scn) override final;
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const override final;
   int get_access_mode(AccessMode &access_mode) const override final;
-  int get_access_mode_version(int64_t &mode_version) const;
+  int get_access_mode_version(int64_t &mode_version) const override final;
   int get_access_mode_ref_scn(int64_t &mode_version,
                               AccessMode &access_mode,
                               SCN &ref_scn) const override final;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
+  int alloc_palf_buffer_iterator(const SCN &scn, PalfBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const LSN &offset, PalfGroupBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const share::SCN &scn, PalfGroupBufferIterator &iterator) override final;
   // =========================== Iterator end ============================
@@ -1044,6 +999,14 @@ public:
     return sw_.get_last_slide_scn();
   }
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const override final;
+  const LSN get_readable_end_lsn() const override final
+  {
+    LSN committed_end_lsn;
+    sw_.get_committed_end_lsn(committed_end_lsn);
+    LSN max_flushed_end_lsn;
+    sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
+    return MIN(committed_end_lsn, max_flushed_end_lsn);
+  }
   int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const;
   // return the smallest recycable lsn
   const LSN &get_base_lsn_used_for_block_gc() const override final
@@ -1176,6 +1139,7 @@ public:
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   int update_palf_stat() override final;
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
+
 private:
   int do_init_mem_(const int64_t palf_id,
                    const PalfBaseInfo &palf_base_info,
@@ -1341,6 +1305,9 @@ private:
                                 const common::ObMemberList &removed_learners);
   // ======================= report event end =======================================
   bool check_need_hook_fetch_log_(const FetchLogType fetch_type, const LSN &start_lsn);
+  template<typename LogEntryType>
+  int alloc_iterator_from_scn_(const SCN &scn,
+                               PalfIterator<LogEntryType> &iterator);
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {

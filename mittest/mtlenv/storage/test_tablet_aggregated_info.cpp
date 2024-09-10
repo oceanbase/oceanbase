@@ -68,19 +68,27 @@ TEST_F(TestTabletAggregatedInfo, test_space_usage)
 
   // check tablet's space_usage with empty major sstable
   ObTabletHandle new_tablet_handle;
-  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle));
+  const ObTabletPersisterParam param(ls_id, ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
   ObTabletSpaceUsage space_usage = new_tablet_handle.get_obj()->tablet_meta_.space_usage_;
-  ASSERT_EQ(0, space_usage.data_size_);
-  ASSERT_EQ(0, space_usage.shared_data_size_);
-  ASSERT_NE(0, space_usage.shared_meta_size_);
+  ASSERT_EQ(0, space_usage.all_sstable_data_occupy_size_);
+  ASSERT_EQ(0, space_usage.all_sstable_data_required_size_);
+  ASSERT_EQ(0, space_usage.ss_public_sstable_occupy_size_);
+  ASSERT_EQ(0, space_usage.all_sstable_meta_size_);
+  ASSERT_EQ(0, space_usage.tablet_clustered_sstable_data_size_);
+  ASSERT_NE(0, space_usage.tablet_clustered_meta_size_);
 
   // check tablet's space_usage without sstable
   tablet->table_store_addr_.ptr_->major_tables_.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle));
-  space_usage = new_tablet_handle.get_obj()->tablet_meta_.space_usage_;
-  ASSERT_EQ(0, space_usage.data_size_);
-  ASSERT_EQ(0, space_usage.shared_data_size_);
-  ASSERT_NE(0, space_usage.shared_meta_size_);
+  ObTabletHandle new_tablet_handle2;
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle2));
+  space_usage = new_tablet_handle2.get_obj()->tablet_meta_.space_usage_;
+  ASSERT_EQ(0, space_usage.all_sstable_data_occupy_size_);
+  ASSERT_EQ(0, space_usage.all_sstable_data_required_size_);
+  ASSERT_EQ(0, space_usage.ss_public_sstable_occupy_size_);
+  ASSERT_EQ(0, space_usage.all_sstable_meta_size_);
+  ASSERT_EQ(0, space_usage.tablet_clustered_sstable_data_size_);
+  ASSERT_NE(0, space_usage.tablet_clustered_meta_size_);
 }
 
 } // storage

@@ -44,6 +44,9 @@ int convert_sys_errno()
   case ENOMEM:
     ret = OB_ALLOCATE_MEMORY_FAILED;
     break;
+  case EMFILE:
+    ret = OB_TOO_MANY_OPEN_FILES;
+    break;
   default:
     ret = OB_IO_ERROR;
   }

@@ -14,6 +14,8 @@
 #include "logservice/ob_log_handler.h"
 #include "storage/tx/ob_ts_mgr.h"
 
+#define USING_LOG_PREFIX TRANS
+
 namespace oceanbase
 {
 
@@ -94,6 +96,14 @@ void ObKeepAliveLSHandler::reset()
   stat_info_.reset();
 }
 
+void ObKeepAliveLSHandler::clear_keep_alive_smaller_scn_info()
+{
+  SpinWLockGuard guard(lock_);
+  FLOG_INFO("[Keep Alive] clear keep alive ls info", K(ls_id_), K(tmp_keep_alive_info_), K(durable_keep_alive_info_));
+  tmp_keep_alive_info_.reset();
+  durable_keep_alive_info_.reset();
+}
+
 int ObKeepAliveLSHandler::try_submit_log(const SCN &min_start_scn, MinStartScnStatus min_start_status)
 {
   int ret = OB_SUCCESS;
@@ -149,6 +159,7 @@ int ObKeepAliveLSHandler::on_success()
 
   durable_keep_alive_info_.replace(tmp_keep_alive_info_);
   stat_info_.stat_keepalive_info_ = durable_keep_alive_info_;
+
 
   ATOMIC_STORE(&is_busy_,false);
 

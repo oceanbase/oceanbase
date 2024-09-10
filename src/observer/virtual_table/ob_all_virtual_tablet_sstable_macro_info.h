@@ -85,9 +85,12 @@ private:
               && compressor_type_ < ObCompressorType::MAX_COMPRESSOR)
           && row_store_type_ < ObRowStoreType::MAX_ROW_STORE;
     }
-    TO_STRING_KV(K(data_seq_), K(macro_logic_version_), K(macro_block_index_), K(micro_block_count_),
-                 K(data_checksum_), K(occupy_size_), K(original_size_), K_(data_size), K(data_zsize_),
-                 K(store_range_), K(row_count_), K(compressor_type_), K(row_store_type_));
+    TO_STRING_KV(K(data_seq_), K(macro_logic_version_), K(macro_block_index_),
+                 K(micro_block_count_), K(data_checksum_), K(occupy_size_),
+                 K(original_size_), K_(data_size), K(data_zsize_),
+                 K(macro_block_id_), K(store_range_), K(row_count_),
+                 K(compressor_type_), K(row_store_type_));
+
   public:
     int64_t data_seq_;
     uint64_t macro_logic_version_;
@@ -98,6 +101,7 @@ private:
     int64_t original_size_;
     int64_t data_size_;
     int64_t data_zsize_;
+    blocksstable::MacroBlockId macro_block_id_;
     ObStoreRange store_range_;
     int32_t row_count_;
     ObCompressorType compressor_type_;

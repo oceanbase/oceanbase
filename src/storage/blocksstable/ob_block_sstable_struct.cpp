@@ -22,6 +22,7 @@
 #include "ob_block_manager.h"
 #include "ob_data_buffer.h"
 #include "share/config/ob_server_config.h"
+#include "observer/ob_server_struct.h"
 
 using namespace oceanbase;
 using namespace common;

@@ -122,6 +122,7 @@ private:
 
   // 3. 执行归档
   int archive_log_(const share::ObBackupDest &backup_dest,
+      const int64_t backup_dest_id,
       const ObArchiveSendDestArg &arg,
       ObArchiveSendTask &task,
       ObLSArchiveTask &ls_archive_task);
@@ -160,6 +161,7 @@ private:
   int push_log_(const share::ObLSID &id,
       const ObString &uri,
       const share::ObBackupStorageInfo *storage_info,
+      const int64_t backup_dest_id,
       const bool is_full_file,
       const bool is_can_seal,
       const int64_t offset,

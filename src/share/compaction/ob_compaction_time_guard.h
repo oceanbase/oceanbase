@@ -25,6 +25,7 @@ namespace compaction
  * -- ObRSCompactionTimeGuard
  * -- ObScheduleCompactionTimeGuard
  * -- ObStorageCompactionTimeGuard
+ * -- ObSSCompactionTimeGuard
  */
 class ObCompactionTimeGuard
 {
@@ -114,6 +115,7 @@ private:
   const static char *CompactionEventStr[];
   static const char *get_comp_event_str(const enum CompactionEvent event);
 };
+
 struct ObCompactionScheduleTimeGuard : public ObCompactionTimeGuard
 {
 public:
@@ -146,8 +148,8 @@ private:
 struct ObStorageCompactionTimeGuard : public ObCompactionTimeGuard
 {
 public:
-  ObStorageCompactionTimeGuard()
-    : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, COMPACTION_WARN_THRESHOLD_RATIO, "[STORAGE] ")
+  ObStorageCompactionTimeGuard(const int64_t warn_threshold = COMPACTION_WARN_THRESHOLD_RATIO)
+    : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, warn_threshold, "[STORAGE] ")
   {}
   virtual ~ObStorageCompactionTimeGuard() {}
   enum CompactionEvent : uint16_t {
@@ -162,6 +164,7 @@ public:
     RELEASE_MEMTABLE,
     SCHEDULE_OTHER_COMPACTION,
     DAG_FINISH,
+    PRE_WARM,
     COMPACTION_EVENT_MAX
   };
   virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
@@ -173,6 +176,31 @@ private:
   static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 1 * 1000L * 1000L; // 1s
 };
 
+struct ObSSCompactionTimeGuard : public ObCompactionTimeGuard
+{
+public:
+  ObSSCompactionTimeGuard()
+    : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, COMPACTION_WARN_THRESHOLD_RATIO, "[SS_Merge] ")
+  {}
+  virtual ~ObSSCompactionTimeGuard() {}
+  enum CompactionEvent : uint16_t {
+    // ls merge scheduler
+    GET_SCHEDULE_TABLET,
+    PREPARE_CLOG,
+    UPDATE_TABLET_OBJ,
+    GET_TABLET,
+    SCHEDULE_MERGE,
+    REFRESH,
+    FORCE_FREEZE,
+    COMPACTION_EVENT_MAX
+  };
+private:
+  const static char *CompactionEventStr[];
+  static const char *get_comp_event_str(const enum CompactionEvent event);
+  static const int64_t COMPACTION_WARN_THRESHOLD_RATIO = 60 * 1000L * 1000L; // 1 min
+  static constexpr float COMPACTION_SHOW_PERCENT_THRESHOLD = 0.1;
+  static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 1 * 1000L * 1000L; // 1s
+};
 
 } // namespace compaction
 } // namespace oceanbase

@@ -29,15 +29,6 @@ class ObString;
 }
 namespace share
 {
-
-enum class ResourceGroupType {
-  INVALID_GROUP,
-  USER_GROUP,
-  FUNCTION_GROUP,
-  SQL_GROUP,
-  END_GROUP
-};
-
 class ObResourceManagerProxy;
 class ObResourceMappingRuleManager
 {
@@ -72,7 +63,7 @@ public:
   }
 
   inline int get_group_id_by_function_type(const uint64_t tenant_id,
-                                           const int64_t function_type,
+                                           const uint8_t function_type,
                                            uint64_t &group_id)
   {
     int ret = common::OB_SUCCESS;
@@ -135,20 +126,18 @@ public:
     int ret = function_rule_map_.set_refactored(share::ObTenantFunctionKey(tenant_id, func), 0, 1/*overwrite*/);
     return ret;
   }
-  inline int get_group_type_by_id(const uint64_t tenant_id, uint64_t group_id, ResourceGroupType &group_type)
-  {
-    int ret = group_id_type_map_.get_refactored(share::ObTenantGroupIdKey(tenant_id, group_id), group_type);
-    return ret;
-  }
+
 private:
   int refresh_resource_function_mapping_rule(
       ObResourceManagerProxy &proxy,
       const uint64_t tenant_id,
       const ObString &plan);
+  int clear_resource_function_mapping_rule(const uint64_t tenant_id, const ObResourceMappingRuleSet &rules);
   int refresh_resource_user_mapping_rule(
       ObResourceManagerProxy &proxy,
       const uint64_t tenant_id,
       const ObString &plan);
+  int clear_resource_user_mapping_rule(const uint64_t tenant_id, const ObResourceUserMappingRuleSet &rules);
 private:
   /* variables */
   // 将用户 id 映射到 group id，用于用户登录时快速确定登录用户所属 cgroup
@@ -159,7 +148,6 @@ private:
   common::hash::ObHashMap<uint64_t, ObGroupName> group_id_name_map_;
   // 将 group_name 映射到 group_id, 用于快速根据group_name找到id(主要是用于io控制)
   common::hash::ObHashMap<share::ObTenantGroupKey, uint64_t> group_name_id_map_;
-  common::hash::ObHashMap<share::ObTenantGroupIdKey, ResourceGroupType> group_id_type_map_;
   DISALLOW_COPY_AND_ASSIGN(ObResourceMappingRuleManager);
 };
 }

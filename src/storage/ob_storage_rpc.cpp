@@ -28,6 +28,9 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "lib/thread/thread.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
+#endif
 
 namespace oceanbase
 {
@@ -42,7 +45,6 @@ using namespace share::schema;
 
 namespace obrpc
 {
-
 static bool is_copy_ls_inner_tablet(const common::ObIArray<common::ObTabletID> &tablet_id_list)
 {
   bool is_inner = false;
@@ -1186,7 +1188,6 @@ int ObStorageStreamRpcP<RPC_CODE>::fill_data(const Data &data)
   } else if (serialization::encoded_length(data) > this->result_.get_remain()
       || (curr_ts - last_send_time_ >= FLUSH_TIME_INTERVAL
           && this->result_.get_capacity() != this->result_.get_remain())) {
-    LOG_INFO("flush", K(this->result_));
     if (0 == this->result_.get_position()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "data is too large", K(ret));
@@ -1366,6 +1367,209 @@ int ObStorageStreamRpcP<RPC_CODE>::is_follower_ls(logservice::ObLogService *log_
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+ObGetMicroBlockCacheSizeArg::ObGetMicroBlockCacheSizeArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_()
+{
+}
+
+bool ObGetMicroBlockCacheSizeArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid();
+}
+
+void ObGetMicroBlockCacheSizeArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheSizeArg, tenant_id_, ls_id_);
+
+ObGetMicroBlockCacheSizeRes::ObGetMicroBlockCacheSizeRes()
+  : cache_size_(0)
+{
+}
+
+bool ObGetMicroBlockCacheSizeRes::is_valid() const
+{
+  return cache_size_ >= 0;
+}
+
+void ObGetMicroBlockCacheSizeRes::reset()
+{
+  cache_size_ = 0;
+}
+
+OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheSizeRes, cache_size_);
+
+ObGetMigrationCacheJobInfoArg::ObGetMigrationCacheJobInfoArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    task_count_(0)
+{
+}
+
+bool ObGetMigrationCacheJobInfoArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && task_count_ > 0;
+}
+
+void ObGetMigrationCacheJobInfoArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  task_count_ = 0;
+}
+
+OB_SERIALIZE_MEMBER(ObGetMigrationCacheJobInfoArg, tenant_id_, ls_id_, task_count_);
+
+ObGetMigrationCacheJobInfoRes::ObGetMigrationCacheJobInfoRes()
+  : job_infos_()
+{
+}
+
+bool ObGetMigrationCacheJobInfoRes::is_valid() const
+{
+  return !job_infos_.empty();
+}
+
+void ObGetMigrationCacheJobInfoRes::reset()
+{
+  job_infos_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObGetMigrationCacheJobInfoRes, job_infos_);
+
+ObGetMicroBlockKeyArg::ObGetMicroBlockKeyArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    job_info_()
+{
+}
+
+bool ObGetMicroBlockKeyArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && ls_id_.is_valid()
+      && job_info_.is_valid();
+}
+
+void ObGetMicroBlockKeyArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  job_info_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObGetMicroBlockKeyArg, tenant_id_, ls_id_, job_info_);
+
+ObCopyMicroBlockKeySetRes::ObCopyMicroBlockKeySetRes()
+  : header_(),
+    key_set_array_()
+{
+}
+
+ObCopyMicroBlockKeySetRes::~ObCopyMicroBlockKeySetRes()
+{
+}
+
+bool ObCopyMicroBlockKeySetRes::is_valid() const
+{
+  return header_.is_valid();
+}
+
+void ObCopyMicroBlockKeySetRes::reset()
+{
+  header_.reset();
+  key_set_array_.reset();
+}
+
+int ObCopyMicroBlockKeySetRes::assign(const ObCopyMicroBlockKeySetRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(other));
+  } else if (this == &other) {
+    // do nothing
+  } else {
+    header_ = other.header_;
+    if (OB_FAIL(key_set_array_.assign(other.key_set_array_))) {
+      LOG_WARN("fail to assign key sets", KR(ret), K(other));
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCopyMicroBlockKeySetRes, header_, key_set_array_);
+
+ObMigrateWarmupKeySet::ObMigrateWarmupKeySet()
+  : tenant_id_(OB_INVALID_ID),
+    key_sets_()
+{
+}
+
+bool ObMigrateWarmupKeySet::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && !key_sets_.empty();
+}
+
+void ObMigrateWarmupKeySet::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  key_sets_.reset();
+}
+
+int ObMigrateWarmupKeySet::assign(const ObMigrateWarmupKeySet &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(key_sets_.assign(arg.key_sets_))) {
+    LOG_WARN("failed to assign arg list", K(ret), K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObMigrateWarmupKeySet, tenant_id_, key_sets_);
+
+ObSSLSFetchMicroBlockArg::ObSSLSFetchMicroBlockArg()
+  : tenant_id_(OB_INVALID_TENANT_ID), micro_metas_()
+{
+}
+
+bool ObSSLSFetchMicroBlockArg::is_valid() const
+{
+  return (is_valid_tenant_id(tenant_id_) && !micro_metas_.empty());
+}
+
+void ObSSLSFetchMicroBlockArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  micro_metas_.reset();
+}
+
+int ObSSLSFetchMicroBlockArg::assign(const ObSSLSFetchMicroBlockArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    tenant_id_ = other.tenant_id_;
+    if (OB_FAIL(micro_metas_.assign(other.micro_metas_))) {
+      LOG_WARN("fail to assign micro keys", KR(ret));
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObSSLSFetchMicroBlockArg, tenant_id_, micro_metas_);
+
+#endif
 
 ObHAFetchMacroBlockP::ObHAFetchMacroBlockP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
   : ObStorageStreamRpcP(bandwidth_throttle)
@@ -1929,6 +2133,7 @@ int ObFetchLSMemberAndLearnerListP::process()
     logservice::ObLogService *log_service = nullptr;
     ObRole role;
     int64_t proposal_id = 0;
+    int64_t validating_proposal_id = 0;
     common::GlobalLearnerList learner_list;
     if (tenant_id != MTL_ID()) {
       ret = OB_ERR_UNEXPECTED;
@@ -1958,8 +2163,15 @@ int ObFetchLSMemberAndLearnerListP::process()
       LOG_WARN("failed to assign member list", K(ret), K(member_list));
     } else if (OB_FAIL(result_.learner_list_.deep_copy(learner_list))) {
       LOG_WARN("failed to assign learner list", K(ret), K(learner_list));
+    } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, validating_proposal_id))) {
+      LOG_WARN("failed to get palf role", K(ret), "arg", arg_);
+    } else if (!is_strong_leader(role)) {
+      ret = OB_PARTITION_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_));
+    } else if (proposal_id != validating_proposal_id) {
+      ret = OB_PARTITION_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_), K(proposal_id), K(validating_proposal_id));
     }
-
   }
 
   return ret;
@@ -2063,34 +2275,133 @@ int ObFetchSSTableMacroInfoP::fetch_sstable_macro_info_header_()
 int ObFetchSSTableMacroInfoP::fetch_sstable_macro_range_info_(const obrpc::ObCopySSTableMacroRangeInfoHeader &header)
 {
   int ret = OB_SUCCESS;
+  ObICopySSTableMacroRangeObProducer *producer = nullptr;
 
   if (!header.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fetch sstable macro range info get invalid argument", K(ret) ,K(header));
+  } else if (OB_FAIL(get_macro_range_producer_(header, producer))) {
+    LOG_WARN("failed to get macro range producer", K(ret), K(header));
   } else {
-    SMART_VARS_2((ObCopySSTableMacroRangeObProducer, macro_range_producer), (ObCopyMacroRangeInfo, macro_range_info)) {
-      if (OB_FAIL(macro_range_producer.init(
-          arg_.tenant_id_, arg_.ls_id_, arg_.tablet_id_, header, arg_.macro_range_max_marco_count_))) {
-        LOG_WARN("failed to init macro range producer", K(ret), K(arg_), K(header));
-      } else {
-        while (OB_SUCC(ret)) {
-          macro_range_info.reuse();
-          if (OB_FAIL(macro_range_producer.get_next_macro_range_info(macro_range_info))) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              break;
-            } else {
-              LOG_WARN("failed to get next macro range info", K(ret), K(header), K(arg_));
-            }
-          } else if (OB_FAIL(fill_data(macro_range_info))) {
-            LOG_WARN("failed to fill macro range info", K(ret), K(macro_range_info), K(arg_));
+    SMART_VAR(ObCopyMacroRangeInfo, macro_range_info) {
+      while (OB_SUCC(ret)) {
+        macro_range_info.reuse();
+        if (OB_FAIL(producer->get_next_macro_range_info(macro_range_info))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("failed to get next macro range info", K(ret), K(header), K(arg_));
           }
+        } else if (OB_FAIL(fill_data(macro_range_info))) {
+          LOG_WARN("failed to fill macro range info", K(ret), K(macro_range_info), K(arg_));
         }
       }
     }
   }
+
+  free_sstable_macro_range_producer_(producer);
   return ret;
 }
+
+int ObFetchSSTableMacroInfoP::get_macro_range_producer_(
+    const obrpc::ObCopySSTableMacroRangeInfoHeader &header,
+    ObICopySSTableMacroRangeObProducer *&producer)
+{
+  int ret = OB_SUCCESS;
+  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
+
+  if (!header.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get sstable macro range producer get invalid argument", K(ret) ,K(header));
+  } else if (header.copy_table_key_.is_ddl_dump_sstable() && is_shared_storage_mode) {
+    if (OB_FAIL(get_ddl_macro_range_producer_(header, producer))) {
+      LOG_WARN("failed to get ddl macro range producer", K(ret), K(header));
+    }
+  } else {
+    if (OB_FAIL(get_sstable_macro_range_producer_(header, producer))) {
+      LOG_WARN("failed to get sstable macro range producer", K(ret), K(header));
+    }
+  }
+  return ret;
+}
+
+int ObFetchSSTableMacroInfoP::get_sstable_macro_range_producer_(
+    const obrpc::ObCopySSTableMacroRangeInfoHeader &header,
+    ObICopySSTableMacroRangeObProducer *&producer)
+{
+  int ret = OB_SUCCESS;
+  producer = nullptr;
+  void *buf = nullptr;
+  ObCopySSTableMacroRangeObProducer *sstable_macro_range_producer = nullptr;
+
+  if (!header.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get sstable macro range producer get invalid argument", K(ret) ,K(header));
+  } else if (FALSE_IT(buf = mtl_malloc(sizeof(ObCopySSTableMacroRangeObProducer), "SSTMacroRange"))) {
+  } else if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(ret), KP(buf));
+  } else if (FALSE_IT(sstable_macro_range_producer = new (buf) ObCopySSTableMacroRangeObProducer())) {
+  } else if (OB_FAIL(sstable_macro_range_producer->init(arg_.tenant_id_, arg_.ls_id_, arg_.tablet_id_,
+      header, arg_.macro_range_max_marco_count_))) {
+    LOG_WARN("failed to init sstable macro range producer", K(ret), K(arg_), K(header));
+  } else {
+    producer = sstable_macro_range_producer;
+    sstable_macro_range_producer = nullptr;
+  }
+
+  if (OB_NOT_NULL(sstable_macro_range_producer)) {
+    sstable_macro_range_producer->~ObCopySSTableMacroRangeObProducer();
+    mtl_free(sstable_macro_range_producer);
+    sstable_macro_range_producer = nullptr;
+  }
+  return ret;
+}
+
+int ObFetchSSTableMacroInfoP::get_ddl_macro_range_producer_(
+    const obrpc::ObCopySSTableMacroRangeInfoHeader &header,
+    ObICopySSTableMacroRangeObProducer *&producer)
+{
+  int ret = OB_SUCCESS;
+  producer = nullptr;
+  void *buf = nullptr;
+  ObDDLCopySSTableMacroRangeObProducer *ddl_macro_range_producer = nullptr;
+
+  if (!header.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get ddl sstable macro range producer get invalid argument", K(ret) ,K(header));
+  } else if (FALSE_IT(buf = mtl_malloc(sizeof(ObDDLCopySSTableMacroRangeObProducer), "DDLMacroRange"))) {
+  } else if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(ret), KP(buf));
+  } else if (FALSE_IT(ddl_macro_range_producer = new (buf) ObDDLCopySSTableMacroRangeObProducer())) {
+  } else if (FALSE_IT(producer = ddl_macro_range_producer)) {
+  } else if (OB_FAIL(ddl_macro_range_producer->init(arg_.tenant_id_, arg_.ls_id_, arg_.tablet_id_,
+      header, arg_.macro_range_max_marco_count_))) {
+    LOG_WARN("failed to init sstable macro range producer", K(ret), K(arg_), K(header));
+  } else {
+    producer = ddl_macro_range_producer;
+    ddl_macro_range_producer = nullptr;
+  }
+
+  if (OB_NOT_NULL(ddl_macro_range_producer)) {
+    ddl_macro_range_producer->~ObDDLCopySSTableMacroRangeObProducer();
+    mtl_free(ddl_macro_range_producer);
+    ddl_macro_range_producer = nullptr;
+  }
+  return ret;
+}
+
+void ObFetchSSTableMacroInfoP::free_sstable_macro_range_producer_(ObICopySSTableMacroRangeObProducer *&producer)
+{
+  if (nullptr != producer) {
+    producer->~ObICopySSTableMacroRangeObProducer();
+    mtl_free(producer);
+    producer = nullptr;
+  }
+}
+
 
 ObCheckStartTransferTabletsDelegate::ObCheckStartTransferTabletsDelegate()
   : is_inited_(false),
@@ -3162,7 +3473,7 @@ int ObStorageGetTransferDestPrepareSCNP::process()
     } else if (OB_FAIL(ls->get_transfer_status().get_transfer_prepare_status(enable, scn))) {
       LOG_WARN("failed to get wrs handler transfer_prepare status", K(ret));
     } else if (!enable) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_EAGAIN;
       LOG_WARN("wrs handler not enter transfer_prepare status", K(ret), K_(arg));
     } else {
       result_ = scn;
@@ -3315,6 +3626,308 @@ int ObStorageWakeupTransferServiceP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObFetchMicroBlockKeysP::set_header_attr_(
+    const ObCopyMicroBlockKeySetRpcHeader::ConnectStatus connect_status,
+    const int64_t blk_idx, const int64_t count,
+    ObCopyMicroBlockKeySetRpcHeader &header)
+{
+  int ret = OB_SUCCESS;
+  header.reset();
+  if (connect_status < ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT
+      || connect_status >= ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::MAX_STATUS
+      || blk_idx < 0
+      || count < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "header attr is invalid", K(ret), K(connect_status), K(blk_idx), K(count));
+  } else {
+    header.connect_status_ = connect_status;
+    header.end_blk_idx_ = blk_idx;
+    header.object_count_ = count;
+  }
+  return ret;
+}
+
+int ObFetchMicroBlockKeysP::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObCopyMicroBlockKeySetProducer producer;
+    ObCopyMicroBlockKeySet key_set;
+    ObCopyMicroBlockKeySetRpcHeader rpc_header;
+    int64_t max_key_set_size = OB_MALLOC_BIG_BLOCK_SIZE; // 2M;
+#ifdef ERRSIM
+    max_key_set_size = GCONF.errsim_max_key_set_size; // test multi rpc get key set
+#endif
+    const int64_t start_ts = ObTimeUtil::current_time();
+    int64_t end_blk_idx = 0;
+    int64_t key_set_count = 0;
+    int64_t key_count = 0;
+    ObCopyMicroBlockKeySetRpcHeader::ConnectStatus connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::MAX_STATUS;
+    LOG_INFO("start to fetch micro block header", K(arg_));
+
+    if (!arg_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid args", K(ret), K_(arg));
+    } else if (OB_FAIL(producer.init(arg_.job_info_, arg_.ls_id_))) {
+      LOG_WARN("failed to init micro block key producer", K(ret), K(arg_));
+    } else {
+      while (OB_SUCC(ret)) {
+        key_set.reset();
+        if (OB_FAIL(producer.get_next_micro_block_key_set(key_set))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            end_blk_idx = key_set.blk_idx_;
+            connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::ENDCONNECT;
+            break;
+          } else {
+            STORAGE_LOG(WARN, "failed to get next micro block key set", K(ret));
+          }
+        } else if (!key_set.is_valid()) {
+          LOG_INFO("skip this key set", K(arg_), K(key_set));
+        } else {
+          // dest will judge ObMigrateWarmupKeySet serialize size,
+          if (OB_FAIL(result_.key_set_array_.key_sets_.push_back(key_set))) {
+            STORAGE_LOG(WARN, "fail to fill key set", K(ret), K(key_set));
+          } else if (result_.key_set_array_.get_serialize_size() > max_key_set_size) {
+            result_.key_set_array_.key_sets_.pop_back();
+            connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT;
+            break;
+          } else {
+            key_set_count++;
+            key_count += key_set.micro_block_key_metas_.count();
+            end_blk_idx = key_set.blk_idx_;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(set_header_attr_(connect_status, end_blk_idx, key_set_count, rpc_header))) {
+        LOG_WARN("failed to set header attr", K(ret), K(rpc_header), K(arg_),
+            K(connect_status), K(end_blk_idx), K(key_set_count));
+      } else {
+        result_.header_ = rpc_header;
+      }
+    }
+    LOG_INFO("finish fetch micro block header", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts, K(key_count));
+  }
+  return ret;
+}
+
+ObFetchMicroBlockP::ObFetchMicroBlockP(
+      common::ObInOutBandwidthThrottle *bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObFetchMicroBlockP::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    blocksstable::ObBufferReader data;
+    char *buf = NULL;
+    last_send_time_ = this->get_receive_timestamp();
+    int64_t key_count = 0;
+    ObSArray<ObSSMicroBlockCacheKeyMeta> key_meta_array;
+    const int64_t start_ts = ObTimeUtil::current_time();
+    const int64_t first_receive_ts = this->get_receive_timestamp();
+    LOG_INFO("start to fetch micro block", K(arg_));
+    if (!arg_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid args", K(ret), K_(arg));
+    }
+    // The reason that apply 4M buffer：
+    // buffer struct：key_meta_array + data
+    // data less than 2M, it comes from a cache block
+    // key_meta_array also less than 2M
+    // so key_meta_array + data maybe exceeding 2M, but less than 4M
+    else if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE * 2)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
+    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE * 2)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed set data to result", K(ret));
+    } else if (OB_ISNULL(bandwidth_throttle_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "bandwidth_throttle must not null", K(ret), KP_(bandwidth_throttle));
+    } else {
+      SMART_VAR(storage::ObCopyMicroBlockDataProducer, producer) {
+        if (OB_FAIL(producer.init(arg_.key_sets_))) {
+          LOG_WARN("failed to init micro block data producer", K(ret), K(arg_));
+        } else {
+          while (OB_SUCC(ret)) {
+            key_meta_array.reset();
+            if (OB_FAIL(producer.get_next_micro_block_data(key_meta_array, data))) {
+              if (OB_ITER_END != ret) {
+                STORAGE_LOG(WARN, "failed to get next micro block set", K(ret));
+              } else {
+                ret = OB_SUCCESS;
+              }
+              break;
+            } else if (key_meta_array.empty()) {
+              LOG_INFO("skip this key and size arr", K(arg_));
+            } else if (OB_FAIL(fill_data(key_meta_array))) {
+              STORAGE_LOG(WARN, "failed to fill data length", K(ret), K(data.pos()), K(key_meta_array));
+            } else if (OB_FAIL(fill_buffer(data))) {
+              STORAGE_LOG(WARN, "failed to fill data", K(ret), K(key_meta_array));
+            } else {
+              key_count += key_meta_array.count();
+              STORAGE_LOG(INFO, "succeed to fill micro block set",
+                  "key and size array", key_meta_array, K(data));
+            }
+          }
+        }
+      }
+    }
+
+    LOG_INFO("finish fetch micro block set", K(ret),
+        "cost_ts", ObTimeUtil::current_time() - start_ts,
+        "in rpc queue time", start_ts - first_receive_ts, K(key_count));
+  }
+  return ret;
+}
+
+int ObGetMicroBlockCacheSizeP::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObSSMicroCache *micro_cache = nullptr;
+    if (!arg_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid args", K(ret), K_(arg));
+    } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("micro cache should not be nullptr", K(ret));
+    } else {
+      int64_t ls_micro_size = 0;
+      if (OB_FAIL(micro_cache->get_ls_micro_size(arg_.ls_id_, ls_micro_size))) {
+        LOG_WARN("fail to get ls micro_size", KR(ret), K_(arg));
+      } else {
+        result_.cache_size_ = ls_micro_size;
+      }
+      LOG_INFO("send cache size", K(ret), K(result_.cache_size_), K(arg_));
+    }
+  }
+  return ret;
+}
+
+int ObGetMigrationCacheJobInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObSSMicroCache *micro_cache = nullptr;
+    ObArray<ObSSPhyBlockIdxRange> block_ranges;
+    if (!arg_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid args", K(ret), K_(arg));
+    } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("micro cache should not be nullptr", K(ret));
+    } else if (OB_FAIL(micro_cache->divide_phy_block_range(arg_.ls_id_, arg_.task_count_, block_ranges))) {
+      LOG_WARN("failed to divide phy_block range", K(ret), K(arg_));
+    } else if (block_ranges.empty()) {
+      FLOG_INFO("block_ranges is empty", K_(arg));
+    } else if (OB_FAIL(convert_block_range_to_job_infos_(block_ranges, result_.job_infos_))) {
+      LOG_WARN("failed to convert job infos", K(ret), K(block_ranges), K(arg_));
+    } else if (arg_.task_count_ < result_.job_infos_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("job info count is unexpected", K(ret), K(arg_), K(result_));
+    } else {
+      LOG_INFO("send job info", K(block_ranges), K(result_.job_infos_));
+    }
+  }
+  return ret;
+}
+
+int ObGetMigrationCacheJobInfoP::convert_block_range_to_job_infos_(
+    const ObIArray<ObSSPhyBlockIdxRange> &block_ranges, ObIArray<ObMigrationCacheJobInfo> &job_infos)
+{
+  int ret = OB_SUCCESS;
+  job_infos.reset();
+  if (block_ranges.count() <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    ObMigrationCacheJobInfo job_info;
+    for (int i = 0; i < block_ranges.count() && OB_SUCC(ret); i++) {
+      job_info.reset();
+      if (OB_FAIL(job_info.convert_from(block_ranges.at(i)))) {
+        LOG_WARN("failed to convert from block range", K(ret), "block range", block_ranges.at(i));
+      } else if (OB_FAIL(job_infos.push_back(job_info))) {
+        LOG_WARN("failed to push back to job infos", K(ret), K(job_info));
+      }
+    }
+  }
+  return ret;
+}
+
+ObFetchReplicaPrewarmMicroBlockP::ObFetchReplicaPrewarmMicroBlockP(
+    common::ObInOutBandwidthThrottle *bandwidth_throttle)
+  : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObFetchReplicaPrewarmMicroBlockP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      blocksstable::ObBufferReader data;
+      char *buf = nullptr;
+      last_send_time_ = this->get_receive_timestamp();
+      const int64_t start_us = ObTimeUtil::current_time();
+      const int64_t first_receive_us = this->get_receive_timestamp();
+
+      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to alloc data buffer.", KR(ret));
+      } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to set data to result", KR(ret));
+      } else if (OB_ISNULL(bandwidth_throttle_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "bandwidth_throttle must not null", KR(ret), KP_(bandwidth_throttle));
+      } else {
+        SMART_VARS_2((storage::ObReplicaPrewarmMicroBlockProducer, producer),
+                     (ObSSLSFetchMicroBlockArg, arg)) {
+          if (OB_FAIL(arg.assign(arg_))) {
+            LOG_WARN("fail to assign copy fetch micro block arg", KR(ret), K(arg_));
+          } else if (OB_FAIL(producer.init(arg.micro_metas_))) {
+            LOG_WARN("fail to init replica prewarm micro block producer", KR(ret), K(arg));
+          } else {
+            while (OB_SUCC(ret)) {
+              ObSSMicroBlockCacheKeyMeta micro_meta;
+              if (OB_FAIL(producer.get_next_micro_block(micro_meta, data))) {
+                if (OB_ITER_END != ret) {
+                  STORAGE_LOG(WARN, "fail to get next micro block", KR(ret));
+                } else {
+                  ret = OB_SUCCESS;
+                }
+                break;
+              } else if (OB_FAIL(fill_data(micro_meta))) {
+                STORAGE_LOG(WARN, "fail to fill data length", KR(ret), K(data.pos()), K(micro_meta));
+              } else if (OB_FAIL(fill_buffer(data))) {
+                STORAGE_LOG(WARN, "fail to fill data", KR(ret), K(micro_meta));
+              } else {
+                STORAGE_LOG(INFO, "succ to fill micro block", K(micro_meta));
+              }
+            }
+          }
+        }
+      }
+
+      const int64_t cost_us = ObTimeUtil::current_time() - start_us;
+      LOG_INFO("finish fetch replica prewarm micro block", KR(ret), K(cost_us), "in rpc queue time",
+              start_us - first_receive_us);
+    }
+  }
+  return ret;
+}
+
+#endif
 
 } //namespace obrpc
 
@@ -3866,8 +4479,103 @@ int ObStorageRpc::fetch_ls_member_and_learner_list(
       .fetch_ls_member_and_learner_list(arg, member_info))) {
     LOG_WARN("fail to check ls is valid member", K(ret), K(tenant_id), K(ls_id));
   }
-
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObStorageRpc::get_ls_micro_block_cache_size(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    int64_t &cache_size)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObGetMicroBlockCacheSizeArg arg;
+  obrpc::ObGetMicroBlockCacheSizeRes res;
+  cache_size = 0;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(tenant_id), K(ls_id), K(src_info));
+  } else {
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+        .by(tenant_id)
+        .group_id(share::OBCG_STORAGE)
+        .get_micro_block_cache_size(arg, res))) {
+      LOG_WARN("fail to get micro block cache size", K(ret), K(tenant_id), K(ls_id), K(src_info));
+    } else {
+      cache_size = res.cache_size_;
+    }
+  }
+  return ret;
+}
+
+int ObStorageRpc::get_ls_migration_cache_job_info(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    const int64_t task_count,
+    obrpc::ObGetMigrationCacheJobInfoRes &res)
+{
+  int ret = OB_SUCCESS;
+  res.reset();
+  obrpc::ObGetMigrationCacheJobInfoArg arg;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_info.is_valid() || task_count <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(src_info), K(task_count));
+  } else {
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.task_count_ = task_count;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+        .by(tenant_id)
+        .group_id(share::OBCG_STORAGE)
+        .get_migration_cache_job_info(arg, res))) {
+      LOG_WARN("fail to get migration cache job info", K(ret), K(tenant_id), K(ls_id), K(src_info));
+    }
+  }
+  return ret;
+}
+
+int ObStorageRpc::get_micro_block_key_set(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    const ObMigrationCacheJobInfo &job_info,
+    obrpc::ObCopyMicroBlockKeySetRes &res)
+{
+  int ret = OB_SUCCESS;
+  res.reset();
+  obrpc::ObGetMicroBlockKeyArg arg;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_info.is_valid() || !job_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(src_info), K(job_info));
+  } else {
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.job_info_ = job_info;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+        .by(tenant_id)
+        .group_id(share::OBCG_STORAGE)
+        .fetch_micro_block_keys(arg, res))) {
+      LOG_WARN("fail to fetch micro block keys", K(ret), K(tenant_id), K(ls_id), K(src_info));
+    }
+  }
+  return ret;
+}
+#endif
 } // storage
 } // oceanbase

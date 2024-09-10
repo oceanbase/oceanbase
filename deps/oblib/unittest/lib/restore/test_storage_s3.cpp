@@ -194,7 +194,7 @@ TEST_F(TestStorageS3, test_basic_rw)
       // read not exist object
       const int64_t ts = ObTimeUtility::current_time();
       ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%snot_exist_%ld", dir_uri, ts));
-      ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, reader.open(uri, &s3_base));
+      ASSERT_EQ(OB_OBJECT_NOT_EXIST, reader.open(uri, &s3_base));
       ASSERT_EQ(OB_NOT_INIT, reader.close());
 
       // open after fail
@@ -308,7 +308,7 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     ASSERT_FALSE(is_tagging);
 
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     tmp_s3_base.reset();
     util.close();
 
@@ -343,7 +343,7 @@ TEST_F(TestStorageS3, test_util_is_tagging)
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
     ASSERT_EQ(OB_SUCCESS, util.open(&tmp_s3_base));
     ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_OBJECT_NOT_EXIST, util.is_tagging(uri, is_tagging));
     util.close();
   }
 }

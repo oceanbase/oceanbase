@@ -38,6 +38,8 @@ enum class ObTenantStorageMetaType
   INVALID_TYPE
 };
 
+class ObTenantCheckpointSlogHandler;
+
 class ObTenantStorageCheckpointWriter final
 {
 public:
@@ -47,7 +49,8 @@ public:
   ~ObTenantStorageCheckpointWriter() = default;
   ObTenantStorageCheckpointWriter(const ObTenantStorageCheckpointWriter &) = delete;
   ObTenantStorageCheckpointWriter &operator=(const ObTenantStorageCheckpointWriter &) = delete;
-  int init(const ObTenantStorageMetaType meta_type);
+  int init(const ObTenantStorageMetaType meta_type,
+           ObTenantCheckpointSlogHandler *ckpt_slog_handler);
   void reset();
 
   // record meta for ckpt
@@ -118,6 +121,7 @@ private:
 private:
   bool is_inited_;
   ObTenantStorageMetaType meta_type_;
+  ObTenantCheckpointSlogHandler *ckpt_slog_handler_;
   common::ObArray<TabletItemAddrInfo> tablet_item_addr_info_arr_;
   ObLinkedMacroBlockItemWriter ls_item_writer_;
   ObLinkedMacroBlockItemWriter tablet_item_writer_;

@@ -22,10 +22,12 @@
 #include "share/ob_io_device_helper.h"
 #include "common/storage/ob_io_device.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_block_manager.h"
+#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "observer/ob_server_struct.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/ob_file_system_router.h"
 
 namespace oceanbase
 {
@@ -77,9 +79,9 @@ ObAdminExecutor::~ObAdminExecutor()
   blocksstable::ObDecodeResourcePool::get_instance().destroy();
   ObIOManager::get_instance().stop();
   ObIOManager::get_instance().destroy();
-  OB_SERVER_BLOCK_MGR.stop();
-  OB_SERVER_BLOCK_MGR.wait();
-  OB_SERVER_BLOCK_MGR.destroy();
+  OB_STORAGE_OBJECT_MGR.stop();
+  OB_STORAGE_OBJECT_MGR.wait();
+  OB_STORAGE_OBJECT_MGR.destroy();
   share::ObIODeviceWrapper::get_instance().destroy();
   LOG_INFO("destruct ObAdminExecutor");
 }
@@ -88,13 +90,12 @@ ObIODevice* ObAdminExecutor::get_device_inner()
 {
   int ret = OB_SUCCESS;
   common::ObIODevice* device = NULL;
-  common::ObString storage_info(OB_LOCAL_PREFIX);
-  if(OB_FAIL(common::ObDeviceManager::get_instance().get_device(storage_info, storage_info, device))) {
-    LOG_WARN("get_device_inner", K(ret));
+  common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
+  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+    LOG_WARN("fail to get local device", K(ret));
   }
   return device;
 }
-
 
 int ObAdminExecutor::prepare_io()
 {
@@ -116,6 +117,8 @@ int ObAdminExecutor::prepare_io()
 
   if (OB_FAIL(ret)) {
     // do nothing
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    LOG_WARN("init device manager failed", KR(ret));
   } else if (OB_FAIL(share::ObIODeviceWrapper::get_instance().init(
       storage_env_.data_dir_,
       storage_env_.sstable_dir_,
@@ -125,14 +128,18 @@ int ObAdminExecutor::prepare_io()
     LOG_WARN("fail to init io device, ", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().init())) {
     LOG_WARN("fail to init io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE,
+  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(&LOCAL_DEVICE_INSTANCE,
       async_io_thread_count, sync_io_thread_count, max_io_depth))) {
     LOG_WARN("add device channel failed", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     LOG_WARN("fail to start io manager", K(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, storage_env_.default_block_size_))) {
+  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_instance().init(data_dir_))) {
+    LOG_WARN("fail to init file system router", K(ret));
+  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(false/*is_shared_storage*/))) {
+    LOG_WARN("fail to init storage meta service", K(ret));
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.init(false/*is_shared_storage*/, storage_env_.default_block_size_))) {
     LOG_WARN("fail to init block manager, ", K(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0/*reserved_size*/))) {
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(0/*reserved_size*/))) {
     LOG_WARN("fail to start block manager, ", K(ret));
   }
 
@@ -145,21 +152,6 @@ int ObAdminExecutor::prepare_decoder()
   if (OB_FAIL(blocksstable::ObDecodeResourcePool::get_instance().init())) {
     LOG_WARN("fail to init decoder resource pool");
   }
-  return ret;
-}
-
-int ObAdminExecutor::init_slogger_mgr()
-{
-  int ret = OB_SUCCESS;
-
-  const int64_t MAX_FILE_SIZE = 64 * 1024 * 1024;
-
-  if (OB_FAIL(databuff_printf(slog_dir_, OB_MAX_FILE_NAME_LENGTH, "%s/slog/", data_dir_))) {
-    LOG_WARN("failed to gen slog dir", K(ret));
-  } else if (OB_FAIL(SLOGGERMGR.init(slog_dir_, sstable_dir_, MAX_FILE_SIZE, storage_env_.slog_file_spec_))) {
-    STORAGE_LOG(WARN, "fail to init SLOGGERMGR", K(ret));
-  }
-
   return ret;
 }
 
@@ -196,11 +188,6 @@ int ObAdminExecutor::load_config()
 
   return ret;
 }
-
-
-
-
-
 
 }
 }

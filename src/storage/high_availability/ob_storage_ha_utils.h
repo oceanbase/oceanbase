@@ -59,6 +59,14 @@ public:
       const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
   static int check_tenant_will_be_deleted(
       bool &is_deleted);
+  static int make_macro_id_to_datum(
+      const common::ObIArray<MacroBlockId> &macro_block_id_array,
+      char *buf,
+      const int64_t buf_size,
+      ObDatumRowkey &end_key);
+  static int extract_macro_id_from_datum(
+      const ObDatumRowkey &end_key,
+      common::ObIArray<MacroBlockId> &macro_block_id_array);
   static int get_sstable_read_info(
       const ObTablet &tablet,
       const ObITable::TableType &table_type,

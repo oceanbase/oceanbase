@@ -33,22 +33,25 @@ namespace sql
 int ObRbExprHelper::get_input_roaringbitmap_bin(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg,  ObString &rb_bin, bool &is_rb_null)
 {
   INIT_SUCC(ret);
-  ObDatum *rb_datum;
+  ObDatum *rb_datum = nullptr;
+  ObString get_str;
   if (OB_FAIL(rb_arg->eval(ctx, rb_datum))) {
     LOG_WARN("eval roaringbitmap args failed", K(ret));
   } else if (rb_datum->is_null()) {
     is_rb_null = true;
-  } else if (OB_FALSE_IT(rb_bin = rb_datum->get_string())) {
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
                          allocator,
                          *rb_datum,
                          rb_arg->datum_meta_,
                          rb_arg->obj_meta_.has_lob_header(),
-                         rb_bin))) {
-    LOG_WARN("fail to get real string data", K(ret), K(rb_bin));
-  } else if (rb_bin.empty()) {
-    ret = OB_INVALID_DATA;
-    LOG_WARN("roaringbitmap binary is empty", K(ret), K(rb_bin));
+                         get_str))) {
+    LOG_WARN("fail to get real string data", K(ret), K(get_str));
+  } else if (rb_arg->datum_meta_.type_ != ObRoaringBitmapType) {
+    if (OB_FAIL(ObRbUtils::build_binary(allocator, get_str, rb_bin))) {
+      LOG_WARN("failed to build roaringbitmap from binary", K(ret), K(get_str));
+    }
+  } else {
+    rb_bin.assign_ptr(get_str.ptr(), get_str.length());
   }
   return ret;
 }
@@ -56,11 +59,30 @@ int ObRbExprHelper::get_input_roaringbitmap_bin(ObEvalCtx &ctx, ObIAllocator &al
 int ObRbExprHelper::get_input_roaringbitmap(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg, ObRoaringBitmap *&rb, bool &is_rb_null)
 {
   INIT_SUCC(ret);
-  ObString rb_bin = nullptr;
-  if (OB_FAIL(get_input_roaringbitmap_bin(ctx, allocator, rb_arg, rb_bin, is_rb_null))) {
-    LOG_WARN("failed to get input roaringbitmap binary", K(ret));
-  } else if (!is_rb_null && OB_FAIL(ObRbUtils::rb_deserialize(allocator, rb_bin, rb))) {
-    LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+  ObDatum *rb_datum = nullptr;
+  ObString get_str;
+  if (OB_FAIL(rb_arg->eval(ctx, rb_datum))) {
+    LOG_WARN("eval roaringbitmap args failed", K(ret));
+  } else if (rb_datum->is_null()) {
+    is_rb_null = true;
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                         allocator,
+                         *rb_datum,
+                         rb_arg->datum_meta_,
+                         rb_arg->obj_meta_.has_lob_header(),
+                         get_str))) {
+    LOG_WARN("fail to get real string data", K(ret), K(get_str));
+  } else if (rb_arg->datum_meta_.type_ != ObRoaringBitmapType) {
+    bool need_validate = true;
+    if (OB_FAIL(ObRbUtils::check_binary(get_str))) {
+      LOG_WARN("invalid roaringbitmap binary string", K(ret));
+    } else if (OB_FAIL(ObRbUtils::rb_deserialize(allocator, get_str, rb, need_validate))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObRbUtils::rb_deserialize(allocator, get_str, rb))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    }
   }
   return ret;
 }

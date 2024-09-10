@@ -300,17 +300,6 @@ int ObBuildMViewTask::cleanup_impl()
   return ret;
 }
 
-void ObBuildMViewTask::flt_set_task_span_tag() const
-{
-  LOG_INFO("flt_set_task_span_tag begin");
-}
-
-void ObBuildMViewTask::flt_set_status_span_tag() const
-{
-  LOG_INFO("flt_set_status_span_tag begin");
-}
-
-
 int ObBuildMViewTask::mview_complete_refresh(obrpc::ObMViewCompleteRefreshRes &res)
 {
   int ret = OB_SUCCESS;

@@ -1493,6 +1493,8 @@ int FetchStream::fetch_miss_log_direct_(
         } else if (OB_FAIL(entry_iter.init(tenant_id, ls_id, cur_scn, missing_lsn,
             LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler))) {
           LOG_WARN("remote entry iter init failed", KR(ret));
+        } else if (OB_FAIL(entry_iter.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
+          LOG_WARN("remote entry iter set_io_context failed", KR(ret));
         } else if (OB_FAIL(entry_iter.next(log_entry, lsn, buf, buf_size))) {
           retry_on_err =true;
           LOG_WARN("log entry iter failed to iterate", KR(ret));

@@ -15,7 +15,7 @@
 #define protected public
 #define private public
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
-#include "storage/blockstore/ob_shared_block_reader_writer.h"
+#include "storage/blockstore/ob_shared_object_reader_writer.h"
 #include "share/io/ob_io_define.h"
 #include "share/io/ob_io_manager.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
@@ -25,6 +25,7 @@
 #include "share/ob_simple_mem_limit_getter.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/blocksstable/ob_object_manager.h"
 
 namespace oceanbase
 {
@@ -106,13 +107,15 @@ void TestSharedBlockRWriter::create_empty_sstable(ObSSTable &empty_sstable)
   param.ddl_scn_.set_min();
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.column_cnt_ = 1;
+  param.table_backup_flag_.reset();
+  param.table_shared_flag_.reset();
   OK(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   OK(empty_sstable.init(param, &allocator_));
 }
 
 TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
 {
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
   ObMetaDiskAddr addr;
   MacroBlockId macro_id;
@@ -128,9 +131,9 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
   char s[10] = "";
   int test_round = 10;
   while (test_round--) {
-    ObSharedBlockWriteInfo write_info;
-    ObSharedBlockWriteHandle write_handle;
-    ObSharedBlockReadHandle read_handle(allocator_);
+    ObSharedObjectWriteInfo write_info;
+    ObSharedObjectWriteHandle write_handle;
+    ObSharedObjectReadHandle read_handle(allocator_);
     for (int i = 0; i < 10; ++i) {
       s[i] = '0' + test_round;
     }
@@ -138,19 +141,19 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
     write_info.offset_ = 0;
     write_info.size_ = 10;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    OK(rwriter.async_write(write_info, write_handle));
+    blocksstable::ObStorageObjectOpt curr_opt;
+    curr_opt.set_private_object_opt();
+    OK(rwriter.async_write(write_info, curr_opt, write_handle));
     ASSERT_TRUE(write_handle.is_valid());
 
-    ObSharedBlocksWriteCtx write_ctx;
-    ObSharedBlockReadInfo read_info;
+    ObSharedObjectsWriteCtx write_ctx;
+    ObSharedObjectReadInfo read_info;
     OK(write_handle.get_write_ctx(write_ctx));
-    ASSERT_EQ(write_ctx.addr_.size_, 10);
     if (test_round == 9) {
       macro_id = write_ctx.addr_.block_id();
     }
 
     read_info.addr_ = write_ctx.addr_;
-    ASSERT_EQ(read_info.addr_.size_, 10);
     ASSERT_TRUE(read_info.addr_.is_raw_block());
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     OK(rwriter.async_read(read_info, read_handle));
@@ -180,12 +183,12 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
 
 TEST_F(TestSharedBlockRWriter, test_batch_write_easy_block)
 {
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
   int test_round = 10;
 
-  ObSharedBlockWriteInfo write_info;
-  ObArray<ObSharedBlockWriteInfo> write_infos;
+  ObSharedObjectWriteInfo write_info;
+  ObArray<ObSharedObjectWriteInfo> write_infos;
   char s[10][100];
   for (int i = 0; i < test_round; ++i) {
     for (int j = 0; j <10; ++j) {
@@ -198,19 +201,20 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_easy_block)
     write_infos.push_back(write_info);
   }
 
-  ObSharedBlockBatchHandle write_handle;
-  OK(rwriter.async_batch_write(write_infos, write_handle));
+  ObSharedObjectBatchHandle write_handle;
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
+  OK(rwriter.async_batch_write(write_infos, write_handle, curr_opt));
   ASSERT_TRUE(write_handle.is_valid());
 
-  ObArray<ObSharedBlocksWriteCtx> write_ctxs;
+  ObArray<ObSharedObjectsWriteCtx> write_ctxs;
   OK(write_handle.batch_get_write_ctx(write_ctxs));
   ASSERT_EQ(test_round, write_ctxs.count());
 
   for (int i = 0; i < test_round; ++i) {
-    ObSharedBlockReadInfo read_info;
-    ObSharedBlockReadHandle read_handle(allocator_);
+    ObSharedObjectReadInfo read_info;
+    ObSharedObjectReadHandle read_handle(allocator_);
     read_info.addr_ = write_ctxs.at(i).addr_;
-    ASSERT_EQ(read_info.addr_.size_, 10 + sizeof(ObSharedBlockHeader));
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     OK(rwriter.async_read(read_info, read_handle));
     char *buf = nullptr;
@@ -226,12 +230,12 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_easy_block)
 
 TEST_F(TestSharedBlockRWriter, test_link_write)
 {
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
   int test_round = 10;
 
-  ObSharedBlockWriteInfo write_info;
-  ObSharedBlockLinkHandle write_handle;
+  ObSharedObjectWriteInfo write_info;
+  ObSharedObjectLinkHandle write_handle;
   char s[10];
   for (int i = 0; i < test_round; ++i) {
     for (int j = 0; j < 10; ++j) {
@@ -241,14 +245,15 @@ TEST_F(TestSharedBlockRWriter, test_link_write)
     write_info.offset_ = 0;
     write_info.size_ = 10;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    OK(rwriter.async_link_write(write_info, write_handle));
+    blocksstable::ObStorageObjectOpt curr_opt;
+    curr_opt.set_private_object_opt();
+    OK(rwriter.async_link_write(write_info, curr_opt, write_handle));
     ASSERT_TRUE(write_handle.is_valid());
   }
 
-  ObSharedBlocksWriteCtx write_ctx;
-  ObSharedBlockLinkIter iter;
+  ObSharedObjectsWriteCtx write_ctx;
+  ObSharedObjectLinkIter iter;
   OK(write_handle.get_write_ctx(write_ctx));
-  ASSERT_EQ(write_ctx.addr_.size_, 10 + sizeof(ObSharedBlockHeader));
   OK(iter.init(write_ctx.addr_));
   char *buf = nullptr;
   int64_t buf_len = 0;
@@ -264,7 +269,7 @@ TEST_F(TestSharedBlockRWriter, test_link_write)
 
 TEST_F(TestSharedBlockRWriter, test_cb_single_write)
 {
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
 
   ObSSTable empty_sstable;
@@ -274,16 +279,18 @@ TEST_F(TestSharedBlockRWriter, test_cb_single_write)
   int64_t pos = 0;
   OK(empty_sstable.serialize(sstable_buf, sstable_size, pos));
 
-  ObSharedBlockWriteInfo write_info;
-  ObSharedBlockWriteHandle write_handle;
+  ObSharedObjectWriteInfo write_info;
+  ObSharedObjectWriteHandle write_handle;
   write_info.buffer_ = sstable_buf;
   write_info.offset_ = 0;
   write_info.size_ = sstable_size;
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-  OK(rwriter.async_write(write_info, write_handle));
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
+  OK(rwriter.async_write(write_info, curr_opt, write_handle));
   ASSERT_TRUE(write_handle.is_valid());
 
-  ObSharedBlocksWriteCtx write_ctx;
+  ObSharedObjectsWriteCtx write_ctx;
   OK(write_handle.get_write_ctx(write_ctx));
 
   ObStorageMetaHandle meta_handle;
@@ -305,8 +312,8 @@ TEST_F(TestSharedBlockRWriter, test_cb_single_write)
                                                                       meta_handle.cache_handle_,
                                                                       fake_tablet,
                                                                       nullptr);
-  ObSharedBlockReadInfo read_info;
-  ObSharedBlockReadHandle read_handle;
+  ObSharedObjectReadInfo read_info;
+  ObSharedObjectReadHandle read_handle;
   read_info.addr_ = write_ctx.addr_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_callback_ = cb;
@@ -321,12 +328,12 @@ TEST_F(TestSharedBlockRWriter, test_cb_single_write)
 
 TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
 {
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
   int test_round = 10;
 
-  ObSharedBlockWriteInfo write_info;
-  ObArray<ObSharedBlockWriteInfo> write_infos;
+  ObSharedObjectWriteInfo write_info;
+  ObArray<ObSharedObjectWriteInfo> write_infos;
   char s[10][100];
   for (int i = 0; i < test_round; ++i) {
     for (int j = 0; j <10; ++j) {
@@ -351,11 +358,13 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
   write_infos.push_back(write_info);
 
-  ObSharedBlockBatchHandle write_handle;
-  OK(rwriter.async_batch_write(write_infos, write_handle));
+  ObSharedObjectBatchHandle write_handle;
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
+  OK(rwriter.async_batch_write(write_infos, write_handle, curr_opt));
   ASSERT_TRUE(write_handle.is_valid());
 
-  ObArray<ObSharedBlocksWriteCtx> write_ctxs;
+  ObArray<ObSharedObjectsWriteCtx> write_ctxs;
   OK(write_handle.batch_get_write_ctx(write_ctxs));
   ASSERT_EQ(test_round + 1, write_ctxs.count());
 
@@ -378,8 +387,8 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
                                                                       meta_handle.cache_handle_,
                                                                       fake_tablet,
                                                                       nullptr);
-  ObSharedBlockReadInfo read_info;
-  ObSharedBlockReadHandle read_handle;
+  ObSharedObjectReadInfo read_info;
+  ObSharedObjectReadHandle read_handle;
   read_info.addr_ = write_ctxs[test_round].addr_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_callback_ = cb;
@@ -392,14 +401,14 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
   ASSERT_EQ(sstable_size, buf_len);
 }
 
-TEST_F(TestSharedBlockRWriter, test_parse_data_from_macro_block)
+TEST_F(TestSharedBlockRWriter, test_parse_data_from_object)
 {
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
   int test_round = 10;
 
-  ObSharedBlockWriteInfo write_info;
-  ObArray<ObSharedBlockWriteInfo> write_infos;
+  ObSharedObjectWriteInfo write_info;
+  ObArray<ObSharedObjectWriteInfo> write_infos;
   char s[10][20];
   for (int i = 0; i < test_round; ++i) {
     for (int j = 0; j < 20; ++j) {
@@ -412,17 +421,19 @@ TEST_F(TestSharedBlockRWriter, test_parse_data_from_macro_block)
     write_infos.push_back(write_info);
   }
 
-  ObSharedBlockBatchHandle write_handle;
-  OK(rwriter.async_batch_write(write_infos, write_handle));
+  ObSharedObjectBatchHandle write_handle;
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
+  OK(rwriter.async_batch_write(write_infos, write_handle, curr_opt));
   ASSERT_TRUE(write_handle.is_valid());
 
-  ObArray<ObSharedBlocksWriteCtx> write_ctxs;
+  ObArray<ObSharedObjectsWriteCtx> write_ctxs;
   OK(write_handle.batch_get_write_ctx(write_ctxs));
   ASSERT_EQ(test_round, write_ctxs.count());
   MacroBlockId block_id = write_ctxs[0].addr_.block_id();
-  ObMacroBlockHandle macro_handle;
-  ObMacroBlockReadInfo read_info;
-  const int64_t io_buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  ObStorageObjectReadInfo read_info;
+  ObStorageObjectHandle object_handle;
+  const int64_t io_buf_size = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   read_info.offset_ = 0;
   read_info.size_ = io_buf_size;
   read_info.io_desc_.set_mode(ObIOMode::READ);
@@ -431,11 +442,12 @@ TEST_F(TestSharedBlockRWriter, test_parse_data_from_macro_block)
   read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
   read_info.macro_block_id_ = block_id;
   read_info.buf_ = static_cast<char *>(allocator_.alloc(io_buf_size));
-  OK(ObBlockManager::read_block(read_info, macro_handle));
+  read_info.mtl_tenant_id_ = MTL_ID();
+  OK(ObObjectManager::read_object(read_info, object_handle));
   char *buf = nullptr;
   int64_t buf_len = 0;
   for (int i = 0; i < test_round; ++i) {
-    OK(ObSharedBlockReaderWriter::parse_data_from_macro_block(macro_handle, write_ctxs[i].addr_, buf, buf_len));
+    OK(ObSharedObjectReaderWriter::parse_data_from_object(object_handle, write_ctxs[i].addr_, buf, buf_len));
     ASSERT_EQ(20, buf_len);
     ASSERT_EQ(0, MEMCMP(s[i], buf, 20));
   }
@@ -444,10 +456,10 @@ TEST_F(TestSharedBlockRWriter, test_parse_data_from_macro_block)
 TEST_F(TestSharedBlockRWriter, test_batch_write_switch_block)
 {
   // test switch block when batch write, which means hanging_=true
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
-  ObSharedBlockWriteInfo write_info;
-  ObArray<ObSharedBlockWriteInfo> write_infos;
+  ObSharedObjectWriteInfo write_info;
+  ObArray<ObSharedObjectWriteInfo> write_infos;
   int64_t data_size = 3L << 10; // 3K
   char s[3L << 10] = "";
   for (int i = 0; i < data_size; ++i) {
@@ -470,17 +482,19 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_switch_block)
   rwriter.align_offset_ = rwriter.offset_;
   rwriter.data_.advance(rwriter.offset_ - header_size);
 
-  ObSharedBlockBatchHandle write_handle;
-  OK(rwriter.async_batch_write(write_infos, write_handle));
+  ObSharedObjectBatchHandle write_handle;
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
+  OK(rwriter.async_batch_write(write_infos, write_handle, curr_opt));
   ASSERT_TRUE(write_handle.is_valid());
 
-  ObArray<ObSharedBlocksWriteCtx> write_ctxs;
+  ObArray<ObSharedObjectsWriteCtx> write_ctxs;
   OK(write_handle.batch_get_write_ctx(write_ctxs));
   ASSERT_EQ(write_infos.count(), write_ctxs.count());
 
   for (int i = 0; i < write_ctxs.count(); ++i) {
-    ObSharedBlockReadInfo read_info;
-    ObSharedBlockReadHandle read_handle(allocator_);
+    ObSharedObjectReadInfo read_info;
+    ObSharedObjectReadHandle read_handle(allocator_);
     read_info.addr_ = write_ctxs.at(i).addr_;
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     OK(rwriter.async_read(read_info, read_handle));
@@ -501,14 +515,14 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_bug1)
     when hanging_ = true && we need switch_block.
     This may result in 4016 read error of other blocks flushed by next async_write.
   */
-  ObSharedBlockReaderWriter rwriter;
+  ObSharedObjectReaderWriter rwriter;
   OK(rwriter.init(true/*need align*/, false/*need cross*/));
 
   rwriter.offset_ = (2L << 20) - 10; // nearly to 2M, ready to switch block
   rwriter.align_offset_ = (2L << 20) - 4096;
   rwriter.hanging_ = true;
 
-  ObSharedBlockWriteInfo write_info; // the last block
+  ObSharedObjectWriteInfo write_info; // the last block
   int64_t data_size = 1L << 10; // 1K
   char s[1L << 10] = "";
   for (int i = 0; i < data_size; ++i) {
@@ -518,11 +532,13 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_bug1)
   write_info.offset_ = 0;
   write_info.size_ = data_size;
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
 
-  ObSharedBlockWriteHandle block_handle;
-  OK(rwriter.async_write(write_info, block_handle));
-  ObSharedBlocksWriteCtx write_ctx;
-  OK(block_handle.get_write_ctx(write_ctx));
+  ObSharedObjectWriteHandle shared_obj_handle;
+  OK(rwriter.async_write(write_info, curr_opt, shared_obj_handle));
+  ObSharedObjectsWriteCtx write_ctx;
+  OK(shared_obj_handle.get_write_ctx(write_ctx));
   const ObMetaDiskAddr &addr = write_ctx.addr_;
 
   ObMacroBlockCommonHeader common_header;

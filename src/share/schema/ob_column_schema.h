@@ -203,6 +203,8 @@ int assign(const ObColumnSchemaV2 &src_schema);
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
            || meta_type_.is_xml_sql_type();
   }
+
+  inline bool is_collection() const { return meta_type_.is_collection_sql_type(); }
   inline bool is_extend() const { return meta_type_.is_ext() || meta_type_.is_user_defined_sql_type(); }
   inline bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
   inline bool is_udt_related_column(bool is_oracle_mode) const { return is_extend() || is_udt_hidden_column() ||
@@ -266,6 +268,14 @@ int assign(const ObColumnSchemaV2 &src_schema);
     del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
     del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
   }
+  /* vector index */
+  inline bool is_vec_index_column() const { return ObSchemaUtils::is_vec_index_column(column_flags_); }
+  inline bool is_vec_vid_column() const { return ObSchemaUtils::is_vec_vid_column(column_flags_); }
+  inline bool is_vec_type_column() const { return ObSchemaUtils::is_vec_type_column(column_flags_); }
+  inline bool is_vec_vector_column() const { return ObSchemaUtils::is_vec_vector_column(column_flags_); }
+  inline bool is_vec_scn_column() const { return ObSchemaUtils::is_vec_scn_column(column_flags_); }
+  inline bool is_vec_key_column() const { return ObSchemaUtils::is_vec_key_column(column_flags_); }
+  inline bool is_vec_data_column() const { return ObSchemaUtils::is_vec_data_column(column_flags_); }
   inline bool is_fulltext_column() const { return ObSchemaUtils::is_fulltext_column(column_flags_); }
   inline bool is_doc_id_column() const { return ObSchemaUtils::is_doc_id_column(column_flags_); }
   inline bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
@@ -340,7 +350,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   int get_each_column_group_name(ObString &cg_name) const;
   inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
   inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
-
+  int is_same_collection_column(const ObColumnSchemaV2 &other, bool &is_same) const;
   DECLARE_VIRTUAL_TO_STRING;
 private:
   int alloc_column_ref_set();

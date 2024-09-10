@@ -230,8 +230,8 @@ public:
   ~ObLobMetaManager() {}
   // write one lob meta row
   int write(ObLobAccessParam& param, ObLobMetaInfo& in_row);
-  int batch_insert(ObLobAccessParam& param, ObNewRowIterator &iter);
-  int batch_delete(ObLobAccessParam& param, ObNewRowIterator &iter);
+  int batch_insert(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter);
+  int batch_delete(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter);
   // append
   int append(ObLobAccessParam& param, ObLobMetaWriteIter& iter);
   // return ObLobMetaWriteResult

@@ -526,6 +526,9 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
          && ObDatumCast::need_scale_decimalint(src_meta.scale_, src_meta.precision_,
                                                dst_expr->datum_meta_.scale_,
                                                dst_expr->datum_meta_.precision_));
+      bool need_cast_collection_element =
+        (src_meta.type_ == ObCollectionSQLType && dst_expr->datum_meta_.type_ == ObCollectionSQLType
+         && src_expr->obj_meta_.get_subschema_id() != dst_expr->obj_meta_.get_subschema_id());
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (src_expr == dst_expr) {
@@ -542,7 +545,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
       } else if (src_meta.type_ == dst_expr->datum_meta_.type_
                  && src_meta.cs_type_ == dst_expr->datum_meta_.cs_type_
                  && src_obj_meta.has_lob_header() == dst_expr->obj_meta_.has_lob_header()
-                 && !need_adjust_decimal_int) {
+                 && !need_adjust_decimal_int
+                 && !need_cast_collection_element) {
         // 将values中数据copy到output中
         if (OB_FAIL(src_expr->eval(eval_ctx_, datum))) {
           // catch err and print log later

@@ -20,6 +20,7 @@
 #include "share/vector/ob_uniform_format.h"
 #include "share/vector/ob_fixed_length_format.h"
 #include "sql/engine/ob_serializable_function.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 #define NULL_FIRST_IDX 0
 #define NULL_LAST_IDX  1
@@ -109,6 +110,83 @@ RowCmpFunc VectorCmpExprFuncsHelper::get_row_cmp_func(const sql::ObDatumMeta &l_
 }
 
 // ===================== expr cmp functions =====================
+
+struct ObNestedVectorCmpFunc
+{
+  template <typename LeftVector, typename RightVector>
+  static int cmp(const LeftVector *l_vec, const RightVector *r_vec,
+                 const int64_t idx, const ObExpr &expr, ObEvalCtx &ctx, int &cmp_ret)
+  {
+    int ret = OB_SUCCESS;
+    cmp_ret = 0;
+    ObString left = l_vec->get_string(idx);
+    ObString right = r_vec->get_string(idx);
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    const uint16_t left_meta_id = expr.args_[0]->obj_meta_.get_subschema_id();
+    const uint16_t right_meta_id = expr.args_[1]->obj_meta_.get_subschema_id();
+    const uint16_t res_meta_id = expr.obj_meta_.get_subschema_id();
+    ObIArrayType *left_obj = NULL;
+    ObIArrayType *right_obj = NULL;
+    ObIArrayType *res_obj = NULL;
+    ObString res_str;
+    if (l_vec->get_format() == VEC_UNIFORM || l_vec->get_format() == VEC_UNIFORM_CONST) {
+      ret = construct_param(tmp_allocator, ctx, left_meta_id, left, left_obj);
+    } else {
+      ret = construct_attr_param(tmp_allocator, ctx, *expr.args_[0], left_meta_id, idx, left_obj);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (r_vec->get_format() == VEC_UNIFORM || r_vec->get_format() == VEC_UNIFORM_CONST) {
+      ret = construct_param(tmp_allocator, ctx, right_meta_id, right, right_obj);
+    } else {
+      ret = construct_attr_param(tmp_allocator, ctx, *expr.args_[1], right_meta_id, idx, right_obj);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(left_obj->compare(*right_obj, cmp_ret))) {
+      SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
+    }
+    return ret;
+  }
+
+  static int construct_attr_param(ObIAllocator &alloc, ObEvalCtx &ctx, ObExpr &param_expr,
+                                  const uint16_t meta_id, int64_t row_idx, ObIArrayType *&param_obj)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, meta_id, param_obj))) {
+      LOG_WARN("construct array obj failed", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::assemble_array_attrs(ctx, param_expr, row_idx, param_obj))) {
+      LOG_WARN("assemble array attrs failed", K(ret));
+    }
+    return ret;
+  }
+
+  static int construct_param(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id,
+                              ObString &str_data, ObIArrayType *&param_obj)
+  {
+    return ObArrayExprUtils::get_array_obj(alloc, ctx, meta_id, str_data, param_obj);
+  }
+
+  static int construct_res_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id, ObIArrayType *&res_obj)
+  {
+    return ObArrayExprUtils::construct_array_obj(alloc, ctx, meta_id, res_obj, false);
+  }
+
+  static int construct_params(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t left_meta_id,
+                                const uint16_t right_meta_id, const uint16_t res_meta_id, ObString &left, ObString right,
+                                ObIArrayType *&left_obj, ObIArrayType *&right_obj, ObIArrayType *&res_obj)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObArrayExprUtils::get_array_obj(alloc, ctx, left_meta_id, left, left_obj))) {
+      SQL_ENG_LOG(WARN, "get array failed", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(alloc, ctx, right_meta_id, right, right_obj))) {
+      SQL_ENG_LOG(WARN, "get array failed", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, res_meta_id, res_obj, false))) {
+      SQL_ENG_LOG(WARN, "construct res array failed", K(ret));
+    }
+    return ret;
+  }
+};
+
 template <typename LVec>
 static int eval_right_operand(const ObExpr &cmp_expr, const ObExpr &left, const ObExpr &right,
                               ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
@@ -183,6 +261,7 @@ template <> int get_cmp_ret<CO_CMP> (const int ret) { return ret; }
   do {                                                                                             \
     LVec *l_vector = static_cast<LVec *>(left.get_vector(ctx));                                    \
     RVec *r_vector = static_cast<RVec *>(right.get_vector(ctx));                                   \
+    bool is_nested = left.is_nested_expr() || right.is_nested_expr();                              \
     ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));                                 \
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);                                       \
     const char *l_payload = nullptr, *r_payload = nullptr;                                         \
@@ -192,11 +271,15 @@ template <> int get_cmp_ret<CO_CMP> (const int ret) { return ret; }
       if (OB_LIKELY(bound.get_all_rows_active() && bound.is_full_size()                            \
                     && eval_flags.accumulate_bit_cnt(bound.batch_size()) == 0)) {                  \
         for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {                        \
-          l_vector->get_payload(i, l_payload, l_len);                                              \
-          r_vector->get_payload(i, r_payload, r_len);                                              \
-          ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
-                                              (const void *)l_payload, l_len,                      \
-                                              (const void *)r_payload, r_len, cmp_ret);            \
+          if (is_nested) {                                                                         \
+            ret = ObNestedVectorCmpFunc::cmp(l_vector, r_vector, i, expr, ctx, cmp_ret);           \
+          } else {                                                                                 \
+            l_vector->get_payload(i, l_payload, l_len);                                            \
+            r_vector->get_payload(i, r_payload, r_len);                                            \
+            ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                   \
+                                                (const void *)l_payload, l_len,                    \
+                                                (const void *)r_payload, r_len, cmp_ret);          \
+          }                                                                                        \
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \
             res_vec->set_int(i, get_cmp_ret<cmp_op>(cmp_ret));                                     \
@@ -206,11 +289,15 @@ template <> int get_cmp_ret<CO_CMP> (const int ret) { return ret; }
       } else {                                                                                     \
         for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {                        \
           if (skip.at(i) || eval_flags.at(i)) { continue; }                                        \
-          l_vector->get_payload(i, l_payload, l_len);                                              \
-          r_vector->get_payload(i, r_payload, r_len);                                              \
-          ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
-                                              (const void *)l_payload, l_len,                      \
-                                              (const void *)r_payload, r_len, cmp_ret);            \
+          if (is_nested) {                                                                         \
+            ret = ObNestedVectorCmpFunc::cmp(l_vector, r_vector, i, expr, ctx, cmp_ret);           \
+          } else {                                                                                 \
+            l_vector->get_payload(i, l_payload, l_len);                                              \
+            r_vector->get_payload(i, r_payload, r_len);                                              \
+            ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
+                                                (const void *)l_payload, l_len,                      \
+                                                (const void *)r_payload, r_len, cmp_ret);            \
+          }                                                                                        \
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \
             res_vec->set_int(i, get_cmp_ret<cmp_op>(cmp_ret));                                     \
@@ -225,11 +312,15 @@ template <> int get_cmp_ret<CO_CMP> (const int ret) { return ret; }
           res_vec->set_null(i);                                                                    \
           eval_flags.set(i);                                                                       \
         } else {                                                                                   \
-          l_vector->get_payload(i, l_payload, l_len);                                              \
-          r_vector->get_payload(i, r_payload, r_len);                                              \
-          ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
-                                              (const void *)l_payload, l_len,                      \
-                                              (const void *)r_payload, r_len, cmp_ret);            \
+          if (is_nested) {                                                                         \
+            ret = ObNestedVectorCmpFunc::cmp(l_vector, r_vector, i, expr, ctx, cmp_ret);           \
+          } else {                                                                                 \
+            l_vector->get_payload(i, l_payload, l_len);                                            \
+            r_vector->get_payload(i, r_payload, r_len);                                            \
+            ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                   \
+                                                (const void *)l_payload, l_len,                    \
+                                                (const void *)r_payload, r_len, cmp_ret);          \
+          }                                                                                        \
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \
             res_vec->set_int(i, get_cmp_ret<cmp_op>(cmp_ret));                                     \

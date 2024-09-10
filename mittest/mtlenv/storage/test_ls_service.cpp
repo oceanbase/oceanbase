@@ -62,7 +62,7 @@ using namespace oceanbase::obsys;
 void TestLSService::SetUpTestCase()
 {
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 }
 
 void TestLSService::TearDownTestCase()

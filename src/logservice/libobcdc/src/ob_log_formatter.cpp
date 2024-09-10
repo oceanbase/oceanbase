@@ -1322,7 +1322,7 @@ int ObLogFormatter::fill_normal_cols_(
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
                 }
-              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap()) {
+              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()) {
                 const common::ObObjType obj_type = cv->get_obj_type();
                 cv->value_.set_string(obj_type, *new_col_str);
 
@@ -1375,7 +1375,7 @@ int ObLogFormatter::fill_normal_cols_(
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
                 }
-              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap()) {
+              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()) {
                 const common::ObObjType obj_type = cv->get_obj_type();
                 cv->value_.set_string(obj_type, *old_col_str);
 

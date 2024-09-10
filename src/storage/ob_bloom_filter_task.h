@@ -43,7 +43,7 @@ private:
   uint64_t tenant_id_;
   uint64_t table_id_;
   blocksstable::MacroBlockId macro_id_;
-  blocksstable::ObMacroBlockHandle macro_handle_;
+  blocksstable::ObStorageObjectHandle macro_handle_;
   int64_t prefix_len_;
   common::ObArenaAllocator allocator_;
   char *io_buf_;

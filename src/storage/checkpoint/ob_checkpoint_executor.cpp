@@ -194,10 +194,7 @@ int ObCheckpointExecutor::update_clog_checkpoint()
                         K(checkpoint_scn_in_ls_meta), K(ls_id), K(service_type));
           }
         } else if (OB_FAIL(loghandler_->locate_by_scn_coarsely(checkpoint_scn, clog_checkpoint_lsn))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            STORAGE_LOG(WARN, "no file in disk", K(ret), K(ls_id), K(checkpoint_scn));
-            ret = OB_SUCCESS;
-          } else if (OB_NOT_INIT == ret) {
+          if (OB_NOT_INIT == ret) {
             STORAGE_LOG(WARN, "palf has been disabled", K(ret), K(checkpoint_scn), K(ls_->get_ls_id()));
             ret = OB_SUCCESS;
           } else if (OB_NEED_RETRY == ret) {
@@ -207,7 +204,7 @@ int ObCheckpointExecutor::update_clog_checkpoint()
             STORAGE_LOG(ERROR, "locate lsn by logts failed", K(ret), K(ls_id),
                         K(checkpoint_scn), K(checkpoint_scn_in_ls_meta));
           }
-        } else if (OB_FAIL(ls_->set_clog_checkpoint(clog_checkpoint_lsn, checkpoint_scn))) {
+        } else if (OB_FAIL(ls_->set_clog_checkpoint(clog_checkpoint_lsn, checkpoint_scn, true/*write_slog*/))) {
           STORAGE_LOG(WARN, "set clog checkpoint failed", K(ret), K(clog_checkpoint_lsn), K(checkpoint_scn), K(ls_id));
         } else {
           update_clog_checkpoint_times_++;

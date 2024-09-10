@@ -243,6 +243,32 @@ ObDASScanCtDef *ObTableScanCtDef::get_lookup_ctdef()
   return lookup_ctdef;
 }
 
+ObDASScanCtDef *ObTableScanCtDef::get_rowkey_vid_ctdef()
+{
+  ObDASScanCtDef *rowkey_vid_ctdef = nullptr;
+  const ObDASBaseCtDef *attach_ctdef = attach_spec_.attach_ctdef_;
+  if (OB_NOT_NULL(attach_ctdef)) {
+    /**
+     * The iter tree of das scan with vid:
+     *
+     * CASE 1: Partition Scan Tree
+     *
+     *                DOC_ID_MERGE_ITER
+     *                 /              \
+     *               /                  \
+     * DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyVid)
+     *
+     *
+     *
+     **/
+    if (DAS_OP_VID_MERGE == attach_ctdef->op_type_) {
+      OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
+      rowkey_vid_ctdef = static_cast<ObDASScanCtDef *>(attach_ctdef->children_[1]);
+    }
+  }
+  return rowkey_vid_ctdef;
+}
+
 int ObTableScanCtDef::allocate_dppr_table_loc()
 {
   int ret = OB_SUCCESS;
@@ -2199,6 +2225,19 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
     LOG_WARN("failed to get next batch", K(ret));
   }
 
+  if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
+    ObEvalCtx::BatchInfoScopeGuard convert_guard(eval_ctx_);
+    convert_guard.set_batch_size(brs_.size_);
+    for (int i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+      if (brs_.skip_->at(i)) { continue; }
+      convert_guard.set_batch_idx(i);
+      if (OB_FAIL(vt_result_converter_->convert_output_row(
+            eval_ctx_, MY_CTDEF.get_das_output_exprs(), MY_SPEC.agent_vt_meta_.access_exprs_))) {
+        LOG_WARN("convert output row failed", K(ret));
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && enable_random_output && !brs_.end_
       && brs_.skip_->accumulate_bit_cnt(brs_.size_) == 0) {
     if (OB_UNLIKELY(brs_.size_ > max_row_cnt || rand_append_bits + brs_.size_ > max_row_cnt)) {
@@ -3135,25 +3174,17 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
           } else if (cellids.size() > SAPTIAL_INDEX_DEFAULT_ROW_COUNT) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("cellid over size", K(ret), K(cellids.size()));
-          } else if (OB_ISNULL(spat_index_.obj_buffer_)) {
+          } else if (OB_ISNULL(spat_index_.rows_)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to alloc memory for spatial index row cells", K(ret));
+            LOG_WARN("failed to alloc memory for spatial index datum row", K(ret));
           } else {
-            ObObj *obj_arr = reinterpret_cast<ObObj *>(spat_index_.obj_buffer_);
-            uint64_t obj_idx = 0;
-            for (uint64_t i = 0; OB_SUCC(ret) && i < cellids.size(); i++) {
-              obj_arr[obj_idx].set_nop_value();
-              obj_arr[obj_idx].set_uint64(cellids.at(i));
-              obj_arr[obj_idx + 1].set_nop_value();
-              obj_arr[obj_idx + 1].set_varchar(mbr_val);
-              obj_arr[obj_idx + 1].set_collation_type(CS_TYPE_BINARY);
-              obj_arr[obj_idx + 1].set_collation_level(CS_LEVEL_IMPLICIT);
-              ObNewRow row;
-              row.cells_ = &obj_arr[obj_idx];
-              row.count_ = 2;
-              obj_idx += 2;
-              if (OB_FAIL(spat_index_.spat_rows_->push_back(row))) {
-                LOG_WARN("failed to push back spatial index row", K(ret), K(row));
+            for (uint64_t i = 0, datum_idx = 0; OB_SUCC(ret) && i < cellids.size(); i++) {
+              spat_index_.rows_[i].reuse();
+              spat_index_.rows_[i].storage_datums_[datum_idx].set_uint(cellids.at(i));
+              spat_index_.rows_[i].storage_datums_[datum_idx + 1].set_string(mbr_val);
+              // not set_collation_type(CS_TYPE_BINARY) and set_collation_level(CS_LEVEL_IMPLICIT)
+              if (OB_FAIL(spat_index_.spat_rows_->push_back(spat_index_.rows_ + i))) {
+                LOG_WARN("failed to push back spatial index row", K(ret), K(spat_index_.rows_[i]));
               }
             }
           }
@@ -3162,10 +3193,10 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
         }
       }
     }
-    if (OB_SUCC(ret) && !need_ignore_null) {
-      ObNewRow &row = (*(spat_index_.spat_rows_))[spat_index_.spat_row_index_++];
-      ObObj &cellid= row.get_cell(0);
-      ObObj &mbr = row.get_cell(1);
+    if (OB_SUCC(ret)) {
+      ObDatumRow *row = (*(spat_index_.spat_rows_))[spat_index_.spat_row_index_++];
+      ObStorageDatum &cellid = row->storage_datums_[0];
+      ObStorageDatum &mbr = row->storage_datums_[1];
       if (OB_FAIL(fill_generated_cellid_mbr(cellid, mbr))) {
         LOG_WARN("fill cellid mbr failed", K(ret), K(cellid), K(mbr));
       }
@@ -3178,19 +3209,24 @@ int ObTableScanOp::init_spatial_index_rows()
 {
   int ret = OB_SUCCESS;
   void *buf = ctx_.get_allocator().alloc(sizeof(ObDomainIndexRow));
+  void *row_buf = ctx_.get_allocator().alloc(sizeof(blocksstable::ObDatumRow) * SAPTIAL_INDEX_DEFAULT_ROW_COUNT);
   void *mbr_buffer = ctx_.get_allocator().alloc(OB_DEFAULT_MBR_SIZE);
-  void *obj_buf = ctx_.get_allocator().alloc(sizeof(ObObj) * 2 * SAPTIAL_INDEX_DEFAULT_ROW_COUNT);
-  if (OB_ISNULL(buf) || OB_ISNULL(mbr_buffer) || OB_ISNULL(obj_buf)) {
+  if (OB_ISNULL(buf) || OB_ISNULL(mbr_buffer) || OB_ISNULL(row_buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate spatial row store failed", K(ret), K(buf), K(mbr_buffer));
   } else {
     spat_index_.spat_rows_ = new(buf) ObDomainIndexRow();
+    spat_index_.rows_ = new(row_buf) blocksstable::ObDatumRow[SAPTIAL_INDEX_DEFAULT_ROW_COUNT];
     spat_index_.mbr_buffer_ = mbr_buffer;
-    spat_index_.obj_buffer_ = obj_buf;
     const ObExprPtrIArray &exprs = MY_SPEC.output_;
     const uint8_t spatial_expr_cnt = 3;
     uint8_t cnt = 0;
-    for (uint32_t i = 0; i < exprs.count() && cnt < spatial_expr_cnt; i++) {
+    for (uint32_t i = 0; OB_SUCC(ret) && i < SAPTIAL_INDEX_DEFAULT_ROW_COUNT; i++) {
+      if (OB_FAIL(spat_index_.rows_[i].init(SAPTIAL_INDEX_DEFAULT_COL_COUNT))) {
+        LOG_WARN("init datum row failed", K(ret));
+      }
+    }
+    for (uint32_t i = 0; OB_SUCC(ret) && i < exprs.count() && cnt < spatial_expr_cnt; i++) {
       if (exprs.at(i)->type_ == T_FUN_SYS_SPATIAL_CELLID) {
         spat_index_.cell_idx_ = i;
         cnt++;
@@ -3202,7 +3238,7 @@ int ObTableScanOp::init_spatial_index_rows()
         cnt++;
       }
     }
-    if (cnt != spatial_expr_cnt) {
+    if (OB_FAIL(ret) || cnt != spatial_expr_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid spatial index exprs", K(ret), K(cnt));
     }
@@ -3210,7 +3246,7 @@ int ObTableScanOp::init_spatial_index_rows()
   return ret;
 }
 
-int ObTableScanOp::fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &mbr)
+int ObTableScanOp::fill_generated_cellid_mbr(const ObStorageDatum &cellid, const ObStorageDatum &mbr)
 {
   int ret = OB_SUCCESS;
   const ObExprPtrIArray &exprs = MY_SPEC.output_;
@@ -3220,12 +3256,12 @@ int ObTableScanOp::fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &m
   } else {
     for (uint8_t i = 0; i < 2 && OB_SUCC(ret); i++) {
       ObObjDatumMapType type = i == 0 ? OBJ_DATUM_8BYTE_DATA : OBJ_DATUM_STRING;
-      const ObObj &value = i == 0 ? cellid : mbr;
+      const ObStorageDatum &value = i == 0 ? cellid : mbr;
       uint32_t idx = i == 0 ? spat_index_.cell_idx_ : spat_index_.mbr_idx_;
       ObExpr *expr = exprs.at(idx);
       ObDatum *datum = &expr->locate_datum_for_write(get_eval_ctx());
       ObEvalInfo *eval_info = &expr->get_eval_info(get_eval_ctx());
-      if (OB_FAIL(datum->from_obj(value, type))) {
+      if (OB_FAIL(datum->from_storage_datum(value, type))) {
         LOG_WARN("fill spatial index row failed", K(ret));
       } else {
         eval_info->evaluated_ = true;

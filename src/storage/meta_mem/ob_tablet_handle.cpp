@@ -104,7 +104,17 @@ void ObTabletHandle::reset()
       if (OB_UNLIKELY(ref_cnt < 0)) {
         STORAGE_LOG(ERROR, "obj ref cnt may be leaked", K(ref_cnt), KPC(this));
       } else if (0 == ref_cnt) {
-        if (!allow_copy_and_assign_) {
+        if (obj_->is_external_tablet()) {
+          int tmp_ret = OB_SUCCESS; // let tablet finish deconstruct in case some resource can't be released
+          if (allow_copy_and_assign_) {
+            tmp_ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("allow_copy_and_assign_ of external_tablet must be false", K(tmp_ret), KPC(this), KPC(obj_), K(lbt()));
+          } else if (OB_TMP_FAIL(t3m_->dec_external_tablet_cnt(obj_->get_tablet_id().id(), obj_->get_transfer_seq()))) {
+            LOG_ERROR("fail to dec external tablet_cnt", K(tmp_ret), KP(obj_), KPC(obj_));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!allow_copy_and_assign_) {
           // all in memory, no need to dec macro ref
           if (OB_NOT_NULL(obj_pool_)) {
             ob_usleep(1000 * 1000);

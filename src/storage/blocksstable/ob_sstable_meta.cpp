@@ -120,12 +120,13 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
       && 0 == MEMCMP(encrypt_key_, other.encrypt_key_, sizeof(encrypt_key_))
       && latest_row_store_type_ == other.latest_row_store_type_
       && table_backup_flag_ == other.table_backup_flag_
-      && table_shared_flag_ == other.table_shared_flag_;
+      && table_shared_flag_ == other.table_shared_flag_
+      && root_macro_seq_ == other.root_macro_seq_;
 }
 
 bool ObSSTableBasicMeta::is_valid() const
 {
-  bool ret = (SSTABLE_BASIC_META_VERSION == version_
+  bool ret = SSTABLE_BASIC_META_VERSION == version_
            && row_count_ >= 0
            && occupy_size_ >= 0
            && original_size_ >= 0
@@ -147,9 +148,10 @@ bool ObSSTableBasicMeta::is_valid() const
            && data_index_tree_height_ >= 0
            && sstable_logic_seq_ >= 0
            && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
-           && is_latest_row_store_type_valid())
+           && is_latest_row_store_type_valid()
            && table_backup_flag_.is_valid()
-           && table_shared_flag_.is_valid();
+           && table_shared_flag_.is_valid()
+           && root_macro_seq_ >= 0;
   return ret;
 }
 
@@ -191,6 +193,7 @@ void ObSSTableBasicMeta::reset()
   latest_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
   table_backup_flag_.reset();
   table_shared_flag_.reset();
+  root_macro_seq_ = 0;
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -571,8 +574,7 @@ ObSSTableMeta::ObSSTableMeta()
     data_root_info_(),
     macro_info_(),
     cg_sstables_(),
-    column_checksums_(nullptr),
-    column_checksum_count_(0),
+    column_ckm_struct_(),
     tx_ctx_(),
     is_inited_(false)
 {
@@ -604,8 +606,7 @@ void ObSSTableMeta::reset()
   data_root_info_.reset();
   macro_info_.reset();
   basic_meta_.reset();
-  column_checksums_ = nullptr;
-  column_checksum_count_ = 0;
+  column_ckm_struct_.reset();
   cg_sstables_.reset();
   tx_ctx_.reset();
   is_inited_ = false;
@@ -655,8 +656,9 @@ int ObSSTableMeta::init_base_meta(
     MEMCPY(basic_meta_.encrypt_key_, param.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     basic_meta_.table_backup_flag_ = param.table_backup_flag_;
     basic_meta_.table_shared_flag_ = param.table_shared_flag_;
+    basic_meta_.root_macro_seq_ = param.root_macro_seq_;
     basic_meta_.length_ = basic_meta_.get_serialize_size();
-    if (OB_FAIL(prepare_column_checksum(param.column_checksums_, allocator))) {
+    if (OB_FAIL(column_ckm_struct_.assign(allocator, param.column_checksums_))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
     }
   }
@@ -676,27 +678,6 @@ int ObSSTableMeta::init_data_index_tree_info(
     LOG_WARN("fail to init data root info", K(ret), K(param));
   } else {
     basic_meta_.status_ = SSTABLE_WRITE_BUILDING;
-  }
-  return ret;
-}
-
-int ObSSTableMeta::prepare_column_checksum(
-    const common::ObIArray<int64_t> &column_checksums,
-    common::ObArenaAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  const int64_t count = column_checksums.count();
-  if (OB_UNLIKELY(nullptr != column_checksums_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("column checksum isn't empty, cannot initialize twice", K(ret), KP(column_checksums_));
-  } else if (count > 0 && OB_ISNULL(column_checksums_ = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * count)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate column checksum memory", K(ret), K(count));
-  } else {
-    column_checksum_count_ = column_checksums.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_checksums.count(); ++i) {
-      column_checksums_[i] = column_checksums.at(i);
-    }
   }
   return ret;
 }
@@ -816,18 +797,16 @@ int ObSSTableMeta::serialize_(char *buf, const int64_t buf_len, int64_t &pos) co
   int ret = OB_SUCCESS;
   if (OB_FAIL(basic_meta_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize basic meta", K(ret), KP(buf), K(buf_len), K(pos), K_(basic_meta));
-  } else {
-    OB_UNIS_ENCODE_ARRAY(column_checksums_, column_checksum_count_);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(data_root_info_.serialize(buf, buf_len, pos))) {
-      LOG_WARN("fail to serialize data root info", K(ret), K(buf_len), K(pos), K(data_root_info_));
-    } else if (OB_FAIL(macro_info_.serialize(buf, buf_len, pos))) {
-      LOG_WARN("fail to serialize macro info", K(ret), K(buf_len), K(pos), K(macro_info_));
-    } else if (OB_FAIL(cg_sstables_.serialize(buf, buf_len, pos))) {
-      LOG_WARN("fail to serialize cg sstables", K(ret), K(buf_len), K(pos), K(cg_sstables_));
-    } else if (OB_FAIL(tx_ctx_.serialize(buf, buf_len, pos))) {
-      LOG_WARN("fail to serialize tx ids", K(ret), K(buf_len), K(pos), K(tx_ctx_));
-    }
+  } else if (OB_FAIL(column_ckm_struct_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize column ckm array", KR(ret), K(buf_len), K(pos), K_(column_ckm_struct));
+  } else if (OB_FAIL(data_root_info_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize data root info", K(ret), K(buf_len), K(pos), K(data_root_info_));
+  } else if (OB_FAIL(macro_info_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize macro info", K(ret), K(buf_len), K(pos), K(macro_info_));
+  } else if (OB_FAIL(cg_sstables_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize cg sstables", K(ret), K(buf_len), K(pos), K(cg_sstables_));
+  } else if (OB_FAIL(tx_ctx_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize tx ids", K(ret), K(buf_len), K(pos), K(tx_ctx_));
   }
   return ret;
 }
@@ -880,17 +859,9 @@ int ObSSTableMeta::deserialize_(
   int ret = OB_SUCCESS;
   if (OB_FAIL(basic_meta_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize basic meta", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(column_ckm_struct_.deserialize(allocator, buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize column checksum", K(ret), K(column_ckm_struct_));
   } else {
-    OB_UNIS_DECODE(column_checksum_count_);
-    if (OB_FAIL(ret)) {
-    } else if (column_checksum_count_ > 0 && OB_ISNULL(column_checksums_ = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * column_checksum_count_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate column checksum memory", K(ret), K(column_checksum_count_));
-    } else {
-      OB_UNIS_DECODE_ARRAY(column_checksums_, column_checksum_count_);
-    }
-  }
-  if (OB_SUCC(ret)) {
     ObMicroBlockDesMeta des_meta(basic_meta_.compressor_type_,
                                  basic_meta_.root_row_store_type_,
                                  basic_meta_.encrypt_id_,
@@ -922,9 +893,8 @@ int64_t ObSSTableMeta::get_serialize_size() const
 int64_t ObSSTableMeta::get_serialize_size_() const
 {
   int64_t len = 0;
-  MacroBlockId id_map_entry_id;
   len += basic_meta_.get_serialize_size();
-  OB_UNIS_ADD_LEN_ARRAY(column_checksums_, column_checksum_count_);
+  len += column_ckm_struct_.get_serialize_size();
   len += data_root_info_.get_serialize_size();
   len += macro_info_.get_serialize_size();
   len += cg_sstables_.get_serialize_size();
@@ -934,7 +904,7 @@ int64_t ObSSTableMeta::get_serialize_size_() const
 
 int64_t ObSSTableMeta::get_variable_size() const
 {
-  return sizeof(int64_t) * column_checksum_count_ // column checksums
+  return column_ckm_struct_.get_deep_copy_size()
        + data_root_info_.get_variable_size()
        + macro_info_.get_variable_size()
        + cg_sstables_.get_deep_copy_size()
@@ -958,11 +928,9 @@ int ObSSTableMeta::deep_copy(
     dest = new (meta_buf) ObSSTableMeta();
     pos += sizeof(ObSSTableMeta);
     dest->basic_meta_ = basic_meta_;
-    dest->column_checksum_count_ = column_checksum_count_;
-    dest->column_checksums_ = reinterpret_cast<int64_t *>(buf + pos);
-    MEMCPY(dest->column_checksums_, column_checksums_, sizeof(int64_t) * column_checksum_count_);
-    pos += sizeof(int64_t) * column_checksum_count_;
-    if (OB_FAIL(data_root_info_.deep_copy(buf, buf_len, pos, dest->data_root_info_))) {
+    if (OB_FAIL(column_ckm_struct_.deep_copy(buf, buf_len, pos, dest->column_ckm_struct_))) {
+      LOG_WARN("fail to deep copy data root info", K(ret), KP(buf), K(buf_len), K(pos), K(data_root_info_));
+    } else if (OB_FAIL(data_root_info_.deep_copy(buf, buf_len, pos, dest->data_root_info_))) {
       LOG_WARN("fail to deep copy data root info", K(ret), KP(buf), K(buf_len), K(pos), K(data_root_info_));
     } else if (OB_FAIL(macro_info_.deep_copy(buf, buf_len, pos, dest->macro_info_))) {
       LOG_WARN("fail to deep copy macro info", K(ret), KP(buf), K(buf_len), K(pos), K(macro_info_));
@@ -1077,6 +1045,25 @@ int ObMigrationSSTableParam::assign(const ObMigrationSSTableParam &param)
   return ret;
 }
 
+bool ObMigrationSSTableParam::is_empty_sstable() const
+{
+  return 0 == basic_meta_.data_macro_block_count_ && !is_only_shared_macro_blocks_sstable();
+}
+
+bool ObMigrationSSTableParam::is_shared_sstable() const
+{
+  return basic_meta_.table_shared_flag_.is_shared_sstable();
+}
+
+bool ObMigrationSSTableParam::is_shared_macro_blocks_sstable() const
+{
+  return basic_meta_.table_shared_flag_.is_shared_macro_blocks();
+}
+
+bool ObMigrationSSTableParam::is_only_shared_macro_blocks_sstable() const
+{
+  return basic_meta_.table_shared_flag_.is_only_shared_macro_blocks();
+}
 // this is used for backup to get merge res from backup-ed migration sstable param
 int ObMigrationSSTableParam::get_merge_res(blocksstable::ObSSTableMergeRes &res) const
 {
@@ -1228,6 +1215,12 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
   }
 
   LST_DO_CODE(OB_UNIS_DECODE, is_meta_root_);
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, basic_meta_.filled_tx_scn_))) {
+    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(basic_meta_));
+  }
+
   return ret;
 }
 
@@ -1451,6 +1444,23 @@ int ObSSTableMetaChecker::check_sstable_column_checksum_(
   }
   return ret;
 }
+
+int ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
+    const ObITable::TableKey &table_key,
+    share::SCN &filled_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  if (table_key.tablet_id_.is_ls_inner_tablet()) {
+    //do nothing
+  } else if (table_key.is_major_sstable()) {
+    //do nothing
+  } else if (filled_tx_scn.is_min()) {
+    filled_tx_scn = table_key.get_end_scn();
+    LOG_WARN("fix filled tx scn value for compact", K(table_key), K(filled_tx_scn));
+  }
+  return ret;
+}
+
 
 } // namespace blocksstable
 } // namespace oceanbase

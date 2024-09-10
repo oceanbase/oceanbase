@@ -188,8 +188,8 @@ int ObFreezeInfoManager::fetch_new_freeze_info(
              sql_proxy, min_frozen_scn, freeze_infos))) {
     LOG_WARN("fail to get freeze info", KR(ret), K(min_frozen_scn));
   } else if (OB_UNLIKELY(freeze_infos.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid frozen status", KR(ret), K(min_frozen_scn));
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("no freeze info in inner table", KR(ret), K(min_frozen_scn));
   }
   return ret;
 }

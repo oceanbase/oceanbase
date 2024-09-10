@@ -191,6 +191,8 @@ private:
   // row_dimension_, op_
   int cg_expr_basic(const common::ObIArray<ObRawExpr *> &raw_exprs);
 
+  int init_attr_expr(ObExpr *rt_expr, ObRawExpr *raw_expr);
+
   // init parent_cnt_, parents_
   int cg_expr_parents(const common::ObIArray<ObRawExpr *> &raw_exprs);
 

@@ -536,6 +536,7 @@ int ObCdcService::query_tenant_archive_info_(bool &archive_dest_changed)
     EXTLOG_LOG(ERROR, "mysql_proxy is null, unexpected", KR(ret));
   } else if (OB_FAIL(helper.init(tenant_id))) {
     EXTLOG_LOG(WARN, "init ObArchivePersistHelper failed", KR(ret), K(tenant_id));
+  // TODO by yunlong: get dest_id for QoS
   } else if (OB_FAIL(helper.get_valid_dest_pairs(*mysql_proxy, tmp_info))) {
     EXTLOG_LOG(WARN, "get_valid_dest_pairs failed", KR(ret), K(tenant_id));
   } else if (is_archive_dest_changed_(tmp_info)) {

@@ -504,7 +504,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(NULL, MEDIUMTEXT(16777216)) = t.mediumtext_t]), filter(nil)
+  0 - output([cast(NULL, MEDIUMTEXT(16777216)) = t.mediumtext_t]), filter(nil), rowset=8
       access([t.mediumtext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -523,7 +523,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(NULL, LONGTEXT(536870911)) = t.longtext_t]), filter(nil)
+  0 - output([cast(NULL, LONGTEXT(536870911)) = t.longtext_t]), filter(nil), rowset=8
       access([t.longtext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1056,7 +1056,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.mediumtext_t, DECIMAL(-1, -1))]), filter(nil)
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.mediumtext_t, DECIMAL(-1, -1))]), filter(nil), rowset=8
       access([t.tinyint_t], [t.mediumtext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1075,7 +1075,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.longtext_t, DECIMAL(-1, -1))]), filter(nil)
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.longtext_t, DECIMAL(-1, -1))]), filter(nil), rowset=8
       access([t.tinyint_t], [t.longtext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true

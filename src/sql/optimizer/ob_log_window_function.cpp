@@ -185,6 +185,7 @@ int ObLogWindowFunction::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
+// estimate input_rows_mem_bound_ratio for auto mem management in window function
 int ObLogWindowFunction::est_input_rows_mem_bound_ratio()
 {
   int ret = OB_SUCCESS;

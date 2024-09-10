@@ -71,7 +71,13 @@ public:
   int init(int64_t data_length, common::ObIAllocator &allocator, int64_t tenant_id,
            double fpp = 0.01, int64_t max_filter_size = 2147483648 /*2G*/);
   int init(const ObPxBloomFilter *filter);
+  inline bool is_inited() { return is_inited_; }
+  // both reset_filter && reset_for_rescan are use in partition wise hash join scene
+  // reset_filter is used in old fashion(bloom filter based on estimate row)
+  // reset_for_rescan is used in old fashion(bloom filter based on real row)
   void reset_filter();
+
+  void reset_for_rescan();
   inline int might_contain(uint64_t hash, bool &is_match) {
     return (this->*might_contain_)(hash, is_match);
   }

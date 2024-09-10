@@ -62,6 +62,8 @@ public:
   OB_INLINE bool is_disable_block_cache() const { return disable_block_cache_; }
   OB_INLINE common::ObIOFlag get_io_flag() const { return io_flag_; }
   OB_INLINE int64_t get_io_timeout_ms() const { return io_timeout_ms_; }
+  OB_INLINE void set_is_unaligned_read(const bool is_unaligned_read) { is_unaligned_read_ = is_unaligned_read; }
+  OB_INLINE bool is_unaligned_read() { return is_unaligned_read_; }
 
   TO_STRING_KV(K(is_inited_), K(is_read_),
                K(fd_), K(dir_id_), KP(buf_),
@@ -161,6 +163,7 @@ private:
   int64_t read_offset_in_file_;
   bool disable_page_cache_;
   bool disable_block_cache_; // only used in ut, to control whether read data from block cache
+  bool is_unaligned_read_; //for statistics
   common::ObIOFlag io_flag_;
   int64_t io_timeout_ms_;
   common::ObSEArray<ObIOReadHandle, 1> io_handles_;

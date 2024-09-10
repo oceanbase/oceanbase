@@ -570,6 +570,8 @@ private:
   int check_stack_once();
   int output_expr_sanity_check();
   int output_expr_sanity_check_batch();
+  int output_expr_sanity_check_batch_inner(const ObExpr &expr);
+  int output_nested_expr_sanity_check_batch(const ObExpr &expr);
   int output_expr_decint_datum_len_check();
   int output_expr_decint_datum_len_check_batch();
   int setup_op_feedback_info();

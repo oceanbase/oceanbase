@@ -186,7 +186,7 @@ int ObExtInfoCallback::set(
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
-  ObDatumRow datum_row;
+  blocksstable::ObDatumRow datum_row;
   char *buf = nullptr;
   int64_t len = 0;
 
@@ -250,7 +250,8 @@ int ObExtInfoCbRegister::register_cb(
     const blocksstable::ObDmlFlag dml_flag,
     transaction::ObTxDesc *tx_desc,
     transaction::ObTxSEQ &parent_seq_no,
-    ObObj &index_data,
+    blocksstable::ObStorageDatum &index_data,
+    ObObjType &type,
     ObObj &ext_info_data)
 {
   int ret = OB_SUCCESS;
@@ -269,7 +270,7 @@ int ObExtInfoCbRegister::register_cb(
   } else if (OB_ISNULL(mvcc_ctx_ = ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data is empty", K(ret), K(ext_info_data));
-  } else if (OB_FAIL(init_header(index_data, ext_info_data))) {
+  } else if (OB_FAIL(init_header(type))) {
     LOG_WARN("init_header_ fail", K(ret), K(ext_info_data));
   } else if (OB_FAIL(build_data_iter(ext_info_data))) {
     LOG_WARN("build data iter fail", K(ret));
@@ -306,24 +307,24 @@ int ObExtInfoCbRegister::register_cb(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FALSE_IT(seq_no_cnt_ = cb_cnt)) {
-    } else if (OB_FAIL(set_index_data(index_data))) {
+    } else if (OB_FAIL(set_index_data(index_data, type))) {
       LOG_WARN("set_index_data fail", K(ret));
     }
   }
   return ret;
 }
 
-int ObExtInfoCbRegister::init_header(ObObj& index_data, ObObj &ext_info_data)
+int ObExtInfoCbRegister::init_header(ObObjType &type)
 {
   int ret = OB_SUCCESS;
-  header_.type_ = get_type(index_data.get_type());
+  header_.type_ = get_type(type);
   return ret;
 }
 
-int ObExtInfoCbRegister::set_index_data(ObObj &index_data)
+int ObExtInfoCbRegister::set_index_data(blocksstable::ObStorageDatum &index_data, ObObjType &type)
 {
   int ret = OB_SUCCESS;
-  if (is_lob_storage(index_data.get_type())) {
+  if (is_lob_storage(type)) {
     if (OB_FAIL(set_outrow_ctx_seq_no(index_data))) {
       LOG_WARN("set_outrow_ctx_seq_no fail", K(ret));
     }
@@ -334,7 +335,7 @@ int ObExtInfoCbRegister::set_index_data(ObObj &index_data)
   return ret;
 }
 
-int ObExtInfoCbRegister::set_outrow_ctx_seq_no(ObObj& index_data)
+int ObExtInfoCbRegister::set_outrow_ctx_seq_no(blocksstable::ObStorageDatum& index_data)
 {
   int ret = OB_SUCCESS;
   ObLobLocatorV2 locator;

@@ -92,8 +92,33 @@ int ObLSRebuildCbImpl::on_rebuild(
   return ret;
 }
 
+bool ObLSRebuildCbImpl::is_rebuilding(const int64_t id) const
+{
+  int ret = OB_SUCCESS;
+  ObLSID ls_id(id);
+  bool is_in_rebuild_map = false;
+  bool is_in_rebuild_status = false;
+  ObRebuildService *rebuild_service = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls rebuild cb impl do not init", K(ret));
+  } else if (false == ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(id));
+  } else if (OB_ISNULL(rebuild_service = (MTL(ObRebuildService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rebuild service not be NULL", K(ret), KP(rebuild_service));
+  } else if (OB_FAIL(rebuild_service->check_ls_need_rebuild(ls_id, is_in_rebuild_map))) {
+    LOG_WARN("rebuild service not be NULL", K(ret), KP(rebuild_service));
+  } else if (OB_FAIL(check_ls_in_rebuild_status_(is_in_rebuild_status))) {
+    LOG_WARN("failed to check ls in rebuild status", K(ret), K(ls_id), KPC(ls_));
+  }
+  return is_in_rebuild_map || is_in_rebuild_status;
+}
+
 int ObLSRebuildCbImpl::check_ls_in_rebuild_status_(
-    bool &is_ls_in_rebuild)
+    bool &is_ls_in_rebuild) const
 {
   int ret = OB_SUCCESS;
   is_ls_in_rebuild = false;

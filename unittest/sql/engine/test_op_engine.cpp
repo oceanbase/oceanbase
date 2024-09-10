@@ -24,9 +24,13 @@
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "observer/ob_req_time_service.h"
 #include "ob_fake_table_scan_vec_op.h"
+#include "share/io/ob_io_manager.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "src/share/ob_local_device.h"
 #include "src/share/ob_device_manager.h"
+#include "src/storage/meta_store/ob_server_storage_meta_service.h"
+#include "src/storage/blocksstable/ob_block_manager.h"
+#include "src/storage/ob_file_system_router.h"
 #include "src/storage/blocksstable/ob_storage_cache_suite.h"
 #include "ob_test_config.h"
 #include <vector>
@@ -60,6 +64,12 @@ void TestOpEngine::SetUp()
   tbase_.inner_set(&instance);
   ASSERT_EQ(tbase_.init(), 0);
   ObTenantEnv::set_tenant(&tbase_);
+  common::ObTenantIOManager *io_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, common::ObTenantIOManager::mtl_new(io_service));
+  EXPECT_EQ(OB_SUCCESS, common::ObTenantIOManager::mtl_init(io_service));
+  EXPECT_EQ(OB_SUCCESS, io_service->start());
+  tbase_.set(io_service);
+  ObTenantEnv::set_tenant(&tbase_);
 
   out_origin_result_stream_.open(ObTestOpConfig::get_instance().test_filename_origin_output_file_, std::ios::out | std::ios::trunc);
   out_vec_result_stream_.open(ObTestOpConfig::get_instance().test_filename_vec_output_file_, std::ios::out | std::ios::trunc);
@@ -72,9 +82,10 @@ void TestOpEngine::TearDown()
 
 void TestOpEngine::destory()
 {
-  OB_SERVER_BLOCK_MGR.stop();
-  OB_SERVER_BLOCK_MGR.wait();
-  OB_SERVER_BLOCK_MGR.destroy();
+  SERVER_STORAGE_META_SERVICE.destroy();
+  OB_STORAGE_OBJECT_MGR.stop();
+  OB_STORAGE_OBJECT_MGR.wait();
+  OB_STORAGE_OBJECT_MGR.destroy();
   OB_STORE_CACHE.destroy();
   ObIOManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
@@ -87,10 +98,9 @@ common::ObIODevice *TestOpEngine::get_device_inner()
 {
   int ret = OB_SUCCESS;
   common::ObIODevice *device = NULL;
-  common::ObString storage_info(OB_LOCAL_PREFIX);
-  // for the local and nfs, storage_prefix and storage info are same
-  if (OB_FAIL(common::ObDeviceManager::get_instance().get_device(storage_info, storage_info, device))) {
-    LOG_WARN("get_device_inner", K(ret));
+  common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
+  if (OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+    LOG_WARN("fail to get local device", K(ret));
   }
   return device;
 }
@@ -126,6 +136,10 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
     STORAGE_LOG(WARN, "failed to gen slog dir", K(ret));
   } else if (OB_FAIL(databuff_printf(clog_dir, OB_MAX_FILE_NAME_LENGTH, "%s/clog/", data_dir))) {
     STORAGE_LOG(WARN, "failed to gen clog dir", K(ret));
+  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_instance().init(data_dir))) {
+    STORAGE_LOG(WARN, "failed to init file system router", K(ret));
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    LOG_WARN("fail to init device manager", K(ret));
   }
   storage_env_.data_dir_ = data_dir;
   storage_env_.sstable_dir_ = file_dir;
@@ -157,6 +171,16 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   } else if (0 != system(cmd)) {
     ret = OB_ERR_SYS;
     LOG_WARN("failed to exec cmd", K(ret), K(cmd), K(errno), KERRMSG);
+//<<<<<<< HEAD
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(slog_dir))) {
+    LOG_WARN("failed to create slog dir", K(ret), K(slog_dir));
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir))) {
+    LOG_WARN("failed to create file dir", K(ret), K(file_dir));
+//=======
+  } else if (OB_ISNULL(THE_IO_DEVICE)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("io device is null", K(ret));
+//>>>>>>> origin/palf_tiered_storage
   } else if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
     LOG_WARN("fail to init io device", K(ret), K_(storage_env));
   } else if (OB_FAIL(ObIOManager::get_instance().init())) {
@@ -164,14 +188,17 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE, async_io_thread_count,
                                                                     sync_io_thread_count, max_io_depth))) {
     LOG_WARN("add device channel failed", K(ret));
+  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(false/*is_shared_storage*/))) {
+    LOG_WARN("fail to init storage meta service", K(ret));
+  } else if (FALSE_IT(SERVER_STORAGE_META_SERVICE.get_slogger_manager().need_reserved_ = false)) {
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.init(false, storage_env_.default_block_size_))) {
+    LOG_WARN("init block manager fail", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     LOG_WARN("fail to start io manager", K(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, storage_env_.default_block_size_))) {
-    STORAGE_LOG(WARN, "init block manager fail", K(ret));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir))) {
     STORAGE_LOG(WARN, "failed to create file dir", K(ret), K(file_dir));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0 /*reserver_size*/))) {
-    STORAGE_LOG(WARN, "Fail to start server block mgr", K(ret));
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(0/*reserved_size*/))) {
+    STORAGE_LOG(WARN, "Fail to start storage object mgr", K(ret));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.first_mark_device())) {
     STORAGE_LOG(WARN, "Fail to start first mark device", K(ret));
   } else if (OB_FAIL(OB_STORE_CACHE.init(10, 1, 1, 1, 1, 10000, 10))) {

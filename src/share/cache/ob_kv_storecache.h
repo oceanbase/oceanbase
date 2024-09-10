@@ -129,6 +129,7 @@ class ObKVGlobalCache : public lib::ObICacheWasher
 {
   friend class observer::ObServer;
 public:
+  static const int64_t DEFAULT_ONCE_BATCH_GET_BUCKET_NUM = 10000;
   static ObKVGlobalCache &get_instance();
   int init(ObITenantMemLimitGetter *mem_limit_getter,
            const int64_t bucket_num = DEFAULT_BUCKET_NUM,
@@ -162,6 +163,10 @@ public:
                             lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks);
   int set_storage_leak_check_mod(const char *check_mod);
   int get_cache_name(const int64_t cache_id, char *cache_name);
+  int get_batch_data_block_cache_key(ObIArray<blocksstable::ObMicroBlockCacheKey> &keys) {
+    return map_.get_batch_data_block_cache_key(DEFAULT_ONCE_BATCH_GET_BUCKET_NUM, keys);
+  }
+  OB_INLINE int64_t get_bucket_num() const { return map_.get_bucket_num(); }
 private:
   template<class Key, class Value> friend class ObIKVCache;
   template<class Key, class Value> friend class ObKVCache;

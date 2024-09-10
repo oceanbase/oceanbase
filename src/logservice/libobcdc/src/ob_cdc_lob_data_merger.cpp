@@ -212,7 +212,7 @@ int ObCDCLobDataMerger::push_lob_column_(
     LOG_ERROR("lob_data_out_row_ctx is nullptr", KR(ret), K(lob_data_get_ctx));
   } else {
     LOG_DEBUG("push_lob_column_", K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
-    const bool is_empty_sql = (ObLobDataOutRowCtx::OpType::EMPTY_SQL == lob_data_out_row_ctx->op_);
+    const bool is_empty_sql = lob_data_out_row_ctx->is_empty_sql();
     bool is_update_outrow_lob_from_empty_to_empty = false;
     const auto seq_no_st = transaction::ObTxSEQ::cast_from_int(lob_data_out_row_ctx->seq_no_st_);
     const uint32_t seq_no_cnt = lob_data_out_row_ctx->seq_no_cnt_;

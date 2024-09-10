@@ -16,7 +16,6 @@
 #include "logservice/restoreservice/ob_log_restore_handler.h"
 #include "share/restore/ob_ls_restore_status.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"

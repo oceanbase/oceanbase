@@ -225,7 +225,7 @@ public:
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise all column group");
     return false;
   }
-  DECLARE_TO_STRING;
+  DECLARE_VIRTUAL_TO_STRING;
   int generate_for_column_store(ObIAllocator &allocator,
                                 const ObColDesc &desc,
                                 const bool is_oracle_mode);
@@ -342,7 +342,7 @@ public:
       const int64_t buf_len,
       int64_t &pos) const;
   int64_t get_serialize_size() const;
-  DECLARE_TO_STRING;
+  DECLARE_VIRTUAL_TO_STRING;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableReadInfo);

@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX STORAGE
 
 #include "ob_empty_shell_task.h"
 #include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
@@ -17,7 +18,8 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "rootserver/ob_tenant_info_loader.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {
@@ -46,7 +48,7 @@ void ObEmptyShellTask::runTimerTask()
 
   skip_empty_shell_task = (OB_SUCCESS != (OB_E(EventTable::EN_TABLET_EMPTY_SHELL_TASK_FAILED) OB_SUCCESS));
 
-  if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+  if (!SERVER_STORAGE_META_SERVICE.is_started()) {
     // do nothing
     STORAGE_LOG(DEBUG, "ob block manager has not started");
   } else if (OB_ISNULL(ls_svr)) {
@@ -123,10 +125,17 @@ int ObTabletEmptyShellHandler::init(ObLS *ls)
 int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArray &empty_shell_tablet_ids, bool &need_retry)
 {
   int ret = OB_SUCCESS;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  int64_t tablet_ref_cnt = 0;
+  bool allow_tablet_version_gc = false;
+  int64_t current_tablet_version = OB_INVALID_VERSION;
   ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tablet empty shell handler is not inited", KR(ret));
+  } else if (OB_ISNULL(t3m)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "failed to get t3m", KR(ret), KP(t3m));
   } else if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     STORAGE_LOG(WARN, "failed to build ls tablet iter", KR(ret), KPC(this));
   } else {
@@ -166,6 +175,16 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
         STORAGE_LOG(WARN, "check tablet can become empty shell failed", KR(ret), KPC(tablet));
       } else if (!can_become_shell) {
         STORAGE_LOG(INFO, "tablet can not become shell", KR(ret), "tablet_meta", tablet->get_tablet_meta());
+      } else if (OB_FAIL(t3m->get_current_version_for_tablet(ls_->get_ls_id(), tablet->get_tablet_id(), current_tablet_version,
+                                                             allow_tablet_version_gc))) {
+        STORAGE_LOG(WARN, "failed to check tablet ref status", KR(ret), K(ls_->get_ls_id()), K(tablet->get_tablet_id()));
+      } else if (FALSE_IT(tablet_ref_cnt = tablet->get_ref())) {
+      } else if (GCTX.is_shared_storage_mode() && (!allow_tablet_version_gc || (2 < tablet_ref_cnt))) {
+        // why (2 < ref_cnt) ?
+        // A: 1. this func hold one ref.
+        //    2. tablet_pointer in t3m hold on ref.
+        need_retry = true;
+        FLOG_INFO("tablet has been referred", KR(ret), K(allow_tablet_version_gc), K(ls_->get_ls_id()), K(tablet->get_tablet_id()), K(current_tablet_version), K(tablet_ref_cnt));
       } else if (OB_FAIL(empty_shell_tablet_ids.push_back(tablet->get_tablet_meta().tablet_id_))) {
         STORAGE_LOG(WARN, "update tablet to empty shell failed", KR(ret),"tablet_meta", tablet->get_tablet_meta());
       }

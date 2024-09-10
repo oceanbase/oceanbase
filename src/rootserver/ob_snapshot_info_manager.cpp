@@ -94,7 +94,8 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
     } else if (OB_FAIL(snapshot_proxy.batch_add_snapshot(trans, snapshot_type,
         tenant_id, schema_version, snapshot.snapshot_scn_, comment, tablet_ids))) {
       LOG_WARN("batch add snapshot failed", K(ret));
-    } else {
+    }
+    if (trans.is_started()) {
       bool need_commit = (ret == OB_SUCCESS);
       int tmp_ret = trans.end(need_commit);
       if (OB_SUCCESS != tmp_ret) {

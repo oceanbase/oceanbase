@@ -76,9 +76,13 @@ public:
   double min_cpu() const { return resource_.min_cpu(); }
   int64_t memory_size() const { return resource_.memory_size(); }
   int64_t log_disk_size() const { return resource_.log_disk_size(); }
+  int64_t data_disk_size() const { return resource_.data_disk_size(); }
+  void set_data_disk_size(const int64_t data_disk_size) { resource_.set_data_disk_size(data_disk_size);}
   int64_t max_iops() const { return resource_.max_iops(); }
   int64_t min_iops() const { return resource_.min_iops(); }
   int64_t iops_weight() const { return resource_.iops_weight(); }
+  int64_t max_net_bandwidth() const { return resource_.max_net_bandwidth(); }
+  int64_t net_bandwidth_weight() const { return resource_.net_bandwidth_weight(); }
 
   ///////////////// update func ///////////////////
   int update_unit_resource(ObUnitResource &ur);

@@ -66,7 +66,9 @@ public:
       const common::ObObj &utilization_limit,
       const common::ObObj &min_iops,
       const common::ObObj &max_iops,
-      const common::ObObj &weight_iops);
+      const common::ObObj &weight_iops,
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
   int create_plan_directive(
       uint64_t tenant_id,
       const common::ObString &plan,
@@ -76,7 +78,9 @@ public:
       const common::ObObj &utilization_limit,
       const common::ObObj &min_iops,
       const common::ObObj &max_iops,
-      const common::ObObj &weight_iops);
+      const common::ObObj &weight_iops,
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
   // 这里之所以直接传入 ObObj，而不是传入 ObString 或 int
   // 是为了便于判断传入的参数是否是缺省，如果缺省则 ObObj.is_null() 是 true
   int update_plan_directive(
@@ -88,7 +92,9 @@ public:
       const common::ObObj &utilization_limit,
       const common::ObObj &min_iops,
       const common::ObObj &max_iops,
-      const common::ObObj &weight_iops);
+      const common::ObObj &weight_iops,
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
   int delete_plan_directive(
       uint64_t tenant_id,
       const common::ObString &plan,
@@ -240,13 +246,18 @@ private:
       const common::ObString &group,
       const int64_t iops_minimum,
       const int64_t iops_maximum,
-      bool &valid);
+      bool &valid,
+      ObIArray<ObPlanDirective> &directives);
 
   // get user_info from inner mapping_table
   int get_user_mapping_info(
       const uint64_t tenant_id,
       const common::ObString &user,
       ObResourceUserMappingRule &rule);
+  // if net bandwidth config not default, return ob_not_support
+  int check_net_bandwidth_config_is_default_(
+      const common::ObObj &max_net_bandwidth,
+      const common::ObObj &net_bandwidth_weight);
 
 public:
   class TransGuard {

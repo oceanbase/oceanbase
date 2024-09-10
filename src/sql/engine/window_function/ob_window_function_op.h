@@ -25,6 +25,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/basic/ob_hp_infrastructure_manager.h"
 
 namespace oceanbase
 {
@@ -335,34 +336,58 @@ public:
   class RowsStore
   {
   public:
-    RowsStore() :
+    RowsStore(ObWindowFunctionOp &op) :
+      op_(op),
       ra_rs_(NULL /*allocator*/),
       begin_idx_(0),
       row_cnt_(0),
       stored_row_cnt_(0),
       output_row_idx_(0),
-      need_output_(false) {}
+      need_output_(false),
+      prior_dumping_rows_stores_(op.get_local_allocator()),
+      local_mem_limit_version_(0)
+      {}
     ~RowsStore() { destroy(); }
     void destroy() { ra_rs_.reset(); }
+
+    template <bool IS_INPUT>
+    int process_dump(const bool found_part_end = false);
+
+    // for input
     inline int add_row(const common::ObIArray<ObExpr*> &exprs,
                        ObEvalCtx *ctx,
                        ObRADatumStore::StoredRow **stored_row = nullptr,
                        bool add_row_cnt = true)
     {
-      int ret = ra_rs_.add_row(exprs, ctx, stored_row);
-      stored_row_cnt_++;
-      row_cnt_ += add_row_cnt;
-      SQL_ENG_LOG(DEBUG, "add_row", K(ret), K_(row_cnt), K_(stored_row_cnt));
+      int ret = common::OB_SUCCESS;
+      // skip process dump when store contains only one block
+      if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump<true>())) {
+        SQL_ENG_LOG(WARN, "fail to dump_by_priority", K(ret), K(ObToStringExprRow(*ctx, exprs)));
+      } else if (OB_FAIL(ra_rs_.add_row(exprs, ctx, stored_row))) {
+        SQL_ENG_LOG(WARN, "fail to add_row for ra_rs_", K(ret));
+      } else {
+        stored_row_cnt_++;
+        row_cnt_ += add_row_cnt;
+        SQL_ENG_LOG(DEBUG, "add_row", K(ret), K_(row_cnt), K_(stored_row_cnt));
+      }
       return ret;
     }
+    // for result
     inline int add_row(const common::ObIArray<common::ObDatum> &datums,
                        ObRADatumStore::StoredRow **stored_row = nullptr,
                        bool add_row_cnt = true)
     {
-      int ret = ra_rs_.add_row(datums, stored_row);
-      row_cnt_ += add_row_cnt;
-      ++stored_row_cnt_;
-      SQL_ENG_LOG(DEBUG, "add_row", K(ret), K_(row_cnt), K_(stored_row_cnt), K(add_row_cnt));
+      int ret = common::OB_SUCCESS;
+      // skip process dump when store contains only one block
+      if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump<false>())) {
+        SQL_ENG_LOG(WARN, "fail to dump_by_priority", K(ret));
+      } else if (OB_FAIL(ra_rs_.add_row(datums, stored_row))) {
+        SQL_ENG_LOG(WARN, "fail to add_row for ra_rs_", K(ret));
+      } else {
+        row_cnt_ += add_row_cnt;
+        ++stored_row_cnt_;
+        SQL_ENG_LOG(DEBUG, "add_row", K(ret), K_(row_cnt), K_(stored_row_cnt), K(add_row_cnt));
+      }
       return ret;
     }
     inline int add_row_with_index(int64_t idx,
@@ -371,7 +396,7 @@ public:
                                   ObRADatumStore::StoredRow **stored_row = nullptr,
                                   bool add_row_cnt = true)
     {
-      int ret = OB_SUCCESS;
+      int ret = common::OB_SUCCESS;
       UNUSED(idx); // use BatchInfoScopeGuard instead
       SQL_ENG_LOG(DEBUG, "add row with index", K(idx), K((void*)this),
                   K(begin_idx_), K(output_row_idx_),
@@ -382,6 +407,10 @@ public:
       return ret;
     }
     inline int64_t count() const { return row_cnt_; }
+    inline bool need_check_dump(const int64_t g_mem_version) const
+    {
+      return g_mem_version != local_mem_limit_version_;
+    }
     // return row count which computed but not outputed
     inline int64_t to_output_rows() const {
       return row_cnt_ - output_row_idx_;
@@ -391,13 +420,27 @@ public:
     inline bool is_empty() const { return stored_row_cnt_ == begin_idx_; }
     inline int reset_buf(const uint64_t tenant_id)
     {
+      int ret = common::OB_SUCCESS;
       //row_cnt_ no need reset
       begin_idx_ = row_cnt_;
       ra_rs_.reset();
-      const int64_t mem_limit = 0;
+      const int64_t mem_limit = INT64_MAX; // disable dump by mem limit, use auto memory manage instead
       const int64_t mem_ctx_id = common::ObCtxIds::WORK_AREA;
       const char *label = common::ObModIds::OB_SQL_WINDOW_ROW_STORE;
-      return ra_rs_.init(mem_limit, tenant_id, mem_ctx_id, label);
+      if (OB_FAIL(ra_rs_.init(mem_limit, tenant_id, mem_ctx_id, label))) {
+        LOG_WARN("init ra datum store failed", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(op_.mem_context_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null memory context", K(ret));
+      } else {
+        ra_rs_.set_allocator(op_.mem_context_->get_malloc_allocator());
+        ra_rs_.set_mem_stat(&(op_.sql_mem_processor_));
+        ra_rs_.set_io_observer(&(op_.io_event_observer_));
+        ra_rs_.set_dir_id(op_.sql_mem_processor_.get_dir_id());
+        LOG_TRACE("trace init sql mem mgr for window function",
+                  K(op_.profile_.get_cache_size()), K(op_.profile_.get_expect_size()));
+      }
+      return ret;
     }
     inline int reset(const uint64_t tenant_id)
     {
@@ -405,6 +448,8 @@ public:
       output_row_idx_ = 0;
       stored_row_cnt_ = 0;
       row_cnt_ = 0;
+      local_mem_limit_version_ = 0;
+      prior_dumping_rows_stores_.clear();
       return reset_buf(tenant_id);
     }
     inline int get_row(const int64_t row_idx, const ObRADatumStore::StoredRow *&sr)
@@ -428,6 +473,7 @@ public:
     TO_STRING_KV(K_(begin_idx), K_(output_row_idx), K_(row_cnt), K_(stored_row_cnt),
                  K_(need_output), K_(ra_rs));
   public:
+    ObWindowFunctionOp &op_;
     ObRADatumStore ra_rs_;
     // record begin idx of current partition. always zero for rows_store_
     int64_t begin_idx_;
@@ -447,6 +493,10 @@ public:
     int64_t output_row_idx_;
     // record whether the input row of consolidator need to output
     bool need_output_;
+    common::ObFixedArray<RowsStore*, common::ObIAllocator> prior_dumping_rows_stores_;
+    // each RowsStore may trigger a new mem_limit fetch
+    // synchronize this version to others to let them update the mem_limit
+    int64_t local_mem_limit_version_;
   };
 
   struct Stores
@@ -489,7 +539,6 @@ public:
     }
 
     TO_STRING_KV(K(processed_), K(cur_), K(first_), K(last_));
-
 
     // `processed_` is rows calculated but not outputed, only used in vectorized execution
     RowsStore *processed_;
@@ -745,7 +794,14 @@ public:
       pby_expr_cnt_idx_array_(),
       pby_hash_values_(),
       participator_whole_msg_array_(),
-      pby_hash_values_sets_()
+      pby_hash_values_sets_(),
+      mem_context_(NULL),
+      profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+      sql_mem_processor_(profile_, op_monitor_info_),
+      hp_infras_mgr_(MTL_ID()),
+      distinct_aggr_count_(0),
+      global_mem_limit_version_(0),
+      amm_periodic_cnt_(0)
   {
   }
   virtual ~ObWindowFunctionOp() {}
@@ -770,9 +826,13 @@ public:
                       const ObDatum &rank,
                       const int64_t val);
 
+  inline common::ObArenaAllocator& get_local_allocator() { return local_allocator_; }
+  inline double get_input_rows_mem_bound_ratio() const
+  { return MY_SPEC.input_rows_mem_bound_ratio_; }
+  inline int64_t get_global_mem_limit_version() const { return global_mem_limit_version_; }
+
 protected:
   int init();
-
   // Window function inner_get_next_row()/inner_get_next_batch() are implemented in three steps:
   //
   // 1. partial_next_row/parallel_next_batch: calculate the input's rows window function result.
@@ -795,9 +855,7 @@ protected:
   int set_it_age(Stores &s);
   int unset_it_age(Stores &s);
   int reset_for_scan(const int64_t tenant_id);
-
   int reset_for_part_scan(const int64_t tenant_id);
-
   int get_pos(RowsReader &assist_reader,
               WinFuncCell &func_ctx,
               const int64_t row_idx,
@@ -855,7 +913,7 @@ protected:
       bool &is_result_datum_null, bool &is_pushdown_bypass);
 
   // For participator, add aggr result row to input rows
-  int found_part_end(const WinFuncCell *end, RowsStore *rows_store, bool add_row_cnt = true);
+  int found_part_end(const WinFuncCell *end, bool add_row_cnt = true);
   int found_new_part(const bool update_part_first_row_idx);
   int save_part_first_row_idx();
   int output_row();
@@ -906,7 +964,21 @@ protected:
   int detect_aggr_status();
   bool skip_calc(const int64_t wf_idx);
   int check_interval_valid(ObExpr &expr);
+  int init_distinct_set(ObAggregateProcessor &aggr_processor);
+  int init_hp_infras_group_mgr();
+  inline int update_mem_limit_version_periodically();
 
+private:
+  int init_mem_context();
+  void destroy_mem_context()
+  {
+    if (nullptr != mem_context_) {
+      DESTROY_CONTEXT(mem_context_);
+      mem_context_ = nullptr;
+    }
+  }
+  inline bool need_dump() const
+  { return sql_mem_processor_.get_data_size() > sql_mem_processor_.get_mem_bound(); }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObWindowFunctionOp);
@@ -982,9 +1054,20 @@ private:
   // Use to decide whether compute or bypass, generated from ObReportingWFWholeMsg
   ObArray<ReportingWFHashSet *> pby_hash_values_sets_;
   // Members for reporting wf push down, use for pushdown paricipator transmit pieces to datahub end
+  // Following three member variables are for auto memory managing
+  lib::MemoryContext mem_context_;
+  ObSqlWorkAreaProfile profile_;
+  ObSqlMemMgrProcessor sql_mem_processor_;
+  HashPartInfrasMgr hp_infras_mgr_;
+  int64_t distinct_aggr_count_;
+
+  // Each RowsStore may trigger a new mem_limit fetch, this records newest mem_limit version
+  // Synchronize this version to others to let them update the mem_limit
+  int64_t global_mem_limit_version_;
+  // Only increase, not decrease, used for update_max_available_mem_size_periodically
+  // Means the total count of rows which have been added to the each ra datum store
+  int64_t amm_periodic_cnt_;
 };
-
-
 
 template <typename STORE_ROW_L, typename STORE_ROW_R>
 int ObWindowFunctionSpec::rd_sort_cmp(const STORE_ROW_L *l,
@@ -1010,6 +1093,43 @@ int ObWindowFunctionSpec::rd_sort_cmp(const STORE_ROW_L *l,
         cmp_ret = cmp_ret * (-1);
       }
     }
+  }
+  return ret;
+}
+int ObWindowFunctionOp::update_mem_limit_version_periodically()
+{
+  int ret = common::OB_SUCCESS;
+  // update global mem bound every 1024 rows
+  // use total_stored_row_cnt of wf op instead of row_cnt of each ra_rs_ here
+  // because total_stored_row_cnt is monotone increasing
+  bool updated = false;
+  bool need_inc_version = false;
+  const static int64_t UPDATE_MEM_SIZE_PERIODIC_CNT = 1024;
+  if (!GCONF.is_sql_operator_dump_enabled()) {
+    // do nothing, disable dump
+  } else if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
+      &mem_context_->get_malloc_allocator(),
+      [&](int64_t cur_cnt) {
+        UNUSED(cur_cnt);
+        // keep periodic_cnt 1024
+        // because periodic_cnt will mulitply 2 each time, it will overflow after updated 64 times
+        sql_mem_processor_.set_periodic_cnt(1024);
+        return 0 == ((++amm_periodic_cnt_) % UPDATE_MEM_SIZE_PERIODIC_CNT);
+      },
+      updated))) {
+    LOG_WARN("failed to update max available memory size periodically", K(ret));
+  } else if ((updated || need_dump()) &&
+      OB_FAIL(sql_mem_processor_.extend_max_memory_size(
+                &mem_context_->get_malloc_allocator(),
+                [&](int64_t max_memory_size) {
+                  return sql_mem_processor_.get_data_size() > max_memory_size;
+                },
+                need_inc_version, sql_mem_processor_.get_data_size()))) {
+    LOG_WARN("fail to extend max memory size", K(ret), K(updated), K(need_dump()));
+  } else if (need_inc_version) {
+    // use the mem_limit_version_ of wf op to trigger updating mem_limit of each ra_rs_
+    // using newest global mem bound while add_row to ra_rs_
+    ++global_mem_limit_version_;
   }
   return ret;
 }

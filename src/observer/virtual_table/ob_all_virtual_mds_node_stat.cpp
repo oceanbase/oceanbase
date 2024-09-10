@@ -79,7 +79,7 @@ struct ApplyOnLSOp {
     if (table_->judege_in_ranges(ls.get_ls_id(), table_->ls_ranges_)) {
       (void) table_->get_tablet_info_(ls, apply_on_tablet_op_);
     } else {
-      MDS_LOG(TRACE, "not in ranges", K(ret), K(*table_));
+      MDS_LOG(TRACE, "not in ranges", K(ls.get_ls_id()), K(ret), K(*table_));
     }
     return OB_SUCCESS;
   }
@@ -97,7 +97,7 @@ struct ApplyOnTenantOp {
         ret = OB_SUCCESS;
       }
     } else {
-      MDS_LOG(TRACE, "not in ranges", K(ret), K(*table_));
+      MDS_LOG(TRACE, "not in ranges", K(MTL_ID()), K(ret), K(*table_));
     }
     return ret;
   }

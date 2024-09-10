@@ -321,11 +321,11 @@ int ObTableApiModifyExecutor::get_next_conflict_rowkey(DASTaskIter &task_iter,
   bool got_row = false;
 
   while (OB_SUCC(ret) && !got_row) {
-    ObNewRow *dup_row = nullptr;
+    ObDatumRow *dup_row = nullptr;
     ObChunkDatumStore::StoredRow *stored_row = nullptr;
     ObDASWriteBuffer::DmlShadowRow ssr;
     ObDASInsertOp *ins_op = static_cast<ObDASInsertOp*>(*task_iter);
-    ObNewRowIterator *conflict_result = ins_op->get_duplicated_result();
+    ObDatumRowIterator *conflict_result = ins_op->get_duplicated_result();
     const ObDASInsCtDef *ins_ctdef = static_cast<const ObDASInsCtDef*>(ins_op->get_ctdef());
     if (OB_ISNULL(conflict_result)) {
       ret = OB_ERR_UNEXPECTED;

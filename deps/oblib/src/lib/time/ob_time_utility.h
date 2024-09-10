@@ -30,6 +30,9 @@ class ObTimeUtility
 {
 public:
   static int64_t current_time();
+  static int64_t current_time_s();
+  static int64_t current_time_ms();
+  static int64_t current_time_us();
 	static int64_t current_time_ns();
   static int64_t fast_current_time();
   static int64_t current_monotonic_time();

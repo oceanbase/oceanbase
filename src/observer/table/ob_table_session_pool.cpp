@@ -15,6 +15,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::share;
+using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
@@ -41,7 +42,7 @@ int ObTableApiSessPoolMgr::start()
 {
   int ret = OB_SUCCESS;
 
-  if (!is_inited_) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("table api session pool mgr isn't inited", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
@@ -274,7 +275,12 @@ int ObTableApiSessPool::init(int64_t hash_bucket/* = SESS_POOL_DEFAULT_BUCKET_NU
                                      MTL_ID()))) {
       LOG_WARN("fail to init sess pool", K(ret), K(hash_bucket), K(MTL_ID()));
     } else {
-      is_inited_ = true;
+      const ObMemAttr attr(MTL_ID(), "TbSessPool");
+      if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
+        LOG_WARN("fail to init allocator", K(ret));
+      } else {
+        is_inited_ = true;
+      }
     }
   }
 
@@ -305,6 +311,8 @@ void ObTableApiSessPool::destroy()
         }
       } else if (OB_NOT_NULL(del_node)) {
         del_node->destroy();
+        allocator_.free(del_node);
+        del_node = nullptr;
       }
     }
   }
@@ -313,12 +321,14 @@ void ObTableApiSessPool::destroy()
   DLIST_FOREACH(node, retired_nodes_) {
     if (OB_NOT_NULL(node)) {
       node->destroy();
+      allocator_.free(node);
+      node = nullptr;
     }
   }
 
   retired_nodes_.clear();
   key_node_map_.destroy();
-  allocator_.reset(); // when mtl_destroy, all worker thread has beed existed, no need to lock allocator
+  allocator_.reset();
   is_inited_ = false;
   LOG_INFO("ObTableApiSessPool destroy successfully", K(MTL_ID()));
 }
@@ -335,7 +345,7 @@ void ObTableApiSessPool::destroy()
 int ObTableApiSessPool::retire_session_node()
 {
   int ret = OB_SUCCESS;
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObTimeUtility::fast_current_time();
   ObTableApiSessForeachOp op;
 
   if (OB_FAIL(key_node_map_.foreach_refactored(op))) {
@@ -388,7 +398,7 @@ int ObTableApiSessPool::evict_retired_sess()
 {
   int ret = OB_SUCCESS;
   int64_t delete_count = 0;
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObTimeUtility::fast_current_time();
   ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
 
   DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, delete_count < BACKCROUND_TASK_DELETE_SESS_NUM) {
@@ -402,7 +412,6 @@ int ObTableApiSessPool::evict_retired_sess()
         ObTableApiSessNode *rm_node = retired_nodes_.remove(node);
         if (OB_NOT_NULL(rm_node)) {
           rm_node->~ObTableApiSessNode();
-          ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
           allocator_.free(rm_node);
           rm_node = nullptr;
           delete_count++;
@@ -498,7 +507,7 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(sess_node)) {
-    int64_t cur_time = ObTimeUtility::current_time();
+    int64_t cur_time = ObTimeUtility::fast_current_time();
     ATOMIC_STORE(&sess_node->last_active_ts_, cur_time);
   }
 
@@ -508,7 +517,6 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
 int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   ObTableApiSessNode *tmp_node = nullptr;
   void *buf = nullptr;
 
@@ -522,6 +530,13 @@ int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTab
     } else {
       node = tmp_node;
     }
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(tmp_node)) {
+    tmp_node->~ObTableApiSessNode();
+    allocator_.free(tmp_node);
+    tmp_node = nullptr;
+    node = nullptr;
   }
 
   return ret;
@@ -539,9 +554,14 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
       LOG_WARN("fail to add sess node to hash map", K(ret), K(credential), K(*node));
     } else {
       ret = OB_SUCCESS; // replace error code
+      // other thread has set_refactored, free current node
+      node->~ObTableApiSessNode();
+      allocator_.free(node);
+      node = nullptr;
     }
-    // this node has been set by other thread, free it
-    ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(node)) {
     node->~ObTableApiSessNode();
     allocator_.free(node);
     node = nullptr;
@@ -560,7 +580,7 @@ int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
   int ret = OB_SUCCESS;
   ObTableApiSessNode *node = nullptr;
   const uint64_t key = credential.hash_val_;
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObTimeUtility::fast_current_time();
 
   if (OB_FAIL(get_sess_node(key, node))) {
     if (OB_HASH_NOT_EXIST == ret) { // not exist, create
@@ -608,7 +628,7 @@ int ObTableApiSessNodeVal::init_sess_info()
 {
   int ret = OB_SUCCESS;
 
-  if (!is_inited_) {
+  if (IS_NOT_INIT) {
     share::schema::ObSchemaGetterGuard schema_guard;
     const ObTenantSchema *tenant_schema = nullptr;
     if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
@@ -667,8 +687,42 @@ int ObTableApiSessNode::init()
       LOG_WARN("unexpected null mem context ", K(ret));
     } else {
       mem_ctx_ = tmp_mem_ctx;
-      last_active_ts_ = ObTimeUtility::fast_current_time();
-      is_inited_ = true;
+      ObSchemaGetterGuard schema_guard;
+      const uint64_t tenant_id = credential_.tenant_id_;
+      const uint64_t user_id = credential_.user_id_;
+      const uint64_t database_id = credential_.database_id_;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+      } else {
+        const ObSimpleTenantSchema *tenant_info = nullptr;
+        const ObUserInfo *user_info = nullptr;
+        const ObSimpleDatabaseSchema *db_info = nullptr;
+        if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+          LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
+        } else if (OB_ISNULL(tenant_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant info is null", K(ret));
+        } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+          LOG_WARN("fail to get user info", K(ret), K(tenant_id), K(user_id));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("user info is null", K(ret));
+        } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, db_info))) {
+          LOG_WARN("fail to get database info", K(ret), K(tenant_id), K(database_id));
+        } else if (OB_ISNULL(db_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("database info is null", K(ret));
+        } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), tenant_info->get_tenant_name(), tenant_name_))) {
+          LOG_WARN("fail to deep copy tenant name", K(ret));
+        } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), user_info->get_user_name(), user_name_))) {
+          LOG_WARN("fail to deep copy user name", K(ret));
+        } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), db_info->get_database_name(), db_name_))) {
+          LOG_WARN("fail to deep copy database name", K(ret));
+        } else {
+          last_active_ts_ = ObTimeUtility::fast_current_time();
+          is_inited_ = true;
+        }
+      }
     }
 
     if (OB_FAIL(ret) && OB_NOT_NULL(mem_ctx_)) {
@@ -707,6 +761,7 @@ void ObTableApiSessNode::destroy()
   }
   if (OB_NOT_NULL(mem_ctx_)) {
     DESTROY_CONTEXT(mem_ctx_);
+    mem_ctx_ = nullptr;
   }
 }
 

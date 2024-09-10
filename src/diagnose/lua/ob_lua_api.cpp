@@ -1492,11 +1492,11 @@ int select_disk_stat(lua_State *L)
     gen.next_row();
 
     // total_size
-    gen.next_column(OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    gen.next_column(OB_STORAGE_OBJECT_MGR.get_total_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size());
     // used_size
-    gen.next_column(OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    gen.next_column(OB_STORAGE_OBJECT_MGR.get_used_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size());
     // free_size
-    gen.next_column(OB_SERVER_BLOCK_MGR.get_free_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    gen.next_column(OB_STORAGE_OBJECT_MGR.get_free_macro_block_count() * OB_STORAGE_OBJECT_MGR.get_macro_block_size());
     // is_disk_valid
     gen.next_column(DEVICE_HEALTH_NORMAL != dhs ? 0 : 1);
     // disk_error_begin_ts

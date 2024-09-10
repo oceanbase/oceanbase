@@ -39,11 +39,17 @@ public:
   int register_to_tablet(ObDDLKvMgrHandle &kv_mgr_handle);
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int set_max_freeze_scn(const share::SCN &checkpoint_scn);
-  int get_or_create_ddl_kv(
+  int get_or_create_shared_nothing_ddl_kv(
       const share::SCN &macro_redo_scn,
       const share::SCN &macro_redo_start_scn,
       ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
-      ObDDLKVHandle &kv_handle); // used in active ddl kv guard
+      ObDDLKVHandle &kv_handle);
+  int get_or_create_shared_storage_ddl_kv(
+      const share::SCN &macro_redo_scn,
+      const share::SCN &macro_redo_start_scn,
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      ObDDLKVHandle &kv_handle);
   int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
   int get_ddl_kvs(const bool frozen_only, ObIArray<ObDDLKVHandle> &kv_handle_array); // get all freeze ddl kvs
   int get_ddl_kvs_for_query(ObTablet &tablet, ObIArray<ObDDLKVHandle> &kv_handle_array);
@@ -71,6 +77,13 @@ public:
   int online();
   int cleanup();
   bool can_freeze();
+  int add_idempotence_checker();
+  int check_macro_block_idempotence(
+      const blocksstable::MacroBlockId &macro_block_id,
+      const ObDDLMacroBlockType block_type,
+      const char *buf,
+      const int64_t buf_size);
+  int remove_idempotence_checker();
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id),
       K_(max_freeze_scn),
       K_(head), K_(tail), K_(ref_cnt));
@@ -107,6 +120,7 @@ private:
   int64_t head_;
   int64_t tail_;
   common::ObLatch lock_;
+  hash::ObHashMap<blocksstable::MacroBlockId, int64_t/*checksum*/> macro_block_checksum_map_;
 
   volatile int64_t ref_cnt_ CACHE_ALIGNED;
   DISALLOW_COPY_AND_ASSIGN(ObTabletDDLKvMgr);

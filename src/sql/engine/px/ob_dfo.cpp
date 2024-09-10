@@ -194,6 +194,7 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     temp_file.file_id_ = other_file.file_id_;
     temp_file.part_id_ = other_file.part_id_;
     temp_file.file_addr_ = other_file.file_addr_;
+    temp_file.file_size_ = other_file.file_size_;
     if (OB_FAIL(ob_write_string(allocator_, other_file.file_url_, temp_file.file_url_))) {
       LOG_WARN("fail to write string", K(ret));
     } else if (OB_FAIL(access_external_table_files_.push_back(temp_file))) {
@@ -653,6 +654,9 @@ OB_DEF_SERIALIZE(ObPxRpcInitSqcArgs)
   // can reuse cache from now on
   (const_cast<ObSqcSerializeCache &>(ser_cache_)).cache_serialized_ = ser_cache_.enable_serialize_cache_;
   LST_DO_CODE(OB_UNIS_ENCODE, qc_order_gi_tasks_);
+  if (OB_SUCC(ret) && sqc_.is_fulltree()) {
+    ret = exec_ctx_->serialize_group_pwj_map(buf, buf_len, pos);
+  }
   LOG_TRACE("serialize sqc", K_(sqc));
   LOG_DEBUG("end trace sqc args", K(pos), K(buf_len), K(this->get_serialize_size()));
   return ret;
@@ -704,6 +708,9 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
     // always serialize
     LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, qc_order_gi_tasks_);
+  }
+  if (OB_SUCC(ret) && sqc_.is_fulltree()) {
+    len += exec_ctx_->get_group_pwj_map_serialize_size();
   }
   return len;
 }
@@ -789,6 +796,9 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
     // if version of qc is old, qc_order_gi_tasks_ will not be serialized and the value will be false.
     qc_order_gi_tasks_ = false;
     LST_DO_CODE(OB_UNIS_DECODE, qc_order_gi_tasks_);
+    if (OB_SUCC(ret) && sqc_.is_fulltree() && pos < data_len) {
+      ret = exec_ctx_->deserialize_group_pwj_map(buf, data_len, pos);
+    }
     LOG_TRACE("deserialize qc order gi tasks", K(qc_order_gi_tasks_), K(sqc_), K(this));
   }
   return ret;
@@ -1007,6 +1017,12 @@ int ObPxRpcInitTaskArgs::deep_copy_assign(ObPxRpcInitTaskArgs &src,
   } else if (ser_pos != des_pos) {
     ret = OB_DESERIALIZE_ERROR;
     LOG_WARN("data_len and pos mismatch", K(ser_arg_len), K(ser_pos), K(des_pos), K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (sqc_handler_->get_sqc_init_arg().sqc_.is_fulltree()
+        && nullptr != src.exec_ctx_->get_group_pwj_map()) {
+      exec_ctx_->deep_copy_group_pwj_map(src.exec_ctx_->get_group_pwj_map());
+    }
   }
   return ret;
 }

@@ -156,6 +156,64 @@ private:
   ObStorageUtil &util_;
 };
 
+// ObTopNMinimumDirEntryWithMarkerOperator is used to get the minimum N element, therefore, we need make
+// a Max-Heap(i.e. always push dirent when the count of Max-Heap is smaller than or equal to N, replace
+// top of Max-Hap when it is greater than new dirent and the count of Max-Heap is greater than N).
+class ObTopNMinimumDirEntryWithMarkerOperator : public ObBaseDirEntryOperator
+{
+public:
+  ObTopNMinimumDirEntryWithMarkerOperator(
+    const int64_t num,
+    const char *marker,
+    const bool need_size);
+  virtual ~ObTopNMinimumDirEntryWithMarkerOperator();
+
+  int func(const dirent *entry) final;
+  int handle_each_dir_entry(common::ObBaseDirEntryOperator &op);
+  virtual bool need_get_file_size() const override;
+
+  struct Entry
+  {
+    Entry() : obj_name_(nullptr), obj_size_(-1) {}
+    char *obj_name_;
+    int64_t obj_size_;
+
+    TO_STRING_KV(K_(obj_name), K_(obj_size));
+  };
+
+  // get top N minimum, we need make a Max-Heap,
+  // TopNCompElement should like this:
+  // bool operator(const T &lhs, const T &rhs)
+  // {
+  //    return lsh < rhs;
+  // }
+  //
+  // get top N maximum, TopNCompElement like this
+  // bool operator(const T &lhs, const T &rhs)
+  // {
+  //    return lsh > rhs;
+  // }
+  //
+  struct TopNCompElement
+  {
+    bool operator()(const Entry &lhs, const Entry &rhs);
+    int get_error_code();
+  };
+
+private:
+  int alloc_and_init_(const char *d_name, Entry &out_entry);
+  void free_memory_(Entry &out_entry);
+  int try_replace_top_(const char *d_name);
+  DISALLOW_COPY_AND_ASSIGN(ObTopNMinimumDirEntryWithMarkerOperator);
+private:
+  int64_t n_;
+  const char *marker_;
+  const bool need_size_;
+  TopNCompElement less_than_;
+  ObBinaryHeap<Entry, TopNCompElement> heap_;
+  DefaultPageAllocator allocator_;
+};
+
 class ObStorageUtil
 {
 public:
@@ -178,6 +236,7 @@ public:
   int write_single_file(const common::ObString &uri, const char *buf, const int64_t size);
   int del_dir(const common::ObString &uri);
   int is_tagging(const common::ObString &uri, bool &is_tagging);
+  int list_files_with_marker(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
   // This func is to check the object/file/dir exists or not.
   // If the uri is a common directory(not a 'SIMULATE_APPEND' object), please set @is_adaptive as FALSE
   // If the uri is a normal object, please set @is_adaptive as FALSE
@@ -188,6 +247,31 @@ public:
   int list_appendable_file_fragments(const common::ObString &uri, ObStorageObjectMeta &obj_meta);
 
   int del_file(const common::ObString &uri, const bool is_adaptive);
+  /**
+   * Deletes a list of specified objects (files_to_delete).
+   * If some objects are deleted successfully and others fail, the function
+   * returns OB_SUCCESS. It uses the failed_files_idx to return the indices
+   * of the objects that failed to delete.
+   *
+   * It's important to ensure that all the objects provided for deletion are located
+   * on the same destination. If the destination is object storage, all objects must be
+   * within the same bucket.
+   *
+   * Due to the absence of a batch tagging interface, if delete mode 'tagging' is set
+   * when initiating the utility, it will switch to a looped tagging operation.
+   *
+   * As NFS does not offer a batch deleting interface, and GCS's batch delete interface
+   * is not compatible with the S3 protocol, GCS and NFS will revert to looped delete operations.
+   *
+   * If it switches to looped operations, upon the failure of any deletion request,
+   * the function attempts to record that object along with all remaining unprocessed objects
+   * as failed_files. After successfully recording failures, it returns OB_SUCCESS.
+   *
+   * @param files_to_delete: The objects intended for deletion.
+   * @param failed_files_idx: The index list where indices of failed deletions will be returned.
+   */
+  int batch_del_files(
+      const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx);
   int del_unmerged_parts(const common::ObString &uri);
 
   // For one object, if given us the uri(no matter in oss, cos or s3), we can't tell the type of this object.
@@ -202,7 +286,7 @@ public:
   //                      for example, when using adaptive reader, this param will set as TRUE; when using is_exist(),
   //                      this param will set as FALSE
   // @obj_meta the result, which saves the meta info of this object. If the target object not exists, we can check
-  //           obj_meta.is_exist_, not return OB_BACKUP_FILE_NOT_EXIST.
+  //           obj_meta.is_exist_, not return OB_OBJECT_NOT_EXIST.
   int detect_storage_obj_meta(const common::ObString &uri, const bool is_adaptive,
                               const bool need_fragment_meta, ObStorageObjectMeta &obj_meta);
 
@@ -244,6 +328,14 @@ private:
   // NOTICE: children objects of 'appendable-dir' all have the same prefix(OB_S3_APPENDABLE_FRAGMENT_PREFIX).
   //         If there exists some children objects not have this prefix, these objects will also be listed.
   //         Cuz we think these objects are just some common objects.
+  //
+  // If op.is_marker_scan() is True:
+  // list objects under the directory 'uri' that are lexicographically greater than 'marker',
+  // and the number of objects returned does not exceed op.get_scan_count()
+  // If 'marker' is "", it means the listing starts from the lexicographically smallest object in the 'dir_name' directory
+  // If op.get_scan_count() is <= 0, it indicates there is no upper limit on the number of objects listed
+  // If op.is_marker_scan() is False:
+  // 'marker' is unsed
   int list_adaptive_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   // ObjectStorage and Filesystem need to handle seperately.
   int handle_listed_objs(ObStorageListCtxBase *ctx_base, const common::ObString &uri,
@@ -324,7 +416,8 @@ class ObStorageReader : public ObStorageAccesser
 public:
   ObStorageReader();
   virtual ~ObStorageReader();
-  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
+  virtual int open(const common::ObString &uri,
+      common::ObObjectStorageInfo *storage_info, const bool head_meta = true);
   int pread(char *buf, const int64_t buf_size, int64_t offset, int64_t &read_size);
   int close();
   int64_t get_length() const { return file_length_; }
@@ -338,6 +431,7 @@ protected:
   ObStorageS3Reader s3_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
+  bool has_meta_;
   ObObjectStorageInfo *storage_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageReader);
@@ -381,7 +475,7 @@ public:
   int close();
 protected:
   ObIStorageWriter *writer_;
-  ObStorageFileWriter file_writer_;
+  ObStorageFileSingleWriter file_writer_;
   ObStorageOssWriter oss_writer_;
   ObStorageCosWriter cos_writer_;
   ObStorageS3Writer s3_writer_;
@@ -406,7 +500,6 @@ public:
   };
 
   int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
-  int write(const char *buf, const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
   int close();
   bool is_opened() const { return is_opened_; }
@@ -432,6 +525,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageAppender);
 };
 
+// TODO @fangdan: delete this class
 class ObStorageMultiPartWriter : public ObStorageAccesser
 {
 public:
@@ -459,6 +553,117 @@ protected:
   common::ObObjectStorageInfo *storage_info_;
   int64_t cur_max_offset_;
 	DISALLOW_COPY_AND_ASSIGN(ObStorageMultiPartWriter);
+};
+
+class ObStorageParallelMultiPartWriterBase
+{
+public:
+  ObStorageParallelMultiPartWriterBase();
+  virtual ~ObStorageParallelMultiPartWriterBase();
+  virtual void reset();
+
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info);
+
+protected:
+  ObIStorageParallelMultipartWriter *multipart_writer_;
+  ObStorageParallelFileMultiPartWriter file_multipart_writer_;
+  ObStorageParallelCosMultiPartWriter cos_multipart_writer_;
+  ObStorageParallelOssMultiPartWriter oss_multipart_writer_;
+  ObStorageParallelS3MultiPartWriter s3_multipart_writer_;
+  int64_t start_ts_;
+  bool is_opened_;
+  char uri_[OB_MAX_URI_LENGTH];
+  common::ObObjectStorageInfo *storage_info_;
+
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageParallelMultiPartWriterBase);
+};
+
+/*
+ * Design doc:
+ *
+ * Note: When using the following parallel multipart upload interfaces, only the data upload process
+ * is conducted in parallel. As such, only the methods `get_length`, `upload_part`,
+ * `buf_append_part`, and `get_part_id` may be invoked concurrently
+ * and therefore require parallelization.
+ */
+
+// This interface entrusts the caller with the responsibility to comply with part size limitations,
+// with part IDs being managed seamlessly within the interface
+class ObStorageDirectMultiPartWriter : public ObStorageAccesser,
+                                       public ObStorageParallelMultiPartWriterBase
+{
+public:
+  ObStorageDirectMultiPartWriter();
+  virtual ~ObStorageDirectMultiPartWriter();
+  virtual void reset() override;
+
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override;
+  virtual int upload_part(const char *buf, const int64_t size, const int64_t part_id);
+  int complete();
+  int abort();
+  virtual int close();
+  // Returns the size of data successfully uploaded so far.
+  int64_t get_length() const;
+  bool is_opened() const { return is_opened_; }
+
+  virtual int buf_append_part(
+      const char *buf, const int64_t size, const uint64_t tenant_id, bool &is_full);
+  virtual int get_part_id(bool &is_exist, int64_t &part_id);
+  virtual int get_part_size(const int64_t part_id, int64_t &part_size) const;
+
+protected:
+  SpinRWLock lock_;
+  int64_t uploaded_file_length_;
+  int64_t cur_part_id_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageDirectMultiPartWriter);
+};
+
+// Manages parallel multipart uploads with data aggregation to meet part size requirements.
+// This class facilitates efficient object storage uploads by aggregating data into chunks that
+// satisfy the minimum size constraint for multipart uploads. Each aggregated part is assigned an
+// incrementing part ID, which streamlines the upload process and supports parallel execution.
+class ObStorageBufferedMultiPartWriter : public ObStorageDirectMultiPartWriter
+{
+public:
+  ObStorageBufferedMultiPartWriter();
+  virtual ~ObStorageBufferedMultiPartWriter();
+  virtual void reset() override;
+
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override;
+  virtual int upload_part(const char *buf, const int64_t size, const int64_t part_id) override;
+  virtual int buf_append_part(
+      const char *buf, const int64_t size, const uint64_t tenant_id, bool &is_full) override;
+  virtual int get_part_id(bool &is_exist, int64_t &part_id) override;
+  virtual int get_part_size(const int64_t part_id, int64_t &part_size) const override;
+
+  struct PartData
+  {
+    PartData() : data_(nullptr), size_(0) {}
+    bool is_valid() const { return data_ != nullptr && size_ > 0; }
+    char *data_;
+    int64_t size_;
+
+    TO_STRING_KV(KP_(data), K_(size));
+  };
+
+private:
+  int append_buf_(const char *buf, const int64_t size, const uint64_t tenant_id);
+  int save_buf_to_map_();
+  static void free_part_data_(PartData &part_data);
+
+private:
+  static constexpr const char *ALLOC_TAG = "BufferdMulti";
+  static constexpr int64_t PART_SIZE_THRESHOLD = 6L * 1024L * 1024L; // 6MB
+
+  char *cur_buf_;
+  int64_t cur_buf_pos_;
+  hash::ObHashMap<int64_t, PartData> part_id_to_data_map_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObStorageBufferedMultiPartWriter);
 };
 
 }//common

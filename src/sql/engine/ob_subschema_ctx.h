@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_SUBSCHEMA_CTX_H
 
 #include "lib/oblog/ob_log_module.h"
+#include "lib/udt/ob_collection_type.h"
 #include "common/ob_field.h"
 
 namespace oceanbase
@@ -25,6 +26,7 @@ namespace sql
 enum ObSubSchemaType {
   OB_SUBSCHEMA_UDT_TYPE = 0,
   OB_SUBSCHEMA_ENUM_SET_TYPE = 1,
+  OB_SUBSCHEMA_COLLECTION_TYPE = 2,
   OB_SUBSCHEMA_MAX_TYPE
 };
 
@@ -43,6 +45,7 @@ public:
   ObSubSchemaType type_;
   uint64_t signature_;
   void *value_;
+  common::ObIAllocator *allocator_; // for deserialize
 };
 
 typedef int (*ob_subschema_value_serialize)(void *value, char* buf, const int64_t buf_len, int64_t& pos);
@@ -64,25 +67,42 @@ struct ObSubSchemaFuncs
 };
 
 template <ObSubSchemaType type>
-    int subschema_value_serialize(void *value, char* buf, const int64_t buf_len, int64_t& pos);
+int subschema_value_serialize(void *value, char* buf, const int64_t buf_len, int64_t& pos)
+{
+  return OB_NOT_SUPPORTED;
+}
 template <ObSubSchemaType type>
-    int subschema_value_deserialize(void *value, const char* buf, const int64_t data_len, int64_t& pos);
-template <ObSubSchemaType type> int64_t subschema_value_serialize_size(void *value);
+int subschema_value_deserialize(void *value, const char* buf, const int64_t data_len, int64_t& pos)
+{
+  return OB_NOT_SUPPORTED;
+}
+template <ObSubSchemaType type> int64_t subschema_value_serialize_size(void *value)
+{
+  return OB_NOT_SUPPORTED;
+}
 template <ObSubSchemaType type>
-    int subschema_value_get_signature(void *value, uint64_t &signature);
+int subschema_value_get_signature(void *value, uint64_t &signature)
+{
+  return OB_NOT_SUPPORTED;
+}
 template <ObSubSchemaType type>
-    int subschema_value_deep_copy(const void *src_value, void *&dst_value, ObIAllocator &allocator);
+int subschema_value_deep_copy(const void *src_value, void *&dst_value, ObIAllocator &allocator)
+{
+  return OB_NOT_SUPPORTED;
+}
 
 class ObSubSchemaReverseKey
 {
   public:
-  ObSubSchemaReverseKey() : type_(OB_SUBSCHEMA_MAX_TYPE), signature_(0) {}
-  ObSubSchemaReverseKey(ObSubSchemaType type, uint64_t signature) : type_(type), signature_(signature) {}
+  ObSubSchemaReverseKey() : type_(OB_SUBSCHEMA_MAX_TYPE), signature_(0), str_signature_() {}
+  ObSubSchemaReverseKey(ObSubSchemaType type, uint64_t signature) : type_(type), signature_(signature), str_signature_() {}
+  ObSubSchemaReverseKey(ObSubSchemaType type, ObString type_info) : type_(type), signature_(0), str_signature_(type_info) {}
   ~ObSubSchemaReverseKey() {}
 
   uint64_t hash() const
   {
-    return signature_ + static_cast<uint64_t>(type_);
+    return type_ == OB_SUBSCHEMA_UDT_TYPE ? signature_ + static_cast<uint64_t>(type_)
+      : murmurhash(str_signature_.ptr(), static_cast<int32_t>(str_signature_.length()), 0) + static_cast<uint64_t>(type_);
   }
 
   int hash(uint64_t &res) const
@@ -94,12 +114,14 @@ class ObSubSchemaReverseKey
   bool operator==(const ObSubSchemaReverseKey &other) const
   {
     return (other.type_ == this->type_
-            && other.signature_ == this->signature_);
+            && other.signature_ == this->signature_
+            && other.str_signature_ == this->str_signature_);
   }
 
   TO_STRING_KV(K_(type), K_(signature));
   ObSubSchemaType type_;
   uint64_t signature_;
+  ObString str_signature_;
 };
 
 class ObSubSchemaCtx
@@ -135,7 +157,10 @@ public:
   const ObSubSchemaMap &get_subschema_map() const { return subschema_map_; }
 
   int get_subschema_id(uint64_t value_signature, ObSubSchemaType type, uint16_t &subschema_id) const;
-
+  int get_subschema_id_by_typedef(ObNestedType coll_type, const ObDataType &elem_type, uint16_t &subschema_id);
+  int get_subschema_id_by_typedef(ObNestedType coll_type, const ObDataType &elem_type, uint16_t &subschema_id) const;
+  int get_subschema_id_by_typedef(const ObString &type_def, uint16_t &subschema_id);
+  int get_subschema_id_by_typedef(const ObString &type_def, uint16_t &subschema_id) const;
   void set_fields(const common::ObIArray<common::ObField> *fields) { fields_ = fields; }
   ObIAllocator &get_allocator() { return allocator_; }
 

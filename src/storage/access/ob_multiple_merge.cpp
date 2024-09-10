@@ -20,6 +20,7 @@
 #include "storage/ob_storage_util.h"
 #include "ob_vector_store.h"
 #include "ob_aggregated_store.h"
+#include "ob_aggregated_store_vec.h"
 #include "ob_dml_param.h"
 #include "lib/worker.h"
 #include "sql/engine/ob_operator.h"
@@ -181,15 +182,15 @@ int ObMultipleMerge::init(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(prepare_read_tables())) {
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
+    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(long_life_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc skip bit", K(ret), K(batch_size));
     } else if (OB_FAIL(alloc_row_store(context, param))) {
       LOG_WARN("fail to alloc row store", K(ret));
     } else if (param.iter_param_.is_use_stmt_iter_pool() &&
         OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
       LOG_WARN("Failed to init iter pool", K(ret));
     } else if (FALSE_IT(stmt_iter_pool_ = access_ctx_->get_stmt_iter_pool())) {
-    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(access_ctx_->stmt_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("Failed to alloc skip bit", K(ret), K(batch_size));
     } else {
       skip_bit_->init(batch_size);
       access_ctx_->block_row_store_ = block_row_store_;
@@ -651,20 +652,20 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     LOG_WARN("unexpect aggregate pushdown status", K(ret),
              K(access_ctx_->range_array_pos_->count()));
   } else {
-    ObAggregatedStore *agg_row_store = reinterpret_cast<ObAggregatedStore *>(block_row_store_);
-    agg_row_store->reuse_aggregated_row();
+    ObBlockBatchedRowStore *batch_row_store = static_cast<ObBlockBatchedRowStore *>(block_row_store_);
     if (OB_NOT_NULL(access_param_->get_op())) {
       sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
       int64_t batch_size = max(1, access_param_->get_op()->get_batch_size());
-      eval_ctx.reuse(batch_size);
-      if (access_param_->get_op()->enable_rich_format_ &&
-          OB_FAIL(init_exprs_uniform_header(access_param_->aggregate_exprs_, eval_ctx, eval_ctx.get_batch_size()))) {
-        LOG_WARN("Fail to init aggregate exprs header", K(ret));
+      if (OB_FAIL(batch_row_store->reuse_capacity(batch_size))) {
+        LOG_WARN("Fail to reuse batch_row_store capacity", K(ret), K(batch_size));
       }
+    }
+    if (need_padding_) {
+      padding_allocator_.reuse();
     }
     reuse_lob_locator();
     bool need_init_expr_header = true;
-    while (OB_SUCC(ret) && !agg_row_store->is_end()) {
+    while (OB_SUCC(ret) && !batch_row_store->is_end()) {
       bool can_batch = false;
       // clear evaluated flag for every row
       // all rows will be touched in this loop
@@ -677,7 +678,16 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
         LOG_WARN("fail to check can batch scan", K(ret));
       } else if (can_batch) {
         scan_state_ = ScanState::BATCH;
-        if (OB_FAIL(inner_get_next_rows())) {
+        if (need_init_expr_header && access_param_->get_op()->enable_rich_format_) {
+          sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
+          if (OB_FAIL(init_exprs_vector_header(access_param_->output_exprs_, eval_ctx, eval_ctx.max_batch_size_))) {
+            LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx.max_batch_size));
+          } else {
+            need_init_expr_header = false;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(inner_get_next_rows())) {
           if (OB_LIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret || OB_ITER_END == ret)) {
             // OB_ITER_END should use fuse to make sure no greater key in dynamic data
             ret = OB_SUCCESS;
@@ -697,6 +707,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
           if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
             ret = OB_SUCCESS;
             scan_state_ = ScanState::BATCH;
+            need_init_expr_header = true;
             continue;
           } else if (OB_ITER_END != ret) {
             LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
@@ -723,7 +734,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                       out_row))) {
             LOG_WARN("get row from fuse failed", K(ret));
           } else if (nullptr != out_row) {
-            if (OB_FAIL(agg_row_store->fill_row(unprojected_row_))) {
+            if (OB_FAIL(batch_row_store->fill_row(unprojected_row_))) {
               LOG_WARN("fail to aggregate row", K(ret));
             }
           }
@@ -732,17 +743,23 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     }
 
     // second time: ret = OB_ITER_END
-    if (agg_row_store->is_end()) {
+    if (batch_row_store->is_end()) {
       ret = OB_ITER_END;
     }
     // first time: aggregated row, ret = OB_SUCCESS
-    if (OB_ITER_END == ret && !agg_row_store->is_end()) {
-      if (OB_FAIL(agg_row_store->collect_aggregated_row(row))) {
+    if (OB_ITER_END == ret && !batch_row_store->is_end()) {
+      ObAggStoreBase *agg_store_base = nullptr;
+      if (batch_row_store->is_vec2()) {
+        agg_store_base = static_cast<ObAggregatedStoreVec *>(batch_row_store);
+      } else {
+        agg_store_base = static_cast<ObAggregatedStore *>(batch_row_store);
+      }
+      if (OB_FAIL(agg_store_base->collect_aggregated_result())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to collect aggregate row", K(ret));
         }
       }
-      agg_row_store->set_end();
+      batch_row_store->ObBlockBatchedRowStore::set_end();
     }
 
     if (nullptr != access_ctx_->table_scan_stat_) {
@@ -1041,14 +1058,27 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state, group by can not pushdown in reverse scan", K(ret));
   } else if (param.iter_param_.enable_pd_aggregate()) {
-    if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObAggregatedStore)))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc aggregated store", K(ret));
+    if (param.iter_param_.use_new_format() && can_use_vec2()) {
+      if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObAggregatedStoreVec)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc aggregated store vec", K(ret));
+      } else {
+        block_row_store_ = new (buf) ObAggregatedStoreVec(
+            param.get_op()->get_batch_size(),
+            param.get_op()->get_eval_ctx(),
+            context,
+            skip_bit_);
+      }
     } else {
-      block_row_store_ = new (buf) ObAggregatedStore(
-          param.iter_param_.vectorized_enabled_ ? param.get_op()->get_batch_size() : AGGREGATE_STORE_BATCH_SIZE,
-          param.get_op()->get_eval_ctx(),
-          context);
+      if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObAggregatedStore)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc aggregated store", K(ret));
+      } else {
+        block_row_store_ = new (buf) ObAggregatedStore(
+            param.iter_param_.vectorized_enabled_ ? param.get_op()->get_batch_size() : AGGREGATE_STORE_BATCH_SIZE,
+            param.get_op()->get_eval_ctx(),
+            context);
+      }
     }
   } else if (ObQRIterType::T_SINGLE_GET != get_type()) {
     if (param.iter_param_.vectorized_enabled_) {
@@ -1059,7 +1089,8 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
         block_row_store_ = new (buf) ObVectorStore(
             param.get_op()->get_batch_size(),
             param.get_op()->get_eval_ctx(),
-            context);
+            context,
+            skip_bit_);
       }
     } else if (param.iter_param_.enable_pd_blockscan()) {
       if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObBlockRowStore)))) {

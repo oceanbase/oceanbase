@@ -105,6 +105,7 @@ public:
                                        LogGetStatReq,
                                        LogGetStatResp,
                                        OB_LOG_GET_STAT);
+
 #ifdef OB_BUILD_ARBITRATION
   DECLARE_SYNC_RPC_PROXY_POST_FUNCTION(PR5,
                                        get_remote_arb_member_info,

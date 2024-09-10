@@ -12,11 +12,13 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include <iostream>
 #include <gtest/gtest.h>
 #define private public
 #define protected public
 
 #include "storage/ob_partition_range_spliter.h"
+#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 #include "storage/blocksstable/index_block/ob_index_block_dumper.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
@@ -207,7 +209,7 @@ TEST_F(TestIndexDumper, append_single_meta)
   const ObDataStoreDesc &desc = root_index_builder_->index_store_desc_.get_desc();
   // ASSERT_EQ(OB_SUCCESS, mem_desc.shallow_copy(root_index_builder_->index_store_desc_.get_desc()));
   // mem_desc.micro_block_size_ = mem_desc.get_micro_block_size_limit();
-  ASSERT_EQ(OB_SUCCESS, dumper.init(desc, root_index_builder_->container_store_desc_, nullptr, allocator_, allocator_, true));
+  ASSERT_EQ(OB_SUCCESS, dumper.init(desc, root_index_builder_->container_store_desc_, desc.sstable_index_builder_, allocator_, allocator_, true));
 
   common::ObArenaAllocator row_allocator;
   ObDatumRow meta_row;
@@ -291,7 +293,7 @@ TEST_F(TestIndexDumper, get_from_mem)
   ASSERT_EQ(OB_SUCCESS, mem_desc.shallow_copy(root_index_builder_->index_store_desc_.get_desc()));
   mem_desc.micro_block_size_ = mem_desc.get_micro_block_size_limit();
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.init(mem_desc,
-    root_index_builder_->container_store_desc_, nullptr, allocator_, allocator_, true));
+    root_index_builder_->container_store_desc_, mem_desc.sstable_index_builder_, allocator_, allocator_, true));
   ObDatumRow meta_row;
   ASSERT_EQ(OB_SUCCESS, meta_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
 
@@ -304,7 +306,7 @@ TEST_F(TestIndexDumper, get_from_mem)
   // close
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.close(meta_block_info));
   STORAGE_LOG(INFO, "test print meta block info", K(meta_block_info));
-  ASSERT_TRUE(meta_block_info.in_mem_);
+  ASSERT_TRUE(meta_block_info.in_mem());
   ASSERT_EQ(data_macro_metas.count(), meta_block_info.get_row_count());
   ASSERT_EQ(1, meta_block_info.get_micro_block_count());
 
@@ -333,6 +335,119 @@ TEST_F(TestIndexDumper, get_from_mem)
 
   // test mem micro
   ASSERT_NE(nullptr, meta_block_info.micro_block_desc_);
+}
+
+TEST_F(TestIndexDumper, get_from_mem_and_change_row_store_type)
+{
+  ObArray<ObDataMacroBlockMeta> data_macro_metas;
+  const ObITableReadInfo &index_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();
+  ObSSTableSecMetaIterator meta_iter;
+  ObDataMacroBlockMeta data_macro_meta;
+  ObDatumRange range;
+  range.set_whole_range();
+  ASSERT_EQ(OB_SUCCESS, meta_iter.open(
+      range,
+      ObMacroBlockMetaType::DATA_BLOCK_META,
+      sstable_,
+      index_read_info,
+      allocator_));
+  int tmp_ret = OB_SUCCESS;
+  while (OB_SUCCESS == tmp_ret) {
+    tmp_ret = meta_iter.get_next(data_macro_meta);
+    if (OB_SUCCESS == tmp_ret) {
+      ObDataMacroBlockMeta *deep_copy_meta = nullptr;
+      ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(deep_copy_meta, allocator_));
+      ASSERT_EQ(OB_SUCCESS, data_macro_metas.push_back(
+          *(deep_copy_meta)));
+    }
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_ret);
+  ASSERT_TRUE(data_macro_metas.count() > 0);
+  ObIndexBlockInfo meta_block_info;
+  ObIndexTreeBlockDumper index_tree_dumper;
+  ObDataStoreDesc mem_desc;
+  ASSERT_EQ(OB_SUCCESS, mem_desc.shallow_copy(root_index_builder_->index_store_desc_.get_desc()));
+  mem_desc.micro_block_size_ = mem_desc.get_micro_block_size_limit();
+  ASSERT_EQ(OB_SUCCESS, index_tree_dumper.init(root_index_builder_->data_store_desc_.get_desc(),
+    mem_desc, mem_desc.sstable_index_builder_, root_index_builder_->container_store_desc_, allocator_, allocator_, true));
+  ObDatumRow index_row;
+  ASSERT_EQ(OB_SUCCESS, index_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
+
+  for (int64_t i = 0; i < data_macro_metas.count(); ++i) {
+    ObIndexBlockRowDesc row_desc(mem_desc);
+    ObDataMacroBlockMeta &meta = data_macro_metas.at(i);
+    ASSERT_EQ(OB_SUCCESS, meta.build_row(index_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, ObBaseIndexBlockBuilder::meta_to_row_desc(meta, mem_desc, nullptr, row_desc));
+    ASSERT_EQ(OB_SUCCESS, index_tree_dumper.append_row(row_desc));
+  }
+  // close
+  ASSERT_EQ(OB_SUCCESS, index_tree_dumper.close(meta_block_info));
+  ASSERT_TRUE(meta_block_info.in_mem());
+  ASSERT_EQ(data_macro_metas.count(), meta_block_info.get_row_count());
+  ASSERT_EQ(1, meta_block_info.get_micro_block_count());
+
+  // row builder
+  ObWholeDataStoreDesc row_builder_desc;
+  ASSERT_EQ(OB_SUCCESS, row_builder_desc.assign(mem_desc));
+  common::ObRowStoreType before_row_store_type = mem_desc.get_row_store_type();
+  common::ObRowStoreType after_row_store_type;
+  if (before_row_store_type <= common::ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE) {
+    after_row_store_type = common::ObRowStoreType::CS_ENCODING_ROW_STORE;
+  } else {
+    after_row_store_type = common::ObRowStoreType::FLAT_ROW_STORE;
+  }
+  row_builder_desc.get_desc().row_store_type_ = after_row_store_type;
+  ASSERT_NE(row_builder_desc.get_desc().get_row_store_type(), mem_desc.get_row_store_type());
+  ObIndexBlockRowBuilder row_builder;
+  ASSERT_EQ(OB_SUCCESS, row_builder.init(allocator_, row_builder_desc.get_desc(), row_builder_desc.get_desc()));
+
+  // test mem row
+  ObDatumRow load_row;
+  ObIndexBlockRowParser row_parser;
+  ObWholeDataStoreDesc desc;
+  ObDataMacroBlockMeta macro_meta;
+  ObIndexBlockLoader index_block_loader;
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info));
+  ASSERT_EQ(OB_SUCCESS, load_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
+  tmp_ret = OB_SUCCESS;
+  ASSERT_EQ(OB_SUCCESS, desc.assign(mem_desc));
+  int iter_cnt = 0;
+  while (OB_SUCCESS == tmp_ret) {
+    row_parser.reset();
+    load_row.reuse();
+    ObIndexBlockRowDesc row_desc;
+    const ObDatumRow * new_row = nullptr;
+    tmp_ret = index_block_loader.get_next_row(load_row);
+    if (OB_SUCCESS == tmp_ret) {
+      const ObDatumRow *row_to_append = NULL;
+      ASSERT_EQ(OB_SUCCESS, row_parser.init(mem_desc.get_rowkey_column_count(), load_row));
+      desc.get_desc().row_store_type_ = common::ObRowStoreType::DUMMY_ROW_STORE;
+      ASSERT_NE(desc.get_desc().row_store_type_, mem_desc.row_store_type_);
+      ASSERT_EQ(OB_SUCCESS, row_desc.init(desc.get_desc(), row_parser, load_row));
+      ASSERT_EQ(desc.get_desc().row_store_type_, mem_desc.row_store_type_);
+      ASSERT_EQ(OB_SUCCESS,row_builder.build_row(row_desc, new_row));
+      for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
+        bool bret = ObDatum::binary_equal(load_row.storage_datums_[i], new_row->storage_datums_[i]);
+        if (bret != true) {
+          ObIndexBlockRowParser tmp_row_parser;
+          const ObIndexBlockRowHeader *tmp_row_header = nullptr;
+          ASSERT_EQ(OB_SUCCESS, tmp_row_parser.init(mem_desc.get_rowkey_column_count(), load_row));
+          ASSERT_EQ(OB_SUCCESS, tmp_row_parser.get_header(tmp_row_header));
+          LOG_INFO("load row", KPC(tmp_row_header));
+          tmp_row_parser.reset();
+          ASSERT_EQ(OB_SUCCESS, tmp_row_parser.init(mem_desc.get_rowkey_column_count(), *new_row));
+          ASSERT_EQ(OB_SUCCESS, tmp_row_parser.get_header(tmp_row_header));
+          LOG_INFO("new row", KPC(tmp_row_header));
+        }
+        ASSERT_TRUE(bret);
+      }
+      ++iter_cnt;
+    } else {
+      ASSERT_EQ(OB_ITER_END, tmp_ret);
+      break;
+    }
+  }
 }
 
 TEST_F(TestIndexDumper, get_from_disk)
@@ -368,7 +483,7 @@ TEST_F(TestIndexDumper, get_from_disk)
   ASSERT_EQ(OB_SUCCESS, mem_desc.shallow_copy(root_index_builder_->index_store_desc_.get_desc()));
   mem_desc.micro_block_size_ = mem_desc.get_micro_block_size_limit();
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.init(mem_desc,
-    root_index_builder_->container_store_desc_, nullptr, allocator_, allocator_, true));
+    root_index_builder_->container_store_desc_, mem_desc.sstable_index_builder_, allocator_, allocator_, true));
   ObDatumRow meta_row;
   ASSERT_EQ(OB_SUCCESS, meta_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
 
@@ -387,7 +502,7 @@ TEST_F(TestIndexDumper, get_from_disk)
   table_backup_flag.clear();
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.close(meta_block_info));
   STORAGE_LOG(INFO, "test print meta block info", K(meta_block_info));
-  ASSERT_FALSE(meta_block_info.in_mem_);
+  ASSERT_TRUE(meta_block_info.in_disk());
   ASSERT_EQ(data_macro_metas.count(), meta_block_info.get_row_count());
   ASSERT_EQ(data_macro_metas.count(), meta_block_info.block_write_ctx_->get_macro_block_count());
 
@@ -431,6 +546,86 @@ TEST_F(TestIndexDumper, get_from_disk)
   ASSERT_EQ(OB_ITER_END, tmp_ret);
   ASSERT_EQ(iter_cnt, meta_block_info.get_micro_block_count());
 }
+
+TEST_F(TestIndexDumper, get_from_array)
+{
+  ObArray<ObDataMacroBlockMeta> data_macro_metas;
+  const ObITableReadInfo &index_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();
+  ObSSTableSecMetaIterator meta_iter;
+  ObDataMacroBlockMeta data_macro_meta;
+  ObDatumRange range;
+  range.set_whole_range();
+  ASSERT_EQ(OB_SUCCESS, meta_iter.open(
+      range,
+      ObMacroBlockMetaType::DATA_BLOCK_META,
+      sstable_,
+      index_read_info,
+      allocator_));
+  int tmp_ret = OB_SUCCESS;
+  while (OB_SUCCESS == tmp_ret) {
+    tmp_ret = meta_iter.get_next(data_macro_meta);
+    STORAGE_LOG(DEBUG, "Got next data macro block meta", K(tmp_ret), K(data_macro_meta));
+    if (OB_SUCCESS == tmp_ret) {
+      ObDataMacroBlockMeta *deep_copy_meta = nullptr;
+      ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(deep_copy_meta, allocator_));
+      ASSERT_EQ(OB_SUCCESS, data_macro_metas.push_back(
+          *(deep_copy_meta)));
+    }
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_ret);
+  ASSERT_TRUE(data_macro_metas.count() > 0);
+  ObIndexBlockInfo meta_block_info;
+  ObBaseIndexBlockDumper macro_meta_dumper;
+  ObDataStoreDesc mem_desc;
+  ASSERT_EQ(OB_SUCCESS, mem_desc.shallow_copy(root_index_builder_->index_store_desc_.get_desc()));
+  mem_desc.micro_block_size_ = mem_desc.get_micro_block_size_limit();
+  ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.init(mem_desc,
+    root_index_builder_->container_store_desc_, mem_desc.sstable_index_builder_, allocator_, allocator_, true, false));
+  ObDatumRow meta_row;
+  ASSERT_EQ(OB_SUCCESS, meta_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
+
+  STORAGE_LOG(INFO, "test print metas count", K(data_macro_metas.count()));
+  for (int64_t i = 0; i < data_macro_metas.count(); ++i) {
+    ObDataMacroBlockMeta &meta = data_macro_metas.at(i);
+    ASSERT_EQ(OB_SUCCESS, meta.build_row(meta_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(meta_row));
+  }
+  // close
+  ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.close(meta_block_info));
+  STORAGE_LOG(INFO, "test print meta block info", K(meta_block_info));
+  ASSERT_TRUE(meta_block_info.in_array());
+  ASSERT_EQ(data_macro_metas.count(), meta_block_info.get_row_count());
+
+
+  // test array row
+  ObDatumRow load_row;
+  ObDataMacroBlockMeta macro_meta;
+  ObIndexBlockLoader index_block_loader;
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info));
+  ASSERT_EQ(OB_SUCCESS, load_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
+  tmp_ret = OB_SUCCESS;
+  int iter_cnt = 0;
+  while (OB_SUCCESS == tmp_ret) {
+    tmp_ret = index_block_loader.get_next_row(load_row);
+    STORAGE_LOG(INFO, "loader get next row", K(iter_cnt), K(tmp_ret), K(load_row));
+    if (OB_SUCCESS == tmp_ret) {
+      ASSERT_EQ(OB_SUCCESS, data_macro_metas.at(iter_cnt).build_row(meta_row, allocator_));
+      STORAGE_LOG(INFO, "data macro meta", K(meta_row), K(data_macro_metas.at(iter_cnt)));
+      for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
+        ASSERT_TRUE(ObDatum::binary_equal(load_row.storage_datums_[i], meta_row.storage_datums_[i]));
+      }
+      ++iter_cnt;
+    }
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_ret);
+  ASSERT_EQ(iter_cnt, meta_block_info.get_row_count());
+
+  // test mem micro
+  ASSERT_EQ(nullptr, meta_block_info.micro_block_desc_);
+}
+
+
 } // namespace blocksstable
 } // namespace oceanbase
 

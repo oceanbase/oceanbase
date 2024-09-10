@@ -88,6 +88,55 @@ public:
     return ret;
   }
 
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *cur_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const char *cur_llc_bitmap_buf = nullptr;
+    char *rollup_llc_bitmap_buf = nullptr;
+    const NotNullBitVector &curr_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, cur_agg_cell);
+    if (agg_func != T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+      cur_llc_bitmap_buf =
+        (const char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(cur_agg_cell));
+      rollup_llc_bitmap_buf =
+        (char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(rollup_agg_cell));
+    } else {
+      cur_llc_bitmap_buf =
+        reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(cur_agg_cell));
+      rollup_llc_bitmap_buf =
+        reinterpret_cast<char *>(*reinterpret_cast<const int64_t *>(rollup_agg_cell));
+    }
+    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
+      NotNullBitVector &rollup_not_nulls =
+        agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+      if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+        rollup_llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(LLC_NUM_BUCKETS);
+        if (OB_ISNULL(cur_llc_bitmap_buf)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "invalid null llc bitmap", K(ret));
+        } else if (OB_ISNULL(rollup_llc_bitmap_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SQL_LOG(WARN, "allocate memory failed", K(ret));
+        } else {
+          MEMSET(rollup_llc_bitmap_buf, 0, LLC_NUM_BUCKETS);
+          MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, LLC_NUM_BUCKETS);
+          STORE_MEM_ADDR(rollup_llc_bitmap_buf, rollup_agg_cell);
+          *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = LLC_NUM_BUCKETS;
+        }
+      } else {
+        MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, LLC_NUM_BUCKETS);
+      }
+      rollup_not_nulls.set(agg_col_idx);
+    }
+    return ret;
+  }
+
   template <typename ColumnFmt>
   OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                        const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)

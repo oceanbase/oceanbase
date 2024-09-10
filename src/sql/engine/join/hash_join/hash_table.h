@@ -385,14 +385,16 @@ private:
   int probe_batch_del_match(JoinTableCtx &ctx, OutputInfo &output_info);
   // Get stored row list which has the same hash value.
   // return NULL if not found.
-  inline Item *get(const uint64_t hash_val);
+  OB_INLINE Item *get(const uint64_t hash_val);
+  void get(uint64_t hash_val, Bucket *&bkt, int64_t &bkt_pos);
+
   void get(uint64_t hash_val, Bucket *&bkt);
   // performance critical, do not double check the parameters
-  void set(JoinTableCtx &ctx,
-           const uint64_t hash_val,
-           ObHJStoredRow *row,
-           int64_t &used_buckets,
-           int64_t &collisions);
+  OB_INLINE void set(JoinTableCtx &ctx,
+                     const uint64_t hash_val,
+                     ObHJStoredRow *row,
+                     int64_t &used_buckets,
+                     int64_t &collisions);
 
   // mark delete, can not add row again after delete
   void del(const uint64_t hash_val, const RowMeta &row_meta, Item *item);

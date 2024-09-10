@@ -347,7 +347,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
         }
       } else if (vector_format == VEC_DISCRETE || vector_format == VEC_UNIFORM) {
         VecValueTypeClass var_tc_arr[] = {VEC_TC_NUMBER, VEC_TC_EXTEND, VEC_TC_STRING, VEC_TC_ENUM_SET_INNER,
-            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT, VEC_TC_ROARINGBITMAP};
+            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT, VEC_TC_COLLECTION, VEC_TC_ROARINGBITMAP};
         VecValueTypeClass *vec = std::find(std::begin(var_tc_arr), std::end(var_tc_arr), vec_tc);
         if (vec == std::end(var_tc_arr)) {
           need_test_column = false;

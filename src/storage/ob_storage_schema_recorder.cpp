@@ -190,7 +190,7 @@ int ObStorageSchemaRecorder::try_update_storage_schema(
   } else if (OB_UNLIKELY(ignore_storage_schema_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to update storage schema", K(ret), K_(tablet_id));
-  } else if (OB_FAIL(MTL(ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
+  } else if (OB_FAIL(MERGE_SCHEDULER_PTR->get_min_data_version(compat_version))) {
     LOG_WARN("fail to get data version", K(ret));
   } else if (compat_version >= DATA_VERSION_4_2_0_0) {
     // for compat, before all server upgrade to 4.2, need sync storage schema

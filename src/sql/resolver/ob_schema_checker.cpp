@@ -758,7 +758,8 @@ int ObSchemaChecker::get_simple_table_schema(
 
 int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &database_name,
                                       const ObString &table_name, const bool is_index_table,
-                                      const ObTableSchema *&table_schema)
+                                      const ObTableSchema *&table_schema, const bool with_hidden_flag,
+                                      const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
@@ -771,7 +772,7 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_name), K(table_name), K(ret));
   } else if (OB_FAIL(schema_mgr_->get_table_schema(tenant_id, database_name, table_name,
-                                            is_index_table, table))) {
+                                            is_index_table, table, with_hidden_flag, is_built_in_index))) {
     LOG_WARN("get table schema failed", K(tenant_id), K(database_name), K(table_name), K(ret));
   } else if (NULL == table) {
     ret = OB_TABLE_NOT_EXIST;

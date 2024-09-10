@@ -214,7 +214,7 @@ int ObDDLTaskExecutor::init(const int64_t task_num, int tg_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
-    ret = common::OB_NOT_INIT;
+    ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDDLTaskExecutor has already been inited", K(ret));
   } else if (OB_UNLIKELY(task_num <= 0)) {
     ret = common::OB_INVALID_ARGUMENT;

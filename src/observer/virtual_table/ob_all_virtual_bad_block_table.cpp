@@ -112,7 +112,7 @@ int ObVirtualBadBlockTable::init(const common::ObAddr &addr)
   if (!addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "Invalid argument, ", K(ret), K(addr));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.get_bad_block_infos(bad_block_infos_))) {
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(OB_SERVER_BLOCK_MGR.get_bad_block_infos(bad_block_infos_))) {
     SERVER_LOG(WARN, "Fail to get bad block infos", K(ret));
   } else {
     addr_ = addr;

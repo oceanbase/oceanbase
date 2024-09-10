@@ -17,6 +17,7 @@
 #include "ob_storage_logger_manager.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {
@@ -38,12 +39,6 @@ ObStorageLoggerManager::ObStorageLoggerManager()
 ObStorageLoggerManager::~ObStorageLoggerManager()
 {
   destroy();
-}
-
-ObStorageLoggerManager &ObStorageLoggerManager::get_instance()
-{
-  static ObStorageLoggerManager instance_;
-  return instance_;
 }
 
 int ObStorageLoggerManager::init(
@@ -73,8 +68,6 @@ int ObStorageLoggerManager::init(
     log_file_spec_ = log_file_spec;
     if (OB_FAIL(server_slogger_.init(*this, OB_SERVER_TENANT_ID))) {
       STORAGE_REDO_LOG(WARN, "fail to init server slogger", K(ret));
-    } else if (OB_FAIL(server_slogger_.start())) {
-      STORAGE_REDO_LOG(WARN,  "fail to start server slogger", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -85,6 +78,34 @@ int ObStorageLoggerManager::init(
   }
   return ret;
 }
+
+int ObStorageLoggerManager::start()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_REDO_LOG(WARN, "not inited", K(ret));
+  } else if (OB_FAIL(server_slogger_.start())) {
+    STORAGE_REDO_LOG(WARN,  "fail to start server slogger", K(ret));
+  }
+  return ret;
+}
+
+void ObStorageLoggerManager::stop()
+{
+  if (IS_INIT) {
+    server_slogger_.stop();
+  }
+}
+
+void ObStorageLoggerManager::wait()
+{
+  if (IS_INIT) {
+    server_slogger_.wait();
+  }
+}
+
+
 
 void ObStorageLoggerManager::destroy()
 {
@@ -349,11 +370,7 @@ int ObStorageLoggerManager::get_using_disk_space(int64_t &using_space) const
         STORAGE_REDO_LOG(WARN, "fail to switch tenant", K(ret), K(tenant_id));
       } else {
         int64_t tenant_using_size = 0;
-        ObStorageLogger *slogger = nullptr;
-        if (OB_ISNULL(slogger = MTL(ObStorageLogger*))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_REDO_LOG(WARN, "slogger is null", K(ret), KP(slogger));
-        } else if (OB_FAIL(slogger->get_using_disk_space(tenant_using_size))) {
+        if (OB_FAIL(MTL(ObTenantStorageMetaService*)->get_slogger().get_using_disk_space(tenant_using_size))) {
           STORAGE_REDO_LOG(WARN, "fail to get the disk space that slog used", K(ret));
         } else {
           using_space += tenant_using_size;

@@ -432,6 +432,7 @@ public:
                  const int64_t transfer_epoch);
   int find_part(const share::ObLSID ls_id,
                 const int64_t orig_epoch,
+                const int64_t transfer_epoch,
                 ObTxExecPart &part);
 private:
   ObSpinLock lock_;
@@ -1120,6 +1121,11 @@ inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
     return ObTxSEQ::mk_v0(seq);
   }
 }
+
+enum ObTxCleanPolicy {
+  FAST_ROLLBACK = 1, ROLLBACK = 2, KEEP = 3
+};
+
 } // transaction
 } // oceanbase
 

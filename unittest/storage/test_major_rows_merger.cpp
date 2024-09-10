@@ -394,7 +394,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   scn_range.start_scn_.set_min();
   scn_range.end_scn_.convert_for_tx(10);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
-  reset_writer(snapshot_version);
+  reset_writer(snapshot_version, MAJOR_MERGE);
   prepare_one_macro(micro_data, 1);
   prepare_data_end(handle1, storage::ObITable::MAJOR_SSTABLE);
   merge_context.static_param_.tables_handle_.add_table(handle1);

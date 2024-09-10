@@ -25,7 +25,7 @@ using namespace share;
 namespace palf
 {
 class LogReader;
-LogStorage::LogStorage() :
+LogStorage::LogStorage() : ILogStorage(ILogStorageType::DISK_STORAGE),
     block_mgr_(),
     log_reader_(),
     log_tail_(),
@@ -270,6 +270,7 @@ int LogStorage::pread(const LSN &read_lsn,
                       LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
+  UNUSED(io_ctx);
   bool need_read_with_block_header = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -935,9 +936,13 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
   const offset_t real_read_offset =
     read_offset == 0 && true ==  need_read_log_block_header ? 0 : get_phy_offset_(read_lsn);
 
+  const LSN begin_lsn = get_begin_lsn();
+
   if (read_lsn >= readable_log_tail) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
     PALF_LOG(WARN, "read something out of upper bound", K(ret), K(read_lsn), K(log_tail_));
+  } else if (read_lsn < begin_lsn) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
   } else {
     if (is_log_cache_inited_()) {
       if (OB_FAIL(log_cache_->read(flashback_version, read_lsn, real_in_read_size,

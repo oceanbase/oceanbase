@@ -155,7 +155,6 @@ protected:
   const ObCGBitmap *filter_bitmap_;
   const ObITableReadInfo *read_info_;
   common::ObFixedArray<ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
-  private:
   common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> col_params_;
 };
 

@@ -41,6 +41,7 @@ public:
   int init(ObIAllocator &allocator,
            const ObTabletID tablet_id,
            const share::ObLSID ls_id,
+           const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
            ObTabletPointer *pointer,
            ObMdsTableMgr *mgr_handle = nullptr);
   template <typename UnitKey, typename UnitValue>
@@ -49,7 +50,7 @@ public:
   int mark_removed_from_t3m(ObTabletPointer *pointer) const;
   int mark_switched_to_empty_shell() const;
   template <int N>
-  int forcely_reset_mds_table(const char (&reason)[N]);
+  int forcely_remove_nodes(const char (&reason)[N], share::SCN redo_scn_limit);
   /******************************Single Key Unit Access Interface**********************************/
   template <typename T>
   int set(T &&data, MdsCtx &ctx, const int64_t lock_timeout_us = 0);

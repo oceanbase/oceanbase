@@ -48,7 +48,6 @@ struct ObEncryptMetaCache;
 
 namespace storage
 {
-class ObITable;
 class ObTableStoreIterator;
 class ObLS;
 class ObLSHandle;

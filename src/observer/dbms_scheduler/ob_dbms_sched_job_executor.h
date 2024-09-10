@@ -36,6 +36,7 @@ public:
   int init_env(ObDBMSSchedJobInfo &job_info, sql::ObSQLSessionInfo &session);
 
 private:
+  const static int OLAP_ASYNC_JOB_DEVIATION_SECOND = 60;
   static int init_session(
     sql::ObSQLSessionInfo &session,
     share::schema::ObSchemaGetterGuard &schema_guard,

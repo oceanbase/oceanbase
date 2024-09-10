@@ -547,6 +547,8 @@ private:
 private:
   int build_backup_file_header_(ObBackupFileHeader &file_header);
   int do_write_file_header_();
+  int do_backup_ddl_other_blocks_();
+  int do_backup_other_blocks_addr_block_();
   int do_backup_macro_block_data_(common::ObIArray<ObIODevice *> &device_handle);
   int do_backup_meta_data_(ObIODevice *device_handle);
   int do_backup_tablet_meta_(const ObTabletMetaReaderType reader_type, const ObBackupMetaType meta_type,
@@ -565,13 +567,22 @@ private:
       common::ObIArray<ObBackupProviderItem> &item_list);
   int get_need_copy_macro_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &list);
   int get_meta_item_list_(common::ObIArray<ObBackupProviderItem> &list);
+  int get_ddl_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &list);
+  int get_sstable_meta_item_list_(common::ObIArray<ObBackupProviderItem> &list);
+  int get_tablet_id_for_macro_id_(const blocksstable::MacroBlockId &macro_id, common::ObTabletID &tablet_id);
+  int get_other_block_mgr_for_tablet_(const common::ObTabletID &tablet_id,
+      ObBackupOtherBlocksMgr *&other_block_mgr, ObBackupLinkedBlockItemWriter *&linked_writer);
+  int write_ddl_other_block_(const blocksstable::ObBufferReader &buffer_reader, ObBackupLinkedBlockAddr &physical_id);
+  int add_item_to_other_block_mgr_(const blocksstable::MacroBlockId &macro_id,
+      const ObBackupLinkedBlockAddr &physical_id, ObBackupOtherBlocksMgr *other_block_mgr);
+  int deal_with_sstable_other_block_root_blocks_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
   int prepare_macro_block_reader_(const uint64_t tenant_id,
       const common::ObIArray<ObBackupMacroBlockId> &list, ObMultiMacroBlockBackupReader *&reader);
   int prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,
       const share::ObBackupDataType &backup_data_type, storage::ObTabletHandle &tablet_handle,
       ObIODevice *device_handle, ObITabletMetaBackupReader *&reader);
   int get_next_macro_block_data_(ObMultiMacroBlockBackupReader *reader, blocksstable::ObBufferReader &buffer_reader,
-      storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator);
+      storage::ObITable::TableKey &table_key, blocksstable::ObLogicMacroBlockId &logic_id, blocksstable::MacroBlockId &macro_id, ObIAllocator *io_allocator);
   int check_macro_block_data_(const blocksstable::ObBufferReader &data);
   int write_macro_block_data_(const blocksstable::ObBufferReader &data, const storage::ObITable::TableKey &table_key,
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);

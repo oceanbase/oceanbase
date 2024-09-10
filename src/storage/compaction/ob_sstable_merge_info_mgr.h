@@ -17,7 +17,7 @@
 #include "lib/lock/ob_spin_rwlock.h"
 #include "lib/container/ob_array.h"
 #include "storage/compaction/ob_compaction_suggestion.h"
-#include "storage/ob_sstable_struct.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_multi_tenant.h"
 
@@ -33,11 +33,11 @@ public:
   static int64_t cal_max();
   static int get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
       compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
-      ObSSTableMergeInfo &info, char *buf, const int64_t buf_len);
+      compaction::ObSSTableMergeHistory &merge_history, char *buf, const int64_t buf_len);
   ObTenantSSTableMergeInfoMgr();
   virtual ~ObTenantSSTableMergeInfoMgr();
   int init(const int64_t page_size=compaction::ObIDiagnoseInfoMgr::INFO_PAGE_SIZE);
-  int add_sstable_merge_info(ObSSTableMergeInfo &input_info);
+  int add_sstable_merge_info(compaction::ObSSTableMergeHistory &merge_history);
   void reset();
   void destroy();
   int open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,

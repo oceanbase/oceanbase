@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/join/hash_join/ob_hj_partition_mgr.h"
+#include "sql/engine/join/ob_partition_store.h"
 
 namespace oceanbase
 {
@@ -89,9 +90,9 @@ int ObHJPartitionMgr::remove_undumped_part(int64_t cur_dumped_partition, int32_t
               || (part_round == (left->get_partno() >> 32) && (left->get_partno() & PARTITION_IDX_MASK) <= cur_dumped_partition)) {
         ++erase_cnt;
         erased = true;
-        LOG_DEBUG("debug remove undumped partition", K(ret), K(left), K(right),
-          K(left->get_partno()), K(left->get_part_level()), K(left->get_partno() >> 32),
-          K(left->get_partno() & PARTITION_IDX_MASK));
+        LOG_DEBUG("debug remove undumped partition", K(ret), K(cur_dumped_partition), K(part_round),
+                 K(left), K(right), K(left->get_partno()), K(left->get_part_level()),
+                 K(left->get_partno() >> 32), K(left->get_partno() & PARTITION_IDX_MASK));
         if (OB_FAIL(part_pair_list_.erase(iter))) {
           LOG_WARN("failed to remove iter", K(left->get_part_level()), K(left->get_partno()));
         } else {
@@ -127,7 +128,8 @@ int ObHJPartitionMgr::get_or_create_part(int32_t level,
                                          int64_t partno,
                                          bool is_left,
                                          ObHJPartition *&part,
-                                         bool only_get)
+                                         bool only_get,
+                                         bool create_left_store)
 {
   int ret = OB_SUCCESS;
   bool flag = false;
@@ -153,11 +155,23 @@ int ObHJPartitionMgr::get_or_create_part(int32_t level,
     ObHJPartitionPair part_pair;
     void *buf1 = alloc_.alloc(sizeof(ObHJPartition));
     void *buf2 = nullptr;
+    void *temp_buf1 = nullptr;
+    void *temp_buf2 = nullptr;
     if (NULL == buf1) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       part_count_ ++;
       part_pair.left_ = new (buf1) ObHJPartition(alloc_, tenant_id_, level, part_shift, partno);
+      if (create_left_store) {
+        temp_buf1 = alloc_.alloc(sizeof(ObPartitionStore));
+        if (OB_ISNULL(temp_buf1)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc for ObPartitionStore");
+        } else {
+          ObPartitionStore *partition_store = new (temp_buf1) ObPartitionStore(tenant_id_, alloc_);
+          part_pair.left_->set_partition_store(partition_store);
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       buf2 = alloc_.alloc(sizeof(ObHJPartition));
@@ -166,6 +180,14 @@ int ObHJPartitionMgr::get_or_create_part(int32_t level,
       } else {
         part_count_ ++;
         part_pair.right_ = new (buf2) ObHJPartition(alloc_, tenant_id_, level, part_shift, partno);
+        temp_buf2 = alloc_.alloc(sizeof(ObPartitionStore));
+        if (OB_ISNULL(temp_buf2)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc for ObPartitionStore");
+        } else {
+          ObPartitionStore *partition_store = new (temp_buf2) ObPartitionStore(tenant_id_, alloc_);
+          part_pair.right_->set_partition_store(partition_store);
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -186,6 +208,12 @@ int ObHJPartitionMgr::get_or_create_part(int32_t level,
       }
       if (nullptr != buf2) {
         alloc_.free(buf2);
+      }
+      if (nullptr != temp_buf1) {
+        alloc_.free(temp_buf1);
+      }
+      if (nullptr != temp_buf2) {
+        alloc_.free(temp_buf2);
       }
     }
   }

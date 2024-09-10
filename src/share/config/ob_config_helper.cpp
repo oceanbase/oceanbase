@@ -34,6 +34,10 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_ddl_common.h"
 #include "share/backup/ob_archive_persist_helper.h"
+#include "lib/utility/utility.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
+#include "share/vector_index/ob_vector_index_util.h"
+
 namespace oceanbase
 {
 using namespace share;
@@ -176,12 +180,34 @@ bool less_or_equal_tx_share_limit(const uint64_t tenant_id, const int64_t value)
   return bool_ret;
 }
 
+bool check_vector_memory_limit(const uint64_t tenant_id, const int64_t value)
+{
+  bool bool_ret = false;
+  int64_t vector_memory_limit = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    vector_memory_limit = tenant_config->ob_vector_memory_limit_percentage;
+    if (0 == vector_memory_limit) {
+      // 0 is default value, which means vector index is disabled,do not need to check
+      bool_ret = true;
+    } else if (value + 15 + vector_memory_limit >= 100) {
+      bool_ret = false;
+    } else {
+      bool_ret = true;
+    }
+  } else {
+    bool_ret = false;
+    OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "tenant config check_vector_memory_limit is invalid",K(value), K(vector_memory_limit), K(tenant_id));
+  }
+  return bool_ret;
+}
 
 bool ObConfigMemstoreLimitChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
 {
   bool is_valid = false;
   int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
-  if (less_or_equal_tx_share_limit(tenant_id, value)) {
+  if (less_or_equal_tx_share_limit(tenant_id, value) &&
+      check_vector_memory_limit(tenant_id, value)) {
     is_valid = true;
   } else {
     is_valid = false;
@@ -634,6 +660,39 @@ bool ObConfigTenantMemoryChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigTenantDataDiskChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
+  if (is_valid) {
+    is_valid = ((0 == value) || (value >= ObUnitResource::HIDDEN_SYS_TENANT_MIN_DATA_DISK_SIZE));
+  }
+  return is_valid;
+}
+
+bool ObConfigVectorMemoryChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
+  int64_t cur_value = 0;
+  int64_t upper_limit = 0;
+  int ret = OB_SUCCESS;
+  if (is_valid) {
+    if (value == 0) {
+      is_valid = true;
+    } else if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_value_and_limit(tenant_id, cur_value, upper_limit))) {
+      OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "fail to get_vector_memory_value_and_limit", K(tenant_id));
+    } else if (0 < value && value < upper_limit) {
+      is_valid = true;
+    } else {
+      is_valid = false;
+    }
+    int64_t memory_size = 0;
+    ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id, memory_size);
+  }
+  return is_valid;
+}
+
 bool ObConfigQueryRateLimitChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
@@ -738,43 +797,7 @@ int64_t ObConfigCapacityParser::get(const char *str, bool &valid,
                                     bool check_unit /* = true */,
                                     bool use_byte /* = false*/)
 {
-  char *p_unit = NULL;
-  int64_t value = 0;
-
-  if (OB_ISNULL(str) || '\0' == str[0]) {
-    valid = false;
-  } else {
-    valid = true;
-    value = strtol(str, &p_unit, 0);
-
-    if (OB_ISNULL(p_unit)) {
-      valid = false;
-    } else if (value < 0) {
-      valid = false;
-    } else if ('\0' == *p_unit) {
-      if (check_unit) {
-        valid = false;
-      } else if (!use_byte) {
-        value <<= CAP_MB;
-      }
-    } else if (0 == STRCASECMP("b", p_unit) || 0 == STRCASECMP("byte", p_unit)) {
-      // do nothing
-    } else if (0 == STRCASECMP("kb", p_unit) || 0 == STRCASECMP("k", p_unit)) {
-      value <<= CAP_KB;
-    } else if (0 == STRCASECMP("mb", p_unit) || 0 == STRCASECMP("m", p_unit)) {
-      value <<= CAP_MB;
-    } else if (0 == STRCASECMP("gb", p_unit) || 0 == STRCASECMP("g", p_unit)) {
-      value <<= CAP_GB;
-    } else if (0 == STRCASECMP("tb", p_unit) || 0 == STRCASECMP("t", p_unit)) {
-      value <<= CAP_TB;
-    } else if (0 == STRCASECMP("pb", p_unit) || 0 == STRCASECMP("p", p_unit)) {
-      value <<= CAP_PB;
-    } else {
-      valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get capacity error", K(str), K(p_unit));
-    }
-  }
-  return value;
+  return parse_config_capacity(str, valid, check_unit, use_byte);
 }
 
 int64_t ObConfigReadableIntParser::get(const char *str, bool &valid)
@@ -1386,6 +1409,22 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
     }
   }
   return bret;
+}
+
+bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
+{
+  bool valid = false;
+  if (0 == ObString::make_string("Hyperscan").case_compare(t.str())) {
+#if defined(__x86_64__)
+    valid = true;
+#else
+    valid = false;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using hyperscan as regex engine in platforms other than x86");
+#endif
+  } else {
+    valid = (0 == ObString::make_string("ICU").case_compare(t.str()));
+  }
+  return valid;
 }
 
 } // end of namepace common

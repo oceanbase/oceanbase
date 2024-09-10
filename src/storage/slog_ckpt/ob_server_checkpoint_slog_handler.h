@@ -57,12 +57,13 @@ public:
   ObServerCheckpointSlogHandler(const ObServerCheckpointSlogHandler &) = delete;
   ObServerCheckpointSlogHandler &operator=(const ObServerCheckpointSlogHandler &) = delete;
 
-  int init();
+  int init(ObStorageLogger *server_slogger);
   int start();
+  int start_replay(TENANT_META_MAP &tenant_meta_map);
+  int do_post_replay_work();
   void stop();
   void wait();
   void destroy();
-  bool is_started() const { return ATOMIC_LOAD(&is_started_); }
   int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list);
   virtual int replay(const ObRedoModuleReplayParam &param) override;
   virtual int replay_over() override;
@@ -70,10 +71,6 @@ public:
   static ObServerCheckpointSlogHandler &get_instance();
 
   int write_checkpoint(bool is_force);
-
-  int load_all_tenant_metas(); // for obadmin
-  int write_tenant_super_block_slog(const ObTenantSuperBlock &super_block);
-  const TENANT_META_MAP &get_tenant_meta_map() const { return tenant_meta_map_for_replay_; } // for obadmin
 
 private:
   virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
@@ -94,25 +91,16 @@ private:
   int replay_update_tenant_super_block(const char *buf, const int64_t buf_len);
 
   int set_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &meta_block_list);
-  int apply_replay_result();
-  int handle_tenant_creating(const uint64_t tenant_id);
-  int handle_tenant_create_commit(const omt::ObTenantMeta &tenant_meta);
-
-  int handle_tenant_deleting(const uint64_t tenant_id);
-  int finish_slog_replay();
-  static int online_ls();
-  int mock_start(); // for test;
 
 private:
   bool is_inited_;
-  bool is_started_;
   bool is_writing_checkpoint_;
   ObStorageLogger *server_slogger_;
   common::TCRWLock lock_;  // protect block_handle
   ObMetaBlockListHandle server_meta_block_handle_;
-  common::ObTimer task_timer_;
   ObWriteCheckpointTask write_ckpt_task_;
-  TENANT_META_MAP tenant_meta_map_for_replay_; // only used when replay
+  common::ObTimer task_timer_;
+  TENANT_META_MAP *tenant_meta_map_for_replay_; // only used when replay
 };
 
 }  // end namespace storage
