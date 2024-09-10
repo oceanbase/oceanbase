@@ -279,7 +279,7 @@ int ObTabletPersister::persist_and_fill_tablet(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (CLICK_FAIL(acquire_tablet(type, key, try_smaller_pool, new_handle))) {
+  } else if (nullptr == new_handle.get_obj() && CLICK_FAIL(acquire_tablet(type, key, try_smaller_pool, new_handle))) {
     LOG_WARN("fail to acquire tablet", K(ret), K(key), K(type));
   } else if (CLICK_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
     LOG_WARN("fail to transform old tablet", K(ret), K(arg), K(new_handle), K(type));

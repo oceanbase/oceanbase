@@ -542,6 +542,11 @@ private:
   int delete_all_tablets();
   int offline_gc_tablet_for_create_or_transfer_in_abort_();
   int mock_duplicated_rows_(common::ObNewRowIterator *&duplicated_rows);
+  int get_tablet_and_acquire_new(
+      const ObTabletMapKey &key,
+      ObTabletHandle &old_tablet,
+      ObTabletHandle &new_tablet,
+      ObTimeGuard &time_guard);
 private:
   static int check_real_leader_for_4377_(const ObLSID ls_id);
   static int check_need_rollback_in_transfer_for_4377_(const transaction::ObTxDesc *tx_desc,

@@ -89,15 +89,15 @@ public:
       char *buf,
       const int64_t len);
   static int transform_empty_shell(const ObTablet &old_tablet, ObTabletHandle &new_handle);
-private:
-  static int check_tablet_meta_ids(
-      const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
-      const ObTablet &tablet);
   static int acquire_tablet(
       const ObTabletPoolType &type,
       const ObTabletMapKey &key,
       const bool try_smaller_pool,
       ObTabletHandle &new_handle);
+private:
+  static int check_tablet_meta_ids(
+      const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
+      const ObTablet &tablet);
   static int convert_tablet_to_mem_arg(
       const ObTablet &tablet,
       ObTabletMemberWrapper<share::ObTabletAutoincSeq> &auto_inc_seq,
