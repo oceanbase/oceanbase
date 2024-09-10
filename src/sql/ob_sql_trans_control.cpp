@@ -433,6 +433,7 @@ int ObSqlTransControl::rollback_trans(ObSQLSessionInfo *session,
   return ret;
 }
 
+ERRSIM_POINT_DEF(SQL_DO_END_TX_FAIL)
 int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
                                      const bool is_rollback,
                                      const bool is_explicit,
@@ -445,6 +446,8 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
   if (!session->is_inner() && session->associated_xa() && !is_explicit) {
     ret = OB_TRANS_XA_RMFAIL;
     LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()), KPC(tx_ptr));
+  } else if (OB_FAIL(SQL_DO_END_TX_FAIL)) {
+    LOG_WARN("do end trans failed", K(ret));
   } else {
     int tmp_ret = OB_SUCCESS;
     bool is_detector_exist = false;
