@@ -1227,7 +1227,7 @@ int ObDbmsStats::create_stat_table(ObExecContext &ctx, ParamStore &params, ObObj
       LOG_WARN("dbms_stats with temp table not support", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
     } else if (param.db_name_.empty()) {
-      param.db_name_ = session->get_user_name();
+      param.db_name_ = session->get_database_name();
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDbmsStatsExportImport::create_stat_table(ctx, param))) {
@@ -1282,7 +1282,7 @@ int ObDbmsStats::drop_stat_table(ObExecContext &ctx, ParamStore &params, ObObj &
       LOG_WARN("Statistics table must be specified", K(ret));
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Statistics table must be specified");
     } else if (param.db_name_.empty()) {
-      param.db_name_ = session->get_user_name();
+      param.db_name_ = session->get_database_name();
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDbmsStatsExportImport::drop_stat_table(ctx, param))) {
@@ -4537,21 +4537,21 @@ int ObDbmsStats::parse_set_table_stat_options(ObExecContext &ctx,
     LOG_WARN("failed to get ncachehit", K(ret));
   } else if (!nummicroblks.is_null() && OB_FAIL(nummicroblks.get_number(num_nummicroblks))) {
     LOG_WARN("failed to get ncachehit", K(ret));
-  } else if (OB_FAIL(num_numrows.extract_valid_int64_with_trunc(param.numrows_))) {
+  } else if (!numrows.is_null() && OB_FAIL(num_numrows.extract_valid_int64_with_trunc(param.numrows_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_numrows));
-  } else if (OB_FAIL(num_numblks.extract_valid_int64_with_trunc(param.numblks_))) {
+  } else if (!numblks.is_null() && OB_FAIL(num_numblks.extract_valid_int64_with_trunc(param.numblks_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_numblks));
-  } else if (OB_FAIL(num_avgrlen.extract_valid_int64_with_trunc(param.avgrlen_))) {
+  } else if (!avgrlen.is_null() && OB_FAIL(num_avgrlen.extract_valid_int64_with_trunc(param.avgrlen_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_avgrlen));
-  } else if (OB_FAIL(num_flags.extract_valid_int64_with_trunc(param.flags_))) {
+  } else if (!flags.is_null() && OB_FAIL(num_flags.extract_valid_int64_with_trunc(param.flags_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_flags));
-  } else if (OB_FAIL(num_cachedblk.extract_valid_int64_with_trunc(param.cachedblk_))) {
+  } else if (!cachedblk.is_null() && OB_FAIL(num_cachedblk.extract_valid_int64_with_trunc(param.cachedblk_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_cachedblk));
-  } else if (OB_FAIL(num_cachehit.extract_valid_int64_with_trunc(param.cachehit_))) {
+  } else if (!cachehit.is_null() && OB_FAIL(num_cachehit.extract_valid_int64_with_trunc(param.cachehit_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_cachehit));
-  } else if (OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(param.nummacroblks_))) {
+  } else if (!nummacroblks.is_null() && OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(param.nummacroblks_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_nummacroblks));
-  } else if (OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(param.nummicroblks_))) {
+  } else if (!nummicroblks.is_null() && OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(param.nummicroblks_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(nummicroblks));
   } else {/*do nothing*/}
   return ret;
@@ -4597,15 +4597,15 @@ int ObDbmsStats::parse_set_column_stats_options(ObExecContext &ctx,
     LOG_WARN("failed to get no_invalidate", K(ret));
   } else if (!force.is_null() && OB_FAIL(force.get_bool(param.table_param_.force_))) {
     LOG_WARN("failed to get force", K(ret));
-  } else if (OB_FAIL(num_distcnt.extract_valid_int64_with_trunc(param.distcnt_))) {
+  } else if (!distcnt.is_null() && OB_FAIL(num_distcnt.extract_valid_int64_with_trunc(param.distcnt_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_distcnt));
-  } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(num_density, param.density_))) {
+  } else if (!density.is_null() && OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(num_density, param.density_))) {
     LOG_WARN("failed to cast number to double" , K(ret), K(num_density));
-  } else if (OB_FAIL(num_nullcnt.extract_valid_int64_with_trunc(param.nullcnt_))) {
+  } else if (!nullcnt.is_null() && OB_FAIL(num_nullcnt.extract_valid_int64_with_trunc(param.nullcnt_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_nullcnt));
-  } else if (OB_FAIL(num_avgclen.extract_valid_int64_with_trunc(param.avgclen_))) {
+  } else if (!avgclen.is_null() && OB_FAIL(num_avgclen.extract_valid_int64_with_trunc(param.avgclen_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_avgclen));
-  } else if (OB_FAIL(num_flags.extract_valid_int64_with_trunc(param.flags_))) {
+  } else if (!flags.is_null() && OB_FAIL(num_flags.extract_valid_int64_with_trunc(param.flags_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_flags));
   } else {/*do nothing*/}
   return ret;
@@ -5556,7 +5556,7 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
   } else {
     stat_param.tenant_id_ = session->get_effective_tenant_id();
     if (owner.is_null()) {
-      stat_param.db_name_ = session->get_user_name();
+      stat_param.db_name_ = session->get_database_name();
     } else if (OB_FAIL(owner.get_string(stat_param.db_name_))) {
       LOG_WARN("failed to get db name", K(ret));
     } else if (OB_FAIL(convert_vaild_ident_name(*stat_param.allocator_,
