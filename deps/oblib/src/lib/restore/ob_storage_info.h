@@ -40,10 +40,20 @@ const char *const APPID = "appid=";
 const char *const DELETE_MODE = "delete_mode=";
 const char *const REGION = "s3_region=";
 
+const char *const ADDRESSING_MODEL = "addressing_model=";
+const char *const ADDRESSING_MODEL_VIRTUAL_HOSTED_STYLE = "virtual_hosted_style";
+const char *const ADDRESSING_MODEL_PATH_STYLE = "path_style";
+
 const char *const CHECKSUM_TYPE = "checksum_type=";
 const char *const CHECKSUM_TYPE_NO_CHECKSUM = "no_checksum";
 const char *const CHECKSUM_TYPE_MD5 = "md5";
 const char *const CHECKSUM_TYPE_CRC32 = "crc32";
+
+enum ObStorageAddressingModel
+{
+  OB_VIRTUAL_HOSTED_STYLE = 0,
+  OB_PATH_STYLE = 1,
+};
 
 enum ObStorageChecksumType
 {
@@ -87,6 +97,7 @@ protected:
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const;
   virtual int parse_storage_info_(const char *storage_info, bool &has_appid);
   int check_delete_mode_(const char *delete_mode);
+  int check_addressing_model_(const char *addressing_model) const;
   int set_checksum_type_(const char *checksum_type_str);
   int set_storage_info_field_(const char *info, char *field, const int64_t length);
 

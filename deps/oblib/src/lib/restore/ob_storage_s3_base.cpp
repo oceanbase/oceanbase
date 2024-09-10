@@ -125,6 +125,9 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
     config.payloadSigningPolicy = Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never;
     config.endpointOverride = account.endpoint_;
     config.executor = nullptr;
+    if (account.addressing_model_ == ObStorageAddressingModel::OB_PATH_STYLE) {
+      config.useVirtualAddressing = false;
+    }
 
     // Default maxRetries is 10
     std::shared_ptr<Aws::Client::DefaultRetryStrategy> retryStrategy =
@@ -825,6 +828,7 @@ void ObS3Account::reset()
   MEMSET(endpoint_, 0, sizeof(endpoint_));
   MEMSET(access_id_, 0, sizeof(access_id_));
   MEMSET(secret_key_, 0, sizeof(secret_key_));
+  addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
 }
 
 int64_t ObS3Account::hash() const
@@ -834,6 +838,7 @@ int64_t ObS3Account::hash() const
   hash_value = murmurhash(endpoint_, static_cast<int32_t>(strlen(endpoint_)), hash_value);
   hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
   hash_value = murmurhash(secret_key_, static_cast<int32_t>(strlen(secret_key_)), hash_value);
+  hash_value = murmurhash(&addressing_model_, sizeof(addressing_model_), hash_value);
   return hash_value;
 }
 
@@ -886,6 +891,15 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
         } else {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "delete mode is invalid", K(ret), KCSTRING(token));
+        }
+      } else if (0 == strncmp(ADDRESSING_MODEL, token, strlen(ADDRESSING_MODEL))) {
+        if (0 == strcmp(token + strlen(ADDRESSING_MODEL), ADDRESSING_MODEL_VIRTUAL_HOSTED_STYLE)) {
+          addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
+        } else if (0 == strcmp(token + strlen(ADDRESSING_MODEL), ADDRESSING_MODEL_PATH_STYLE)) {
+          addressing_model_ = ObStorageAddressingModel::OB_PATH_STYLE;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          OB_LOG(WARN, "addressing model is invalid", K(ret), KCSTRING(token));
         }
       } else {
         OB_LOG(DEBUG, "unknown s3 info", K(*token));
