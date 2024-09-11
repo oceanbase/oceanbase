@@ -787,6 +787,9 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_array_contains.cpp
   engine/expr/ob_expr_decode_trace_id.cpp
   engine/expr/ob_expr_split_part.cpp
+  engine/expr/ob_expr_st_numpoints.cpp
+  engine/expr/ob_expr_st_pointn.cpp
+  engine/expr/ob_expr_st_pointfromtext.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

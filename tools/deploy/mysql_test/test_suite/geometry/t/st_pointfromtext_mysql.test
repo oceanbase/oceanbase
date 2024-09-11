@@ -1,0 +1,40 @@
+#owner: yky448618
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY ST_PointFromText.
+--echo # ----------------------------------------------------------------------
+
+SET @wkt_pt = 'POINT(0 0)';
+SET @wkt_ls = ST_GeomFromText('LineString(1 1,2 2,3 3)');
+
+SELECT ST_AsText(ST_PointFromText(@wkt_pt)) AS res;
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_AsText(ST_PointFromText(@wkt_ls)) AS res;
+
+SELECT ST_X(ST_POINTFROMTEXT('POINT(0 0)'));
+
+SELECT ST_X(ST_POINTFROMTEXT('POINT(10 10)'));
+
+SELECT ST_X(ST_POINTFROMTEXT('POINT(1e308 1e308)'));
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+SELECT ST_X(ST_POINTFROMTEXT());
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_X(ST_POINTFROMTEXT('NULL'));
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_X(ST_POINTFROMTEXT('POINT()'));
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_X(ST_POINTFROMTEXT('POINT(1)'));
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_X(ST_POINTFROMTEXT('POINT(a 1)'));
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_X(ST_POINTFROMTEXT('POINT(1 1,2)'));
+
+--error ER_PARSE_ERROR
+SELECT ST_X(ST_POINTFROMTEXT('POINT('!' 0)'));

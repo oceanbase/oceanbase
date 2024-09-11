@@ -459,6 +459,9 @@
 #include "sql/engine/expr/ob_expr_rb_to_string.h"
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
 #include "sql/engine/expr/ob_expr_array_contains.h"
+#include "sql/engine/expr/ob_expr_st_numpoints.h"
+#include "sql/engine/expr/ob_expr_st_pointn.h"
+#include "sql/engine/expr/ob_expr_st_pointfromtext.h"
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
@@ -1156,6 +1159,9 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm4Encrypt);
     REG_OP(ObExprSm4Decrypt);
     REG_OP(ObExprSplitPart);
+    REG_OP(ObExprSTNumPoints);
+    REG_OP(ObExprSTPointN);
+    REG_OP(ObExprSTPointFromText);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
