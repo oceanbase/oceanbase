@@ -210,6 +210,10 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
   } else if (OB_ISNULL(geo)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null geometry", K(ret));
+  } else if (geo->type() != ObGeoType::POINT &&
+    strncmp(func_name, N_ST_POINTFROMTEXT, sizeof(N_ST_POINTFROMTEXT)) == 0) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_POINTFROMTEXT);
   } else {
     ObString res_wkb;
     if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs_item, res_wkb))) {

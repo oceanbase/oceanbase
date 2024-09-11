@@ -1,0 +1,33 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY ST_PointFromText.
+# ----------------------------------------------------------------------
+SET @wkt_pt = 'POINT(0 0)';
+SET @wkt_ls = ST_GeomFromText('LineString(1 1,2 2,3 3)');
+SELECT ST_AsText(ST_PointFromText(@wkt_pt)) AS res;
+res
+POINT(0 0)
+SELECT ST_AsText(ST_PointFromText(@wkt_ls)) AS res;
+ERROR 22023: Invalid GIS data provided to function st_pointfromtext.
+SELECT ST_X(ST_POINTFROMTEXT('POINT(0 0)'));
+ST_X(ST_POINTFROMTEXT('POINT(0 0)'))
+0
+SELECT ST_X(ST_POINTFROMTEXT('POINT(10 10)'));
+ST_X(ST_POINTFROMTEXT('POINT(10 10)'))
+10
+SELECT ST_X(ST_POINTFROMTEXT('POINT(1e308 1e308)'));
+ST_X(ST_POINTFROMTEXT('POINT(1e308 1e308)'))
+1e308
+SELECT ST_X(ST_POINTFROMTEXT());
+ERROR 42000: Incorrect parameter count in the call to native function 'ST_POINTFROMTEXT'
+SELECT ST_X(ST_POINTFROMTEXT('NULL'));
+ERROR 22023: Invalid GIS data provided to function st_pointfromtext.
+SELECT ST_X(ST_POINTFROMTEXT('POINT()'));
+ERROR 22023: Invalid GIS data provided to function st_pointfromtext.
+SELECT ST_X(ST_POINTFROMTEXT('POINT(1)'));
+ERROR 22023: Invalid GIS data provided to function st_pointfromtext.
+SELECT ST_X(ST_POINTFROMTEXT('POINT(a 1)'));
+ERROR 22023: Invalid GIS data provided to function st_pointfromtext.
+SELECT ST_X(ST_POINTFROMTEXT('POINT(1 1,2)'));
+ERROR 22023: Invalid GIS data provided to function st_pointfromtext.
+SELECT ST_X(ST_POINTFROMTEXT('POINT('!' 0)'));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '!' 0)'))' at line 1
