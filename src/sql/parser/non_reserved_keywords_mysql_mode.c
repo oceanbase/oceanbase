@@ -1085,7 +1085,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"rb_or_agg", RB_OR_AGG},
   {"rb_and_agg", RB_AND_AGG},
   {"optimizer_costs", OPTIMIZER_COSTS},
-  {"micro_index_clustered", MICRO_INDEX_CLUSTERED}
+  {"micro_index_clustered", MICRO_INDEX_CLUSTERED},
+  {"load_file", LOAD_FILE}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

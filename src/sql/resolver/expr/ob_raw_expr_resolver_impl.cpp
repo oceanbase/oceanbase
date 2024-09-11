@@ -1367,6 +1367,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_LOAD_FILE: {
+        if (OB_FAIL(process_load_file_node(node, expr))) {
+          LOG_WARN("failed to process load file node", K(ret), K(node));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
@@ -8878,6 +8884,35 @@ int ObRawExprResolverImpl::process_last_refresh_scn_node(const ParseNode *expr_n
     expr = func_expr;
     LOG_DEBUG("finish resolve last_refresh_scn expr", K(get_type_name(child_node->type_)), K(func_expr->get_mview_id()));
   }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_load_file_node(const ParseNode *node, ObRawExpr *&expr) 
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *sub_expr = NULL;
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_ISNULL(node) || OB_UNLIKELY(1 != node->num_child_) ||
+        OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(node), K(node->num_child_));
+  } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], sub_expr)))) {
+    LOG_WARN("resolve sub-query failed", K(ret));
+  } else if (OB_ISNULL(sub_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid sub_expr", K(sub_expr));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+      LOG_WARN("create ObOpRawExpr failed", K(ret));
+    } else if (OB_ISNULL(expr = func_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("op_expr is null");
+    } else if (OB_FAIL(func_expr->set_param_expr(sub_expr))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    } else { 
+      /*do nothing*/ 
+    }
+
+
   return ret;
 }
 

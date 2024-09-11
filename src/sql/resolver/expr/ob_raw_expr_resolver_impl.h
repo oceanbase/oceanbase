@@ -219,6 +219,7 @@ private:
                               ObQualifiedName &column_ref,
                               ObRawExpr *&expr);
   int process_array_contains_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_load_file_node(const ParseNode *node, ObRawExpr *&expr);
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);

@@ -378,6 +378,8 @@ END_P SET_VAR DELIMITER
         ZONE ZONE_LIST ZONE_TYPE OPTIMIZER_COSTS
 
         OVERWRITE
+
+        LOAD_FILE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
@@ -3288,6 +3290,10 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_AGG, 1, $3);
   $$->reserved_ = 0;
+}
+| LOAD_FILE '(' STRING_VALUE ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_LOAD_FILE, 1, $3);
 }
 ;
 
