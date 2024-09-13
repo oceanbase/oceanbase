@@ -35,7 +35,7 @@ ob_define(ENABLE_PERF_MODE OFF)
 
 # begin of unity build config
 ob_define(OB_MAX_UNITY_BATCH_SIZE 30)
-# the global switch of unity build, defualt is 'ON'
+# the global switch of unity build, default is 'ON'
 ob_define(OB_ENABLE_UNITY ON)
 
 ob_define(OB_BUILD_OPENSOURCE ON)
@@ -48,7 +48,7 @@ ob_define(OB_DISABLE_PIE OFF)
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
   # -fprofile-arcs to generate .gcda file
-  # -DDBUILD_COVERAGE marco use to mark 'coverage build type' and to handle some speical case
+  # -DDBUILD_COVERAGE marco use to mark 'coverage build type' and to handle some special case
   set(CMAKE_COVERAGE_COMPILE_OPTIONS -ftest-coverage -fprofile-arcs -Xclang -coverage-version=408R -DBUILD_COVERAGE)
   set(CMAKE_COVERAGE_EXE_LINKER_OPTIONS "-ftest-coverage -fprofile-arcs")
 
@@ -114,7 +114,7 @@ if(OB_BUILD_CLOSE_MODULES)
   # share storage
   ob_define(OB_BUILD_SHARED_STORAGE ON)
 
-  # oralce
+  # oracle
   ob_define(OB_BUILD_ORACLE_PARSER ON)
   ob_define(OB_BUILD_ORACLE_PL ON)
   # dblink
