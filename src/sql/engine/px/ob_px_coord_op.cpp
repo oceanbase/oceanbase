@@ -1097,7 +1097,7 @@ int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
         for (int j = 0; j < last_px_batch_rescan_size_; ++j) {
           key.batch_id_ = j;
           if (OB_FAIL(MTL(ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
-            LOG_TRACE("fail to release recieve internal result", K(ret));
+            LOG_TRACE("fail to release receive internal result", K(ret));
           }
         }
       }

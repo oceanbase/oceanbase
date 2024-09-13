@@ -234,7 +234,7 @@ int ObP2PDatahubMsgBase::fill_empty_query_range(const ObPxQueryRangeInfo &query_
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory for end_obj failed", K(ret));
   } else {
-    // fill all coloumns with (max, min)
+    // fill all columns with (max, min)
     for (int64_t i = 0; i < range_column_cnt; ++i) {
       new (start + i) ObObj();
       new (end + i) ObObj();

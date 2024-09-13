@@ -872,7 +872,7 @@ int ObNestedLoopJoinOp::rescan_right_op()
   // Note:
   // Overwrite batch_size in the beginning of the loop as eval_ctx_.batch_size
   // would be modified when processing right child.
-  // Adding seperated guards for left/right children can also solve the problem,
+  // Adding separated guards for left/right children can also solve the problem,
   // we don't choose that way due to performance reason.
   batch_info_guard.set_batch_size(left_brs_->size_);
   if (!MY_SPEC.group_rescan_ && !MY_SPEC.enable_px_batch_rescan_) {

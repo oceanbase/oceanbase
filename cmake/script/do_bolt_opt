@@ -48,7 +48,7 @@ def shell_run_command(command_str, need_print_all=True, need_print_output=True, 
     result["return_code"] = 1
     result["return_message"] = []
     result["cmd"] = command_str
-    is_frist = False
+    is_first = False
     ps = subprocess.Popen(command_str,
                           stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE,
@@ -66,9 +66,9 @@ def shell_run_command(command_str, need_print_all=True, need_print_output=True, 
             continue
 
         if need_print_output and len(data.strip()) > 1:
-            if not is_frist:
+            if not is_first:
                 print_log("[运行输出]: %s" % data.replace("\n", ""))
-                is_frist = True
+                is_first = True
             else:
                 data_str = "            %s" % data.replace("\n", "")
                 if no_time:

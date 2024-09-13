@@ -233,7 +233,7 @@ int ObBackupLinkedBlockItemWriter::get_entry_block_addr_(
   int ret = OB_SUCCESS;
   if (!param.is_valid() || file_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invliad args", K(ret), K(param), K(file_id));
+    LOG_WARN("get invalid args", K(ret), K(param), K(file_id));
   } else if (!is_aligned(file_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file offset is not aligned", K(ret), K(file_offset));

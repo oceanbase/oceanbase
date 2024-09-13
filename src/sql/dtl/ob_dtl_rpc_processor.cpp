@@ -171,7 +171,7 @@ int ObDtlSendMessageP::process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer)
           if (OB_FAIL(filter->merge_filter(&bf_data.filter_))) {
             LOG_WARN("fail to merge filter", K(ret));
           } else if (OB_FAIL(filter->process_recieve_count(bf_data.bloom_filter_count_))) {
-            LOG_WARN("fail to process recieve count", K(ret));
+            LOG_WARN("fail to process receive count", K(ret));
           }
           // merge以及process操作完成之后, 需要减少其引用计数.
           (void)filter->dec_merge_filter_count();

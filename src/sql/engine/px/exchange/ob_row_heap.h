@@ -175,14 +175,14 @@ public:
   bool has_inited() const { return inited_; }
   void reset() { row_idx_.reset(); row_arr_.reset(); }
 
-  void reuse_heap(int64_t capacity, common::ObIAllocator &allocatar) 
+  void reuse_heap(int64_t capacity, common::ObIAllocator &allocator) 
   { 
     capacity_ = capacity;
     row_idx_.reuse(); 
     writable_ch_idx_ = 0;
     for (int i = 0; i < row_arr_.count(); ++i) {
       if (OB_NOT_NULL(row_arr_.at(i))) {
-        allocatar.free((void *)row_arr_.at(i));
+        allocator.free((void *)row_arr_.at(i));
         row_arr_.at(i) = NULL;
       } 
     }

@@ -1258,7 +1258,7 @@ int ObStaticEngineExprCG::arrange_datums_data(ObIArray<ObRawExpr *> &exprs,
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not support non-continuous datum", K(ret));
-    // Layout2: Frame is seperated by exprs
+    // Layout2: Frame is separated by exprs
     // All data(metas + reserved data/buf) within one expr are allocated continuously
     // Frame layouts:
     // +--------------------------------+

@@ -600,7 +600,7 @@ int ObStoragePathUtil::generate_part_list_file_path(const common::ObString &head
     OB_LOG(WARN, "fail to join cluster name to path", K(ret), K(path), K(cluster_name));
   } else if (index_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "argumen is invalid", K(ret), K(path));
+    OB_LOG(WARN, "argument is invalid", K(ret), K(path));
   } else if (OB_FAIL(path.join_common_meta_variables(data_version, tenant_id, table_id, partition_id))) {
     OB_LOG(WARN, "fail to join common meta variables", K(ret), K(path), K(data_version),
         K(tenant_id), K(table_id), K(partition_id));

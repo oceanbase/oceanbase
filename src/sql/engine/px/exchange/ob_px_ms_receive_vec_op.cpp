@@ -1073,7 +1073,7 @@ int ObPxMSReceiveVecOp::inner_rescan()
   output_iter_.reset();
   output_store_.reset();
   if (OB_FAIL(ObPxReceiveOp::inner_rescan())) {
-    LOG_WARN("fail to do recieve op rescan", K(ret));
+    LOG_WARN("fail to do receive op rescan", K(ret));
   } else if (!MY_SPEC.local_order_
              && OB_FAIL(row_heap_.init(get_channel_count(),
                                        &MY_SPEC.sort_collations_,

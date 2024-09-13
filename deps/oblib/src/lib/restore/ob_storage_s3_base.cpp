@@ -789,7 +789,7 @@ static int set_request_checkusum_algorithm(RequestType &request,
     if (checksum_type == ObStorageChecksumType::OB_CRC32_ALGO) {
       request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
     } else {
-      // defaut md5
+      // default md5
     }
   }
   return ret;
@@ -1055,7 +1055,7 @@ int ObS3Account::set_field(const char *value, char *field, const uint32_t field_
   int ret = OB_SUCCESS;
   if (OB_ISNULL(value) || OB_ISNULL(field)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invliad arguments", K(ret), KP(value), KP(field));
+    OB_LOG(WARN, "invalid arguments", K(ret), KP(value), KP(field));
   } else {
     const int64_t value_len = strlen(value);
     if (value_len >= field_length) {

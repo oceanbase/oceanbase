@@ -688,7 +688,7 @@ int ObPxCleanDtlIntermResP::process()
                 ret = OB_SUCCESS;
                 break;
               } else {
-                LOG_WARN("fail to release recieve internal result", K(ret), K(ret));
+                LOG_WARN("fail to release receive internal result", K(ret), K(ret));
               }
             }
           }

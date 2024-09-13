@@ -1,15 +1,15 @@
 set(CPACK_GENERATOR "RPM")
-# use seperated RPM SPECs and generate different RPMs
+# use separated RPM SPECs and generate different RPMs
 set(CPACK_COMPONENTS_IGNORE_GROUPS 1)
 set(CPACK_RPM_COMPONENT_INSTALL ON)
 # use "server" as main component so its RPM filename won't have "server"
 set(CPACK_RPM_MAIN_COMPONENT "server")
 # let rpmbuild determine rpm filename
 set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
-## Stardard debuginfo generating instructions in cmake.  However 6u
+## Standard debuginfo generating instructions in cmake.  However 6u
 ## server with rpm-4.8.0 which doesn't support dwarf4 won't generate
 ## BUILDID for RPM. And Our debuginfo package doesn't contain source
-## code. Thus we don't use the way cmake sugguests.
+## code. Thus we don't use the way cmake suggests.
 #set(CPACK_RPM_DEBUGINFO_PACKAGE ON)
 #set(CPACK_RPM_BUILD_SOURCE_DIRS_PREFIX "/usr/src/debug")
 # RPM package informations.

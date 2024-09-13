@@ -2202,7 +2202,7 @@ int ObTransformPredicateMoveAround::pushdown_through_winfunc(
       LOG_WARN("predicate is null", K(ret));
     } else if (pred->has_flag(CNT_WINDOW_FUNC)) {
       // do nothing
-      OPT_TRACE(pred, "countain win func, can not pushdown");
+      OPT_TRACE(pred, "contain win func, can not pushdown");
     } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(pred, column_exprs))) {
       LOG_WARN("failed to extract column exprs", K(ret));
     } else if (!ObOptimizerUtil::subset_exprs(column_exprs, common_part_exprs)) {

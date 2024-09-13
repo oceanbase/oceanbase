@@ -365,7 +365,7 @@ int ObPxReceiveOp::inner_rescan()
       channel->reset_px_row_iterator();
       release_channel_ret = MTL(ObDTLIntermResultManager*)->erase_interm_result_info(key);
       if (release_channel_ret != common::OB_SUCCESS) {
-        LOG_WARN("fail to release recieve internal result", KR(release_channel_ret), K(ret));
+        LOG_WARN("fail to release receive internal result", KR(release_channel_ret), K(ret));
       }
     }
   }
@@ -528,7 +528,7 @@ int ObPxReceiveOp::erase_dtl_interm_result()
             ret = OB_SUCCESS;
             break;
           } else {
-            LOG_WARN("fail to release recieve internal result", K(ret), K(key));
+            LOG_WARN("fail to release receive internal result", K(ret), K(key));
           }
         }
       }
