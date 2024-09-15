@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX BALANCE
 
 #include "share/ob_balance_define.h"                  // need_balance_table()
-#include "share/tablet/ob_tablet_to_ls_iterator.h"    // ObTenantTabletToLSIterator
 #include "share/tablet/ob_tablet_table_iterator.h"    // ObTenantTabletMetaIterator
 #include "share/schema/ob_part_mgr_util.h"            // ObPartitionSchemaIter
 #include "share/schema/ob_schema_mgr_cache.h"         // ObSchemaMgrItem
@@ -414,16 +413,16 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_table_not_in_tablegroup_(
     ret = tmp_ret;
     LOG_WARN("exist_refactored failed", KR(ret), K(tmp_ret), K(table_schema));
   } else if (need_balance_table(table_schema)) {
-    if (PARTITION_LEVEL_ZERO == table_schema.get_part_level())  {
+    if (PARTITION_LEVEL_ZERO == table_schema.get_part_level()) {
       if (OB_FAIL(build_bg_for_partlevel_zero_(table_schema))) {
         LOG_WARN("fail build balance group for partlevel zero table", KR(ret), K(tenant_id_), K(table_schema));
       }
-    } else if (PARTITION_LEVEL_ONE == table_schema.get_part_level())  {
+    } else if (PARTITION_LEVEL_ONE == table_schema.get_part_level()) {
       if (OB_FAIL(build_bg_for_partlevel_one_(table_schema))) {
         LOG_WARN("fail build balance group for partlevel one table", KR(ret), K(tenant_id_),
             K(table_schema));
       }
-    } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level())  {
+    } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
       if (OB_FAIL(build_bg_for_partlevel_two_(table_schema))) {
         LOG_WARN("fail build balance group for partlevel two table", KR(ret), K(tenant_id_), K(table_schema));
       }
@@ -863,15 +862,14 @@ int ObAllBalanceGroupBuilder::add_new_part_(
           K(tablet_size), K(in_new_part_group), K(part_group_uid));
     } else if (OB_FAIL(callback_->on_new_partition(
         bg,
-        table_id,
+        table_schema,
         part_object_id,
-        tablet_id,
         src_ls_id,
         dest_ls_id,
         tablet_size,
         in_new_part_group,
         part_group_uid))) {
-      LOG_WARN("callback handle new partition fail", KR(ret), K(bg), K(table_id),
+      LOG_WARN("callback handle new partition fail", KR(ret), K(bg), K(table_schema),
           K(part_object_id), K(tablet_id), K(src_ls_id), K(dest_ls_id), K(tablet_size),
           K(in_new_part_group), K(part_group_uid), K(pre_dest_ls_id_),
           K(pre_dup_to_normal_dest_ls_id_), K(pre_bg_id_), K(pre_part_group_uid_));

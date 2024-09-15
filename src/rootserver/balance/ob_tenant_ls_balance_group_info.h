@@ -34,10 +34,17 @@ namespace rootserver
 class ObTenantLSBalanceGroupInfo final : public ObAllBalanceGroupBuilder::NewPartitionCallback
 {
 public:
-  ObTenantLSBalanceGroupInfo() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), ls_bg_map_() {}
+  ObTenantLSBalanceGroupInfo() :
+      inited_(false),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      alloc_("TenantLSBGInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      ls_bg_map_(),
+      balanced_ls_num_(0),
+      part_distribution_mode_(ObPartDistributionMode::INVALID) {}
   ~ObTenantLSBalanceGroupInfo() { destroy(); }
 
-  int init(const uint64_t tenant_id);
+  int init(const uint64_t tenant_id, const int64_t balanced_ls_num,
+          const ObPartDistributionMode &part_distribution_mode);
   void destroy();
 
   // build All LS Balance Group Info
@@ -45,30 +52,26 @@ public:
       common::ObMySQLProxy &sql_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service);
 
-  int get(const share::ObLSID &ls_id, ObLSBalanceGroupInfo *&ls_bg_info) const
-  {
-    return ls_bg_map_.get_refactored(ls_id, ls_bg_info);
-  }
+  int get(const share::ObLSID &ls_id, ObLSBalanceGroupInfo *&ls_bg_info) const;
 
 public:
   // for ObAllBalanceGroupBuilder
   // Handle new partition when building balance group
   virtual int on_new_partition(
       const ObBalanceGroup &bg,
-      const common::ObObjectID table_id,
+      const share::schema::ObSimpleTableSchemaV2 &table_schema,
       const common::ObObjectID part_object_id,
-      const common::ObTabletID tablet_id,
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id,
       const int64_t tablet_size,
       const bool in_new_partition_group,
       const uint64_t part_group_uid);
 
-  TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size());
+  TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size(), K_(balanced_ls_num),
+              K_(part_distribution_mode));
 
-private:
-  int create_new_ls_bg_info_(const share::ObLSID ls_id,
-      ObLSBalanceGroupInfo *&ls_bg_info);
+public:
+  int get_or_create(const share::ObLSID ls_id, ObLSBalanceGroupInfo *&ls_bg_info);
 
 private:
   static const int64_t MAP_BUCKET_NUM = 100;
@@ -80,6 +83,9 @@ private:
   // map for all balance groups on tenant every LS
   // If LS is empty, it does not exist in this map
   common::hash::ObHashMap<share::ObLSID, ObLSBalanceGroupInfo *> ls_bg_map_;
+  // the number of LS after LS balance
+  int64_t balanced_ls_num_;
+  ObPartDistributionMode part_distribution_mode_;
 };
 
 }

@@ -14,7 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_BALANCE_GROUP_DEFINE_H_
 #include "lib/ob_define.h"
 #include "lib/string/ob_fixed_length_string.h"
-#include "share/ob_ls_id.h"
+#include "lib/utility/ob_print_utils.h"     // TO_STRING_KV
 
 namespace oceanbase
 {
@@ -58,6 +58,13 @@ public:
   bool operator !=(const ObBalanceGroupID &other) const {
     return !(*this == other);
   }
+  bool is_non_part_table_bg() const {
+    return NON_PART_BG_ID == *this;
+  }
+  void reset() {
+    id_high_ = common::OB_INVALID_ID;
+    id_low_ = common::OB_INVALID_ID;
+  }
 
   TO_STRING_KV(K_(id_high),
                K_(id_low));
@@ -67,18 +74,14 @@ public:
            && OB_INVALID_ID != id_low_;
   }
 
-  void reset() {
-    id_high_ = common::OB_INVALID_ID;
-    id_low_ = common::OB_INVALID_ID;
-  }
 
 public:
+  static const ObBalanceGroupID NON_PART_BG_ID;
+  static const ObBalanceGroupID DUP_TABLE_BG_ID;
+
   uint64_t id_high_;
   uint64_t id_low_;
 };
-
-static const ObBalanceGroupID NON_PART_BG_ID(0, 0);
-static const ObBalanceGroupID DUP_TABLE_BG_ID(0, 1);
 
 class ObBalanceGroup
 {
@@ -102,6 +105,8 @@ public:
   bool operator !=(const ObBalanceGroup &other) const {
     return !(*this == other);
   }
+  bool is_non_part_table_bg() const { return id_.is_non_part_table_bg(); }
+  bool is_valid() const { return id_.is_valid() && !name_.is_empty(); }
 
   TO_STRING_KV(K_(id), K_(name));
 public:

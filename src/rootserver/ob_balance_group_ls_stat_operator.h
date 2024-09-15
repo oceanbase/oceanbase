@@ -16,7 +16,6 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_array.h"
-#include "lib/string/ob_fixed_length_string.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
