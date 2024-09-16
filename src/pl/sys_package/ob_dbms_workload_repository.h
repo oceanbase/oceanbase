@@ -27,6 +27,8 @@ public:
     AshReportParams(const common::ObTimeZoneInfo *tz_info)
         : ash_begin_time(0),
           ash_end_time(0),
+          wr_begin_time(0),
+          wr_end_time(0),
           sql_id(),
           trace_id(),
           wait_class(),
@@ -40,6 +42,8 @@ public:
     {}
     int64_t ash_begin_time;
     int64_t ash_end_time;
+    int64_t wr_begin_time;
+    int64_t wr_end_time;
     ObString sql_id;
     ObString trace_id;
     ObString wait_class;
@@ -77,8 +81,12 @@ public:
     const int64_t usec, char *buf, int64_t buf_len, int64_t &pos);
   static int append_fmt_ash_view_sql(
       const AshReportParams &ash_report_params, ObSqlString &sql_string);
+  static int append_fmt_wr_view_sql(
+      const AshReportParams &ash_report_params, ObSqlString &sql_string);
   static int get_ash_begin_and_end_time(
       const AshReportParams &ash_report_params, int64_t &ash_begin_time, int64_t &ash_end_time);
+  static int get_wr_begin_and_end_time(
+      const AshReportParams &ash_report_params, int64_t &wr_begin_time, int64_t &wr_end_time);
   static int get_ash_num_samples_and_events(
       const AshReportParams &ash_report_params, int64_t &num_samples, int64_t &num_events);
   static int print_ash_summary_info(const AshReportParams &ash_report_params, const int64_t l_btime,
