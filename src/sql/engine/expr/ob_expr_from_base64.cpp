@@ -101,12 +101,13 @@ int ObExprFromBase64::calc_result_type1(ObExprResType &type,
     if (max_deduce_length < OB_MAX_MYSQL_VARCHAR_LENGTH) {
       type.set_varbinary();
       type.set_length(max_deduce_length);
-      type.set_collation_level(CS_LEVEL_IMPLICIT);
+      type.set_collation_level(CS_LEVEL_COERCIBLE);
     } else {
       type.set_blob();
       // TODO : Fixme the blob type do not need to set_length.
       // Maybe need wait ObDDLResolver::check_text_length fix the judge of length.
       type.set_length(max_deduce_length);
+      type.set_collation_level(CS_LEVEL_COERCIBLE);
     }
   }
 

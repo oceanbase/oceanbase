@@ -320,14 +320,20 @@ int ObExprSubAddtime::calc_result_type2(ObExprResType &type,
     type.set_datetime();
     type.set_scale(MAX_SCALE_FOR_TEMPORAL);
     type.set_precision(static_cast<ObPrecision>(DATETIME_MIN_LENGTH + MAX_SCALE_FOR_TEMPORAL));
+    type.set_collation_type(type_ctx.get_coll_type());
+    type.set_collation_level(CS_LEVEL_COERCIBLE);
   } else if (ObTimeTC == date_arg.get_type_class()) {
     type.set_time();
     type.set_scale(MAX(scale1, scale2));
     type.set_precision(static_cast<ObPrecision>(TIME_MIN_LENGTH + type.get_scale()));
+    type.set_collation_type(type_ctx.get_coll_type());
+    type.set_collation_level(CS_LEVEL_COERCIBLE);
   } else if (ObDateTimeType == date_arg.get_type() || ObTimestampType == date_arg.get_type()) {
     type.set_datetime();
     type.set_scale(MAX(scale1, scale2));
     type.set_precision(static_cast<ObPrecision>(DATETIME_MIN_LENGTH + type.get_scale()));
+    type.set_collation_type(type_ctx.get_coll_type());
+    type.set_collation_level(CS_LEVEL_COERCIBLE);
   } else {
     type.set_varchar();
     type.set_length(DATETIME_MAX_LENGTH);
@@ -335,6 +341,8 @@ int ObExprSubAddtime::calc_result_type2(ObExprResType &type,
     ret = aggregate_charsets_for_string_result(type, &date_arg, 1, type_ctx);
     date_arg.set_calc_collation_type(type.get_collation_type());
     date_arg.set_calc_collation_level(type.get_collation_level());
+    type.set_collation_type(type_ctx.get_coll_type());
+    type.set_collation_level(CS_LEVEL_COERCIBLE);
   }
   if (OB_SUCC(ret)) {
     // date_arg无法设置calc_type的原因是，date_arg类型是varchar时，设置calc_type为time和datetime都不合适
@@ -711,12 +719,12 @@ int ObExprDayName::calc_result_type1(ObExprResType &type,
   type.set_varchar();
   type.set_full_length(DAYNAME_MAX_LENGTH, type1.get_length_semantics());
   type.set_collation_type(cs_type);
-  type.set_collation_level(CS_LEVEL_IMPLICIT);
+  type.set_collation_level(CS_LEVEL_COERCIBLE);
   common::ObObjTypeClass tc1 = ob_obj_type_class(type1.get_type());
   if (ob_is_enumset_tc(type1.get_type())) {
     type1.set_calc_type(common::ObVarcharType);
     type1.set_collation_type(cs_type);
-    type1.set_collation_level(CS_LEVEL_IMPLICIT);
+    type1.set_collation_level(CS_LEVEL_COERCIBLE);
   } else if ((common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
     type1.set_calc_type(common::ObIntType);
   }

@@ -79,14 +79,19 @@ int ObExprRegexpLike::calc_result_typeN(ObExprResType &type,
       //lob TODO,jiangxiu.wt
       bool need_utf8 = false;
       types[1].set_calc_type(ObVarcharType);
-      types[1].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+      // types[1].set_calc_collation_level(CS_LEVEL_IMPLICIT);
       if (!types[0].is_clob()) {
         types[0].set_calc_type(ObVarcharType);
       }
-      types[0].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+      // types[0].set_calc_collation_level(CS_LEVEL_IMPLICIT);
       type.set_tinyint();
       type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+      if (types[0].get_collation_level() < types[1].get_collation_level()){
+        type.set_collation_level(types[0].get_collation_level());
+      } else {
+        type.set_collation_level(types[1].get_collation_level());
+      }
       ObExprOperator::calc_result_flag2(type, types[0], types[1]);
       need_utf8 = false;
       if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {

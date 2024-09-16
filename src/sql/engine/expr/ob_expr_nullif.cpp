@@ -79,8 +79,12 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
   if (ob_is_real_type(type.get_type()) && SCALE_UNKNOWN_YET != type1.get_scale()) {
     type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type1.get_scale())));
   } else if (ob_is_string_type(type.get_type()) || ob_is_enumset_tc(type.get_type())) {
-    type.set_collation_level(type1.get_collation_level());
-    type.set_collation_type(type1.get_collation_type());
+    ObArray<ObExprResType> types;
+    types.push_back(type1);
+    types.push_back(type2);
+    if(OB_FAIL(aggregate_charsets_for_string_result(type, (types.count() == 0 ? NULL : &(types.at(0))),types.count(), type_ctx))){
+      LOG_WARN("fail to aggregate charsets for string result", K(ret), K(types));
+    }
   }
   if (ob_is_enumset_tc(type.get_type()) || ob_is_enumset_inner_tc(type.get_type())) {
     type.set_varchar();

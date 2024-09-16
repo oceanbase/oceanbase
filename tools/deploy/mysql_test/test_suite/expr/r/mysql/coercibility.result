@@ -1,0 +1,362 @@
+select coercibility(from_base64(1));
+coercibility(from_base64(1))
+4
+select coercibility(from_base64('1'));
+coercibility(from_base64('1'))
+4
+select coercibility(from_base64('SGVsbG8sIHdvcmxkIQ=='));
+coercibility(from_base64('SGVsbG8sIHdvcmxkIQ=='))
+4
+select coercibility(from_base64(_utf8mb4'A' COLLATE utf8mb4_bin));
+coercibility(from_base64(_utf8mb4'A' COLLATE utf8mb4_bin))
+4
+select coercibility(from_base64(CONCAT(1, 'abc')));
+coercibility(from_base64(CONCAT(1, 'abc')))
+4
+select coercibility(from_base64(CONCAT(CONVERT('Hello', BINARY), CONVERT(' 世界' USING latin1))));
+coercibility(from_base64(CONCAT(CONVERT('Hello', BINARY), CONVERT(' 世界' USING latin1))))
+4
+select coercibility(from_base64(null));
+coercibility(from_base64(null))
+4
+SELECT COERCIBILITY(DAYNAME(1));
+COERCIBILITY(DAYNAME(1))
+4
+SELECT COERCIBILITY(DAYNAME('2024-07-07'));
+COERCIBILITY(DAYNAME('2024-07-07'))
+4
+SELECT COERCIBILITY(DAYNAME(_utf8mb4'A' COLLATE utf8mb4_bin));
+COERCIBILITY(DAYNAME(_utf8mb4'A' COLLATE utf8mb4_bin))
+4
+SELECT COERCIBILITY(DAYNAME(CONCAT(1, 'abc')));
+COERCIBILITY(DAYNAME(CONCAT(1, 'abc')))
+4
+SELECT COERCIBILITY(DAYNAME(CONCAT(CONVERT('Hello', BINARY), CONVERT(' 世界' USING latin1))));
+COERCIBILITY(DAYNAME(CONCAT(CONVERT('Hello', BINARY), CONVERT(' 世界' USING latin1))))
+4
+SELECT COERCIBILITY(DAYNAME(NULL));
+COERCIBILITY(DAYNAME(NULL))
+4
+DROP TABLE IF EXISTS table_3;
+CREATE TABLE table_3 (
+c1 SET('a') character set utf8mb4 collate utf8mb4_general_ci
+);
+INSERT INTO table_3 VALUES ('a');
+SELECT COERCIBILITY(REGEXP_LIKE(c1, 'a')) FROM table_3;
+COERCIBILITY(REGEXP_LIKE(c1, 'a'))
+2
+SELECT COERCIBILITY(REGEXP_LIKE(c1, _utf8mb4'A' COLLATE utf8mb4_bin)) FROM table_3;
+COERCIBILITY(REGEXP_LIKE(c1, _utf8mb4'A' COLLATE utf8mb4_bin))
+0
+SELECT COERCIBILITY(REGEXP_LIKE(c1, CONCAT(1, 'abc'))) FROM table_3;
+COERCIBILITY(REGEXP_LIKE(c1, CONCAT(1, 'abc')))
+2
+SELECT COERCIBILITY(REGEXP_LIKE('a', 'a')) FROM table_3;
+COERCIBILITY(REGEXP_LIKE('a', 'a'))
+4
+SELECT COERCIBILITY(REGEXP_LIKE(c1, null)) FROM table_3;
+COERCIBILITY(REGEXP_LIKE(c1, null))
+2
+SELECT COERCIBILITY(REGEXP_LIKE(null, 'a')) FROM table_3;
+COERCIBILITY(REGEXP_LIKE(null, 'a'))
+4
+SELECT COERCIBILITY(REGEXP_LIKE(null, null)) FROM table_3;
+COERCIBILITY(REGEXP_LIKE(null, null))
+6
+set collation_connection=utf8mb4_general_ci;
+drop table if exists utf8_table_2;
+Warnings:
+Note	1051	Unknown table 'test.utf8_table_2'
+create table utf8_table_2(c1 TEXT character set utf8mb4 collate utf8mb4_unicode_ci,
+c2 TEXT character set utf8mb4 collate utf8mb4_general_ci,
+c3 TEXT character set utf8mb4 collate utf8mb4_0900_ai_ci,
+c4 TEXT character set utf8mb4 collate utf8mb4_bin);
+insert into utf8_table_2 value ('a','b','c','d');
+SELECT COLLATION(ADDTIME(c1, '2:0:0')) FROM utf8_table_2;
+COLLATION(ADDTIME(c1, '2:0:0'))
+utf8mb4_general_ci
+SELECT COLLATION(ADDTIME(c2, '2:0:0')) FROM utf8_table_2;
+COLLATION(ADDTIME(c2, '2:0:0'))
+utf8mb4_general_ci
+SELECT COLLATION(ADDTIME(c3, '2:0:0')) FROM utf8_table_2;
+COLLATION(ADDTIME(c3, '2:0:0'))
+utf8mb4_general_ci
+SELECT COLLATION(ADDTIME(c4, '2:0:0')) FROM utf8_table_2;
+COLLATION(ADDTIME(c4, '2:0:0'))
+utf8mb4_general_ci
+SELECT COLLATION(SUBTIME(c1, '2:0:0')) FROM utf8_table_2;
+COLLATION(SUBTIME(c1, '2:0:0'))
+utf8mb4_general_ci
+SELECT COLLATION(SUBTIME(c2, '2:0:0')) FROM utf8_table_2;
+COLLATION(SUBTIME(c2, '2:0:0'))
+utf8mb4_general_ci
+SELECT COLLATION(SUBTIME(c3, '2:0:0')) FROM utf8_table_2;
+COLLATION(SUBTIME(c3, '2:0:0'))
+utf8mb4_general_ci
+SELECT COLLATION(SUBTIME(c4, '2:0:0')) FROM utf8_table_2;
+COLLATION(SUBTIME(c4, '2:0:0'))
+utf8mb4_general_ci
+drop table if exists test;
+CREATE TABLE test (
+id INT AUTO_INCREMENT PRIMARY KEY,
+char_col CHAR(10),
+varchar_col VARCHAR(255),
+text_col TEXT,
+blob_col BLOB,
+tinytext_col TINYTEXT,
+mediumtext_col MEDIUMTEXT,
+longtext_col LONGTEXT,
+int_col INT,
+float_col FLOAT,
+double_col DOUBLE,
+decimal_col DECIMAL(10, 2),
+date_col DATE,
+datetime_col DATETIME,
+timestamp_col TIMESTAMP,
+time_col TIME,
+year_col YEAR,
+enum_col ENUM('Option1', 'Option2'),
+set_col SET('A', 'B', 'C'),
+boolean_col BOOLEAN
+);
+INSERT INTO test (
+char_col, varchar_col, text_col, blob_col, tinytext_col, mediumtext_col, longtext_col,
+int_col, float_col, double_col, decimal_col, date_col, datetime_col, timestamp_col,
+time_col, year_col, enum_col, set_col, boolean_col
+) VALUES
+('abcdefghij', 'Test VARCHAR', 'Test TEXT', 'Test BLOB', 'Test TINYTEXT', 'Test MEDIUMTEXT', 'Test LONGTEXT',
+123, 123.45, 678.90, 5432.10, '2023-10-01', '2023-10-01 10:00:00', CURRENT_TIMESTAMP,
+'10:00:00', 2023, 'Option1', 'A,B', TRUE);
+select coercibility(from_base64(id)) from test;
+coercibility(from_base64(id))
+4
+select coercibility(from_base64(char_col)) from test;
+coercibility(from_base64(char_col))
+4
+select coercibility(from_base64(varchar_col)) from test;
+coercibility(from_base64(varchar_col))
+4
+select coercibility(from_base64(text_col)) from test;
+coercibility(from_base64(text_col))
+4
+select coercibility(from_base64(blob_col)) from test;
+coercibility(from_base64(blob_col))
+4
+select coercibility(from_base64(tinytext_col)) from test;
+coercibility(from_base64(tinytext_col))
+4
+select coercibility(from_base64(mediumtext_col)) from test;
+coercibility(from_base64(mediumtext_col))
+4
+select coercibility(from_base64(longtext_col)) from test;
+coercibility(from_base64(longtext_col))
+4
+select coercibility(from_base64(int_col)) from test;
+coercibility(from_base64(int_col))
+4
+select coercibility(from_base64(float_col)) from test;
+coercibility(from_base64(float_col))
+4
+select coercibility(from_base64(double_col)) from test;
+coercibility(from_base64(double_col))
+4
+select coercibility(from_base64(decimal_col)) from test;
+coercibility(from_base64(decimal_col))
+4
+select coercibility(from_base64(date_col)) from test;
+coercibility(from_base64(date_col))
+4
+select coercibility(from_base64(datetime_col)) from test;
+coercibility(from_base64(datetime_col))
+4
+select coercibility(from_base64(time_col)) from test;
+coercibility(from_base64(time_col))
+4
+select coercibility(from_base64(year_col)) from test;
+coercibility(from_base64(year_col))
+4
+select coercibility(from_base64(enum_col)) from test;
+coercibility(from_base64(enum_col))
+4
+select coercibility(from_base64(set_col)) from test;
+coercibility(from_base64(set_col))
+4
+select coercibility(from_base64(boolean_col)) from test;
+coercibility(from_base64(boolean_col))
+4
+SELECT COERCIBILITY(DAYNAME(id)) FROM test;
+COERCIBILITY(DAYNAME(id))
+4
+SELECT COERCIBILITY(DAYNAME(char_col)) FROM test;
+COERCIBILITY(DAYNAME(char_col))
+4
+SELECT COERCIBILITY(DAYNAME(varchar_col)) FROM test;
+COERCIBILITY(DAYNAME(varchar_col))
+4
+SELECT COERCIBILITY(DAYNAME(text_col)) FROM test;
+COERCIBILITY(DAYNAME(text_col))
+4
+SELECT COERCIBILITY(DAYNAME(blob_col)) FROM test;
+COERCIBILITY(DAYNAME(blob_col))
+4
+SELECT COERCIBILITY(DAYNAME(tinytext_col)) FROM test;
+COERCIBILITY(DAYNAME(tinytext_col))
+4
+SELECT COERCIBILITY(DAYNAME(mediumtext_col)) FROM test;
+COERCIBILITY(DAYNAME(mediumtext_col))
+4
+SELECT COERCIBILITY(DAYNAME(longtext_col)) FROM test;
+COERCIBILITY(DAYNAME(longtext_col))
+4
+SELECT COERCIBILITY(DAYNAME(int_col)) FROM test;
+COERCIBILITY(DAYNAME(int_col))
+4
+SELECT COERCIBILITY(DAYNAME(float_col)) FROM test;
+COERCIBILITY(DAYNAME(float_col))
+4
+SELECT COERCIBILITY(DAYNAME(double_col)) FROM test;
+COERCIBILITY(DAYNAME(double_col))
+4
+SELECT COERCIBILITY(DAYNAME(decimal_col)) FROM test;
+COERCIBILITY(DAYNAME(decimal_col))
+4
+SELECT COERCIBILITY(DAYNAME(date_col)) FROM test;
+COERCIBILITY(DAYNAME(date_col))
+4
+SELECT COERCIBILITY(DAYNAME(datetime_col)) FROM test;
+COERCIBILITY(DAYNAME(datetime_col))
+4
+SELECT COERCIBILITY(DAYNAME(time_col)) FROM test;
+COERCIBILITY(DAYNAME(time_col))
+4
+SELECT COERCIBILITY(DAYNAME(year_col)) FROM test;
+COERCIBILITY(DAYNAME(year_col))
+4
+SELECT COERCIBILITY(DAYNAME(enum_col)) FROM test;
+COERCIBILITY(DAYNAME(enum_col))
+4
+SELECT COERCIBILITY(DAYNAME(set_col)) FROM test;
+COERCIBILITY(DAYNAME(set_col))
+4
+SELECT COERCIBILITY(DAYNAME(boolean_col)) FROM test;
+COERCIBILITY(DAYNAME(boolean_col))
+4
+drop table if exists test;
+CREATE TABLE test (
+id INT AUTO_INCREMENT PRIMARY KEY,
+char_col CHAR(10),
+varchar_col VARCHAR(255),
+text_col TEXT,
+blob_col BLOB,
+tinytext_col TINYTEXT,
+mediumtext_col MEDIUMTEXT,
+longtext_col LONGTEXT,
+int_col INT,
+float_col FLOAT,
+double_col DOUBLE,
+decimal_col DECIMAL(10, 2),
+date_col DATE,
+datetime_col DATETIME,
+timestamp_col TIMESTAMP,
+time_col TIME,
+year_col YEAR,
+enum_col ENUM('Option1', 'Option2'),
+set_col SET('A', 'B', 'C'),
+boolean_col BOOLEAN
+);
+INSERT INTO test (
+char_col, varchar_col, text_col, blob_col, tinytext_col, mediumtext_col, longtext_col,
+int_col, float_col, double_col, decimal_col, date_col, datetime_col, timestamp_col,
+time_col, year_col, enum_col, set_col, boolean_col
+) VALUES
+('abcdefghij', 'Test VARCHAR', 'Test TEXT', 'Test BLOB', 'Test TINYTEXT', 'Test MEDIUMTEXT', 'Test LONGTEXT',
+123, 123.45, 678.90, 5432.10, '2023-10-01', '2023-10-01 10:00:00', CURRENT_TIMESTAMP,
+'10:00:00', 2023, 'Option1', 'A,B', TRUE);
+SELECT COERCIBILITY(DATE_SUB(id, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(id, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(char_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(char_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(varchar_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(varchar_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(text_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(text_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(blob_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(blob_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(tinytext_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(tinytext_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(mediumtext_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(mediumtext_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(longtext_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(longtext_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(int_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(int_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(float_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(float_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(double_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(double_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(decimal_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(decimal_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(date_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(date_col, INTERVAL 1 WEEK))
+5
+SELECT COERCIBILITY(DATE_SUB(datetime_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(datetime_col, INTERVAL 1 WEEK))
+5
+SELECT COERCIBILITY(DATE_SUB(time_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(time_col, INTERVAL 1 WEEK))
+5
+SELECT COERCIBILITY(DATE_SUB(year_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(year_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(enum_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(enum_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(set_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(set_col, INTERVAL 1 WEEK))
+4
+SELECT COERCIBILITY(DATE_SUB(boolean_col, INTERVAL 1 WEEK)) FROM test;
+COERCIBILITY(DATE_SUB(boolean_col, INTERVAL 1 WEEK))
+4
+drop table if exists non_bin_coll_2;
+create table non_bin_coll_2(c TEXT character set utf8mb4 collate utf8mb4_general_ci,
+c0 TEXT character set binary,
+c1 TEXT character set utf8mb4 collate utf8mb4_general_ci,
+c2 TEXT character set ascii collate ascii_general_ci,
+c3 TEXT character set gbk collate gbk_chinese_ci,
+c4 TEXT character set gb18030 collate gb18030_chinese_ci,
+c5 TEXT character set latin1 collate latin1_swedish_ci,
+c6 TEXT character set tis620 collate tis620_thai_ci);
+insert into non_bin_coll_2 values ('x','y','a','b','c','d','e','f');
+SELECT COLLATION(NULLIF('pok', c0)) FROM non_bin_coll_2;
+COLLATION(NULLIF('pok', c0))
+binary
+SELECT COLLATION(NULLIF('pok', c1)) FROM non_bin_coll_2;
+COLLATION(NULLIF('pok', c1))
+utf8mb4_general_ci
+SELECT COLLATION(NULLIF('pok', c2)) FROM non_bin_coll_2;
+COLLATION(NULLIF('pok', c2))
+ascii_general_ci
+SELECT COLLATION(NULLIF('pok', c3)) FROM non_bin_coll_2;
+COLLATION(NULLIF('pok', c3))
+gbk_chinese_ci
+SELECT COLLATION(NULLIF('pok', c4)) FROM non_bin_coll_2;
+COLLATION(NULLIF('pok', c4))
+gb18030_chinese_ci
+SELECT COLLATION(NULLIF('pok', c5)) FROM non_bin_coll_2;
+COLLATION(NULLIF('pok', c5))
+latin1_swedish_ci
+SELECT COLLATION(NULLIF('pok', c6)) FROM non_bin_coll_2;
+COLLATION(NULLIF('pok', c6))
+tis620_thai_ci

@@ -55,7 +55,6 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
   // so scale of literal datetime or date should be -1.
 
   //literal -> cast to string -> is date or datetime format?
-
   int ret = OB_SUCCESS;
   ObDateUnitType unit_type = static_cast<ObDateUnitType>(unit.get_param().get_int());
   ObExprResType res_date = date;
@@ -66,6 +65,8 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
     if (ObDateTimeType == date.get_type() || ObTimestampType == date.get_type()) {
       type.set_datetime();
       date.set_calc_type(ObDateTimeType);
+      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_collation_level(CS_LEVEL_NUMERIC);
     } else if (ObDateType == date.get_type()) {
       if (DATE_UNIT_YEAR == unit_type || DATE_UNIT_MONTH == unit_type
           || DATE_UNIT_DAY == unit_type || DATE_UNIT_YEAR_MONTH == unit_type
@@ -74,8 +75,12 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
       } else {
         type.set_datetime();
       }
+      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_collation_level(CS_LEVEL_NUMERIC);
     } else if (ObTimeType == date.get_type()) {
       type.set_time();
+      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_collation_level(CS_LEVEL_NUMERIC);
     } else {
       date.set_calc_type(ObVarcharType);
       type.set_varchar();
@@ -83,6 +88,8 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
       ret = aggregate_charsets_for_string_result(type, &date, 1, type_ctx);
       date.set_calc_collation_type(type.get_collation_type());
       date.set_calc_collation_level(type.get_collation_level());
+      type.set_collation_type(type_ctx.get_coll_type());
+      type.set_collation_level(CS_LEVEL_COERCIBLE);
     }
     interval.set_calc_type(ObVarcharType);
     if (OB_SUCC(ret)) {
