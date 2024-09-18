@@ -234,10 +234,9 @@ public:
     }
   }
   OB_INLINE common::ObIAllocator *get_allocator() { return allocator_; }
-  OB_INLINE int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+  OB_INLINE int init_evaluated_datums(bool &is_valid) override
   {
-    UNUSED(allocator);
-    need_convert = false;
+    is_valid = true;
     return OB_SUCCESS;
   }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(row_num), K_(interval_infos),

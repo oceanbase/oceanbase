@@ -81,7 +81,7 @@ public:
   virtual bool is_empty() const { return true; }
   OB_INLINE bool is_vec2() const { return is_vec2_; } // need to remove after statistical info pushdown support vec 2.0
   VIRTUAL_TO_STRING_KV(K_(is_inited),  K_(can_blockscan), K_(filter_applied),
-      K_(disabled), K_(is_aggregated_in_prefetch), K_(is_vec2));
+      K_(disabled), K_(is_aggregated_in_prefetch), K_(is_vec2), K_(filter_valid));
 protected:
   int filter_micro_block(
       const int64_t row_count,
@@ -98,7 +98,7 @@ private:
   bool filter_applied_;
   bool disabled_;
   bool is_aggregated_in_prefetch_;
-
+  bool filter_valid_;
 };
 
 }
