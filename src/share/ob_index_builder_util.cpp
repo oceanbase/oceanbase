@@ -818,7 +818,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
       ObArenaAllocator allocator(ObModIds::OB_SQL_EXPR);
       ObRawExprFactory expr_factory(allocator);
       SMART_VAR(sql::ObSQLSessionInfo, session) {
-        SMART_VAR(sql::ObExecContext, exec_ctx, allocator) {
+        SMART_VARS_2((sql::ObExecContext, exec_ctx, allocator), (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
           uint64_t tenant_id = data_schema.get_tenant_id();
           const ObTenantSchema *tenant_schema = NULL;
           ObSchemaGetterGuard guard;
@@ -827,6 +827,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
           LinkExecCtxGuard link_guard(session, exec_ctx);
           exec_ctx.set_my_session(&session);
           exec_ctx.set_is_ps_prepare_stage(false);
+          exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
           if (OB_FAIL(session.init(0 /*default session id*/,
                                   0 /*default proxy id*/,
                                   &allocator))) {
@@ -873,6 +874,9 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
               } else if (ob_is_json_tc(expr->get_result_type().get_type())) {
                 ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;
                 LOG_WARN("Cannot create a functional index on an expression that returns a JSON or GEOMETRY.",K(ret));
+              } else if (ob_is_collection_sql_type(expr->get_result_type().get_type())) {
+                ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+                LOG_WARN("Cannot create a functional index on an expression that returns a ARRAY.",K(ret));
               } else if (ob_is_text_tc(expr->get_result_type().get_type()) || ob_is_lob_tc(expr->get_result_type().get_type())) {
                 ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
                 LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
@@ -923,6 +927,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
             LOG_WARN("Functional index on a column is not supported.", K(ret), K(*expr));
           }
+          exec_ctx.set_physical_plan_ctx(NULL);
         }
       }
     }
