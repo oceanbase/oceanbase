@@ -70,9 +70,6 @@ static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t MAX_S3_CONNECTIONS_PER_CLIENT = 128;
 static constexpr int64_t STOP_S3_TIMEOUT_US = 10 * 1000L;   // 10ms
-// max allowed idle duration for a s3 client: 12h
-static constexpr int64_t MAX_S3_CLIENT_IDLE_DURATION = 12 * 3600 * 1000 * 1000L;
-static constexpr int64_t MAX_S3_CLIENT_MAP_THRESHOLD = 500;
 
 // TODO: check length
 static constexpr int MAX_S3_REGION_LENGTH = 128;
@@ -128,6 +125,9 @@ protected:
     return seekoff(std::streamoff(pos), std::ios_base::beg, which);
   }
 };
+
+int set_max_s3_client_idle_duration_us(const int64_t duration_us);
+int64_t get_max_s3_client_idle_duration_us();
 
 struct ObS3Account
 {

@@ -141,6 +141,26 @@ void ObS3Logger::LogStream(Logging::LogLevel logLevel, const char* tag, const Aw
 }
 
 /*--------------------------------ObS3Client--------------------------------*/
+// max allowed idle duration for a s3 client: 20min
+static int64_t MAX_S3_CLIENT_IDLE_DURATION_US = 20LL * 600LL * 1000LL * 1000LL;
+
+int set_max_s3_client_idle_duration_us(const int64_t duration_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(duration_us <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arg", K(ret), K(duration_us));
+  } else {
+    MAX_S3_CLIENT_IDLE_DURATION_US = duration_us;
+  }
+  return ret;
+}
+
+int64_t get_max_s3_client_idle_duration_us()
+{
+  return MAX_S3_CLIENT_IDLE_DURATION_US;
+}
+
 ObS3Client::ObS3Client()
     : lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       is_inited_(false),
@@ -255,8 +275,9 @@ bool ObS3Client::try_stop(const int64_t timeout)
   bool is_stopped = true;
   if (OB_SUCCESS == lock_.wrlock(timeout)) {
     if (is_inited_) {
-      const int64_t cur_time = ObTimeUtility::current_time();
-      if (ref_cnt_ <= 0 && cur_time - last_modified_ts_ >= MAX_S3_CLIENT_IDLE_DURATION) {
+      const int64_t cur_time_us = ObTimeUtility::current_time();
+      if (ref_cnt_ <= 0
+          && cur_time_us - last_modified_ts_ >= get_max_s3_client_idle_duration_us()) {
         stopped_ = true;
       } else {
         is_stopped = false;
@@ -547,6 +568,7 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
 {
   int ret = OB_SUCCESS;
   const int64_t key = account.hash();
+  client = nullptr;
   SpinWLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -554,29 +576,39 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
   } else if (OB_UNLIKELY(!account.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "S3 account not valid", K(ret));
-  } else if (OB_FAIL(s3_client_map_.get_refactored(key, client))) {
+  } else if (REACH_TIME_INTERVAL(get_max_s3_client_idle_duration_us())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(clean_s3_client_map_())) {
+      OB_LOG(WARN, "failed to clean s3 client map", K(tmp_ret), K(s3_client_map_.size()));
+    }
+  }
+
+  if (FAILEDx(s3_client_map_.get_refactored(key, client))) {
     if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
-      void *client_buf = NULL;
-      if (s3_client_map_.size() > MAX_S3_CLIENT_MAP_THRESHOLD && OB_FAIL(clean_s3_client_map_())) {
-        OB_LOG(WARN, "failed to clean s3 client map", K(ret), K(s3_client_map_.size()));
-      } else if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
+      void *client_buf = nullptr;
+      if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "failed to alloc buf for ob s3 client", K(ret));
       } else {
         client = new(client_buf) ObS3Client();
         if (OB_FAIL(client->init(account))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to init ObS3Client", K(ret), K(account));
         } else if (OB_FAIL(s3_client_map_.set_refactored(key, client))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to insert into s3 client map", K(ret), K(account));
         } else {
           OB_LOG(DEBUG, "succeed create new s3 client", K(account), K(s3_client_map_.size()));
+        }
+
+        if (OB_FAIL(ret)) {
+          if (OB_NOT_NULL(client)) {
+            client->~ObS3Client();
+            client = nullptr;
+          }
+          if (OB_NOT_NULL(client_buf)) {
+            ob_free(client_buf);
+            client_buf = nullptr;
+          }
         }
       }
     } else {
