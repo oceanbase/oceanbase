@@ -21,8 +21,6 @@
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/ob_common_rpc_proxy.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_des_exec_context.h"
 
 namespace oceanbase
 {
@@ -38,7 +36,6 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
     store_ctx_(nullptr),
     job_stat_(nullptr),
     session_info_(nullptr),
-    exec_ctx_(nullptr),
     allocator_("TLD_TableCtx"),
     ref_count_(0),
     is_assigned_resource_(false),
@@ -56,28 +53,16 @@ ObTableLoadTableCtx::~ObTableLoadTableCtx()
   destroy();
 }
 
-int ObTableLoadTableCtx::new_exec_ctx()
-{
-  int ret = OB_SUCCESS;
-  exec_ctx_ = OB_NEWx(sql::ObDesExecContext, &allocator_, allocator_, GCTX.session_mgr_);
-  if (exec_ctx_ == nullptr) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate des_exec_ctx", KR(ret));
-  }
-  return ret;
-}
-
 int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param,
-                                                            sql::ObSQLSessionInfo *session_info,
-                                                            sql::ObExecContext *ctx)
+                                                            sql::ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTableCtx init twice", KR(ret));
-  } else if (OB_UNLIKELY(!param.is_valid() || !ddl_param.is_valid() || nullptr == session_info || ctx == nullptr)) {
+  } else if (OB_UNLIKELY(!param.is_valid() || !ddl_param.is_valid() || nullptr == session_info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(param), K(ddl_param), KP(ctx));
+    LOG_WARN("invalid args", KR(ret), K(param), K(ddl_param));
   } else {
     param_ = param;
     ddl_param_ = ddl_param;
@@ -94,23 +79,10 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
       LOG_WARN("fail to create session info", KR(ret));
     } else if (OB_FAIL(ObTableLoadUtils::deep_copy(*session_info, *session_info_, allocator_))) {
       LOG_WARN("fail to deep copy", KR(ret));
-    } else if (OB_FAIL(new_exec_ctx())) {
-      LOG_WARN("fail to new exec ctx", KR(ret));
-    } else if (OB_FAIL(ObTableLoadUtils::deep_copy(*ctx, *exec_ctx_, allocator_))) {
-      LOG_WARN("fail to deep copy", KR(ret));
     } else {
       is_inited_ = true;
     }
   }
-  if (OB_SUCC(ret)) {
-    if (exec_ctx_ == nullptr || session_info_ == nullptr) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("cur exec ctx is null", KR(ret), KP(session_info_), KP(exec_ctx_));
-    } else {
-      ObSQLSessionInfo::ExecCtxSessionRegister(*session_info_, *exec_ctx_);
-    }
-  }
-
   return ret;
 }
 
@@ -280,11 +252,6 @@ void ObTableLoadTableCtx::destroy()
   if (nullptr != session_info_) {
     observer::ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
     session_info_ = nullptr;
-  }
-  if (nullptr != exec_ctx_) {
-    exec_ctx_->~ObDesExecContext();
-    allocator_.free(exec_ctx_);
-    exec_ctx_ = nullptr;
   }
   unregister_job_stat();
   is_inited_ = false;
