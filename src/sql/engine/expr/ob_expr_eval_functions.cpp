@@ -1534,6 +1534,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprArrayContains::eval_array_contains_array_vector,        /* 121 */
   ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,/* 122 */
   NULL, // ObExprTrim::eval_trim_vector                         /* 123 */
+  NULL, // ObExprEncodeSortkey::eval_encode_sortkey_vector      /* 124 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
