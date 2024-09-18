@@ -295,11 +295,6 @@ public:
       const blocksstable::ObSSTableMacroInfo &macro_info,
       ObBlockInfoSet &block_info_set);
   static int transform_empty_shell(const ObTabletPersisterParam &param, const ObTablet &old_tablet, ObTabletHandle &new_handle);
-  static int acquire_tablet(
-      const ObTabletPoolType &type,
-      const ObTabletMapKey &key,
-      const bool try_smaller_pool,
-      ObTabletHandle &new_handle);
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int delete_blocks_(
@@ -319,6 +314,11 @@ private:
   static int check_tablet_meta_ids(
       const ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr,
       const ObTablet &tablet);
+  static int acquire_tablet(
+      const ObTabletPoolType &type,
+      const ObTabletMapKey &key,
+      const bool try_smaller_pool,
+      ObTabletHandle &new_handle);
   static int convert_tablet_to_mem_arg(
       const ObTablet &tablet,
       ObTabletTransformArg &arg);

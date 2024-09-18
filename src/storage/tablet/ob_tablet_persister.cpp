@@ -331,6 +331,9 @@ int ObTabletPersister::persist_and_transform_tablet(
   if (OB_UNLIKELY(param.is_shared_object())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("shared tablet meta persistence should not call this method", K(ret), K(lbt()));
+  } else if (OB_UNLIKELY(new_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("new handle should not be valid", K(ret), K(new_handle));
   } else if (OB_FAIL(inner_persist_and_transform_shared_tablet(param, old_tablet, new_handle))) {
     LOG_WARN("persist and transform fail", K(ret), K(param));
   }
