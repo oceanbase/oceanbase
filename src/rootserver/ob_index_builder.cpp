@@ -872,23 +872,29 @@ int ObIndexBuilder::do_create_local_index(
       bool rowkey_vid_exist = false;
       if (OB_FAIL(ret)) {
       } else if (share::schema::is_vec_index(my_arg.index_type_)) {
-        const ObTableSchema *rowkey_vid_schema = nullptr;
-        if (OB_FAIL(tmp_arg.assign(my_arg))) {
-          LOG_WARN("fail to assign arg", K(ret));
-        } else if (!tmp_arg.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to copy create index arg", K(ret));
-        } else if (!create_index_arg.is_rebuild_index_ &&
-                   FALSE_IT(tmp_arg.index_type_ = INDEX_TYPE_VEC_ROWKEY_VID_LOCAL)) {
-        } else if (OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(&allocator, tmp_arg.index_type_, tmp_arg.index_name_, tmp_arg.index_name_))) {
-          LOG_WARN("failed to adjust vec index name", K(ret));
-        } else if (OB_FAIL(ddl_service_.check_aux_index_schema_exist_(tenant_id,
-                                                                      tmp_arg,
-                                                                      schema_guard,
-                                                                      &new_table_schema,
-                                                                      rowkey_vid_exist,
-                                                                      rowkey_vid_schema))) {
-          LOG_WARN("fail to check rowkey vid schema existence", K(ret));
+        if (OB_FAIL(ObVectorIndexUtil::check_table_exist(new_table_schema, my_arg.index_name_))) {  // index_name should be domain index name， like 'idx1'
+          if (OB_ERR_TABLE_EXIST != ret) {
+            LOG_WARN("Failed to check vec table exist", K(ret), K(my_arg.index_name_));
+          }
+        } else {
+          const ObTableSchema *rowkey_vid_schema = nullptr;
+          if (OB_FAIL(tmp_arg.assign(my_arg))) {
+            LOG_WARN("fail to assign arg", K(ret));
+          } else if (!tmp_arg.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to copy create index arg", K(ret));
+          } else if (!create_index_arg.is_rebuild_index_ &&
+                    FALSE_IT(tmp_arg.index_type_ = INDEX_TYPE_VEC_ROWKEY_VID_LOCAL)) {
+          } else if (OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(&allocator, tmp_arg.index_type_, tmp_arg.index_name_, tmp_arg.index_name_))) {
+            LOG_WARN("failed to adjust vec index name", K(ret));
+          } else if (OB_FAIL(ddl_service_.check_aux_index_schema_exist_(tenant_id,
+                                                                        tmp_arg,
+                                                                        schema_guard,
+                                                                        &new_table_schema,
+                                                                        rowkey_vid_exist,
+                                                                        rowkey_vid_schema))) {
+            LOG_WARN("fail to check rowkey vid schema existence", K(ret));
+          }
         }
       }
       if (OB_FAIL(ret)) {

@@ -831,5 +831,40 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
   return ret;
 }
 
+int ObVectorIndexUtil::check_table_exist(
+    const ObTableSchema &data_table_schema,
+    const ObString &domain_index_name)
+{
+  int ret = OB_SUCCESS;
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+  bool is_exist = false;
+  const int64_t tenant_id = data_table_schema.get_tenant_id();
+  const int64_t database_id = data_table_schema.get_database_id();
+  const int64_t data_table_id = data_table_schema.get_table_id();
+  ObString index_table_name;
+  ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+
+  if (OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == database_id || OB_INVALID_ID == data_table_id ||
+      domain_index_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(database_id), K(data_table_id), K(domain_index_name));
+  } else if (OB_FAIL(ObTableSchema::build_index_table_name(
+               allocator, data_table_id, domain_index_name, index_table_name))) {
+    LOG_WARN("build_index_table_name failed", K(ret), K(data_table_id), K(domain_index_name));
+  } else if (OB_FAIL(schema_service.check_table_exist(tenant_id,
+                                                      database_id,
+                                                      index_table_name,
+                                                      true, /* is_index_table */
+                                                      OB_INVALID_VERSION, /* latest version */
+                                                      is_exist))) {
+    LOG_WARN("failed to check is table exist", K(ret));
+  } else if (is_exist) {
+    ret = OB_ERR_TABLE_EXIST;
+    LOG_WARN("table is exist, cannot create it twice", K(ret),
+      K(tenant_id),  K(database_id), K(domain_index_name));
+  }
+  return ret;
+}
+
 }
 }

@@ -103,6 +103,9 @@ public:
   static bool has_multi_index_on_same_column(
       ObIArray<uint64_t> &vec_index_cols,
       const uint64_t col_id);
+  static int check_table_exist(
+      const ObTableSchema &data_table_schema,
+      const ObString &domain_index_name);
 };
 
 // For vector index snapshot write data
