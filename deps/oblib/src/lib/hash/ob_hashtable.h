@@ -905,6 +905,24 @@ public:
     return bucket_iterator(this, bucket_num_, NULL);
   }
 
+  int get_bucket_iterator(const int64_t bucket_pos, bucket_iterator &iterator)
+  {
+    int ret = OB_SUCCESS;
+    hashbucket *bucket = NULL;
+    if (OB_UNLIKELY(!inited(buckets_)) || OB_UNLIKELY(NULL == allocer_)) {
+      ret = OB_NOT_INIT;
+      HASH_WRITE_LOG(HASH_WARNING, "hashtable not init, backtrace=%s", lbt());
+    } else if (OB_UNLIKELY((bucket_pos < 0) || (bucket_pos >= bucket_num_))) {
+      ret = OB_INVALID_ARGUMENT;
+      HASH_WRITE_LOG(HASH_WARNING, "invalid bucket pos, bucket_pos = %ld, bucket_num = %ld",
+                     bucket_pos, bucket_num_);
+    } else {
+      bucket = &buckets_[bucket_pos];
+      iterator = bucket_iterator(this, bucket_pos, bucket);
+    }
+    return ret;
+  }
+
   iterator begin()
   {
     hashnode *node = NULL;
