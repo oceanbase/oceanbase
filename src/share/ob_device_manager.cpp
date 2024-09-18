@@ -59,6 +59,17 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else {
+      // When compliantRfc3986Encoding is set to true:
+      // - Adhere to RFC 3986 by supporting the encoding of reserved characters
+      //   such as '-', '_', '.', '$', '@', etc.
+      // - This approach mitigates inconsistencies in server behavior when accessing
+      //   COS using the S3 SDK.
+      // Otherwise, the reserved characters will not be encoded,
+      // following the default behavior of the S3 SDK.
+      const bool compliantRfc3986Encoding =
+          (0 == ObString(GCONF.ob_storage_s3_url_encode_type).case_compare("compliantRfc3986Encoding"));
+      Aws::Http::SetCompliantRfc3986Encoding(compliantRfc3986Encoding);
     }
   }
 

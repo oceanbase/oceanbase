@@ -2172,3 +2172,10 @@ DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "[0,100)",
         "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "default",
+                     common::ObConfigS3URLEncodeTypeChecker,
+                     "Determines the URL encoding method for S3 requests."
+                     "\"default\": Uses the S3 standard URL encoding method."
+                     "\"compliantRfc3986Encoding\": Uses URL encoding that adheres to the RFC 3986 standard.",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

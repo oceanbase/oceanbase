@@ -922,6 +922,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigRegexpEngineChecker);
 };
 
+class ObConfigS3URLEncodeTypeChecker : public ObConfigChecker
+{
+public:
+  ObConfigS3URLEncodeTypeChecker() {}
+  virtual ~ObConfigS3URLEncodeTypeChecker() {}
+  virtual bool check(const ObConfigItem &t) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigS3URLEncodeTypeChecker);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 
