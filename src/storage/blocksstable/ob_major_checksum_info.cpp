@@ -59,6 +59,7 @@ int ObMajorChecksumInfo::assign(
   ObArenaAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+  reset();
   info_ = other.info_;
   compaction_scn_ = other.compaction_scn_;
   if (other.is_empty()) {
@@ -73,6 +74,10 @@ int ObMajorChecksumInfo::assign(
       LOG_WARN("failed to assgin column checksums", KR(ret), K(other));
     }
   }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObMajorChecksumInfo is invalid after assign", KR(ret), KPC(this), K(other));
+  }
   return ret;
 }
 
@@ -83,6 +88,7 @@ int ObMajorChecksumInfo::deep_copy(
       ObMajorChecksumInfo &dest) const
 {
   int ret = OB_SUCCESS;
+  dest.reset();
   dest.info_ = info_;
   dest.compaction_scn_ = compaction_scn_;
   if (!is_empty()) {
@@ -91,6 +97,10 @@ int ObMajorChecksumInfo::deep_copy(
     if (OB_FAIL(column_ckm_struct_.deep_copy(buf, buf_len, pos, dest.column_ckm_struct_))) {
       LOG_WARN("failed to deep copy column checksum", KR(ret), K_(column_ckm_struct));
     }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!dest.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObMajorChecksumInfo is invalid after deep copy", KR(ret), KPC(this), K(dest));
   }
   return ret;
 }
@@ -285,6 +295,10 @@ int ObCOMajorChecksumInfo::init_from_merge_result(
                K(res.data_column_checksums_[j]));
     }
   } // for
+  if (OB_SUCC(ret) && OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("after init from merge result, major checksum info is not valid", KR(ret), KPC(this), K(res));
+  }
   return ret;
 }
 
