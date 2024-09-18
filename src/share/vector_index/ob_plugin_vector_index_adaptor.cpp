@@ -1514,6 +1514,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
       snap_distances = nullptr;
     }
   }
+  LOG_TRACE("now all_vsag_used is: ", K(ATOMIC_LOAD(all_vsag_use_mem_)));
   return ret;
 }
 
@@ -1974,8 +1975,8 @@ int ObPluginVectorIndexAdaptor::check_vsag_mem_used()
       LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id_));
     } else if (ATOMIC_LOAD(all_vsag_use_mem_) > mem_size) {
       ret = OB_ERR_VSAG_MEM_LIMIT_EXCEEDED;
-      LOG_USER_ERROR(OB_ERR_VSAG_MEM_LIMIT_EXCEEDED, (int)mem_size >> 20);
-      LOG_WARN("Memory usage exceeds user limit.", K(ret));
+      LOG_USER_ERROR(OB_ERR_VSAG_MEM_LIMIT_EXCEEDED, int(mem_size>>20));
+      LOG_WARN("Memory usage exceeds user limit.", K(ret), K(mem_size), K(ATOMIC_LOAD(all_vsag_use_mem_)));
     }
   }
 
@@ -2027,7 +2028,7 @@ void *ObVsagMemContext::Allocate(size_t size)
 
     void *ptr = mem_context_->get_malloc_allocator().alloc(actual_size);
     if (OB_NOT_NULL(ptr)) {
-      ATOMIC_AAF(all_vsag_use_mem_, size);
+      ATOMIC_AAF(all_vsag_use_mem_, actual_size);
 
       *(int64_t*)ptr = actual_size;
       ret_ptr = (char*)ptr + MEM_PTR_HEAD_SIZE;
