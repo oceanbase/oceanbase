@@ -92,7 +92,7 @@ public:
     executions_(0),
     elapsed_time_(UINT64_MAX),
     cpu_time_( UINT64_MAX),
-    need_sync_(false) {}
+    avg_cpu_time_(-1) {}
 
   virtual ~ObPlanBaselineItem() { destroy(); }
   
@@ -164,15 +164,17 @@ public:
   inline void set_elapsed_time(int64_t v) { elapsed_time_ = v; }
   inline int64_t get_cpu_time() const { return cpu_time_; }
   inline void set_cpu_time(int64_t v) { cpu_time_ = v; }
-  inline bool get_need_sync() const { return need_sync_; }
-  inline void set_need_sync(bool v) { need_sync_ = v; }
+  inline int64_t get_avg_cpu_time() const { return avg_cpu_time_; }
+  inline void set_avg_cpu_time(int64_t v) { avg_cpu_time_ = v; }
+  int calc_avg_cpu_time();
   
   int check_basic_constraint_match(bool& is_match);
   int merge_baseline_item(ObPlanBaselineItem& other);
   
   TO_STRING_KV(K_(origin), K_(db_version), K_(last_executed),
                K_(last_verified), K_(plan_hash_value), K_(plan_type), K_(outline_data),
-               K_(flags), K_(optimizer_cost), K_(executions), K_(elapsed_time), K_(cpu_time));
+               K_(flags), K_(optimizer_cost), K_(executions), K_(elapsed_time), K_(cpu_time),
+               K_(avg_cpu_time));
 
 public:
   common::ObString origin_sql_text_;  // origin sql text for baseline
@@ -190,8 +192,7 @@ public:
   int64_t  elapsed_time_;         // The total elapsed time consumed during the evolution process
   int64_t  cpu_time_;         // The total CPU time consumed during the evolution process
   // common::ObString hints_info_;
-  // for lib cache management
-  bool need_sync_;
+  int64_t avg_cpu_time_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanBaselineItem);
 };
@@ -204,7 +205,8 @@ public:
     : ObILibCacheNode(lib_cache, mem_context),
       is_inited_(false),
       baseline_key_(),
-      enabled_fixed_baseline_count_(0)
+      fixed_baseline_count_(0),
+      ref_lock_(common::ObLatchIds::SPM_SET_LOCK)
   {
   }
   virtual ~ObSpmSet()
@@ -229,7 +231,8 @@ private:
   ObBaselineKey baseline_key_; //used for manager key memory
   common::ObSEArray<ObPlanBaselineItem*, 4> baseline_array_;
   common::ObSEArray<ObPlanBaselineItem*, 4> fixed_baseline_array_;
-  int64_t enabled_fixed_baseline_count_;
+  int64_t fixed_baseline_count_;
+  common::SpinRWLock ref_lock_;
 };
 
 struct BaselineCmp
@@ -237,8 +240,14 @@ struct BaselineCmp
   inline bool operator()(const ObPlanBaselineItem *left, const ObPlanBaselineItem *right)
   {
     bool bret = false;
-    if (left != nullptr && right != nullptr) {
-      bret = left->get_elapsed_time() < right->get_elapsed_time();
+    if (left == nullptr || right == nullptr) {
+      bret = left != nullptr;
+    } else if (!left->get_accepted() || !right->get_accepted()) {
+      bret = left->get_accepted();
+    } else if (left->get_avg_cpu_time() < 0 || right->get_avg_cpu_time() < 0) {
+      bret = left->get_avg_cpu_time() >= 0;
+    } else {
+      bret = left->get_avg_cpu_time() < right->get_avg_cpu_time();
     }
     return bret;
   }
@@ -280,7 +289,6 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     STAT_ADD_EVOLUTION_PLAN,      // add evolution plan to plan cache evolution layer
     STAT_ADD_BASELINE_PLAN,       // add baseline plan to plan cache evolution layer
     STAT_ACCEPT_EVOLUTION_PLAN,   // accept evolution plan as baseline and move it from evolution layer to plan layer 
-    STAT_ACCEPT_BASELINE_PLAN,    // move baseline plan from evolution layer to plan layer 
     STAT_FIRST_EXECUTE_PLAN,
     STAT_FALLBACK_EXECUTE_PLAN,
     STAT_MAX
@@ -302,7 +310,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   void set_add_force_mode() { handle_cache_mode_ = MODE_ADD_FORCE; }
   bool force_get_evolution_plan()
   {
-    return (STAT_ACCEPT_EVOLUTION_PLAN == spm_stat_) || (STAT_ACCEPT_BASELINE_PLAN == spm_stat_);
+    return STAT_ACCEPT_EVOLUTION_PLAN == spm_stat_;
   }
   bool is_spm_in_process()
   {
@@ -329,10 +337,10 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       uint64_t cache_node_empty_:               1;
       uint64_t spm_force_disable_:              1;
       uint64_t has_fixed_plan_to_check_:        1;
-      uint64_t cur_baseline_not_enable_:        1;
       uint64_t need_spm_timeout_:               1;
       uint64_t evolution_task_in_two_plan_set_: 1;
       uint64_t baseline_exists_:                1;
+      uint64_t has_better_baseline_:            1;
       uint64_t reserved_:                      55;
     };
   };
@@ -345,7 +353,8 @@ public:
   : key_(),
     accept_new_plan_(false),
     new_plan_hash_(0),
-    new_stat_()
+    new_stat_(),
+    new_plan_is_baseline_(false)
   {}
   ~EvolutionTaskResult() {}
 int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
@@ -358,6 +367,7 @@ public:
   // new plan statistics
   uint64_t new_plan_hash_;
   ObEvolutionStat new_stat_;
+  bool new_plan_is_baseline_;
 };
 
 struct EvoResultUpdateTask
