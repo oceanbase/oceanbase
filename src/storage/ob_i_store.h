@@ -496,6 +496,7 @@ struct ObStoreCtx
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
   storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
   bool is_read_store_ctx_;
+  int64_t check_seq_;
 };
 
 

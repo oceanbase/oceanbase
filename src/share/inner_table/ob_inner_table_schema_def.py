@@ -13322,7 +13322,8 @@ def_table_schema(
     ('enable_sync', 'bool'),
     ('enable_vote', 'bool'),
     ('arb_srv_info', 'varchar:1024'),
-    ('parent', 'varchar:1024')
+    ('parent', 'varchar:1024'),
+    ('readonly_tx', 'varchar:1024'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],

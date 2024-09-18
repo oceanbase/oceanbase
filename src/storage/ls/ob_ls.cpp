@@ -78,6 +78,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #endif
+#include "storage/tx_storage/ob_tx_leak_checker.h"
 
 namespace oceanbase
 {
@@ -720,6 +721,7 @@ bool ObLS::safe_to_destroy()
                  K(ret), KP(this), KPC(this));
         ref_mgr_.print();
         PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_LS_HANDLE);
+        READ_CHECKER_PRINT(ls_meta_.ls_id_);
       }
     } else {
       LOG_INFO("this ls is safe to destroy", KP(this), KPC(this));
@@ -2506,6 +2508,8 @@ int ObLS::diagnose(DiagnoseInfo &info) const
     // election, palf, log handler角色不统一时可能出现无主
     STORAGE_LOG(WARN, "diagnose rc service failed", K(ret), K(ls_id));
   }
+  DiagnoseFunctor fn(MTL_ID(), ls_id, info.read_only_tx_info_, 0, sizeof(info.read_only_tx_info_));
+  READ_CHECKER_FOR_EACH(fn);
   STORAGE_LOG(INFO, "diagnose finish", K(ret), K(info), K(ls_id));
   return ret;
 }

@@ -146,6 +146,7 @@ struct DiagnoseInfo
 #ifdef OB_BUILD_ARBITRATION
   logservice::LogArbSrvDiagnoseInfo arb_srv_diagnose_info_;
 #endif
+  char read_only_tx_info_[1024];
   TO_STRING_KV(K(ls_id_),
                K(log_handler_diagnose_info_),
                K(palf_diagnose_info_),
@@ -158,7 +159,7 @@ struct DiagnoseInfo
 #ifdef OB_BUILD_ARBITRATION
                ,K(arb_srv_diagnose_info_)
 #endif
-               );
+               ,K(read_only_tx_info_));
   void reset() {
     ls_id_ = -1;
     log_handler_diagnose_info_.reset();
@@ -172,6 +173,7 @@ struct DiagnoseInfo
 #ifdef OB_BUILD_ARBITRATION
     arb_srv_diagnose_info_.reset();
 #endif
+    read_only_tx_info_[0] = '\0';
   }
 };
 

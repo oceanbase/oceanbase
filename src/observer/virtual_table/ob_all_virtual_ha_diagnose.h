@@ -56,6 +56,7 @@ enum IOStatColumn
   ENABLE_VOTE,
   ARB_SRV_INFO,
   PARENT,
+  READ_TX,
 };
 
 class ObAllVirtualHADiagnose : public common::ObVirtualTableScannerIterator
