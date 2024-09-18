@@ -28,6 +28,7 @@
 #include "storage/column_store/ob_column_store_replica_util.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif
@@ -166,6 +167,10 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
         // do nothing, end loop
       } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
         if (freeze_info.frozen_scn_.get_val_for_tx() <= scheduler_frozen_version) {
+#ifdef ERRSIM
+          SERVER_EVENT_SYNC_ADD("merge_errsim", "schema_recycled", "tablet_id", tablet_id,
+              "merge_version", scheduler_frozen_version, "ret", ret);
+#endif
           FLOG_INFO("table schema may recycled, use newer freeze info instead", K(ret), KPC(last_major), K(freeze_info),
             K(scheduler_frozen_version));
           schedule_snapshot = freeze_info.frozen_scn_.get_val_for_tx();
@@ -1310,21 +1315,21 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
           ret = tmp_ret;
           LOG_WARN("unexpected error in tablet replica checksum", KR(ret), K(curr_item), KPC(prev_item));
         }
-#ifdef ERRSIM
-        if (is_medium_checker && OB_SUCC(ret)) {
-          ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
-          if (OB_FAIL(ret)) {
-            STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_REPLICA_CHECKSUM_ERROR", K(ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
-            error_tablet_ls.tablet_info_ = ObTabletLSPair(curr_item.tablet_id_, curr_item.ls_id_);
-            error_tablet_ls.compaction_scn_ = curr_item.compaction_scn_.get_val_for_tx();
-            if (OB_TMP_FAIL(error_pairs.push_back(error_tablet_ls))) {
-              LOG_WARN("fail to push back error pair", K(tmp_ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
-            }
-            check_ret = OB_CHECKSUM_ERROR;
-          }
-        }
-#endif
       }
+#ifdef ERRSIM
+      if (is_medium_checker && OB_SUCC(ret)) {
+        ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_REPLICA_CHECKSUM_ERROR", K(ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
+          error_tablet_ls.tablet_info_ = ObTabletLSPair(curr_item.tablet_id_, curr_item.ls_id_);
+          error_tablet_ls.compaction_scn_ = curr_item.compaction_scn_.get_val_for_tx();
+          if (OB_TMP_FAIL(error_pairs.push_back(error_tablet_ls))) {
+            LOG_WARN("fail to push back error pair", K(tmp_ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
+          }
+          check_ret = OB_CHECKSUM_ERROR;
+        }
+      }
+#endif
       prev_item = &curr_item;
     }
   }

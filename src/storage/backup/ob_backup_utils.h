@@ -367,11 +367,9 @@ private:
       const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int add_macro_block_id_item_list_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
       const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count);
-  int add_sstable_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl,
-      const storage::ObITable::TableKey &table_key);
   int get_backup_data_type_(const storage::ObITable::TableKey &table_key, share::ObBackupDataType &backup_data_type);
   bool is_same_type_(const storage::ObITable::TableKey &lhs, const storage::ObITable::TableKey &rhs);
-  int add_tablet_item_(const common::ObTabletID &tablet_id);
+  int add_tablet_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl, const storage::ObITable::TableKey &table_key);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
   int get_tablet_status_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObTabletStatus &status);
   int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);

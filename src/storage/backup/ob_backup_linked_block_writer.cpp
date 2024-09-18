@@ -239,8 +239,7 @@ int ObBackupLinkedBlockItemWriter::get_entry_block_addr_(
     LOG_WARN("file offset is not aligned", K(ret), K(file_offset));
   } else {
     ObBackupDataType backup_data_type;
-    // TODO(yanfeng): change to major when quick restore code merge
-    backup_data_type.set_minor_data_backup();
+    backup_data_type.set_user_data_backup();
     block_addr.ls_id_ = param.ls_id_.id();
     block_addr.type_ = backup_data_type.type_;
     block_addr.turn_id_ = param.turn_id_;

@@ -607,7 +607,8 @@ void ObMediumCompactionInfo::gene_info(
     char* buf, const int64_t buf_len, int64_t &pos) const
 {
   J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info));
+       "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
+       K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info));
 }
 
 int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) const
@@ -617,7 +618,7 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
   } else {
     J_OBJ_START();
     J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
+      "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
       K_(medium_snapshot), K_(last_medium_snapshot), K_(tenant_id), K_(cluster_id),
       K_(medium_compat_version), K_(data_version), K_(is_schema_changed), K_(storage_schema),
       "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(co_major_merge_type_)),

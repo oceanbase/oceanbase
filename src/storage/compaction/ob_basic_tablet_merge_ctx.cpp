@@ -684,7 +684,9 @@ int ObBasicTabletMergeCtx::generate_macro_id_list(char *buf, const int64_t buf_l
       MacroBlockId macro_id;
       for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_id(macro_id)); ++i) {
         LOG_INFO("print macro id", K(macro_id));
-        const int64_t block_seq = is_local_exec_mode(get_exec_mode()) ? macro_id.fourth_id() : macro_id.third_id();
+        const int64_t block_seq = is_local_exec_mode(get_exec_mode())
+                                ? (GCTX.is_shared_storage_mode() ? macro_id.fourth_id() : macro_id.second_id())
+                                : macro_id.third_id();
         if (0 == i) {
           pret = snprintf(buf + strlen(buf), remain_len, "%ld", block_seq);
         } else {

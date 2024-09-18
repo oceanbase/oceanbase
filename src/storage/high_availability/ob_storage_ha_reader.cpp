@@ -727,6 +727,8 @@ int ObCopyDDLMacroBlockRestoreReader::prepare_link_item_()
   const backup::ObBackupMetaType meta_type = backup::ObBackupMetaType::BACKUP_SSTABLE_META;
   backup::ObBackupMetaIndex meta_index;
   ObArray<MacroBlockId> macro_block_id_array;
+  share::ObBackupDataType user_data_type;
+  user_data_type.set_user_data_backup();
 
   if (OB_FAIL(ObStorageHAUtils::extract_macro_id_from_datum(copy_macro_range_info_->start_macro_block_end_key_, macro_block_id_array))) {
     LOG_WARN("failed to extract macro id from datum", KPC(copy_macro_range_info_), K(table_key_));
@@ -744,8 +746,8 @@ int ObCopyDDLMacroBlockRestoreReader::prepare_link_item_()
   } else if (OB_FALSE_IT(mod.storage_id_ = static_cast<uint64_t>(dest_id))) {
   } else if (OB_FAIL(backup_set_dest.set(backup_set_brief_info.backup_set_path_))) {
     LOG_WARN("fail to set backup set dest", K(ret));
-  } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest, meta_index.ls_id_,
-      data_type, meta_index.turn_id_, meta_index.retry_id_, meta_index.file_id_, backup_path))) {
+  } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest, meta_index.ls_id_,
+      user_data_type, meta_index.turn_id_, meta_index.retry_id_, meta_index.file_id_, backup_path))) {
     LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(meta_index), KPC(restore_base_info_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_ddl_sstable_other_block_id_list_in_ss_mode_with_batch(
       backup_set_dest, backup_path.get_obstr(), restore_base_info_->backup_dest_.get_storage_info(),
@@ -2707,6 +2709,9 @@ int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info(
         LOG_WARN("failed to get sstable range info from backup", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      sstable_index_++;
+    }
   }
 
   return ret;
@@ -2732,7 +2737,6 @@ int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info_from_local_(
     LOG_WARN("sstable macro range count is not equal to array count", K(ret), K(header), K(sstable_macro_range_info));
   } else {
     sstable_macro_range_info.copy_table_key_ = header.copy_table_key_;
-    sstable_index_++;
   }
 
   return ret;
@@ -2782,8 +2786,6 @@ int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info_from_backup_(Ob
   const ObITable::TableKey &table_key = rpc_arg_.copy_table_key_array_.at(sstable_index_);
   if (OB_FAIL(get_next_sstable_range_info_(table_key, sstable_macro_range_info))) {
     LOG_WARN("failed to get next sstable range info", K(ret), K(table_key));
-  } else {
-    sstable_index_++;
   }
   return ret;
 }
@@ -2979,6 +2981,8 @@ int ObCopySSTableMacroRestoreReader::get_next_shared_ddl_sstable_range_info_(
   int64_t dest_id = 0;
   share::ObBackupPath backup_path;
   ObArray<backup::ObBackupLinkedItem> link_item;
+  share::ObBackupDataType user_data_type;
+  user_data_type.set_user_data_backup();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2997,8 +3001,8 @@ int ObCopySSTableMacroRestoreReader::get_next_shared_ddl_sstable_range_info_(
   } else if (OB_FALSE_IT(mod.storage_id_ = static_cast<uint64_t>(dest_id))) {
   } else if (OB_FAIL(backup_set_dest.set(backup_set_brief_info.backup_set_path_))) {
     LOG_WARN("fail to set backup set dest", K(ret));
-  } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest, meta_index.ls_id_,
-      backup_data_type, meta_index.turn_id_, meta_index.retry_id_, meta_index.file_id_, backup_path))) {
+  } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest, meta_index.ls_id_,
+      user_data_type, meta_index.turn_id_, meta_index.retry_id_, meta_index.file_id_, backup_path))) {
     LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(meta_index), KPC(restore_base_info_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_ddl_sstable_other_block_id_list_in_ss_mode(
       backup_set_dest, backup_path.get_obstr(), restore_base_info_->backup_dest_.get_storage_info(), mod, meta_index, table_key, link_item))) {
