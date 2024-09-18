@@ -233,11 +233,6 @@ public:
     return use_realistic_runtime_bloom_filter_size() && jf_material_control_info_.is_controller_;
   }
 
-  inline bool is_under_material_control() const
-  {
-    return use_realistic_runtime_bloom_filter_size() && !jf_material_control_info_.is_controller_;
-  }
-
   inline int16_t under_control_join_filter_count() const
   {
     return jf_material_control_info_.join_filter_count_;

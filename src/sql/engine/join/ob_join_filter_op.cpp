@@ -538,8 +538,30 @@ ObJoinFilterSpec::ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOpera
 int ObJoinFilterSpec::register_to_datahub(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  if (!is_shared_join_filter()) {
-    // not shared join filter, no need to register datahub to sync rows
+  bool need_register_to_datahub = false;
+  if (!is_material_controller()) {
+    // only the material controller needs to register datahub to sync rows
+  } else {
+    const ObOpSpec *cur_spec = this;
+    int64_t join_filter_count = under_control_join_filter_count();
+    // if at least one join filter is shared join filter, we need to send datahub msg to synchronize
+    // row count
+    for (int64_t i = 0; i < join_filter_count && OB_NOT_NULL(cur_spec) && OB_SUCC(ret); ++i) {
+      if (cur_spec->get_type() != PHY_JOIN_FILTER) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("must be join filter bellow");
+      } else {
+        const ObJoinFilterSpec &spec = static_cast<const ObJoinFilterSpec &>(*cur_spec);
+        if (spec.is_shared_join_filter()) {
+          need_register_to_datahub = true;
+          break;
+        }
+        cur_spec = cur_spec->get_child();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!need_register_to_datahub) {
   } else if (OB_ISNULL(ctx.get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ret));
