@@ -464,14 +464,14 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
   bool is_all_same_type = true;
   ObObjType last_type = ObNullType;
   int64_t elem_idx = 0;
-  ObDecimalIntWideType dec_type = DECIMAL_INT_32;
   for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
     if (!types_stack[i].is_null()) {
       elem_idx = i;
     }
-    if (types_stack[i].get_type() == ObDecimalIntType) {
+    if (types_stack[i].get_type() == ObDecimalIntType
+        || types_stack[i].get_type() == ObNumberType
+        || types_stack[i].get_type() == ObUNumberType) {
       is_decimal_exist = true;
-      dec_type = MAX(dec_type, get_decimalint_type(types_stack[i].get_precision()));
     }
     if (!ob_is_numeric_tc(types_stack[i].get_type_class()) && !types_stack[i].is_null()) {
       is_all_num_tc = false;
