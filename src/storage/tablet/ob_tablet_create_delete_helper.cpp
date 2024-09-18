@@ -427,9 +427,6 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out(
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (!is_committed && !transfer_scn.is_min()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("if not committed, transfer_scn should not has value", KR(ret), K(is_committed), K(transfer_scn), K(tablet));
   } else if (transfer_scn.is_min()) {
     // noop, before on_redo()
   } else if (read_snapshot >= transfer_scn) {

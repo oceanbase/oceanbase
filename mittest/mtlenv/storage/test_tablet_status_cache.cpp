@@ -241,7 +241,6 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
       ObMDSGetTabletMode::READ_READABLE_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
   //ASSERT_EQ(OB_SCHEMA_EAGAIN, ret);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret); // not committed but user_data.transfer_scn_ has valid_value
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
   // mode is READ_ALL_COMMITED, allow to get TRANSFER_OUT status tablet
