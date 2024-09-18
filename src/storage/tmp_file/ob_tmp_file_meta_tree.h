@@ -24,6 +24,7 @@ namespace tmp_file
 
 class ObTmpPageValueHandle;
 class ObSNTmpFileInfo;
+class ObTmpFileBlockManager;
 
 struct ObSharedNothingTmpFileMetaItem
 {
@@ -307,7 +308,7 @@ public:
   ~ObSharedNothingTmpFileMetaTree();
   void reset();
 public:
-  int init(const int64_t fd, ObTmpWriteBufferPool *wbp, ObIAllocator *callback_allocator);
+  int init(const int64_t fd, ObTmpWriteBufferPool *wbp, ObIAllocator *callback_allocator, ObTmpFileBlockManager *block_manager);
 
   //append write: We always write the rightmost page of the leaf layer
   //It happens after a tmp file write request:
@@ -524,6 +525,7 @@ private:
   int64_t fd_;
   ObTmpWriteBufferPool *wbp_;
   ObIAllocator *callback_allocator_;
+  ObTmpFileBlockManager *block_manager_;
   int64_t tree_epoch_;
   ObSharedNothingTmpFileMetaItem root_item_;
   //When the tmp file writes less data, we can use an array instead of a tree to store metadata

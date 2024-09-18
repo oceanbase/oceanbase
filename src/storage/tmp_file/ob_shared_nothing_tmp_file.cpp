@@ -313,7 +313,7 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
   } else if (OB_FAIL(page_idx_cache_.init(fd, &pc_ctrl->get_write_buffer_pool(),
                                           wbp_index_cache_allocator, wbp_index_cache_bkt_allocator))) {
     LOG_WARN("fail to init page idx array", KR(ret), K(fd));
-  } else if (OB_FAIL(meta_tree_.init(fd, &pc_ctrl->get_write_buffer_pool(), callback_allocator))) {
+  } else if (OB_FAIL(meta_tree_.init(fd, &pc_ctrl->get_write_buffer_pool(), callback_allocator, block_manager))) {
     LOG_WARN("fail to init meta tree", KR(ret), K(fd));
   } else {
     is_inited_ = true;
