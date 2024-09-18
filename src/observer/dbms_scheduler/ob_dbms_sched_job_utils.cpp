@@ -62,6 +62,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   interval_ts_ = other.interval_ts_;
   is_oracle_tenant_ = other.is_oracle_tenant_;
   max_run_duration_ = other.max_run_duration_;
+  max_failures_ = other.max_failures_;
 
   OZ (ob_write_string(allocator, other.lowner_, lowner_));
   OZ (ob_write_string(allocator, other.powner_, powner_));

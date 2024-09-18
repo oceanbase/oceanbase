@@ -124,17 +124,15 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
   OZ (dml.add_pk_column("job", job_info.job_));
   OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_column("state", job_info.state_));
-  if (0 == job_info.state_.case_compare("COMPLETED")) {
+  if (job_info.is_completed() || job_info.is_broken()) { // broken job should set disabled refer to oracle
     OZ (dml.add_column("enabled", false));
-  } else if (0 == job_info.state_.case_compare("BROKEN")) {
-    OZ (dml.add_time_column("next_date", 64060560000000000));
   }
   OZ (dml.add_column(true, "this_date"));
   OZ (dml.add_time_column("last_date", job_info.this_date_));
   OZ (dml.add_column("failures", job_info.failures_));
-  OZ (dml.add_column("flag", job_info.flag_));
   OZ (dml.add_column("total", job_info.total_));
-  OZ (dml.get_extra_condition().assign_fmt("state!='BROKEN' AND (last_date is null OR last_date<=usec_to_time(%ld))", job_info.last_date_));
+  // job reach end_date before first scheduled shoule updated too
+  OZ (dml.get_extra_condition().assign_fmt("(state is NULL OR state!='BROKEN') AND (last_date is null OR last_date<=usec_to_time(%ld))", job_info.last_date_));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   return ret;
 }
@@ -215,6 +213,7 @@ int ObDBMSSchedTableOperator::_check_need_record(ObDBMSSchedJobInfo &job_info, b
 int ObDBMSSchedTableOperator::update_for_missed(ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -224,7 +223,9 @@ int ObDBMSSchedTableOperator::update_for_missed(ObDBMSSchedJobInfo &job_info)
   CK (OB_NOT_NULL(sql_proxy_));
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
   CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
-  OZ (_check_need_record(job_info, need_record));
+  if (OB_SUCC(ret) && OB_TMP_FAIL(_check_need_record(job_info, need_record))) { // need_record is true when check failed
+    LOG_WARN("failed to check need record", K(tmp_ret), K(job_info));
+  }
 
   if (OB_SUCC(ret) && need_record) {
     OZ (_build_job_log_dml(now, job_info, 0, "check job missed", sql));
@@ -244,6 +245,7 @@ int ObDBMSSchedTableOperator::update_for_missed(ObDBMSSchedJobInfo &job_info)
 int ObDBMSSchedTableOperator::update_for_rollback(ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObSqlString sql1;
   ObSqlString sql2;
@@ -254,7 +256,9 @@ int ObDBMSSchedTableOperator::update_for_rollback(ObDBMSSchedJobInfo &job_info)
   CK (OB_NOT_NULL(sql_proxy_));
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
   CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
-  OZ (_check_need_record(job_info, need_record));
+  if (OB_SUCC(ret) && OB_TMP_FAIL(_check_need_record(job_info, need_record))) { // need_record is true when check failed
+    LOG_WARN("failed to check need record", K(tmp_ret), K(job_info));
+  }
 
   OZ (_build_job_rollback_start_dml(job_info, sql1));
   if (OB_SUCC(ret) && need_record) {
@@ -294,6 +298,7 @@ int ObDBMSSchedTableOperator::update_for_timeout(ObDBMSSchedJobInfo &job_info)
 int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObSqlString sql1;
   ObSqlString sql2;
@@ -304,25 +309,18 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   CK (OB_NOT_NULL(sql_proxy_));
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
   CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
-  OZ (_check_need_record(job_info, need_record, false));
+  if (OB_SUCC(ret) && OB_TMP_FAIL(_check_need_record(job_info, need_record))) { // need_record is true when check failed
+    LOG_WARN("failed to check need record", K(tmp_ret), K(job_info));
+  }
 
   if (OB_FAIL(ret)) {
   } else if ((now >= job_info.end_date_ || job_info.get_interval_ts() == 0) && (true == job_info.auto_drop_)) {
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
     OX (job_info.failures_ = (err == 0) ? 0 : (job_info.failures_ + 1));
-    if (OB_FAIL(ret)) {
-    } else if (ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())
-        || ObScheduledTriggerPartitionBalance::is_trigger_job(job_info.get_job_name())) {
-      job_info.flag_ = (job_info.flag_ & 0xfffffffffffffffE); // never be broken
-    } else if (job_info.failures_ > 15) {
-      job_info.flag_ = (job_info.flag_ | 0x1);
-    } else {
-      job_info.flag_ = (job_info.flag_ & 0xfffffffffffffffE);
-    }
     OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
-    if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
-      // when if failures > 16 then set broken state.
+    if (OB_SUCC(ret) && job_info.max_failures_ > 0 && job_info.failures_ >= job_info.max_failures_) {
+      // when if failures > max_failures then set broken state, and disable job
       job_info.state_ = ObString("BROKEN");
     } else if (now >= job_info.end_date_ || job_info.get_interval_ts() == 0) {
       // when end_date is reach and auto_drop is set false, disable set completed state.
@@ -481,6 +479,7 @@ do {                                                                  \
   //last_run_duration not used
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "interval_ts", job_info_local.interval_ts_, uint64_t);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "max_run_duration", job_info_local.max_run_duration_, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "max_failures", job_info_local.max_failures_, uint64_t);
   //comments not used
   //credential_name not used
   //destination_name not used

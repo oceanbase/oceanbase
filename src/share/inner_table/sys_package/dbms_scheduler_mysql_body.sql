@@ -1,9 +1,5 @@
 CREATE OR REPLACE PACKAGE BODY dbms_scheduler
 
-  PROCEDURE create_job    ( job_name            VARCHAR(65535),
-                            enabled             BOOLEAN DEFAULT FALSE);
-  PRAGMA INTERFACE(C, DBMS_SCHEDULER_MYSQL_CREATE_JOB);
-
   PROCEDURE enable ( job_name  VARCHAR(65535));
   PRAGMA INTERFACE(C, DBMS_SCHEDULER_MYSQL_ENABLE);
 
