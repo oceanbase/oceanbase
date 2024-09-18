@@ -7440,7 +7440,7 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         !(table_scan->get_is_index_global() && table_scan->get_index_back() && table_scan->has_index_lookup_filter()) &&
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr())) &&
-         (table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL || table_scan->get_vector_index_info().topk_limit_expr_ == NULL)) {
+         table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL) {
       bool das_multi_partition = false;
       if (table_scan->use_das() && NULL != table_scan->get_table_partition_info()) {
         int64_t partition_count = table_scan->get_table_partition_info()->
