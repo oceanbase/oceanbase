@@ -385,6 +385,8 @@ int ObSSTmpFileIOHandle::do_shared_storage_read_wait()
 }
 #endif
 
+// TODO: wanyue.wy
+// keep all interfaces of handle run under the ctx of corresponding tenant
 int ObSSTmpFileIOHandle::wait()
 {
   int ret = OB_SUCCESS;

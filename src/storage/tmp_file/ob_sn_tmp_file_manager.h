@@ -62,16 +62,16 @@ public:
   void refresh_meta_memory_limit();
 
 public:
-  int aio_read(const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
-  int aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
-  int read(const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
-  int pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
+  int aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
+  int aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
+  int read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
+  int pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
   // NOTE:
   //   only support append write.
-  int aio_write(const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
+  int aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
   // NOTE:
   //   only support append write.
-  int write(const ObTmpFileIOInfo &io_info);
+  int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
   int truncate(const int64_t fd, const int64_t offset);
 
 public:

@@ -411,6 +411,8 @@ int ObSSTenantTmpFileManager::stop()
   return ret;
 }
 
+// TODO: wanyue.wy
+// print all tmp file in files_. these files will cause resource leaked.
 void ObSSTenantTmpFileManager::destroy()
 {
   int ret = OB_SUCCESS;
@@ -739,6 +741,8 @@ int ObSSTenantTmpFileManager::exec_wait_task_once()
   return ret;
 }
 
+// TODO: wanyue.wy
+// if memory is not enough, enqueue operation might be failed, leading to resource leak
 int ObSSTenantTmpFileManager::remove_task_enqueue(const MacroBlockId &tmp_file_id, const int64_t length)
 {
   int ret = OB_SUCCESS;
@@ -751,7 +755,7 @@ int ObSSTenantTmpFileManager::remove_task_enqueue(const MacroBlockId &tmp_file_i
     LOG_WARN("fail to allocate ObTmpFileAsyncRemoveTask", K(ret));
   } else if (FALSE_IT(remove_task = new (buf) ObTmpFileAsyncRemoveTask(tmp_file_id, length))) {
   } else if (OB_FAIL(remove_task_queue_.push(remove_task))) {
-    LOG_WARN("fail to push async remove task", K(ret), K(tmp_file_id), K(length));
+    LOG_ERROR("fail to push async remove task", K(ret), K(tmp_file_id), K(length));
   }
 
   if (OB_FAIL(ret) && remove_task != nullptr) {

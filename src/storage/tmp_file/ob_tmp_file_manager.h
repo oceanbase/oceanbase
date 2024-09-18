@@ -42,16 +42,18 @@ public:
   int remove(const int64_t fd);
 
 public:
-  int aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle);
-  int read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle);
+  int aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
+  int aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                const int64_t offset, ObTmpFileIOHandle &io_handle);
+  int read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
+  int pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+            const int64_t offset, ObTmpFileIOHandle &io_handle);
   // NOTE:
   //   only support append write.
-  int aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
+  int aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
   // NOTE:
   //   only support append write.
-  int write(const ObTmpFileIOInfo &io_info);
+  int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
   int truncate(const int64_t fd, const int64_t offset);
   int get_tmp_file_size(const int64_t fd, int64_t &file_size);
 public:

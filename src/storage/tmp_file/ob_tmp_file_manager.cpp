@@ -177,7 +177,8 @@ int ObTenantTmpFileManager::remove(const int64_t fd)
 }
 
 
-int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                     ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -190,14 +191,15 @@ int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIO
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.aio_read(io_info, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.aio_read(tenant_id, io_info, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                      const int64_t offset, ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -210,14 +212,15 @@ int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info, const int6
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.aio_pread(io_info, offset, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.aio_pread(tenant_id, io_info, offset, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info), K(offset));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                 ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -230,14 +233,15 @@ int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHand
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.read(io_info, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.read(tenant_id, io_info, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                  const int64_t offset, ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -250,14 +254,15 @@ int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t 
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.pread(io_info, offset, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.pread(tenant_id, io_info, offset, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info), K(offset));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                      ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -270,14 +275,14 @@ int ObTenantTmpFileManager::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileI
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.aio_write(io_info, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.aio_write(tenant_id, io_info, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to write file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::write(const ObTmpFileIOInfo &io_info)
+int ObTenantTmpFileManager::write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -290,7 +295,7 @@ int ObTenantTmpFileManager::write(const ObTmpFileIOInfo &io_info)
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.write(io_info))) {
+    if (OB_FAIL(sn_file_manager_.write(tenant_id, io_info))) {
       LOG_WARN("fail to write file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
@@ -477,7 +482,7 @@ int ObTenantTmpFileManagerWithMTLSwitch::aio_read(const uint64_t tenant_id, cons
     } else if (OB_ISNULL(tmp_file_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(tmp_file_mgr->aio_read(io_info, io_handle))) {
+    } else if (OB_FAIL(tmp_file_mgr->aio_read(tenant_id, io_info, io_handle))) {
       LOG_WARN("fail to aio read", KR(ret), K(tenant_id), K(io_info));
     }
   }
@@ -503,7 +508,7 @@ int ObTenantTmpFileManagerWithMTLSwitch::aio_pread(const uint64_t tenant_id, con
     } else if (OB_ISNULL(tmp_file_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(tmp_file_mgr->aio_pread(io_info, offset, io_handle))) {
+    } else if (OB_FAIL(tmp_file_mgr->aio_pread(tenant_id, io_info, offset, io_handle))) {
       LOG_WARN("fail to aio pread", KR(ret), K(tenant_id), K(io_info), K(offset));
     }
   }
@@ -528,7 +533,7 @@ int ObTenantTmpFileManagerWithMTLSwitch::read(const uint64_t tenant_id, const Ob
     } else if (OB_ISNULL(tmp_file_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(tmp_file_mgr->read(io_info, io_handle))) {
+    } else if (OB_FAIL(tmp_file_mgr->read(tenant_id, io_info, io_handle))) {
       LOG_WARN("fail to read", KR(ret), K(tenant_id), K(io_info));
     }
   }
@@ -553,7 +558,7 @@ int ObTenantTmpFileManagerWithMTLSwitch::pread(const uint64_t tenant_id, const O
     } else if (OB_ISNULL(tmp_file_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(tmp_file_mgr->pread(io_info, offset, io_handle))) {
+    } else if (OB_FAIL(tmp_file_mgr->pread(tenant_id, io_info, offset, io_handle))) {
       LOG_WARN("fail to pread", KR(ret), K(tenant_id), K(io_info), K(offset));
     }
   }
@@ -578,7 +583,7 @@ int ObTenantTmpFileManagerWithMTLSwitch::aio_write(const uint64_t tenant_id, con
     } else if (OB_ISNULL(tmp_file_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(tmp_file_mgr->aio_write(io_info, io_handle))) {
+    } else if (OB_FAIL(tmp_file_mgr->aio_write(tenant_id, io_info, io_handle))) {
       LOG_WARN("fail to aio write", KR(ret), K(tenant_id), K(io_info));
     }
   }
@@ -603,7 +608,7 @@ int ObTenantTmpFileManagerWithMTLSwitch::write(const uint64_t tenant_id, const O
     } else if (OB_ISNULL(tmp_file_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(tmp_file_mgr->write(io_info))) {
+    } else if (OB_FAIL(tmp_file_mgr->write(tenant_id, io_info))) {
       LOG_WARN("fail to write", KR(ret), K(tenant_id), K(io_info));
     }
   }
