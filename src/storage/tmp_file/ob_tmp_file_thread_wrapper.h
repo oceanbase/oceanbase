@@ -65,6 +65,7 @@ private:
   int handle_generated_flush_tasks_(ObSpLinkQueue &flushing_list, int64_t &task_num);
   int wash_(const int64_t expect_flush_size, const RUNNING_MODE mode);
   int check_flush_task_io_finished_();
+  int retry_fast_flush_meta_task_();
   int retry_task_();
   int special_flush_meta_tree_page_();
   void flush_fast_();

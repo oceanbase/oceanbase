@@ -2583,6 +2583,7 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(inner_flush_ctx_.data_flush_infos_.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
+    ret = OB_ITER_END; // override error code, we will handle this err code in flush mgr
   }
   while (OB_SUCC(ret) && cur_page_id != copy_end_page_id && write_offset < OB_STORAGE_OBJECT_MGR.get_macro_object_size()) {
     if (need_flush_tail && cur_page_id == end_page_id_ && file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0) {
@@ -2707,6 +2708,7 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(flush_infos_.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
+    ret = OB_ITER_END; // override error code, we will handle this err code in flush mgr
   } else if (OB_FAIL(meta_tree_.flush_meta_pages_for_block(block_index, flush_type, buf, write_offset,
                                                            meta_flush_context, info.flush_meta_page_array_))) {
     LOG_WARN("fail to flush meta pages for block", KR(ret), K(fd_), K(flush_task), K(meta_flush_context), KPC(this));

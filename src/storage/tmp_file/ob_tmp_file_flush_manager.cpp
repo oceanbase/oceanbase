@@ -291,7 +291,7 @@ int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
           flush_ctx_.record_flush_task(flush_task->get_data_length()); // maintain statistics
         }
         if (flush_task->get_is_fast_flush_tree()) {
-          if (OB_FAIL(ret)) {
+          if (OB_FAIL(ret) && flush_task->get_data_length() > 0) {
             STORAGE_LOG(ERROR, "fail to execute fast_flush_tree_page flush task to TFFT_WAIT", KR(ret), KPC(flush_task));
           }
           break;  // generate only one fast_flush_tree_page_ task to avoid excessive flushing of the meta
@@ -665,7 +665,13 @@ void ObTmpFileFlushManager::try_remove_unused_flush_info_(ObTmpFileFlushTask &fl
       STORAGE_LOG(INFO, "the file is deleting, abort this flush info",
           KR(ret), K(flush_info), K(flush_task));
       flush_info.reset();
-      flush_infos.remove(i);
+      // manually move and reset flush_info to avoid file handle not released
+      int64_t last_idx = flush_infos.count() - 1;
+      for (int64_t j = i; j < last_idx; ++j) {
+        flush_infos.at(j) = flush_infos.at(j + 1);
+      }
+      flush_infos.at(last_idx).reset();
+      flush_infos.remove(last_idx);
       --i;
     }
   }

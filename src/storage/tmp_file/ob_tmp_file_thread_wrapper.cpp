@@ -228,6 +228,7 @@ int ObTmpFileFlushTG::do_work_()
 
   if (is_fast_flush_meta_) {
     check_flush_task_io_finished_();
+    retry_fast_flush_meta_task_();
   } else {
     if (RUNNING_MODE::FAST == mode_) {
       flush_fast_();
@@ -381,6 +382,38 @@ int ObTmpFileFlushTG::wash_(const int64_t expect_flush_size, const RUNNING_MODE 
   return ret;
 }
 
+int ObTmpFileFlushTG::retry_fast_flush_meta_task_()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t cnt = retry_list_size_; cnt > 0 && !retry_list_.is_empty(); --cnt) {
+    ObTmpFileFlushTask *flush_task = nullptr;
+    pop_retry_list_(flush_task);
+    if (OB_ISNULL(flush_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "flush task is nullptr", KR(ret));
+    } else if (!flush_task->get_is_fast_flush_tree()) {
+      push_retry_list_(flush_task);
+    } else {
+      // only retry is_fast_flush_tree tasks
+      STORAGE_LOG(DEBUG, "retry is_fast_flush_tree flush task", KPC(flush_task));
+      if (OB_FAIL(flush_mgr_.retry(*flush_task))) {
+        STORAGE_LOG(WARN, "fail to retry flush task", KR(ret), KPC(flush_task));
+      }
+
+      FlushState state = flush_task->get_state();
+      if (FlushState::TFFT_WAIT == state) {
+        push_wait_list_(flush_task);
+      } else if (FlushState::TFFT_FILL_BLOCK_BUF < state) {
+        push_retry_list_(flush_task);
+      } else if (FlushState::TFFT_FILL_BLOCK_BUF >= state) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected flush task status in retry phase", KR(ret), KPC(flush_task));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTmpFileFlushTG::retry_task_()
 {
   int ret = OB_SUCCESS;
@@ -416,6 +449,9 @@ int ObTmpFileFlushTG::retry_task_()
           }
           break;
         }
+      } else if (FlushState::TFFT_FILL_BLOCK_BUF >= state) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected flush task status in retry phase", KR(ret), KPC(flush_task));
       }
     }
   }
