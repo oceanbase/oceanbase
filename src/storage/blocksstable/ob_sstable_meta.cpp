@@ -1216,11 +1216,6 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
 
   LST_DO_CODE(OB_UNIS_DECODE, is_meta_root_);
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, basic_meta_.filled_tx_scn_))) {
-    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(basic_meta_));
-  }
-
   return ret;
 }
 
