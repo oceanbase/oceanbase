@@ -91,7 +91,7 @@ void TestOpEngine::destory()
   ObKVGlobalCache::get_instance().destroy();
   ObClusterVersion::get_instance().destroy();
 
-  // THE_IO_DEVICE->destroy();
+  // LOCAL_DEVICE_INSTANCE.destroy();
 }
 
 common::ObIODevice *TestOpEngine::get_device_inner()
@@ -149,7 +149,7 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   storage_env_.data_disk_percentage_ = 0;
   storage_env_.log_disk_size_ = 20 * 1024 * 1024 * 1024ll;
   share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice *>(get_device_inner());
-  THE_IO_DEVICE = local_device;
+  ObIODeviceWrapper::get_instance().set_local_device(local_device);
   iod_opt_array[0].set("data_dir", storage_env_.data_dir_);
   iod_opt_array[1].set("sstable_dir", storage_env_.sstable_dir_);
   iod_opt_array[2].set("block_size", storage_env_.default_block_size_);
@@ -171,21 +171,16 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   } else if (0 != system(cmd)) {
     ret = OB_ERR_SYS;
     LOG_WARN("failed to exec cmd", K(ret), K(cmd), K(errno), KERRMSG);
-//<<<<<<< HEAD
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(slog_dir))) {
     LOG_WARN("failed to create slog dir", K(ret), K(slog_dir));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir))) {
     LOG_WARN("failed to create file dir", K(ret), K(file_dir));
-//=======
-  } else if (OB_ISNULL(THE_IO_DEVICE)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("io device is null", K(ret));
-//>>>>>>> origin/palf_tiered_storage
-  } else if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.init(iod_opts))) {
     LOG_WARN("fail to init io device", K(ret), K_(storage_env));
   } else if (OB_FAIL(ObIOManager::get_instance().init())) {
     LOG_WARN("fail to init io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE, async_io_thread_count,
+  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(&LOCAL_DEVICE_INSTANCE,
+                                                                    async_io_thread_count,
                                                                     sync_io_thread_count, max_io_depth))) {
     LOG_WARN("add device channel failed", K(ret));
   } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(false/*is_shared_storage*/))) {

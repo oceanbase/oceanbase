@@ -518,8 +518,6 @@ protected:
   int64_t ref_cnt_;
 };
 
-extern ObIODevice *THE_IO_DEVICE;
-
 }
 }
 

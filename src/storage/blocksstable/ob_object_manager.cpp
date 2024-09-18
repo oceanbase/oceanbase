@@ -14,6 +14,7 @@
 
 #include "ob_object_manager.h"
 #include "ob_block_manager.h"
+#include "share/ob_io_device_helper.h"
 #include "storage/meta_store/ob_tenant_seq_generator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
@@ -240,7 +241,7 @@ int ObObjectManager::init(const bool is_shared_storage, const int64_t macro_obje
   if (OB_FAIL(super_block_buf_holder_.init(ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE))) {
     LOG_WARN("fail to init super block buffer holder, ", K(ret));
   } else if (!is_shared_storage) {
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, macro_object_size))) {
+    if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(&LOCAL_DEVICE_INSTANCE, macro_object_size))) {
       LOG_WARN("fail to init block manager", K(ret), K(macro_object_size));
     }
   } else {
@@ -501,7 +502,7 @@ int ObObjectManager::update_super_block(const common::ObLogCursor &replay_start_
       tmp_super_block.construct_header();
       if (OB_FAIL(OB_SERVER_BLOCK_MGR.write_super_block(tmp_super_block, super_block_buf_holder_))) {
         LOG_WARN("fail to write server super block", K(ret));
-      } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) {
+      } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
         LOG_WARN("failed to fsync_block", K(ret));
       } else {
         super_block_ = tmp_super_block;

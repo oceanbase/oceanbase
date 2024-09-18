@@ -1,13 +1,13 @@
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan
- * PubL v2. You may obtain a copy of Mulan PubL v2 at:
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
  *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
- * Mulan PubL v2 for more details.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
  */
 
 #define USING_LOG_PREFIX STORAGE_BLKMGR
@@ -123,10 +123,7 @@ void ObMacroBlockRewriteSeqGenerator::reset() { rewrite_seq_ = 0; }
 int ObMacroBlockRewriteSeqGenerator::generate_next_sequence(uint64_t &blk_seq) {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
-  if (OB_ISNULL(THE_IO_DEVICE)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("io device is null", K(ret));
-  } else if (OB_UNLIKELY(MacroBlockId::MAX_WRITE_SEQ == rewrite_seq_)) {
+  if (OB_UNLIKELY(MacroBlockId::MAX_WRITE_SEQ == rewrite_seq_)) {
     ret = OB_ERROR_OUT_OF_RANGE;
     LOG_ERROR("rewrite sequence number overflow!", K(ret),
               LITERAL_K(MacroBlockId::MAX_WRITE_SEQ), K(rewrite_seq_));

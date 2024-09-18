@@ -22,6 +22,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/file/file_directory_utils.h"
 #include "share/io/ob_io_manager.h"
+#include "share/ob_io_device_helper.h"
 #include "observer/ob_server.h"
 #include "common/storage/ob_fd_simulator.h"
 
@@ -3446,7 +3447,7 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     retry_task->io_info_.flag_.set_time_detect();
     retry_task->io_info_.fd_.first_id_ = first_id;
     retry_task->io_info_.fd_.second_id_ = second_id;
-    retry_task->io_info_.fd_.device_handle_ = THE_IO_DEVICE;
+    retry_task->io_info_.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
     retry_task->io_info_.offset_ = 0;
     retry_task->io_info_.callback_ = nullptr;
     retry_task->timeout_ms_ = io_config_.data_storage_warning_tolerance_time_; // default 5s

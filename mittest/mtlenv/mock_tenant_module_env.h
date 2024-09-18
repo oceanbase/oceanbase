@@ -566,7 +566,6 @@ int MockTenantModuleEnv::prepare_io()
 #endif
     common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
     share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice*>(get_device_inner(storage_type_prefix));
-    THE_IO_DEVICE = local_device;
     // for unifying init/add_device_channel/destroy local_device and local_cache_device code below
     ObIODeviceWrapper::get_instance().set_local_device(local_device);
 #ifdef OB_BUILD_SHARED_STORAGE
