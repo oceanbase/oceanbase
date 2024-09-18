@@ -255,7 +255,7 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
                   K(hash_ret), K(sessid), K(req));
       }
 
-      get_next_cond_(wait_object.thid_).unlock();
+      get_next_cond_(thid).unlock();
       ATOMIC_DEC(&waiting_thread_count_);
     } else {
       //do nothing
