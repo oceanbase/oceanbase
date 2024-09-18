@@ -733,17 +733,6 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
 
 #define ADD_COMMENT(...) \
   ADD_COMPACTION_INFO_PARAM(running_info.comment_, sizeof(running_info.comment_), __VA_ARGS__)
-  if (get_is_full_merge()) {
-    ADD_COMMENT("is_full_merge", true);
-  }
-  if (ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE != static_param_.merge_reason_) {
-    ADD_COMMENT("merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(static_param_.merge_reason_));
-  }
-  if (is_major_merge_type(get_merge_type())
-      && ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE != static_param_.co_major_merge_type_) {
-    ADD_COMMENT("major", static_param_.major_sstable_status_);
-    ADD_COMMENT("co", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_param_.co_major_merge_type_));
-  }
   // calc flush macro speed
   uint32_t exe_ts = time_guard.get_specified_cost_time(ObStorageCompactionTimeGuard::EXECUTE);
   if (exe_ts > 0 && block_info.new_micro_info_.get_data_micro_size() > 0) {
@@ -751,7 +740,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
     int64_t io_percentage = block_info.block_io_us_ * 100 / (float)exe_ts;
     ADD_COMMENT("block_io_us", block_info.block_io_us_);
     if (io_percentage > 0) {
-      ADD_COMMENT("io_percent", io_percentage);
+      running_info.io_percentage_ = io_percentage;
     }
   }
   int64_t mem_peak_mb = mem_ctx_.get_total_mem_peak() >> 20;
@@ -1317,6 +1306,9 @@ int ObBasicTabletMergeCtx::init_sstable_merge_history()
   static_history_.is_full_merge_ = static_param_.is_full_merge_;
   static_history_.merge_level_ = static_param_.merge_level_;
   static_history_.exec_mode_ = get_exec_mode();
+  static_history_.merge_reason_ = static_param_.merge_reason_;
+  static_history_.base_major_status_ = static_param_.major_sstable_status_;
+  static_history_.co_major_merge_type_ = static_param_.co_major_merge_type_;
   if (!static_history_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("static info is invalid", KR(ret), K_(static_history));

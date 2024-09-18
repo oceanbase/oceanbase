@@ -230,6 +230,10 @@ int ObCOTabletMergeCtx::prepare_schema()
     LOG_INFO("[CS-Replica] finish prepare schema for co merge", K(ret),
              "is_cs_replica", static_param_.is_cs_replica_, KPC(this));
   }
+
+  if (FAILEDx(prepare_row_store_cg_schema())) {
+    LOG_WARN("failed to init major sstable status", K(ret));
+  }
   return ret;
 }
 
@@ -239,8 +243,6 @@ int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
   // finish_flag in this function is useless, just for virtual function definition.
   if (OB_FAIL(ObBasicTabletMergeCtx::build_ctx(finish_flag))) {
     LOG_WARN("failed to build basic ctx", KR(ret), "param", get_dag_param(), KPC(this));
-  } else if (OB_FAIL(init_major_sstable_status())) {
-    LOG_WARN("failed to init major sstable status", K(ret));
   } else if (is_major_merge_type(get_merge_type())) {
     // meta major merge not support row col switch now
     if (is_build_row_store_from_rowkey_cg() && OB_FAIL(mock_row_store_table_read_info())) {
@@ -755,7 +757,7 @@ int ObCOTabletMergeCtx::get_cg_schema_for_merge(const int64_t idx, const ObStora
   return ret;
 }
 
-int ObCOTabletMergeCtx::init_major_sstable_status()
+int ObCOTabletMergeCtx::prepare_row_store_cg_schema()
 {
   int ret = OB_SUCCESS;
   ObSSTable *sstable = static_cast<ObSSTable *>(get_tables_handle().get_table(0));

@@ -467,7 +467,7 @@ public:
   int get_migration_sstable_size(int64_t &data_size);
 
   // column store replica
-  int check_cs_replica_compat_schema(bool &is_cs_replica_compat);
+  int check_cs_replica_compat_schema(bool &is_cs_replica_compat) const;
   int pre_process_cs_replica(ObTabletDirectLoadInsertParam &direct_load_param);
 
   // other

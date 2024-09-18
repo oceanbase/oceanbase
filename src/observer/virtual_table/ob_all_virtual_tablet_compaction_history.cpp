@@ -245,6 +245,36 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       }
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
+    case IS_FULL_MERGE:
+      cells[i].set_bool(static_info.is_full_merge_);
+      break;
+    case IO_COST_TIME_PERCENTAGE:
+      cells[i].set_int(running_info.io_percentage_);
+      break;
+    case MERGE_REASON:
+      if (ObAdaptiveMergePolicy::is_valid_merge_reason(static_info.merge_reason_)) {
+        cells[i].set_varchar(ObAdaptiveMergePolicy::merge_reason_to_str(static_info.merge_reason_));
+      } else {
+        cells[i].set_varchar("");
+      }
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
+    case BASE_MAJOR_STATUS:
+      if (is_valid_co_major_sstable_status(static_info.base_major_status_)) {
+        cells[i].set_varchar(co_major_sstable_status_to_str(static_info.base_major_status_));
+      } else {
+        cells[i].set_varchar("");
+      }
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
+    case CO_MERGE_TYPE:
+      if (ObCOMajorMergePolicy::is_valid_major_merge_type(static_info.co_major_merge_type_)) {
+        cells[i].set_varchar(ObCOMajorMergePolicy::co_major_merge_type_to_str(static_info.co_major_merge_type_));
+      } else {
+        cells[i].set_varchar("");
+      }
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));

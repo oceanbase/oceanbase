@@ -4272,6 +4272,7 @@ def_table_schema(
     ('data_checksum', 'int'),
     ('column_checksums', 'longtext', 'true'),
     ('b_column_checksums', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
+    ('data_checksum_type', 'int', 'false', 0)
   ],
 )
 
@@ -10058,7 +10059,12 @@ def_table_schema(
       ('end_cg_id', 'int'),
       ('kept_snapshot', 'varchar:OB_COMPACTION_INFO_LENGTH'),
       ('merge_level', 'varchar:OB_MERGE_LEVEL_STR_LENGTH'),
-      ('exec_mode', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
+      ('exec_mode', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('is_full_merge', 'bool'),
+      ('io_cost_time_percentage', 'int'),
+      ('merge_reason', 'varchar:OB_MERGE_REASON_STR_LENGTH'),
+      ('base_major_status', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('co_merge_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -24962,7 +24968,14 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      (CASE IS_FULL_MERGE
+           WHEN false THEN "FALSE"
+           ELSE "TRUE" END) AS IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -25007,7 +25020,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -62877,7 +62895,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      CASE WHEN IS_FULL_MERGE = 0 THEN 'FALSE' ELSE 'TRUE' END AS IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -62924,7 +62947,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()

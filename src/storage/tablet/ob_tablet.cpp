@@ -5740,7 +5740,7 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq)
   return ret;
 }
 
-int ObTablet::check_cs_replica_compat_schema(bool &is_cs_replica_compat)
+int ObTablet::check_cs_replica_compat_schema(bool &is_cs_replica_compat) const
 {
   int ret = OB_SUCCESS;
   is_cs_replica_compat = false;
@@ -6150,6 +6150,7 @@ int ObTablet::get_tablet_report_info_by_sstable(
   ObArray<int64_t> column_checksums;
   column_checksums.set_attr(ObMemAttr(MTL_ID(), "tmpCkmArr"));
   ObSSTable *table = nullptr;
+  bool is_cs_replica_compat = false;
   if (OB_UNLIKELY(nullptr == main_major || report_major_snapshot != main_major->get_snapshot_version())) {
     if (GCTX.is_shared_storage_mode()) {
       ret = OB_EAGAIN;
@@ -6193,6 +6194,8 @@ int ObTablet::get_tablet_report_info_by_sstable(
       LOG_WARN("fail to init a tablet replica", KR(ret), "tablet_id", get_tablet_id(), K(tablet_replica));
   } else if (!need_checksums) {
     // do nothing
+  } else if (OB_FAIL(check_cs_replica_compat_schema(is_cs_replica_compat))) {
+    LOG_WARN("fail to check cs replica compat", K(ret), K(is_cs_replica_compat));
   } else if (OB_FAIL(get_sstable_column_checksum(*main_major, column_checksums))) {
     LOG_WARN("fail to get sstable column checksum", K(ret), KPC(main_major));
   } else if (OB_FAIL(tablet_checksum.set_tenant_id(MTL_ID()))) {
@@ -6207,6 +6210,7 @@ int ObTablet::get_tablet_report_info_by_sstable(
     tablet_checksum.server_ = addr;
     tablet_checksum.row_count_ = get_tablet_meta().report_status_.row_count_;
     tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_;
+    tablet_checksum.data_checksum_type_ = is_cs_replica_compat ? ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE : ObDataChecksumType::DATA_CHECKSUM_NORMAL;
     LOG_INFO("success to get tablet report info", KR(ret), "tablet_id", get_tablet_id(), "report_status",
       tablet_meta_.report_status_, K(tablet_checksum));
   }
@@ -7905,7 +7909,7 @@ int ObTablet::get_sstable_column_checksum(
     ObArenaAllocator allocator;
     if (OB_FAIL(load_storage_schema(allocator, storage_schema))) {
       LOG_WARN("fail to load storage schema", K(ret));
-    } else if (OB_FAIL(static_cast<const ObCOSSTableV2 *>(&sstable)->fill_column_ckm_array(*storage_schema, column_checksums))) {
+    } else if (OB_FAIL(static_cast<const ObCOSSTableV2 *>(&sstable)->fill_column_ckm_array(*storage_schema, column_checksums, storage_schema->is_cs_replica_compat()))) {
       LOG_WARN("fail to fill_column_ckm_array", K(ret), K(sstable));
     }
     ObTabletObjLoadHelper::free(allocator, storage_schema);
