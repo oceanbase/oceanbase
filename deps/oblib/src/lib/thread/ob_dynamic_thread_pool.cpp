@@ -13,6 +13,7 @@
 #include "ob_dynamic_thread_pool.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/thread_mgr.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 
 extern "C" {
 int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
@@ -452,6 +453,7 @@ void ObSimpleDynamicThreadPool::try_expand_thread_count()
     }
     inc_cnt = min(inc_cnt, max_thread_cnt_ - cur_thread_count);
     if (inc_cnt > 0) {
+      DISABLE_SQL_MEMLEAK_GUARD;
       COMMON_LOG(INFO, "expand thread count", KP(this), K_(max_thread_cnt), K(cur_thread_count), K(inc_cnt), K(queue_size));
       if (is_server_tenant(tenant_id_)) {
         // temporarily reset ob_get_tenant_id() and run_wrapper

@@ -342,6 +342,7 @@ int ObDeviceManager::alloc_device_and_init_(
         lib::Threads::get_expect_run_wrapper() = NULL;
         DEFER(lib::Threads::get_expect_run_wrapper() = run_wrapper);
         ObResetThreadTenantIdGuard tenant_guard;
+        DISABLE_SQL_MEMLEAK_GUARD;
         if (OB_FAIL(ObIOManager::get_instance().add_device_channel(dev_info->device_,
                                                                    0/*async_channel_thread_count*/,
                                                                    GCONF.sync_io_thread_count,
