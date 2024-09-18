@@ -341,7 +341,7 @@ private:
 
 // for ddl insert row.
 class ObDirectLoadMgrAgent;
-class ObDDLInsertRowIterator : public ObIStoreRowIterator
+class ObDDLInsertRowIterator : public ObIDirectLoadRowIterator
 {
 public:
   ObDDLInsertRowIterator();
@@ -361,7 +361,7 @@ public:
     // const bool skip_lob = false;
     return get_next_row(is_skip_lob_, row);
   }
-  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row);
+  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(current_tablet_id), K_(context_id), K_(macro_seq),
       K_(lob_id_generator), K_(lob_id_cache), K_(lob_slice_id), K_(lob_cols_cnt), K_(is_skip_lob));
 public:
