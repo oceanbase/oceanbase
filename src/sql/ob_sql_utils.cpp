@@ -1965,11 +1965,18 @@ int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
     LOG_WARN("failed to get default cast mode", K(ret));
   } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(expr->get_collation_level(), cast_mode))) {
     LOG_WARN("failed to set cs level cast mode", K(ret));
-  } else if (lib::is_mysql_mode() && dst_type.is_string_type() &&
-             expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
-    cast_mode |= CM_ADD_ZEROFILL;
+  } else {
+    if (lib::is_mysql_mode() && dst_type.is_string_type() &&
+        expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
+      cast_mode |= CM_ADD_ZEROFILL;
+    }
+    cast_mode |= CM_BY_TRANSFORMER;
+    const ObObjTypeClass src_tc = ob_obj_type_class(expr->get_result_type().get_type());
+    const ObObjTypeClass dst_tc = ob_obj_type_class(dst_type.get_type());
+    if (ob_is_int_uint(src_tc, dst_tc)) {
+      cast_mode |= CM_NO_RANGE_CHECK;
+    }
   }
-  cast_mode = CM_SET_BY_TRANSFORMERN(cast_mode);
   return ret;
 }
 
