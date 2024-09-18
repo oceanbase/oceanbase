@@ -7924,7 +7924,8 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   if (NULL == package_guard) {
     // patch bugfix from 42x: 55397384
-    if (NULL != session_info.get_cur_exec_ctx()) {
+    if (NULL != session_info.get_cur_exec_ctx()
+        && NULL != session_info.get_cur_exec_ctx()->get_sql_ctx()) { // bypass tmp ObExecContext
       OZ (session_info.get_cur_exec_ctx()->get_package_guard(package_guard));
       CK (OB_NOT_NULL(package_guard));
     } else {
