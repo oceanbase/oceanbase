@@ -317,7 +317,9 @@ int ObDomainIndexLookupOp::set_doc_id_idx_lookup_param(
       aux_scan_param.sample_info_ = *aux_lookup_rtdef->sample_info_;
     }
     if (OB_NOT_NULL(snapshot_)) {
-      aux_scan_param.snapshot_ = *snapshot_;
+      if (OB_FAIL(aux_scan_param.snapshot_.assign(*snapshot_))) {
+        LOG_WARN("assign snapshot fail", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("snapshot is null", K(ret), KPC(this));

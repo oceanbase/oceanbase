@@ -4410,9 +4410,10 @@ int ObLSTabletService::insert_lob_col(
     ObLobAccessParam lob_param;
     lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
     lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
-    lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
     lob_param.is_total_quantity_log_ = run_ctx.dml_param_.is_total_quantity_log_;
-    if (lob_param.snapshot_.is_none_read()) {
+    if (OB_FAIL(lob_param.snapshot_.assign(run_ctx.dml_param_.snapshot_))) {
+      LOG_WARN("assign snapshot fail", K(ret));
+    } else if (lob_param.snapshot_.is_none_read()) {
       // NOTE:
       // lob_insert need table_scan, the snapshot already generated in
       // run_ctx.store_ctx, use it as an LS ReadSnapshot
@@ -4442,7 +4443,7 @@ int ObLSTabletService::insert_lob_col(
     // for not strict sql mode, will insert empty string without lob header
     bool has_lob_header = datum.has_lob_header() && raw_data.length() > 0;
     ObLobLocatorV2 loc(raw_data, has_lob_header);
-    if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
+    if (FAILEDx(set_lob_storage_params(run_ctx, column, lob_param))) {
       LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
     } else if (OB_FAIL(lob_mngr->append(lob_param, loc))) {
       LOG_WARN("[STORAGE_LOB]lob append failed.", K(ret));
@@ -4822,8 +4823,9 @@ int ObLSTabletService::process_delta_lob(
     // init lob param
     lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
     lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
-    lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
-    if (lob_param.snapshot_.is_none_read()) {
+    if (OB_FAIL(lob_param.snapshot_.assign(run_ctx.dml_param_.snapshot_))) {
+      LOG_WARN("assign snapshot fail", K(ret));
+    } else if (lob_param.snapshot_.is_none_read()) {
       // NOTE:
       // lob_insert need table_scan, the snapshot already generated in
       // run_ctx.store_ctx, use it as an LS ReadSnapshot
@@ -4839,7 +4841,7 @@ int ObLSTabletService::process_delta_lob(
     // should use old obj lob
     ObLobLocatorV2 old_lob;
     ObString old_disk_lob;
-    if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
+    if (FAILEDx(set_lob_storage_params(run_ctx, column, lob_param))) {
       LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
     } else if (FALSE_IT(old_datum.get_mem_lob(old_lob))) {
     } else if (!old_lob.is_valid()) {
@@ -5818,7 +5820,6 @@ int ObLSTabletService::delete_lob_col(
         lob_common = reinterpret_cast<ObLobCommon*>(buf);
         lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
         lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
-        lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
         lob_param.tx_id_ = lob_param.tx_desc_->get_tx_id();
         lob_param.sql_mode_ = run_ctx.dml_param_.sql_mode_;
         lob_param.is_total_quantity_log_ = run_ctx.dml_param_.is_total_quantity_log_;
@@ -5834,7 +5835,10 @@ int ObLSTabletService::delete_lob_col(
         lob_param.offset_ = 0;
         // use byte size to delete all
         lob_param.len_ = lob_param.byte_size_; //ObCharset::strlen_char(lob_param.coll_type_, sql_data.ptr(), sql_data.length());
-        if (lob_param.byte_size_ < 0) {
+
+        if (OB_FAIL(lob_param.snapshot_.assign(run_ctx.dml_param_.snapshot_))) {
+          LOG_WARN("assign snapshot fail", K(ret));
+        } else if (lob_param.byte_size_ < 0) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("calc byte size is negative.", K(ret), K(data), K(lob_param));
         } else if (OB_FAIL(lob_mngr->erase(lob_param))) {

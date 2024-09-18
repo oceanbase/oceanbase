@@ -376,8 +376,8 @@ int TestDmlCommon::build_table_scan_param(
     ObTableScanParam &scan_param)
 {
   int ret = build_table_scan_param_base_(tenant_id, table_param, false, scan_param);
-  if (OB_SUCC(ret)) {
-    scan_param.snapshot_ = read_snapshot;
+  if (FAILEDx(scan_param.snapshot_.assign(read_snapshot))) {
+    STORAGE_LOG(WARN, "assign snapshot fail", K(ret));
   }
   return ret;
 }

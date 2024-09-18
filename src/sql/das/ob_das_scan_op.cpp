@@ -280,7 +280,9 @@ int ObDASScanOp::init_scan_param()
     scan_param_.sample_info_ = *scan_rtdef_->sample_info_;
   }
   if (OB_NOT_NULL(snapshot_)) {
-    scan_param_.snapshot_ = *snapshot_;
+    if (OB_FAIL(scan_param_.snapshot_.assign(*snapshot_))) {
+      LOG_WARN("assign snapshot fail", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("snapshot is null", K(ret), KPC(this));
@@ -296,7 +298,7 @@ int ObDASScanOp::init_scan_param()
     scan_param_.op_filters_ = &scan_ctdef_->pd_expr_spec_.pushdown_filters_;
   }
   scan_param_.pd_storage_filters_ = scan_rtdef_->p_pd_expr_op_->pd_storage_filters_;
-  if (OB_FAIL(scan_param_.column_ids_.assign(scan_ctdef_->access_column_ids_))) {
+  if (FAILEDx(scan_param_.column_ids_.assign(scan_ctdef_->access_column_ids_))) {
     LOG_WARN("init column ids failed", K(ret));
   }
   //external table scan params
@@ -1831,7 +1833,9 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
     scan_param_.trans_desc_ = tx_desc_;
   }
   if (OB_NOT_NULL(snapshot_)) {
-    scan_param_.snapshot_ = *snapshot_;
+    if (OB_FAIL(scan_param_.snapshot_.assign(*snapshot_))) {
+      LOG_WARN("assign snapshot fail", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("snapshot is null", K(ret), KPC(this));
@@ -1847,7 +1851,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
     scan_param_.op_filters_ = &lookup_ctdef_->pd_expr_spec_.pushdown_filters_;
   }
   scan_param_.pd_storage_filters_ = lookup_rtdef_->p_pd_expr_op_->pd_storage_filters_;
-  if (OB_FAIL(scan_param_.column_ids_.assign(lookup_ctdef_->access_column_ids_))) {
+  if (FAILEDx(scan_param_.column_ids_.assign(lookup_ctdef_->access_column_ids_))) {
     LOG_WARN("init column ids failed", K(ret));
   }
   LOG_DEBUG("init local index lookup scan_param", K(scan_param_));

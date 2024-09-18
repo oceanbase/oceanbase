@@ -358,7 +358,6 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.tz_info_ = NULL;
   dml_base_param.sql_mode_ = SMO_DEFAULT;
   dml_base_param.encrypt_meta_ = &dml_base_param.encrypt_meta_legacy_;
-  dml_base_param.snapshot_ = param.snapshot_;
   dml_base_param.check_schema_version_ = false; // lob tablet should not check schema version
   dml_base_param.schema_version_ = 0;
   dml_base_param.store_ctx_guard_ = store_ctx_guard;
@@ -374,6 +373,8 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_meta_table_dml_param(dml_base_param.table_param_))) {
       LOG_WARN("get_meta_table_dml_param fail", KR(ret));
+    } else if (OB_FAIL(dml_base_param.snapshot_.assign(param.snapshot_))) {
+      LOG_WARN("assign snapshot fail", K(ret));
     }
   }
   return ret;
@@ -695,7 +696,6 @@ int ObPersistentLobApator::build_common_scan_param(
     scan_param.limit_param_.limit_ = -1;
     scan_param.limit_param_.offset_ = 0;
     // sessions
-    scan_param.snapshot_ = param.snapshot_;
     if(param.read_latest_) {
       scan_param.tx_id_ = param.snapshot_.core_.tx_id_;
     }
@@ -715,6 +715,9 @@ int ObPersistentLobApator::build_common_scan_param(
     scan_param.need_scn_ = false;
     scan_param.pd_storage_flag_ = false;
     scan_param.fb_snapshot_ = param.fb_snapshot_;
+    if (OB_FAIL(scan_param.snapshot_.assign(param.snapshot_))) {
+      LOG_WARN("assign snapshot fail", K(ret));
+    }
   }
   return ret;
 }

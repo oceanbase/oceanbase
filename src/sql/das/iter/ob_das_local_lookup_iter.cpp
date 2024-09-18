@@ -138,7 +138,9 @@ int ObDASLocalLookupIter::init_scan_param(ObTableScanParam &param, const ObDASSc
       param.trans_desc_ = trans_desc_;
     }
     if (OB_NOT_NULL(snapshot_)) {
-      param.snapshot_ = *snapshot_;
+      if (OB_FAIL(param.snapshot_.assign(*snapshot_))) {
+        LOG_WARN("assign snapshot fail", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null snapshot", K(ret), KPC(this));
@@ -152,7 +154,7 @@ int ObDASLocalLookupIter::init_scan_param(ObTableScanParam &param, const ObDASSc
       param.op_filters_ = &ctdef->pd_expr_spec_.pushdown_filters_;
     }
     param.pd_storage_filters_ = rtdef->p_pd_expr_op_->pd_storage_filters_;
-    if (OB_FAIL(param.column_ids_.assign(ctdef->access_column_ids_))) {
+    if (FAILEDx(param.column_ids_.assign(ctdef->access_column_ids_))) {
       LOG_WARN("failed to assign column ids", K(ret));
     }
     if (rtdef->sample_info_ != nullptr) {

@@ -320,9 +320,14 @@ int ObHNSWSerializeCallback::operator()(const char *data, const int64_t data_siz
   lob_param.sql_mode_ = SMO_DEFAULT;
   lob_param.timeout_ = param.timeout_;
   lob_param.lob_common_ = nullptr;
-  lob_param.snapshot_ = *reinterpret_cast<transaction::ObTxReadSnapshot*>(param.snapshot_);
-  lob_param.tx_desc_ = reinterpret_cast<transaction::ObTxDesc*>(param.tx_desc_);
-  if (OB_ISNULL(lob_mngr)) {
+  ret = lob_param.snapshot_.assign(*reinterpret_cast<transaction::ObTxReadSnapshot*>(param.snapshot_));
+  if (OB_FAIL(ret)) {
+    LOG_WARN("assign snapshot fail", K(ret));
+  } else {
+    lob_param.tx_desc_ = reinterpret_cast<transaction::ObTxDesc*>(param.tx_desc_);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get lob manager nullptr", K(ret));
   } else if (OB_FAIL(lob_mngr->append(lob_param, src_lob))) {

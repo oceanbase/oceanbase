@@ -385,7 +385,9 @@ int ObDASTextRetrievalIter::init_base_idx_scan_param(
     }
 
     if (OB_NOT_NULL(snapshot)) {
-      scan_param.snapshot_ = *snapshot;
+      if (OB_FAIL(scan_param.snapshot_.assign(*snapshot))) {
+        LOG_WARN("assign snapshot fail", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("null snapshot", K(ret), KP(snapshot));

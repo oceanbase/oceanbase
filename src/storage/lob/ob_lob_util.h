@@ -81,6 +81,8 @@ public:
   ~ObLobAccessParam();
 
 public:
+  int assign(const ObLobAccessParam &other);
+
   bool is_full_read() const { return op_type_ == ObLobDataOutRowCtx::OpType::SQL && 0 == offset_ && (len_ == byte_size_ || INT64_MAX == len_ || UINT64_MAX == len_); }
   bool is_full_delete() const { return op_type_ == ObLobDataOutRowCtx::OpType::SQL && 0 == offset_ && len_ >= byte_size_; }
   bool is_full_insert() const { return op_type_ == ObLobDataOutRowCtx::OpType::SQL && 0 == offset_ && 0 == byte_size_; }
@@ -174,6 +176,9 @@ public:
   share::ObTabletCacheInterval *lob_id_geneator_;
   // remote query ctx
   void *remote_query_ctx_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLobAccessParam);
 };
 
 struct ObLobMetaInfo {

@@ -282,7 +282,9 @@ int ObDASVIdMergeIter::init_rowkey_vid_scan_param(
       rowkey_vid_scan_param_.trans_desc_ = trans_desc;
     }
     if (OB_NOT_NULL(snapshot)) {
-      rowkey_vid_scan_param_.snapshot_ = *snapshot;
+      if (OB_FAIL(rowkey_vid_scan_param_.snapshot_.assign(*snapshot))) {
+        LOG_WARN("assign snapshot fail", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null snapshot", K(ret), KPC(ctdef), KPC(rtdef));
@@ -296,7 +298,7 @@ int ObDASVIdMergeIter::init_rowkey_vid_scan_param(
       rowkey_vid_scan_param_.op_filters_ = &ctdef->pd_expr_spec_.pushdown_filters_;
     }
     rowkey_vid_scan_param_.pd_storage_filters_ = rtdef->p_pd_expr_op_->pd_storage_filters_;
-    if (OB_FAIL(rowkey_vid_scan_param_.column_ids_.assign(ctdef->access_column_ids_))) {
+    if (FAILEDx(rowkey_vid_scan_param_.column_ids_.assign(ctdef->access_column_ids_))) {
       LOG_WARN("failed to assign column ids", K(ret));
     }
     if (rtdef->sample_info_ != nullptr) {

@@ -422,7 +422,9 @@ int ObDataAccessService::do_async_remote_das_task(
   remote_info.exec_ctx_ = &das_ref.get_exec_ctx();
   remote_info.frame_info_ = das_ref.get_expr_frame_info();
   remote_info.trans_desc_ = session->get_tx_desc();
-  remote_info.snapshot_ = *task_arg.get_task_op()->get_snapshot();
+  if (OB_FAIL(remote_info.snapshot_.assign(*task_arg.get_task_op()->get_snapshot()))) {
+    LOG_WARN("assign snapshot fail", K(ret));
+  }
   remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
@@ -433,7 +435,7 @@ int ObDataAccessService::do_async_remote_das_task(
   ObDASRemoteInfo::get_remote_info() = &remote_info;
   ObIDASTaskResult *op_result = nullptr;
   ObRpcDasAsyncAccessCallBack *das_async_cb = nullptr;
-  if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
+  if (FAILEDx(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
     LOG_WARN("failed to allocate das async cb", K(ret));
   }
   // prepare op result in advance avoiding racing condition.
@@ -516,7 +518,9 @@ int ObDataAccessService::do_sync_remote_das_task(
   remote_info.exec_ctx_ = &das_ref.get_exec_ctx();
   remote_info.frame_info_ = das_ref.get_expr_frame_info();
   remote_info.trans_desc_ = session->get_tx_desc();
-  remote_info.snapshot_ = *task_arg.get_task_op()->get_snapshot();
+  if (OB_FAIL(remote_info.snapshot_.assign(*task_arg.get_task_op()->get_snapshot()))) {
+    LOG_WARN("assign snapshot fail", K(ret));
+  }
   remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();

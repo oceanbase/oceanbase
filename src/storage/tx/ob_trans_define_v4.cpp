@@ -1454,6 +1454,7 @@ int ObTxExecResult::assign(const ObTxExecResult &r)
     TRANS_LOG(WARN, "assign touched_ls_list fail, set incomplete", K(ret), KPC(this));
   }
   conflict_txs_.assign(r.conflict_txs_);
+  conflict_info_array_.assign(r.conflict_info_array_);
   return ret;
 }
 

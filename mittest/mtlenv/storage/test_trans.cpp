@@ -118,7 +118,7 @@ public:
     ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   }
   void create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls);
-  void insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot snapshot, const char* in_str);
+  void insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot &snapshot, const char* in_str);
   void prepare_tx_desc(ObTxDesc *&tx_desc, ObTxReadSnapshot &snapshot);
 private:
   static share::schema::ObTableSchema table_schema_;
@@ -161,7 +161,7 @@ void TestTrans::create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls)
   }
 }
 
-void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot snapshot, const char* ins_str)
+void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot &snapshot, const char* ins_str)
 {
   int64_t affected_rows = 0;
   ObMockDatumRowIterator ins_iter;
@@ -179,7 +179,7 @@ void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_d
   dml_param.timeout_ = ObTimeUtility::current_time() + 100000000;
   dml_param.schema_version_ = 1000;
   dml_param.table_param_ = &table_dml_param;
-  dml_param.snapshot_ = snapshot;
+  ASSERT_EQ(OB_SUCCESS, dml_param.snapshot_.assign(snapshot));
   dml_param.store_ctx_guard_ = &store_ctx_guard;
 
   auto as = MTL(ObAccessService*);

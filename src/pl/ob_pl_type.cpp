@@ -2090,7 +2090,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
     forall_rollback_ = src.forall_rollback_;
     trans_id_ = src.trans_id_;
     is_scrollable_ = src.is_scrollable_;
-    snapshot_ = src.snapshot_;
+    OZ (snapshot_.assign(src.snapshot_));
     is_need_check_snapshot_ = src.is_need_check_snapshot_;
     last_execute_time_ = src.last_execute_time_;
     sql_trace_id_ = src.sql_trace_id_;

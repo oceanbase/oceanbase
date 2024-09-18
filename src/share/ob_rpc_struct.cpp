@@ -11093,7 +11093,9 @@ bool ObRegisterTxDataResult::is_valid() const
 int ObRegisterTxDataResult::init(const ObTxExecResult &tx_result)
 {
   int ret = OB_SUCCESS;
-  tx_result_ = tx_result;
+  if (OB_FAIL(tx_result_.assign(tx_result))) {
+    LOG_WARN("assign tx result fail", K(ret));
+  }
   return ret;
 }
 
