@@ -38,6 +38,13 @@ public:
            const share::ObBackupDest &backup_dest,
            const share::ObBackupSetDesc &backup_set_desc,
            ObBackupMetaIndexStore &meta_index_store);
+  int init(const common::ObTabletID &tablet_id,
+           const storage::ObTabletHandle &tablet_handle,
+           const storage::ObITable::TableKey &table_key,
+           const blocksstable::ObDatumRange &query_range,
+           const share::ObBackupDest &backup_dest,
+           const share::ObBackupSetDesc &backup_set_desc,
+           ObBackupMetaIndexStore &meta_index_store);
   int get_next(blocksstable::ObDataMacroBlockMeta &macro_meta);
 
 private:
@@ -62,6 +69,14 @@ private:
       ObBackupSSTableMeta *&ptr);
 
 private:
+  int inner_init_(
+      const common::ObTabletID &tablet_id,
+      const storage::ObTabletHandle &tablet_handle,
+      const storage::ObITable::TableKey &table_key,
+      const share::ObBackupDest &backup_dest,
+      const share::ObBackupSetDesc &backup_set_desc,
+      ObBackupMetaIndexStore &meta_index_store);
+  int deep_copy_query_range_(const blocksstable::ObDatumRange &query_range);
   int build_create_sstable_param_(
       const storage::ObTabletHandle &tablet_handle,
       const ObBackupSSTableMeta &backup_sstable_meta,

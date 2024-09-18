@@ -1569,14 +1569,15 @@ int ObTabletTableStore::inner_replace_remote_major_sstable_(
     LOG_WARN("failed to get major tables from old store", K(ret), K(old_store));
   }
 
+  bool has_backup_macro = false;
   for (int64_t idx = 0; OB_SUCC(ret) && idx < old_tables_array.count(); ++idx) {
     old_table = old_tables_array.at(idx);
     if (OB_ISNULL(old_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(old_store));
-    } else if (OB_FAIL(static_cast<ObSSTable *>(old_table)->get_meta(old_sst_meta_hdl))) {
-      LOG_WARN("failed to get old sstable meta handle", K(ret), KPC(old_table));
-    } else if (old_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_no_backup()) {
+    } else if (OB_FAIL(ObTableStoreUtil::check_has_backup_macro_block(old_table, has_backup_macro))) {
+      LOG_WARN("failed to check table has backup macro block", K(ret), KPC(old_table));
+    } else if (!has_backup_macro) {
       if (OB_FAIL(new_tables_array.push_back(old_table))) {
         LOG_WARN("failed to push back", K(ret));
       }

@@ -98,7 +98,7 @@ public:
       const bool only_persisted_ddl_data = false);
 
   int replay_create_tablet_direct_load(
-      const ObTabletHandle &tablet_handle,
+      const ObTablet *tablet,
       const int64_t execution_id,
       const ObTabletDirectLoadInsertParam &param);
 

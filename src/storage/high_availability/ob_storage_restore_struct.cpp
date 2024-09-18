@@ -387,6 +387,80 @@ int ObRestoreUtils::get_backup_data_type(
   return ret;
 }
 
+int ObRestoreUtils::create_backup_sstable_sec_meta_iterator(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    const storage::ObTabletHandle &tablet_handle,
+    const ObITable::TableKey &table_key,
+    const blocksstable::ObDatumRange &query_range,
+    const ObRestoreBaseInfo &restore_base_info,
+    backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+    backup::ObBackupSSTableSecMetaIterator *&sstable_sec_meta_iterator)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupSetDesc backup_set_desc;
+  ObBackupDataType backup_data_type;
+  backup::ObRestoreMetaIndexStore *meta_index_store_ptr = nullptr;
+  backup::ObBackupSSTableSecMetaIterator *iterator = nullptr;
+  const share::ObBackupDest &backup_dest = restore_base_info.backup_dest_;
+
+  if (OB_ISNULL(iterator = backup::ObLSBackupFactory::get_backup_sstable_sec_meta_iterator(tenant_id))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to get backup sstable sec meta iterator", K(ret));
+  } else if (OB_FAIL(restore_base_info.get_last_backup_set_desc(backup_set_desc))) {
+    LOG_WARN("failed to get last backup set desc", K(ret));
+  } else if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key, backup_data_type))) {
+    LOG_WARN("failed to get backup data type", K(ret), K(table_key));
+  } else if (OB_FAIL(meta_index_store.get_backup_meta_index_store(backup_data_type, meta_index_store_ptr))) {
+    LOG_WARN("failed to get backup meta index store", K(ret), K(backup_data_type));
+  } else if (OB_FAIL(iterator->init(table_key.get_tablet_id(),
+                                    tablet_handle,
+                                    table_key,
+                                    query_range,
+                                    backup_dest,
+                                    backup_set_desc,
+                                    *meta_index_store_ptr))) {
+    LOG_WARN("failed to init sstable sec meta iterator", K(ret), K(table_key),
+        K(query_range), K(backup_dest), K(backup_set_desc), K(restore_base_info));
+  } else {
+    sstable_sec_meta_iterator = iterator;
+    iterator = nullptr;
+  }
+
+  if (OB_NOT_NULL(iterator)) {
+    backup::ObLSBackupFactory::free(iterator);
+  }
+
+  return ret;
+}
+
+int ObRestoreUtils::create_backup_sstable_sec_meta_iterator(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    const storage::ObTabletHandle &tablet_handle,
+    const ObITable::TableKey &table_key,
+    const ObRestoreBaseInfo &restore_base_info,
+    backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+    backup::ObBackupSSTableSecMetaIterator *&sstable_sec_meta_iterator)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObDatumRange query_range;
+
+  query_range.set_whole_range();
+  if (OB_FAIL(create_backup_sstable_sec_meta_iterator(tenant_id,
+                                                      tablet_id,
+                                                      tablet_handle,
+                                                      table_key,
+                                                      query_range,
+                                                      restore_base_info,
+                                                      meta_index_store,
+                                                      sstable_sec_meta_iterator))) {
+    LOG_WARN("failed to create backup sstable sec meta iterator", K(ret));
+  }
+
+  return ret;
+}
+
 /******************ObTabletGroupRestoreArg*********************/
 ObTabletGroupRestoreArg::ObTabletGroupRestoreArg()
   : tenant_id_(OB_INVALID_ID),
@@ -783,15 +857,14 @@ int ObRestoreMacroBlockIdMgr::inner_init_v2_(
       const ObITable::TableKey &table_key = sstable_metas.at(index).sstable_meta_.table_key_;
       ObArenaAllocator allocator;
       backup::ObBackupSSTableSecMetaIterator *iterator = NULL;
-      if (OB_ISNULL(iterator = backup::ObLSBackupFactory::get_backup_sstable_sec_meta_iterator(tenant_id))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to get backup sstable sec meta iterator", K(ret));
-      } else if (OB_FAIL(prepare_backup_sstable_sec_meta_iterator_(tablet_id, tablet_handle,
-          table_key, restore_base_info, allocator, meta_index_store, iterator))) {
-        LOG_WARN("failed to prepare sstable sec meta iterator from backup", K(ret), K(tablet_id), K(table_key));
-      } else if (OB_ISNULL(iterator)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("iterator should not be null", K(ret));
+      if (OB_FAIL(ObRestoreUtils::create_backup_sstable_sec_meta_iterator(tenant_id,
+                                                                          tablet_id,
+                                                                          tablet_handle,
+                                                                          table_key,
+                                                                          restore_base_info,
+                                                                          meta_index_store,
+                                                                          iterator))) {
+        LOG_WARN("failed to create backup sstable sec meta iterator", K(ret), K(tablet_id), K(table_key));
       } else if (OB_FAIL(get_macro_block_index_list_from_iter_(*iterator, block_id_array_))) {
         LOG_WARN("failed to get macro block index list from iter", K(ret), K(tablet_id), K(table_key), K(restore_base_info));
       } else {
@@ -896,38 +969,6 @@ int ObRestoreMacroBlockIdMgr::get_restore_macro_block_id_array(
     LOG_WARN("restore macro block id mgr do not init", K(ret));
   } else if (OB_FAIL(block_id_array.assign(block_id_array_))) {
     LOG_WARN("failed to assign block id array", K(ret), K(table_key_));
-  }
-  return ret;
-}
-
-int ObRestoreMacroBlockIdMgr::prepare_backup_sstable_sec_meta_iterator_(
-    const common::ObTabletID &tablet_id,
-    const storage::ObTabletHandle &tablet_handle,
-    const ObITable::TableKey &table_key,
-    const ObRestoreBaseInfo &restore_base_info,
-    common::ObIAllocator &allocator,
-    backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
-    backup::ObBackupSSTableSecMetaIterator *&sstable_sec_meta_iterator)
-{
-  int ret = OB_SUCCESS;
-  const share::ObBackupDest &backup_dest = restore_base_info.backup_dest_;
-  share::ObBackupSetDesc backup_set_desc;
-  backup::ObRestoreMetaIndexStore *meta_index_store_ptr = NULL;
-  ObBackupDataType backup_data_type;
-  if (OB_FAIL(restore_base_info.get_last_backup_set_desc(backup_set_desc))) {
-    LOG_WARN("failed to get last backup set desc", K(ret));
-  } else if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key, backup_data_type))) {
-    LOG_WARN("failed to get backup data type", K(ret), K(table_key));
-  } else if (OB_FAIL(meta_index_store.get_backup_meta_index_store(backup_data_type, meta_index_store_ptr))) {
-    LOG_WARN("failed to get backup meta index store", K(ret), K(backup_data_type));
-  } else if (OB_FAIL(sstable_sec_meta_iterator->init(tablet_id,
-                                                     tablet_handle,
-                                                     table_key,
-                                                     backup_dest,
-                                                     backup_set_desc,
-                                                     *meta_index_store_ptr))) {
-    LOG_WARN("failed to init sstable sec meta iterator", K(ret), K(tablet_id), K(table_key),
-        K(backup_dest), K(backup_set_desc), K(restore_base_info));
   }
   return ret;
 }

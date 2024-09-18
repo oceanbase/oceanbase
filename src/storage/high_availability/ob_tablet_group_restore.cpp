@@ -2817,9 +2817,8 @@ int ObTabletRestoreTask::check_need_copy_macro_blocks_(
     bool &need_copy)
 {
   int ret = OB_SUCCESS;
-  if (ObTabletRestoreAction::is_restore_remote_sstable(tablet_restore_ctx_->action_)) {
-    need_copy = false;
-  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(param,
+  // TODO(wangxiaohui.wxh): do not copy macro blocks when restore remote sstable
+  if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(param,
                                                                  tablet_restore_ctx_->is_leader_,
                                                                  need_copy))) {
     LOG_WARN("failed to check need copy macro blocks", K(ret), K(param), KPC(tablet_restore_ctx_));

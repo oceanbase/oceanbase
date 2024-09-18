@@ -324,7 +324,7 @@ int ObTenantDirectLoadMgr::create_tablet_direct_load(
 }
 
 int ObTenantDirectLoadMgr::replay_create_tablet_direct_load(
-    const ObTabletHandle &tablet_handle,
+    const ObTablet *tablet,
     const int64_t execution_id,
     const ObTabletDirectLoadInsertParam &build_param)
 {
@@ -332,15 +332,15 @@ int ObTenantDirectLoadMgr::replay_create_tablet_direct_load(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid() || execution_id < 0 || !build_param.is_valid())) {
+  } else if (OB_UNLIKELY(OB_ISNULL(tablet) || execution_id < 0 || !build_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tablet_handle), K(execution_id), K(build_param));
+    LOG_WARN("invalid argument", K(ret), KP(tablet), K(execution_id), K(build_param));
   } else {
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
     ObTabletDirectLoadMgrKey data_mgr_key(build_param.common_param_.tablet_id_, build_param.common_param_.direct_load_type_);
     ObBucketHashWLockGuard guard(bucket_lock_, data_mgr_key.hash());
-    if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+    if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
       LOG_WARN("fetch table store failed", K(ret));
     } else if (OB_FAIL(try_create_tablet_direct_load_mgr_nolock(
             nullptr != table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/),

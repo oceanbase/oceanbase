@@ -839,8 +839,7 @@ int ObSSTableCopyFinishTask::get_cluster_version_(
 bool ObSSTableCopyFinishTask::is_sstable_should_rebuild_index_(const ObMigrationSSTableParam *sstable_param) const
 {
   return !sstable_param->is_empty_sstable()
-         && !is_shared_sstable_without_copy_(sstable_param)
-         && !ObTabletRestoreAction::is_restore_remote_sstable(copy_ctx_.restore_action_);
+         && !is_shared_sstable_without_copy_(sstable_param);
 }
 
 bool ObSSTableCopyFinishTask::is_shared_sstable_without_copy_(const ObMigrationSSTableParam *sstable_param) const
@@ -932,6 +931,9 @@ int ObSSTableCopyFinishTask::build_restore_macro_block_id_mgr_(
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr = nullptr;
 
   if (!init_param.is_leader_restore_) {
+    restore_macro_block_id_mgr_ = nullptr;
+  } else if (ObTabletRestoreAction::is_restore_remote_sstable(init_param.restore_action_)) {
+    // restore index/meta tree for backup sstable, macro blocks should be got by iterator.
     restore_macro_block_id_mgr_ = nullptr;
   } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(init_param.restore_action_)) {
     restore_macro_block_id_mgr_ = nullptr;
@@ -1037,8 +1039,6 @@ int ObSSTableCopyFinishTask::alloc_and_init_sstable_creator_(ObCopiedSSTableCrea
   ObCopiedSSTableCreatorImpl *tmp_creator = nullptr;
   if (sstable_param_->is_empty_sstable()) {
     tmp_creator = MTL_NEW(ObCopiedEmptySSTableCreator, "CopySSTCreator");
-  } else if (ObTabletRestoreAction::is_restore_remote_sstable(copy_ctx_.restore_action_)) {
-    tmp_creator = MTL_NEW(ObBackupSSTableCreator, "CopySSTCreator");
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (sstable_param_->is_shared_sstable()) {
     tmp_creator = MTL_NEW(ObCopiedSharedSSTableCreator, "CopySSTCreator");

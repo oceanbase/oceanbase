@@ -5836,16 +5836,16 @@ int ObTablet::start_direct_load_task_if_need()
 
     if (OB_FAIL(pre_process_cs_replica(direct_load_param))) {
       LOG_WARN("failed to process cs replica", K(ret), KPC(this));
-    } else if (OB_FAIL(tenant_direct_load_mgr->create_tablet_direct_load(
-        unused_context_id,
-        tablet_meta_.ddl_execution_id_,
-        direct_load_param,
-        tablet_meta_.ddl_checkpoint_scn_,
-        true/*only_persisted_ddl_data*/))) {
+    } else if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(
+        this, tablet_meta_.ddl_execution_id_, direct_load_param))) {
       LOG_WARN("create tablet manager failed", K(ret));
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr(
         ObTabletDirectLoadMgrKey(tablet_meta_.tablet_id_, ObDirectLoadType::DIRECT_LOAD_DDL), direct_load_mgr_handle))) {
       LOG_WARN("get tablet mgr failed", K(ret), K(tablet_meta_));
+    } else if (OB_FAIL(direct_load_mgr_handle.get_full_obj()->update(
+            nullptr/*lob_direct_load_mgr*/, // replay is independent for data and lob meta tablet, force null here
+            direct_load_param))) {
+      LOG_WARN("update direct load mgr failed", K(ret));
     } else if (OB_FAIL(direct_load_mgr_handle.get_full_obj()->start_with_checkpoint(
             *this, tablet_meta_.ddl_start_scn_, tablet_meta_.ddl_data_format_version_,
             tablet_meta_.ddl_execution_id_, tablet_meta_.ddl_checkpoint_scn_))) {

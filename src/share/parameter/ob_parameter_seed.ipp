@@ -1237,6 +1237,11 @@ ERRSIM_DEF_INT(errsim_backup_table_list_batch_size, OB_CLUSTER_PARAMETER, "20000
         "Range: [1,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+ERRSIM_DEF_BOOL(enable_quick_restore_remove_backup_dest_test, OB_CLUSTER_PARAMETER, "False",
+         "when remove backup dest test mode is enabled, io from backup will "
+         "resturn OB_EAGAIN",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 #ifdef TRANS_MODULE_TEST
 DEF_INT(module_test_trx_memory_errsim_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100]",
         "the percentage of memory errsim. Rang:[0,100]",

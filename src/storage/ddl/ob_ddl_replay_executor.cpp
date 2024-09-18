@@ -276,7 +276,7 @@ int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, co
 
     if (!is_lob_meta_tablet && ls_->is_cs_replica() && OB_FAIL(pre_process_for_cs_replica(direct_load_param, table_key, tablet_handle, tablet_id))) {
       LOG_WARN("pre process for cs replica failed", K(ret), K(direct_load_param), K(table_key), K(tablet_id));
-    } else if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(tablet_handle, log_->get_execution_id(), direct_load_param))) {
+    } else if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(tablet_handle.get_obj(), log_->get_execution_id(), direct_load_param))) {
       LOG_WARN("create tablet manager failed", K(ret));
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
             ls_->get_ls_id(),
