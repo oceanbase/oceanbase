@@ -221,6 +221,7 @@ private:
 
   static int find_leftest_const_node(ParseNode &cur_node, ParseNode *&const_node);
   static bool need_fast_parser(const ObString &sql);
+  static bool is_vector_index_query(const ParseNode *tree);
 };
 
 }
