@@ -6649,6 +6649,8 @@ static struct VarsInit{
       ObSysVars[475].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
       ObSysVars[475].name_ = "plsql_optimize_level" ;
       ObSysVars[475].data_type_ = ObIntType ;
+      ObSysVars[475].min_val_ = "0" ;
+      ObSysVars[475].max_val_ = "3" ;
       ObSysVars[475].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[475].id_ = SYS_VAR_PLSQL_OPTIMIZE_LEVEL ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL)) ;

@@ -6904,6 +6904,8 @@
     "default_value": "2",
     "base_value": "2",
     "data_type": "int",
+    "min_val": "0",
+    "max_val": "3",
     "info": "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
     "publish_version": "423",
