@@ -253,6 +253,17 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support to drop a building or dropping index", K(ret), K(arg.is_inner_), KPC(index_table_schema));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
+        } else if (index_table_schema->is_doc_id_rowkey() || index_table_schema->is_rowkey_doc_id()) {
+          if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(trans, *index_table_schema, tenant_id, data_table_id,
+              has_other_domain_index))) {
+            LOG_WARN("fail to check has rowkey doc or doc rowkey task", K(ret), K(tenant_id), K(arg), KPC(index_table_schema));
+          } else if (has_other_domain_index) {
+            ret = OB_EAGAIN;
+            LOG_WARN("has doing other ddl task", K(ret), K(tenant_id), K(data_table_id), K(index_table_schema->get_table_id()));
+          }
+        }
+
+        if (OB_FAIL(ret) || has_other_domain_index) {
         } else if (need_rename_index && OB_FAIL(ddl_service_.rename_dropping_index_name(
                                                       table_schema->get_table_id(),
                                                       table_schema->get_database_id(),
