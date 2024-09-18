@@ -135,11 +135,16 @@ private:
                               share::schema::ObTableSchema &schema);
 
   bool is_final_index_status(const share::schema::ObIndexStatus index_status) const;
-  int check_has_none_shared_index_tables_for_fts_or_multivalue_or_vector_index_(
+  int check_has_none_shared_index_tables_for_fts_or_multivalue_index_(
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
-      bool &has_fts_or_multivalue_or_vector_index);
+      bool &has_fts_or_multivalue_index);
+  int check_has_none_shared_index_tables_for_vector_index_(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &has_none_share_vector_index);
   bool ignore_error_code_for_domain_index(
       const int ret,
       const obrpc::ObDropIndexArg &arg,

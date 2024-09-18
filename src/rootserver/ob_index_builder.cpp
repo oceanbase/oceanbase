@@ -234,14 +234,17 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
         if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
         } else if ((index_table_schema->is_doc_id_rowkey() ||
-                    index_table_schema->is_rowkey_doc_id() ||
-                    index_table_schema->is_vec_rowkey_vid_type() ||
-                    index_table_schema->is_vec_vid_rowkey_type())
-            && OB_FAIL(check_has_none_shared_index_tables_for_fts_or_multivalue_or_vector_index_(tenant_id, index_table_schema->get_data_table_id(), schema_guard,
+                    index_table_schema->is_rowkey_doc_id())
+            && OB_FAIL(check_has_none_shared_index_tables_for_fts_or_multivalue_index_(tenant_id, index_table_schema->get_data_table_id(), schema_guard,
                 has_other_domain_index))) {
-          LOG_WARN("fail to check has fts/multivalue/vector index", K(ret), K(tenant_id), K(index_table_schema->get_index_type()), K(arg), KPC(index_table_schema));
+          LOG_WARN("fail to check has fts or multivalue index", K(ret), K(tenant_id), K(index_table_schema->get_index_type()), K(arg), KPC(index_table_schema));
+        } else if ((index_table_schema->is_vec_rowkey_vid_type() ||
+                   index_table_schema->is_vec_vid_rowkey_type())
+            && OB_FAIL(check_has_none_shared_index_tables_for_vector_index_(tenant_id, index_table_schema->get_data_table_id(), schema_guard,
+                has_other_domain_index))) {
+          LOG_WARN("fail to check has vector index", K(ret), K(tenant_id), K(index_table_schema->get_index_type()), K(arg), KPC(index_table_schema));
         } else if (has_other_domain_index) {
-          LOG_INFO("there are some other fts/multivalue/vector index, and don't need to drop share index table",
+          LOG_INFO("there are some other none share index table, and don't need to drop share index table",
               K(index_table_schema->get_index_type()), KPC(index_table_schema));
         } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
           LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -1561,15 +1564,15 @@ bool ObIndexBuilder::is_final_index_status(const ObIndexStatus index_status) con
           || is_error_index_status(index_status));
 }
 
-int ObIndexBuilder::check_has_none_shared_index_tables_for_fts_or_multivalue_or_vector_index_(
+int ObIndexBuilder::check_has_none_shared_index_tables_for_fts_or_multivalue_index_(
     const uint64_t tenant_id,
     const uint64_t data_table_id,
     share::schema::ObSchemaGetterGuard &schema_guard,
-    bool &has_fts_or_multivalue_or_vector_index)
+    bool &has_fts_or_multivalue_index)
 {
   int ret = OB_SUCCESS;
   ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
-  has_fts_or_multivalue_or_vector_index = false;
+  has_fts_or_multivalue_index = false;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == data_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id or data table id", K(ret), K(tenant_id), K(data_table_id));
@@ -1577,21 +1580,52 @@ int ObIndexBuilder::check_has_none_shared_index_tables_for_fts_or_multivalue_or_
     LOG_WARN("fail to get index schema with data table id", K(ret), K(tenant_id), K(data_table_id));
   } else {
     bool has_other_fts_index = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !has_fts_or_multivalue_or_vector_index && i < indexs.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_fts_or_multivalue_index && i < indexs.count(); ++i) {
       const ObSimpleTableSchemaV2 *index_schema = indexs.at(i);
       if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, index schema is nullptr", K(ret), KP(index_schema), K(i), K(indexs));
-      } else if (!index_schema->is_fts_index() && !index_schema->is_multivalue_index() && !index_schema->is_vec_index()) {
+      } else if (!index_schema->is_fts_index() && !index_schema->is_multivalue_index()) {
         continue; // The index isn't fulltext index / multivalue index, just skip.
       } else if (index_schema->is_fts_index_aux() ||
                  index_schema->is_fts_doc_word_aux() ||
-                 index_schema->is_multivalue_index_aux() ||
-                 index_schema->is_vec_index_id_type() ||
+                 index_schema->is_multivalue_index_aux()) {
+        // none-shared-index tables still exist. shared-index table for FTS/MULTI-VALUE index should not be deleted
+        has_fts_or_multivalue_index = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIndexBuilder::check_has_none_shared_index_tables_for_vector_index_(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    bool &has_none_share_vector_index)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
+  has_none_share_vector_index = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == data_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id or data table id", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(schema_guard.get_index_schemas_with_data_table_id(tenant_id, data_table_id, indexs))) {
+    LOG_WARN("fail to get index schema with data table id", K(ret), K(tenant_id), K(data_table_id));
+  } else {
+    bool has_other_fts_index = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !has_none_share_vector_index && i < indexs.count(); ++i) {
+      const ObSimpleTableSchemaV2 *index_schema = indexs.at(i);
+      if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, index schema is nullptr", K(ret), KP(index_schema), K(i), K(indexs));
+      } else if (!index_schema->is_vec_index()) {
+        continue; // The index isn't vector index table, just skip.
+      } else if (index_schema->is_vec_index_id_type() ||
                  index_schema->is_vec_delta_buffer_type() ||
                  index_schema->is_vec_index_snapshot_data_type()) {
-        // none-shared-index tables still exist. shared-index table for FTS/MULTI-VALUE/VEC index should not be deleted
-        has_fts_or_multivalue_or_vector_index = true;
+        // none-shared-index tables still exist. shared-index table for VEC index should not be deleted
+        has_none_share_vector_index = true;
       }
     }
   }
