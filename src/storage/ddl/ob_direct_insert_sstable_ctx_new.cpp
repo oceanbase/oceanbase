@@ -2477,7 +2477,7 @@ int ObTabletFullDirectLoadMgr::open(const int64_t current_execution_id, share::S
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is invalid", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id_))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), dir_id_))) {
     LOG_WARN("alloc dir id failed", K(ret));
   } else if (current_execution_id < execution_id_
     || current_execution_id < tablet_handle.get_obj()->get_tablet_meta().ddl_execution_id_) {

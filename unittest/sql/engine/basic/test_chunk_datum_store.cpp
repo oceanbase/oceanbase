@@ -906,9 +906,9 @@ TEST_F(TestChunkDatumStore, test_only_disk_data)
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkDatumStore rs("TEST");
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(1L << 30);
   // disk data
   CALL(append_rows, rs, cnt);
@@ -933,9 +933,9 @@ TEST_F(TestChunkDatumStore, test_only_disk_data1)
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkDatumStore rs("TEST");
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(1L << 30);
   // disk data
   CALL(append_rows, rs, cnt);
@@ -994,9 +994,10 @@ TEST_F(TestChunkDatumStore, test_append_block)
 
   //recv
   ObChunkDatumStore rs2("TEST");
-  rs2.alloc_dir_id();
   ObChunkDatumStore::Block *block2 = reinterpret_cast<ObChunkDatumStore::Block *>(mem2);
   ret = rs2.init(0, tenant_id_, ctx_id_, label_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = rs2.alloc_dir_id();
   ASSERT_EQ(OB_SUCCESS, ret);
   for (int64_t i = 0; OB_SUCC(ret) && i < 100; ++i) {
     ret = rs2.append_block(block->get_buffer()->data(), block->get_buffer()->data_size(), true);

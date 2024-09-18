@@ -27,7 +27,7 @@ int ObScalarAggregateVecOp::inner_open()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObGroupByVecOp::inner_open())) {
     LOG_WARN("groupby inner open failed", K(ret));
-  } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+  } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(ctx_.get_my_session()->get_effective_tenant_id(), dir_id_))) {
     LOG_WARN("failed to allocate dir id", K(ret));
   } else if (OB_FAIL(init_mem_context())) {
     LOG_WARN("init memory context failed", K(ret));

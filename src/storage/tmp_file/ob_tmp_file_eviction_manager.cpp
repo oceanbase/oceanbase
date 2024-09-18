@@ -23,12 +23,37 @@ namespace tmp_file
 {
 void ObTmpFileEvictionManager::destroy()
 {
+  // int ret = OB_SUCCESS;
+  // ObSharedNothingTmpFile *file = nullptr;
   {
     ObSpinLockGuard guard(meta_list_lock_);
+    // while (!file_meta_eviction_list_.is_empty()) {
+    //   ObTmpFileHandle file_handle;
+    //   if (OB_ISNULL(file = &file_meta_eviction_list_.remove_first()->file_)) {
+    //     ret = OB_ERR_UNEXPECTED;
+    //     LOG_WARN("file is null", KR(ret));
+    //   } else if (OB_FAIL(file_handle.init(file))) {
+    //     LOG_WARN("fail to init file handle", KR(ret), KP(file));
+    //   } else {
+    //     file->dec_ref_cnt();
+    //   }
+    // }
     file_meta_eviction_list_.reset();
   }
+
   {
     ObSpinLockGuard guard(data_list_lock_);
+    // while (!file_data_eviction_list_.is_empty()) {
+    //   ObTmpFileHandle file_handle;
+    //   if (OB_ISNULL(file = &file_data_eviction_list_.remove_first()->file_)) {
+    //     ret = OB_ERR_UNEXPECTED;
+    //     LOG_WARN("file is null", KR(ret));
+    //   } else if (OB_FAIL(file_handle.init(file))) {
+    //     LOG_WARN("fail to init file handle", KR(ret), KP(file));
+    //   } else {
+    //     file->dec_ref_cnt();
+    //   }
+    // }
     file_data_eviction_list_.reset();
   }
 }

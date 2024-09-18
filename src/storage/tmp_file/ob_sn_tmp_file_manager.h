@@ -56,7 +56,7 @@ public:
   void destroy();
 
   int alloc_dir(int64_t &dir_id);
-  int open(int64_t &fd, const int64_t &dir_id, const char* const label = nullptr);
+  int open(int64_t &fd, const int64_t &dir_id, const char* const label);
   int remove(const int64_t fd);
 
   void refresh_meta_memory_limit();
@@ -116,8 +116,8 @@ private:
   ObTmpFileBlockManager tmp_file_block_manager_;
   ObTmpFilePageCacheController page_cache_controller_;
 
-  int64_t current_fd_;
-  int64_t current_dir_id_;
+  static int64_t current_fd_;
+  static int64_t current_dir_id_;
 };
 
 }  // end namespace tmp_file

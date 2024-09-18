@@ -216,7 +216,7 @@ public:
            ObIAllocator *wbp_index_cache_bkt_allocator,
            ObTmpFilePageCacheController *page_cache_controller,
            const char* label);
-  int destroy();
+  int release_resource();
   void reset();
   bool can_remove();
   bool is_deleting();

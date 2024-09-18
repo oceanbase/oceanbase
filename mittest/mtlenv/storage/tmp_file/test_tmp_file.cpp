@@ -63,7 +63,6 @@ public:
   static void TearDownTestCase();
 };
 static ObSimpleMemLimitGetter getter;
-static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;
 
 // ATTENTION!
 // currently, we only initialize modules about tmp file at the beginning of unit test and
@@ -268,7 +267,6 @@ TEST_F(TestTmpFile, test_read)
   ret = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_tmp_file(fd, file_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   file_handle.get()->page_idx_cache_.max_bucket_array_capacity_ = SMALL_WBP_IDX_CACHE_MAX_CAPACITY;
-  file_handle.reset();
 
   ObTmpFileIOInfo io_info;
   io_info.fd_ = fd;
@@ -282,11 +280,8 @@ TEST_F(TestTmpFile, test_read)
   write_time = ObTimeUtility::current_time() - write_time;
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_tmp_file(fd, file_handle);
-  ASSERT_EQ(OB_SUCCESS, ret);
   int64_t wbp_begin_offset = file_handle.get()->cal_wbp_begin_offset();
   ASSERT_GT(wbp_begin_offset, 0);
-  file_handle.get()->page_idx_cache_.max_bucket_array_capacity_ = SMALL_WBP_IDX_CACHE_MAX_CAPACITY;
   file_handle.reset();
 
   int64_t read_time = ObTimeUtility::current_time();
@@ -1204,7 +1199,6 @@ TEST_F(TestTmpFile, test_write_last_page_during_flush)
   LOG_INFO("test_write_last_page_during_flush");
 }
 
-// generate 750MB random data.
 // this test will trigger flush and evict logic for both data and meta pages.
 void test_big_file(const int64_t write_size, const int64_t wbp_mem_limit, ObTmpFileIOInfo io_info)
 {
@@ -1239,7 +1233,7 @@ void test_big_file(const int64_t write_size, const int64_t wbp_mem_limit, ObTmpF
   io_info.io_desc_.set_wait_event(2);
   io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
 
-  // 1. write 750MB data
+  // 1. write data
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
   int64_t write_time = ObTimeUtility::current_time();
@@ -1247,7 +1241,7 @@ void test_big_file(const int64_t write_size, const int64_t wbp_mem_limit, ObTmpF
   ASSERT_EQ(OB_SUCCESS, ret);
   write_time = ObTimeUtility::current_time() - write_time;
 
-  // 2. read 750MB data
+  // 2. read data
   ObTmpFileIOHandle handle;
   int64_t read_size = write_size;
   char *read_buf = new char [read_size];
@@ -1619,6 +1613,9 @@ TEST_F(TestTmpFile, test_multiple_small_files)
   STORAGE_LOG(INFO, "io time", K(io_time));
 }
 
+// ATTENTION
+// the case after this will increase wbp_mem_limit to BIG_WBP_MEM_LIMIT.
+// And it will never be decreased as long as it has been increased
 TEST_F(TestTmpFile, test_big_file)
 {
   const int64_t write_size = 750 * 1024 * 1024;  // write 750MB data
@@ -1649,7 +1646,6 @@ TEST_F(TestTmpFile, test_big_file_disable_page_cache)
   test_big_file(write_size, wbp_mem_limit, io_info);
 }
 
-// TODO, xuwei, enbale later
 TEST_F(TestTmpFile, test_aio_pread)
 {
   int ret = OB_SUCCESS;
@@ -1733,7 +1729,7 @@ TEST_F(TestTmpFile, test_aio_pread)
   ret = MTL(ObTenantTmpFileManager *)->remove(fd);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  LOG_INFO("test_cached_read");
+  LOG_INFO("test_aio_pread");
 }
 } // namespace oceanbase
 

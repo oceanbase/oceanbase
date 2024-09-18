@@ -286,7 +286,7 @@ ObSharedNothingTmpFile::ObSharedNothingTmpFile()
 
 ObSharedNothingTmpFile::~ObSharedNothingTmpFile()
 {
-  destroy();
+  reset();
 }
 
 int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, const int64_t dir_id,
@@ -344,13 +344,13 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
   return ret;
 }
 
-int ObSharedNothingTmpFile::destroy()
+int ObSharedNothingTmpFile::release_resource()
 {
   int ret = OB_SUCCESS;
   int64_t fd_backup = fd_;
   int64_t free_cnt = 0;
 
-  LOG_INFO("tmp file destroy start", KR(ret), K(fd_), KPC(this));
+  LOG_INFO("tmp file release_resource start", KR(ret), K(fd_), KPC(this));
 
   if (cached_page_nums_ > 0) {
     uint32_t cur_page_id = begin_page_id_;
@@ -360,7 +360,7 @@ int ObSharedNothingTmpFile::destroy()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("begin page virtual id is invalid", KR(ret), K(fd_), K(begin_page_virtual_id_));
       } else if (OB_FAIL(wbp_->free_page(fd_, cur_page_id, ObTmpFilePageUniqKey(begin_page_virtual_id_), next_page_id))) {
-        LOG_WARN("fail to free page", KR(ret), K(fd_), K(cur_page_id), K(begin_page_virtual_id_));
+        LOG_ERROR("fail to free page", KR(ret), K(fd_), K(cur_page_id), K(begin_page_virtual_id_));
       } else {
         free_cnt++;
         cur_page_id = next_page_id;
@@ -369,22 +369,16 @@ int ObSharedNothingTmpFile::destroy()
     }
   }
   if (OB_SUCC(ret) && cached_page_nums_ != free_cnt) {
-    LOG_ERROR("tmp file destroy, cached_page_nums_ and free_cnt are not equal", KR(ret), K(fd_), K(free_cnt), KPC(this));
+    LOG_ERROR("tmp file release resource, cached_page_nums_ and free_cnt are not equal", KR(ret), K(fd_), K(free_cnt), KPC(this));
   }
 
-  LOG_INFO("tmp file destroy, free wbp page phase over", KR(ret), K(fd_), KPC(this));
+  LOG_INFO("tmp file release resource, free wbp page phase over", KR(ret), K(fd_), KPC(this));
 
   if (FAILEDx(meta_tree_.clear(truncated_offset_, file_size_))) {
-    LOG_WARN("fail to clear", KR(ret), K(fd_), K(truncated_offset_), K(file_size_));
+    LOG_ERROR("fail to clear meta tree", KR(ret), K(fd_), K(truncated_offset_), K(file_size_));
   }
 
-  LOG_INFO("tmp file destroy, meta_tree_ clear phase over", KR(ret), K(fd_), KPC(this));
-
-  if (OB_SUCC(ret)) {
-    reset();
-  }
-
-  LOG_INFO("tmp file destroy over", KR(ret), "fd", fd_backup);
+  LOG_INFO("tmp file release resource over", KR(ret), "fd", fd_);
   return ret;
 }
 

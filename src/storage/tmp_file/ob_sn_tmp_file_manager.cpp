@@ -19,6 +19,9 @@ namespace oceanbase
 {
 namespace tmp_file
 {
+int64_t ObSNTenantTmpFileManager::current_fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
+int64_t ObSNTenantTmpFileManager::current_dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
+
 ObSNTenantTmpFileManager::ObSNTenantTmpFileManager()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
@@ -30,9 +33,7 @@ ObSNTenantTmpFileManager::ObSNTenantTmpFileManager()
     wbp_index_cache_bucket_allocator_(),
     files_(),
     tmp_file_block_manager_(),
-    page_cache_controller_(tmp_file_block_manager_),
-    current_fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD),
-    current_dir_id_(ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID)
+    page_cache_controller_(tmp_file_block_manager_)
 {
 }
 
@@ -111,18 +112,42 @@ void ObSNTenantTmpFileManager::wait()
 
 void ObSNTenantTmpFileManager::destroy()
 {
-  last_access_tenant_config_ts_ = -1;
-  last_meta_mem_limit_ = META_DEFAULT_LIMIT;
-  page_cache_controller_.destroy();
-  files_.destroy();
-  tmp_file_block_manager_.destroy();
-  tmp_file_allocator_.reset();
-  callback_allocator_.reset();
-  wbp_index_cache_allocator_.reset();
-  wbp_index_cache_bucket_allocator_.reset();
-  is_inited_ = false;
-  current_fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
-  current_dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
+  if (is_inited_) {
+    is_inited_ = false;
+    last_access_tenant_config_ts_ = -1;
+    last_meta_mem_limit_ = META_DEFAULT_LIMIT;
+    page_cache_controller_.destroy();
+    int64_t curr_file_cnt = files_.count();
+    if (OB_UNLIKELY(curr_file_cnt > 0)) {
+      int ret = OB_SUCCESS;
+      TmpFileMap::BlurredIterator iter(files_);
+      while (OB_SUCC(ret)) {
+        ObTmpFileKey unused_key(ObTmpFileGlobal::INVALID_TMP_FILE_FD);
+        ObTmpFileHandle handle;
+        if (OB_FAIL(iter.next(unused_key, handle))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next tmp file", KR(ret), K(tenant_id_));
+          }
+        } else {
+          LOG_ERROR("the tmp file has not been removed when tmp file mgr is destroying", KPC(handle.get()));
+        }
+      } // end while
+
+      int64_t new_file_cnt = files_.count();
+      if (OB_UNLIKELY(new_file_cnt != curr_file_cnt)) {
+        LOG_ERROR("there are some operation for tmp files when tmp file mgr is destroying", K(tenant_id_), K(curr_file_cnt));
+      }
+    }
+    files_.destroy();
+    tmp_file_block_manager_.destroy();
+    tmp_file_allocator_.reset();
+    callback_allocator_.reset();
+    wbp_index_cache_allocator_.reset();
+    wbp_index_cache_bucket_allocator_.reset();
+  }
 
   LOG_INFO("ObSNTenantTmpFileManager destroy", K(tenant_id_), KP(this));
 }
@@ -220,8 +245,12 @@ int ObSNTenantTmpFileManager::remove(const int64_t fd)
         usleep(100 * 1000); // 100ms
       }
     }
-    tmp_file_handle.reset();
-    tmp_file_allocator_.free(tmp_file);
+    if (OB_FAIL(tmp_file->release_resource())) {
+      LOG_ERROR("fail to release resource", KR(ret), KP(tmp_file), KPC(tmp_file), K(lbt()));
+    } else {
+      tmp_file_handle.reset();
+      tmp_file_allocator_.free(tmp_file);
+    }
   }
 
   LOG_INFO("remove a tmp file over", KR(ret), K(start_remove_ts), K(fd), K(lbt()));
