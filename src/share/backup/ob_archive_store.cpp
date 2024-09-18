@@ -1354,12 +1354,12 @@ int ObArchiveStore::get_single_piece_info(bool &is_empty_piece, ObSinglePieceDes
     LOG_WARN("ObArchiveStore not init", K(ret));
   } else if (OB_FAIL(read_single_piece(single_piece))) {
     // not a frozen piece, build single piece info with extend and checkpoint info.
-    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret) {
       ObPieceCheckpointDesc checkpoint_desc;
       ObTenantArchivePieceInfosDesc extend_desc;
       ret = OB_SUCCESS;
       if (OB_FAIL(read_piece_checkpoint(checkpoint_desc))) {
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           is_empty_piece = true;
         } else {

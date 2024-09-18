@@ -736,7 +736,7 @@ int ObRestoreUtil::get_restore_scn_from_multi_path_(
           }
         }
       } else if (OB_FAIL(get_backup_set_info_from_multi_path_(multi_path, backup_set_info))) { //read backup set info
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("ignore non backup set dir");
         } else {
@@ -859,7 +859,7 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
       } else if (OB_FAIL(store.init(backup_dest))) {
         LOG_WARN("failed to init backup store", K(ret));
       } else if (OB_FAIL(store.read_backup_set_info(backup_set_info))) { //check if backup set
-       if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+       if (OB_OBJECT_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         LOG_INFO("skip log dir", K(ret), K(backup_dest));
         continue;

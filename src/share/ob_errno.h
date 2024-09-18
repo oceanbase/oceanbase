@@ -3779,7 +3779,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NOT_READ_ALL_DATA__USER_ERROR_MSG "Read all data fail"
 #define OB_BUILD_MD5_ERROR__USER_ERROR_MSG "Build MD5 fail"
 #define OB_MD5_NOT_MATCH__USER_ERROR_MSG "OSS file MD5 not match"
-#define OB_BACKUP_FILE_NOT_EXIST__USER_ERROR_MSG "cannot find backup file"
 #define OB_OSS_DATA_VERSION_NOT_MATCHED__USER_ERROR_MSG "Can not get data version from timestamp"
 #define OB_OSS_WRITE_ERROR__USER_ERROR_MSG "Write OSS file error"
 #define OB_RESTORE_IN_PROGRESS__USER_ERROR_MSG "Another restore is in progress"
@@ -7974,8 +7973,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BUILD_MD5_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9009, Build MD5 fail"
 #define OB_MD5_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9010, OSS file MD5 not match"
 #define OB_MD5_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9010, OSS file MD5 not match"
-#define OB_BACKUP_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9011, cannot find backup file"
-#define OB_BACKUP_FILE_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9011, cannot find backup file"
 #define OB_OSS_DATA_VERSION_NOT_MATCHED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9012, Can not get data version from timestamp"
 #define OB_OSS_DATA_VERSION_NOT_MATCHED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9012, Can not get data version from timestamp"
 #define OB_OSS_WRITE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9013, Write OSS file error"
@@ -8949,7 +8946,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2338];
+extern int g_all_ob_errnos[2337];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

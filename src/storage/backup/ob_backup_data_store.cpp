@@ -1032,7 +1032,7 @@ int ObBackupDataStore::get_single_backup_set_sys_time_zone_wrap(common::ObTimeZo
       if (OB_FAIL(read_tenant_locality_info(locality_info))) {
         LOG_WARN("fail to read backup set info", K(ret), K_(backup_set_dest));
       } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
           LOG_WARN("backup set info not exist", K(ret), K_(backup_set_dest));
           ret = OB_SUCCESS;
         } else {
