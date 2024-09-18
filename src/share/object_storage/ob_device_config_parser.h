@@ -25,16 +25,10 @@ public:
   static const char USED_FOR[];
   static const char PATH[];
   static const char ENDPOINT[];
-  static const char ACCESS_MODE[];
-  static const char ACCESS_ID[];
-  static const char ACCESS_KEY[];
-  static const char ENCRYPT_KEY[];
+  static const char ACCESS_INFO[];
   static const char ENCRYPT_INFO[];
   static const char EXTENSION[];
-  static const char OLD_ACCESS_MODE[];
-  static const char OLD_ACCESS_ID[];
-  static const char OLD_ACCESS_KEY[];
-  static const char OLD_ENCRYPT_KEY[];
+  static const char OLD_ACCESS_INFO[];
   static const char OLD_ENCRYPT_INFO[];
   static const char OLD_EXTENSION[];
   static const char RAM_URL[];
@@ -51,14 +45,13 @@ public:
   static const char INVALID_OP_ID[];
 
 public:
-  static int parse_one_device_config(char *opt_str, ObDeviceConfig &config);
+  static int parse_device_config_field(const char *buf, ObDeviceConfig &device_config);
   static int parse_config_type_int(const char *key_name, const char *token, int64_t &value);
   static int parse_config_type_uint(const char *key_name, const char *token, uint64_t &value);
   static int parse_config_type_char_array(const char *key_name,
                                           const char *token,
                                           const int64_t max_value_len,
                                           char *value);
-  static int convert_access_info_to_old(char *access_info, char *old_access_info);
 
 private:
   enum class FieldType

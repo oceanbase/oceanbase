@@ -90,7 +90,7 @@ int ObDeviceConfigMgr::load_configs()
       ret = OB_NOT_INIT;
       LOG_WARN("ObDeviceConfigMgr not init", KR(ret));
     } else if (OB_FAIL(device_manifest_.load(device_configs, head_))) {
-      if (OB_FILE_NOT_EXIST == ret) { // first start of observer
+      if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) { // first start of observer
         LOG_INFO("device manifest file does not exist", KR(ret));
         ret = OB_SUCCESS;
       } else {
