@@ -497,6 +497,8 @@ int ObTmpPageCache::cached_read(const common::ObIArray<ObTmpPageCacheKey> &page_
     callback->allocator_ = &callback_allocator;
     if (OB_FAIL(callback->page_keys_.assign(page_keys))) {
       STORAGE_LOG(WARN, "fail to assign page keys", KR(ret), K(page_keys.count()));
+      callback->~ObTmpCachedReadPageIOCallback();
+      callback_allocator.free(callback);
     } else if (OB_FAIL(inner_read_io_(macro_block_id, read_size, begin_offset_in_block,
                                       io_desc, io_timeout_ms, callback, mb_handle))) {
       STORAGE_LOG(WARN, "fail to inner read io", KR(ret), K(macro_block_id), K(read_size),
