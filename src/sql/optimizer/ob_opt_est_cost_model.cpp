@@ -1375,45 +1375,39 @@ int ObOptEstCostModel::cost_basic_table(const ObCostTableScanInfo &est_cost_info
 
 {
   int ret = OB_SUCCESS;
-  const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
-  if (OB_ISNULL(table_meta_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret));
+  double row_count = est_cost_info.phy_query_range_row_count_;
+  // revise number of output row if is row sample scan
+  if (est_cost_info.sample_info_.is_row_sample()) {
+    row_count *= 0.01 * est_cost_info.sample_info_.percent_;
+  }
+  // calc row count for one partition
+  double part_count = static_cast<double>(est_cost_info.index_meta_info_.index_part_count_);
+  part_count = part_count > 0 ? part_count : 1;
+  double row_count_per_part = row_count / part_count;
+  double index_scan_cost = 0;
+  double index_back_cost = 0;
+  double prefix_filter_sel = 1.0;
+  // calc scan one partition cost
+  if (OB_FAIL(cost_index_scan(est_cost_info,
+                              row_count_per_part,
+                              prefix_filter_sel,
+                              index_scan_cost))) {
+    LOG_WARN("failed to calc index scan cost", K(ret));
+  } else if (est_cost_info.index_meta_info_.is_index_back_ &&
+              OB_FAIL(cost_index_back(est_cost_info,
+                                    row_count_per_part,
+                                    prefix_filter_sel,
+                                    index_back_cost))) {
+    LOG_WARN("failed to calc index back cost", K(ret));
   } else {
-    double row_count = est_cost_info.phy_query_range_row_count_;
-    // revise number of output row if is row sample scan
-    if (est_cost_info.sample_info_.is_row_sample()) {
-      row_count *= 0.01 * est_cost_info.sample_info_.percent_;
-    }
-    // calc row count for one partition
-    int64_t part_count = table_meta_info->part_count_;
-    part_count = part_count > 0 ? part_count : 1;
-    double row_count_per_part = row_count / part_count;
-    double index_scan_cost = 0;
-    double index_back_cost = 0;
-    double prefix_filter_sel = 1.0;
-    // calc scan one partition cost
-    if (OB_FAIL(cost_index_scan(est_cost_info,
-                                row_count_per_part,
-                                prefix_filter_sel,
-                                index_scan_cost))) {
-      LOG_WARN("failed to calc index scan cost", K(ret));
-    } else if (est_cost_info.index_meta_info_.is_index_back_ &&
-               OB_FAIL(cost_index_back(est_cost_info,
-                                      row_count_per_part,
-                                      prefix_filter_sel,
-                                      index_back_cost))) {
-      LOG_WARN("failed to calc index back cost", K(ret));
-    } else {
-      cost += index_scan_cost;
-      OPT_TRACE_COST_MODEL(KV(cost), "+=", KV(index_scan_cost));
-      cost += index_back_cost;
-      OPT_TRACE_COST_MODEL(KV(cost), "+=", KV(index_back_cost));
-      // calc one parallel scan cost
-      cost *= part_cnt_per_dop;
-      OPT_TRACE_COST_MODEL(KV(cost), "*=", KV(part_cnt_per_dop));
-      LOG_TRACE("OPT:[ESTIMATE FINISH]", K(cost), K(part_cnt_per_dop), K(est_cost_info));
-    }
+    cost += index_scan_cost;
+    OPT_TRACE_COST_MODEL(KV(cost), "+=", KV(index_scan_cost));
+    cost += index_back_cost;
+    OPT_TRACE_COST_MODEL(KV(cost), "+=", KV(index_back_cost));
+    // calc one parallel scan cost
+    cost *= part_cnt_per_dop;
+    OPT_TRACE_COST_MODEL(KV(cost), "*=", KV(part_cnt_per_dop));
+    LOG_TRACE("OPT:[ESTIMATE FINISH]", K(cost), K(part_cnt_per_dop), K(est_cost_info));
   }
   return ret;
 }
@@ -1895,12 +1889,8 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
   int ret = OB_SUCCESS;
   double project_cost = 0.0;
   const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
-  const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
   bool is_index_back = index_meta_info.is_index_back_;
-  if (OB_ISNULL(table_meta_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret));
-  } else if (is_scan_index && is_index_back) {
+  if (is_scan_index && is_index_back) {
     if (OB_FAIL(cost_project(row_count,
                             est_cost_info.index_access_column_items_,
                             is_get,
