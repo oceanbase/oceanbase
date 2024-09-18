@@ -2202,6 +2202,8 @@ DEFINE_ERROR_DEP(OB_FILE_LENGTH_INVALID, -9007, -1, "HY000", "Invalid OSS file l
 DEFINE_ERROR(OB_NOT_READ_ALL_DATA, -9008, -1, "HY000", "Read all data fail");
 DEFINE_ERROR(OB_BUILD_MD5_ERROR, -9009, -1, "HY000", "Build MD5 fail");
 DEFINE_ERROR(OB_MD5_NOT_MATCH, -9010, -1, "HY000", "OSS file MD5 not match");
+// do not use OB_BACKUP_FILE_NOT_EXIST, use OB_OBJECT_NOT_EXIST instead
+DEFINE_ERROR_DEP(OB_BACKUP_FILE_NOT_EXIST, -9011, -1, "HY000", "cannot find backup file");
 DEFINE_ERROR(OB_OSS_DATA_VERSION_NOT_MATCHED, -9012, -1, "HY000", "Can not get data version from timestamp");
 DEFINE_ERROR(OB_OSS_WRITE_ERROR, -9013, -1, "HY000", "Write OSS file error");
 DEFINE_ERROR(OB_RESTORE_IN_PROGRESS, -9014, -1, "HY000", "Another restore is in progress");
