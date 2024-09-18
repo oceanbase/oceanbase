@@ -193,7 +193,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     hash_join_enabled_(true),
     optimizer_sortmerge_join_enabled_(true),
     nested_loop_join_enabled_(true),
-    push_join_pred_into_view_enabled_(true)
+    push_join_pred_into_view_enabled_(true),
+    das_batch_rescan_flag_(0)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -560,6 +561,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_nested_join_enabled(bool enabled) { nested_loop_join_enabled_ = enabled; }
   inline bool is_push_join_pred_into_view_enabled() const { return push_join_pred_into_view_enabled_; }
   inline void set_push_join_pred_into_view_enabled(bool enabled) { push_join_pred_into_view_enabled_ = enabled; }
+  inline void set_das_batch_rescan_flag(const int64_t batch_rescan_flag) { das_batch_rescan_flag_ = batch_rescan_flag; }
+  inline int64_t get_das_batch_rescan_flag() const { return das_batch_rescan_flag_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -642,6 +645,7 @@ private:
   bool optimizer_sortmerge_join_enabled_;
   bool nested_loop_join_enabled_;
   bool push_join_pred_into_view_enabled_;
+  int64_t das_batch_rescan_flag_;
 };
 }
 }

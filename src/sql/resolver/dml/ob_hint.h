@@ -96,6 +96,7 @@ struct ObOptParamHint
     DEF(_PUSH_JOIN_PREDICATE,)   \
     DEF(RANGE_INDEX_DIVE_LIMIT,) \
     DEF(PARTITION_INDEX_DIVE_LIMIT,) \
+    DEF(DAS_BATCH_RESCAN_FLAG,)           \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

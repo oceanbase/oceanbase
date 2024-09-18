@@ -485,6 +485,14 @@ int ObLogSubPlanFilter::check_if_match_das_group_rescan(ObLogicalOperator *root,
         group_rescan = false;
       } else if (tsc->get_scan_direction() != default_asc_direction() && tsc->get_scan_direction() != ObOrderDirection::UNORDERED) {
         group_rescan = false;
+      } else if (tsc->has_index_scan_filter() && tsc->get_index_back() && tsc->get_is_index_global()) {
+        // contains global index back filter, enabled after 4.2.1.9
+        ObDASBatchRescanFlag flag(plan->get_optimizer_context().get_das_batch_rescan_flag());
+        if (flag.enable_global_index_filter()) {
+          // do nothing
+        } else {
+          group_rescan = false;
+        }
       } else {/*do nothing*/}
     }
   } else if (log_op_def::LOG_SUBPLAN_SCAN == root->get_type()) {

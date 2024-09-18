@@ -1000,6 +1000,7 @@ int ObOptimizerTraceImpl::trace_parameters()
     TRACE_PARAMETER(_nested_loop_join_enabled, bool);
     TRACE_PARAMETER(_enable_var_assign_use_das, bool);
     TRACE_PARAMETER(_enable_distributed_das_scan, bool);
+    TRACE_PARAMETER(_enable_das_batch_rescan_flag, int64_t);
     //for system variables
     TRACE_SYS_VAR(_PX_SHARED_HASH_JOIN, int64_t);
     TRACE_SYS_VAR(_ENABLE_PARALLEL_DML, int64_t);

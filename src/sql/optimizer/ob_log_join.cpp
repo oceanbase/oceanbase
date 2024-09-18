@@ -1403,6 +1403,15 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
         }
       }
     }
+    if (OB_SUCC(ret) && can_use_batch_nlj && ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
+      // contains global index back filter, enabled after 4.2.1.9
+      ObDASBatchRescanFlag flag(plan->get_optimizer_context().get_das_batch_rescan_flag());
+      if (flag.enable_global_index_filter()) {
+        // do nothing
+      } else {
+        can_use_batch_nlj = false;
+      }
+    }
   } else if (1 == root->get_num_of_child()) {
     if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0), can_use_batch_nlj)))) {
       LOG_WARN("failed to check if disable batch", K(ret));

@@ -651,6 +651,34 @@ ObTMSegmentArray<T, max_block_size, BlockAllocatorT, auto_free,
   this->set_tenant_id(MTL_ID());
 }
 
+// DAS batch rescan flag, to control multiple batch rescan scenarios
+struct ObDASBatchRescanFlag
+{
+static const int BATCH_RESCAN_BIT_GLOBAL_INDEX_FILTER = 0;
+static const int BATCH_RESCAN_BIT_SPF_SEMI_ANTI_LEFT_CHILD = 1;
+
+public:
+  explicit ObDASBatchRescanFlag(int64_t flag)
+    : flag_(0)
+    {
+      enable_global_index_filter_ = (flag & (0x1L << BATCH_RESCAN_BIT_GLOBAL_INDEX_FILTER)) > 0 ? true : false;
+      enable_spf_semi_anti_left_child_ = (flag & (0x1L << BATCH_RESCAN_BIT_SPF_SEMI_ANTI_LEFT_CHILD)) > 0 ? true : false;
+    }
+  union {
+    int64_t flag_;
+    struct {
+      int64_t enable_global_index_filter_ : 1;
+      int64_t enable_spf_semi_anti_left_child_ : 1;
+      int64_t reserved_ : 62;
+    };
+  };
+
+  inline bool enable_global_index_filter() const { return enable_global_index_filter_; }
+  inline bool enable_spf_semi_anti_left_child() const { return enable_spf_semi_anti_left_child_; }
+
+  TO_STRING_KV(K(enable_global_index_filter()), K(enable_spf_semi_anti_left_child()));
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OCEANBASE_SQL_OB_SQL_DEFINE_H_ */

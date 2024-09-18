@@ -1021,6 +1021,7 @@ public:
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
     enable_distributed_das_scan_(false),
+    enable_das_batch_rescan_flag_(0),
     enable_var_assign_use_das_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
@@ -1065,6 +1066,7 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool enable_spf_batch_rescan_;
   bool enable_distributed_das_scan_;
+  int64_t enable_das_batch_rescan_flag_;
   bool enable_var_assign_use_das_;
 
 private:
