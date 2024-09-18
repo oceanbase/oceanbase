@@ -36,12 +36,13 @@ void ObPluginVectorIndexMgr::destroy()
     release_all_adapters();
     partial_index_adpt_map_.destroy();
     complete_index_adpt_map_.destroy();
-    first_mem_sync_map_.destroy();
-    second_mem_sync_map_.destroy();
+
     // elements memory in adpt map will be released by allocator in service, refine later;
-    // elements memory in mem_sync_map should be released here, they are alloc by ob_malloc;
-    // should use 2 allocator to avoid accumulation
-    task_allocator_.reset();
+    // elements memory in mem_sync_map should be released here
+    first_mem_sync_map_.destroy();
+    first_task_allocator_.reset();
+    second_mem_sync_map_.destroy();
+    second_task_allocator_.reset();
   }
 }
 
@@ -74,13 +75,13 @@ int ObPluginVectorIndexMgr::init(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   int64_t hash_capacity = common::hash::cal_next_prime(DEFAULT_ADAPTER_HASH_SIZE);
-  if (OB_FAIL(complete_index_adpt_map_.create(hash_capacity, "VecIdxAdpt"))) {
+  if (OB_FAIL(complete_index_adpt_map_.create(hash_capacity, "VecIdxAdptMap", "VecIdxAdptMap", tenant_id))) {
     LOG_WARN("fail to create full index adapter map", K(ls_id), KR(ret));
-  } else if (OB_FAIL(partial_index_adpt_map_.create(hash_capacity, "VecIdxAdpt"))) {
+  } else if (OB_FAIL(partial_index_adpt_map_.create(hash_capacity, "VecIdxAdptMap", "VecIdxAdptMap", tenant_id))) {
     LOG_WARN("fail to create partial index adapter map", K(ls_id), KR(ret));
-  } else if (OB_FAIL(first_mem_sync_map_.create(hash_capacity, "VecIdxAdpt", "VecIdxAdpt"))) {
+  } else if (OB_FAIL(first_mem_sync_map_.create(hash_capacity, "VecIdxTaskMap", "VecIdxTaskMap", tenant_id))) {
     LOG_WARN("fail to create first mem sync set", K(ls_id), KR(ret));
-  } else if (OB_FAIL(second_mem_sync_map_.create(hash_capacity, "VecIdxAdpt", "VecIdxAdpt"))) {
+  } else if (OB_FAIL(second_mem_sync_map_.create(hash_capacity, "VecIdxTaskMap", "VecIdxTaskMap", tenant_id))) {
     LOG_WARN("fail to create second mem sync set", K(ls_id), KR(ret));
   } else {
     ls_tablet_task_ctx_.task_id_ = 0;
@@ -225,7 +226,7 @@ int ObPluginVectorIndexMgr::create_partial_adapter(ObTabletID idx_tablet_id,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for vector index adapter", KR(ret));
   } else {
-    tmp_vec_idx_adpt = new(adpt_buff)ObPluginVectorIndexAdaptor(&allocator, memory_context_);
+    tmp_vec_idx_adpt = new(adpt_buff)ObPluginVectorIndexAdaptor(&allocator, memory_context_, tenant_id_);
     ObVectorIndexRecordType record_type = ObPluginVectorIndexUtils::index_type_to_record_type(type);
     if (record_type >= VIRT_MAX) {
       ret = OB_ERR_UNEXPECTED;
@@ -395,6 +396,7 @@ int ObPluginVectorIndexMgr::check_need_mem_data_sync_task(bool &need_sync)
   if (get_processing_map().size() > 0) {
     if (ls_tablet_task_ctx_.all_finished_) { // is false
       get_processing_map().reuse();
+      get_processing_allocator().reset();
       // release task ctx
       ls_tablet_task_ctx_.all_finished_ = false;
       LOG_INFO("release processing set to waiting set",
@@ -652,7 +654,7 @@ int ObPluginVectorIndexService::acquire_vector_index_mgr(ObLSID ls_id, ObPluginV
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memeory for new vector index mgr", KR(ret));
       } else {
-        ObPluginVectorIndexMgr *new_ls_index_mgr = new(mgr_buff)ObPluginVectorIndexMgr(memory_context_);
+        ObPluginVectorIndexMgr *new_ls_index_mgr = new(mgr_buff)ObPluginVectorIndexMgr(memory_context_, tenant_id_);
         if (OB_FAIL(new_ls_index_mgr->init(tenant_id_, ls_id, memory_context_, &all_vsag_use_mem_))) {
           LOG_WARN("failed to init ls vector index mgr", K(ls_id), KR(ret));
         } else if (OB_FAIL(get_ls_index_mgr_map().set_refactored(ls_id, new_ls_index_mgr))) {
@@ -750,7 +752,7 @@ int ObPluginVectorIndexService::init(const uint64_t tenant_id,
                                      ObLSService *ls_service)
 {
   int ret = OB_SUCCESS;
-  lib::ObMemAttr mem_attr(MTL_ID(), "VecIdxSrv");
+  lib::ObMemAttr mem_attr(tenant_id, "VecIdxSrv");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K(tenant_id));
@@ -759,14 +761,17 @@ int ObPluginVectorIndexService::init(const uint64_t tenant_id,
       || OB_ISNULL(ls_service)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument to init ObPluginVectorIndexService", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(index_ls_mgr_map_.create(common::hash::cal_next_prime(DEFAULT_LS_HASH_SIZE), "VecIdxLSMgr"))) {
+  } else if (OB_FAIL(index_ls_mgr_map_.create(common::hash::cal_next_prime(DEFAULT_LS_HASH_SIZE),
+                                              "VecIdxLSMgr",
+                                              "VecIdxLSMgr",
+                                              tenant_id))) {
     LOG_WARN("create ls mgr ", KR(ret), K(tenant_id));
-  } else if (FALSE_IT(alloc_.set_tenant_id(MTL_ID()))) {
+  } else if (FALSE_IT(alloc_.set_tenant_id(tenant_id))) {
   } else if (OB_FAIL(allocator_.init(&alloc_, OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("ObTenantSrs allocator init failed.", K(ret));
   } else {
     lib::ContextParam param;
-    param.set_mem_attr(MTL_ID())
+    param.set_mem_attr(tenant_id)
       .set_properties(lib::ADD_CHILD_THREAD_SAFE | lib::ALLOC_THREAD_SAFE | lib::RETURN_MALLOC_DEFAULT)
       .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
       .set_label("VectorIndexVsag")
@@ -820,7 +825,7 @@ void ObPluginVectorIndexService::wait()
   }
 }
 
-// ToDo: debug functions, remove later virtual-table ready
+// debug functions
 void ObPluginVectorIndexMgr::dump_all_inst()
 {
   int ret = OB_SUCCESS;
@@ -897,7 +902,7 @@ int ObPluginVectorIndexMgr::replace_with_complete_adapter(ObVectorIndexAdapterCa
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for vector index adapter", KR(ret));
   } else {
-    new_adapter = new(adpt_buff)ObPluginVectorIndexAdaptor(&allocator, memory_context_);
+    new_adapter = new(adpt_buff)ObPluginVectorIndexAdaptor(&allocator, memory_context_, tenant_id_);
     new_adapter->set_create_type(CreateTypeComplete);
     if (OB_FAIL(new_adapter->merge_parital_index_adapter(inc_adapter_guard.get_adatper()))) {
       LOG_WARN("failed to merge inc index adapter", KPC(inc_adapter_guard.get_adatper()), KR(ret));
@@ -981,7 +986,7 @@ int ObPluginVectorIndexMgr::replace_with_full_partial_adapter(ObVectorIndexAcqui
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for vector index adapter", KR(ret));
   } else {
-    new_adapter = new(adpt_buff)ObPluginVectorIndexAdaptor(&allocator, memory_context_);
+    new_adapter = new(adpt_buff)ObPluginVectorIndexAdaptor(&allocator, memory_context_, tenant_id_);
     new_adapter->set_create_type(CreateTypeFullPartial);
     if (OB_FAIL(new_adapter->set_tablet_id(VIRT_INC, ctx.inc_tablet_id_))) {
       LOG_WARN("failed to set inc tablet id", K(ctx), KR(ret));

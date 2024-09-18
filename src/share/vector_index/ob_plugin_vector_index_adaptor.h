@@ -321,7 +321,7 @@ class ObPluginVectorIndexAdaptor
 {
 public:
   friend class ObVsagMemContext;
-  ObPluginVectorIndexAdaptor(common::ObIAllocator *allocator, lib::MemoryContext &entity);
+  ObPluginVectorIndexAdaptor(common::ObIAllocator *allocator, lib::MemoryContext &entity, uint64_t tenant_id);
   ~ObPluginVectorIndexAdaptor();
 
   int init(ObString init_str, int64_t dim, lib::MemoryContext &parent_mem_ctx, uint64_t *all_vsag_use_mem);
@@ -329,6 +329,7 @@ public:
   int init(lib::MemoryContext &parent_mem_ctx, uint64_t *all_vsag_use_mem);
   int set_param(ObString init_str, int64_t dim);
   int get_index_type() { return type_; };
+  uint64_t get_tenant_id() {return tenant_id_; };
 
   // -- start 调试使用
   void init_incr_tablet() {inc_tablet_id_ = ObTabletID(common::ObTabletID::MIN_VALID_TABLET_ID); }
@@ -422,7 +423,8 @@ public:
                                     ObVectorIndexAlgorithmType &type,
                                     void *&param);
   static int cast_roaringbitmap_to_stdmap(const roaring::api::roaring64_bitmap_t *bitmap,
-                                          std::map<int, bool> &mymap);
+                                          std::map<int, bool> &mymap,
+                                          uint64_t tenant_id);
   int check_vsag_mem_used();
   uint64_t get_all_vsag_mem_used() {
     return ATOMIC_LOAD(all_vsag_use_mem_);
@@ -471,7 +473,8 @@ public:
   ObAdapterCreateType &get_create_type() { return create_type_; };
   void set_create_type(ObAdapterCreateType type) { create_type_ = type; };
 
-  TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data), KP_(incr_data), KP_(snap_data), KP_(vbitmap_data),
+  TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
+              KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
               K_(data_tablet_id),K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
               K_(inc_tablet_id), K_(vbitmap_tablet_id), K_(snapshot_tablet_id),
               K_(data_table_id), K_(rowkey_vid_table_id), K_(vid_rowkey_table_id),
@@ -517,6 +520,8 @@ private:
   ObVectorIndexMemData *incr_data_;
   ObVectorIndexMemData *snap_data_;
   ObVectorIndexMemData *vbitmap_data_;
+
+  uint64_t tenant_id_;
 
   ObTabletID snapshot_tablet_id_;
   ObTabletID inc_tablet_id_;
@@ -611,7 +616,7 @@ public:
       all_vsag_use_mem_ = nullptr;
     }
   }
-  int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem);
+  int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id);
   bool is_inited() { return OB_NOT_NULL(mem_context_); }
 
   std::string Name() override {

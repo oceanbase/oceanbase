@@ -73,7 +73,7 @@ typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexTaskCtx*>
 class ObPluginVectorIndexMgr
 {
 public:
-  ObPluginVectorIndexMgr(lib::MemoryContext &memory_context)
+  ObPluginVectorIndexMgr(lib::MemoryContext &memory_context, uint64_t tenant_id)
     : is_inited_(false),
       need_check_(false),
       ls_id_(),
@@ -81,13 +81,14 @@ public:
       partial_index_adpt_map_(),
       adapter_map_rwlock_(),
       ls_tablet_task_ctx_(),
-      tenant_id_(0),
+      tenant_id_(tenant_id),
       interval_factor_(0),
       vector_index_service_(nullptr),
       processing_first_mem_sync_(true),
       first_mem_sync_map_(),
       second_mem_sync_map_(),
-      task_allocator_(ObMemAttr(MTL_ID(), "VecIdxTask")),
+      first_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),
+      second_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),
       memory_context_(memory_context),
       all_vsag_use_mem_(nullptr)
   {}
@@ -151,9 +152,9 @@ public:
 
   VectorIndexMemSyncMap &get_processing_map() { return processing_first_mem_sync_ ? first_mem_sync_map_ : second_mem_sync_map_; }
   VectorIndexMemSyncMap &get_waiting_map() { return processing_first_mem_sync_ ? second_mem_sync_map_ : first_mem_sync_map_; }
+  ObIAllocator &get_processing_allocator() { return processing_first_mem_sync_ ? first_task_allocator_ : second_task_allocator_; }
+  ObIAllocator &get_waiting_allocator() { return processing_first_mem_sync_ ? second_task_allocator_ : first_task_allocator_; }
   void switch_processing_map() { processing_first_mem_sync_ = !processing_first_mem_sync_; }
-
-  ObIAllocator &get_task_allocator() { return task_allocator_; }
 
   // debug interface
   void dump_all_inst();
@@ -197,11 +198,12 @@ private:
   int64_t local_schema_version_; // detect schema change
 
 
-  // pingpong map for follower receive memdata sync task from log
+  // pingpong map/allocator for follower receive memdata sync task from log
   bool processing_first_mem_sync_;
   VectorIndexMemSyncMap first_mem_sync_map_;
   VectorIndexMemSyncMap second_mem_sync_map_;
-  ObArenaAllocator task_allocator_;
+  ObArenaAllocator first_task_allocator_;
+  ObArenaAllocator second_task_allocator_;
   lib::MemoryContext &memory_context_;
   uint64_t *all_vsag_use_mem_;
 };

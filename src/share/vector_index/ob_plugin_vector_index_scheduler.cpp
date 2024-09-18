@@ -78,6 +78,8 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
       ObPluginVectorIndexAdaptor *adapter = iter->second;
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema *table_schema;
+      ObTabletID tablet_id = iter->first;
+      ObTabletHandle tablet_handle;
       if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
         LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adapter->get_vbitmap_table_id(), table_schema))) {
@@ -94,11 +96,22 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
           LOG_WARN("push back table id failed",
             K(delete_tablet_id_array.count()), K(adapter->get_snap_tablet_id()), KR(ret));
         }
+      } else if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST != ret) {
+          LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
+        } else {
+          ret = OB_SUCCESS; // not found, moved from this ls
+          if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
+            LOG_WARN("push back table id failed",
+              K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
+          }
+        }
       }
     }
-
-    LOG_INFO("try erase complete vector index adapter",
-          K(index_ls_mgr->get_ls_id()), K(delete_tablet_id_array.count())); // debug, remove later
+    if (delete_tablet_id_array.count() > 0) {
+      LOG_INFO("try erase complete vector index adapter",
+          K(index_ls_mgr->get_ls_id()), K(delete_tablet_id_array.count()));
+    }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < delete_tablet_id_array.count(); i++) {
       if (OB_FAIL(index_ls_mgr->erase_complete_adapter(delete_tablet_id_array.at(i)))) {
@@ -140,8 +153,10 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
       }
     }
 
-    LOG_INFO("try erase partial vector index adapter",
-          K(index_ls_mgr->get_ls_id()), K(delete_tablet_id_array.count())); // debug, remove later
+    if (delete_tablet_id_array.count() > 0) {
+      LOG_INFO("try erase partial vector index adapter",
+            K(index_ls_mgr->get_ls_id()), K(delete_tablet_id_array.count()));
+    }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < delete_tablet_id_array.count(); i++) {
       if (OB_FAIL(index_ls_mgr->erase_partial_adapter(delete_tablet_id_array.at(i)))) {
@@ -162,7 +177,6 @@ bool ObPluginVectorIndexLoadScheduler::check_can_do_work()
 {
   bool bret = true;
   int ret = OB_SUCCESS;
-  int64_t tenant_id = MTL_ID();
   uint64_t tenant_data_version = 0;
   bool is_oracle_mode = false;
 
@@ -170,15 +184,15 @@ bool ObPluginVectorIndexLoadScheduler::check_can_do_work()
     LOG_WARN("fail to check oracle mode", KR(ret), K_(tenant_id));
   } else if (is_oracle_mode) {
     bret = false;
-    LOG_DEBUG("vector index not support oracle mode", K(tenant_id));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_DEBUG("vector index not support oracle mode", K_(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     bret = false;
     LOG_WARN("get tenant data version failed", K(ret));
   } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
     bret = false;
     LOG_DEBUG("vector index can not work with data version less than 4_3_3", K(tenant_data_version));
-  } else if (is_user_tenant(tenant_id)) {
-    if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), tenant_data_version))) {
+  } else if (is_user_tenant(tenant_id_)) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id_), tenant_data_version))) {
       bret = false;
       LOG_WARN("get tenant data version failed", K(ret));
     } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
@@ -209,10 +223,12 @@ int ObPluginVectorIndexLoadScheduler::check_schema_version()
   return ret;
 }
 
-int ObPluginVectorIndexLoadScheduler::check_parital_index_adpter_exist(ObPluginVectorIndexMgr *mgr)
+int ObPluginVectorIndexLoadScheduler::check_index_adpter_exist(ObPluginVectorIndexMgr *mgr)
 {
   int ret = OB_SUCCESS;
-  if (!mgr->get_partial_adapter_map().empty()) {
+  if (!mgr->get_partial_adapter_map().empty() || !mgr->get_complete_adapter_map().empty()) {
+    // partial map not empty, exist adapter create by dml/ddl data complement/query
+    // complete adapter not empty, also need check for transfer
     mark_tenant_need_check();
   }
   return ret;
@@ -386,7 +402,7 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance()
   ObSEArray<uint64_t, DEFAULT_TABLE_ARRAY_SIZE> table_id_array;
 
   ObVecIdxSharedTableInfoMap shared_table_info_map;
-  ObMemAttr memattr(MTL_ID(), "VecIdxInfo");
+  ObMemAttr memattr(tenant_id_, "VecIdxInfo");
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet vector index scheduler not init", KR(ret));
@@ -836,7 +852,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_adapter_maintenance_task
   // if schema version change, or exist partial adapter(create by access) need do maintenance
   if (OB_FAIL(check_schema_version())) {
     LOG_WARN("fail to check schema version", KR(ret));
-  } else if (OB_NOT_NULL(mgr) && OB_FAIL(check_parital_index_adpter_exist(mgr))) {
+  } else if (OB_NOT_NULL(mgr) && OB_FAIL(check_index_adpter_exist(mgr))) {
     LOG_WARN("fail to check exist paritial index adapter", KR(ret));
   } else if (local_tenant_task_.need_check_) {
     if (OB_FAIL(execute_adapter_maintenance())) {
@@ -965,7 +981,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_memdata_sync_task(ObPlug
         } else {
           // generate one task
           char *task_ctx_buf =
-            static_cast<char *>(mgr->get_task_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+            static_cast<char *>(mgr->get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
           ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
           if (OB_ISNULL(task_ctx_buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -976,7 +992,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_memdata_sync_task(ObPlug
           }
           if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
             task_ctx->~ObPluginVectorIndexTaskCtx();
-            mgr->get_task_allocator().free(task_ctx);
+            mgr->get_processing_allocator().free(task_ctx);
             task_ctx = nullptr;
           }
         }
@@ -1161,7 +1177,7 @@ int ObPluginVectorIndexLoadScheduler::handle_replay_result(ObVectorIndexSyncLog 
       ObTabletID tablet_id = ls_log.get_tablet_id_array().at(i);
       uint64_t table_id = ls_log.get_table_id_array().at(i);
       char *task_ctx_buf =
-        static_cast<char *>(mgr->get_task_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+        static_cast<char *>(mgr->get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
       ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
 
       if (OB_ISNULL(task_ctx_buf)) {
@@ -1180,7 +1196,7 @@ int ObPluginVectorIndexLoadScheduler::handle_replay_result(ObVectorIndexSyncLog 
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
         task_ctx->~ObPluginVectorIndexTaskCtx();
-        mgr->get_task_allocator().free(task_ctx); // not really free
+        mgr->get_waiting_allocator().free(task_ctx); // not really free
         task_ctx = nullptr;
       }
     }
@@ -1381,6 +1397,7 @@ int ObVectorIndexTask::init(ObPluginVectorIndexLoadScheduler *schedular,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(schedular), KP(mgr), KP(task_ctx));
   } else {
+    allocator_.set_tenant_id(mgr->get_tenant_id());
     ls_id_ = mgr->get_ls_id();
     vec_idx_scheduler_ = schedular;
     vec_idx_mgr_ = mgr;
@@ -1411,7 +1428,8 @@ int ObVectorIndexTask::process()
     while(!need_stop && OB_SUCC(ret)) {
       // need set context? should set attr in constructor
       lib::ContextParam param;
-      param.set_mem_attr(MTL_ID(), "VecIdxTaskCtx", ObCtxIds::DEFAULT_CTX_ID) // 这里是dag的MTL
+      // use dag mtl id for param refer to TTLtask
+      param.set_mem_attr(MTL_ID(), "VecIdxTaskCtx", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
       CREATE_WITH_TEMP_CONTEXT(param) {
         if (OB_FAIL(process_one())) {

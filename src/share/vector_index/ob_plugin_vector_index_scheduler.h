@@ -250,7 +250,7 @@ public:
                                   bool &is_vector_index_table,
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
-  int check_parital_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
+  int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
 
   int log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *mgr);
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
