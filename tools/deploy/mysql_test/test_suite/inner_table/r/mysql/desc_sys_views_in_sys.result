@@ -9908,6 +9908,38 @@ POS	bigint(0) unsigned	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FOREIGN_COLS limit 1);
 cnt
 1
+desc oceanbase.GV$OB_FUNCTION_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+FUNCTION_NAME	varchar(32)	NO		NULL	
+MODE	varchar(32)	NO		NULL	
+SIZE	bigint(20)	NO		NULL	
+REAL_IOPS	bigint(20)	NO		NULL	
+REAL_MBPS	bigint(20)	NO		NULL	
+SCHEDULE_US	bigint(20)	NO		NULL	
+IO_DELAY_US	bigint(20)	NO		NULL	
+TOTAL_US	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_FUNCTION_IO_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_FUNCTION_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+FUNCTION_NAME	varchar(32)	NO			
+MODE	varchar(32)	NO			
+SIZE	bigint(20)	NO			
+REAL_IOPS	bigint(20)	NO			
+REAL_MBPS	bigint(20)	NO			
+SCHEDULE_US	bigint(20)	NO			
+IO_DELAY_US	bigint(20)	NO			
+TOTAL_US	bigint(20)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_FUNCTION_IO_STAT limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_TEMP_FILES;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

@@ -2250,7 +2250,7 @@ int ObTenantIOManager::print_io_function_status()
     char io_status[1024] = { 0 };
     int FUNC_NUM = static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM);
     int GROUP_MODE_NUM = static_cast<uint8_t>(ObIOGroupMode::MODECNT);
-    ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> &func_usages = io_func_infos_.func_usages_;
+    ObIOFuncUsageArr &func_usages = io_func_infos_.func_usages_;
     double avg_size = 0;
     double avg_iops = 0;
     int64_t avg_bw = 0;
@@ -2259,13 +2259,15 @@ int ObTenantIOManager::print_io_function_status()
     int64_t avg_submit_delay = 0;
     int64_t avg_device_delay = 0;
     int64_t avg_total_delay = 0;
-    for (int i = 0; i < FUNC_NUM; ++i) {
-      for (int j = 0; j < GROUP_MODE_NUM; ++j) {
+    for (int i = 0; OB_SUCC(ret) && i < FUNC_NUM; ++i) {
+      for (int j = 0; OB_SUCC(ret) && j < GROUP_MODE_NUM; ++j) {
         avg_size = 0;
         const char *mode_str = get_io_mode_string(static_cast<ObIOGroupMode>(j));
         if (i >= func_usages.count()) {
+          ret = OB_INVALID_ARGUMENT;
           LOG_ERROR("func usages out of range", K(i), K(func_usages.count()));
         } else if (j >= func_usages.at(i).count()) {
+          ret = OB_INVALID_ARGUMENT;
           LOG_ERROR("func usages by mode out of range", K(i), K(j), K(func_usages.at(i).count()));
         } else if (OB_FAIL(func_usages.at(i).at(j).calc(
                        avg_size,
@@ -2342,9 +2344,7 @@ int ObTenantIOManager::get_throttled_time(uint64_t group_id, int64_t &throttled_
   return ret;
 }
 
-int ObTenantIOManager::get_io_func_infos(ObIOFuncUsages &io_func_infos) const
+const ObIOFuncUsages& ObTenantIOManager::get_io_func_infos()
 {
-  int ret = OB_SUCCESS;
-  io_func_infos = io_func_infos_;
-  return ret;
+  return io_func_infos_;
 }

@@ -15004,7 +15004,32 @@ def_table_schema(
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
 
-# 12504: __all_virtual_function_io_stat
+def_table_schema(
+  owner             = 'zz412656',
+  table_name        = '__all_virtual_function_io_stat',
+  table_id          = '12504',
+  table_type        = 'VIRTUAL_TABLE',
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('tenant_id',           'int'),
+    ('function_name',       'varchar:32'),
+    ('mode',                'varchar:32')
+  ],
+  in_tenant_space   = True,
+  normal_columns    = [
+    ('size',                'int'),
+    ('real_iops',           'int'),
+    ('real_mbps',           'int'),
+    ('schedule_us',         'int'),
+    ('io_delay_us',         'int'),
+    ('total_us',            'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -15049,6 +15074,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15564,8 +15590,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15467'
 # 15481: __all_virtual_wr_sql_plan
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
-# 15484: __all_virtual_function_io_stat
-
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15484', all_def_keywords['__all_virtual_function_io_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15485', all_def_keywords['__all_virtual_temp_file']))
 
 # 余留位置（此行之前占位）
@@ -37258,8 +37283,62 @@ def_table_schema(
 # 21617: CDB_OB_SPM_EVO_RESULT
 # 21618: DBA_OB_KV_REDIS_TABLE
 # 21619: CDB_OB_KV_REDIS_TABLE
-# 21620: GV$OB_FUNCTION_IO_STAT
-# 21621: V$OB_FUNCTION_IO_STAT
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_FUNCTION_IO_STAT',
+  table_id        = '21620',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    FUNCTION_NAME,
+    MODE,
+    SIZE,
+    REAL_IOPS,
+    REAL_MBPS,
+    SCHEDULE_US,
+    IO_DELAY_US,
+    TOTAL_US
+  FROM
+    oceanbase.__all_virtual_function_io_stat;
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_FUNCTION_IO_STAT',
+  table_id        = '21621',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    FUNCTION_NAME,
+    MODE,
+    SIZE,
+    REAL_IOPS,
+    REAL_MBPS,
+    SCHEDULE_US,
+    IO_DELAY_US,
+    TOTAL_US
+  FROM
+    OCEANBASE.GV$OB_FUNCTION_IO_STAT
+  WHERE
+    SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -37319,7 +37398,6 @@ def_table_schema(
   FROM oceanbase.__all_virtual_temp_file
 """.replace("\n", " ")
 )
-
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -65747,8 +65825,68 @@ def_table_schema(
 # 28259: DBA_WR_SQL_PLAN
 # 28260: DBA_WR_RES_MGR_SYSSTAT
 # 28261: DBA_OB_SPM_EVO_RESULT
-# 28262: GV$OB_FUNCTION_IO_STAT
-# 28263: V$OB_FUNCTION_IO_STAT
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_FUNCTION_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28262',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.TENANT_ID AS TENANT_ID,
+    A.FUNCTION_NAME AS FUNCTION_NAME,
+    A."MODE" AS "MODE",
+    A."SIZE" AS "SIZE",
+    A.REAL_IOPS AS REAL_IOPS,
+    A.REAL_MBPS AS REAL_MBPS,
+    A.SCHEDULE_US AS SCHEDULE_US,
+    A.IO_DELAY_US AS IO_DELAY_US,
+    A.TOTAL_US AS TOTAL_US
+  FROM
+    SYS.ALL_VIRTUAL_FUNCTION_IO_STAT A
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_FUNCTION_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28263',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.TENANT_ID AS TENANT_ID,
+    A.FUNCTION_NAME AS FUNCTION_NAME,
+    A."MODE" AS "MODE",
+    A."SIZE" AS "SIZE",
+    A.REAL_IOPS AS REAL_IOPS,
+    A.REAL_MBPS AS REAL_MBPS,
+    A.SCHEDULE_US AS SCHEDULE_US,
+    A.IO_DELAY_US AS IO_DELAY_US,
+    A.TOTAL_US AS TOTAL_US
+  FROM
+    SYS.GV$OB_FUNCTION_IO_STAT A
+  WHERE
+    SVR_IP=HOST_IP()
+    AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -65781,6 +65919,7 @@ def_table_schema(
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " "),
 )
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

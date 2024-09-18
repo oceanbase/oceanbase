@@ -1819,8 +1819,11 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
   } else if (0 == wait_timeout_ms) {
     ret = OB_EAGAIN;
   } else if (UINT64_MAX == wait_timeout_ms) {
-    const int64_t timeout_ms = ((result_->time_log_.begin_ts_ > 0 ? result_->time_log_.begin_ts_ + result_->timeout_us_ : 0)
-                                - ObTimeUtility::current_time()) / 1000L;
+    const int64_t timeout_ms =
+        ((result_->time_log_.begin_ts_ > 0
+                ? result_->time_log_.begin_ts_ + result_->timeout_us_ - ObTimeUtility::current_time()
+                : 0)) /
+        1000L;
     ObWaitEventGuard wait_guard(result_->flag_.get_wait_event(),
                                 timeout_ms,
                                 result_->size_);

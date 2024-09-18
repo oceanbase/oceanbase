@@ -5191,6 +5191,25 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_vector_index_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_function_io_stat;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+function_name	varchar(32)	NO	PRI	NULL	
+mode	varchar(32)	NO	PRI	NULL	
+size	bigint(20)	NO		NULL	
+real_iops	bigint(20)	NO		NULL	
+real_mbps	bigint(20)	NO		NULL	
+schedule_us	bigint(20)	NO		NULL	
+io_delay_us	bigint(20)	NO		NULL	
+total_us	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_function_io_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_function_io_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_temp_file;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	

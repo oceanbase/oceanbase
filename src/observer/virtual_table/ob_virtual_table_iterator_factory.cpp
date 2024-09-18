@@ -2833,6 +2833,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_FUNCTION_IO_STAT_TID: {
+            ObAllVirtualFunctionIOStat *all_virtual_func_io_stat = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualFunctionIOStat, all_virtual_func_io_stat))) {
+              if (OB_FAIL(all_virtual_func_io_stat->init(addr_))) {
+                SERVER_LOG(WARN, "fail to init ObAllVirtualFunctionIOStatus, ", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_func_io_stat);
+              }
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_TEMP_FILE_TID:
           {
             ObAllVirtualTmpFileInfo *all_tmp_file_info = NULL;

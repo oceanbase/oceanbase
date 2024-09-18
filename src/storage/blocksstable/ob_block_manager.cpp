@@ -1087,7 +1087,7 @@ int ObBlockManager::mark_macro_blocks(
       const uint64_t tenant_id = mtl_tenant_ids.at(i);
       MacroBlockId macro_id;
       MTL_SWITCH(tenant_id) {
-        CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_SERVER_BACKGROUND_LOW);
+        CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_GC_MACRO_BLOCK);
         if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set,
                                               tmp_status))) {
           LOG_WARN("fail to mark tenant blocks", K(ret), K(tenant_id));

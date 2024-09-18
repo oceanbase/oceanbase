@@ -48,8 +48,8 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_DDL_HIGH:
       ret_name = ObString("DDL_HIGH");
       break;
-    case ObFunctionType::PRIO_SERVER_BACKGROUND_LOW:
-      ret_name = ObString("SERVER_BACKGROUND_LOW");
+    case ObFunctionType::PRIO_GC_MACRO_BLOCK:
+      ret_name = ObString("GC_MACRO_BLOCK");
       break;
     case ObFunctionType::PRIO_CLOG_LOW:
       ret_name = ObString("CLOG_LOW");

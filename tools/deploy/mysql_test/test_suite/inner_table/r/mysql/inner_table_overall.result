@@ -776,6 +776,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12490	__all_virtual_spatial_reference_systems	2	201001	1
 12492	__all_virtual_ss_local_cache_info	2	201001	1
 12496	__all_virtual_vector_index_info	2	201001	1
+12504	__all_virtual_function_io_stat	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
@@ -1250,6 +1251,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21603	INNODB_SYS_FIELDS	1	201002	1
 21604	INNODB_SYS_FOREIGN	1	201002	1
 21605	INNODB_SYS_FOREIGN_COLS	1	201002	1
+21620	GV$OB_FUNCTION_IO_STAT	1	201001	1
+21621	V$OB_FUNCTION_IO_STAT	1	201001	1
 21622	DBA_OB_TEMP_FILES	1	201001	1
 21623	CDB_OB_TEMP_FILES	1	201001	1
 check sys table count and table_id range success

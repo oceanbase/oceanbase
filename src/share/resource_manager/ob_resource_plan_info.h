@@ -37,13 +37,13 @@ enum ObFunctionType : uint8_t
   PRIO_HA_LOW = 6,
   PRIO_DDL = 7,
   PRIO_DDL_HIGH = 8,
-  PRIO_SERVER_BACKGROUND_LOW = 9, // block manager scans for bad blocks in the background
+  PRIO_GC_MACRO_BLOCK = 9, // block manager scans for bad blocks in the background
   PRIO_CLOG_LOW = 10,
   PRIO_CLOG_MID = 11,
   PRIO_CLOG_HIGH = 12,
   PRIO_EXTERNAL = 13,
   PRIO_EXPORT = 14,
-
+  /* add new function type here, or you will have compatibility issues. */
 
   MAX_FUNCTION_NUM
 };
