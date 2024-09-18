@@ -1069,6 +1069,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         break;
       case DDL_DROP_FTS_INDEX:
       case DDL_DROP_MULVALUE_INDEX:
+        drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_fts_index_task(proxy,
                                                param.src_table_schema_,
                                                param.schema_version_,
@@ -1076,6 +1077,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                param.aux_rowkey_doc_schema_,
                                                param.aux_doc_rowkey_schema_,
                                                param.aux_doc_word_schema_,
+                                               drop_index_arg,
                                                *param.allocator_,
                                                task_record))) {
           LOG_WARN("fail to create drop fts index task", K(ret));
@@ -1796,6 +1798,7 @@ int ObDDLScheduler::create_drop_fts_index_task(
     const share::schema::ObTableSchema *rowkey_doc_schema,
     const share::schema::ObTableSchema *doc_rowkey_schema,
     const share::schema::ObTableSchema *doc_word_schema,
+    const obrpc::ObDropIndexArg *drop_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
@@ -1811,9 +1814,9 @@ int ObDDLScheduler::create_drop_fts_index_task(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || OB_ISNULL(drop_index_arg)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(index_schema));
+    LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg));
   } else if (FALSE_IT(is_fts_index = index_schema->is_fts_index_aux())) {
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1860,6 +1863,7 @@ int ObDDLScheduler::create_drop_fts_index_task(
                                 doc_rowkey,
                                 domain_index,
                                 fts_doc_word,
+                                drop_index_arg->ddl_stmt_str_,
                                 schema_version,
                                 consumer_group_id))) {
       LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(domain_index));

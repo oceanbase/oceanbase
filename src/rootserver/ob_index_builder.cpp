@@ -774,7 +774,8 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                  index_schema.get_schema_version(),
                                  0/*parallelism*/,
                                  arg.consumer_group_id_,
-                                 &allocator);
+                                 &allocator,
+                                 &arg);
 
       param.aux_rowkey_doc_schema_ = &(index_schemas.at(aux_rowkey_doc_ith));
       param.aux_doc_rowkey_schema_ = &(index_schemas.at(aux_doc_rowkey_ith));

@@ -497,6 +497,7 @@ private:
       const share::schema::ObTableSchema *rowkey_doc_schema,
       const share::schema::ObTableSchema *doc_rowkey_schema,
       const share::schema::ObTableSchema *doc_word_schema,
+      const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
