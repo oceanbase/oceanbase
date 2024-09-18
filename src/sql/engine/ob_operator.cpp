@@ -1174,7 +1174,7 @@ int ObOperator::submit_op_monitor_node()
     op_monitor_info_.db_time_ = 1000 * db_time;
     op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_;
 
-    if (list && spec_.plan_) {
+    if (list && spec_.plan_ && ctx_.get_physical_plan_ctx()) {
       if (spec_.plan_->get_phy_plan_hint().monitor_
           || (ctx_.get_my_session()->is_user_session()
               && (spec_.plan_->get_px_dop() > 1
