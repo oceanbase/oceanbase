@@ -788,6 +788,9 @@ public:
   static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
                                           const int64_t parallel,
                                           ObCompressorType &compr_type);
+  static int get_temp_store_compress_type(const share::schema::ObTableSchema *table_schema,
+                                          const int64_t parallel,
+                                          ObCompressorType &compr_type);
   static inline bool is_verifying_checksum_error_needed(share::ObDDLType type)
   {
     bool res = false;

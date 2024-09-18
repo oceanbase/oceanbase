@@ -257,7 +257,7 @@ public:
     }
     // compress type
     else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
-               table_schema->get_compressor_type(), task_param.get_parallel(), compressor_type))) {
+            table_schema, task_param.get_parallel(), compressor_type))) {
       LOG_WARN("fail to get tmp store compressor type", KR(ret));
     }
     // opt stat gather

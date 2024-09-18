@@ -98,7 +98,7 @@ int ObTableDirectInsertCtx::init(
         LOG_WARN("failed to get direct load level", KR(ret), K(phy_plan), K(table_id));
       } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(*schema_guard, tenant_id, table_id, table_schema))) {
         LOG_WARN("fail to get table schema", KR(ret));
-      } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema->get_compressor_type(),
+      } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema,
                                                                  parallel,
                                                                  compressor_type))) {
         LOG_WARN("fail to get tmp store compressor type", KR(ret));

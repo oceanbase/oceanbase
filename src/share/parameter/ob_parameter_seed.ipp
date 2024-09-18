@@ -1912,7 +1912,7 @@ DEF_BOOL(_enable_skip_index, OB_TENANT_PARAMETER, "True",
 DEF_STR_WITH_CHECKER(_ob_ddl_temp_file_compress_func, OB_TENANT_PARAMETER, "AUTO",
         common::ObConfigTempStoreFormatChecker,
         "specific compression in ObTempBlockStore."\
-        "AUTO: use dop to determine compression;"\
+        "AUTO: use compression algorithm from table schema;"\
         "ZSTD: use ZSTD compression algorithm;"\
         "LZ4: use LZ4 compression algorithm;"\
         "NONE: do not use compression.",

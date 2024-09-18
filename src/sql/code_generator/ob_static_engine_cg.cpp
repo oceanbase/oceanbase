@@ -2307,15 +2307,15 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
 int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_type)
 {
   int ret = OB_SUCCESS;
+  compr_type = NONE_COMPRESSOR;
   int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
   // for normal sort we use default compress type. for online ddl, we use the compress type in source table
   ObLogicalOperator *child_op = op.get_child(0);
-  ObCompressorType tmp_compr_type = NONE_COMPRESSOR;
+  const share::schema::ObTableSchema *table_schema = nullptr;
   while(OB_SUCC(ret) && OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
     child_op = child_op->get_child(0);
     if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
       share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
-      const share::schema::ObTableSchema *table_schema = nullptr;
       uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
       if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2325,13 +2325,11 @@ int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("can't find table schema", K(ret), K(table_id));
-      } else {
-        tmp_compr_type = table_schema->get_compressor_type();
       }
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(tmp_compr_type,
+    if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema,
                                               op.get_parallel(),
                                               compr_type))) {
       LOG_WARN("fail to get compress type", K(ret));
