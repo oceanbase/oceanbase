@@ -661,8 +661,12 @@ protected:
     OB_INLINE int prefetch_macro_block(const MacroBlockId &macro_id)
     {
       int ret = OB_SUCCESS;
+      const ObStorageObjectType object_type = macro_id.storage_object_type();
       if (!GCTX.is_shared_storage_mode()) {
         // do nothing
+      } else if ((ObStorageObjectType::SHARED_MAJOR_DATA_MACRO != object_type) &&
+                 (ObStorageObjectType::SHARED_MAJOR_META_MACRO != object_type)) {
+        // do nothing, only prefetch SHARED_MACRO type
       } else if (OB_UNLIKELY(!macro_id.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "get unexpected invalid macro id", K(ret), K(macro_id));
