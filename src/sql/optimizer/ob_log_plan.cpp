@@ -11720,6 +11720,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(adjust_final_plan_info(root))) {
     LOG_WARN("failed to adjust parent-child relationship", K(ret));
+  } else if (OB_FAIL(remove_duplicate_constraints())) {
+    LOG_WARN("failed to remove duplicate constraints", K(ret));
   } else if (OB_FAIL(update_re_est_cost(root))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else if (OB_FAIL(choose_duplicate_table_replica(root,
@@ -14347,6 +14349,51 @@ int ObLogPlan::compute_duplicate_table_replicas(ObLogicalOperator *op)
         LOG_WARN("no server in replica", K(basic_addr), K(ret));
       } else {
         phy_part_loc.set_selected_replica_idx(dup_table_pos);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::remove_duplicate_constraints()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && OB_NOT_NULL(get_optimizer_context().get_query_ctx())) {
+    ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
+    for (int64_t i = query_ctx->all_equal_param_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_equal_param_constraints_.at(i) == query_ctx->all_equal_param_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_equal_param_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
+    for (int64_t i = query_ctx->all_plan_const_param_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_plan_const_param_constraints_.at(i) == query_ctx->all_plan_const_param_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_plan_const_param_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
+    for (int64_t i = query_ctx->all_expr_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_expr_constraints_.at(i) == query_ctx->all_expr_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_expr_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
       }
     }
   }
