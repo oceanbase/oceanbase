@@ -12580,6 +12580,10 @@ public:
   ~ObLSSyncHotMicroKeyArg() {}
   int assign(const ObLSSyncHotMicroKeyArg &other);
   bool is_valid() const;
+  // return reserved serialize size besides ObSSMicroBlockCacheKeyMeta elements (including
+  // OB_UNIS_VERSION, tenant_id_, ls_id_, leader_addr_.get_serialize_size(), count of ObSArray,
+  // and NS_::OB_SERIALIZE_SIZE_NEED_BYTES), which is smaller than 4KB.
+  OB_INLINE int64_t get_reserved_serialize_size() const { return 4096; }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(leader_addr), "micro_keys_cnt", micro_keys_.count());
 
 public:
