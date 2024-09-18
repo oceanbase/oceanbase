@@ -7667,7 +7667,7 @@ PARTITION BY '(' column_name_list ')'
     malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_COLUMNS_PARTITION, 5, column_names, partition_defs, NULL, NULL, NULL);
     dup_expr_string($$, result, @4.first_column, @4.last_column);
   } else {
-    yyerror(NULL, result, "paritition by column is not allowed");
+    yyerror(&@3, result, "paritition by column is not allowed");
     YYERROR;
   }
 }
