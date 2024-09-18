@@ -794,7 +794,6 @@ int ObRADatumStore::dump(const bool all_dump, const int64_t target_dump_size)
         } else if (OB_FAIL(write_file(*bi, mem, bi->length_))) { // write file and update bi
           LOG_WARN("write block to file failed", K(ret), K(is_ib), KPC(bi));
         } else {
-          free_blk_mem(mem, bi->capacity_);
           if (blkbuf_.blk_ == blk) {
             blkbuf_.reset();
           } else if (idx_blk_ == idx_blk) {
@@ -802,6 +801,7 @@ int ObRADatumStore::dump(const bool all_dump, const int64_t target_dump_size)
           }
           tmp_dumped_size += bi->length_;
         }
+        free_blk_mem(mem, bi->capacity_);
       }
     }
     if (OB_SUCC(ret)) {
