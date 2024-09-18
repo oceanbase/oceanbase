@@ -971,7 +971,8 @@ public:
                K_(sweep_cost_time),
                KTIME_(start_time),
                KTIME_(last_end_time),
-               K_(hold_info));
+               K_(hold_info),
+               K_(mark_finished));
 public:
   int64_t total_block_count_;
   int64_t reserved_block_count_;
@@ -992,6 +993,7 @@ public:
   int64_t start_time_;
   int64_t last_end_time_;
   ObSimpleMacroBlockInfo hold_info_;
+  bool mark_finished_;
 };
 
 /****************************** following codes are inline functions ****************************/

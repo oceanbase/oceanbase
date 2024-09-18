@@ -345,7 +345,6 @@ private:
   };
 
 private:
-  void update_partial_status(const ObMacroBlockMarkerStatus &tmp_status);
   int get_macro_block_info(const MacroBlockId &macro_id,
                            ObMacroBlockInfo &macro_block_info,
                            ObMacroBlockHandle &macro_block_handle);
