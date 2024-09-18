@@ -1,5 +1,5 @@
-change mysql tenant primary_zone to RANDOM
-alter tenant mysql set primary_zone = 'RANDOM';
+create resource unit if not exists tx_free_route_unit max_cpu=1, memory_size='2G';
+create tenant tx_free_route_tenant replica_num=2, resource_pool_list=('tx_free_route_pool'),primary_zone=RANDOM set ob_tcp_invited_nodes='%',ob_compatibility_mode='mysql';
 drop table if exists t;
 create table t(id int primary key) partition by range(id)
 (partition p0 values less than (10000), partition p1 values less than (3000000000));
@@ -358,4 +358,6 @@ drop outline tx_route_test_ot_4;
 "------------- X - special query types ----------------------"
 "CLEANUP"
 drop table t;
-recovery primary_zone settings for mysql tenant
+drop tenant tx_free_route_tenant force;
+drop resource pool tx_free_route_pool;
+drop resource unit tx_free_route_unit;

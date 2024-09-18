@@ -2,9 +2,42 @@
 ##  common routines to prepare table and ls topology for tx_free_route test
 ## -------
 
+connection sys;
+
+# create tenant for test
+
+--disable_warnings
+create resource unit if not exists tx_free_route_unit max_cpu=1, memory_size='2G';
+--enable_warnings
+--disable_abort_on_error
+--disable_query_log
+--disable_result_log
+let $i=0;
+let $breakloop=0;
+while($breakloop == 0) {
+  create resource pool tx_free_route_pool unit='tx_free_route_unit',unit_num=1,zone_list=('zone1','zone2');
+  if ($mysql_errno == 0) {
+    let $breakloop=1;
+  }
+  if ($mysql_errno != 0) {
+    --inc $i
+    if ($i > 20) {
+      --echo "create resource pool failed : retry times=$i, error no=$mysql_errno"
+      let $breakloop=1;
+    }
+    --sleep 1
+  }
+}
+--enable_abort_on_error
+--enable_query_log
+--enable_result_log
+
+eval create tenant tx_free_route_tenant replica_num=2, resource_pool_list=('tx_free_route_pool'),primary_zone=RANDOM set ob_tcp_invited_nodes='%',ob_compatibility_mode='$compat_mode';
+
+let $tenant_id=`select tenant_id from oceanbase.__all_tenant where tenant_name = 'tx_free_route_tenant'`;
+
 # check tenant has multiple ls
 
-connection sys;
 let $breakLoop=0;
 let $i=0;
 let $fail = 0;
@@ -14,7 +47,7 @@ while ($breakLoop == 0) {
  if ($lsCnt > 1) {
     --inc $breakLoop
  }
- if ($i >= 3000) {
+ if ($i >= 50) {
     --inc $fail
     --inc $breakLoop
  }
@@ -26,21 +59,27 @@ if ($fail > 0) {
    eval select * from oceanbase.__all_virtual_ls where tenant_id = $tenant_id;
 }
 
-connection conn0;
-
-let $tname=$tenant_name;
-
-if ($tname == '') {
-  die "error , tenant_name unspeficied: $tenant_name";
+if ($compat_mode == 'mysql') {
+   connect (conn0,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
+   connect (conn1,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
+   connect (conn2,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 }
 
-if ($tname == 'mysql') {
+if ($compat_mode == 'oracle') {
+   connect (conn0,$OBMYSQL_MS0,sys@tx_free_route_tenant,,sys,$OBMYSQL_PORT);
+   connect (conn1,$OBMYSQL_MS0,sys@tx_free_route_tenant,,sys,$OBMYSQL_PORT);
+   connect (conn2,$OBMYSQL_MS0,sys@tx_free_route_tenant,,sys,$OBMYSQL_PORT);
+}
+
+connection conn0;
+
+if ($compat_mode == 'mysql') {
   --disable_warnings
   drop table if exists t;
   --enable_warnings
 }
 
-if ($tname == 'oracle') {
+if ($compat_mode == 'oracle') {
   --disable_abort_on_error
   --disable_result_log
   drop table t purge;
@@ -72,7 +111,7 @@ while ($breakLoop == 0)
   if ($lsCnt > 1) {
     --inc $breakLoop
   }
-  if ($i >= 3000) {
+  if ($i >= 50) {
     --inc $fail
     --inc $breakLoop
   }
