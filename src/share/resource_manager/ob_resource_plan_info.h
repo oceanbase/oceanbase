@@ -41,10 +41,12 @@ enum ObFunctionType : uint8_t
   PRIO_CLOG_LOW = 10,
   PRIO_CLOG_MID = 11,
   PRIO_CLOG_HIGH = 12,
-  PRIO_EXTERNAL = 13,
+  PRIO_IMPORT = 13,
   PRIO_EXPORT = 14,
   /* add new function type here, or you will have compatibility issues. */
 
+
+  /* add new function, can learn by "grep -rnI 'CLOG_HIGH' src/" */
   MAX_FUNCTION_NUM
 };
 ObString get_io_function_name(ObFunctionType function_type);

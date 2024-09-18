@@ -90,7 +90,7 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
 {
   int ret = OB_SUCCESS;
   file_size = -1;
-  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_IMPORT);
   ObString url_cstring;
   ObArenaAllocator allocator;
 
@@ -125,7 +125,7 @@ int ObExternalDataAccessDriver::pread(void *buf, const int64_t count, const int6
 {
   int ret = OB_SUCCESS;
   ObIOHandle io_handle;
-  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
   if (OB_FAIL(ObBackupIoAdapter::async_pread(*device_handle_, fd_,
       static_cast<char *>(buf), offset, count, io_handle))) {
     LOG_WARN("fail to async pread", KR(ret),
@@ -268,7 +268,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
   ObExprRegexContext regexp_ctx;
   ObExternalPathFilter filter(regexp_ctx, allocator);
   ObString path_cstring;
-  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
 
   if (OB_UNLIKELY(!access_info_.is_valid())) {
     ret = OB_NOT_INIT;

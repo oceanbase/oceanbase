@@ -730,7 +730,9 @@ int ObResourceManagerProxy::check_if_function_exist(const ObString &function_nam
       0 == function_name.compare("CLOG_LOW")  ||
       0 == function_name.compare("CLOG_MID")  ||
       0 == function_name.compare("CLOG_HIGH") ||
-      0 == function_name.compare("OTHER_BACKGROUND")) {
+      0 == function_name.compare("IMPORT") ||
+      0 == function_name.compare("EXPORT") ||
+      0 == function_name.compare("GC_MACRO_BLOCK")) {
     exist = true;
   } else {
     exist = false;
