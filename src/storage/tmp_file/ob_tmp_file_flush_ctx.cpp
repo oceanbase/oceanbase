@@ -353,19 +353,9 @@ int ObTmpFileFlushTask::lazy_alloc_and_fill_block_buf_for_data_page_()
         } else {
           // only copy the size we recorded if we need to flush the last page
           // since we do not hold last_page_lock and the last page may be appended
-          int64_t copy_size = ObTmpFileGlobal::PAGE_SIZE;
-          if (flush_info.file_size_ != 0) {
-            if (cur_info_disk_begin_id + cur_info_page_num - 1 != copy_index) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_ERROR("invalid flush info",
-                  KR(ret), K(cur_info_disk_begin_id), K(cur_info_page_num), K(copy_index), K(flush_info), KPC(this));
-            } else {
-              copy_size = flush_info.file_size_ % ObTmpFileGlobal::PAGE_SIZE;
-            }
-          }
-          if (OB_SUCC(ret)) {
-            MEMCPY(get_data_buf() + copy_index * ObTmpFileGlobal::PAGE_SIZE, page_buf, copy_size);
-          }
+          int64_t copy_size = flush_info.file_size_ != 0 && cur_info_disk_begin_id + cur_info_page_num - 1 == copy_index ?
+          flush_info.file_size_ % ObTmpFileGlobal::PAGE_SIZE : ObTmpFileGlobal::PAGE_SIZE;
+          MEMCPY(get_data_buf() + copy_index * ObTmpFileGlobal::PAGE_SIZE, page_buf, copy_size);
         }
         copy_index += 1;
         cur_info_virtual_page_id += 1;
