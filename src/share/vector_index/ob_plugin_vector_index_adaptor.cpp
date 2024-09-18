@@ -1894,6 +1894,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
       if (OB_FAIL(obvectorutil::get_index_number(get_incr_index(), current_incr_count))) {
         ret = OB_ERR_VSAG_RETURN_ERROR;
         LOG_WARN("fail to get incr index number", K(ret));
+        ret = OB_SUCCESS; // continue to check other parts
       }
     }
 
@@ -1913,6 +1914,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
       if (OB_FAIL(obvectorutil::get_index_number(get_snap_index(), current_snapshot_count))) {
         ret = OB_ERR_VSAG_RETURN_ERROR;
         LOG_WARN("fail to get snap index number", K(ret));
+        ret = OB_SUCCESS; // continue to check other parts
       }
     }
 

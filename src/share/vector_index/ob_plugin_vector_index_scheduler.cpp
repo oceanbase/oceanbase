@@ -980,6 +980,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_memdata_sync_task(ObPlug
           adapter->inc_sync_idle_count();
         } else {
           // generate one task
+          common::ObSpinLockGuard ctx_guard(mgr->task_allocator_lock_);
           char *task_ctx_buf =
             static_cast<char *>(mgr->get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
           ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
@@ -989,6 +990,8 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_memdata_sync_task(ObPlug
           } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, adapter->get_inc_table_id()))) {
           } else if (OB_FAIL(current_map.set_refactored(tablet_id, task_ctx))) {
             LOG_WARN("failed to set vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+          } else {
+            LOG_INFO("success set force index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
           }
           if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
             task_ctx->~ObPluginVectorIndexTaskCtx();
@@ -1176,6 +1179,7 @@ int ObPluginVectorIndexLoadScheduler::handle_replay_result(ObVectorIndexSyncLog 
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_log.get_tablet_id_array().count(); i++) {
       ObTabletID tablet_id = ls_log.get_tablet_id_array().at(i);
       uint64_t table_id = ls_log.get_table_id_array().at(i);
+      common::ObSpinLockGuard ctx_guard(mgr->task_allocator_lock_);
       char *task_ctx_buf =
         static_cast<char *>(mgr->get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
       ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
@@ -1187,14 +1191,15 @@ int ObPluginVectorIndexLoadScheduler::handle_replay_result(ObVectorIndexSyncLog 
       } else if (OB_FAIL(waiting_task_map.set_refactored(tablet_id, task_ctx))) {
         if (ret != OB_HASH_EXIST) {
           LOG_WARN("failed to set vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
-        } else {
-          ret = OB_SUCCESS;
-          LOG_INFO("duplicate vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
         }
       } else {
         LOG_INFO("success get replay vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
+        if (ret == OB_HASH_EXIST) {
+          ret = OB_SUCCESS;
+          LOG_INFO("duplicate vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+        }
         task_ctx->~ObPluginVectorIndexTaskCtx();
         mgr->get_waiting_allocator().free(task_ctx); // not really free
         task_ctx = nullptr;

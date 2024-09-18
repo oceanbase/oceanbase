@@ -156,12 +156,14 @@ public:
   ObIAllocator &get_waiting_allocator() { return processing_first_mem_sync_ ? second_task_allocator_ : first_task_allocator_; }
   void switch_processing_map() { processing_first_mem_sync_ = !processing_first_mem_sync_; }
 
-  // debug interface
+  // for debug interface
   void dump_all_inst();
   // for virtual table
   int get_snapshot_tablet_ids(ObIArray<obrpc::ObLSTabletPair> &complete_tablet_ids,  ObIArray<obrpc::ObLSTabletPair> &partial_tablet_ids);
 
   TO_STRING_KV(K_(is_inited), K_(need_check), K_(ls_id), K_(ls_tablet_task_ctx));
+public:
+  common::ObSpinLock task_allocator_lock_;
 private:
   // non-thread save inner functions
   int get_adapter_inst_(ObTabletID tablet_id, ObPluginVectorIndexAdaptor *&index_inst);

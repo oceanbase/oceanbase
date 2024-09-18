@@ -201,7 +201,7 @@ class ObPluginVectorIndexLoadScheduler : public common::ObTimerTask,
 public:
   ObPluginVectorIndexLoadScheduler()
     : is_inited_(false),
-      is_leader_(true),
+      is_leader_(false),
       need_do_for_switch_(false),
       is_stopped_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
