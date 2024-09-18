@@ -528,6 +528,8 @@ int ObTablet::init_for_merge(
           old_tablet.tablet_meta_.report_status_.cur_report_version_, tablet_meta_.report_status_))) {
           LOG_WARN("failed to init report info", K(tmp_ret));
         }
+      } else if (is_convert_co_major_merge(param.compaction_info_.merge_type_) && FALSE_IT(tablet_meta_.report_status_.reset())) {
+        // force update data checksum for cs replica migration
       } else if (OB_TMP_FAIL(ObTabletMeta::init_report_info(major_table,
           old_tablet.tablet_meta_.report_status_.cur_report_version_, tablet_meta_.report_status_))) {
         LOG_WARN("failed to init report info", K(tmp_ret));
