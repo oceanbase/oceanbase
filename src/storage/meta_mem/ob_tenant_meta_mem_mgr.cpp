@@ -1693,10 +1693,13 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
   } else if (OB_UNLIKELY(!handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(key), K(handle));
-  } else {
-    handle.set_wash_priority(priority);
-    if (&allocator == handle.get_allocator()) {
-      handle.disallow_copy_and_assign();
+  }
+
+  // get_meta_obj success or not set handle is disallow_copy_and_assign
+  handle.set_wash_priority(priority);
+  if (&allocator == handle.get_allocator()) {
+    handle.disallow_copy_and_assign();
+    if (OB_NOT_NULL(handle.get_obj())) {
       handle.get_obj()->set_allocator(handle.get_allocator());
     }
   }
