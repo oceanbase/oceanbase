@@ -252,6 +252,7 @@ public:
   int check_with_tx_data(ObITxDataCheckFunctor &fn);
   const share::SCN get_rec_log_ts() const;
   int on_tx_ctx_table_flushed();
+  int update_rec_log_ts_for_parallel_replay(const SCN &rec_log_ts);
 
   int64_t get_applying_log_ts() const;
   int64_t get_pending_log_size() { return mt_ctx_.get_pending_log_size(); }

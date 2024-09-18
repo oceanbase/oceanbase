@@ -362,6 +362,10 @@ void ObTxReplayExecutor::finish_replay_(const int retcode)
       if (OB_SUCCESS == retcode) {
         ctx_->push_replayed_log_ts(log_ts_ns_, lsn_, replaying_log_entry_no_);
       }
+    } else {
+      if (OB_SUCCESS == retcode) {
+        ctx_->update_rec_log_ts_for_parallel_replay(log_ts_ns_);
+      }
     }
     if (OB_SUCCESS != retcode) {
       ctx_->print_trace_log();
