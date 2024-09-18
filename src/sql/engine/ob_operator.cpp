@@ -982,9 +982,9 @@ int ObOperator::setup_op_feedback_info()
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_ctx = ctx_.get_physical_plan_ctx();
-  if (OB_ISNULL(spec_.plan_)) {
+  if (OB_ISNULL(spec_.plan_) || OB_ISNULL(phy_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy plan is null", K(ret));
+    LOG_WARN("phy plan or phy_ctx is null", K(ret), K(phy_ctx));
   } else if ((!spec_.plan_->need_record_plan_info() && !phy_ctx->get_check_pdml_affected_rows()) ||
              OB_INVALID_INDEX == fb_node_idx_) {
   } else {
