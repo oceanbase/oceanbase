@@ -604,6 +604,8 @@ public:
                                   share::schema::ObRoutineInfo &routine_info);
   static int deep_copy_pl_type(ObIAllocator &allocator, const ObPLDataType &src, ObPLDataType *&dst);
 
+  static int datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null);
+
   DECLARE_TO_STRING;
 
 protected:
