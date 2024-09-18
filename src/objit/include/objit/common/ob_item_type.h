@@ -2595,6 +2595,8 @@ typedef enum ObItemType
   T_DISTRIBUTE_BASIC = 4736,
 
   T_RB_ITERATE_EXPRESSION = 4737,
+  T_MODULE_DATA = 4738,
+  T_MODULE_NAME = 4739,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
