@@ -583,8 +583,13 @@ int ObMemtable::set(
                 context,
                 memtable_key_generator,
                 nullptr /*mvcc_row*/);
-      TRANS_LOG(WARN, "[xuanxi] set row", K(ret), K(row), K(check_exist), K(memtable_key_generator.get_memtable_key()));
       guard.set_memtable(this);
+    }
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+        TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+      }
     }
   }
   return ret;
@@ -641,6 +646,13 @@ int ObMemtable::set(
                 memtable_key_generator,
                 nullptr /*mvcc_row*/);
       guard.set_memtable(this);
+    }
+
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+        TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+      }
     }
   }
   return ret;

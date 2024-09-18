@@ -5729,7 +5729,6 @@ int ObLSTabletService::table_refresh_row(
     } else {
       LOG_DEBUG("get new row success.", K(datum_row), KPC(new_row));
       // only write cells, not write row
-      // TODO：concern about fixed double scale from row to new_row？@xuanxi
       for (int64_t i = 0; OB_SUCC(ret) && i < new_row->count_; ++i) {
         if (OB_FAIL(datum_row.storage_datums_[i].deep_copy(new_row->storage_datums_[i], run_ctx.dml_param_.lob_allocator_))) {
           LOG_WARN("copy storage datum error", K(ret), K(i), K(new_row->storage_datums_[i]));

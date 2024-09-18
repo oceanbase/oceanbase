@@ -826,14 +826,11 @@ void ObPersistentLobApator::set_lob_meta_row(
 {
   datum_row.reuse();
   datum_row.storage_datums_[ObLobMetaUtil::LOB_ID_COL_ID].set_string(reinterpret_cast<char*>(&in_row.lob_id_), sizeof(ObLobId));
-  // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
   datum_row.storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID].set_string(in_row.seq_id_);
-  // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
   datum_row.storage_datums_[ObLobMetaUtil::BYTE_LEN_COL_ID].set_uint32(in_row.byte_len_);
   datum_row.storage_datums_[ObLobMetaUtil::CHAR_LEN_COL_ID].set_uint32(in_row.char_len_);
   datum_row.storage_datums_[ObLobMetaUtil::PIECE_ID_COL_ID].set_uint(in_row.piece_id_);
   datum_row.storage_datums_[ObLobMetaUtil::LOB_DATA_COL_ID].set_string(in_row.lob_data_);
-  // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
 }
 
 int ObPersistentLobApator::set_lob_piece_row(
@@ -855,7 +852,6 @@ int ObPersistentLobApator::set_lob_piece_row(
     LOG_WARN("failed to serialize macro id", K(ret), K(buf_len), K(pos));
   } else {
     datum_row.storage_datums_[2].set_string(buf, pos);
-    // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
     new_row_iter->set_row(&datum_row);
   }
 

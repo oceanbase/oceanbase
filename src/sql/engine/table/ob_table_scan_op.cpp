@@ -3193,7 +3193,7 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !need_ignore_null) {
       ObDatumRow *row = (*(spat_index_.spat_rows_))[spat_index_.spat_row_index_++];
       ObStorageDatum &cellid = row->storage_datums_[0];
       ObStorageDatum &mbr = row->storage_datums_[1];

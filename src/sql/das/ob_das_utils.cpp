@@ -455,7 +455,6 @@ int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
       row.storage_datums_[dmltype_col].set_string(ObString("I"));
       row.storage_datums_[old_new_col].set_string(ObString("N"));
     }
-    // TODO: if we need to update col_type_ in col_descs with ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI ?@xuanxi
   }
   return ret;
 }
