@@ -462,6 +462,8 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
   bool is_bigint_signed_exsit = false;
   bool is_all_num_tc = true;
   bool is_all_same_type = true;
+  // scale is zero
+  bool is_all_int_type = true;
   ObObjType last_type = ObNullType;
   int64_t elem_idx = 0;
   for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
@@ -472,6 +474,9 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
         || types_stack[i].get_type() == ObNumberType
         || types_stack[i].get_type() == ObUNumberType) {
       is_decimal_exist = true;
+      if (types_stack[i].get_scale() != 0) {
+        is_all_int_type = false;
+      }
     }
     if (!ob_is_numeric_tc(types_stack[i].get_type_class()) && !types_stack[i].is_null()) {
       is_all_num_tc = false;
@@ -531,11 +536,12 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
         }
       }
     } else if (is_decimal_exist) {
-      elem_type.meta_.set_double();
+      is_all_int_type ? elem_type.meta_.set_int() : elem_type.meta_.set_double();
+      ObObjType target_type = is_all_int_type ? ObIntType : ObDoubleType;
       for (int64_t i = 0; i < param_num; i++) {
         if (!types_stack[i].is_null()) {
-          if (types_stack[i].get_type() != ObDoubleType) {
-            types_stack[i].set_calc_type(ObDoubleType);
+          if (types_stack[i].get_type() != target_type) {
+            types_stack[i].set_calc_type(target_type);
           }
         }
       }

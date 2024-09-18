@@ -199,8 +199,8 @@ int ObCreateIndexResolver::resolve_index_column_node(
           } else if (OB_NOT_NULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
             if (ob_is_collection_sql_type(column_schema->get_data_type()) && index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support index create on vector column yet", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector column is");
+              LOG_WARN("not support index type create on vector or array column yet", K(ret), K(index_keyname_));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector or array column is");
             }
           }
         }
