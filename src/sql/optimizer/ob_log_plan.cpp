@@ -5957,10 +5957,17 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
              OB_UNLIKELY(!pushdown_groupby_columns.at(0)->is_column_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FALSE_IT(column = static_cast<ObColumnRefRawExpr*>(pushdown_groupby_columns.at(0)))) {
+  } else if (FALSE_IT(schema_guard = get_optimizer_context().get_schema_guard())) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret));
+  } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_id(0, first_column_id))) {
+    LOG_WARN("failed to get first rowkey column id", K(ret));
+  } else if (column->get_column_id() == first_column_id) {
+    can_push = false;
   } else if (OB_UNLIKELY(EN_FORCE_GBY_PUSHDOWN_STORAGE)) {
     can_push = true;
     LOG_TRACE("force pushdown group by to storage layer", K(ret), K(can_push));
-  } else if (OB_FALSE_IT(column = static_cast<ObColumnRefRawExpr*>(pushdown_groupby_columns.at(0)))) {
   } else if (!ObColumnStatParam::is_valid_opt_col_type(column->get_data_type())) {
     can_push = false;
   } else if (NULL == (table_meta =
@@ -5972,13 +5979,6 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column meta not find", K(ret), K(*table_meta), K(column));
   } else if (table_meta->get_micro_block_count() <= 0) {
-    can_push = false;
-  } else if (FALSE_IT(schema_guard = get_optimizer_context().get_schema_guard())) {
-  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(ret));
-  } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_id(0, first_column_id))) {
-    LOG_WARN("failed to get first rowkey column id", K(ret));
-  } else if (column->get_column_id() == first_column_id) {
     can_push = false;
   } else {
     double micro_block_avg_count = table_meta->get_rows() / table_meta->get_micro_block_count();
