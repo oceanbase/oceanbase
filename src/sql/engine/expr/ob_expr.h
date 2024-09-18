@@ -742,8 +742,8 @@ public:
   OB_INLINE void unset_null(ObEvalCtx &ctx, int64_t batch_idx) {
     get_nulls(ctx).unset(batch_idx);
   }
-  void reset_attr_datums_ptr(char *frame, const int64_t size);
-  void reset_attrs_datums(char *frame, const int64_t size) const;
+
+  void reset_attrs_datums(ObEvalCtx &ctx) const;
   OB_INLINE bool is_nested_expr() const { return attrs_cnt_ > 0; }
 
 
