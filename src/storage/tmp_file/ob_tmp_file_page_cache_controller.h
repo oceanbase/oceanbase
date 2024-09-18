@@ -40,6 +40,7 @@ public:
   }
   ~ObTmpFilePageCacheController() {}
 public:
+  static const int64_t FLUSH_TIMER_CNT = 4;
   static const int64_t FLUSH_FAST_INTERVAL = 5;     // 5ms
   static const int64_t FLUSH_INTERVAL = 1000;       // 1s
   static const int64_t SWAP_FAST_INTERVAL = 5;      // 5ms

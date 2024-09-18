@@ -2505,10 +2505,13 @@ int ObSharedNothingTmpFile::generate_data_flush_info_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush sequence not match",
         KR(ret), K(inner_flush_ctx_.flush_seq_), K(flush_task), KPC(this));
-  } else if (OB_FAIL(copy_flush_data_from_wbp_(flush_task, info, data_flush_context,
-                                               copy_begin_page_id, copy_begin_page_virtual_id,
-                                               copy_end_page_id,
-                                               flush_sequence, need_flush_tail))) {
+  } else if (ObTmpFileFlushTask::TaskType::META == flush_task.get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("flush task type is unexpected", KR(ret), K(flush_task), K(data_flush_context), KPC(this));
+  } else if (OB_FAIL(collect_flush_data_page_id_(flush_task, info, data_flush_context,
+                                                 copy_begin_page_id, copy_begin_page_virtual_id,
+                                                 copy_end_page_id,
+                                                 flush_sequence, need_flush_tail))) {
     LOG_WARN("fail to copy flush data from wbp", KR(ret),
         K(flush_task), K(info), K(data_flush_context), KPC(this));
   }
@@ -2549,7 +2552,7 @@ int ObSharedNothingTmpFile::generate_data_flush_info(
   return ret;
 }
 
-int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
+int ObSharedNothingTmpFile::collect_flush_data_page_id_(
     ObTmpFileFlushTask &flush_task,
     ObTmpFileFlushInfo &info,
     ObTmpFileDataFlushContext &data_flush_context,
@@ -2571,8 +2574,9 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
   uint32_t cur_flushed_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
   uint32_t cur_page_id = copy_begin_page_id;
   int64_t cur_page_virtual_id = copy_begin_page_virtual_id;
+  int64_t collected_page_cnt = 0;
 
-  if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
+  if (OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(inner_flush_ctx_.data_flush_infos_.push_back(InnerFlushInfo()))) {
@@ -2596,21 +2600,21 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
       LOG_WARN("fail to read page", KR(ret), K(fd_), K(cur_page_id));
     } else if (OB_FAIL(wbp_->notify_write_back(fd_, cur_page_id, ObTmpFilePageUniqKey(cur_page_virtual_id)))) {
       LOG_WARN("fail to notify write back", KR(ret), K(fd_), K(cur_page_id));
-    } else if (OB_UNLIKELY(!flush_task.check_buf_range_valid(buf, ObTmpFileGlobal::PAGE_SIZE))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid buffer range", KR(ret), K(fd_), K(write_offset), KP(buf));
+    } else if (OB_FAIL(flush_task.get_flush_page_id_arr().push_back(cur_page_id))) {
+      LOG_ERROR("fail to push back flush page id", KR(ret), K(fd_), K(cur_page_id), KPC(this));
+      ret = OB_ITER_END; // override error code
     } else {
       // ObTmpPageCacheKey cache_key(flush_task.get_block_index(),
       //                             write_offset / ObTmpFileGlobal::PAGE_SIZE, tenant_id_);
       // ObTmpPageCacheValue cache_value(page_buf);
       // ObTmpPageCache::get_instance().try_put_page_to_cache(cache_key, cache_value);
 
-      MEMCPY(buf + write_offset, page_buf, ObTmpFileGlobal::PAGE_SIZE);
       write_offset += ObTmpFileGlobal::PAGE_SIZE;
       flushing_page_num += 1;
       cur_flushed_page_id = cur_page_id;
       cur_page_id = next_page_id;
       cur_page_virtual_id += 1;
+      collected_page_cnt += 1;
       if (original_state_is_dirty) {
         write_back_data_page_num_++;
       }
@@ -2658,11 +2662,16 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
       data_flush_context.set_has_flushed_last_partially_written_page(true);
     }
     flush_task.set_data_length(write_offset);
+    flush_task.set_buffer_pool_ptr(wbp_);
+    flush_task.set_type(ObTmpFileFlushTask::DATA);
 
     inner_flush_ctx_.flush_seq_ = flush_sequence;
   } else {
     LOG_WARN("fail to generate data flush info", KR(ret), K(fd_), K(need_flush_tail),
         K(flush_sequence), K(data_flush_context), K(info), K(flush_task), KPC(this));
+    for (int32_t i = 0; i < collected_page_cnt; ++i) {
+      flush_task.get_flush_page_id_arr().pop_back();
+    }
     if (inner_flush_ctx_.data_flush_infos_.size() == origin_info_num + 1) {
       inner_flush_ctx_.data_flush_infos_.pop_back();
     }
@@ -2697,6 +2706,9 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush sequence not match", KR(ret), K(flush_sequence), K(inner_flush_ctx_.flush_seq_),
              K(flush_task), KPC(this));
+  } else if (ObTmpFileFlushTask::TaskType::DATA == flush_task.get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("flush task type is unexpected", KR(ret), K(flush_task), K(meta_flush_context), KPC(this));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
@@ -2725,6 +2737,7 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
 
   if (OB_SUCC(ret)) {
     flush_task.set_data_length(write_offset);
+    flush_task.set_type(ObTmpFileFlushTask::META);
     inner_flush_ctx_.flush_seq_ = flush_sequence;
   } else {
     LOG_WARN("fail to generate meta flush info", KR(ret), K(fd_), K(flush_task),
@@ -2788,9 +2801,6 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
       last_page_lock_.unlock();
     }
 
-    if (OB_SUCC(ret)) {
-      truncate_lock_.unlock();
-    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush info does not contain data info", KR(ret), K(info), KPC(this));
@@ -2823,6 +2833,13 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
   }
 
   LOG_DEBUG("insert_meta_tree_item end", KR(ret), KPC(this));
+  return ret;
+}
+
+int ObSharedNothingTmpFile::copy_finish()
+{
+  int ret = OB_SUCCESS;
+  truncate_lock_.unlock();
   return ret;
 }
 

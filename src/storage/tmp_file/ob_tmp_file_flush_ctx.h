@@ -28,6 +28,16 @@ namespace tmp_file
 {
 class ObTmpFileFlushTG;
 
+class ObTmpFileWriteBlockTask : public common::ObTimerTask
+{
+public:
+  explicit ObTmpFileWriteBlockTask(ObTmpFileFlushTask &flush_task);
+  virtual ~ObTmpFileWriteBlockTask() {}
+  virtual void runTimerTask() override;
+private:
+  ObTmpFileFlushTask &flush_task_;
+};
+
 struct ObTmpFileDataFlushContext
 {
 public:
@@ -242,6 +252,12 @@ public:
     TFFT_FINISH = 7,
     TFFT_ABORT = 8,
   };
+  enum TaskType
+  {
+    INVALID = -1,
+    DATA = 0,
+    META = 1,
+  };
 public:
   void destroy();
   int prealloc_block_buf();
@@ -254,8 +270,11 @@ public:
   OB_INLINE bool is_valid() const { return OB_NOT_NULL(get_data_buf()); }
   OB_INLINE bool is_full() const { return data_length_ == OB_STORAGE_OBJECT_MGR.get_macro_object_size(); }
   OB_INLINE char *get_data_buf() const { return block_handle_.value_ == nullptr ? nullptr : block_handle_.value_->get_buffer(); }
-  OB_INLINE void atomic_set_ret_code(int ret_code) { ATOMIC_SET(&ret_code_, ret_code); }
-  OB_INLINE int atomic_get_ret_code() const { return ATOMIC_LOAD(&ret_code_); }
+  OB_INLINE ObSEArray<uint32_t, ObTmpFileGlobal::BLOCK_PAGE_NUMS>& get_flush_page_id_arr() {
+    return flush_page_id_arr_;
+  }
+  OB_INLINE void atomic_set_ret_code(int ret_code) { ATOMIC_SET(&io_result_ret_code_, ret_code); }
+  OB_INLINE int atomic_get_ret_code() const { return ATOMIC_LOAD(&io_result_ret_code_); }
   OB_INLINE void atomic_set_write_block_ret_code(int write_block_ret_code) {
     ATOMIC_SET(&write_block_ret_code_, write_block_ret_code);
   }
@@ -276,6 +295,8 @@ public:
   OB_INLINE bool get_is_fast_flush_tree() const { return fast_flush_tree_page_; }
   OB_INLINE void mark_recorded_as_prepare_finished() { recorded_as_prepare_finished_ = true; }
   OB_INLINE bool get_recorded_as_prepare_finished() const { return recorded_as_prepare_finished_; }
+  OB_INLINE void set_type(TaskType type) { type_ = type; }
+  OB_INLINE TaskType get_type() const { return type_; }
   OB_INLINE void set_state(const ObTmpFileFlushTaskState state) { task_state_ = state; }
   OB_INLINE ObTmpFileFlushTaskState get_state() const { return task_state_; }
   OB_INLINE void set_tmp_file_block_handle(const ObTmpFileBlockHandle &tfb_handle) { tmp_file_block_handle_ = tfb_handle; }
@@ -289,26 +310,39 @@ public:
     return buffer != nullptr && get_data_buf() != nullptr &&
            buffer >= get_data_buf() && buffer + length <= get_data_buf() + OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   }
-  TO_STRING_KV(KP(this), KP(kvpair_), K(write_block_ret_code_), K(ret_code_), K(data_length_),
+  OB_INLINE void set_buffer_pool_ptr(ObTmpWriteBufferPool *wbp) { wbp_ = wbp; }
+  OB_INLINE void atomic_set_write_block_executed(const bool executed) { ATOMIC_SET(&is_write_block_executed_, executed); }
+  OB_INLINE bool atomic_get_write_block_executed() const { return ATOMIC_LOAD(&is_write_block_executed_); }
+  OB_INLINE ObTmpFileWriteBlockTask& get_flush_write_block_task() { return flush_write_block_task_; }
+
+  TO_STRING_KV(KP(this), KP(kvpair_), K(io_result_ret_code_), K(data_length_),
                K(block_index_), K(flush_seq_), K(create_ts_), K(is_io_finished_),
-               K(fast_flush_tree_page_), K(recorded_as_prepare_finished_), K(task_state_), K(tmp_file_block_handle_), K(flush_infos_));
+               K(fast_flush_tree_page_), K(recorded_as_prepare_finished_), K(type_), K(task_state_), K(tmp_file_block_handle_), K(flush_infos_),
+               K(is_write_block_executed_), K(write_block_ret_code_), K(flush_write_block_task_), K(flush_page_id_arr_.count()));
+private:
+  int lazy_alloc_and_fill_block_buf_for_data_page_();
 private:
   ObKVCacheInstHandle inst_handle_;
   ObKVCachePair *kvpair_;
   ObTmpBlockValueHandle block_handle_;
+  ObSEArray<uint32_t, ObTmpFileGlobal::BLOCK_PAGE_NUMS> flush_page_id_arr_;
   int write_block_ret_code_;
-  int ret_code_;
+  int io_result_ret_code_;
   int64_t data_length_;       // data length (including padding to make length upper align to page size)
   int64_t block_index_;       // tmp file block logical index in ObTmpFileBlockManager
   int64_t flush_seq_;         // flush sequence, for verification purpose
   int64_t create_ts_;
-  bool is_io_finished_;
+  bool is_write_block_executed_; // set to true if task has sent IO
+  bool is_io_finished_;       // set to true if task has finished async IO
   bool fast_flush_tree_page_; // indicate the task requires fast flush tree pages
-  bool recorded_as_prepare_finished_;
+  bool recorded_as_prepare_finished_;  // set to true if this task has been recorded by ObTmpFileBatchFlushContext as prepare_finished
+  TaskType type_;
   ObTmpFileFlushTaskState task_state_;
   ObTmpFileBlockHandle tmp_file_block_handle_;// hold a reference to the corresponding tmp file block to prevent it from being released
   blocksstable::ObMacroBlockHandle handle_;
   ObArray<ObTmpFileFlushInfo> flush_infos_;   // multi file flush into one block if size > 0
+  ObTmpFileWriteBlockTask flush_write_block_task_;
+  ObTmpWriteBufferPool *wbp_; // use to lazy read data pages
 };
 
 }  // end namespace tmp_file
