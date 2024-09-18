@@ -9656,6 +9656,7 @@ int ObUnitManager::do_migrate_unit_in_trans_(const share::ObResourcePool &pool,
     LOG_WARN("update_unit failed", K(new_unit), K(ret));
   }
   // End this transaction
+  DEBUG_SYNC(BEFORE_MIGRATE_FINISH);
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {

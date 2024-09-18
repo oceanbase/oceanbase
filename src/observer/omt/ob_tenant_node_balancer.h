@@ -89,6 +89,7 @@ private:
   int refresh_hidden_sys_memory();
   void periodically_check_tenant();
   int fetch_effective_tenants(const share::TenantUnits &old_tenants, share::TenantUnits &new_tenants);
+  int check_tenant_resource_released(const uint64_t tenant_id, bool &is_released) const;
   int refresh_tenant(share::TenantUnits &units);
   DISALLOW_COPY_AND_ASSIGN(ObTenantNodeBalancer);
 
