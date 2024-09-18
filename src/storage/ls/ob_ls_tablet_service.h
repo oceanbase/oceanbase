@@ -577,6 +577,11 @@ private:
   int offline_gc_tablet_for_create_or_transfer_in_abort_();
   int offline_destroy_memtable_and_mds_table_();
   int mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&duplicated_rows);
+  int get_tablet_and_acquire_new(
+      const ObTabletMapKey &key,
+      ObTabletHandle &old_tablet,
+      ObTabletHandle &new_tablet,
+      ObTimeGuard &time_guard);
 private:
   static int replay_create_inner_tablet(
       common::ObArenaAllocator &allocator,
