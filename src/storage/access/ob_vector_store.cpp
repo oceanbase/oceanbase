@@ -194,6 +194,7 @@ int ObVectorStore::check_agg_mask(
   return ret;
 }
 
+// TODO wenye: remove this func by disable group by in SQL layer or support first row in storage layer.
 int ObVectorStore::check_need_group_by(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
@@ -213,7 +214,7 @@ int ObVectorStore::check_need_group_by(const ObTableAccessParam &param)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_expr_cnt; ++i) {
       int32_t col_offset = param.iter_param_.agg_cols_project_->at(i);
-      if (OB_FAIL(col_offset_set.set_refactored(col_offset, 0/*deduplicated*/))) {
+      if (OB_FAIL(col_offset_set.set_refactored(col_offset))) {
         LOG_WARN("Failed to add column offset", K(ret), K(i), K(col_offset));
       }
     }
@@ -260,7 +261,7 @@ int ObVectorStore::alloc_group_by_cell(const ObTableAccessParam &param)
         LOG_WARN("Failed to init group by cell", K(ret));
       }
     }
-    if (OB_SUCC(ret) && check_need_group_by(param)) {
+    if (OB_SUCC(ret) && OB_FAIL(check_need_group_by(param))) {
       LOG_WARN("Failed to check need group by", K(ret), K(param));
     }
   }
