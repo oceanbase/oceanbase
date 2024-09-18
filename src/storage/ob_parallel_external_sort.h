@@ -1759,6 +1759,10 @@ ObExternalSort<T, Compare>::ObExternalSort(ObIAllocator &allocator)
 template<typename T, typename Compare>
 ObExternalSort<T, Compare>::~ObExternalSort()
 {
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+     STORAGE_LOG(ERROR, "Haven't called clean up before destruct", K(ret));
+  }
 }
 
 template<typename T, typename Compare>
