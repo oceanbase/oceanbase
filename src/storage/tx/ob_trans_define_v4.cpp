@@ -446,6 +446,7 @@ int ObTxDesc::switch_to_idle()
   commit_task_.reset();
   modified_tables_.reset();
   state_ = State::IDLE;
+  op_sn_ = 0;
   return OB_SUCCESS;
 }
 
