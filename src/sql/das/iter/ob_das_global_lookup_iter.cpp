@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_global_lookup_iter.h"
 #include "sql/das/iter/ob_das_merge_iter.h"
+#include "sql/das/ob_das_attach_define.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -33,6 +34,8 @@ int ObDASGlobalLookupIter::inner_init(ObDASIterParam &param)
     ObDASGlobalLookupIterParam &lookup_param = static_cast<ObDASGlobalLookupIterParam&>(param);
     can_retry_ = lookup_param.can_retry_;
     calc_part_id_ = lookup_param.calc_part_id_;
+    attach_ctdef_ = lookup_param.attach_ctdef_;
+    attach_rtinfo_ = lookup_param.attach_rtinfo_;
     // use lookup_memctx for lookup to avoid memory expansion during global index lookup
     lookup_rtdef_->scan_allocator_.set_alloc(&get_arena_allocator());
     lookup_rtdef_->stmt_allocator_.set_alloc(&get_arena_allocator());
@@ -104,6 +107,11 @@ int ObDASGlobalLookupIter::add_rowkey()
       das_scan_op->set_scan_ctdef(lookup_ctdef_);
       das_scan_op->set_scan_rtdef(lookup_rtdef_);
       das_scan_op->set_can_part_retry(can_retry_);
+      if (OB_NOT_NULL(attach_rtinfo_)) {
+        if (OB_FAIL(pushdown_attach_task_to_das(*das_scan_op))) {
+          LOG_WARN("fail to pushdown attach task into das scan", K(ret));
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -234,6 +242,57 @@ int ObDASGlobalLookupIter::check_index_lookup()
     }
   }
 
+  return ret;
+}
+
+int ObDASGlobalLookupIter::pushdown_attach_task_to_das(ObDASScanOp &target_op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(attach_ctdef_) || OB_ISNULL(attach_rtinfo_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("attach ctdef or rtinfo is nullptr", K(ret), KPC(attach_ctdef_), KP(attach_rtinfo_));
+  } else if (OB_FAIL(target_op.reserve_related_buffer(attach_rtinfo_->related_scan_cnt_))) {
+    LOG_WARN("reserve related buffer failed", K(ret), K(attach_rtinfo_->related_scan_cnt_));
+  } else if (OB_FAIL(attach_related_taskinfo(target_op, attach_rtinfo_->attach_rtdef_))) {
+    LOG_WARN("attach related task info failed", K(ret));
+  } else {
+    target_op.set_attach_ctdef(attach_ctdef_);
+    target_op.set_attach_rtdef(attach_rtinfo_->attach_rtdef_);
+  }
+  return ret;
+}
+
+int ObDASGlobalLookupIter::attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(attach_rtdef) || OB_ISNULL(attach_rtdef->ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("attach rtdef is invalid", K(ret), KP(attach_rtdef));
+  } else if (attach_rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
+    const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(attach_rtdef->ctdef_);
+    ObDASScanRtDef *scan_rtdef = static_cast<ObDASScanRtDef*>(attach_rtdef);
+    ObDASTableLoc *table_loc = scan_rtdef->table_loc_;
+    ObDASTabletLoc *tablet_loc = ObDASUtils::get_related_tablet_loc(
+        *target_op.get_tablet_loc(), table_loc->loc_meta_->ref_table_id_);
+    if (OB_ISNULL(tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("related tablet loc is not found", K(ret),
+               KPC(target_op.get_tablet_loc()),
+               KPC(table_loc->loc_meta_));
+    } else if (OB_FAIL(target_op.set_related_task_info(scan_ctdef,
+                                                       scan_rtdef,
+                                                       tablet_loc->tablet_id_))) {
+      LOG_WARN("set attach task info failed", K(ret), KPC(tablet_loc));
+    } else {
+      table_loc->is_reading_ = true;
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < attach_rtdef->children_cnt_; ++i) {
+      if (OB_FAIL(attach_related_taskinfo(target_op, attach_rtdef->children_[i]))) {
+        LOG_WARN("recursive attach related task info failed", K(ret), K(i));
+      }
+    }
+  }
   return ret;
 }
 

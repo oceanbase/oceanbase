@@ -11293,6 +11293,8 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       rel_info.ref_table_id_ = tsc_op.get_ref_table_id();
       if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_ref_table_id()))) {
         LOG_WARN("store the source table id failed", K(ret));
+      } else if (tsc_op.is_tsc_with_vid() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_rowkey_vid_table_id()))) {
+        LOG_WARN("fail to store rowkey vid table id", K(ret));
       } else if (nullptr != tsc_op.get_global_index_back_table_partition_info() && OB_FAIL(rel_info.table_part_infos_.push_back(tsc_op.get_global_index_back_table_partition_info()))) {
         LOG_WARN("collect table partition info to relation info failed", K(ret));
       }

@@ -48,12 +48,12 @@ public:
   INHERIT_TO_STRING_KV("ObDASIterParam", ObDASIterParam,
                      K(rowkey_vid_tablet_id_),
                      K(rowkey_vid_ls_id_),
-                     KPC(rowkey_vid_iter_),
-                     KPC(data_table_iter_),
-                     KPC(rowkey_vid_ctdef_),
-                     KPC(data_table_ctdef_),
-                     KPC(rowkey_vid_rtdef_),
-                     KPC(data_table_rtdef_),
+                     KP(rowkey_vid_iter_),
+                     KP(data_table_iter_),
+                     KP(rowkey_vid_ctdef_),
+                     KP(data_table_ctdef_),
+                     KP(rowkey_vid_rtdef_),
+                     KP(data_table_rtdef_),
                      KPC(trans_desc_),
                      KPC(snapshot_));
 public:

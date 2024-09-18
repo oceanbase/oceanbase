@@ -91,6 +91,8 @@ private:
                                       ObDASScanRtDef *scan_rtdef,
                                       const ObDASScanCtDef *lookup_ctdef,
                                       ObDASScanRtDef *lookup_rtdef,
+                                      const ObDASBaseCtDef *attach_ctdef,
+                                      ObDASBaseRtDef *attach_rtdef,
                                       const ObDASRelatedTabletID &related_tablet_ids,
                                       transaction::ObTxDesc *trans_desc,
                                       transaction::ObTxReadSnapshot *snapshot,
@@ -120,7 +122,8 @@ private:
                                       transaction::ObTxReadSnapshot *snapshot,
                                       ObDASIter *&iter_tree);
 
-  static int create_domain_lookup_sub_tree(const ObLSID &ls_id,
+  static int create_domain_lookup_sub_tree(ObTableScanParam &scan_param,
+                                           const ObLSID &ls_id,
                                            common::ObIAllocator &alloc,
                                            const ObDASTableLookupCtDef *table_lookup_ctdef,
                                            ObDASTableLookupRtDef *table_lookup_rtdef,

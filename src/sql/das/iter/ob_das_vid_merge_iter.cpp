@@ -608,7 +608,11 @@ int ObDASVIdMergeIter::get_vid_id(
     const int64_t rowkey_cnt = ctdef->table_param_.get_read_info().get_schema_rowkey_count();
     const int64_t extern_size = ctdef->trans_info_expr_ != nullptr ? 1 : 0;
     ObExpr *expr = nullptr;
-    if (GCONF.enable_strict_defensive_check()) {
+    // When the defensive check level is set to 2 (strict defensive check), the transaction information of the current
+    // row is recorded for 4377 diagnosis. Then, it will add pseudo_trans_info_expr into result output of das scan.
+    //
+    // just skip it if trans info expr in ctdef isn't nullptr.
+    if (OB_NOT_NULL(ctdef->trans_info_expr_)) {
       if (OB_UNLIKELY(ctdef->result_output_.count() != rowkey_cnt + 1 + extern_size)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected result output column count", K(ret), K(rowkey_cnt), K(ctdef->result_output_.count()));

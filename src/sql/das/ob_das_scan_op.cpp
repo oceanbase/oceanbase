@@ -1069,7 +1069,12 @@ const ExprFixedArray &ObDASScanOp::get_result_outputs() const
 const ObDASScanCtDef *ObDASScanOp::get_lookup_ctdef() const
 {
   const ObDASScanCtDef *lookup_ctdef = nullptr;
-  if (nullptr == attach_ctdef_) {
+  const ObDASBaseCtDef *attach_ctdef = attach_ctdef_;
+  if (OB_NOT_NULL(attach_ctdef) && DAS_OP_VID_MERGE == attach_ctdef->op_type_) {
+    OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
+    attach_ctdef = attach_ctdef->children_[0];
+  }
+  if (nullptr == attach_ctdef) {
     if (!related_ctdefs_.empty()) {
       OB_ASSERT(related_ctdefs_.count() == 1);
       OB_ASSERT(related_ctdefs_.at(0)->op_type_ == DAS_OP_TABLE_SCAN);
@@ -1077,8 +1082,8 @@ const ObDASScanCtDef *ObDASScanOp::get_lookup_ctdef() const
     }
   } else {
     const ObDASTableLookupCtDef *table_lookup_ctdef = nullptr;
-    if (DAS_OP_TABLE_LOOKUP == attach_ctdef_->op_type_) {
-      table_lookup_ctdef = static_cast<const ObDASTableLookupCtDef*>(attach_ctdef_);
+    if (DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_) {
+      table_lookup_ctdef = static_cast<const ObDASTableLookupCtDef*>(attach_ctdef);
       lookup_ctdef = table_lookup_ctdef->get_lookup_scan_ctdef();
     }
   }
@@ -1088,7 +1093,12 @@ const ObDASScanCtDef *ObDASScanOp::get_lookup_ctdef() const
 ObDASScanRtDef *ObDASScanOp::get_lookup_rtdef()
 {
   ObDASScanRtDef *lookup_rtdef = nullptr;
-  if (nullptr == attach_rtdef_) {
+  ObDASBaseRtDef *attach_rtdef = attach_rtdef_;
+  if (OB_NOT_NULL(attach_rtdef) && DAS_OP_VID_MERGE == attach_rtdef->op_type_) {
+    OB_ASSERT(2 == attach_rtdef->children_cnt_ && attach_rtdef->children_ != nullptr);
+    attach_rtdef = attach_rtdef->children_[0];
+  }
+  if (nullptr == attach_rtdef) {
     if (!related_rtdefs_.empty()) {
       OB_ASSERT(related_rtdefs_.count() == 1);
       OB_ASSERT(related_rtdefs_.at(0)->op_type_ == DAS_OP_TABLE_SCAN);
@@ -1096,8 +1106,8 @@ ObDASScanRtDef *ObDASScanOp::get_lookup_rtdef()
     }
   } else {
     ObDASTableLookupRtDef *table_lookup_rtdef = nullptr;
-    if (DAS_OP_TABLE_LOOKUP == attach_rtdef_->op_type_) {
-      table_lookup_rtdef = static_cast<ObDASTableLookupRtDef*>(attach_rtdef_);
+    if (DAS_OP_TABLE_LOOKUP == attach_rtdef->op_type_) {
+      table_lookup_rtdef = static_cast<ObDASTableLookupRtDef*>(attach_rtdef);
       lookup_rtdef = table_lookup_rtdef->get_lookup_scan_rtdef();
     }
   }
@@ -1180,7 +1190,7 @@ int ObDASScanOp::get_aux_lookup_tablet_id(common::ObTabletID &tablet_id) const
     } else if (ObDASOpType::DAS_OP_SORT == table_lookup_ctdef->get_rowkey_scan_ctdef()->op_type_) {
       aux_lookup_ctdef = static_cast<const ObDASIRAuxLookupCtDef *>(table_lookup_ctdef->get_rowkey_scan_ctdef()->children_[0]);
     }
-    for (int i = 0; !tablet_id.is_valid() && i < related_ctdefs_.count(); ++i) {
+    for (int i = 0; OB_NOT_NULL(aux_lookup_ctdef) && !tablet_id.is_valid() && i < related_ctdefs_.count(); ++i) {
       if (aux_lookup_ctdef->get_lookup_scan_ctdef() == related_ctdefs_.at(i)) {
         tablet_id = related_tablet_ids_.at(i);
       }
