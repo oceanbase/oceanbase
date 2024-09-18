@@ -3140,8 +3140,8 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
-  MemPalfGroupBufferIterator iterator;
   MemoryStorage storage;
+  MemPalfGroupBufferIterator iterator;
   auto get_file_end_lsn = [curr_lsn, buf_len] () { return curr_lsn + buf_len; };
   if (OB_FAIL(iterator.init(curr_lsn, get_file_end_lsn, &storage))) {
     PALF_LOG(ERROR, "init iterator failed", K(ret), KPC(this));
