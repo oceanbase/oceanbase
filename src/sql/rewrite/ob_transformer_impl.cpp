@@ -552,43 +552,12 @@ void ObTransformerImpl::print_trans_stat()
   }
 }
 
-
-int ObTransformerImpl::check_vec_approx(ObDMLStmt *stmt, bool &has_approx)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObDMLStmt::TempTableInfo, 8> temp_table_infos;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is NULL", K(ret));
-  } else if (has_approx == true) {
-    // do nothing
-  } else if (stmt->has_vec_approx()) {
-    has_approx = true;
-  } else if (stmt->has_subquery()) {
-    int sub_query_size = stmt->get_subquery_expr_size();
-    for (int64_t j = 0; OB_SUCC(ret) && j < sub_query_size && !has_approx; ++j) {
-      ObQueryRefRawExpr *subquery_ref = stmt->get_subquery_exprs().at(j);
-      ObDMLStmt *subquery_stmt = nullptr;
-      if (OB_ISNULL(subquery_ref) ||
-          OB_ISNULL(subquery_stmt = subquery_ref->get_ref_stmt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("subquery reference is null", K(subquery_ref));
-      } else if (OB_FAIL(check_vec_approx(subquery_stmt, has_approx))) {
-        LOG_WARN("stored subquery reference stmt failed", K(ret));
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_types)
 {
   int ret = OB_SUCCESS;
   uint64_t disable_list = 0;
   StmtFunc func;
   ObSqlCtx *sql_ctx = NULL;
-  bool has_approx = false;
   if (OB_ISNULL(stmt)
       || OB_ISNULL(ctx_->exec_ctx_)
       || OB_ISNULL(sql_ctx = ctx_->exec_ctx_->get_sql_ctx())) {
@@ -600,12 +569,10 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else if (OB_FAIL(check_temp_table_functions(stmt, func))) {
     LOG_WARN("failed to check stmt functions", K(ret));
-  } else if (OB_FAIL(check_vec_approx(stmt, has_approx))) {
-     LOG_WARN("failed to check vec approx", K(ret));
   } else {
     //TODO::unpivot open @xifeng
     if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_ ||
-        func.contain_fulltext_search_ || func.contain_dml_with_doc_id_ || has_approx) {
+        func.contain_fulltext_search_ || func.contain_dml_with_doc_id_ || func.contain_vec_index_approx_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_dml_with_doc_id_) {
@@ -703,6 +670,7 @@ int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &fun
     func.contain_for_update_ = func.contain_for_update_ || stmt->has_for_update();
     func.contain_unpivot_query_ = func.contain_unpivot_query_ || stmt->is_unpivot_select();
     func.contain_fulltext_search_ = func.contain_fulltext_search_ || (stmt->get_match_exprs().count() != 0);
+    func.contain_vec_index_approx_ = func.contain_vec_index_approx_ || stmt->has_vec_approx();
   }
   for (int64_t i = 0; OB_SUCC(ret)
                       && (!func.contain_enum_set_values_ || !func.contain_geometry_values_)
