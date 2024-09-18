@@ -279,6 +279,7 @@ ObTmpFileFlushTask::ObTmpFileFlushTask()
 
 void ObTmpFileFlushTask::destroy()
 {
+  flush_write_block_task_.~ObTmpFileWriteBlockTask();
   block_handle_.reset();
   flush_page_id_arr_.reset();
   inst_handle_.reset();
@@ -295,6 +296,8 @@ void ObTmpFileFlushTask::destroy()
   recorded_as_prepare_finished_ = false;
   type_ = TaskType::INVALID;
   task_state_ = ObTmpFileFlushTaskState::TFFT_INITED;
+  tmp_file_block_handle_.reset();
+  handle_.reset();
   flush_infos_.reset();
 }
 

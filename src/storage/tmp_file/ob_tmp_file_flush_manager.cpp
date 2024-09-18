@@ -953,6 +953,8 @@ int ObTmpFileFlushManager::handle_wait_(ObTmpFileFlushTask &flush_task, FlushSta
     // rollback the status to TFFT_ASYNC_WRITE if IO failed, and re-send the I/O in the retry process.
     STORAGE_LOG(INFO, "flush_task io fail, retry it later",
         KR(write_block_ret_code), KR(task_ret_code), K(flush_task));
+    flush_task.atomic_set_write_block_executed(false);
+    flush_task.atomic_set_io_finished(false);
     flush_task.set_state(FlushState::TFFT_ASYNC_WRITE);
   } else if (OB_FAIL(tmp_file_block_mgr_.write_back_succ(flush_task.get_block_index(),
                                                          flush_task.get_macro_block_handle().get_macro_id()))) {
