@@ -5875,7 +5875,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
   } else if (!is_only_full_group_by) {
     OPT_TRACE("not only full group by disable storage pushdwon");
   } else if (static_cast<const ObSelectStmt*>(stmt)->has_rollup() ||
-             group_exprs.count() > 1) {
+             static_cast<const ObSelectStmt*>(stmt)->get_group_expr_size() > 1) {
     /*do nothing*/
   } else {
     const ObIArray<ObRawExpr *> &filters = stmt->get_condition_exprs();
@@ -5950,6 +5950,7 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
   ObColumnRefRawExpr* column = NULL;
   const OptTableMeta *table_meta = NULL;
   const OptColumnMeta *column_meta = NULL;
+  uint64_t first_column_id = 0;
   can_push = false;
   if (OB_UNLIKELY(pushdown_groupby_columns.empty()) ||
              OB_ISNULL(pushdown_groupby_columns.at(0)) ||
@@ -5975,6 +5976,10 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
   } else if (FALSE_IT(schema_guard = get_optimizer_context().get_schema_guard())) {
   } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(ret));
+  } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_id(0, first_column_id))) {
+    LOG_WARN("failed to get first rowkey column id", K(ret));
+  } else if (column->get_column_id() == first_column_id) {
+    can_push = false;
   } else {
     double micro_block_avg_count = table_meta->get_rows() / table_meta->get_micro_block_count();
     // TODO it's better to use stat of column group in column store
