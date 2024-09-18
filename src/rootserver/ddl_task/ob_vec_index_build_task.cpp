@@ -554,6 +554,7 @@ int ObVecIndexBuildTask::prepare()
   } else {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_STATUS);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_ERR) OB_SUCCESS;
@@ -630,6 +631,7 @@ int ObVecIndexBuildTask::prepare_rowkey_vid_table()
   if (OB_SUCC(ret) && (rowkey_vid_task_submitted_ || is_rebuild_index_)) {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_ROWKEY_VID);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_ROWKEY_VID_TBL_ERR) OB_SUCCESS;
@@ -683,6 +685,7 @@ int ObVecIndexBuildTask::prepare_aux_index_tables()
   if (OB_SUCC(ret) && delta_buffer_task_submitted_ && index_id_task_submitted_) {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_AUX_INDEX);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_DELTA_OR_INDEX_ID_TBL_ERR) OB_SUCCESS;
@@ -770,6 +773,7 @@ int ObVecIndexBuildTask::prepare_vid_rowkey_table()
     (vid_rowkey_task_submitted_ || is_rebuild_index_) && index_snapshot_data_task_submitted_) {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_VID_ROWKEY);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_VID_ROWKEY_OR_SNAP_TBL_ERR) OB_SUCCESS;
