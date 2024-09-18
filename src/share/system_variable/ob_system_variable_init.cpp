@@ -3280,7 +3280,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[232].default_value_ = "4.2.1.8" ;
+      ObSysVars[232].default_value_ = "4.2.1.9" ;
       ObSysVars[232].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[232].name_ = "optimizer_features_enable" ;
       ObSysVars[232].data_type_ = ObVarcharType ;
@@ -3381,13 +3381,39 @@ static struct VarsInit{
     ObSysVars[238].alias_ = "OB_SV_KV_MODE" ;
     }();
 
+    [&] (){
+      ObSysVars[239].default_value_ = "10" ;
+      ObSysVars[239].info_ = "Indicate the limit on the number of ranges when optimizer use storage cardinality estimation" ;
+      ObSysVars[239].name_ = "range_index_dive_limit" ;
+      ObSysVars[239].data_type_ = ObIntType ;
+      ObSysVars[239].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[239].id_ = SYS_VAR_RANGE_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_INDEX_DIVE_LIMIT] = 239 ;
+      ObSysVars[239].base_value_ = "10" ;
+    ObSysVars[239].alias_ = "OB_SV_RANGE_INDEX_DIVE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[240].default_value_ = "10" ;
+      ObSysVars[240].info_ = "Indicate the limit on the number of partitions when optimizer use storage cardinality estimation" ;
+      ObSysVars[240].name_ = "partition_index_dive_limit" ;
+      ObSysVars[240].data_type_ = ObIntType ;
+      ObSysVars[240].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[240].id_ = SYS_VAR_PARTITION_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARTITION_INDEX_DIVE_LIMIT] = 240 ;
+      ObSysVars[240].base_value_ = "10" ;
+    ObSysVars[240].alias_ = "OB_SV_PARTITION_INDEX_DIVE_LIMIT" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 239;
+static int64_t var_amount = 241;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -3621,18 +3621,18 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                               |NAME        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |PX COORDINATOR                         |            |2       |72          |
-|1 |└─EXCHANGE OUT DISTR                   |:EX10002    |2       |71          |
-|2 |  └─HASH OUTER JOIN                    |            |2       |67          |
-|3 |    ├─EXCHANGE IN DISTR                |            |2       |58          |
-|4 |    │ └─EXCHANGE OUT DISTR (PKEY)      |:EX10001    |2       |57          |
-|5 |    │   └─MERGE OUTER JOIN             |            |2       |55          |
+|0 |PX COORDINATOR                         |            |3       |75          |
+|1 |└─EXCHANGE OUT DISTR                   |:EX10002    |3       |73          |
+|2 |  └─HASH OUTER JOIN                    |            |3       |69          |
+|3 |    ├─EXCHANGE IN DISTR                |            |3       |59          |
+|4 |    │ └─EXCHANGE OUT DISTR (PKEY)      |:EX10001    |3       |58          |
+|5 |    │   └─MERGE OUTER JOIN             |            |3       |55          |
 |6 |    │     ├─EXCHANGE IN DISTR          |            |2       |5           |
 |7 |    │     │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000    |2       |5           |
 |8 |    │     │   └─TABLE FULL SCAN        |t1(HLDINDEX)|2       |4           |
-|9 |    │     └─SORT                       |            |1       |50          |
-|10|    │       └─PX PARTITION ITERATOR    |            |1       |50          |
-|11|    │         └─TABLE FULL SCAN        |t2          |1       |50          |
+|9 |    │     └─SORT                       |            |2       |50          |
+|10|    │       └─PX PARTITION ITERATOR    |            |2       |50          |
+|11|    │         └─TABLE FULL SCAN        |t2          |2       |50          |
 |12|    └─PX PARTITION ITERATOR            |            |1       |8           |
 |13|      └─TABLE FULL SCAN                |t3          |1       |8           |
 ===============================================================================
@@ -3852,14 +3852,14 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SCALAR GROUP BY              |        |1       |32          |
-|1 |└─PX COORDINATOR             |        |1       |32          |
-|2 |  └─EXCHANGE OUT DISTR       |:EX10000|1       |32          |
+|0 |SCALAR GROUP BY              |        |1       |31          |
+|1 |└─PX COORDINATOR             |        |1       |31          |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000|1       |31          |
 |3 |    └─MERGE GROUP BY         |        |1       |31          |
 |4 |      └─PX PARTITION ITERATOR|        |1       |31          |
 |5 |        └─HASH JOIN          |        |1       |31          |
-|6 |          ├─TABLE FULL SCAN  |B       |1       |16          |
-|7 |          └─TABLE FULL SCAN  |A       |1       |16          |
+|6 |          ├─TABLE FULL SCAN  |A       |1       |16          |
+|7 |          └─TABLE FULL SCAN  |B       |1       |16          |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -3874,14 +3874,14 @@ Outputs & filters:
       partition wise, force partition granule
   5 - output(nil), filter(nil), rowset=16
       equal_conds([A.c1 = B.c2]), other_conds(nil)
-  6 - output([B.c2]), filter([B.c2 < 5631105], [B.c2 >= 5630905]), rowset=16
-      access([B.c2]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
-      range_key([B.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([A.c1]), filter([A.c1 >= 5630905], [A.c1 < 5631105], [A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
+  6 - output([A.c1]), filter([A.c1 >= 5630905], [A.c1 < 5631105], [A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.c1], [A.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false], 
       range_key([A.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([B.c2]), filter([B.c2 < 5631105], [B.c2 >= 5630905]), rowset=16
+      access([B.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([B.__pk_increment]), range(MIN ; MAX)always true
 Used Hint:
 -------------------------------------
   /*+
@@ -3896,37 +3896,37 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       GBY_PUSHDOWN(@"SEL$0208448F")
-      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."B"@"SEL$1" "db_predicate_deduce"."A"@"SEL$1"))
-      USE_HASH(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
-      PQ_DISTRIBUTE(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1" NONE NONE)
-      FULL(@"SEL$0208448F" "B"@"SEL$1")
+      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."A"@"SEL$1" "db_predicate_deduce"."B"@"SEL$1"))
+      USE_HASH(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
+      PQ_DISTRIBUTE(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1" NONE NONE)
       FULL(@"SEL$0208448F" "A"@"SEL$1")
+      FULL(@"SEL$0208448F" "B"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
 -------------------------------------
-  B:
-      table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
-      output_rows:1
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[t2]
-      stats version:0
-      dynamic sampling level:1
   A:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t1]
+      stats version:0
+      dynamic sampling level:1
+  B:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:

@@ -3313,7 +3313,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.2.1.8",
+    "default_value": "4.2.1.9",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
@@ -3414,6 +3414,32 @@
     "info": "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode.",
     "flags": "GLOBAL | READONLY",
     "publish_version": "421",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "range_index_dive_limit": {
+    "id": 10740,
+    "name": "range_index_dive_limit",
+    "default_value": "10",
+    "base_value": "10",
+    "data_type": "int",
+    "info": "Indicate the limit on the number of ranges when optimizer use storage cardinality estimation",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "425",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "partition_index_dive_limit": {
+    "id": 10741,
+    "name": "partition_index_dive_limit",
+    "default_value": "10",
+    "base_value": "10",
+    "data_type": "int",
+    "info": "Indicate the limit on the number of partitions when optimizer use storage cardinality estimation",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""

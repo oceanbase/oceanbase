@@ -6030,6 +6030,13 @@ STRING_VALUE
   $$->type_ = T_INT;
   $$->param_num_ = 1;
 }
+| NEG_SIGN INTNUM
+{
+  $$ = $2;
+  $$->value_ = -$$->value_;
+  $$->type_ = T_INT;
+  $$->param_num_ = 1;
+}
 
 charset_name:
 NAME_OB

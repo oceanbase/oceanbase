@@ -32,7 +32,7 @@ struct ObBatchEstTasks
 
   bool check_result_reliable() const;
 
-  TO_STRING_KV(K_(addr));
+  TO_STRING_KV(K_(addr), K_(arg), K_(res));
 };
 
 class ObAccessPathEstimation
@@ -50,6 +50,7 @@ public:
 
   static bool is_retry_ret(int ret);
 private:
+  static const int STORAGE_EST_SAMPLE_SEED = 1;
 
   static int process_common_estimate_rowcount(ObOptimizerContext &ctx,
                                               common::ObIArray<AccessPath *> &paths);
@@ -58,12 +59,13 @@ private:
 
   static int64_t get_scan_range_count(const ObIArray<ObNewRange> &ranges);
 
-  static int choose_best_estimation_method(const AccessPath *path,
+  static int choose_best_estimation_method(ObOptimizerContext &ctx,
+                                           const AccessPath *path,
                                            const ObTableMetaInfo &meta,
                                            bool &use_storage_stat,
                                            bool &use_default_vt);
 
-  static int check_path_can_use_stroage_estimate(const AccessPath *path, bool &can_use);
+  static int check_path_can_use_stroage_estimate(ObOptimizerContext &ctx, const AccessPath *path, bool &can_use);
 
   static int choose_leader_replica(const ObCandiTabletLoc &part_loc_info,
                                    const bool can_use_remote,
@@ -81,6 +83,24 @@ private:
   /// following functions are mainly used by storage estimation
   static int process_storage_estimation(ObOptimizerContext &ctx,
                                         ObIArray<AccessPath *> &paths);
+  static int get_storage_estimation_task(ObOptimizerContext &ctx,
+                                         ObIAllocator &arena,
+                                         const ObCandiTabletLoc &partition,
+                                         const ObTableMetaInfo &table_meta,
+                                         ObIArray<ObAddr> &prefer_addrs,
+                                         ObIArray<ObBatchEstTasks *> &tasks,
+                                         EstimatedPartition &best_index_part,
+                                         ObBatchEstTasks *&task);
+
+  static int process_storage_estimation_result(ObIArray<ObBatchEstTasks *> &tasks,
+                                               bool &is_reliable);
+
+  static int choose_storage_estimation_partitions(const int64_t partition_limit,
+                                                  const ObCandiTabletLocIArray &partitions,
+                                                  ObCandiTabletLocIArray &chosen_partitions);
+  static int choose_storage_estimation_ranges(const int64_t range_limit,
+                                              AccessPath *ap,
+                                              ObIArray<common::ObNewRange> &scan_ranges);
 
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
                                                  ObIArray<AccessPath *> &paths,
@@ -118,7 +138,8 @@ private:
                             ObIAllocator &allocator,
                             ObBatchEstTasks *task,
                             const EstimatedPartition &part,
-                            AccessPath *ap);
+                            AccessPath *ap,
+                            const ObIArray<common::ObNewRange> &chosen_scan_ranges);
 
   static int construct_scan_range_batch(ObIAllocator &allocator,
                                         const ObIArray<ObNewRange> &scan_ranges,
@@ -131,7 +152,9 @@ private:
   static bool is_multi_geo_range(const ObNewRange &range);
 
   static int estimate_prefix_range_rowcount(
-      const obrpc::ObEstPartResElement &result,
+      const int64_t res_logical_row_count,
+      const int64_t res_physical_row_count,
+      const int64_t sample_partition_cnt,
       ObCostTableScanInfo &est_cost_info,
       double &logical_row_count,
       double &physical_row_count);
@@ -169,6 +192,9 @@ private:
   static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                                   const ObCandiTabletLoc &part_loc_info,
                                                   ObTableMetaInfo &meta);
+  static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
+                                                  const ObCandiTabletLocIArray &part_loc_infos,
+                                                  ObTableMetaInfo &meta);
 
   static int estimate_full_table_rowcount_by_meta_table(ObOptimizerContext &ctx,
                                                         const ObIArray<ObTabletID> &all_tablet_ids,
@@ -186,7 +212,8 @@ private:
                                                 const common::ObOptDSStat::DSColStats &ds_col_stats,
                                                 ObIArray<OptColumnMeta> &col_metas);
 
-  static int add_ds_result_items(ObIArray<AccessPath *> &paths,
+  static int add_ds_result_items(ObOptimizerContext &ctx,
+                                 ObIArray<AccessPath *> &paths,
                                  const ObIArray<ObRawExpr*> &filter_exprs,
                                  const bool specify_ds,
                                  ObIArray<ObDSResultItem> &ds_result_items,
@@ -204,11 +231,16 @@ private:
                                                         const bool is_inner_path,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
 
-  static int get_valid_ds_path(ObIArray<AccessPath *> &paths,
+  static int get_valid_ds_path(ObOptimizerContext &ctx,
+                               ObIArray<AccessPath *> &paths,
                                const bool specify_ds,
                                common::ObIArray<AccessPath *> &ds_paths,
                                common::ObIArray<AccessPath *> &no_ds_paths,
                                bool &all_path_is_get);
+
+  static int get_index_dive_limit(ObOptimizerContext &ctx,
+                                  int64_t *range_index_dive_limit,
+                                  int64_t *partition_index_dive_limit);
 };
 
 }

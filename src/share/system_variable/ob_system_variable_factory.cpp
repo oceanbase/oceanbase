@@ -298,6 +298,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "parallel_degree_policy",
   "parallel_min_scan_time_threshold",
   "parallel_servers_target",
+  "partition_index_dive_limit",
   "performance_schema",
   "plsql_ccflags",
   "plsql_optimize_level",
@@ -309,6 +310,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "query_cache_size",
   "query_cache_type",
   "query_cache_wlock_invalidate",
+  "range_index_dive_limit",
   "read_only",
   "recyclebin",
   "regexp_stack_limit",
@@ -540,6 +542,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PARALLEL_DEGREE_POLICY,
   SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD,
   SYS_VAR_PARALLEL_SERVERS_TARGET,
+  SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
   SYS_VAR_PERFORMANCE_SCHEMA,
   SYS_VAR_PLSQL_CCFLAGS,
   SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
@@ -551,6 +554,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_QUERY_CACHE_SIZE,
   SYS_VAR_QUERY_CACHE_TYPE,
   SYS_VAR_QUERY_CACHE_WLOCK_INVALIDATE,
+  SYS_VAR_RANGE_INDEX_DIVE_LIMIT,
   SYS_VAR_READ_ONLY,
   SYS_VAR_RECYCLEBIN,
   SYS_VAR_REGEXP_STACK_LIMIT,
@@ -853,7 +857,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_default_lob_inrow_threshold",
   "_oracle_sql_select_limit",
   "plsql_optimize_level",
-  "ob_kv_mode"
+  "ob_kv_mode",
+  "range_index_dive_limit",
+  "partition_index_dive_limit"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1261,6 +1267,8 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarOracleSqlSelectLimit)
         + sizeof(ObSysVarPlsqlOptimizeLevel)
         + sizeof(ObSysVarObKvMode)
+        + sizeof(ObSysVarRangeIndexDiveLimit)
+        + sizeof(ObSysVarPartitionIndexDiveLimit)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3418,6 +3426,24 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_KV_MODE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObKvMode));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeIndexDiveLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRangeIndexDiveLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPartitionIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPartitionIndexDiveLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPartitionIndexDiveLimit));
       }
     }
 
@@ -6056,6 +6082,28 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObKvMode())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObKvMode", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RANGE_INDEX_DIVE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRangeIndexDiveLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRangeIndexDiveLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeIndexDiveLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARTITION_INDEX_DIVE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPartitionIndexDiveLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPartitionIndexDiveLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPartitionIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPartitionIndexDiveLimit", K(ret));
       }
       break;
     }

@@ -750,6 +750,10 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case RANGE_INDEX_DIVE_LIMIT:
+    case PARTITION_INDEX_DIVE_LIMIT:
+      is_valid = val.is_int();
+      break;
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -845,6 +849,47 @@ int ObOptParamHint::has_opt_param(const OptParamType param_type, bool &has_hint)
     has_hint = !obj.is_nop_value();
   }
   return ret;
+}
+
+template<typename T, ObOptParamHint::GET_PARAM_FUNC<T> PARAM_FUNC>
+int ObOptParamHint::inner_get_sys_var(const OptParamType param_type,
+                                      const ObSQLSessionInfo *session,
+                                      const share::ObSysVarClassType sys_var_id,
+                                      T &val) const
+{
+  int ret = OB_SUCCESS;
+  bool has_hint = false;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(session));
+  } else if (OB_FAIL(has_opt_param(param_type, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    if (OB_FAIL((this->*PARAM_FUNC)(param_type, val))) {
+      LOG_WARN("failed to get bool hint param", K(ret));
+    }
+  } else if (OB_FAIL(session->get_sys_variable(sys_var_id, val))) {
+    LOG_WARN("failed to get sys variable", K(ret));
+  }
+  return ret;
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                int64_t &val) const
+{
+  return inner_get_sys_var<int64_t, &ObOptParamHint::get_integer_opt_param>
+            (param_type, session, sys_var_id, val);
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                bool &val) const
+{
+  return inner_get_sys_var<bool, &ObOptParamHint::get_bool_opt_param>
+            (param_type, session, sys_var_id, val);
 }
 
 void ObOptParamHint::reset()

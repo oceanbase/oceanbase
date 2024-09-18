@@ -26,6 +26,7 @@ class ObRandom
 public:
   ObRandom();
   virtual ~ObRandom();
+  void seed(const uint64_t seed);
   //get a random int64_t number in [min(a,b), max(a,b)]
   static int64_t rand(const int64_t a, const int64_t b);
   //get a random int64_t number

@@ -255,6 +255,8 @@ namespace share
   static const char* const OB_SV__ORACLE_SQL_SELECT_LIMIT = "_oracle_sql_select_limit";
   static const char* const OB_SV_PLSQL_OPTIMIZE_LEVEL = "plsql_optimize_level";
   static const char* const OB_SV_KV_MODE = "ob_kv_mode";
+  static const char* const OB_SV_RANGE_INDEX_DIVE_LIMIT = "range_index_dive_limit";
+  static const char* const OB_SV_PARTITION_INDEX_DIVE_LIMIT = "partition_index_dive_limit";
 
 }
 }
