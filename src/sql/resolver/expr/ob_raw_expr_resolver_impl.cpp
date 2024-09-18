@@ -5754,11 +5754,34 @@ int ObRawExprResolverImpl::process_isnull_node(const ParseNode *node, ObRawExpr 
     ObRawExpr *obj_expr = NULL;
     if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1]->children_[0], obj_expr)))) {
       LOG_WARN("resolve child failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(ctx_.expr_factory_,
-                                                              obj_expr,
-                                                              false/*is_not_null*/,
-                                                              expr))) {
-      LOG_WARN("create is null expr failed", K(ret));
+    } else if (lib::is_oracle_mode()) {
+      ObRawExpr *is_null_expr = NULL;
+      ObConstRawExpr *one = NULL;
+      ObConstRawExpr *zero = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(ctx_.expr_factory_,
+                                                         obj_expr,
+                                                         false/*is_not_null*/,
+                                                         is_null_expr))) {
+        LOG_WARN("create is null expr failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(
+                     ctx_.expr_factory_, ObNumberType, number::ObNumber::get_zero(), zero)) ||
+                 OB_FAIL(ObRawExprUtils::build_const_number_expr(
+                     ctx_.expr_factory_, ObNumberType, number::ObNumber::get_positive_one(), one))) {
+        LOG_WARN("create const int expr failed", K(ret));
+      } else if (OB_ISNULL(is_null_expr) || OB_ISNULL(one) || OB_ISNULL(zero)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(
+                     ctx_.expr_factory_, is_null_expr, one, zero, expr))) {
+        LOG_WARN("create case when expr failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(ctx_.expr_factory_,
+                                                         obj_expr,
+                                                         false/*is_not_null*/,
+                                                         expr))) {
+        LOG_WARN("create is null expr failed", K(ret));
+      }
     }
   }
   return ret;
