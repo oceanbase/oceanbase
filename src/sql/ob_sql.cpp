@@ -678,6 +678,16 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           }
 #endif
           LOG_WARN("composite type use in pure sql context not supported!");
+        } else {
+          field.type_.set_collation_type(CS_TYPE_BINARY);
+          field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
+          field.length_ = OB_MAX_LONGTEXT_LENGTH;
+          if (CS_TYPE_BINARY != expr->get_collation_type()
+            && ObCharset::is_valid_collation(collation_type)) {
+            field.charsetnr_ = static_cast<uint16_t>(collation_type);
+          } else {
+            field.charsetnr_ = static_cast<uint16_t>(expr->get_collation_type());
+          }
         }
       }
 
