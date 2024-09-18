@@ -14,6 +14,7 @@
 #define OCEANBASE_OB_ARRAY_CAST_
 #include "lib/udt/ob_collection_type.h"
 #include "lib/udt/ob_array_type.h"
+#include "share/object/ob_obj_cast.h"
 
 namespace oceanbase {
 namespace sql {
@@ -29,7 +30,7 @@ public:
   ObArrayTypeCast() {};
   virtual ~ObArrayTypeCast() {};
   virtual int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                   ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type) = 0;
+                   ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0) = 0;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObArrayTypeCast);
 };
@@ -38,14 +39,14 @@ class ObArrayFixedSizeCast : public ObArrayTypeCast
 {
 public:
   int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type);
+           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
 };
 
 class ObVectorDataCast : public ObArrayTypeCast
 {
 public:
   int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type);
+           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
   uint32_t dim_cnt_;
 };
 
@@ -53,14 +54,14 @@ class ObArrayBinaryCast : public ObArrayTypeCast
 {
 public:
   int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type);
+           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
 };
 
 class ObArrayNestedCast : public ObArrayTypeCast
 {
 public :
 int cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-         ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type);
+         ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode = 0);
 }
 ;
 
@@ -71,7 +72,7 @@ class ObArrayCastUtils
 public:
   static int string_cast(common::ObIAllocator &alloc, ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type);
   static int cast_get_element(ObIArrayType *src, const ObCollectionBasicType *elem_type, uint32_t idx, ObObj &src_elem);
-  static int cast_add_element(common::ObIAllocator &alloc, ObObj &src_elem,  ObIArrayType *dst, const ObCollectionBasicType *dst_elem_type);
+  static int cast_add_element(common::ObIAllocator &alloc, ObObj &src_elem,  ObIArrayType *dst, const ObCollectionBasicType *dst_elem_type, ObCastMode mode);
   static int add_json_node_to_array(common::ObIAllocator &alloc, ObJsonNode &j_node, const ObCollectionTypeBase *elem_type, ObIArrayType *dst);
 };
 

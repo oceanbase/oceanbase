@@ -271,6 +271,13 @@ int ObExprVectorDims::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
 {
     int ret = OB_SUCCESS;
     rt_expr.eval_func_ = ObExprVectorDims::calc_dims;
+    if (rt_expr.arg_cnt_ != 1 || OB_ISNULL(rt_expr.args_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count of children is not 1 or children is null", K(ret), K(rt_expr.arg_cnt_), K(rt_expr.args_));
+    } else if (rt_expr.args_[0]->type_ == T_FUN_SYS_CAST) {
+      // return error if cast failed
+      rt_expr.args_[0]->extra_  &= ~CM_WARN_ON_FAIL;
+    }
     return ret;
 }
 
@@ -305,6 +312,13 @@ int ObExprVectorNorm::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
 {
     int ret = OB_SUCCESS;
     rt_expr.eval_func_ = ObExprVectorNorm::calc_norm;
+    if (rt_expr.arg_cnt_ != 1 || OB_ISNULL(rt_expr.args_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count of children is not 1 or children is null", K(ret), K(rt_expr.arg_cnt_), K(rt_expr.args_));
+    } else if (rt_expr.args_[0]->type_ == T_FUN_SYS_CAST) {
+      // return error if cast failed
+      rt_expr.args_[0]->extra_  &= ~CM_WARN_ON_FAIL;
+    }
     return ret;
 }
 

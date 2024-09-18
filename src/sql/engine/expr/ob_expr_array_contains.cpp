@@ -182,6 +182,9 @@ int ObExprArrayContains::calc_result_type2(ObExprResType &type,
       LOG_WARN("failed to eval args", K(ret));                                                                        \
     } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, meta_id, datum->get_string(), arr_obj))) { \
       LOG_WARN("construct array obj failed", K(ret));                                                                 \
+    } else if (datum_val->is_null()) {                                                                                \
+      bool contains_null = arr_obj->contain_null();                                                                   \
+      res.set_bool(contains_null);                                                                                    \
     } else if (FALSE_IT(val = datum_val->GET_FUNC())) {                                                               \
     } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj, val, bret))) {                                                 \
       LOG_WARN("array contains failed", K(ret));                                                                      \
@@ -259,6 +262,9 @@ int ObExprArrayContains::eval_array_contains_array(const ObExpr &expr, ObEvalCtx
         if (OB_FAIL(ObArrayExprUtils::get_array_obj(                                         \
                 tmp_allocator, ctx, meta_id, src_array.at(j)->get_string(), arr_obj))) {     \
           LOG_WARN("construct array obj failed", K(ret));                                    \
+        } else if (val_array.at(j)->is_null()) {                                             \
+          bool contains_null = arr_obj->contain_null();                                      \
+          res_datum.at(j)->set_bool(contains_null);                                          \
         } else if (FALSE_IT(val = val_array.at(j)->GET_FUNC())) {                            \
         } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj, val, bret))) {                    \
           LOG_WARN("array contains failed", K(ret));                                         \
@@ -455,8 +461,22 @@ int ObExprArrayContains::cg_expr(ObExprCGCtx &expr_cg_ctx,
     rt_expr.may_not_need_raw_check_ = false;
     rt_expr.extra_ = raw_expr.get_extra();
     uint32_t p1 = rt_expr.extra_ == 1 ? 0 : 1;
+    uint32_t p0 = rt_expr.extra_ == 1 ? 1 : 0;
     const ObObjType right_type = rt_expr.args_[p1]->datum_meta_.type_;
-    const ObObjTypeClass right_tc = ob_obj_type_class(right_type);
+    ObObjTypeClass right_tc = ob_obj_type_class(right_type);
+    if (right_tc == ObNullTC) {
+      // use array element type
+      ObExecContext *exec_ctx = expr_cg_ctx.session_->get_cur_exec_ctx();
+      const uint16_t sub_id = rt_expr.args_[p0]->obj_meta_.get_subschema_id();
+      ObObjType elem_type;
+      uint32_t unused;
+      bool is_vec = false;
+      if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, sub_id, elem_type, unused, is_vec))) {
+        LOG_WARN("failed to get collection elem type", K(ret), K(sub_id));
+      } else {
+        right_tc = ob_obj_type_class(elem_type);
+      }
+    }
     switch (right_tc) {
       case ObIntTC:
         rt_expr.eval_func_ = eval_array_contains_int64_t;
