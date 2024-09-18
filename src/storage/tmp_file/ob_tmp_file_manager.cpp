@@ -414,7 +414,10 @@ int ObTenantTmpFileManagerWithMTLSwitch::alloc_dir(const uint64_t tenant_id, int
   return ret;
 }
 
-int ObTenantTmpFileManagerWithMTLSwitch::open(const uint64_t tenant_id, int64_t &fd, const int64_t &dir_id)
+int ObTenantTmpFileManagerWithMTLSwitch::open(const uint64_t tenant_id,
+                                              int64_t &fd,
+                                              const int64_t &dir_id,
+                                              const char* const label)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
@@ -432,8 +435,8 @@ int ObTenantTmpFileManagerWithMTLSwitch::open(const uint64_t tenant_id, int64_t 
     } else if (OB_ISNULL(tmp_file_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(tmp_file_mgr->open(fd, dir_id))) {
-      LOG_WARN("fail to open", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->open(fd, dir_id, label))) {
+      LOG_WARN("fail to open", KR(ret), K(tenant_id), K(fd), K(dir_id), KP(label));
     }
   }
   return ret;

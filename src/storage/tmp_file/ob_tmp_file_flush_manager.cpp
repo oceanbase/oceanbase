@@ -693,6 +693,8 @@ int ObTmpFileFlushManager::drive_flush_task_retry_(
     FlushState &next_state)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
   next_state = state;
   switch (state) {
     case FlushState::TFFT_INSERT_META_TREE:
@@ -705,6 +707,10 @@ int ObTmpFileFlushManager::drive_flush_task_retry_(
       if (0 == flush_task.get_flush_infos().count()) {
         STORAGE_LOG(INFO, "all flush info is aborted", KR(ret), K(flush_task));
         next_state = FlushState::TFFT_ABORT;
+        if (OB_TMP_FAIL(tmp_file_block_mgr_.write_back_failed(flush_task.get_block_index()))) {
+          STORAGE_LOG(ERROR, "fail to notify tmp file block write back failed",
+              KR(ret), KR(tmp_ret), K(flush_task));
+        }
       } else if (OB_FAIL(handle_async_write_(flush_task, next_state))) {
         STORAGE_LOG(WARN, "fail to handle flush task async write", KR(ret), K(flush_task));
       }

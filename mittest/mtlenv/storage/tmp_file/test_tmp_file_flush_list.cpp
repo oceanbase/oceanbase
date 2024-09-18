@@ -262,7 +262,7 @@ TEST_F(TestFlushListIterator, test_iter_order)
   for (auto &mock_record: array) {
     int64_t fd = -1;
     int64_t dir = mock_record.dir;
-    ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+    ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
     ASSERT_EQ(OB_SUCCESS, ret);
 
     mock_dirty_record_[fd] = mock_record;

@@ -38,7 +38,7 @@ public:
   void destroy();
 
   int alloc_dir(int64_t &dir_id);
-  int open(int64_t &fd, const int64_t &dir_id, const char* const label = nullptr);
+  int open(int64_t &fd, const int64_t &dir_id, const char* const label);
   int remove(const int64_t fd);
 
 public:
@@ -71,7 +71,10 @@ class ObTenantTmpFileManagerWithMTLSwitch final
 public:
   static ObTenantTmpFileManagerWithMTLSwitch &get_instance();
   int alloc_dir(const uint64_t tenant_id, int64_t &dir_id);
-  int open(const uint64_t tenant_id, int64_t &fd, const int64_t &dir_id);
+  int open(const uint64_t tenant_id,
+           int64_t &fd,
+           const int64_t &dir_id,
+           const char* const label = nullptr);
   int remove(const uint64_t tenant_id, const int64_t fd);
 
 public:

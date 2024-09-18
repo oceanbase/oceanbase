@@ -445,7 +445,7 @@ void TestMultiTmpFileStress::run1()
   int64_t fd = 0;
   ObTenantEnv::set_tenant(tenant_ctx_);
 
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir_id_);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir_id_, "");
   std::cout << "normal case, fd: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "open file success", K(fd));

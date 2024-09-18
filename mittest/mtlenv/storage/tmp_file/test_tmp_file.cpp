@@ -145,7 +145,7 @@ TEST_F(TestTmpFile, test_unaligned_data_read_write)
   ObTmpFileIOHandle handle;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -260,7 +260,7 @@ TEST_F(TestTmpFile, test_read)
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -431,7 +431,7 @@ TEST_F(TestTmpFile, test_cached_read)
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -575,7 +575,7 @@ TEST_F(TestTmpFile, test_write_tail_page)
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -733,7 +733,7 @@ TEST_F(TestTmpFile, test_tmp_file_truncate)
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -1023,7 +1023,7 @@ TEST_F(TestTmpFile, test_truncate_to_flushed_page_id)
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -1137,7 +1137,7 @@ TEST_F(TestTmpFile, test_write_last_page_during_flush)
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -1221,7 +1221,7 @@ void test_big_file(const int64_t write_size, const int64_t wbp_mem_limit, ObTmpF
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << " tenant_id:"<< MTL_ID() << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
@@ -1351,7 +1351,7 @@ void test_multi_file_single_thread_read_write(bool disable_block_cache)
   for (int i = 0; i < file_num; ++i) {
     int64_t dir = i % 2 == 0 ? dir1 : dir2;
     int64_t fd = -1;
-    ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+    ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
     std::cout << "open temporary file: " << fd << std::endl;
     ASSERT_EQ(OB_SUCCESS, ret);
     fds[i] = fd;
@@ -1664,7 +1664,7 @@ TEST_F(TestTmpFile, test_aio_pread)
   int64_t fd = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
   std::cout << "open temporary file: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   tmp_file::ObTmpFileHandle file_handle;
