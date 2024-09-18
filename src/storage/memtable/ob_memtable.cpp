@@ -2950,6 +2950,12 @@ int ObMemtable::mvcc_write_(
     } else if (blocksstable::ObDmlFlag::DF_DELETE == dml_flag) {
       ++mt_stat_.delete_row_count_;
     }
+
+    // TODO(handora.qc): after finishing the cherrypick of batch_dml_opt_425 to
+    // the master, integrate the event into mvcc_write_statistic_.
+    EVENT_ADD(ObStatEventIds::MEMSTORE_WRITE_BYTES,
+              key.get_rowkey()->get_deep_copy_size() +
+              arg.data_->dup_size());
   }
   return ret;
 }
