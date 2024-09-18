@@ -265,7 +265,7 @@ void TestMdsDumpKV::test_dump_kv_wrapper()
   ASSERT_EQ(OB_SUCCESS, mds_row.init(ObMdsSchemaHelper::MDS_MULTI_VERSION_ROW_COLUMN_CNT));
   ASSERT_EQ(OB_SUCCESS, adapter.convert_to_mds_row(allocator, mds_row));
 
-  // TODO(@luhaopeng.lhp): open this case later
+  // TODO(@baichangmin.bcm): open this case later
   /*
   // convert adapter from row;
   MdsDumpKVStorageAdapter adapter2;

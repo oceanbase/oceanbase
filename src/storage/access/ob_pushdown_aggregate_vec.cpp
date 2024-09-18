@@ -366,7 +366,7 @@ int ObAggCellVec::read_agg_datum(
     skip_index_datum_.reuse();
     skip_index_datum_.set_null();
     blocksstable::ObSkipIndexColMeta meta;
-    // TODO: @luhaopeng.lhp fix col_index in cg, use 0 temporarily
+    // TODO: @baichangmin.bcm fix col_index in cg, use 0 temporarily
     meta.col_idx_ = col_index;
     switch (agg_type_) {
       case PD_COUNT: {

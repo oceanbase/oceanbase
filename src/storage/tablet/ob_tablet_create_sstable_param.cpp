@@ -752,7 +752,7 @@ int ObTabletCreateSSTableParam::init_for_mds(
     const blocksstable::ObSSTableMergeRes &res,
     const ObStorageSchema &mds_schema)
 {
-  // TODO: @luhaopeng.lhp check ctx valid for mds
+  // TODO: @baichangmin.bcm check ctx valid for mds
   // reference to merge info
   int ret = OB_SUCCESS;
   const compaction::ObStaticMergeParam &static_param = ctx.static_param_;

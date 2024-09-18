@@ -13567,7 +13567,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                   is_fts_index(create_index_arg->index_type_) ||
                   is_multivalue_index(create_index_arg->index_type_) ||
                   is_vec_index(create_index_arg->index_type_)) {
-                // TODO hanxuan tempory bypass sumbit build fulltext index task
+                // TODO yunshan.tys tempory bypass sumbit build fulltext index task
                 // TODO yunyi tempory bypass sumbit build multi value index task
               } else {
                 ObArray<ObTabletID> inc_tablet_ids;

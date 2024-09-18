@@ -2653,7 +2653,7 @@ int ObDataIndexBlockBuilder::init(
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  ObDataStoreDesc *tmp_data_store_desc = nullptr; // TODO:luhaopeng.lhp rm this
+  ObDataStoreDesc *tmp_data_store_desc = nullptr;
   ObDataStoreDesc *index_store_desc = nullptr;
   ObDataStoreDesc *container_store_desc = nullptr;
   if (OB_UNLIKELY(is_inited_)) {

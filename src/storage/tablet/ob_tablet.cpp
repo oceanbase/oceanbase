@@ -7558,7 +7558,7 @@ int ObTablet::validate_medium_info_list(
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   const ObTabletDumpedMediumInfo *medium_info_list = mds_data.medium_info_list_.ptr_;
   // const ObExtraMediumInfo &extra_info = mds_data.extra_medium_info_;
-  // TODO: @luhaopeng.lhp after mds_mvs joint debugging completed
+  // TODO: @baichangmin.bcm after mds_mvs joint debugging completed
   const ObExtraMediumInfo &extra_info = tablet_meta_.extra_medium_info_;
 
   if (mds_data.medium_info_list_.is_none_object()) {
