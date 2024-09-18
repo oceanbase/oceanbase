@@ -257,6 +257,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     } else {
       OX (elem_desc.set_data_type(info->elem_type_));
       OX (elem_desc.set_field_count(1));
+      OX (elem_desc.set_pl_type(pl::PL_OBJ_TYPE));
     }
     OX (coll->set_element_desc(elem_desc));
     OX (coll->set_not_null(info->not_null_));
