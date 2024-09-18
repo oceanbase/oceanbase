@@ -379,6 +379,8 @@ int ObExternalStreamFileReader::open(const ObString &filename)
   } else if (OB_FAIL(data_access_driver_.get_file_size(filename.ptr(), file_size_))) {
     LOG_WARN("failed to get file size", K(ret), K(filename));
   } else {
+    is_file_end_ = false;
+
     ObLoadCompressionFormat this_file_compression_format = compression_format_;
     if (this_file_compression_format == ObLoadCompressionFormat::AUTO
         && OB_FAIL(compression_format_from_suffix(filename, this_file_compression_format))) {
