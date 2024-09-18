@@ -2683,6 +2683,7 @@ DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range
 DEFINE_ERROR_EXT(OB_KV_FILTER_PARSE_ERROR, -10514, -1, "HY000", "OBKV filter parse error", "Filter parse errror, the input filter string is: '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_REDIS_PARSE_ERROR, -10515, -1, "HY000", "OBKV redis protocol parse error", "Redis protocol parse errror, the input redis string is: '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG, -10516, -1, "HY000", "When invoking the Increment interface only HBase cells with a length of 8 can be converted to int64_t", "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'.");
+DEFINE_ERROR_EXT(OB_KV_REDIS_ERROR, -10517, -1, "HY000", "OBKV redis error", "Redis err need return to client");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置
