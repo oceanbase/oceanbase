@@ -907,6 +907,7 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
       new_index_schema.set_table_id(new_index_table_id);
       new_index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
       new_index_schema.set_table_state_flag(data_table_schema.get_table_state_flag());
+      new_index_schema.set_exec_env(create_index_arg.vidx_refresh_info_.exec_env_);
     }
   }
   LOG_DEBUG("generate_index_schema_from_exist_table", K(ret), K(new_index_table_name));
