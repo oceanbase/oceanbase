@@ -125,9 +125,15 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
         LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
       }
     }
-    // mysql模式可以直接用default value
+    // mysql模式
     else if (lib::is_mysql_mode()) {
-      dst = column_schema->get_cur_default_value();
+      // char,nchar,binary需要转换
+      if (column_schema->get_meta_type().is_fixed_len_char_type() || column_schema->get_meta_type().is_binary()) {
+        convert_src_obj = &(column_schema->get_cur_default_value());
+      } else {
+        // 直接用default value
+        dst = column_schema->get_cur_default_value();
+      }
     }
     // oracle模式需要转换
     else {
