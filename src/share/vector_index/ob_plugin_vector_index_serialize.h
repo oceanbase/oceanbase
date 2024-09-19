@@ -187,7 +187,7 @@ public:
   int serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, const int64_t capacity = DEFAULT_OUTBUF_CAPACITY);
   int deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb);
 private:
-  static const int64_t DEFAULT_OUTBUF_CAPACITY = 64LL * 1024LL; // 64KB
+  static const int64_t DEFAULT_OUTBUF_CAPACITY = 2LL * 1024LL * 1024LL; // 2MB
 
 private:
   bool is_inited_;
