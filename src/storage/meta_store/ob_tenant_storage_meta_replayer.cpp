@@ -195,7 +195,6 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid item", K(ret), K(item));
   } else if (ObLSItemStatus::CREATED == item.status_) {
-    const ObTenantSuperBlock &tenant_super_block = static_cast<omt::ObTenant*>(MTL_CTX())->get_super_block();
     ObStorageObjectOpt active_opt;
     active_opt.set_ss_ls_level_meta_object_opt(ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY, item.ls_id_.id());
     ObStorageObjectOpt deleting_opt;

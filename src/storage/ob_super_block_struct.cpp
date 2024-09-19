@@ -308,7 +308,7 @@ void ObTenantSnapshotMeta::reset()
 }
 
 // ========================== ObTenantSuperBlock ==============================
-OB_SERIALIZE_MEMBER(ObLSItem, ls_id_, epoch_, status_);
+OB_SERIALIZE_MEMBER(ObLSItem, ls_id_, epoch_, status_, min_macro_seq_, max_macro_seq_);
 
 ObTenantSuperBlock::ObTenantSuperBlock()
 {

@@ -809,33 +809,34 @@ int ObMultiTenant::update_hidden_sys_tenant()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
   omt::ObTenant *tenant = nullptr;
-  ObTenantMeta meta;
-  if (OB_FAIL(get_tenant(tenant_id, tenant))) { // sys tenant will not be deleted
-    LOG_WARN("failed to get sys tenant", K(ret));
-  } else if (OB_FAIL(construct_meta_for_hidden_sys(meta))) {
-    LOG_ERROR("fail to construct meta", K(ret));
-  } else {
-    int64_t bucket_lock_idx = -1;
-    bool lock_succ = false;
-    if (OB_FAIL(bucket_lock_.wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
-      LOG_WARN("fail to try_wrlock for update tenant unit", K(ret), K(tenant_id), K(bucket_lock_idx));
-    } else if (FALSE_IT(lock_succ = true)) {
-    } else if (!tenant->is_hidden() || meta.unit_ == tenant->get_unit()) {
-      // do nothing
-    } else if (OB_FAIL(update_tenant_unit_no_lock(meta.unit_))) {
-      LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
-    }
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(ret)) {
-    } else if (GCTX.is_shared_storage_mode()) {
-      const int64_t hidden_sys_data_disk_size = meta.unit_.config_.data_disk_size();
-      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.update_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
-        LOG_WARN("fail to update hidden sys data disk size", KR(ret), K(hidden_sys_data_disk_size));
+  SMART_VAR(ObTenantMeta, meta) {
+    if (OB_FAIL(get_tenant(tenant_id, tenant))) { // sys tenant will not be deleted
+      LOG_WARN("failed to get sys tenant", K(ret));
+    } else if (OB_FAIL(construct_meta_for_hidden_sys(meta))) {
+      LOG_ERROR("fail to construct meta", K(ret));
+    } else {
+      int64_t bucket_lock_idx = -1;
+      bool lock_succ = false;
+      if (OB_FAIL(bucket_lock_.wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
+        LOG_WARN("fail to try_wrlock for update tenant unit", K(ret), K(tenant_id), K(bucket_lock_idx));
+      } else if (FALSE_IT(lock_succ = true)) {
+      } else if (!tenant->is_hidden() || meta.unit_ == tenant->get_unit()) {
+        // do nothing
+      } else if (OB_FAIL(update_tenant_unit_no_lock(meta.unit_))) {
+        LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
       }
-    }
-#endif
-    if (lock_succ) {
-      bucket_lock_.unlock(bucket_lock_idx);
+      #ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_FAIL(ret)) {
+      } else if (GCTX.is_shared_storage_mode()) {
+        const int64_t hidden_sys_data_disk_size = meta.unit_.config_.data_disk_size();
+        if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.update_hidden_sys_data_disk_size(hidden_sys_data_disk_size))) {
+          LOG_WARN("fail to update hidden sys data disk size", KR(ret), K(hidden_sys_data_disk_size));
+        }
+      }
+      #endif
+      if (lock_succ) {
+        bucket_lock_.unlock(bucket_lock_idx);
+      }
     }
   }
   return ret;

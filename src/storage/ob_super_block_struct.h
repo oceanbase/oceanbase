@@ -190,7 +190,9 @@ public:
   ObLSItem() :
     ls_id_(),
     epoch_(0),
-    status_(ObLSItemStatus::MAX) {}
+    status_(ObLSItemStatus::MAX),
+    min_macro_seq_(UINT64_MAX),
+    max_macro_seq_(UINT64_MAX) {}
   virtual ~ObLSItem() { reset(); }
 
   void reset()
@@ -198,6 +200,8 @@ public:
     ls_id_.reset();
     epoch_ = 0;
     status_ = ObLSItemStatus::MAX;
+    min_macro_seq_ = UINT64_MAX;
+    max_macro_seq_ = UINT64_MAX;
   }
 
   bool is_valid() const
@@ -205,13 +209,15 @@ public:
     return ls_id_.is_valid() && epoch_ >= 0 && ObLSItemStatus::MAX != status_;
   }
 
-  TO_STRING_KV(K_(ls_id), K_(epoch), K_(status));
+  TO_STRING_KV(K_(ls_id), K_(epoch), K_(status), K_(min_macro_seq), K_(max_macro_seq));
   OB_UNIS_VERSION_V(1);
 
 public:
   share::ObLSID ls_id_;
   int64_t epoch_;
   ObLSItemStatus status_;
+  uint64_t min_macro_seq_;
+  uint64_t max_macro_seq_;
 };
 
 struct ObTenantSuperBlock final
