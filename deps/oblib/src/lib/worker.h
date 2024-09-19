@@ -242,8 +242,8 @@ public:
     : thread_group_id_(GET_GROUP_ID()), thread_func_type_(GET_FUNC_TYPE()), group_changed_(false), ret_(OB_SUCCESS)
   {
     THIS_WORKER.set_func_type_(func_type);
-    if (is_user_group(thread_group_id_)) {
-      // has set user-level group id. do nothing.
+    if (is_resource_manager_group(thread_group_id_)) {
+      // has set group id. do nothing.
     } else {
       uint64_t group_id = 0;
       ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);

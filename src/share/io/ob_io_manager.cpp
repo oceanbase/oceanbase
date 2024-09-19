@@ -1643,7 +1643,7 @@ int ObTenantIOManager::get_group_index(const ObIOGroupKey &key, uint64_t &index)
 {
   // IOMode in key is correct, no need to consider object device.
   int ret = OB_SUCCESS;
-  if (!is_user_group(key.group_id_)) {
+  if (!is_resource_manager_group(key.group_id_)) {
     index = (uint64_t)(key.mode_);
   } else if (OB_FAIL(group_id_index_map_.get_refactored(key, index))) {
     if (OB_HASH_NOT_EXIST != ret) {
@@ -1811,7 +1811,7 @@ int ObTenantIOManager::reset_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
+  } else if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot reset other group io config", K(ret), K(group_id));
   } else {
@@ -1854,7 +1854,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
+  } else if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot delete other group io config", K(ret), K(group_id));
   } else {

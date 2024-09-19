@@ -619,7 +619,7 @@ public:
 OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const
 {
   uint64_t worker_concurrency = 0;
-  if (is_user_group(group_id_)) {
+  if (is_resource_manager_group(group_id_)) {
     worker_concurrency = tenant_->cpu_quota_concurrency();
   } else {
     worker_concurrency = share::ObCgSet::instance().get_worker_concurrency(group_id_);

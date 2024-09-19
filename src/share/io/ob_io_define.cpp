@@ -2178,7 +2178,7 @@ int ObTenantIOConfig::add_single_group_config(const uint64_t tenant_id,
                                               int64_t weight_percent)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_user_group(key.group_id_)) || !is_valid_tenant_id(tenant_id) ||
+  if (OB_UNLIKELY(!is_resource_manager_group(key.group_id_)) || !is_valid_tenant_id(tenant_id) ||
       min_percent < 0 || min_percent > 100 ||
       max_percent < 0 || max_percent > 100 ||
       weight_percent < 0 || weight_percent > 100 ||
