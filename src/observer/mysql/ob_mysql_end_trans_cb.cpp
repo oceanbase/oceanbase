@@ -153,8 +153,7 @@ void ObSqlEndTransCb::callback(int cb_param)
       }
     }
 
-    ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
-    ObActiveSessionGuard::setup_default_ash();
+    ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = false;
     session_info->reset_cur_sql_id();
     session_info->reset_current_plan_hash();
     session_info->reset_current_plan_id();

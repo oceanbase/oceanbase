@@ -254,7 +254,8 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
           } else {
             gi_input->set_granule_pump(&sqc_ctx.gi_pump_);
             gi_input->add_table_location_keys(scan_ops);
-            LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_), K(sqc_ctx.gi_pump_.get_task_array_map()));
+            LOG_TRACE("setup gi op input", K(scan_ops), K(gi_input), K(&sqc_ctx.gi_pump_),
+                      K(gi_op->id_), K(sqc_ctx.gi_pump_.get_task_array_map()));
           }
         }
       }
@@ -868,6 +869,9 @@ int ObPxSubCoord::start_ddl()
         FLOG_INFO("start ddl", "context_id", ddl_ctrl_.context_id_, K(param));
       }
     }
+  }
+  if (OB_EAGAIN == ret) {
+    ret = OB_STATE_NOT_MATCH; // avoid px hang
   }
   return ret;
 }

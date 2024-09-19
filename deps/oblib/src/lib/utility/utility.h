@@ -86,7 +86,8 @@ char *rtrim(char *str);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint64_t ipport);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip);
 
-const char *time2str(const int64_t time_s, const char *format = DEFAULT_TIME_FORMAT);
+const char *time2str(const int64_t time_s, char *buf, const int64_t buf_len,
+                     const char *format = DEFAULT_TIME_FORMAT);
 int escape_range_string(char *buffer, const int64_t length, int64_t &pos, const ObString &in);
 int escape_enter_symbol(char *buffer, const int64_t length, int64_t &pos, const char *src);
 
@@ -531,12 +532,23 @@ inline int64_t get_cpu_id()
 // ethernet speed: byte / second.
 int get_ethernet_speed(const char *devname, int64_t &speed);
 int get_ethernet_speed(const ObString &devname, int64_t &speed);
+inline int64_t get_cgroup_memory_limit()
+{
+  int64_t cgroup_memory_limit = INT64_MAX;
+  FILE *file = fopen("/sys/fs/cgroup/memory/memory.limit_in_bytes", "r");
+  if (NULL != file) {
+    fscanf(file, "%ld", &cgroup_memory_limit);
+    fclose(file);
+  }
+  return cgroup_memory_limit;
+}
 
 inline int64_t get_phy_mem_size()
 {
   static int64_t page_size = sysconf(_SC_PAGE_SIZE);
   static int64_t phys_pages = sysconf(_SC_PHYS_PAGES);
-  return page_size * phys_pages;
+  static int64_t cgroup_memory_limit = get_cgroup_memory_limit();
+  return MIN(page_size * phys_pages, cgroup_memory_limit);
 }
 
 int64_t get_level1_dcache_size();

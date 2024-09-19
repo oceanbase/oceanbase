@@ -377,6 +377,7 @@ public:
   int64_t get_retry_cnt() const { return retry_cnt_; }
 
   ObQueryRetryASHDiagInfo* get_query_retry_ash_diag_info_ptr() { return &query_retry_ash_diag_info_; }
+  const ObQueryRetryASHDiagInfo& get_retry_ash_diag_info() const { return query_retry_ash_diag_info_; }
 
   TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(last_query_retry_err));
 
@@ -549,8 +550,12 @@ public:
     }
     return reroute_info_;
   }
-  share::ObFeedbackRerouteInfo *get_reroute_info() {
+  share::ObFeedbackRerouteInfo *get_reroute_info() const {
     return reroute_info_;
+  }
+  void set_reroute_info(share::ObFeedbackRerouteInfo &reroute_info)
+  {
+    reroute_info_->assign(reroute_info);
   }
 
   bool is_batch_params_execute() const
@@ -747,12 +752,14 @@ public:
       has_dblink_udf_(false),
       optimizer_features_enable_version_(0),
       injected_random_status_(false),
-      udf_flag_(0)
+      udf_flag_(0),
+      ori_question_marks_count_(0)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
                N_FETCH_CUR_TIME, fetch_cur_time_,
-               K_(calculable_items));
+               K_(calculable_items),
+               K_(ori_question_marks_count));
 
   void reset()
   {
@@ -795,6 +802,7 @@ public:
     optimizer_features_enable_version_ = 0;
     injected_random_status_ = false;
     udf_flag_ = 0;
+    ori_question_marks_count_ = 0;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -826,7 +834,10 @@ public:
   bool get_injected_random_status() const { return injected_random_status_; }
   void set_injected_random_status(bool injected_random_status) { injected_random_status_ = injected_random_status; }
   void set_random_plan_seed(uint64_t seed) {rand_gen_.seed(seed);}
-
+  void set_questionmark_count(int64_t count) {
+    ori_question_marks_count_ = count;
+    question_marks_count_ = count;
+  };
 
 
 public:
@@ -895,6 +906,7 @@ public:
       int8_t reserved_:5;
     };
   };
+  int64_t ori_question_marks_count_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

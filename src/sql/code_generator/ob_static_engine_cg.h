@@ -325,6 +325,7 @@ private:
   int generate_cte_table_spec(ObLogTableScan &op, ObFakeCTETableSpec &spec);
 
   int generate_spec(ObLogJoin &op, ObHashJoinSpec &spec, const bool in_root_job);
+  int regenerate_adaptive_join_output_map(ObLogJoin &op, ObHashJoinSpec &spec);
   // generate nested loop join
   int generate_spec(ObLogJoin &op, ObNestedLoopJoinSpec &spec, const bool in_root_job);
   // generate merge join
@@ -368,7 +369,7 @@ private:
   int generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec, const bool in_root_job);
 
   // px code gen
-  int generate_spec(ObLogStatCollector &op, ObStatCollectorSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogPxObjectSample &op, ObPxObjectSampleSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorSpec &spec, const bool in_root_job);
   int generate_dml_tsc_ids(const ObOpSpec &spec, const ObLogicalOperator &op,
                            ObIArray<int64_t> &dml_tsc_op_ids, ObIArray<int64_t> &dml_tsc_ref_ids);
@@ -380,6 +381,8 @@ private:
   int generate_spec(ObLogExchange &op, ObPxFifoCoordSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxOrderedCoordSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxMSCoordSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogStatisticsCollector &op, ObStatisticsCollectorSpec &spec,
+                    const bool in_root_job);
   int check_rollup_distributor(ObPxTransmitSpec *spec);
 
   // for remote execute
@@ -524,7 +527,6 @@ private:
   int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
                            const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
 
-  int check_window_functions_order(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

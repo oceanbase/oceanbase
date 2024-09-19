@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace lib
+{
+class ObShareTenantLimiter;
+}
 namespace storage
 {
 class ObStorageLogger;
@@ -192,6 +196,12 @@ protected:
 private:
   int update_tenant_freezer_config_();
   int update_throttle_config_(const uint64_t tenant_id);
+  lib::ObShareTenantLimiter* get_share_tenant_limiter_unsafe(int64_t tenant_id);
+  lib::ObShareTenantLimiter* get_share_tenant_limiter(int64_t tenant_id);
+  int create_share_tenant_limiter_unsafe(int64_t tenant_id, lib::ObShareTenantLimiter*& limiter);
+  void del_share_tenant_limiter(lib::ObShareTenantLimiter* limiter);
+  void update_share_tenant_limiter(int64_t tenant_id);
+  void recycle_tenant_allocator(int64_t tenant_id);
 protected:
       static const int DEL_TRY_TIMES = 30;
       enum class ObTenantCreateStep {
@@ -220,6 +230,8 @@ protected:
   static ObICtxMemConfigGetter *mcg_;
 
 private:
+  lib::ObShareTenantLimiter *tenant_limiter_head_;
+  lib::ObMutex limiter_mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObMultiTenant);
 }; // end of class ObMultiTenant
 

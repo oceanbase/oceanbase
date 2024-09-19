@@ -18,6 +18,12 @@
 
 namespace oceanbase
 {
+
+namespace common
+{
+class ObDiagnosticInfo;
+}
+
 namespace sql
 {
 class ObFreeSessionCtx;

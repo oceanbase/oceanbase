@@ -18,6 +18,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/location_cache/ob_location_struct.h"
+#include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
@@ -151,6 +152,13 @@ const char *const temp_store_format_options[] =
   "none",
 };
 
+enum class ObSplitSSTableType
+{
+  SPLIT_BOTH = 0, // Major and Minor
+  SPLIT_MAJOR = 1,
+  SPLIT_MINOR = 2
+};
+
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
   const char *str = nullptr;
   switch(task_status) {
@@ -267,6 +275,7 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
       || OB_TRANS_KILLED == ret || OB_TRANS_ROLLBACKED == ret // table lock doesn't support leader switch
       || OB_PARTITION_IS_BLOCKED == ret // when LS is block_tx by a transfer task
       || OB_TRANS_NEED_ROLLBACK == ret // transaction killed by leader switch
+      || OB_ERR_DDL_RESOURCE_NOT_ENOUGH == ret // tenant ddl resource not enough
       ;
 }
 
@@ -433,6 +442,12 @@ public:
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
 
+  static bool is_table_lock_retry_ret_code(int ret)
+  {
+    return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
+           || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_TRANS_CTX_NOT_EXIST == ret;
+  }
+
   static bool need_remote_write(const int ret_code);
 
   static int check_can_convert_character(const ObObjMeta &obj_meta)
@@ -588,6 +603,9 @@ public:
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
+  static int get_temp_store_compress_type(const share::schema::ObTableSchema *table_schema,
+                                          const int64_t parallel,
+                                          ObCompressorType &compr_type);
   static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
                                           const int64_t parallel,
                                           ObCompressorType &compr_type);
@@ -683,6 +701,15 @@ private:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map);
+};
+
+class ObSplitUtil
+{
+public:
+  static int deserializ_parallel_datum_rowkey(
+      common::ObIAllocator &rowkey_allocator,
+      const char *buf, const int64_t data_len, int64_t &pos,
+      ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list);
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

@@ -185,7 +185,8 @@ int ObAdminDumpCkptExecutor::dump_tenant_metas(common::ObIArray<omt::ObTenantMet
     LOG_WARN("fail to fprintf", K(ret));
   }
   for (int i = 0; i < metas.count() && OB_SUCC(ret); i++) {
-    if (fprintf(stream, "%d. %s\n", i + 1, to_cstring(metas.at(i))) < 0) {
+    ObCStringHelper helper;
+    if (fprintf(stream, "%d. %s\n", i + 1, helper.convert(metas.at(i))) < 0) {
       ret = OB_ERR_SYS;
       LOG_WARN("fail to fprintf", K(ret));
     }
@@ -211,9 +212,12 @@ int ObAdminDumpCkptExecutor::dump_all_ls_metas_from_ckpt(const blocksstable::Mac
   } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       entry_block, dump_ls_meta_op, meta_block_list))) {
     LOG_WARN("fail to iter_read_checkpoint_item", K(ret), K(entry_block));
-  } else if (fprintf(stream, "checkpoint_block_id_list: [%s]\n", to_cstring(meta_block_list)) < 0) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("fail to fprintf", K(ret));
+  } else {
+    ObCStringHelper helper;
+    if (fprintf(stream, "checkpoint_block_id_list: [%s]\n", helper.convert(meta_block_list)) < 0) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("fail to fprintf", K(ret));
+    }
   }
 
   return ret;
@@ -231,9 +235,12 @@ int ObAdminDumpCkptExecutor::dump_ls_meta(
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(ls_meta.deserialize(buf, buf_len, pos))) {
     LOG_WARN("fail to deserialize ls", K(ret));
-  } else if (fprintf(stream, "%s\n", to_cstring(ls_meta)) < 0) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("fail to fprintf", K(ret));
+  } else {
+    ObCStringHelper helper;
+    if (fprintf(stream, "%s\n", helper.convert(ls_meta)) < 0) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("fail to fprintf", K(ret));
+    }
   }
 
   return ret;
@@ -255,9 +262,12 @@ int ObAdminDumpCkptExecutor::dump_all_tablets_from_ckpt(const blocksstable::Macr
   } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       entry_block, dump_tablet_op, meta_block_list))) {
     LOG_WARN("fail to iter_read_checkpoint_item", K(ret), K(entry_block));
-  } else if (fprintf(stream, "checkpoint_block_id_list: %s\n", to_cstring(meta_block_list)) < 0) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("fail to fprintf", K(ret));
+  } else {
+    ObCStringHelper helper;
+    if (fprintf(stream, "checkpoint_block_id_list: %s\n", helper.convert(meta_block_list)) < 0) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("fail to fprintf", K(ret));
+    }
   }
 
   return ret;
@@ -276,9 +286,12 @@ int ObAdminDumpCkptExecutor::dump_tablet(
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(tablet_meta.deserialize(buf, buf_len, pos))) {
     LOG_WARN("fail to deserialize tablet", K(ret));
-  } else if (fprintf(stream, "%s\n", to_cstring(tablet_meta)) < 0) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("fail to fprintf", K(ret));
+  } else {
+    ObCStringHelper helper;
+    if (fprintf(stream, "%s\n", helper.convert(tablet_meta)) < 0) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("fail to fprintf", K(ret));
+    }
   }
 
   return ret;
@@ -321,9 +334,14 @@ int ObAdminDumpCkptExecutor::dump_tenant_ckpt(FILE *stream)
     const ObServerCheckpointSlogHandler::TENANT_META_MAP &tenant_meta_map = ckpt_slog_hander.get_tenant_meta_map();
     if (OB_FAIL(tenant_meta_map.get_refactored(tenant_id_, tenant_meta))) {
       LOG_WARN("fail to get tenant meta", K(ret));
-    } else if (fprintf(stream, "tenant_meta=> %s\n", to_cstring(tenant_meta)) < 0) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("fail to fprintf tenant meta", K(ret));
+    } else {
+      ObCStringHelper helper;
+      if (fprintf(stream, "tenant_meta=> %s\n", helper.convert(tenant_meta)) < 0) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("fail to fprintf tenant meta", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (ObCheckpointType::TENANT_META == meta_type_) {
       // has dumped, do nothing
     } else if (ObCheckpointType::LS_META == meta_type_) {

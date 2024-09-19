@@ -309,12 +309,12 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SCALAR GROUP BY            |    |1       |64          |
-|1 |└─HASH JOIN                |    |37      |63          |
-|2 |  ├─HASH JOIN              |    |13      |38          |
+|0 |SCALAR GROUP BY            |    |1       |65          |
+|1 |└─HASH JOIN                |    |41      |64          |
+|2 |  ├─HASH JOIN              |    |14      |39          |
 |3 |  │ ├─HASH JOIN            |    |7       |24          |
 |4 |  │ │ ├─HASH JOIN          |    |5       |18          |
-|5 |  │ │ │ ├─TABLE FULL SCAN  |t2  |8       |5           |
+|5 |  │ │ │ ├─TABLE FULL SCAN  |t2  |10      |5           |
 |6 |  │ │ │ └─HASH JOIN        |    |4       |11          |
 |7 |  │ │ │   ├─TABLE FULL SCAN|t1  |3       |5           |
 |8 |  │ │ │   └─TABLE FULL SCAN|t3  |6       |5           |
@@ -664,7 +664,7 @@ Outputs & filters:
   0 - output([T_FUN_COUNT(t1.c1)], [T_FUN_COUNT(t2.d1 * t3.c1)], [T_FUN_SUM(t4.d1 + t5.c1)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(t1.c1)], [T_FUN_COUNT(t2.d1 * t3.c1)], [T_FUN_SUM(t4.d1 + t5.c1)])
   1 - output([t4.d1], [t5.c1], [t2.d1], [t1.c1], [t3.c1]), filter(nil), rowset=16
-      equal_conds([t4.d1 = t5.c1 + t6.d2], [t2.d2 = t5.c1], [t2.d1 = t6.d2], [t1.c1 + t4.d2 = t5.c2 + t6.d2 - 1]), other_conds(nil)
+      equal_conds([t4.d1 = t5.c1 + t6.d2], [t2.d2 = t5.c1], [t2.d1 = t6.d2], [t1.c1 + t4.d2 = t5.c2 + t6.d2 + -1]), other_conds(nil)
   2 - output([t4.d1], [t2.d1], [t1.c1], [t3.c1], [t2.d2], [t4.d2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.d1], [t1.c2 = t3.c1]), other_conds([t1.c1 + t2.d2 = t4.d1 + t1.c2])
   3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
@@ -1087,7 +1087,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t4.d1 % 3], [t4.d2], [t7.c1 % 3], [t8.d2], [t7.c2]), filter(nil), rowset=16
-      equal_conds([t4.d2 % 5 = t5.c1 % 6], [t4.d1 % 4 = t7.c1 % 3], [t4.d1 % 7 = t8.d1 % 3], [t6.d2 % 2 = t4.d1 % 3]), other_conds(nil)
+      equal_conds([t4.d2 % 5 = t5.c1 % 6], [t4.d1 % 4 = t7.c1 % 3], [t4.d1 % 7 = t8.d1 % 3], [t4.d1 % 3 = t6.d2 % 2]), other_conds(nil)
   6 - output([t5.c1], [t5.c1 % 6], [t8.d1 % 3], [t7.c1 % 3], [t8.d2], [t7.c2], [t6.d2]), filter(nil), rowset=16
       equal_conds([t5.c1 % 4 = t7.c1 % 1], [t5.c1 % 7 = t8.d1 % 6], [t6.d1 % 4 = t7.c1 % 3], [t6.d1 % 7 = t8.d1 % 3]), other_conds(nil)
   7 - output([t8.d1 % 3], [t7.c1], [t8.d1], [t8.d2], [t7.c2]), filter(nil), rowset=16
@@ -1128,6 +1128,39 @@ Outputs & filters:
       access([t2.d2], [t2.d1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :0 = :8
+      :6 = :14
+      :3 = :17
+      :5 = :19
+      :7 = :21
+      :9 = :23
+      :11 = :25
+      :13 = :27
+      :20 = :28
+      :15 = :29
+      :5 = :31
+      :7 = :33
+      :9 = :35
+      :3 = :36
+      :11 = :37
+      :13 = :39
+      :32 = :40
+      :15 = :41
+      :7 = :43
+      :5 = :44
+      :9 = :45
+      :11 = :47
+      :13 = :49
+      :42 = :50
+      :15 = :51
+      :15 = :59
+      :11 = :61
+      :13 = :63
+      :53 = :64
+      :15 = :65
+      :13 = :67
+      :15 = :69
 select /*+ leading(t9, (t8, t7, (t6, t5), t4), (t3, t1), t2)*/ count(*),sum(t9.c1-t5.c1+t4.d2-t1.c1) from 
 nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6, nn1 t7, nn2 t8, nn1 t9
 where mod(t1.c1, 3) = mod(t2.d2,2) and mod(t1.c1,5) = mod(t3.c1,4) and mod(t1.c2, 7) = mod(t4.d1, 3) AND 
@@ -1271,17 +1304,17 @@ Query Plan
 =================================================================
 |ID|OPERATOR                         |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SUBPLAN FILTER                   |    |1       |44          |
+|0 |SUBPLAN FILTER                   |    |1       |109         |
 |1 |├─SCALAR GROUP BY                |    |1       |5           |
 |2 |│ └─TABLE FULL SCAN              |x   |11      |5           |
-|3 |└─HASH JOIN                      |    |11      |39          |
-|4 |  ├─TABLE FULL SCAN              |a   |11      |5           |
-|5 |  └─HASH JOIN                    |    |22      |31          |
-|6 |    ├─TABLE FULL SCAN            |c   |11      |5           |
-|7 |    └─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
-|8 |      ├─TABLE FULL SCAN          |b   |11      |5           |
-|9 |      └─MATERIAL                 |    |11      |5           |
-|10|        └─TABLE FULL SCAN        |d   |11      |5           |
+|3 |└─HASH JOIN                      |    |11      |104         |
+|4 |  ├─TABLE FULL SCAN              |a   |11      |21          |
+|5 |  └─HASH JOIN                    |    |22      |80          |
+|6 |    ├─TABLE FULL SCAN            |c   |11      |21          |
+|7 |    └─NESTED-LOOP JOIN CARTESIAN |    |121     |45          |
+|8 |      ├─TABLE FULL SCAN          |b   |11      |21          |
+|9 |      └─MATERIAL                 |    |11      |21          |
+|10|        └─TABLE FULL SCAN        |d   |11      |21          |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -1958,8 +1991,8 @@ Query Plan
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0)) + T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1)]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1)])
+  0 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0)) + T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 + -5 * t9.c1)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 + -5 * t9.c1)])
   1 - output([t1.c1], [t5.c1], [t9.c1], [t4.c2], [t5.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t5.c1]), other_conds(nil)
   2 - output([t1.c1], [t9.c1], [t4.c2]), filter(nil), rowset=16
@@ -2096,7 +2129,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t7.c1], [t9.c1]), filter(nil), rowset=16
-      equal_conds([t9.c1 = t7.c1]), other_conds(nil)
+      equal_conds([t7.c1 = t9.c1]), other_conds(nil)
  16 - output([t9.c1]), filter(nil), rowset=16
       access([t9.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 

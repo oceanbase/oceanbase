@@ -64,7 +64,8 @@ int ObMaterialOpImpl::init(const uint64_t tenant_id,
                           ObEvalCtx *eval_ctx,
                           ObExecContext *exec_ctx,
                           ObIOEventObserver *observer,
-                          const int64_t default_block_size)
+                          const int64_t default_block_size,
+                          const char *mod_name)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -83,7 +84,7 @@ int ObMaterialOpImpl::init(const uint64_t tenant_id,
     io_event_observer_ = observer;
     if (OB_ISNULL(mem_context_)) {
       lib::ContextParam param;
-      param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA)
+      param.set_mem_attr(tenant_id, mod_name, ObCtxIds::WORK_AREA)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
       if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
         LOG_WARN("create entity failed");
@@ -164,6 +165,20 @@ int ObMaterialOpImpl::add_batch(const common::ObIArray<ObExpr *> &exprs,
   if (OB_FAIL(before_add_row())) {
     LOG_WARN("before add row process failed");
   } else if (OB_FAIL(datum_store_.add_batch(exprs, *eval_ctx_, skip, batch_size, read_rows))) {
+    LOG_WARN("add store row failed", K(mem_context_->used()), K(get_memory_limit()));
+  }
+  return ret;
+}
+
+int ObMaterialOpImpl::add_batch(const common::ObIArray<ObExpr *> &exprs,
+                                const ObBitVector &skip,
+                                const int64_t batch_size,
+                                int64_t &stored_rows_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(before_add_row())) {
+    LOG_WARN("before add row process failed");
+  } else if (OB_FAIL(datum_store_.add_batch(exprs, *eval_ctx_, skip, batch_size, stored_rows_count))) {
     LOG_WARN("add store row failed", K(mem_context_->used()), K(get_memory_limit()));
   }
   return ret;

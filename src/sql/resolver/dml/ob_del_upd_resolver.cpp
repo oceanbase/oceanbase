@@ -354,7 +354,9 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
                 LOG_WARN("failed to assign '' to date time", K(ret));
               }
               OZ (c_expr->add_flag(IS_TABLE_ASSIGN));
+              ObObj val = c_expr->get_result_type().get_param();
               OX (c_expr->set_result_type(col_expr->get_result_type()));
+              OX (c_expr->set_param(val));
             }
           }
         } else if (OB_UNLIKELY(!value_expr->is_query_ref_expr())) {
@@ -1487,7 +1489,9 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
         LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, table_name.length(), table_name.ptr(), database_name.length(), database_name.ptr());
       } else {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name),
+            helper.convert(table_name));
       }
     } else {
       LOG_WARN("fail to resolve table name", K(ret));
@@ -3234,7 +3238,9 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
         LOG_WARN("check insert column duplicate failed", K(ret));
       } else if (is_duplicate) {
         ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-        LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_expr->get_column_name()));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+            helper.convert(column_expr->get_column_name()));
       } else if (!session_info_->get_ddl_info().is_ddl() && OB_HIDDEN_SESSION_ID_COLUMN_ID == column_expr->get_column_id()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify __session_id value");
@@ -3281,7 +3287,9 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
           LOG_WARN("check insert column duplicate failed", K(ret));
         } else if (is_duplicate) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_items.at(i).column_name_));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+              helper.convert(column_items.at(i).column_name_));
         } else if (OB_FAIL(mock_values_column_ref(column_items.at(i).expr_))) {
           LOG_WARN("mock values column reference failed", K(ret));
         }

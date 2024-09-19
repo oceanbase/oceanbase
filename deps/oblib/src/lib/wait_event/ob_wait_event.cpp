@@ -64,13 +64,17 @@ int ObWaitEventStat::add(const ObWaitEventStat &other)
 {
   int ret = OB_SUCCESS;
   if (other.is_valid()) {
+    // TODO(roland.qk): remove this if() and make it SIMD compatible.
     if (is_valid()) {
       total_waits_ += other.total_waits_;
       total_timeouts_ += other.total_timeouts_;
       time_waited_ += other.time_waited_;
       max_wait_ = std::max(max_wait_, other.max_wait_);
     } else {
-      *this = other;
+      total_waits_ = other.total_waits_;
+      total_timeouts_ = other.total_timeouts_;
+      time_waited_ = other.time_waited_;
+      max_wait_ =  other.max_wait_;
     }
   }
   return ret;

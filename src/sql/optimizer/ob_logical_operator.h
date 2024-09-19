@@ -1388,9 +1388,9 @@ public:
   int check_exchange_rescan(bool &need_rescan);
 
   /**
-   * Check if has exchange below.
+   * Check if has target op below.
    */
-  int check_has_exchange_below(bool &has_exchange) const;
+  int check_has_op_below(const log_op_def::ObLogOpType target_type, bool &has) const;
   /**
    * Allocate runtime filter operator.
    */
@@ -1631,7 +1631,6 @@ public:
                             ObIArray<ObRawExpr *> &filters_exprs);
 
   int find_shuffle_join_filter(bool &find) const;
-  int has_window_function_below(bool &has_win_func) const;
   int get_pushdown_op(log_op_def::ObLogOpType op_type, const ObLogicalOperator *&op) const;
 
   virtual int get_plan_item_info(PlanText &plan_text,

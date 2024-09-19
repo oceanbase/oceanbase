@@ -117,7 +117,7 @@ private:
   table::ObTableCtx tb_ctx_;
   bool is_group_commit_;
   bool is_group_trigger_;
-  table::ObTableGroupCommitSingleOp *group_single_op_;
+  table::ObTableOp *group_single_op_;
 };
 
 

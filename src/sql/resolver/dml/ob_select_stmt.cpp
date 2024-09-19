@@ -15,6 +15,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/ob_schema_checker.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -754,17 +755,28 @@ int ObSelectStmt::check_and_get_same_aggr_item(ObRawExpr *expr,
   return ret;
 }
 
-ObWinFunRawExpr *ObSelectStmt::get_same_win_func_item(const ObRawExpr *expr)
+int ObSelectStmt::get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr *&win_expr)
 {
-  ObWinFunRawExpr *win_expr = NULL;
-  for (int64_t i = 0; i < win_func_exprs_.count(); ++i) {
-    if (win_func_exprs_.at(i) != NULL && expr != NULL &&
-        expr->same_as(*win_func_exprs_.at(i))) {
-      win_expr = win_func_exprs_.at(i);
-      break;
+  int ret = OB_SUCCESS;
+  win_expr = NULL;
+  if (OB_ISNULL(query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    ObQuestionmarkEqualCtx cmp_ctx;
+    for (int64_t i = 0; i < win_func_exprs_.count(); ++i) {
+      if (win_func_exprs_.at(i) != NULL && expr != NULL &&
+          expr->same_as(*win_func_exprs_.at(i), &cmp_ctx)) {
+        win_expr = win_func_exprs_.at(i);
+        break;
+      }
+    }
+    if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
+                       cmp_ctx.equal_pairs_))) {
+      LOG_WARN("failed to append equal param info", K(ret));
     }
   }
-  return win_expr;
+  return ret;
 }
 
 bool ObSelectStmt::has_for_update() const

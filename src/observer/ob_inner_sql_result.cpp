@@ -232,7 +232,6 @@ int ObInnerSQLResult::inner_close()
 int ObInnerSQLResult::next()
 {
   int ret = OB_SUCCESS;
-  ObInnerSqlWaitGuard guard(is_inner_session(), &session_);
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
   if (!opened_) {

@@ -105,7 +105,6 @@ constexpr int OB_COMMIT_MAJOR_FREEZE_FAILED = -4211;
 constexpr int OB_ABORT_MAJOR_FREEZE_FAILED = -4212;
 constexpr int OB_PARTITION_NOT_LEADER = -4214;
 constexpr int OB_WAIT_MAJOR_FREEZE_RESPONSE_TIMEOUT = -4215;
-constexpr int OB_CURL_ERROR = -4216;
 constexpr int OB_MAJOR_FREEZE_NOT_ALLOW = -4217;
 constexpr int OB_PREPARE_FREEZE_FAILED = -4218;
 constexpr int OB_PARTITION_NOT_EXIST = -4225;
@@ -268,6 +267,7 @@ constexpr int OB_AUTOINC_CACHE_NOT_EQUAL = -4400;
 constexpr int OB_ERR_KILL_CLIENT_SESSION = -4401;
 constexpr int OB_ERR_KILL_CLIENT_SESSION_FAILED = -4402;
 constexpr int OB_IMPROPER_OS_PARAM = -4403;
+constexpr int OB_IO_TIMEOUT = -4404;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1849,6 +1849,7 @@ constexpr int OB_KV_SCAN_RANGE_MISSING = -10513;
 constexpr int OB_KV_FILTER_PARSE_ERROR = -10514;
 constexpr int OB_KV_REDIS_PARSE_ERROR = -10515;
 constexpr int OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG = -10516;
+constexpr int OB_KV_REDIS_ERROR = -10517;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
 constexpr int OB_WRONG_PARTITION_NAME = -11002;
@@ -1865,6 +1866,9 @@ constexpr int OB_CANNOT_USER_IF_EXISTS = -11012;
 constexpr int OB_ERR_ILLEGAL_USER_VAR = -11013;
 constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_ERR_PS_NO_RECURSION = -11016;
+constexpr int OB_EXCEED_QUERY_MEM_LIMIT = -11049;
+constexpr int OB_ERR_DDL_RESOURCE_NOT_ENOUGH = -11048;
+constexpr int OB_ERR_INCORRECT_STRING_VALUE_FOR_INET = -11062;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2173,7 +2177,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DIVISOR_IS_ZERO__USER_ERROR_MSG "divisor is equal to zero"
 #define OB_ERR_AES_DECRYPT__USER_ERROR_MSG "fail to decrypt data"
 #define OB_ERR_AES_ENCRYPT__USER_ERROR_MSG "fail to encrypt data"
-#define OB_ERR_AES_IV_LENGTH__USER_ERROR_MSG "The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long"
+#define OB_ERR_AES_IV_LENGTH__USER_ERROR_MSG "The initialization vector supplied is too short. Must be at least 16 bytes long"
 #define OB_STORE_DIR_ERROR__USER_ERROR_MSG "store directory structure error"
 #define OB_OPEN_TWICE__USER_ERROR_MSG "open twice"
 #define OB_RAID_SUPER_BLOCK_NOT_MACTH__USER_ERROR_MSG "raid super block not match"
@@ -2240,6 +2244,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_KILL_CLIENT_SESSION__USER_ERROR_MSG "Client Session need be killed"
 #define OB_ERR_KILL_CLIENT_SESSION_FAILED__USER_ERROR_MSG "Kill Client Session failed"
 #define OB_IMPROPER_OS_PARAM__USER_ERROR_MSG "OS params check failed, because the operating system has improper parameter configurations"
+#define OB_IO_TIMEOUT__USER_ERROR_MSG "IO timeout"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -2498,7 +2503,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TOO_MANY_PS__USER_ERROR_MSG "Too many prepared statements"
 #define OB_ERR_HINT_UNKNOWN__USER_ERROR_MSG "Unknown hint"
 #define OB_ERR_WHEN_UNSATISFIED__USER_ERROR_MSG "When condition not satisfied"
-#define OB_ERR_QUERY_INTERRUPTED__USER_ERROR_MSG "Query execution was interrupted"
+#define OB_ERR_QUERY_INTERRUPTED__USER_ERROR_MSG "Query execution was interrupted, %s"
 #define OB_ERR_SESSION_INTERRUPTED__USER_ERROR_MSG "Session interrupted"
 #define OB_ERR_UNKNOWN_SESSION_ID__USER_ERROR_MSG "Unknown session ID"
 #define OB_ERR_PROTOCOL_NOT_RECOGNIZE__USER_ERROR_MSG "Incorrect protocol"
@@ -4095,6 +4100,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_FILTER_PARSE_ERROR__USER_ERROR_MSG "Filter parse errror, the input filter string is: '%.*s'"
 #define OB_KV_REDIS_PARSE_ERROR__USER_ERROR_MSG "Redis protocol parse error, the input redis string is: '%.*s'"
 #define OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG__USER_ERROR_MSG "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
+#define OB_KV_REDIS_ERROR__USER_ERROR_MSG "Redis err need return to client"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
@@ -4111,6 +4117,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__USER_ERROR_MSG "User variable name %.*s is illegal"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__USER_ERROR_MSG "Can't update table '%s' while '%s' is being created."
 #define OB_ERR_PS_NO_RECURSION__USER_ERROR_MSG "The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner"
+#define OB_EXCEED_QUERY_MEM_LIMIT__USER_ERROR_MSG "Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
+#define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__USER_ERROR_MSG "The tenant DDL resource is not enough, please retry"
+#define OB_ERR_INCORRECT_STRING_VALUE_FOR_INET__USER_ERROR_MSG "Incorrect string value for function %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4419,7 +4428,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DIVISOR_IS_ZERO__ORA_USER_ERROR_MSG "ORA-01476: divisor is equal to zero"
 #define OB_ERR_AES_DECRYPT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4334, fail to decrypt data"
 #define OB_ERR_AES_ENCRYPT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4335, fail to encrypt data"
-#define OB_ERR_AES_IV_LENGTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4336, The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long"
+#define OB_ERR_AES_IV_LENGTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4336, The initialization vector supplied is too short. Must be at least 16 bytes long"
 #define OB_STORE_DIR_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4337, store directory structure error"
 #define OB_OPEN_TWICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4338, open twice"
 #define OB_RAID_SUPER_BLOCK_NOT_MACTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4339, raid super block not match"
@@ -4486,6 +4495,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_KILL_CLIENT_SESSION__ORA_USER_ERROR_MSG "ORA-04401: Client Session need be killed"
 #define OB_ERR_KILL_CLIENT_SESSION_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4402, Kill Client Session failed"
 #define OB_IMPROPER_OS_PARAM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations"
+#define OB_IO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4404, IO timeout"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -4744,7 +4754,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TOO_MANY_PS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5061, Too many prepared statements"
 #define OB_ERR_HINT_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5063, Unknown hint"
 #define OB_ERR_WHEN_UNSATISFIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5064, When condition not satisfied"
-#define OB_ERR_QUERY_INTERRUPTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5065, Query execution was interrupted"
+#define OB_ERR_QUERY_INTERRUPTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5065, Query execution was interrupted, %s"
 #define OB_ERR_SESSION_INTERRUPTED__ORA_USER_ERROR_MSG "ORA-01092: OceanBase instance terminated. Disconnection forced"
 #define OB_ERR_UNKNOWN_SESSION_ID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5067, Unknown session ID"
 #define OB_ERR_PROTOCOL_NOT_RECOGNIZE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5068, Incorrect protocol"
@@ -6341,6 +6351,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_FILTER_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10514, Filter parse errror, the input filter string is: '%.*s'"
 #define OB_KV_REDIS_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10515, Redis protocol parse error, the input redis string is: '%.*s'"
 #define OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10516, When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
+#define OB_KV_REDIS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10517, Redis err need return to client"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-20000: '%.*s' invalid partition name"
@@ -6357,6 +6368,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11013, User variable name %.*s is illegal"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11015, Can't update table '%s' while '%s' is being created."
 #define OB_ERR_PS_NO_RECURSION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11016, The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner"
+#define OB_EXCEED_QUERY_MEM_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11049, Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
+#define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11048, The tenant DDL resource is not enough, please retry"
+#define OB_ERR_INCORRECT_STRING_VALUE_FOR_INET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11062, Incorrect string value for function %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6367,7 +6381,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2242];
+extern int g_all_ob_errnos[2245];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

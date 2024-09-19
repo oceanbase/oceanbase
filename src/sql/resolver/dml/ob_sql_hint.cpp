@@ -1226,8 +1226,12 @@ int ObStmtHint::set_set_stmt_hint()
 int ObStmtHint::set_simple_view_hint(const ObStmtHint *other /* default NULL */ )
 {
   int ret = OB_SUCCESS;
-  static const int64_t RESET_HINT_SIZE = 3;
-  ObItemType reset_hint[RESET_HINT_SIZE] = { T_MERGE_HINT, T_USE_HASH_AGGREGATE, T_PLACE_GROUP_BY };
+  static const int64_t RESET_HINT_SIZE = 4;
+  ObItemType reset_hint[RESET_HINT_SIZE] = {
+    T_MERGE_HINT,
+    T_USE_HASH_AGGREGATE,
+    T_PLACE_GROUP_BY
+  };
   if (NULL != other && OB_FAIL(assign(*other))) {
     LOG_WARN("failed to assign stmt hint", K(ret));
   } else if (OB_FAIL(remove_normal_hints(reset_hint, RESET_HINT_SIZE))) {
@@ -1394,7 +1398,7 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
   const ObStmtHint &stmt_hint = stmt.get_stmt_hint();
   if (OB_FAIL(join_order_.init_leading_info(stmt, query_hint, stmt_hint.get_normal_hint(T_LEADING)))) {
     LOG_WARN("failed to get leading hint info", K(ret));
-  } else if (OB_FAIL(init_normal_hints(stmt_hint.normal_hints_))) {
+  } else if (OB_FAIL(init_normal_hints(stmt_hint.normal_hints_, *stmt.get_query_ctx()))) {
     LOG_WARN("failed to init normal hints", K(ret));
   } else if (OB_FAIL(init_other_opt_hints(schema_guard, stmt, query_hint,
                                           stmt_hint.other_opt_hints_))) {
@@ -1405,17 +1409,23 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
   return ret;
 }
 
-int ObLogPlanHint::init_normal_hints(const ObIArray<ObHint*> &normal_hints)
+int ObLogPlanHint::init_normal_hints(const ObIArray<ObHint*> &normal_hints,
+                                     const ObQueryCtx &query_ctx)
 {
   int ret = OB_SUCCESS;
   const ObHint *hint = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < normal_hints.count(); ++i) {
+    bool need_add = true;
     if (OB_ISNULL(hint = normal_hints.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(i), K(normal_hints));
+    } else if (hint->get_hint_type() == T_USE_LATE_MATERIALIZATION &&
+               query_ctx.optimizer_features_enable_version_ < COMPAT_VERSION_4_2_5) {
+      /* need_add = true */
     } else if (hint->is_transform_hint() || hint->is_join_order_hint()) {
-      /* do nothing */
-    } else if (OB_FAIL(normal_hints_.push_back(hint))) {
+      need_add = false;
+    }
+    if (OB_SUCC(ret) && need_add && OB_FAIL(normal_hints_.push_back(hint))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
@@ -1466,7 +1476,7 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_log_table_hints(schema_guard))) {
     LOG_WARN("failed to init log table hints", K(ret));
-  } else if (OB_FAIL(init_log_join_hints())) {
+  } else if (OB_FAIL(init_log_join_hints(stmt, query_hint, schema_guard))) {
     LOG_WARN("failed to init log join hints", K(ret));
   }
   return ret;
@@ -1643,11 +1653,13 @@ int ObLogPlanHint::add_join_hint(const ObDMLStmt &stmt,
 }
 
 // init log join hint for use join hint
-int ObLogPlanHint::init_log_join_hints()
+int ObLogPlanHint::init_log_join_hints(const ObDMLStmt &stmt,
+                                       const ObQueryHint &query_hint,
+                                       ObSqlSchemaGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < join_hints_.count(); ++i) {
-    if (OB_FAIL(join_hints_.at(i).init_log_join_hint())) {
+    if (OB_FAIL(join_hints_.at(i).init_log_join_hint(stmt, query_hint, schema_guard))) {
       LOG_WARN("failed to init log join hint", K(ret));
     }
   }
@@ -2232,8 +2244,21 @@ int LogJoinHint::add_join_hint(const ObJoinHint &join_hint)
     case T_USE_NL:
     case T_USE_MERGE:
     case T_USE_HASH:  {
-      if (OB_FAIL(local_method_hints_.push_back(&join_hint))) {
+      if(!local_method_hints_.empty() && local_method_hints_.at(0)->get_hint_type() == T_USE_ADAPTIVE) {
+        // do nothing.
+      } else if (OB_FAIL(local_method_hints_.push_back(&join_hint))) {
         LOG_WARN("fail to push back join hint", K(ret), K(join_hint));
+      }
+      break;
+    }
+    case T_USE_ADAPTIVE: {
+      if (join_hint.get_tables().count() > 1) {
+        // ignore if use_adaptive((t1 t2))
+      } else {
+        local_method_hints_.reset();
+        if (OB_FAIL(local_method_hints_.push_back(&join_hint))) {
+          LOG_WARN("fail to push back join hint", K(ret), K(join_hint));
+        }
       }
       break;
     }
@@ -2268,7 +2293,53 @@ int LogJoinHint::add_join_hint(const ObJoinHint &join_hint)
   return ret;
 }
 
-int LogJoinHint::init_log_join_hint()
+int LogJoinHint::add_init_aj_table_hint(const ObDMLStmt &stmt,
+                                        const ObQueryHint &query_hint,
+                                        const ObJoinHint &join_hint,
+                                        ObSqlSchemaGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  TableItem *table_item = NULL;
+  // add aj mock table hint
+  if (OB_UNLIKELY(NULL != aj_scan_hint_.table_ || 1 != join_hint.get_tables().count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect only one join hint when use adaptive", K(ret), KPC(this), K(join_hint));
+  } else if (OB_FAIL(query_hint.get_table_item_by_hint_table(stmt, join_hint.get_tables().at(0), table_item))) {
+    LOG_WARN("failed to get table item by hint table", K(ret));
+  } else if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret));
+  } else {
+    aj_scan_hint_.table_ = table_item;
+  }
+  for (int64_t i = 0 ; i < join_hint.get_aj_table_hints().count() && OB_SUCC(ret); i++) {
+    const ObHint *hint = join_hint.get_aj_table_hints().at(i);
+    if (OB_ISNULL(hint)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(join_hint));
+    } else if (hint->is_access_path_hint()) {
+      const ObIndexHint *index_hint = static_cast<const ObIndexHint *>(hint);
+      if (T_USE_DAS_HINT == index_hint->get_hint_type()) {
+        if (NULL == aj_scan_hint_.use_das_hint_ || index_hint->is_enable_hint()) {
+          aj_scan_hint_.use_das_hint_ = index_hint;
+        }
+      } else if (OB_FAIL(aj_scan_hint_.index_hints_.push_back(index_hint))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    } else {
+      // do nothing. ignore none access path hint for adaptive join mock table.
+    }
+  }
+  // init aj mock table hint
+  if (OB_SUCC(ret) && OB_FAIL(aj_scan_hint_.init_index_hints(schema_guard))) {
+    LOG_WARN("init index hints failed", K(ret));
+  }
+  return ret;
+}
+
+int LogJoinHint::init_log_join_hint(const ObDMLStmt &stmt,
+                                    const ObQueryHint &query_hint,
+                                    ObSqlSchemaGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   local_methods_ = JoinAlgo::INVALID_JOIN_ALGO;
@@ -2297,6 +2368,14 @@ int LogJoinHint::init_log_join_hint()
           case T_USE_NL:    ADD_USE_JOIN_HINT(NESTED_LOOP_JOIN);  break;
           case T_USE_HASH:  ADD_USE_JOIN_HINT(HASH_JOIN); break;
           case T_USE_MERGE: ADD_USE_JOIN_HINT(MERGE_JOIN);  break;
+          case T_USE_ADAPTIVE: {
+            ADD_USE_JOIN_HINT(ADAPTIVE_JOIN);
+            if (OB_SUCC(ret) && OB_FAIL(add_init_aj_table_hint(stmt, query_hint, *join_hint,
+                                                               schema_guard))) {
+              LOG_WARN("add and init adaptive join table hint failed", K(ret));
+            }
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected join hint type", K(ret), K(join_hint));
@@ -2305,7 +2384,7 @@ int LogJoinHint::init_log_join_hint()
       }
     }
     if (OB_SUCC(ret)) {
-      use_methods = JoinAlgo::INVALID_JOIN_ALGO == use_methods ? NESTED_LOOP_JOIN | HASH_JOIN | MERGE_JOIN
+      use_methods = JoinAlgo::INVALID_JOIN_ALGO == use_methods ? NESTED_LOOP_JOIN | HASH_JOIN | MERGE_JOIN | ADAPTIVE_JOIN
                                                                : use_methods;
       local_methods_ = use_methods & ~no_use_methods;
       LOG_DEBUG("finish init local methods", K(local_methods_), K(all_hints),
@@ -2587,6 +2666,21 @@ int LogTableHint::get_index_prefix(const uint64_t index_id, int64_t &index_prefi
         index_prefix = index_hints_.at(i)->get_index_prefix();
       }
     }
+  }
+  return ret;
+}
+
+int LogTableHint::check_use_das(uint64_t table_id, bool is_outline_data,
+                                bool &hint_force_das, bool &hint_force_no_das) const
+{
+  int ret = OB_SUCCESS;
+  hint_force_das = false;
+  hint_force_no_das = false;
+  if (NULL != table_ && table_->table_id_ == table_id && NULL != use_das_hint_) {
+    hint_force_das = use_das_hint_->is_enable_hint();
+    hint_force_no_das = use_das_hint_->is_disable_hint();
+  } else if (is_outline_data) {
+    hint_force_no_das = true;
   }
   return ret;
 }

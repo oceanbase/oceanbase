@@ -533,14 +533,16 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
                                          const ObRawExpr *to,
                                          const EqualSets &equal_sets)
 {
-  bool found = false;
+  bool bret = false;
+  bool l_found = false;
+  bool r_found = false;
   bool is_consistent = false;
   if (OB_ISNULL(from) || OB_ISNULL(to)) {
     // do nothing
   } else if (from == to) {
-    found = true;
+    bret = true;
   } else if (!from->is_generalized_column() && from->same_as(*to)) {
-    found = true;
+    bret = true;
   } else if (equal_sets.empty()) {
     // do nothing
   } else if (ObRawExprUtils::expr_is_order_consistent(from, to, is_consistent)
@@ -548,16 +550,17 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "check expr is order consist ent failed");
   } else if (is_consistent) {
     int64_t N = equal_sets.count();
-    for (int64_t i = 0; !found && i < N; ++i) {
+    for (int64_t i = 0; !l_found && !r_found && i < N; ++i) {
       if (OB_ISNULL(equal_sets.at(i))) {
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null equal set");
-      } else if (find_equal_expr(*equal_sets.at(i), from) &&
-                 find_equal_expr(*equal_sets.at(i), to)) {
-        found = true;
+      } else {
+        l_found = find_equal_expr(*equal_sets.at(i), from);
+        r_found = find_equal_expr(*equal_sets.at(i), to);
       }
     }
+    bret = l_found && r_found;
   }
-  return found;
+  return bret;
 }
 
 bool ObOptimizerUtil::is_exprs_equivalent(const common::ObIArray<ObRawExpr*> &from,
@@ -846,6 +849,253 @@ int ObOptimizerUtil::compute_const_exprs(ObRawExpr *cur_expr,
           res_const_expr = common_expr;
         }
       }
+    }
+  }
+  return ret;
+}
+
+static inline Monotonicity get_opposite_of(Monotonicity mono) {
+  Monotonicity ret = Monotonicity::CONST;
+  if (mono == Monotonicity::ASC) {
+    ret = Monotonicity::DESC;
+  } else if (mono == Monotonicity::DESC) {
+    ret = Monotonicity::ASC;
+  } else if (mono == Monotonicity::CONST) {
+    ret = Monotonicity::CONST;
+  } else if (mono == Monotonicity::NONE_MONO) {
+    ret = Monotonicity::NONE_MONO;
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::get_expr_monotonicity(const ObRawExpr *expr,
+                                           const ObRawExpr *var,
+                                           ObExecContext &ctx,
+                                           Monotonicity &monotonicity,
+                                           bool &is_strict,
+                                           const ParamStore &param_store,
+                                           ObPCConstParamInfo& const_param_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_not_null = false;
+  const ObColumnRefRawExpr *col = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(var)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expression input is null error", K(ret));
+  } else if (!var->is_column_ref_expr()) {
+    monotonicity = Monotonicity::NONE_MONO;
+  } else if (OB_FALSE_IT(col = static_cast<const ObColumnRefRawExpr*>(var))) {
+    // never in
+  } else if (OB_FAIL(get_expr_monotonicity_recursively(expr, col, ctx,
+                                                       monotonicity, is_strict,
+                                                       param_store, const_param_info))) {
+    LOG_WARN("Failed to get expr monotonicity recursiviely ", K(ret));
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
+                                                       const ObColumnRefRawExpr *var,
+                                                       ObExecContext& ctx,
+                                                       Monotonicity &monotonicity,
+                                                       bool &is_strict,
+                                                       const ParamStore &param_store,
+                                                       ObPCConstParamInfo& const_param_info)
+{
+  int ret = OB_SUCCESS;
+  monotonicity = Monotonicity::NONE_MONO;
+  is_strict = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(var)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expression input is null error", K(ret));
+  } else if (expr->is_const_raw_expr()) {
+    // here if cannot merge into upperline
+    // select x + 10(:?) 通过返回结果看 + int 或者+ null都会被解析为const raw expr 只有返回类型能够区分
+    if (!expr->get_result_type().get_param().is_null_oracle()) {
+      monotonicity = Monotonicity::CONST;
+    }
+  } else if (expr->is_column_ref_expr()) {
+    // there is an another col in expr but is not var
+    if (expr == var) {
+      monotonicity = Monotonicity::ASC;
+      is_strict = true;
+    }
+  } else {
+    // The following is a classification discussion for composite cases.
+    // Only one branch will be chosen for entry. Before entering, the monotonicity is none.
+    Monotonicity mono = Monotonicity::NONE_MONO;
+    bool is_strict_inner = false;
+    if (expr->get_expr_type() == T_FUN_SYS_UPPER || expr->get_expr_type() == T_FUN_SYS_LOWER) {
+      const ObRawExpr *param_expr = expr->get_param_expr(0);
+      if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expression input is null error", K(ret));
+      } else if (ObCharset::is_ci_collate(param_expr->get_collation_type())) {
+        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr, var, ctx,
+                                                                 mono, is_strict_inner,
+                                                                 param_store, const_param_info)))) {
+          LOG_WARN("get string param monotonicity failed", K(ret));
+        } else {
+          monotonicity = mono;
+          is_strict = is_strict_inner;
+        }
+      }
+    } else if (expr->get_expr_type() == T_FUN_SYS_CAST) {
+      const ObRawExpr *param_expr = expr->get_param_expr(0);
+      bool is_consistent = false;
+      if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected exprssion input is null error", K(ret));
+      } else if (OB_FAIL(ObObjCaster::is_order_consistent(param_expr->get_result_type(),
+                                                          expr->get_result_type(),
+                                                          is_consistent))) {
+        if (OB_ERR_UNEXPECTED == ret) {
+          LOG_WARN("failed to check is order consistent", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          is_consistent = false;
+        }
+      } else if (is_consistent) {
+        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr, var, ctx,
+                                                                 mono, is_strict_inner,
+                                                                 param_store, const_param_info)))) {
+          LOG_WARN("get data time param", K(ret));
+        } else {
+          monotonicity = mono;
+          is_strict = false;
+        }
+      } else if (!is_oracle_mode()
+                 && param_expr->get_result_type().is_datetime()
+                 && expr->get_result_type().is_string_type()) {
+        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr, var, ctx,
+                                                                 mono, is_strict_inner,
+                                                                 param_store, const_param_info)))) {
+          LOG_WARN("get data time param", K(ret));
+        } else {
+          monotonicity = mono;
+          is_strict = is_strict_inner;
+        }
+      }
+    } else if (expr->get_expr_type() == T_FUN_SYS_LEFT) {
+      const ObRawExpr *param_expr_str = expr->get_param_expr(0);
+      const ObRawExpr *param_expr_num = expr->get_param_expr(1);
+      if (OB_ISNULL(param_expr_str) || OB_ISNULL(param_expr_num)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected exprssion input is null error", K(ret));
+      } else if ((ObCharset::is_bin_sort(param_expr_str->get_result_type().get_collation_type())
+                 || CS_TYPE_UTF8MB4_GENERAL_CI == param_expr_str->get_result_type().get_collation_type())
+                 && param_expr_num->is_const_raw_expr()
+                 && !param_expr_num->get_result_type().is_null()) {
+        if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr_str, var, ctx,
+                                                                 mono, is_strict_inner,
+                                                                 param_store, const_param_info)))) {
+          LOG_WARN("get string param monotonicity failed", K(ret));
+        } else {
+          monotonicity = mono;
+          is_strict = false;
+        }
+      }
+    } else if (expr->get_expr_type() == T_FUN_SYS_FLOOR || expr->get_expr_type() == T_FUN_SYS_CEIL) {
+      const ObRawExpr *param_expr = expr->get_param_expr(0);
+      if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected exprssion input is null error", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr, var, ctx,
+                                                                      mono, is_strict_inner,
+                                                                      param_store, const_param_info)))) {
+        LOG_WARN("get string param monotonicity failed", K(ret));
+      } else {
+        monotonicity = mono;
+        is_strict = false;
+      }
+    } else if (expr->get_expr_type() == T_FUN_SYS_SUBSTR) {
+      const ObRawExpr *param_expr_str = expr->get_param_expr(0);
+      const ObRawExpr *param_expr_pos = expr->get_param_expr(1);
+      const ObRawExpr *param_expr_len = expr->get_param_count() == 3 ? expr->get_param_expr(2) : NULL;
+      ObSEArray<ObRawExpr*, 4> param;
+      ObArenaAllocator local_allocator;
+      int64_t value = 0;
+      bool is_null_value = true;
+      bool is_one = false;
+      ObRawExpr* param_expr = NULL;
+      const ObConstRawExpr *const_expr = NULL;
+      ObObj target_values;
+      target_values.set_int(ObIntType, 1);
+      if (OB_ISNULL(param_expr_str)
+         || OB_ISNULL(param_expr_pos)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected exprssion input is null error", K(ret));
+      } else if ((ObCharset::is_bin_sort(param_expr_str->get_result_type().get_collation_type()) ||
+                  CS_TYPE_UTF8MB4_GENERAL_CI == param_expr_str->get_result_type().get_collation_type())
+                 && param_expr_pos->is_const_raw_expr() && !param_expr_pos->get_result_type().is_null()
+                 && param_expr_len->is_const_raw_expr() && !param_expr_len->get_result_type().is_null()) {
+        if (OB_FAIL(ObTransformUtils::get_expr_int_value(const_cast<ObRawExpr*>(param_expr_pos), &param_store,
+                                                         &ctx, &local_allocator, value, is_null_value))) {
+          LOG_WARN("failed to check limit value", K(ret));
+        } else if (is_null_value || value != 1) {
+          monotonicity = Monotonicity::NONE_MONO;
+        } else if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr_str, var, ctx,
+                                                                        mono,is_strict_inner,
+                                                                        param_store, const_param_info)))) {
+          LOG_WARN("get string param monotonicity failed", K(ret));
+        } else if (OB_FALSE_IT(const_expr = static_cast<const ObConstRawExpr*>(param_expr_pos))) {
+        } else if (OB_FAIL(const_param_info.const_idx_.push_back(const_expr->get_value().get_unknown()))) {
+          LOG_WARN("failed to push back param idx", K(ret));
+        } else if (OB_FAIL(const_param_info.const_params_.push_back(target_values))) {
+          LOG_WARN("failed to push back value", K(ret));
+        } else {
+          monotonicity = mono;
+          is_strict = false;
+        }
+      }
+    } else if (expr->get_expr_type() == T_OP_MINUS || expr->get_expr_type() == T_OP_ADD) {
+      if (expr->get_param_count() != 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get param count", K(ret));
+      } else {
+        Monotonicity left_mono  = Monotonicity::NONE_MONO;
+        Monotonicity right_mono = Monotonicity::NONE_MONO;
+        const ObRawExpr *l_expr = expr->get_param_expr(0);
+        const ObRawExpr *r_expr = expr->get_param_expr(1);
+        bool is_strict_l = false;
+        bool is_strict_r = false;
+        if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("op expr one side is null", K(l_expr), K(r_expr));
+        } else if ((!l_expr->get_result_type().is_numeric_type() || !r_expr->get_result_type().is_numeric_type())
+                   || (l_expr->get_result_type().is_float() || r_expr->get_result_type().is_float())
+                   || (l_expr->get_result_type().is_double()|| r_expr->get_result_type().is_double())) {
+          // 字符串类型是不正确的 abc < abcd 但是abcz > abcdz, 而且字符串没有减法
+          // explain select distinct(t0.c2)  from t0 where upper(t0.c2) + "ZHU" = "QINGZHU";
+          // 日期类型 日期加减有时候会是正确的。
+          monotonicity = Monotonicity::NONE_MONO;
+        } else if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(l_expr, var, ctx,
+                                                                        left_mono, is_strict_l,
+                                                                        param_store, const_param_info)))
+                   || OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(r_expr, var, ctx,
+                                                                           right_mono, is_strict_r,
+                                                                           param_store, const_param_info)))) {
+          LOG_WARN("failed to get expr monotonicity for expr", K(ret));
+        } else {
+          if (expr->get_expr_type() == T_OP_MINUS) {
+            right_mono = get_opposite_of(right_mono);
+          }
+          if (left_mono == Monotonicity::CONST) {
+            monotonicity = right_mono;
+            is_strict = is_strict_r;
+          } else if (right_mono == Monotonicity::CONST) {
+            monotonicity = left_mono;
+            is_strict = is_strict_l;
+          } else if (left_mono == right_mono && (left_mono == Monotonicity::ASC || left_mono == Monotonicity::DESC)) {
+            monotonicity = left_mono;
+            is_strict = is_strict_l || is_strict_r;
+          } else {
+            monotonicity = Monotonicity::NONE_MONO;
+          }
+        }
+      }
+    } else {
+      monotonicity = Monotonicity::NONE_MONO;
     }
   }
   return ret;
@@ -1476,7 +1726,7 @@ int ObOptimizerUtil::extract_equal_exec_params(const ObIArray<ObRawExpr *> &expr
            */
         } else if (OB_FAIL(left_key.push_back(exec_param->get_ref_expr()))) {
           LOG_WARN("push back error", K(ret));
-        } else if (OB_FAIL(right_key.push_back(cur_expr->get_param_expr(1)))){
+        } else if (OB_FAIL(right_key.push_back(cur_expr->get_param_expr(1)))) {
           LOG_WARN("push back error", K(ret));
         } else if (OB_FAIL(null_safe_info.push_back(is_null_safe))) {
           LOG_WARN("push back error", K(ret));
@@ -1487,7 +1737,7 @@ int ObOptimizerUtil::extract_equal_exec_params(const ObIArray<ObRawExpr *> &expr
           // not my exec param
         } else if (OB_FAIL(left_key.push_back(exec_param->get_ref_expr()))) {
           LOG_WARN("push back error", K(ret));
-        } else if (OB_FAIL(right_key.push_back(cur_expr->get_param_expr(0)))){
+        } else if (OB_FAIL(right_key.push_back(cur_expr->get_param_expr(0)))) {
           LOG_WARN("push back error", K(ret));
         } else if (OB_FAIL(null_safe_info.push_back(is_null_safe))) {
           LOG_WARN("push back error", K(ret));
@@ -3027,7 +3277,7 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
     LOG_WARN("failed to get fd set parent exprs ", K(ret));
   } else if (OB_FAIL(remove_item(fd_set_parent_exprs, extend_exprs))) {
     LOG_WARN("failed to get fd set parent exprs ", K(ret));
-  }else {
+  } else {
     ObRelIds remain_tables = all_tables;
     ObSqlBitSet<> skip_fd;
     int64_t exprs_count = -1;
@@ -3105,6 +3355,35 @@ int ObOptimizerUtil::is_exprs_unique(ObIArray<ObRawExpr *> &extend_exprs,
   return ret;
 }
 
+int ObOptimizerUtil::is_expr_const_for_monotonicity(const ObRawExpr *expr,
+                                                    const ObIArray<ObRawExpr *> &const_exprs,
+                                                    ObExecContext *ctx,
+                                                    bool& is_const)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx* plan_ctx = NULL;
+
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx) || OB_ISNULL(plan_ctx = ctx->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_const && i < const_exprs.count(); ++i) {
+      Monotonicity mono = Monotonicity::NONE_MONO;
+      ObPCConstParamInfo const_param_info;
+      bool is_strict = false;
+      if (OB_FAIL(get_expr_monotonicity(const_exprs.at(i), expr, *ctx, mono, is_strict,
+                                        plan_ctx->get_param_store(), const_param_info))) {
+        LOG_WARN("get expr monotonicity failed", K(i), K(const_exprs.at(i)), K(expr));
+      } else if (const_param_info.const_idx_.empty()
+                && (mono == Monotonicity::ASC || mono == Monotonicity::DESC) && is_strict) {
+        is_const = true;
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
                                      const ObIArray<ObFdItem *> &fd_item_set,
                                      const EqualSets &equal_sets,
@@ -3117,7 +3396,7 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
     if (OB_ISNULL(fd_item_set.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if(!fd_item_set.at(i)->is_unique()) {
+    } else if (!fd_item_set.at(i)->is_unique()) {
       // do nothing
     } else if (OB_FAIL(is_exprs_contain_fd_parent(exprs, *fd_item_set.at(i),
                                                   equal_sets, const_exprs, is_unique))) {
@@ -3710,9 +3989,9 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<OrderItem> &expected_order_i
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 6> expected_order_exprs;
   ObSEArray<ObOrderDirection, 6> expected_order_directions;
-  if(OB_FAIL(split_expr_direction(expected_order_items,
-                                  expected_order_exprs,
-                                  expected_order_directions))) {
+  if (OB_FAIL(split_expr_direction(expected_order_items,
+                                   expected_order_exprs,
+                                   expected_order_directions))) {
     LOG_WARN("failed to split expr and expected_order_directions", K(ret));
   } else if (OB_FAIL(check_need_sort(expected_order_exprs,
                                      &expected_order_directions,
@@ -3909,7 +4188,7 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
       while(left_set.has_member(l_idx)) {
         ++l_idx;
       };
-      while(right_set.has_member(r_idx)){
+      while(right_set.has_member(r_idx)) {
         ++r_idx;
       };
     }
@@ -4407,7 +4686,7 @@ int ObOptimizerUtil::get_type_safe_join_exprs(const ObIArray<ObRawExpr *> &join_
   ObRawExpr *second_expr = NULL;
   ObRawExpr *left_expr = NULL;
   ObRawExpr *right_expr = NULL;
-  for (int64_t i = 0 ; OB_SUCC(ret) && i < join_quals.count(); ++i){
+  for (int64_t i = 0 ; OB_SUCC(ret) && i < join_quals.count(); ++i) {
     cur_expr = join_quals.at(i);
     if (OB_ISNULL(cur_expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4433,15 +4712,13 @@ int ObOptimizerUtil::get_type_safe_join_exprs(const ObIArray<ObRawExpr *> &join_
     if (OB_SUCC(ret) && OB_NOT_NULL(left_expr) && OB_NOT_NULL(right_expr)) {
       bool is_right_valid = false;
       bool is_left_valid = false;
-      if (OB_FAIL(ObRelationalExprOperator::is_equivalent(left_expr->get_result_type(),
-                                                          right_expr->get_result_type(),
-                                                          right_expr->get_result_type(),
-                                                          is_right_valid))) {
+      if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_expr->get_result_type(),
+                                                                right_expr->get_result_type(),
+                                                                is_right_valid))) {
         LOG_WARN("failed to check the compare type is the same", K(ret));
-      } else if (OB_FAIL(ObRelationalExprOperator::is_equivalent(left_expr->get_result_type(),
-                                                                 left_expr->get_result_type(),
-                                                                 right_expr->get_result_type(),
-                                                                 is_left_valid))) {
+      } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_expr->get_result_type(),
+                                                                      right_expr->get_result_type(),
+                                                                      is_left_valid))) {
         LOG_WARN("failed to check the compare type is the same", K(ret));
       } else if (is_left_valid && OB_FAIL(left_exprs.push_back(left_expr))) {
         LOG_WARN("failed to add left exprs", K(ret));
@@ -4522,7 +4799,7 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
         } else { /* do nothing */ }
       }
       if (OB_FAIL(ret)) {
-      } else if (sub_exprs.at(i).empty()){
+      } else if (sub_exprs.at(i).empty()) {
         all_contain = false;
       }
     } else if (cur_expr->has_flag(CNT_SUB_QUERY)) {
@@ -4732,7 +5009,7 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < root_exprs.count(); ++i) {
-      if(OB_UNLIKELY(!find_item(candi_exprs, root_exprs.at(i), &expr_idx))) {
+      if (OB_UNLIKELY(!find_item(candi_exprs, root_exprs.at(i), &expr_idx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to find item", K(ret));
       } else if (OB_FAIL(root_exprs_set.add_member(expr_idx))) {
@@ -5875,7 +6152,15 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
          }
       }
     } else if (ObTimestampType == child_type.get_type() || ObDateTimeType == child_type.get_type()) {
-      if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+      if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()
+            || ObMySQLDateTimeType == dst_type.get_type()) {
+        if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
+            child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
+          is_lossless = true;
+         }
+      }
+    } else if (ObMySQLDateTimeType == child_type.get_type()) {
+      if (ObMySQLDateTimeType == dst_type.get_type()) {
         if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
             child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
           is_lossless = true;
@@ -5883,6 +6168,12 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
       }
     } else if (ObDateTC == child_tc || ObTimeTC == child_tc) {
       if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+           is_lossless = true;
+         }
+       }
+    } else if (ObMySQLDateTC == child_tc) {
+      if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type()) {
         if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
            is_lossless = true;
          }
@@ -5998,17 +6289,27 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = true;
           }
         }
-      } else if (ObDateTimeType == child_type.get_type()) {
+      } else if (ObDateTimeType == child_type.get_type()
+                  || ObMySQLDateTimeType == child_type.get_type()) {
         // do nothing
       } else if (ObTimestampType == child_type.get_type()) {
-        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()) {
+        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()
+              || ObMySQLDateTimeType == dst_type.get_type()) {
           if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
               child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
             is_lossless = true;
           }
         }
       } else if (ObDateTC == child_tc || ObTimeTC == child_tc) {
-        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()
+              || ObTimestampType == dst_type.get_type()
+              || ObMySQLDateTimeType == dst_type.get_type()) {
+          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+            is_lossless = true;
+          }
+        }
+      } else if (ObMySQLDateTC == child_tc) {
+        if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type()) {
           if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
             is_lossless = true;
           }
@@ -6594,6 +6895,28 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         LOG_WARN("failed to push back res type", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
+                                                    ObSQLSessionInfo *session_info,
+                                                    ObRawExprFactory *expr_factory,
+                                                    const bool is_distinct,
+                                                    ObIArray<ObSelectStmt*> &left_stmts,
+                                                    ObSelectStmt *right_stmt,
+                                                    ObIArray<ObExprResType> *res_types,
+                                                    const bool is_mysql_recursive_union /* false */,
+                                                    ObIArray<ObString> *rcte_col_name /* null */)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 1> child_stmts;
+  if (OB_FAIL(child_stmts.push_back(right_stmt))) {
+    LOG_WARN("failed to push back right_stmt", K(ret));
+  } else if (OB_FAIL(try_add_cast_to_set_child_list(allocator, session_info, expr_factory,
+                                                    is_distinct, left_stmts, child_stmts, res_types,
+                                                    is_mysql_recursive_union, rcte_col_name))) {
+    LOG_WARN("failed to add cast to set child list", K(ret));
   }
   return ret;
 }
@@ -8497,62 +8820,24 @@ int ObOptimizerUtil::allocate_identify_seq_expr(ObOptimizerContext &opt_ctx, ObR
   return ret;
 }
 
-int ObOptimizerUtil::check_contribute_query_range(ObLogicalOperator *root,
-                                                  const ObIArray<ObExecParamRawExpr *> &params,
-                                                  bool &is_valid)
+int ObOptimizerUtil::check_exec_param_filter_exprs(const ObIArray<ObRawExpr*> &filters,
+                                                   const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                                   bool &used_in_filter)
 {
   int ret = OB_SUCCESS;
-  is_valid = false;
-  ObSEArray<ObRawExpr*, 32> range_exprs;
-  ObSEArray<ObRawExpr*, 32> all_table_filters;
-  ObSEArray<ObRawExpr*, 32> range_params;
-  ObSEArray<ObRawExpr*, 8> pushdown_params;
-  ObSEArray<ObRawExpr*, 8> exec_params;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid root", K(ret));
-  } else if (params.empty()) {
-    // do nothing
-  } else if (OB_FAIL(append(exec_params, params))) {
-    LOG_WARN("failed to append nl params", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_range_params(root, range_exprs, all_table_filters))) {
-    LOG_WARN("failed to get range_exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::extract_params(range_exprs, range_params))) {
-    LOG_WARN("failed to extract range params", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::intersect(exec_params, range_params, pushdown_params))) {
-    LOG_WARN("failed to get intersect params", K(ret));
-  } else if (pushdown_params.empty()) {
-    // do nothing
-  } else {
-    is_valid = true;
-    LOG_TRACE("pushdown filters can extend query range", K(pushdown_params));
-  }
-  return ret;
-}
-
-int ObOptimizerUtil::check_pushdown_range_cond(ObLogicalOperator *root,
-                                               bool &cnt_pd_range_cond)
-{
-  int ret = OB_SUCCESS;
-  cnt_pd_range_cond = false;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid root", K(ret));
-  } else if (root->is_table_scan()) {
-    ObLogTableScan *tsc = static_cast<ObLogTableScan*>(root);
-    if (OB_FAIL(check_exec_param_filter_exprs(tsc->get_range_conditions(),
-                                              cnt_pd_range_cond))) {
-      LOG_WARN("failed to check exec param filter", K(ret));
-    } else {/*do nothing*/}
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !cnt_pd_range_cond && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child", K(ret));
-      } else if (OB_FAIL(SMART_CALL(check_pushdown_range_cond(child, cnt_pd_range_cond)))) {
-        LOG_WARN("failed to check pd range cond", K(ret));
-      } else {/*do nothing*/}
+  used_in_filter = false;
+  if (!filters.empty() && !exec_params.empty()) {
+    ObSEArray<ObRawExpr*, 8> tmp_exec_params;
+    ObSEArray<ObRawExpr*, 8> filter_params;
+    ObSEArray<ObRawExpr*, 8> used_params;
+    if (OB_FAIL(append(tmp_exec_params, exec_params))) {
+      LOG_WARN("failed to append nl params", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_params(filters, filter_params))) {
+      LOG_WARN("failed to extract range params", K(ret));
+    } else if (OB_FAIL(intersect(tmp_exec_params, filter_params, used_params))) {
+      LOG_WARN("failed to get intersect params", K(ret));
+    } else {
+      used_in_filter = !used_params.empty();
     }
   }
   return ret;
@@ -9284,7 +9569,7 @@ int ObOptimizerUtil::pushdown_and_rename_filter_into_subquery(const ObDMLStmt &p
                                            push_filters))) {
     LOG_WARN("failed to rename pushdown filter", K(ret));
   }
-  for (int64_t i = 0 ; OB_SUCC(ret) && i < remain_filters.count(); i ++){
+  for (int64_t i = 0 ; OB_SUCC(ret) && i < remain_filters.count(); i ++) {
     ObRawExpr *part_push_filter = NULL;
     bool can_pushdown_all = false;
     if (OB_FAIL(split_or_filter_into_subquery(parent_stmt,
@@ -9433,7 +9718,7 @@ int ObOptimizerUtil::split_or_filter_into_subquery(ObIArray<const ObDMLStmt *> &
                                                      can_push_to_where,
                                                      check_match_index))) {
       LOG_WARN("failed to pushdown filter", K(ret));
-    } else if (push_filters.empty()){
+    } else if (push_filters.empty()) {
       // AND pred can not be pushed
       have_push_filter = false;
       can_pushdown_all = false;
@@ -9649,31 +9934,6 @@ int ObOptimizerUtil::check_contain_my_exec_param(const ObIArray<ObRawExpr *> &ex
   return ret;
 }
 
-int ObOptimizerUtil::check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator* parent = nullptr;
-  if (OB_ISNULL(op)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Current operator node is null", K(ret));
-  } else if (OB_ISNULL(parent = op->get_parent())) {
-    // do nothing
-  } else if (can_use_batch_nlj) {
-    if (parent->get_type() == log_op_def::LOG_SUBPLAN_FILTER) {
-      can_use_batch_nlj = false;
-    } else if (parent->get_type() == log_op_def::LOG_JOIN) {
-      ObLogJoin *join = static_cast<ObLogJoin*>(parent);
-      if (IS_SEMI_ANTI_JOIN(join->get_join_type())) {
-        can_use_batch_nlj = false;
-      }
-    }
-    if (can_use_batch_nlj && OB_FAIL(SMART_CALL(check_ancestor_node_support_skip_scan(parent, can_use_batch_nlj)))) {
-      LOG_WARN("failed to check parent node can use batch NLJ", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObOptimizerUtil::check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false)
 {
   int ret = OB_SUCCESS;
@@ -9737,5 +9997,146 @@ int ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerCo
     }
   }
 
+  return ret;
+}
+
+int ObOptimizerUtil::get_has_global_index_filters(const ObSqlSchemaGuard *schema_guard,
+                                                  const uint64_t index_id,
+                                                  const ObIArray<ObRawExpr*> &filter_exprs,
+                                                  bool &has_index_scan_filter,
+                                                  bool &has_index_lookup_filter)
+{
+  int ret = OB_SUCCESS;
+  has_index_scan_filter = false;
+  has_index_lookup_filter = false;
+  const ObTableSchema* index_schema = NULL;
+  ObSEArray<uint64_t, 8> index_columns;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(ret), K(schema_guard));
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null table schema", K(ret));
+  } else if (OB_FAIL(index_schema->get_column_ids(index_columns))) {
+    LOG_WARN("failed to get index schema", K(ret));
+  } else if (OB_FAIL(get_has_global_index_filters(filter_exprs,
+                                                  index_columns,
+                                                  has_index_scan_filter,
+                                                  has_index_lookup_filter))) {
+    LOG_WARN("failed to get has global index filters", K(ret));
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::get_has_global_index_filters(const ObIArray<ObRawExpr*> &filter_exprs,
+                                                  const ObIArray<uint64_t> &index_columns,
+                                                  bool &has_index_scan_filter,
+                                                  bool &has_index_lookup_filter)
+{
+  int ret = OB_SUCCESS;
+  has_index_scan_filter = false;
+  has_index_lookup_filter = false;
+  ObSEArray<bool, 4> filter_before_index_back;
+  if (OB_FAIL(ObOptimizerUtil::check_filter_before_indexback(filter_exprs,
+                                                             index_columns,
+                                                             filter_before_index_back))) {
+    LOG_WARN("Failed to check filter before index back", K(ret));
+  } else if (OB_UNLIKELY(filter_before_index_back.count() != filter_exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unequal array size", K(filter_before_index_back.count()),
+        K(filter_exprs.count()), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_before_index_back.count(); i++) {
+      if (OB_ISNULL(filter_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expr", K(ret));
+      } else if (filter_before_index_back.at(i) &&
+                 !filter_exprs.at(i)->has_flag(CNT_SUB_QUERY)) {
+        has_index_scan_filter = true;
+      } else {
+        has_index_lookup_filter = true;
+      }
+    }
+  }
+  return ret;
+}
+
+//  check batch rescan for nlj / subplan filter
+int ObOptimizerUtil::check_can_batch_rescan(const ObLogicalOperator *op,
+                                            const bool allow_normal_scan,
+                                            bool &can_batch_rescan)
+{
+  int ret = OB_SUCCESS;
+  can_batch_rescan = false;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(op));
+  } else if (op->is_table_scan()) {
+    const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
+    can_batch_rescan = (allow_normal_scan || table_scan->use_das()) && table_scan->can_batch_rescan();
+  } else if (1 == op->get_num_of_child() || log_op_def::LOG_SET == op->get_type()) {
+    can_batch_rescan = true;
+    for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(i), false, can_batch_rescan)))) {
+        LOG_WARN("failed to check batch nlj", K(ret));
+      }
+    }
+  } else {  // other multi child op use batch is disabled, multi level nlj use batch is disabled
+    can_batch_rescan = false;
+  }
+  return ret;
+}
+
+// check batch rescan for nlj / subplan filter
+// check_can_batch_rescan compatible before 425
+int ObOptimizerUtil::check_can_batch_rescan_compat(ObLogicalOperator *op,
+                                                   const ObIArray<ObExecParamRawExpr*> &rescan_params,
+                                                   bool for_nlj,
+                                                   bool &can_batch_rescan)
+{
+  int ret = OB_SUCCESS;
+  can_batch_rescan = false;
+  bool has_exec_param = false;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(op));
+  } else if (OB_FAIL(check_exec_param_filter_exprs(op->get_startup_exprs(), has_exec_param))) {
+    LOG_WARN("failed to check exec param filter exprs", K(ret));
+  } else if (has_exec_param) {
+    /* do nothing */
+  } else if (log_op_def::LOG_LIMIT == op->get_type()
+             || (op->is_table_scan() && NULL != static_cast<const ObLogTableScan*>(op)->get_limit_expr())) {
+    /* do nothing */
+  } else if (op->is_table_scan()) {
+    const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
+    if (!table_scan->use_das() || !table_scan->can_batch_rescan()
+        || table_scan->get_range_conditions().empty() || NULL == table_scan->get_est_cost_info()) {
+      can_batch_rescan = false;
+    } else if (OB_FAIL(check_exec_param_filter_exprs(table_scan->get_est_cost_info()->pushdown_prefix_filters_,
+                                                     rescan_params,
+                                                     can_batch_rescan))) {
+      LOG_WARN("failed to check exec param filter exprs", K(ret));
+    }
+  } else if (log_op_def::LOG_SUBPLAN_SCAN == op->get_type()) {
+    if (OB_FAIL(SMART_CALL(check_can_batch_rescan_compat(op->get_child(0), rescan_params, for_nlj, can_batch_rescan)))) {
+      LOG_WARN("failed to smart call check check op can batch", K(ret));
+    }
+  } else if (!for_nlj) {
+    /* do nothing */
+  } else if (1 == op->get_num_of_child() || log_op_def::LOG_SET == op->get_type()) {
+    can_batch_rescan = ObSelectStmt::UNION == static_cast<const ObLogSet*>(op)->get_set_op()
+                      || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0;
+    for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_can_batch_rescan_compat(op->get_child(i), rescan_params, for_nlj, can_batch_rescan)))) {
+        LOG_WARN("failed to check batch nlj", K(ret));
+      } else {/* do nothing */}
+    }
+  } else {
+    // other multi child op use batch is disabled
+    // multi level nlj use batch is disabled
+    can_batch_rescan = false;
+  }
   return ret;
 }

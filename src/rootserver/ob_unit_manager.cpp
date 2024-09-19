@@ -438,11 +438,13 @@ int ObUnitManager::inner_create_unit_config_(const ObUnitConfig &unit_config, co
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("temp_config is null", KP(temp_config), K(ret));
     } else if (if_not_exist) {
-      LOG_USER_NOTE(OB_RESOURCE_UNIT_EXIST, to_cstring(name));
+      ObCStringHelper helper;
+      LOG_USER_NOTE(OB_RESOURCE_UNIT_EXIST, helper.convert(name));
       LOG_INFO("unit config already exist", K(name));
     } else {
       ret = OB_RESOURCE_UNIT_EXIST;
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_EXIST, to_cstring(name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_EXIST, helper.convert(name));
       LOG_WARN("unit config already exist", K(name), KR(ret));
     }
   } else if (OB_ENTRY_NOT_EXIST != ret) {
@@ -496,7 +498,8 @@ int ObUnitManager::alter_unit_config(const ObUnitConfig &unit_config)
       // overwrite ret on purpose
       ret = OB_RESOURCE_UNIT_NOT_EXIST;
       LOG_WARN("config does not exist", K(name), KR(ret));
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, to_cstring(name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, helper.convert(name));
     }
   } else if (OB_ISNULL(old_config)) {
     ret = OB_ERR_UNEXPECTED;
@@ -574,11 +577,13 @@ int ObUnitManager::drop_unit_config(const ObUnitConfigName &name, const bool if_
     } else {
       if (if_exist) {
         ret = OB_SUCCESS;
-        LOG_USER_NOTE(OB_RESOURCE_UNIT_NOT_EXIST, to_cstring(name));
+        ObCStringHelper helper;
+        LOG_USER_NOTE(OB_RESOURCE_UNIT_NOT_EXIST, helper.convert(name));
         LOG_INFO("unit config not exist, no need to delete it", K(name));
       } else {
         ret = OB_RESOURCE_UNIT_NOT_EXIST;
-        LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, to_cstring(name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, helper.convert(name));
         LOG_WARN("unit config not exist", K(name), K(ret));
       }
     }
@@ -589,7 +594,8 @@ int ObUnitManager::drop_unit_config(const ObUnitConfigName &name, const bool if_
     LOG_WARN("get_config_ref_count failed", "config_id", config->unit_config_id(), K(ret));
   } else if (0 != ref_count) {
     ret = OB_RESOURCE_UNIT_IS_REFERENCED;
-    LOG_USER_ERROR(OB_RESOURCE_UNIT_IS_REFERENCED, to_cstring(name));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_RESOURCE_UNIT_IS_REFERENCED, helper.convert(name));
     LOG_WARN("some resource pool is using this unit config, can not delete it",
              K(ref_count), K(ret));
   } else if (OB_FAIL(ut_operator_.remove_unit_config(*proxy_, config->unit_config_id()))) {
@@ -752,7 +758,8 @@ int ObUnitManager::inner_create_resource_pool_(
       LOG_WARN("get_unit_config_by_name failed", K(config_name), K(ret));
     } else {
       ret = OB_RESOURCE_UNIT_NOT_EXIST;
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, to_cstring(config_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, helper.convert(config_name));
       LOG_WARN("config not exist", K(config_name), K(ret));
     }
   } else if (NULL == config) {
@@ -763,11 +770,13 @@ int ObUnitManager::inner_create_resource_pool_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("pool is null", K_(resource_pool.name), KP(pool), K(ret));
     } else if (if_not_exist) {
-      LOG_USER_NOTE(OB_RESOURCE_POOL_EXIST, to_cstring(resource_pool.name_));
+      ObCStringHelper helper;
+      LOG_USER_NOTE(OB_RESOURCE_POOL_EXIST, helper.convert(resource_pool.name_));
       LOG_INFO("resource_pool already exist, no need to create", K(resource_pool.name_));
     } else {
       ret = OB_RESOURCE_POOL_EXIST;
-      LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, to_cstring(resource_pool.name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, helper.convert(resource_pool.name_));
       LOG_WARN("resource_pool already exist", "name", resource_pool.name_, K(ret));
     }
   } else if (OB_ENTRY_NOT_EXIST != ret) {
@@ -934,7 +943,8 @@ int ObUnitManager::check_split_pool_name_condition(
         } else {
           ret = OB_RESOURCE_POOL_EXIST;
           LOG_WARN("resource pool already exist", K(ret), K(pool_name));
-          LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, to_cstring(pool_name));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, helper.convert(pool_name));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -1028,7 +1038,8 @@ int ObUnitManager::split_resource_pool(
     } else {
       ret = OB_RESOURCE_POOL_NOT_EXIST;
       LOG_WARN("resource pool not exist", K(ret), K(pool_name));
-      LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, to_cstring(pool_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, helper.convert(pool_name));
     }
   } else if (OB_UNLIKELY(NULL == pool)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2364,7 +2375,8 @@ int ObUnitManager::check_merge_pool_name_condition(
     } else {
       ret = OB_RESOURCE_POOL_EXIST;
       LOG_WARN("resource pool already exist", K(ret), K(merge_pool_name));
-      LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, to_cstring(merge_pool_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, helper.convert(merge_pool_name));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -2846,7 +2858,8 @@ int ObUnitManager::alter_resource_pool(const share::ObResourcePool &alter_pool,
       LOG_WARN("get resource pool by name failed", "resource_pool name", alter_pool.name_, K(ret));
     } else {
       ret = OB_RESOURCE_POOL_NOT_EXIST;
-      LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, to_cstring(alter_pool.name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, helper.convert(alter_pool.name_));
       LOG_WARN("resource pool not exist", "resource pool name", alter_pool.name_, K(ret));
     }
   } else if (NULL == pool) {
@@ -2932,11 +2945,13 @@ int ObUnitManager::drop_resource_pool(const ObResourcePoolName &name, const bool
     } else {
       if (if_exist) {
         ret = OB_SUCCESS;
-        LOG_USER_NOTE(OB_RESOURCE_POOL_NOT_EXIST, to_cstring(name));
+        ObCStringHelper helper;
+        LOG_USER_NOTE(OB_RESOURCE_POOL_NOT_EXIST, helper.convert(name));
         LOG_INFO("resource_pool not exist, but no need drop it", K(name));
       } else {
         ret = OB_RESOURCE_POOL_NOT_EXIST;
-        LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, to_cstring(name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, helper.convert(name));
         LOG_WARN("resource_pool not exist", K(name), K(ret));
       }
     }
@@ -2945,7 +2960,8 @@ int ObUnitManager::drop_resource_pool(const ObResourcePoolName &name, const bool
     LOG_WARN("pool is null", KP(pool), K(ret));
   } else if (pool->is_granted_to_tenant()) {
     ret = OB_RESOURCE_POOL_ALREADY_GRANTED;
-    LOG_USER_ERROR(OB_RESOURCE_POOL_ALREADY_GRANTED, to_cstring(name));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_RESOURCE_POOL_ALREADY_GRANTED, helper.convert(name));
     LOG_WARN("resource pool is granted to tenant, can't not delete it",
              "tenant_id", pool->tenant_id_, K(ret));
   } else {
@@ -3610,7 +3626,8 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     LOG_WARN("check pool intersect failed", K(pool_names), KR(ret));
   } else if (intersect) {
     ret = OB_POOL_SERVER_INTERSECT;
-    LOG_USER_ERROR(OB_POOL_SERVER_INTERSECT, to_cstring(pool_names));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_POOL_SERVER_INTERSECT, helper.convert(pool_names));
     LOG_WARN("resource pool unit server intersect", K(pool_names), KR(ret));
   } else if (!is_bootstrap
       && OB_FAIL(check_server_enough(tenant_id, pool_names, server_enough))) {
@@ -3931,7 +3948,8 @@ int ObUnitManager::get_zones_of_pools(const ObIArray<ObResourcePoolName> &pool_n
           LOG_WARN("get resource pool by name failed", "name", pool_names.at(i), K(ret));
         } else {
           ret = OB_RESOURCE_POOL_NOT_EXIST;
-          LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, to_cstring(pool_names.at(i)));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_RESOURCE_POOL_NOT_EXIST, helper.convert(pool_names.at(i)));
           LOG_WARN("pool not exist", "pool_name", pool_names.at(i), K(ret));
         }
       } else if (NULL == pool) {
@@ -4677,8 +4695,9 @@ int ObUnitManager::check_resource_pool(share::ObResourcePool &resource_pool) con
       for (int64_t j = i + 1; OB_SUCC(ret) && j < resource_pool.zone_list_.count(); ++j) {
         if (resource_pool.zone_list_[i] == resource_pool.zone_list_[j]) {
           ret = OB_ZONE_DUPLICATED;
-          LOG_USER_ERROR(OB_ZONE_DUPLICATED, to_cstring(resource_pool.zone_list_[i]),
-              to_cstring(resource_pool.zone_list_));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ZONE_DUPLICATED, helper.convert(resource_pool.zone_list_[i]),
+              helper.convert(resource_pool.zone_list_));
           LOG_WARN("duplicate zone in zone list", "zone_list", resource_pool.zone_list_, K(ret));
         }
       }
@@ -4690,7 +4709,8 @@ int ObUnitManager::check_resource_pool(share::ObResourcePool &resource_pool) con
           LOG_WARN("check_zone_exist failed", KPC(zone), K(ret));
         } else if (!zone_exist) {
           ret = OB_ZONE_INFO_NOT_EXIST;
-          LOG_USER_ERROR(OB_ZONE_INFO_NOT_EXIST, to_cstring(*zone));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ZONE_INFO_NOT_EXIST, helper.convert(*zone));
           LOG_WARN("zone not exist", "zone", *zone, K(ret));
         }
       }
@@ -4806,7 +4826,8 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
       LOG_WARN("failed to do_notify_unit_resource", "dst", unit.server_, K(tenant_unit_server_config));
       if (OB_TENANT_EXIST == ret) {
         ret = OB_TENANT_RESOURCE_UNIT_EXIST;
-        LOG_USER_ERROR(OB_TENANT_RESOURCE_UNIT_EXIST, tenant_id, to_cstring(unit.server_));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TENANT_RESOURCE_UNIT_EXIST, tenant_id, helper.convert(unit.server_));
       }
     }
   }
@@ -5163,10 +5184,13 @@ int ObUnitManager::allocate_pool_units_(
               K(zone), K(excluded_servers), KPC(config));
           // handle return error info
           if (OB_ZONE_RESOURCE_NOT_ENOUGH == ret) {
+            ObCStringHelper helper;
             LOG_USER_ERROR(OB_ZONE_RESOURCE_NOT_ENOUGH,
-                to_cstring(zone), increase_delta_unit_num, resource_not_enough_reason.c_str());
+                helper.convert(zone), increase_delta_unit_num, resource_not_enough_reason.c_str());
           } else if (OB_ZONE_SERVER_NOT_ENOUGH == ret) {
-            LOG_USER_ERROR(OB_ZONE_SERVER_NOT_ENOUGH, to_cstring(zone), increase_delta_unit_num);
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ZONE_SERVER_NOT_ENOUGH, helper.convert(zone),
+                increase_delta_unit_num);
           }
         } else if (OB_FAIL(excluded_servers.push_back(server))) {
           LOG_WARN("push_back failed", K(ret));
@@ -5525,21 +5549,25 @@ int ObUnitManager::do_choose_server_for_unit_(const ObUnitResource &config,
       const ObServerInfoInTable &server_info = servers_info.at(i);
       const ObAddr &server = server_info.get_server();
       const ObUnitPlacementStrategy::ObServerResource &server_resource = server_resources.at(i);
+      char server_str[OB_IP_PORT_STR_BUFF] = {'\0'};
+      int64_t pos = 0;
 
       if (has_exist_in_array(excluded_servers, server)) {
         // excluded servers are expected, need not show in reason
         continue;
+      } else if (OB_FAIL(databuff_printf(server_str, sizeof(server_str), pos, server))) {
+        LOG_WARN("fail to print server to databuff", K(ret), K(server), K(pos));
       } else {
         not_excluded_server_count++;
 
         if (!server_info.can_migrate_in()) {
           if (!server_info.is_active()) {
             resource_not_enough_reason =
-                resource_not_enough_reason + "server '" + to_cstring(server) + "' is not active\n";
+                resource_not_enough_reason + "server '" + server_str + "' is not active\n";
           } else {
             // server is block-migrate-in
             resource_not_enough_reason =
-                resource_not_enough_reason + "server '" + to_cstring(server) + "' is blocked migrate-in\n";
+                resource_not_enough_reason + "server '" + server_str + "' is blocked migrate-in\n";
           }
           LOG_WARN("[CHOOSE_SERVER_FOR_UNIT] server can not migrate in", K(module), K(i), "server", server_info);
           continue;
@@ -5561,7 +5589,7 @@ int ObUnitManager::do_choose_server_for_unit_(const ObUnitResource &config,
                 "not_enough_resource_config", alter_resource_err_to_str(not_enough_resource_config),
                 K(server_resource), "request_unit_config", config);
             resource_not_enough_reason =
-                resource_not_enough_reason + "server '" + to_cstring(server) + "' "
+                resource_not_enough_reason + "server '" + server_str + "' "
                 + resource_type_to_str(not_enough_resource) + " resource not enough\n";
           }
         }
@@ -5688,13 +5716,14 @@ bool ObUnitManager::check_resource_enough_for_unit_(
   }
 
   if (! is_enough) {
+    ObCStringHelper helper;
     _LOG_INFO("server %s resource '%s' is not enough for unit. hard_limit=%.6g, server_resource=%s, "
         "demands=%s",
         resource_type_to_str(not_enough_resource),
         alter_resource_err_to_str(not_enough_resource_config),
         hard_limit,
-        to_cstring(r),
-        to_cstring(u));
+        helper.convert(r),
+        helper.convert(u));
   }
   return is_enough;
 }
@@ -5956,13 +5985,19 @@ int ObUnitManager::check_enough_resource_for_delete_server_(
               K(resource_not_enough_reason.c_str()));
 
           // handle return error info
+          char zone_str[MAX_ZONE_LENGTH] = {'\0'};
+          int64_t zone_pos = 0;
+          (void)databuff_printf(zone_str, sizeof(zone_str), zone_pos, zone);
           if (OB_ZONE_SERVER_NOT_ENOUGH == ret) {
             std::string err_msg;
             const ObUnit *unit = unit_loads->at(i).unit_;
             uint64_t unit_id = (NULL == unit ? 0 : unit->unit_id_);
+            char unit_id_str[32] = {'\0'};
+            int64_t unit_id_pos = 0;
+            (void) databuff_printf(unit_id_str, sizeof(unit_id_str), unit_id_pos, "%lu", unit_id);
 
-            err_msg = err_msg + "can not migrate out unit '" + to_cstring(unit_id) +
-                "', no other available servers on zone '" +  to_cstring(zone) +
+            err_msg = err_msg + "can not migrate out unit '" + unit_id_str +
+                "', no other available servers on zone '" +  zone_str +
                 "', delete server not allowed";
             LOG_USER_ERROR(OB_DELETE_SERVER_NOT_ALLOWED, err_msg.c_str());
           } else if (OB_ZONE_RESOURCE_NOT_ENOUGH == ret) {
@@ -5970,7 +6005,7 @@ int ObUnitManager::check_enough_resource_for_delete_server_(
             const ObUnit *unit = unit_loads->at(i).unit_;
             uint64_t unit_id = (NULL == unit ? 0 : unit->unit_id_);
 
-            err_msg = err_msg + "can not migrate out all units, zone '" + to_cstring(zone) +
+            err_msg = err_msg + "can not migrate out all units, zone '" + zone_str +
                 "' resource not enough, delete server not allowed. "
                 "You can check resource info by views: DBA_OB_UNITS, GV$OB_UNITS, GV$OB_SERVERS.\n"
                 + resource_not_enough_reason.c_str();
@@ -6162,7 +6197,8 @@ int ObUnitManager::alter_pool_unit_config(share::ObResourcePool  *pool,
       LOG_WARN("get_unit_config_by_name failed", K(config_name), K(ret));
     } else {
       ret = OB_RESOURCE_UNIT_NOT_EXIST;
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, to_cstring(config_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, helper.convert(config_name));
       LOG_WARN("unit config not exist", K(config_name), K(ret));
     }
   } else if (NULL == alter_config) {
@@ -7675,15 +7711,17 @@ int ObUnitManager::check_expand_resource_(
     const ObUnitResource delta = new_resource - old_resource;
     ObUnitResource expand_resource;
     ObServerInfoInTable server_info;
+    ObCStringHelper helper;
     _LOG_INFO("[%s] check_expand_resource begin. old=%s, new=%s, delta=%s", module,
-        to_cstring(old_resource), to_cstring(new_resource), to_cstring(delta));
+        helper.convert(old_resource), helper.convert(new_resource), helper.convert(delta));
 
     FOREACH_X(iter, server_ref_count_map, OB_SUCCESS == ret) {
       expand_resource = delta * (iter->second);
       const ObAddr &server = iter->first;
       server_info.reset();
+      helper.reset();
       _LOG_INFO("[%s] check_expand_resource. svr=%s, pools=%ld, expand_resource=%s", module,
-          to_cstring(server), iter->second, to_cstring(expand_resource));
+          helper.convert(server), iter->second, helper.convert(expand_resource));
       if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
         LOG_WARN("fail to get server_info", KR(ret), K(server));
       } else if (OB_UNLIKELY(!server_info.is_active())) {
@@ -7693,9 +7731,9 @@ int ObUnitManager::check_expand_resource_(
         char err_msg[ERR_MSG_LEN] = {'\0'};
         int tmp_ret = OB_SUCCESS;
         int64_t pos = 0;
-        if (OB_TMP_FAIL(databuff_printf(err_msg, ERR_MSG_LEN, pos,
-              "Server %s is inactive, expanding resource",
-              to_cstring(OB_SUCCESS != ERRSIM_USE_DUMMY_SERVER ? ObAddr() : server)))) {
+        if (OB_TMP_FAIL(databuff_print_multi_objs(err_msg, ERR_MSG_LEN, pos, "Server ",
+            OB_SUCCESS != ERRSIM_USE_DUMMY_SERVER ? ObAddr() : server,
+            " is inactive, expanding resource"))){
           LOG_WARN("format err_msg failed", KR(tmp_ret), KR(ret));
         } else {
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
@@ -7704,7 +7742,8 @@ int ObUnitManager::check_expand_resource_(
         LOG_WARN("check expand resource failed", KR(ret), K(server_info));
       } else if (!can_expand) {
         const ObZone &zone = server_info.get_zone();
-        LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone), to_cstring(server),
+        helper.reset();
+        LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, helper.convert(zone), helper.convert(server),
             alter_resource_err_to_str(err_index));
         // return ERROR
         ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
@@ -8019,7 +8058,8 @@ int ObUnitManager::check_pool_ownership_(const uint64_t tenant_id,
     } else if (grant) {
       if (pool->is_granted_to_tenant()) {
         ret = OB_RESOURCE_POOL_ALREADY_GRANTED;
-        LOG_USER_ERROR(OB_RESOURCE_POOL_ALREADY_GRANTED, to_cstring(pool_names.at(i)));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_RESOURCE_POOL_ALREADY_GRANTED, helper.convert(pool_names.at(i)));
         LOG_WARN("pool has already granted to other tenant, can't grant again",
                   KR(ret), K(tenant_id), "pool", *pool);
       } else {/*good*/}
@@ -8555,7 +8595,8 @@ int ObUnitManager::admin_migrate_unit(
       LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, "dummy_zone", "127.0.0.1:1000",
           alter_resource_err_to_str(err_index));
     } else {
-      LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(dst_zone), to_cstring(dst),
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, helper.convert(dst_zone), helper.convert(dst),
           alter_resource_err_to_str(err_index));
     }
     LOG_WARN("left resource can't hold unit", "server", dst,

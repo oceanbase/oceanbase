@@ -360,7 +360,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                         SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
                       }
                     }
-                    if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
+                    if (OB_SUCC(ret) && OB_FAIL(databuff_print_multi_objs(
+                        buf, buf_len, pos, "'", ObHexEscapeSqlStr(out_str), "'"))) {
                       SHARE_SCHEMA_LOG(WARN, "fail to print default value of string tc", K(ret));
                     }
                   } else if (OB_FAIL(default_value.print_varchar_literal(buf, buf_len, pos, tz_info))) {
@@ -440,7 +441,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
           SHARE_SCHEMA_LOG(WARN, "fail to print lob params", K(ret));
         }
         if (OB_SUCC(ret) && !is_oracle_mode && 0 < strlen(col->get_comment())) {
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'", to_cstring(ObHexEscapeSqlStr(col->get_comment_str()))))) {
+          if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+              " COMMENT '", ObHexEscapeSqlStr(col->get_comment_str()), "'"))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print comment", K(ret));
           }
         }
@@ -561,6 +563,8 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
   if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_SCHEMA_LOG(WARN, "index is not exist", K(ret));
+  } else if (index_schema->is_in_deleting()) {
+    // the index is in deleting, do not show to user.
   } else {
     ObString index_name;
     ObString new_index_name;
@@ -1223,8 +1227,8 @@ int ObSchemaPrinter::print_table_definition_rowkeys(const ObTableSchema &table_s
     }
     if (OB_SUCC(ret)) {
       if (!is_oracle_mode && table_schema.get_pk_comment_str().length() > 0) {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'" ,
-            to_cstring(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
+        if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos, " COMMENT '" ,
+            ObHexEscapeSqlStr(table_schema.get_pk_comment_str()), "'"))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print primary key comment", K(ret), K(table_schema));
         }
       }
@@ -1561,10 +1565,12 @@ int ObSchemaPrinter::print_table_definition_comment_oracle(const ObTableSchema &
   } else if (table_schema.get_comment_str().empty()) {
     //do nothing
   } else {
-    ret = databuff_printf(buf, buf_len, pos,
-                          ";\nCOMMENT ON TABLE \"%s\" is '%s'",
+    ret = databuff_print_multi_objs(buf, buf_len, pos,
+                          ";\nCOMMENT ON TABLE \"",
                           table_schema.get_table_name(),
-                          to_cstring(ObHexEscapeSqlStr(table_schema.get_comment_str())));
+                          "\" is '",
+                          ObHexEscapeSqlStr(table_schema.get_comment_str()),
+                          "'");
   }
 
   ObColumnIterByPrevNextID iter(table_schema);
@@ -1771,9 +1777,10 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     }
   }
   if (OB_SUCCESS == ret && !is_oracle_mode && !is_for_table_status && table_schema.get_comment_str().length() > 0) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                is_index_tbl ? "COMMENT '%s' " : "COMMENT = '%s' ",
-                                to_cstring(ObHexEscapeSqlStr(table_schema.get_comment_str()))))) {
+    if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+                                is_index_tbl ? "COMMENT '" : "COMMENT = '",
+                                ObHexEscapeSqlStr(table_schema.get_comment_str()),
+                                "' "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print comment", K(ret), K(table_schema));
     }
   }
@@ -2282,9 +2289,10 @@ int ObSchemaPrinter::print_table_definition_table_options(
   }
 
   if (OB_SUCC(ret) && !is_for_table_status && table_schema.get_comment_str().length() > 0) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                is_index_tbl ? "COMMENT '%s' " : "COMMENT = '%s' ",
-                                to_cstring(ObHexEscapeSqlStr(table_schema.get_comment()))))) {
+    if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+                                is_index_tbl ? "COMMENT '" : "COMMENT = '",
+                                ObHexEscapeSqlStr(table_schema.get_comment()),
+                                "' "))) {
       OB_LOG(WARN, "fail to print comment", K(ret), K(table_schema));
     }
   }

@@ -235,6 +235,9 @@ private:
   static int fill_encrypt_info_(
       const obrpc::ObPhysicalRestoreTenantArg &arg,
       share::ObPhysicalRestoreJob &job);
+  static int fill_sts_credential_(
+      const obrpc::ObPhysicalRestoreTenantArg &arg,
+      share::ObPhysicalRestoreJob &job);
   DISALLOW_COPY_AND_ASSIGN(ObRestoreUtil);
 };
 

@@ -783,6 +783,7 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos, 
     }
     // remove operation should precede the set conflict info operation
     remove_placeholder_node(node);
+    ObCStringHelper helper;
     node->set((void*)node,
                cflict_info.conflict_hash_,
                cflict_info.lock_seq_,
@@ -791,7 +792,7 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos, 
                cflict_info.conflict_tablet_.id(),
                cflict_info.last_compact_cnt_,
                cflict_info.total_update_cnt_,
-               to_cstring(cflict_info.conflict_row_key_str_),
+               helper.convert(cflict_info.conflict_row_key_str_),
                cflict_info.conflict_row_key_str_.get_ob_string().length(),
                cflict_info.holder_sess_id_,
                cflict_info.self_tx_id_,
@@ -1542,7 +1543,8 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
       uint64_t hash = wait_on_row ? row_hash : tx_hash;
       char buffer[rpc::ObLockWaitNode::KEY_BUFFER_SIZE] = {0};// if str length less than ObStringHolder::TINY_STR_SIZE, no heap memory llocated
       int64_t pos = 0;
-      common::databuff_printf(buffer, rpc::ObLockWaitNode::KEY_BUFFER_SIZE, pos, "%s", to_cstring(row_key.get_rowkey()));// it'ok if buffer not enough
+      ObCStringHelper helper;
+      common::databuff_printf(buffer, rpc::ObLockWaitNode::KEY_BUFFER_SIZE, pos, "%s", helper.convert(row_key.get_rowkey()));// it'ok if buffer not enough
       ObString temp_ob_string(pos, buffer);
       ObStringHolder temp_string_holder;
       temp_string_holder.assign(temp_ob_string);
@@ -1836,13 +1838,16 @@ int64_t ObLockWaitMgr::calc_holder_tx_lock_timestamp(const int64_t holder_tx_sta
 
 void ObLockWaitMgr::begin_row_lock_wait_event(const Node * const node)
 {
-  rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
-  if (OB_NOT_NULL(req)) {
-    if (rpc::ObRequest::TRANSPORT_PROTO_POC == req->get_nio_protocol()) {
-      ObSQLSessionInfo *sql_sess = static_cast<ObSQLSessionInfo *> (obmysql::get_sql_sess_from_sess(req->get_server_handle_context()));
-      if (OB_NOT_NULL(sql_sess)) {
-        sql_sess->get_ash_stat().begin_row_lock_wait_event();
-        sql_sess->get_ash_stat().block_sessid_ = node->holder_sessid_;
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
+    if (OB_NOT_NULL(req)) {
+      ObDiagnosticInfo *di = req->get_type() == rpc::ObRequest::OB_MYSQL
+        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->di_
+        : req->get_diagnostic_info();
+      if (OB_NOT_NULL(di)) {
+        ObActiveSessionStat &ash_stat = di->get_ash_stat();
+        ash_stat.begin_row_lock_wait_event();
+        ash_stat.block_sessid_ = node->holder_sessid_;
       }
     }
   }
@@ -1850,13 +1855,16 @@ void ObLockWaitMgr::begin_row_lock_wait_event(const Node * const node)
 
 void ObLockWaitMgr::end_row_lock_wait_event(const Node * const node)
 {
-  rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
-  if (OB_NOT_NULL(req)) {
-    if (rpc::ObRequest::TRANSPORT_PROTO_POC == req->get_nio_protocol()) {
-      ObSQLSessionInfo *sql_sess = static_cast<ObSQLSessionInfo *> (obmysql::get_sql_sess_from_sess(req->get_server_handle_context()));
-      if (OB_NOT_NULL(sql_sess)) {
-        sql_sess->get_ash_stat().end_row_lock_wait_event();
-        sql_sess->get_ash_stat().block_sessid_ = 0;
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
+    if (OB_NOT_NULL(req)) {
+      ObDiagnosticInfo *di = req->get_type() == rpc::ObRequest::OB_MYSQL
+        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->di_
+        : req->get_diagnostic_info();
+      if (OB_NOT_NULL(di)) {
+        ObActiveSessionStat &ash_stat = di->get_ash_stat();
+        ash_stat.end_row_lock_wait_event();
+        ash_stat.block_sessid_ = 0;
       }
     }
   }

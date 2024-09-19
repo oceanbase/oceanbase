@@ -535,6 +535,11 @@ public:
   static int update_system_stats_cache(const uint64_t rpc_tenant_id,
                                       const uint64_t tenant_id);
 
+  static int get_stats_consumer_group_id(ObTableStatParam &param);
+  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
+                                      const common::ObDataTypeCastParams &dtc_params,
+                                      ObString &ident_name,
+                                      bool need_extra_conv = false);
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
@@ -557,12 +562,6 @@ private:
                                ObString &opt_value,
                                bool is_global_prefs,
                                ObStatPrefs *&stat_pref);
-
-  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
-                                      const common::ObDataTypeCastParams &dtc_params,
-                                      ObString &ident_name,
-                                      bool need_extra_conv = false);
-
 
   static int get_common_table_stale_percent(sql::ObExecContext &ctx,
                                             const uint64_t tenant_id,

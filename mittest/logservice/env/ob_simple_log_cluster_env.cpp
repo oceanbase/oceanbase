@@ -534,7 +534,7 @@ int ObSimpleLogClusterTestEnv::restart_paxos_groups()
   auto func = [&finished_cnt, this](const int64_t node_idx, ObISimpleLogServer *svr) -> int{
     int ret = OB_SUCCESS;
     ObTenantEnv::set_tenant(svr->get_tenant_base());
-    if (OB_FAIL(svr->simple_restart(get_test_name(), node_idx))) {
+    if (OB_FAIL(svr->simple_restart(get_test_name(), node_idx, this->tio_manager_))) {
       PALF_LOG(WARN, "simple_restart failed", K(ret), K(node_idx));
     } else {
       ATOMIC_INC(&finished_cnt);
@@ -566,7 +566,7 @@ int ObSimpleLogClusterTestEnv::restart_server(const int64_t server_id)
   if (server_id >= 0 && server_id < cluster.size()) {
     const auto svr = cluster[server_id];
     ObTenantEnv::set_tenant(svr->get_tenant_base());
-    if (OB_FAIL(svr->simple_restart(get_test_name(), get_node_idx_base() + server_id * 2))) {
+    if (OB_FAIL(svr->simple_restart(get_test_name(), get_node_idx_base() + server_id * 2, tio_manager_))) {
       PALF_LOG(WARN, "simple_restart failed", K(ret), K(server_id));
     } else {
       PALF_LOG(INFO, "restart_paxos_groups success", K(svr->get_addr()));

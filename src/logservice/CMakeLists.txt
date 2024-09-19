@@ -159,6 +159,7 @@ ob_set_subtarget(ob_logservice palf
   palf/log_io_utils.cpp
   palf/log_io_worker_wrapper.cpp
   palf/log_throttle.cpp
+  palf/log_io_adapter.cpp
 )
 
 ob_set_subtarget(ob_logservice palf_election

@@ -315,18 +315,20 @@ int QueryAndMutateHelper::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObTableApiExecutor *executor = nullptr;
-  ObTableApiScanRowIterator row_iter;
   OB_TABLE_START_AUDIT(credential_,
                        *tb_ctx_.get_sess_guard(),
                        tb_ctx_.get_table_name(),
                        &audit_ctx_,
                        query_and_mutate_.get_query());
 
-  if (OB_FAIL(scan_spec.create_executor(tb_ctx_, executor))) {
+  ObTableApiScanRowIterator *row_iter = nullptr;
+  if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx_, row_iter))) {
+    LOG_WARN("fail to get scan row iterator", K(ret));
+  } else if (OB_FAIL(scan_spec.create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-  } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
+  } else if (OB_FAIL(row_iter->open(static_cast<ObTableApiScanExecutor*>(executor)))) {
     LOG_WARN("fail to open scan row iterator", K(ret));
-  } else if (OB_FAIL(row_iter.get_next_row(row, tb_ctx_.get_allocator()))) {
+  } else if (OB_FAIL(row_iter->get_next_row(row, tb_ctx_.get_allocator()))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get next row", K(ret));
     } else {
@@ -334,10 +336,12 @@ int QueryAndMutateHelper::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&row)
     }
   }
 
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = row_iter.close())) {
-    LOG_WARN("fail to close row iter", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
+  if (OB_NOT_NULL(row_iter)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = row_iter->close())) {
+      LOG_WARN("fail to close row iter", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
   }
 
   if (OB_NOT_NULL(executor)) {
@@ -920,10 +924,12 @@ int QueryAndMutateHelper::execute_query_and_mutate()
   } else {
     ObTableApiExecutor *executor = nullptr;
     ObTableQueryResultIterator *result_iterator = nullptr;
-    ObTableApiScanRowIterator row_iter;
-    if (OB_FAIL(scan_spec->create_executor(tb_ctx_, executor))) {
+    ObTableApiScanRowIterator *row_iter = nullptr;
+    if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx_, row_iter))) {
+      LOG_WARN("fail to get scan row iterator", K(ret));
+    } else if (OB_FAIL(scan_spec->create_executor(tb_ctx_, executor))) {
       LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-    } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
+    } else if (OB_FAIL(row_iter->open(static_cast<ObTableApiScanExecutor*>(executor)))) {
       LOG_WARN("fail to open scan row iterator", K(ret));
     } else if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(allocator_,
                                                                          query_and_mutate_.get_query(),
@@ -932,7 +938,7 @@ int QueryAndMutateHelper::execute_query_and_mutate()
                                                                          tb_ctx_,
                                                                          result_iterator))) {
       LOG_WARN("fail to generate query result iterator", K(ret));
-    } else if (FALSE_IT(result_iterator->set_scan_result(&row_iter))) {
+    } else if (FALSE_IT(result_iterator->set_scan_result(row_iter))) {
       // do nothing
     } else if (is_hkv_) {
       if (OB_FAIL(execute_htable_mutation(result_iterator))) {
@@ -950,10 +956,12 @@ int QueryAndMutateHelper::execute_query_and_mutate()
       }
     }
 
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = row_iter.close())) {
-      LOG_WARN("fail to close row iter", K(tmp_ret));
-      ret = COVER_SUCC(tmp_ret);
+    if (OB_NOT_NULL(row_iter)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = row_iter->close())) {
+        LOG_WARN("fail to close row iter", K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      }
     }
 
     if (OB_NOT_NULL(scan_spec)) {

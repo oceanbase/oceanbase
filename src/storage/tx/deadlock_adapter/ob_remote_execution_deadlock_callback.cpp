@@ -101,7 +101,8 @@ int RemoteDeadLockCollectCallBack::operator()(const ObDependencyHolder &blocked_
     }
     if (OB_SUCC(ret)) {
       int64_t pos = 0;
-      databuff_printf(buffer_current_sql, current_sql_str_len, pos, "%s:", to_cstring(trace_id_));
+      ObCStringHelper helper;
+      databuff_printf(buffer_current_sql, current_sql_str_len, pos, "%s:", helper.convert(trace_id_));
       ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(cur_query_str.ptr(),
                                                                         cur_query_str.length(),
                                                                         buffer_current_sql + pos,
@@ -109,7 +110,7 @@ int RemoteDeadLockCollectCallBack::operator()(const ObDependencyHolder &blocked_
       (void) databuff_printf(buffer_visitor, trans_id_str_len, "{session_id:%ld}(associated:%ld):%s",
                             (int64_t)sess_id_pair_.sess_id_,
                             (int64_t)sess_id_pair_.assoc_sess_id_,
-                            to_cstring(session_guard->get_tx_desc()->get_tx_id()));
+                            helper.convert(session_guard->get_tx_desc()->get_tx_id()));
       if (++step && OB_FAIL(temp_guard.assign((char*)"transaction", DoNothingDeleter()))) {
       } else if (++step && OB_FAIL(info.set_module_name(temp_guard))) {
       } else if (++step && OB_FAIL(generate_resource_info_(p_conflcit_info, info))) {
@@ -148,16 +149,17 @@ int RemoteDeadLockCollectCallBack::generate_resource_info_(ObRowConflictInfo *co
   } else {
     char * buffer = nullptr;
     constexpr int64_t MAX_LENGTH = 1_KB;
+    ObCStringHelper helper;
     int64_t pos = 0;
     if (OB_ISNULL(buffer = (char *)mtl_malloc(MAX_LENGTH, "DLResource"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       DETECT_LOG(WARN, "fail to alloc memory", KR(ret), KPC(conflict_info), K(info));
     } else if (FALSE_IT(databuff_printf(buffer, MAX_LENGTH, pos,
                                         "{addr:%s}:{ls:%ld}:{tablet:%ld}:{row_key:%s}",
-                                        to_cstring(conflict_info->conflict_happened_addr_),
+                                        helper.convert(conflict_info->conflict_happened_addr_),
                                         conflict_info->conflict_ls_.id(),
                                         conflict_info->conflict_tablet_.id(),
-                                        to_cstring(conflict_info->conflict_row_key_str_)))) {
+                                        helper.convert(conflict_info->conflict_row_key_str_)))) {
       DETECT_LOG(WARN, "fail to convert str", KR(ret), KPC(conflict_info), K(info));
     } else if (OB_FAIL(temp_guard.assign(buffer, MtlDeleter()))) {
       DETECT_LOG(WARN, "fail to construct guard", KR(ret), KPC(conflict_info), K(info));
@@ -232,13 +234,14 @@ int ObTransDeadLockRemoteExecutionFillVirtualInfoOperation::operator()(const boo
     if (CUSTOM_FAIL(databuff_printf(buffer, buffer_len, pos, "["))) {
       DETECT_LOG(WARN, "failed to print first char", PRINT_WRAPPER, K(conflict_sqls));
     } else {
+      ObCStringHelper helper;
       for (int64_t idx = 0; idx < conflict_info_array_.count() && OB_SUCC(ret); ++idx) {
         if (idx != conflict_info_array_.count() - 1) {
           if (CUSTOM_FAIL(databuff_printf(buffer, buffer_len, pos, "{session_id:%ld}(associated:%ld):{txid:%ld}(scheduler:%s), ",
                                           (int64_t)conflict_info_array_[idx].conflict_sess_id_pair_.sess_id_,
                                           (int64_t)conflict_info_array_[idx].conflict_sess_id_pair_.assoc_sess_id_,
                                           conflict_info_array_[idx].conflict_tx_id_.get_id(),
-                                          to_cstring(conflict_info_array_[idx].conflict_tx_scheduler_)))) {
+                                          helper.convert(conflict_info_array_[idx].conflict_tx_scheduler_)))) {
             DETECT_LOG(WARN, "failed to print sql", PRINT_WRAPPER, K(conflict_sqls));
           }
         } else {
@@ -246,7 +249,7 @@ int ObTransDeadLockRemoteExecutionFillVirtualInfoOperation::operator()(const boo
                                           (int64_t)conflict_info_array_[idx].conflict_sess_id_pair_.sess_id_,
                                           (int64_t)conflict_info_array_[idx].conflict_sess_id_pair_.assoc_sess_id_,
                                           conflict_info_array_[idx].conflict_tx_id_.get_id(),
-                                          to_cstring(conflict_info_array_[idx].conflict_tx_scheduler_)))) {
+                                          helper.convert(conflict_info_array_[idx].conflict_tx_scheduler_)))) {
             DETECT_LOG(WARN, "failed to print sql", PRINT_WRAPPER, K(conflict_sqls));
           }
         }
@@ -259,17 +262,18 @@ int ObTransDeadLockRemoteExecutionFillVirtualInfoOperation::operator()(const boo
   if (OB_SUCC(ret)) {// rewrite conflict actions
     if (need_fill_conflict_actions_flag) {
       int64_t begin_pos = pos;
+      ObCStringHelper helper;
       for (int64_t idx = 0; idx < conflict_sqls.count() && OB_SUCC(ret); ++idx) {
         if (idx != conflict_sqls.count() - 1) {
           if (CUSTOM_FAIL(databuff_printf(buffer, buffer_len, pos, "%s:%s\n",
-                                          to_cstring(conflict_sqls[idx].element<0>()),
-                                          to_cstring(conflict_sqls[idx].element<1>())))) {
+                                          helper.convert(conflict_sqls[idx].element<0>()),
+                                          helper.convert(conflict_sqls[idx].element<1>())))) {
             DETECT_LOG(WARN, "failed to print sql", PRINT_WRAPPER, K(conflict_sqls));
           }
         } else {
           if (CUSTOM_FAIL(databuff_printf(buffer, buffer_len, pos, "%s:%s",
-                                          to_cstring(conflict_sqls[idx].element<0>()),
-                                          to_cstring(conflict_sqls[idx].element<1>())))) {
+                                          helper.convert(conflict_sqls[idx].element<0>()),
+                                          helper.convert(conflict_sqls[idx].element<1>())))) {
             DETECT_LOG(WARN, "failed to print sql", PRINT_WRAPPER, K(conflict_sqls));
           }
         }

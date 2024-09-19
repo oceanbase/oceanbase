@@ -179,7 +179,7 @@ public:
   MYSQL_STMT *get_stmt_handler();
   MYSQL *get_conn_handler();
   virtual int close();
-  virtual int init(ObMySQLConnection &conn, const char *sql, int64_t param_count);
+  virtual int init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count);
   int bind_param(ObBindParam &param);
   int bind_result(ObBindParam &param);
   int bind_param_int(const int64_t col_idx, int64_t *out_buf);
@@ -285,7 +285,7 @@ public:
   ObMySQLProcStatement() : ObMySQLPreparedStatement()
   {
     in_out_map_.reset();
-    proc_ = NULL;
+    proc_.reset();
     out_param_start_pos_ = 0;
     out_param_cur_pos_ = 0;
     basic_param_start_pos_ = 0;
@@ -295,14 +295,14 @@ public:
   ~ObMySQLProcStatement()
   {
     in_out_map_.reset();
-    proc_ = NULL;
+    proc_.reset();
     out_param_start_pos_ = 0;
     out_param_cur_pos_ = 0;
     basic_param_start_pos_ = 0;
     basic_return_value_pos_ = 0;
     com_datas_.reset();
   }
-  virtual int init(ObMySQLConnection &conn, const char *sql, int64_t param_count);
+  virtual int init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count);
   virtual int close();
   virtual void free_resouce();
   virtual int close_mysql_stmt();
@@ -330,7 +330,7 @@ public:
                              int32_t ele_datatype,
                              uint64_t array_size,
                              uint32_t *out_valid_array_size);
-  inline void set_proc(const char *sql) { proc_ = sql; }
+  inline void set_proc(const ObString &sql) { proc_ = sql; }
   static bool is_in_param(const share::schema::ObRoutineParam &r_param);
   static bool is_out_param(const share::schema::ObRoutineParam &r_param);
   static int get_udt_by_id(uint64_t user_type_id,
@@ -489,7 +489,7 @@ private:
   ObIArray<ObCompositeData> &get_com_datas() { return com_datas_; }
 private:
   common::ObSEArray<bool, 8> in_out_map_;
-  const char * proc_;
+  ObString proc_;
   int64_t out_param_start_pos_; // composite type out param_start position
   int64_t out_param_cur_pos_;  // composite type out param current position
   int64_t basic_param_start_pos_;

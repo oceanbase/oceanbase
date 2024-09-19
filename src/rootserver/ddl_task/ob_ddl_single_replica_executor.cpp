@@ -166,11 +166,19 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       arg.snapshot_version_ = snapshot_version_;
       arg.ddl_type_ = type_;
       arg.task_id_ = task_id_;
-      arg.parallelism_ = parallelism_;
       arg.execution_id_ = execution_id_;
       arg.data_format_version_ = data_format_version_;
       arg.tablet_task_id_ = request_tablet_task_ids.at(i);
       arg.consumer_group_id_ = consumer_group_id_;
+      /** handle OB_SESSION_NOT_FOUND(-4067) may lead to infinite retry of table recovery task.
+        * Due to the number limit(100) of blocked thread stream rpc receiver
+        * reduce table recovery retry parallelism. */
+      const ObPartitionBuildInfo &build_info = build_infos.at(idxs.at(i));
+      if (ObDDLType::DDL_TABLE_RESTORE == type_ && build_infos.at(i).sess_not_found_times_ > 0) {
+        arg.parallelism_ = MAX(1, parallelism_ >> build_infos.at(i).sess_not_found_times_);
+      } else {
+        arg.parallelism_ = parallelism_;
+      }
       if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
               expire_renew_time, is_cache_hit, orig_ls_id))) {
         LOG_WARN("get ls failed", K(ret), K(arg.source_tablet_id_));
@@ -315,6 +323,9 @@ int ObDDLSingleReplicaExecutor::set_partition_task_status(const common::ObTablet
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_RETRY;
           build_infos.at(i).row_inserted_ = 0;
           build_infos.at(i).row_scanned_ = 0;
+          if (ret_code == common::OB_SESSION_NOT_FOUND) {
+            build_infos.at(i).sess_not_found_times_++;
+          }
         } else {
           build_infos.at(i).ret_code_ = ret_code;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_FAILED;

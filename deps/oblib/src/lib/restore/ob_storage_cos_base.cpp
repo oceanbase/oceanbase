@@ -28,12 +28,14 @@ using namespace oceanbase::common;
 /*--------------------------------GLOBAL---------------------------*/
 int init_cos_env()
 {
-  ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+  int ret = OB_SUCCESS;
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "COS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
   return qcloud_cos::ObCosEnv::get_instance().init(ob_apr_abort_fn);
 }
 
 void fin_cos_env()
 {
+  int ret = OB_SUCCESS;
   // wait doing io finish before destroy cos env.
   const int64_t start_time = ObTimeUtility::current_time();
   const int64_t timeout = ObExternalIOCounter::FLYING_IO_WAIT_TIMEOUT;
@@ -48,7 +50,7 @@ void fin_cos_env()
     flying_io_cnt = ObExternalIOCounter::get_flying_io_cnt();
   }
 
-   ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "COS_GLOBAL_DESTROY", IO_HANDLED_SIZE_ZERO);
   qcloud_cos::ObCosEnv::get_instance().destroy();
 }
 
@@ -798,9 +800,8 @@ int ObStorageCosReader::pread(
     // To maintain thread safety, a new temporary cos_handle should be created for each individual
     // pread operation rather than reusing the same handle. This approach ensures that memory
     // allocation is safely performed without conflicts across concurrent operations.
-  } else if (OB_FAIL(create_cos_handle(
-      allocator, handle_.get_cos_account(),
-      checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO, tmp_cos_handle))) {
+  } else if (OB_FAIL(handle_.create_cos_handle(
+      allocator, checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO, tmp_cos_handle))) {
     OB_LOG(WARN, "fail to create tmp cos handle", K(ret), K_(checksum_type));
   } else {
     // When is_range_read is true, it indicates that only a part of the data is read.

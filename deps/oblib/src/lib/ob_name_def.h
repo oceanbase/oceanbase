@@ -662,6 +662,9 @@
 #define N_GET_SUBPROGRAM_VAR "get_subprogram_var"
 #define N_SHADOW_UK_PROJECTOR "shadow_uk_project"
 #define N_RANDOM_BYTES "random_bytes"
+#define N_SM3 "sm3"
+#define N_SM4_ENCRYPT "sm4_encrypt"
+#define N_SM4_DECRYPT "sm4_decrypt"
 //use capital as 'default now()' flag
 #define N_UPPERCASE_CUR_TIMESTAMP "CURRENT_TIMESTAMP"
 #define N_UPDATE_CURRENT_TIMESTAMP "ON UPDATE CURRENT_TIMESTAMP"
@@ -1090,6 +1093,14 @@
 #define N_PRIV_ST_EQUALS                    "st_equals"
 #define N_PRIV_ST_TOUCHES                   "_st_touches"
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
+
+// for lock function
+#define N_GET_LOCK                          "get_lock"
+#define N_IS_FREE_LOCK                      "is_free_lock"
+#define N_IS_USED_LOCK                      "is_used_lock"
+#define N_RELEASE_LOCK                      "release_lock"
+#define N_RELEASE_ALL_LOCKS                 "release_all_locks"
+
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
 #define N_INNER_DOUBLE_TO_INT               "inner_double_to_int"

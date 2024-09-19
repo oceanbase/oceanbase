@@ -82,18 +82,25 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
     ret = OB_NOT_INIT;
   } else {
     ObIODFileStat statbuf;
-    int temp_ret = device_handle_->stat(to_cstring(url), statbuf);
-    if (OB_SUCCESS != temp_ret) {
-      file_size = -1;
-      if (OB_BACKUP_FILE_NOT_EXIST == temp_ret
-          || OB_IO_ERROR == temp_ret) {
-        file_size = -1;
-      } else {
-        ret = temp_ret;
-      }
-      LOG_WARN("fail to get file length", K(temp_ret), K(url));
+    ObCStringHelper helper;
+    const char *url_str = helper.convert(url);
+    if (OB_ISNULL(url_str)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to convert url", K(ret), K(url));
     } else {
-      file_size = statbuf.size_;
+      int temp_ret = device_handle_->stat(url_str, statbuf);
+      if (OB_SUCCESS != temp_ret) {
+        file_size = -1;
+        if (OB_BACKUP_FILE_NOT_EXIST == temp_ret
+            || OB_IO_ERROR == temp_ret) {
+          file_size = -1;
+        } else {
+          ret = temp_ret;
+        }
+        LOG_WARN("fail to get file length", K(temp_ret), K(url));
+      } else {
+        file_size = statbuf.size_;
+      }
     }
   }
   return ret;
@@ -133,21 +140,28 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     LOG_WARN("ObExternalDataAccessDriver not init", K(ret));
   } else if (get_storage_type() == OB_STORAGE_OSS
              || get_storage_type() == OB_STORAGE_COS) {
-    ObSEArray<ObString, 16> temp_file_urls;
-    ObFileListArrayOp file_op(temp_file_urls, allocator);
-    if (OB_FAIL(device_handle_->scan_dir(to_cstring(path), file_op))) {
-      LOG_WARN("scan dir failed", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < temp_file_urls.count(); i++) {
-      if (temp_file_urls.at(i).length() <= 0) {
-        //do nothing
-      } else if ( '/' == *(temp_file_urls.at(i).ptr() + temp_file_urls.at(i).length() - 1)) {
-        //is direcotry
-      } else {
-        OZ (file_urls.push_back(temp_file_urls.at(i)));
+    ObCStringHelper helper;
+    const char *path_str = helper.convert(path);
+    if (OB_ISNULL(path_str)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to convert path", K(ret), K(path));
+    } else {
+      ObSEArray<ObString, 16> temp_file_urls;
+      ObFileListArrayOp file_op(temp_file_urls, allocator);
+      if (OB_FAIL(device_handle_->scan_dir(path_str, file_op))) {
+        LOG_WARN("scan dir failed", K(ret));
       }
+      for (int64_t i = 0; OB_SUCC(ret) && i < temp_file_urls.count(); i++) {
+        if (temp_file_urls.at(i).length() <= 0) {
+          //do nothing
+        } else if ( '/' == *(temp_file_urls.at(i).ptr() + temp_file_urls.at(i).length() - 1)) {
+          //is direcotry
+        } else {
+          OZ (file_urls.push_back(temp_file_urls.at(i)));
+        }
+      }
+      LOG_DEBUG("show oss files", K(file_urls), K(file_dirs));
     }
-    LOG_DEBUG("show oss files", K(file_urls), K(file_dirs));
   } else if (get_storage_type() == OB_STORAGE_FILE) {
     ObSEArray<ObString, 4> file_dirs;
     bool is_dir = false;
@@ -155,42 +169,56 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     path_without_prifix = path;
     path_without_prifix += strlen(OB_FILE_PREFIX);
 
-    OZ (FileDirectoryUtils::is_directory(to_cstring(path_without_prifix), is_dir));
-    if (!is_dir) {
-      LOG_WARN("external location is not a directory", K(path_without_prifix));
+    ObCStringHelper helper;
+    const char *path_without_prifix_str = helper.convert(path_without_prifix);
+    if (OB_ISNULL(path_without_prifix_str)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to convert path_without_prifix", K(ret), K(path_without_prifix));
     } else {
-      OZ (file_dirs.push_back(path));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
-      ObString file_dir = file_dirs.at(i);
-      ObFullPathArrayOp dir_op(file_dirs, file_dir, allocator);
-      ObFullPathArrayOp file_op(file_urls, file_dir, allocator);
-      dir_op.set_dir_flag();
-      if (file_dir.case_compare(".") == 0
-          || file_dir.case_compare("..") == 0) {
-        //do nothing
-      } else if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dir), file_op))) {
-        LOG_WARN("scan dir failed", K(ret));
-      } else if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dir), dir_op))) {
-        LOG_WARN("scan dir failed", K(ret));
-      } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("too many files and dirs to visit", K(ret));
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
-      if (file_urls.at(i).length() <= path.length()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid file url", K(ret), K(path), K(file_urls.at(i)));
+      OZ (FileDirectoryUtils::is_directory(path_without_prifix_str, is_dir));
+      if (!is_dir) {
+        LOG_WARN("external location is not a directory", K(path_without_prifix));
       } else {
-        file_urls.at(i) += path.length();
-        if (OB_LIKELY(file_urls.at(i).length() > 0)) {
-          if (OB_NOT_NULL(file_urls.at(i).ptr()) && *file_urls.at(i).ptr() == '/') {
-            file_urls.at(i) += 1;
-          }
+        OZ (file_dirs.push_back(path));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
+        ObString file_dir = file_dirs.at(i);
+        ObFullPathArrayOp dir_op(file_dirs, file_dir, allocator);
+        ObFullPathArrayOp file_op(file_urls, file_dir, allocator);
+        dir_op.set_dir_flag();
+        if (file_dir.case_compare(".") == 0
+            || file_dir.case_compare("..") == 0) {
+          //do nothing
         } else {
+          ObCStringHelper helper;
+          const char *file_dir_str = helper.convert(file_dir);
+          if (OB_ISNULL(file_dir_str)) {
+            ret = OB_ERR_NULL_VALUE;
+            LOG_WARN("fail to convert file_dir", K(ret), K(file_dir_str));
+          } else if (OB_FAIL(device_handle_->scan_dir(file_dir_str, file_op))) {
+            LOG_WARN("scan dir failed", K(ret));
+          } else if (OB_FAIL(device_handle_->scan_dir(file_dir_str, dir_op))) {
+            LOG_WARN("scan dir failed", K(ret));
+          } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("too many files and dirs to visit", K(ret));
+          }
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
+        if (file_urls.at(i).length() <= path.length()) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("file name length is invalid", K(ret));
+          LOG_WARN("invalid file url", K(ret), K(path), K(file_urls.at(i)));
+        } else {
+          file_urls.at(i) += path.length();
+          if (OB_LIKELY(file_urls.at(i).length() > 0)) {
+            if (OB_NOT_NULL(file_urls.at(i).ptr()) && *file_urls.at(i).ptr() == '/') {
+              file_urls.at(i) += 1;
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("file name length is invalid", K(ret));
+          }
         }
       }
     }

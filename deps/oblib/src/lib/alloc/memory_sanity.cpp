@@ -377,8 +377,6 @@ VMMgr *g_vm_mgr = NULL;
 
 bool init_sanity()
 {
-  static VMMgr vm_mgr;
-  g_vm_mgr = &vm_mgr;
   set_ob_mem_mgr_path();
   DEFER(unset_ob_mem_mgr_path(););
   bool succ = false;
@@ -417,7 +415,7 @@ bool init_sanity()
                                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
     LOG_WARN_RET(OB_ERR_SYS, "reserve region failed", K(errno));
   } else if (MAP_FAILED == mmap(shadow_ptr, shadow_size,
-                                PROT_READ | PROT_WRITE,
+                                PROT_NONE,
                                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
     LOG_WARN_RET(OB_ERR_SYS, "reserve shadow region failed", K(errno));
   } else if (-1 == do_madvise(ptr, size, MADV_DONTDUMP)) {
@@ -428,6 +426,8 @@ bool init_sanity()
     sanity_max_addr = max;
     sanity_min_addr = min;
     global_addr = sanity_min_addr;
+    static VMMgr vm_mgr;
+    g_vm_mgr = &vm_mgr;
     succ = true;
   }
   return succ;

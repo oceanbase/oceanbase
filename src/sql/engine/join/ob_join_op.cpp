@@ -27,7 +27,7 @@ int ObJoinOp::inner_rescan()
 {
   output_row_produced_ = false;
   left_row_joined_ = false;
-  return ObOperator::inner_rescan();
+  return ObByPassOperator::inner_rescan();
 }
 
 int ObJoinOp::blank_row(const ExprFixedArray &exprs)

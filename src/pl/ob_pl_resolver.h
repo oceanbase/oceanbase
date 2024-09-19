@@ -34,34 +34,6 @@
   } while(0);
 #endif
 
-#ifdef NDEBUG
-#ifndef SET_LOG_CHECK_MODE
-#define SET_LOG_CHECK_MODE()                        \
-  bool set_check_mode = false;                      \
-  if (!IS_OB_LOG_TRACE_MODE()) {                    \
-    SET_OB_LOG_TRACE_MODE();                        \
-    set_check_mode = true;                          \
-  }
-#endif // SET_LOG_CHECK_MODE
-
-#ifndef CANCLE_LOG_CHECK_MODE
-#define CANCLE_LOG_CHECK_MODE()                     \
-  if (set_check_mode) {                             \
-    if (OB_FAIL(ret)) {                             \
-      if (OB_LOG_NEED_TO_PRINT(DEBUG)) {            \
-        PRINT_OB_LOG_TRACE_BUF(PL, DEBUG);          \
-      } else {                                      \
-        PRINT_OB_LOG_TRACE_BUF(PL, INFO);           \
-      }                                             \
-    }                                               \
-    CANCLE_OB_LOG_TRACE_MODE();                     \
-  }
-#endif // CANCLE_LOG_CHECK_MODE
-#else
-#define SET_LOG_CHECK_MODE()
-#define CANCLE_LOG_CHECK_MODE()
-#endif
-
 namespace oceanbase {
 using sql::ObObjAccessIdent;
 using sql::ObRawExprFactory;

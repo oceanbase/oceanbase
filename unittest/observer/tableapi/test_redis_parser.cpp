@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "src/share/table/ob_redis_parser.h"
+#include "src/share/table/redis/ob_redis_parser.h"
 #include "src/share/ob_errno.h"
 
 using namespace oceanbase::common;

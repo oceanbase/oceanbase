@@ -169,7 +169,8 @@ int ObDupTableLogDumpIterator::iter_stat_log_(const int64_t deser_buf_len, int64
     DUP_TABLE_LOG(WARN, "invalid ObAdminMutatorStringArg", K(ret), KPC(this));
   } else {
     str_arg_->writer_ptr_->dump_key("##<STAT_LOG>");
-    str_arg_->writer_ptr_->dump_string(to_cstring(stat_log_));
+    ObCStringHelper helper;
+    str_arg_->writer_ptr_->dump_string(helper.convert(stat_log_));
   }
 
   if (OB_SUCC(ret)) {
@@ -203,16 +204,19 @@ int ObDupTableLogDumpIterator::iter_tablet_log_(const int64_t deser_buf_len, int
         str_arg_->writer_ptr_->start_object();
 
         str_arg_->writer_ptr_->dump_key("#(TabletSetAttribute)");
-        str_arg_->writer_ptr_->dump_string(to_cstring(dup_tablet_map_.get_RO_attribute()));
+        ObCStringHelper helper;
+        str_arg_->writer_ptr_->dump_string(helper.convert(dup_tablet_map_.get_RO_attribute()));
         str_arg_->writer_ptr_->dump_key("#(RelatedTabletSetAttribute)");
-        str_arg_->writer_ptr_->dump_string(to_cstring(dup_tablet_map_.get_RO_related_attribute()));
+        str_arg_->writer_ptr_->dump_string(helper.convert(
+            dup_tablet_map_.get_RO_related_attribute()));
         str_arg_->writer_ptr_->dump_key("#(TabletCount)");
-        str_arg_->writer_ptr_->dump_string(to_cstring(dup_tablet_map_.size()));
+        str_arg_->writer_ptr_->dump_string(helper.convert(dup_tablet_map_.size()));
         str_arg_->writer_ptr_->dump_key("#(TabletIdList)");
         str_arg_->writer_ptr_->start_object();
         for (DupTabletChangeMap::const_iterator iter = dup_tablet_map_.begin();
              iter != dup_tablet_map_.end(); iter++) {
-          str_arg_->writer_ptr_->dump_string(to_cstring(iter->first));
+          helper.reset();
+          str_arg_->writer_ptr_->dump_string(helper.convert(iter->first));
         }
         str_arg_->writer_ptr_->end_object();
 
@@ -256,9 +260,11 @@ int ObDupTableLogDumpIterator::iter_lease_log_(const int64_t deser_buf_len, int6
         } else {
           str_arg_->writer_ptr_->start_object();
           str_arg_->writer_ptr_->dump_key("#(LeaseKey)");
-          str_arg_->writer_ptr_->dump_string(to_cstring(lease_log_header));
+          ObCStringHelper helper;
+          str_arg_->writer_ptr_->dump_string(helper.convert(lease_log_header));
           str_arg_->writer_ptr_->dump_key("#(ConfirmedLeaseInfo)");
-          str_arg_->writer_ptr_->dump_string(to_cstring(leader_lease_info.confirmed_lease_info_));
+          str_arg_->writer_ptr_->dump_string(
+              helper.convert(leader_lease_info.confirmed_lease_info_));
           str_arg_->writer_ptr_->end_object();
         }
       }

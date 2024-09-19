@@ -76,6 +76,22 @@ void ObRangeNode::set_always_true()
   }
 }
 
+void ObRangeNode::set_always_false()
+{
+  flags_ = 0;
+  always_false_ = true;
+  min_offset_ = -1;
+  max_offset_ = -1;
+  in_param_count_ = 0;
+  node_id_ = -1;
+  or_next_ = nullptr;
+  and_next_ = nullptr;
+  for (int64_t i = 0; i < column_cnt_; ++i) {
+    start_keys_[i] = OB_RANGE_MAX_VALUE;
+    end_keys_[i] = OB_RANGE_MIN_VALUE;
+  }
+}
+
 OB_DEF_SERIALIZE(ObRangeNode)
 {
   int ret = OB_SUCCESS;
@@ -324,10 +340,11 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const ColumnIdInfoMap *geo_column_id_map)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
+  if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_)
+      || OB_ISNULL(query_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
       OB_UNLIKELY(range_columns.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected param", K(pre_range_graph), K(exec_ctx_));
+    LOG_WARN("get unexpected param", K(pre_range_graph), K(exec_ctx_), K(query_ctx_));
   } else if (OB_FAIL(column_metas_.assign(pre_range_graph->get_column_metas()))) {
     LOG_WARN("failed to assign column meta");
   } else if (OB_FAIL(column_flags_.prepare_allocate(pre_range_graph->get_column_metas().count()))) {
@@ -335,6 +352,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
   } else if (OB_FAIL(exec_ctx_->get_my_session()->
              is_enable_range_extraction_for_not_in(enable_not_in_range_))) {
     LOG_WARN("failed to check not in range enabled", K(ret));
+  } else if (OB_FAIL(query_ctx_->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::ENABLE_RANGE_EXTRACTION_FOR_NOT_IN, enable_not_in_range_))) {
+    LOG_WARN("fail to check opt param not in range enabled", K(ret));
   } else if (OB_FAIL(exec_ctx_->get_my_session()->
              get_optimizer_features_enable_version(optimizer_features_enable_version_))) {
     LOG_WARN("failed to get optimizer features enable version", K(ret));
@@ -417,6 +436,19 @@ int ObPreRangeGraph::deep_copy(const ObPreRangeGraph &other)
     LOG_WARN("failed to deep copy column metas");
   } else if (OB_FAIL(deep_copy_range_map(other.range_map_))) {
     LOG_WARN("failed to deep copy range map");
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::replace_exprs(ObRawExprCopier &expr_copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr_copier.copy_on_replace(range_exprs_, range_exprs_))) {
+    LOG_WARN("copy on replace failed", K(ret));
+  } else if (OB_FAIL(expr_copier.copy_on_replace(ss_range_exprs_, ss_range_exprs_))) {
+    LOG_WARN("copy on replace failed", K(ret));
+  } else if (OB_FAIL(expr_copier.copy_on_replace(unprecise_range_exprs_, unprecise_range_exprs_))) {
+    LOG_WARN("copy on replace failed", K(ret));
   }
   return ret;
 }
@@ -584,6 +616,7 @@ int ObPreRangeGraph::deep_copy_range_map(const ObRangeMap &src_range_map)
 int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> &range_columns,
                                                      const ObIArray<ObRawExpr*> &root_exprs,
                                                      ObExecContext *exec_ctx,
+                                                     ObQueryCtx *query_ctx,
                                                      ExprConstrantArray *expr_constraints,
                                                      const ParamStore *params,
                                                      const bool phy_rowid_for_table_loc,
@@ -593,7 +626,7 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory expr_factory(allocator_);
-  ObQueryRangeCtx ctx(exec_ctx);
+  ObQueryRangeCtx ctx(exec_ctx, query_ctx);
   if (OB_FAIL(fill_column_metas(range_columns))) {
     LOG_WARN("failed to fill column metas");
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
@@ -1052,7 +1085,10 @@ DEF_TO_STRING(ObPreRangeGraph)
          K_(is_equal_range),
          K_(is_precise_get),
          K_(is_standard_range),
-         K_(contain_exec_param));
+         K_(contain_exec_param),
+         K_(range_exprs),
+         K_(ss_range_exprs),
+         K_(unprecise_range_exprs));
     J_COMMA();
     J_NAME(N_RANGE_GRAPH);
     J_COLON();

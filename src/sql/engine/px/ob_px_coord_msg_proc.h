@@ -37,6 +37,8 @@ class ObReportingWFPieceMsg;
 class ObReportingWFWholeMsg;
 class ObOptStatsGatherPieceMsg;
 class ObOptStatsGatherWholeMsg;
+class ObStatisticsCollectorPieceMsg;
+class ObStatisticsCollectorWholeMsg;
 // 抽象出本接口类的目的是为了 MsgProc 和 ObPxCoord 解耦
 class ObIPxCoordMsgProc
 {
@@ -55,6 +57,7 @@ public:
   virtual int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt) = 0;
   virtual int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt) = 0;
   virtual int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObStatisticsCollectorPieceMsg &pkt) = 0;
 };
 
 class ObIPxSubCoordMsgProc
@@ -84,6 +87,8 @@ public:
       const ObReportingWFWholeMsg &pkt) const = 0;
   virtual int on_whole_msg(
       const ObOptStatsGatherWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObStatisticsCollectorWholeMsg &pkt) const = 0;
   // SQC 被中断
   virtual int on_interrupted(const ObInterruptCode &ic) const = 0;
 };
@@ -120,6 +125,8 @@ public:
       const ObReportingWFWholeMsg &pkt) const;
   virtual int on_whole_msg(
       const ObOptStatsGatherWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObStatisticsCollectorWholeMsg &pkt) const;
 private:
   ObSqcCtx &sqc_ctx_;
 };

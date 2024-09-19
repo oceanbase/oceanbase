@@ -225,7 +225,7 @@ public:
       clear_ttl_history_task_(),
       tenant_id_(OB_INVALID_TENANT_ID),
       task_schedulers_(),
-      tg_id_(0)
+      tg_id_(-1)
   {}
 
   virtual ~ObTenantTTLManager() {}

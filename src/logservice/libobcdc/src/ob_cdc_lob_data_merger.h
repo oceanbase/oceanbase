@@ -76,6 +76,9 @@ private:
   int push_task_(
       ObLobDataOutRowCtxList &task,
       volatile bool &stop_flag);
+  int get_lob_data_out_row_ctx_(
+      ObLobDataGetCtx &lob_data_get_ctx,
+      const ObLobDataOutRowCtx *&lob_data_out_row_ctx);
   int push_lob_column_(
       ObIAllocator &allocator,
       ObLobDataOutRowCtxList &task,

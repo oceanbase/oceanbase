@@ -165,7 +165,7 @@ private:
    * 4. 无聚集函数（select item中）
    * 5. 非常量select item列，全部包含在group exprs中
    */
-  int groupby_can_be_eliminated_in_any_all(const ObSelectStmt *stmt, bool &can_be_eliminated) const;
+  int eliminate_groupby_in_any_all(ObSelectStmt *stmt, bool &trans_happened);
 
   int eliminate_subquery_in_exists(ObDMLStmt *stmt,
                                    ObRawExpr *&expr,
@@ -181,7 +181,6 @@ private:
                                   ObSelectStmt *&subquery,
                                   bool &trans_happened);
   int eliminate_groupby_distinct_in_any_all(ObRawExpr *expr, bool &trans_happened);
-  int eliminate_groupby_in_any_all(ObSelectStmt *&stmt, bool &trans_happened);
   int eliminate_distinct_in_any_all(ObSelectStmt *subquery,bool &trans_happened);
   int check_need_add_limit(ObSelectStmt *subquery, bool &need_add_limit);
   int check_limit(const ObItemType op_type,

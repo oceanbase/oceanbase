@@ -32,6 +32,7 @@ namespace oceanbase
 namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
+  class ObDiagnosticInfoContainer;
   template<typename T> class ObServerObjectPool;
   class ObDetectManager;
   class ObOptStatMonitorManager;
@@ -248,6 +249,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      common::ObDiagnosticInfoContainer*,            \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
       storage::ObTenantMetaMemMgr*,                  \

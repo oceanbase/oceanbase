@@ -132,6 +132,7 @@ int ObLockMemtable::lock_(
   ObLockStep succ_step = STEP_BEGIN;
   bool register_to_deadlock = false;
   ObTxIDSet conflict_tx_set;
+  const bool is_two_phase_lock = param.is_two_phase_lock_;
 
   // 1. record lock myself(check conflict).
   // 2. record lock at memtable ctx.
@@ -212,9 +213,19 @@ int ObLockMemtable::lock_(
             }
           }
         }
-      } else if (OB_SUCCESS == ret) {
+      } else if (OB_SUCCESS == ret || OB_OBJ_LOCK_EXIST == ret) {
         // lock successfully, reset lock_wait_start_ts
         ctx.mvcc_acc_ctx_.set_lock_wait_start_ts(0);
+        if (is_two_phase_lock) {
+          // NOTE that if lock exists from check_lock_exist, lock of objlockmap is not called
+          // in this case, we need remove info from priority queue actively
+          const ObTableLockPrioArg arg(param.lock_priority_);
+          if (OB_FAIL(obj_lock_map_.remove_priority_task(arg, lock_op))) {
+            LOG_WARN("remove priority task failed", K(ret), K(lock_op));
+          } else if (OB_FAIL(mem_ctx->remove_priority_record(lock_op))) {
+            LOG_WARN("remove priority record failed", K(ret), K(lock_op));
+          }
+        }
       }
 
       if (ObClockGenerator::getClock() >= param.expired_time_) {
@@ -988,7 +999,7 @@ int ObLockMemtable::replay_row(
   int ret = OB_SUCCESS;
 
   ObLockID lock_id;
-  ObTableLockOwnerID owner_id(0);
+  ObTableLockOwnerID owner_id;
   ObTableLockMode lock_mode = NO_LOCK;
   ObTableLockOpType lock_op_type = ObTableLockOpType::UNKNOWN_TYPE;
   transaction::ObTxSEQ seq_no;
@@ -1128,6 +1139,123 @@ int ObLockMemtable::check_and_set_tx_lock_timeout_(const ObMvccAccessCtx &acc_ct
       LOG_WARN(
         "exclusive lock conflict", K(ret), K(acc_ctx), K(lock_wait_start_ts), K(lock_wait_expire_ts), K(current_ts));
     }
+  }
+  return ret;
+}
+
+int ObLockMemtable::add_priority_task(
+    const ObLockParam &param,
+    ObStoreCtx &ctx,
+    ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  ObMemtableCtx *mem_ctx = NULL;
+  LOG_DEBUG("ObLockMemtable::add_priority_task", K(lock_op));
+  Thread::WaitGuard wait_guard(Thread::WAIT);
+  ObMvccWriteGuard write_guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockMemtable not inited", K(ret));
+  } else if (OB_UNLIKELY(!ctx.is_valid())
+             || OB_UNLIKELY(!ctx.is_write())
+             || OB_UNLIKELY(!lock_op.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(lock_op), K(ctx));
+  } else if (OB_FAIL(write_guard.write_auth(ctx))) {
+    LOG_WARN("not allow lock table", K(ret), K(ctx));
+  } else {
+    mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_);
+    if (NULL == mem_ctx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected mem_ctx", K(ret), K(ctx));
+    } else {
+      // TODO, check whether the task can be added
+      // serialize multiple writer-thread add row exclusive lock
+      ObLockMemCtx::AddLockGuard guard(mem_ctx->get_lock_mem_ctx());
+      const ObTableLockPrioArg arg(param.lock_priority_);
+      if (OB_FAIL(guard.ret())) {
+        LOG_WARN("failed to acquire lock on lock_mem_ctx", K(ret), K(ctx));
+      } else if (OB_FAIL(obj_lock_map_.add_priority_task(param, ctx, lock_op))) {
+        if (OB_ENTRY_EXIST == ret) {
+          LOG_INFO("duplicate priority task", K(ret), K(param), K(lock_op));
+          // rewrite ret
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("add priority task failed", K(ret), K(param), K(lock_op));
+        }
+      } else if (OB_FAIL(mem_ctx->add_priority_record(arg, lock_op))) {
+        LOG_WARN("add priority record failed", K(ret), K(param), K(lock_op));
+        // if fail, need remove priority task from obj_lock
+        if (OB_FAIL(obj_lock_map_.remove_priority_task(arg, lock_op))) {
+          LOG_WARN("remove priority task failed", K(ret), K(arg), K(lock_op));
+        }
+      }
+    }
+  }
+  LOG_DEBUG("ObLockMemtable::add_priority_task finish", K(ret), K(lock_op));
+  return ret;
+}
+
+int ObLockMemtable::prepare_priority_task(
+    const ObTableLockPrioArg &arg,
+    const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("ObLockMemtable::prepare_priority_task", K(lock_op));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockMemtable not inited");
+  } else if (OB_UNLIKELY(!lock_op.is_valid())
+      || OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg), K(lock_op));
+  } else {
+    obj_lock_map_.prepare_priority_task(arg, lock_op);
+  }
+  LOG_DEBUG("ObLockMemtable::prepare_priority_task finish", K(ret), K(lock_op));
+  return ret;
+}
+
+int ObLockMemtable::remove_priority_task(
+    const ObTableLockPrioArg &arg,
+    const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("ObLockMemtable::remove_priority_task", K(lock_op));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockMemtable not inited");
+  } else if (OB_UNLIKELY(!lock_op.is_valid())
+      || OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg), K(lock_op));
+  } else if (OB_FAIL(obj_lock_map_.remove_priority_task(arg, lock_op))) {
+    LOG_WARN("remove priority task failed", K(ret), K(arg), K(lock_op));
+  }
+  LOG_DEBUG("ObLockMemtable::remove_priority_task finish", K(ret), K(lock_op));
+  return ret;
+}
+
+int ObLockMemtable::switch_to_leader()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockMemtable not inited");
+  } else {
+    obj_lock_map_.switch_to_leader();
+  }
+  return ret;
+}
+
+int ObLockMemtable::switch_to_follower()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockMemtable not inited");
+  } else {
+    obj_lock_map_.switch_to_follower();
   }
   return ret;
 }

@@ -24,6 +24,7 @@
 #include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/ob_mysql_result_set.h"
 #include "sql/session/ob_sess_info_verify.h"
+#include "observer/mysql/ob_feedback_proxy_utils.h"
 
 namespace oceanbase
 {
@@ -317,6 +318,17 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
     }
   }
 
+  // ObProxy only handles extra_info in EOF or OK packet, so we
+  // only feedback proxy_info when respond EOF or OK pacekt here
+  if (OB_FAIL(ret)) {
+  } else if (proto20_context_.is_proto20_used_ && conn_->proxy_cap_flags_.is_feedback_proxy_info_support()
+             && (pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_EOF
+                 || pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_OKP)
+             && OB_FAIL(ObFeedbackProxyUtils::append_feedback_proxy_info(
+               session->get_extra_info_alloc(), &extra_info_ecds_, *session))) {
+    LOG_WARN("failed to add feedback_proxy_info", K(ret));
+  }
+
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(ObSessInfoVerify::sess_veri_control(pkt, session))) {
     // do nothing.
@@ -372,6 +384,7 @@ int ObMPPacketSender::send_error_packet(int err,
   if (OB_SUCCESS == err || (OB_ERR_PROXY_REROUTE == err && OB_ISNULL(extra_err_info))) {
     // @BUG work around
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("error code is incorrect", K(err));
   } else if (!conn_valid_ || OB_ISNULL(conn_)) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret), KP(conn_));
@@ -444,6 +457,7 @@ int ObMPPacketSender::send_error_packet(int err,
 
       char tmp_msg_buf[MAX_MSG_BUF_SIZE];
       strncpy(tmp_msg_buf, message.ptr(), message.length()); // msg_buf is overwriten
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       msg_buf_size = snprintf(msg_buf, MAX_MSG_BUF_SIZE,
                            "%.*s\n"
                            "[%s] "
@@ -453,7 +467,7 @@ int ObMPPacketSender::send_error_packet(int err,
                            addr_buf,
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                            tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec,
-                              ObCurTraceId::get_trace_id_str());
+                              ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)));
       (void) msg_buf_size; // make compiler happy
       message = ObString::make_string(msg_buf); // default error message
     }

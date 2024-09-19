@@ -102,18 +102,20 @@ int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_len));
   } else {
-    int n = snprintf(buf, buf_len,
-        "ls migration : task_id = %s, tenant_id = %s, ls_id = %s, op_type = %s, src = %s, dest = %s",
-        to_cstring(task_id_),
-        to_cstring(tenant_id_),
-        to_cstring(arg_.ls_id_),
-        ObMigrationOpType::get_str(arg_.type_),
-        to_cstring(arg_.data_src_.get_server()),
-        to_cstring(arg_.dst_.get_server()));
-    if (n < 0 || n >= buf_len) {
-      ret = OB_BUF_NOT_ENOUGH;
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ls migration : task_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, task_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", tenant_id = %lu, ls_id = ", tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", op_type = %s, src = ", ObMigrationOpType::get_str(arg_.type_));
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.data_src_.get_server());
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", dest = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.dst_.get_server());
+    if (OB_FAIL(ret)) {
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
-        STORAGE_LOG(WARN, "buf not enough, comment is truncated", K(ret), K(n), K(buf));
+        STORAGE_LOG(WARN, "buf not enough, comment is truncated", K(ret), K(pos), K(buf));
       }
     }
   }
@@ -388,10 +390,15 @@ int ObMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) const
     LOG_WARN("log stream migration dag net do not init ", K(ret));
   } else if (OB_FAIL(ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-          "ObLSMigrationDagNet: tenant_id=%s, ls_id=%s, migration_type=%d, trace_id=%s",
-          to_cstring(ctx_->tenant_id_), to_cstring(ctx_->arg_.ls_id_), ctx_->arg_.type_, task_id_str))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObLSMigrationDagNet: tenant_id=%lu, ls_id=", ctx_->tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type=%d, trace_id=%s", ctx_->arg_.type_, task_id_str);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+    }
   }
   return ret;
 }
@@ -402,10 +409,15 @@ int ObMigrationDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("migration dag net do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObLSMigrationDagNet: ls_id = %s, migration_type = %s",
-      to_cstring(ctx_->arg_.ls_id_), ObMigrationOpType::get_str(ctx_->arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObLSMigrationDagNet: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx_->arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+    }
   }
   return ret;
 }
@@ -474,13 +486,16 @@ int ObMigrationDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, O
   if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration dag migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 static_cast<int64_t>(ctx->tenant_id_), ctx->arg_.ls_id_.id(),
                                 static_cast<int64_t>(ctx->arg_.type_),
-                                "dag_net_task_id", to_cstring(ctx->task_id_),
-                                "src", to_cstring(ctx->arg_.src_.get_server()),
-                                "dest", to_cstring(ctx->arg_.dst_.get_server())))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                "dag_net_task_id", helper.convert(ctx->task_id_),
+                                "src", helper.convert(ctx->arg_.src_.get_server()),
+                                "dest", helper.convert(ctx->arg_.dst_.get_server())))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -548,10 +563,15 @@ int ObInitialMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inital migration dag migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObInitialMigrationDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObInitialMigrationDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx->arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -844,10 +864,15 @@ int ObStartMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObStartMigrationDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObStartMigrationDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx->arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -1742,10 +1767,15 @@ int ObSysTabletsMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) con
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObSysTabletsMigrationDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObSysTabletsMigrationDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx->arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -2099,11 +2129,17 @@ int ObTabletMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletMigrationDag: log_stream_id = %s, tablet_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), to_cstring(copy_tablet_ctx_.tablet_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx), K(copy_tablet_ctx_));
-
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletMigrationDag: log_stream_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, copy_tablet_ctx_.tablet_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx->arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx), K(copy_tablet_ctx_));
+    }
   }
   return ret;
 }
@@ -2184,14 +2220,17 @@ int ObTabletMigrationDag::fill_info_param(compaction::ObIBasicInfoParam *&out_pa
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Tablet migration dag migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 static_cast<int64_t>(ctx->tenant_id_), ctx->arg_.ls_id_.id(),
                                 static_cast<int64_t>(copy_tablet_ctx_.tablet_id_.id()),
                                 static_cast<int64_t>(ctx->arg_.type_),
-                                "dag_net_task_id", to_cstring(ctx->task_id_),
-                                "src", to_cstring(ctx->arg_.src_.get_server()),
-                                "dest", to_cstring(ctx->arg_.dst_.get_server())))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                "dag_net_task_id", helper.convert(ctx->task_id_),
+                                "src", helper.convert(ctx->arg_.src_.get_server()),
+                                "dest", helper.convert(ctx->arg_.dst_.get_server())))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -3235,10 +3274,15 @@ int ObDataTabletsMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) co
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObDataTabletsMigrationDag: log_stream_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObDataTabletsMigrationDag: log_stream_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx->arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -3915,11 +3959,16 @@ int ObTabletGroupMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) co
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletGroupMigrationDag: log_stream_id = %s, migration_type = %s, first_tablet_id = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
-       to_cstring(tablet_id_array_.at(0))))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletGroupMigrationDag: log_stream_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s, first_tablet_id = ", ObMigrationOpType::get_str(ctx->arg_.type_));
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, tablet_id_array_.at(0));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -4061,14 +4110,17 @@ int ObTabletGroupMigrationDag::fill_info_param(compaction::ObIBasicInfoParam *&o
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group migration dag migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 static_cast<int64_t>(ctx->tenant_id_), ctx->arg_.ls_id_.id(),
                                 static_cast<int64_t>(tablet_id_array_.at(0).tablet_id_.id()),
                                 static_cast<int64_t>(ctx->arg_.type_),
-                                "dag_net_task_id", to_cstring(ctx->task_id_),
-                                "src", to_cstring(ctx->arg_.src_.get_server()),
-                                "dest", to_cstring(ctx->arg_.dst_.get_server())))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                "dag_net_task_id", helper.convert(ctx->task_id_),
+                                "src", helper.convert(ctx->arg_.src_.get_server()),
+                                "dest", helper.convert(ctx->arg_.dst_.get_server())))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -4428,10 +4480,15 @@ int ObMigrationFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObMigrationFinishDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObMigrationFinishDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ", migration_type = %s", ObMigrationOpType::get_str(ctx->arg_.type_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }

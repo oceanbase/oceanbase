@@ -98,6 +98,8 @@ public:
   static observer::ObSignalHandle *signal_handle_;
   static bool need_add_arb_server_;
   static bool disable_hot_cache_;
+  static int64_t tenant_id_;
+  static ObTenantIOManager *tio_manager_;
 };
 
 } // end unittest

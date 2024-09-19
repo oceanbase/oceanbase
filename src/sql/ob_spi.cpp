@@ -2437,6 +2437,9 @@ int ObSPIService::calc_dynamic_sqlstr(
     ObCharsetType client_cs_type = CHARSET_INVALID;
 
     OZ (result.get_string(tmp_sql));
+    if (OB_SUCC(ret) && tmp_sql.length() > 1 && ';' == tmp_sql[tmp_sql.length() - 1]) {
+      tmp_sql.assign_ptr(tmp_sql.ptr(), tmp_sql.length() - 1);
+    }
     OZ (ctx->exec_ctx_->get_my_session()->get_character_set_client(client_cs_type));
     OZ (ObCharset::charset_convert(temp_allocator, tmp_sql,
                                    result.get_collation_type(),
@@ -5456,9 +5459,7 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
             OX (row->set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
           }
         }
-        if (OB_FAIL(ret) && OB_NOT_NULL(data) &&
-            coll.get_element_desc().is_composite_type() &&
-            OB_NOT_NULL(ns)) {
+        if (OB_FAIL(ret) && OB_NOT_NULL(data)) {
           for (int j = 0; j < i; ++j) {
             ObObj* row = &(reinterpret_cast<ObObj*>(data)[(coll.get_count() + j)]);
             ObUserDefinedType::destruct_objparam(*coll.get_allocator(), *row, nullptr);
@@ -5604,6 +5605,9 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
 
     ALLOC_ASSOC_ARRAY(int64_t, sort);
     if (nullptr != assoc_array.get_key() && nullptr == assoc_array.get_sort()) {
+      if (OB_NOT_NULL(assoc_array.get_allocator())) {
+        assoc_array.get_allocator()->free(assoc_array.get_key());
+      }
       assoc_array.set_key(nullptr);
     }
 
@@ -7568,9 +7572,12 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                     || obj.is_null())
                && (result_type.get_type() == ObExtendType
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))
-            || (obj.get_meta().is_geometry() && lib::is_oracle_mode() && result_type.get_type() != ObExtendType)) {
+            || (obj.get_meta().is_geometry() && lib::is_oracle_mode() && result_type.get_type() != ObExtendType)
+            || (obj.is_null() && current_type.at(i).get_meta_type().is_xml_sql_type()
+                && !ob_is_xml_pl_type(result_type.get_type(), result_type.get_accuracy().get_accuracy())
+                && !ob_is_string_tc(result_type.get_type()))) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("xml type can not convert other type in pl", K(ret));
+          LOG_WARN("xml type can not convert other type in pl", K(ret), K(obj), K(current_type.at(i)), K(i), K(result_type));
         } else if (result_type.is_ext()
                     && (result_type.get_accuracy().get_accuracy() == 300004 ||
                         result_type.get_accuracy().get_accuracy() == 300005)
@@ -7793,13 +7800,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           if (OB_FAIL(ret)) {
             for (int64_t j = 0; j < i - 1; ++j) {
               int ret = OB_SUCCESS;
-              if (calc_array->at(j).is_pl_extend() &&
-                  calc_array->at(j).get_meta().get_extend_type() != PL_CURSOR_TYPE &&
-                  calc_array->at(j).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-                OZ (ObUserDefinedType::destruct_objparam(*alloc, calc_array->at(j), ctx->exec_ctx_->get_my_session()));
-              } else if (!calc_array->at(j).is_ext() && calc_array->at(j).need_deep_copy()) {
-                OZ (ObUserDefinedType::destruct_objparam(*alloc, calc_array->at(j), ctx->exec_ctx_->get_my_session()));
-              }
+              OZ (ObUserDefinedType::destruct_objparam(*alloc, calc_array->at(j), ctx->exec_ctx_->get_my_session()));
             }
           }
         }
@@ -7808,6 +7809,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
     } else if (is_question_mark_expression(*result_expr)) { //通过question mark访问得到的基础变量
       int64_t param_idx = get_const_value(*result_expr).get_unknown();
       ObAccuracy accuracy;
+      accuracy.set_accuracy(result_types[0].accuracy_);
       if (param_idx >= params->count() || param_idx < 0) {
         ret = OB_ARRAY_OUT_OF_RANGE;
         LOG_WARN("param idx out of range", K(ret), K(param_idx), K(params->count()));
@@ -7856,12 +7858,13 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           ret =OB_ERR_EXPRESSION_WRONG_TYPE;
           LOG_WARN("expr is wrong type", K(ret));
         } else {
-          OX (accuracy.set_accuracy(result_types[0].accuracy_));
           OZ (spi_pad_char_or_varchar(ctx->exec_ctx_->get_my_session(), result_types[0].get_obj_type(),
                                     accuracy, &tmp_alloc, &calc_array->at(0)));
           OZ (deep_copy_obj(*ctx->allocator_, calc_array->at(0), result));
         }
         if (OB_SUCC(ret)) {
+          bool is_ref_cursor = false;
+          is_ref_cursor = params->at(param_idx).is_ref_cursor_type();
           if (params->at(param_idx).is_pl_extend()) {
             if (params->at(param_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
               ObUserDefinedType::destruct_objparam(*ctx->allocator_, params->at(param_idx), ctx->exec_ctx_->get_my_session());
@@ -7873,12 +7876,10 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             }
             params->at(param_idx).set_null();
           }
+          OX (params->at(param_idx) = result);
+          OX (params->at(param_idx).set_is_ref_cursor_type(is_ref_cursor));
+          OX (params->at(param_idx).set_param_meta());
         }
-        bool is_ref_cursor = false;
-        OX (is_ref_cursor = params->at(param_idx).is_ref_cursor_type());
-        OX (params->at(param_idx) = result);
-        OX (params->at(param_idx).set_is_ref_cursor_type(is_ref_cursor));
-        OX (params->at(param_idx).set_param_meta());
         OZ (spi_process_nocopy_params(ctx, param_idx));
         OX (params->at(param_idx).set_accuracy(accuracy));
       }

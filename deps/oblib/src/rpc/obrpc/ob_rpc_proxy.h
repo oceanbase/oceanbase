@@ -27,6 +27,7 @@
 #include "rpc/obrpc/ob_rpc_proxy_macros.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "rpc/obrpc/ob_rpc_opts.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

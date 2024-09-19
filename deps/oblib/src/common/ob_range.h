@@ -571,7 +571,12 @@ public:
     return equal(other);
   };
 
-  TO_YSON_KV(OB_ID(range), to_cstring(*this));
+  int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    ObCStringHelper helper;
+    return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos,
+        ::oceanbase::name::range, helper.convert(*this));
+  }
   int64_t to_string(char *buffer, const int64_t length) const;
   int64_t to_simple_string(char *buffer, const int64_t length) const;
   int64_t to_plain_string(char *buffer, const int64_t length) const;

@@ -13,12 +13,14 @@
 #define USING_LOG_PREFIX SQL_OPTIMIZER
 
 #include <gtest/gtest.h>
+#define private public
 #include "lib/json/ob_json.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/oblog/ob_log.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "observer/ob_server.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -81,7 +83,9 @@ TEST_F(TestRawExprToStr, basic)
   ctx.dest_collation_ = ObCharset::get_default_collation(ctx.connection_charset_);
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
+  session.effective_tenant_id_ = 1;
   ctx.session_info_ = &session;
+  OBSERVER.init_version();
 
   EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
   EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));

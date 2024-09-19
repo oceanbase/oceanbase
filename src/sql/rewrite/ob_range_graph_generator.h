@@ -186,6 +186,8 @@ private:
                                                  const ObRangeMap &range_map,
                                                  bool is_equal_range,
                                                  bool &fast_nlj_range);
+
+  static int formalize_one_range_node(ObRangeNode &range_node);
 private:
   ObRangeGraphGenerator();
 private:

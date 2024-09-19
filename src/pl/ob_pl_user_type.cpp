@@ -5122,6 +5122,9 @@ int ObPLAssocArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
       CK (OB_NOT_NULL(get_allocator()));
       OX (key = static_cast<ObObj*>(get_allocator()->alloc(src->get_count() * sizeof(ObObj))));
       OV (OB_NOT_NULL(key), OB_ALLOCATE_MEMORY_FAILED);
+      for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
+        new(key + i)ObObj(ObNullType);
+      }
       OX (sort = static_cast<int64_t*>(get_allocator()->alloc(src->get_count() * sizeof(int64_t))));
       OV (OB_NOT_NULL(sort), OB_ALLOCATE_MEMORY_FAILED);
       for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
@@ -5135,8 +5138,21 @@ int ObPLAssocArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
       LOG_WARN("Unexpected associative array", K(*src_aa), K(ret));
     }
   }
-  OX (set_key(key));
-  OX (set_sort(sort));
+  if (OB_SUCC(ret)) {
+    set_key(key);
+    set_sort(sort);
+  } else {
+    if (OB_NOT_NULL(key)) {
+      for (int64_t i = 0; i < src->get_count(); ++i) {
+        ObUserDefinedType::destruct_objparam(*get_allocator(), key[i], nullptr);
+      }
+      get_allocator()->free(key);
+    }
+    if (OB_NOT_NULL(sort)) {
+      get_allocator()->free(sort);
+    }
+  }
+
   return ret;
 }
 

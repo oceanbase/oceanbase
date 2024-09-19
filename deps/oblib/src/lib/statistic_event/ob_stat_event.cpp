@@ -62,14 +62,19 @@ int ObStatEventAddStat::add(int64_t value)
   return ret;
 }
 
+int ObStatEventAddStat::atomic_add(int64_t value)
+{
+  IGNORE_RETURN ATOMIC_AAF(&stat_value_, value);
+  return OB_SUCCESS;
+}
+
 void ObStatEventAddStat::reset()
 {
   stat_value_ = 0;
 }
 
 ObStatEventSetStat::ObStatEventSetStat()
-  : stat_value_(0),
-    set_time_(0)
+  : stat_value_(0)
 {
 }
 
@@ -77,13 +82,7 @@ int ObStatEventSetStat::add(const ObStatEventSetStat &other)
 {
   int ret = OB_SUCCESS;
   if (other.is_valid()) {
-    if (is_valid()) {
-      if (set_time_ < other.set_time_) {
-        *this = other;
-      }
-    } else {
-      *this = other;
-    }
+    *this = other;
   }
   return ret;
 }
@@ -91,7 +90,6 @@ int ObStatEventSetStat::add(const ObStatEventSetStat &other)
 void ObStatEventSetStat::reset()
 {
   stat_value_ = 0;
-  set_time_ = 0;
 }
 
 

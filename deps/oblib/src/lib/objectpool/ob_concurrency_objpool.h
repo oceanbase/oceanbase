@@ -90,6 +90,10 @@ public:
       ptr = NULL;
     }
   }
+  void set_nway(int nway)
+  {
+    allocator_.set_nway(static_cast<int32_t>(nway));
+  }
 
 private:
   ObSliceAlloc allocator_;

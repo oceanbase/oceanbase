@@ -1407,6 +1407,8 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
     case ObTimestampType:
     case ObTimestampNanoType:
     case ObDateType:
+    case ObMySQLDateType:
+    case ObMySQLDateTimeType:
     case ObTimeType: {
       ObTime ob_time;
       int64_t value = 0;
@@ -1416,6 +1418,13 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
         value = datum.get_date();
         ob_time.mode_ = DT_TYPE_DATE;
         if (OB_FAIL(ObTimeConverter::date_to_ob_time(value, ob_time))) {
+          LOG_WARN("date transform to ob time failed", K(ret), K(value));
+        }
+      } else if (type == ObMySQLDateType) {
+        node_type = ObJsonNodeType::J_MYSQL_DATE;
+        value = datum.get_date();
+        ob_time.mode_ = DT_TYPE_DATE;
+        if (OB_FAIL(ObTimeConverter::mdate_to_ob_time(value, ob_time))) {
           LOG_WARN("date transform to ob time failed", K(ret), K(value));
         }
       } else if (type == ObTimeType) {
@@ -1430,6 +1439,13 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
         value = datum.get_datetime();
         ob_time.mode_ = DT_TYPE_DATETIME;
         if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, nullptr, ob_time))) {
+          LOG_WARN("datetime transform to ob time failed", K(ret), K(value));
+        }
+      } else if (type == ObMySQLDateTimeType) {
+        node_type = ObJsonNodeType::J_MYSQL_DATETIME;
+        value = datum.get_datetime();
+        ob_time.mode_ = DT_TYPE_MYSQL_DATETIME;
+        if (OB_FAIL(ObTimeConverter::mdatetime_to_ob_time(value, ob_time))) {
           LOG_WARN("datetime transform to ob time failed", K(ret), K(value));
         }
       } else {
@@ -2208,7 +2224,7 @@ int ObJsonExprHelper::check_item_func_with_return(ObJsonPathNodeType path_type, 
       break;
     }
     case JPN_DATE :{
-      if (dst_type == ObDateTimeType) {
+      if (dst_type == ObDateTimeType || dst_type == ObMySQLDateTimeType) {
       } else {
         ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
         LOG_WARN("item func is double, but return type is ", K(dst_type), K(ret));

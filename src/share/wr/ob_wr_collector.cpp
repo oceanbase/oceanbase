@@ -36,12 +36,15 @@ namespace share
 #define WR_INSERT_SQL_STAT_BATCH_SIZE 16
 #define WR_SNAP_ID_SEQNENCE_NAME "OB_WORKLOAD_REPOSITORY_SNAP_ID_SEQNENCE"
 
+#define WR_SQL_PLAN_BATCH_SIZE 20
+
 ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
     int64_t snapshot_end_time, int64_t snapshot_timeout_ts)
     : snap_id_(snap_id),
       snapshot_begin_time_(snapshot_begin_time),
       snapshot_end_time_(snapshot_end_time),
-      timeout_ts_(snapshot_timeout_ts)
+      timeout_ts_(snapshot_timeout_ts),
+      snapshot_ahead_(false)
 {
   if (OB_UNLIKELY(snapshot_begin_time_ == snapshot_end_time_)) {
     snapshot_begin_time_ = 0;
@@ -57,6 +60,9 @@ int ObWrCollector::init()
   int ret = OB_SUCCESS;
   int64_t begin_interval_time = 0;
   const uint64_t tenant_id = MTL_ID();
+  if (snap_id_ == LAST_SNAPSHOT_RECORD_SNAP_ID) {
+    snapshot_ahead_ = true;
+  }
   SMART_VAR(ObISQLClient::ReadResult, res)
   {
     ObMySQLResult *result = nullptr;
@@ -64,8 +70,8 @@ int ObWrCollector::init()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
     } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY */ time_to_usec(END_INTERVAL_TIME) FROM %s where "
-                                      "snap_id=%d and tenant_id=%ld",
-                  OB_WR_SNAPSHOT_TNAME, -1, tenant_id))) {
+                                      "snap_id=%ld and tenant_id=%ld",
+                  OB_WR_SNAPSHOT_TNAME, LAST_SNAPSHOT_RECORD_SNAP_ID, tenant_id))) {
       LOG_WARN("failed to format sql", KR(ret));
     } else if (OB_FAIL(
                   GCTX.sql_proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
@@ -86,9 +92,9 @@ int ObWrCollector::init()
     }
     snapshot_begin_time_ = begin_interval_time;
   }
-  // read from OB_WORKLOAD_REPOSITORY_SNAP_ID_SEQNENCE to get snap id for ahead records
-  if (snap_id_ == -1) {
-    ret = get_cur_snapshot_id(snap_id_);
+  // read from OB_WR_SNAPSHOT_TNAME to get snap id for ahead records
+  if (OB_SUCC(ret) && snap_id_ == LAST_SNAPSHOT_RECORD_SNAP_ID) {
+    ret = get_cur_snapshot_id_for_ahead_snapshot(snap_id_);
   }
   return ret;
 }
@@ -113,6 +119,8 @@ int ObWrCollector::collect()
     LOG_WARN("failed to update sqlstat", KR(ret));
   } else if (OB_FAIL(collect_sqltext())) {
     LOG_WARN("failed to collect sql text", KR(ret));
+  } else if (OB_FAIL(collect_sql_plan())) {
+    LOG_WARN("failed to collect sql plan", KR(ret));
   }
 
   if (OB_SUCC(ret) && OB_UNLIKELY(ERRSIM_WR_SNAPSHOT_COLLECTOR_FAILURE)) {
@@ -340,8 +348,10 @@ int ObWrCollector::collect_ash()
                   skip_null_error, skip_column_error, default_value);
               EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_hash", ash.plan_hash_,
                   uint64_t, skip_null_error, skip_column_error, default_value);
-              EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", ash.tablet_id_, int64_t);
-              EXTRACT_INT_FIELD_MYSQL(*result, "blocking_session_id", ash.blocking_session_id_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "tablet_id", ash.tablet_id_, int64_t,
+                  skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "blocking_session_id", ash.blocking_session_id_, int64_t,
+                  skip_null_error, skip_column_error, default_value);
 
               char plan_hash_char[64] = "";
               if (OB_SUCC(ret)) {
@@ -821,7 +831,8 @@ int ObWrCollector::collect_sqlstat()
                   "    cast(sum(partition_total) as SIGNED INTEGER ) as partition_total, "
                   "    cast(sum(partition_delta) as SIGNED INTEGER ) as partition_delta, cast(sum(nested_sql_total) as SIGNED INTEGER ) as nested_sql_total, "
                   "    cast(sum(nested_sql_delta) as SIGNED INTEGER ) as nested_sql_delta ,source_ip, source_port , cast(sum(route_miss_total) as SIGNED INTEGER ) as route_miss_total, "
-                  "    cast(sum(route_miss_delta) as SIGNED INTEGER ) as route_miss_delta "
+                  "    cast(sum(route_miss_delta) as SIGNED INTEGER ) as route_miss_delta , first_load_time,  cast(sum(plan_cache_hit_total) as SIGNED INTEGER ) as plan_cache_hit_total, "
+                  "    cast(sum(plan_cache_hit_delta) as SIGNED INTEGER ) as plan_cache_hit_delta "
                   "from oceanbase.__all_virtual_sqlstat   "
                   "where tenant_id = %ld and (sql_id,plan_hash) in  (   "
                   "select sql_id, plan_hash   "
@@ -919,6 +930,19 @@ int ObWrCollector::collect_sqlstat()
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "source_port", sqlstat.source_port_, int64_t, true/*skip_null_error*/, skip_column_error, default_value);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "route_miss_total", sqlstat.route_miss_total_, int64_t, null_error, skip_column_error, default_value);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "route_miss_delta", sqlstat.route_miss_delta_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_cache_hit_total", sqlstat.plan_cache_hit_total_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_cache_hit_delta", sqlstat.plan_cache_hit_delta_, int64_t, null_error, skip_column_error, default_value);
+
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(result->get_timestamp("first_load_time", nullptr, sqlstat.first_load_time_))) {
+                if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+                  ret = OB_SUCCESS;
+                  sqlstat.first_load_time_ = default_value;
+                } else {
+                  LOG_WARN("failed to get timestamp", K(ret));
+                }
+              }
+            }
 
             if (OB_SUCC(ret)) {
               if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
@@ -1035,6 +1059,14 @@ int ObWrCollector::collect_sqlstat()
                 LOG_WARN("failed to add column route_miss_total", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column("route_miss_delta", sqlstat.route_miss_delta_))) {
                 LOG_WARN("failed to add column route_miss_delta", KR(ret), K(sqlstat));
+              } else if (sqlstat.first_load_time_ <= 0 && OB_FAIL(dml_splicer.add_column(true, "first_load_time"))) {
+                LOG_WARN("failed to add column first_load_time", KR(ret), K(sqlstat));
+              } else if (sqlstat.first_load_time_ > 0 && OB_FAIL(dml_splicer.add_time_column("first_load_time", sqlstat.first_load_time_))) {
+                LOG_WARN("failed to add column first_load_time", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("plan_cache_hit_total", sqlstat.plan_cache_hit_total_))) {
+                LOG_WARN("failed to add column plan_cache_hit_total", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("plan_cache_hit_delta", sqlstat.plan_cache_hit_delta_))) {
+                LOG_WARN("failed to add column plan_cache_hit_delta", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.finish_row())) {
                 LOG_WARN("failed to finish row", KR(ret));
               }
@@ -1102,19 +1134,19 @@ int ObWrCollector::update_last_snapshot_end_time()
       LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
     } else if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", tenant_id))) {
       LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(dml_splicer.add_pk_column("cluster_id", -1))) {
-      LOG_WARN("failed to add column cluster_id", KR(ret), K(-1));
-    } else if (OB_FAIL(dml_splicer.add_pk_column("snap_id", -1))) {
-      LOG_WARN("failed to add column SNAP_ID", KR(ret), K(-1));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("cluster_id", LAST_SNAPSHOT_RECORD_CLUSTER_ID))) {
+      LOG_WARN("failed to add column cluster_id", KR(ret), K(LAST_SNAPSHOT_RECORD_CLUSTER_ID));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("snap_id", LAST_SNAPSHOT_RECORD_SNAP_ID))) {
+      LOG_WARN("failed to add column SNAP_ID", KR(ret), K(LAST_SNAPSHOT_RECORD_SNAP_ID));
     } else if (OB_FAIL(dml_splicer.add_pk_column("svr_ip", ""))) {
       LOG_WARN("failed to add column svr_ip", KR(ret), K(""));
-    } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", -1))) {
-      LOG_WARN("failed to add column svr_port", KR(ret));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", LAST_SNAPSHOT_RECORD_SVR_PORT))) {
+      LOG_WARN("failed to add column svr_port", KR(ret), K(LAST_SNAPSHOT_RECORD_SVR_PORT));
     } else if (OB_FAIL(dml_splicer.add_time_column("begin_interval_time", snapshot_begin_time_))) {
       LOG_WARN("failed to add column begin_interval_time", KR(ret), K(snapshot_begin_time_));
     } else if (OB_FAIL(dml_splicer.add_time_column("end_interval_time", snapshot_end_time_))) {
       LOG_WARN("failed to add column end_interval_time", KR(ret), K(snapshot_end_time_));
-    } else if (OB_FAIL(dml_splicer.add_column("snap_flag", snap_id_ == -1 
+    } else if (OB_FAIL(dml_splicer.add_column("snap_flag", snapshot_ahead_
                                               ? ObWrSnapshotFlag::LAST_AHEAD_SNAPSHOT 
                                               : ObWrSnapshotFlag::LAST_SCHEDULED_SNAPSHOT))) {
       LOG_WARN("failed to add column snap_flag", KR(ret));
@@ -1194,12 +1226,13 @@ int ObWrCollector::collect_sqltext()
 
 
             if (OB_SUCC(ret)) {
+              ObCStringHelper helper;
               int tmp_ret = OB_SUCCESS;
               ObSqlString insert_sql;
               int64_t affected_rows = 0;
               uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
               query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
-              const char* query_sql = to_cstring(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
+              const char* query_sql = helper.convert(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
               if (OB_UNLIKELY(query_timeout <= 0)) {
                 ret = OB_TIMEOUT;
                 LOG_WARN("wr snapshot timeout", KR(tmp_ret), K_(timeout_ts));
@@ -1229,129 +1262,197 @@ int ObWrCollector::collect_sqltext()
 
 int ObWrCollector::collect_sql_plan()
 {
-  return OB_SUCCESS;
-  // int ret = OB_SUCCESS;
-  // common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
-  // const uint64_t tenant_id = MTL_ID();
-  // int64_t cluster_id = ObServerConfig::get_instance().cluster_id;
-  // ObDMLSqlSplicer dml_splicer;
-  // ObSqlString sql;
-  // int64_t tmp_real_str_len = 0;
-  // int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
-  // SMART_VAR(ObISQLClient::ReadResult, res)
-  // {
-  //   ObMySQLResult *result = nullptr;
-  //   if (OB_UNLIKELY(query_timeout <= 0)) {
-  //     ret = OB_TIMEOUT;
-  //     LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
-  //   } else if (OB_FAIL(sql.assign_fmt(
-  //                  "SELECT /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, "
-  //                  "sql_id, plan_hash, plan_id, id, operator, options, object_id, object_owner, "
-  //                  "object_name, object_alias, object_type, parent_id, position, depth, cost ,cardinality, other_xml as other"
-  //                  "__all_virtual_sql_plan where tenant_id=%ld",
-  //                  query_timeout, tenant_id))) {
-  //     LOG_WARN("failed to assign sysstat query string", KR(ret));
-  //   } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
-  //     LOG_WARN("failed to fetch sysstat", KR(ret), K(tenant_id), K(sql));
-  //   } else if (OB_ISNULL(result = res.get_result())) {
-  //     ret = OB_ERR_UNEXPECTED;
-  //     LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
-  //   } else {
-  //     const bool skip_null_error = true;
-  //     const bool skip_column_error = false;
-  //     const int64_t default_value = -1;
-  //     while (OB_SUCC(ret)) {
-  //       if (OB_FAIL(result->next())) {
-  //         if (OB_ITER_END == ret) {
-  //           ret = OB_SUCCESS;
-  //           break;
-  //         } else {
-  //           LOG_WARN("fail to get next row", KR(ret));
-  //         }
-  //       } else {
-  //         ObWrSqlPlan sqlplan;
-  //         EXTRACT_STRBUF_FIELD_MYSQL(
-  //             *result, "svr_ip", sqlplan.svr_ip_, OB_IP_STR_BUFF, tmp_real_str_len);
-  //         EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", sqlplan.svr_port_, int64_t);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "sql_id", sqlplan.sql_id_, sizeof(sqlplan.sql_id_), tmp_real_str_len);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_hash", sqlplan.plan_hash_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_id", sqlplan.plan_id_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "id", sqlplan.id_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "operator", sqlplan.operator_, sizeof(sqlplan.operator_), tmp_real_str_len);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "option", sqlplan.option_, sizeof(sqlplan.option_), tmp_real_str_len);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "object_id", sqlplan.object_id_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_owner", sqlplan.object_owner_, sizeof(sqlplan.object_owner_), tmp_real_str_len);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_name", sqlplan.object_name_, sizeof(sqlplan.object_name_), tmp_real_str_len);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_alias", sqlplan.object_alias_, sizeof(sqlplan.object_alias_), tmp_real_str_len);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_type", sqlplan.object_type_, sizeof(sqlplan.object_type_), tmp_real_str_len);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "parent_id", sqlplan.parent_id_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "position", sqlplan.position_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "depth", sqlplan.depth_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "cost", sqlplan.cost_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "cardinality", sqlplan.cardinality_, int64_t, skip_null_error, skip_column_error, default_value);
-  //         EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "other", sqlplan.other_, sizeof(sqlplan.other_), tmp_real_str_len);
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  const uint64_t tenant_id = MTL_ID();
+  int64_t cluster_id = ObServerConfig::get_instance().cluster_id;
+  ObDMLSqlSplicer dml_splicer;
+  ObSqlString sql;
+  int64_t tmp_real_str_len = 0;
+  int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_UNLIKELY(query_timeout <= 0)) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
+    } else if (OB_FAIL(sql.assign_fmt(
+                   "SELECT /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, "
+                   "sql_id, plan_hash, plan_id, id, db_id, time_to_usec(gmt_create) as gmt_create,  operator, options, object_id, object_owner, "
+                   "object_name, object_alias, object_type, optimizer, parent_id, depth, position, is_last_child, cost,  "
+                   "real_cost, cardinality, real_cardinality, bytes, rowset, other_tag, partition_start, other, "
+                   "cpu_cost, io_cost, access_predicates, filter_predicates, startup_predicates, projection, special_predicates, "
+                   "qblock_name, remarks, other_xml "
+                   "from __all_virtual_sql_plan where tenant_id=%ld and sql_id in (select distinct sql_id from "
+                   "oceanbase.__all_virtual_wr_sqlstat where tenant_id = %ld and snap_id = %ld)  group by sql_id",
+                   query_timeout, tenant_id, tenant_id, snap_id_))) {
+      LOG_WARN("failed to assign sqlplan query string", KR(ret));
+    } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("failed to fetch sqlplan", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
+    } else {
+      const bool skip_null_error = true;
+      const bool skip_column_error = false;
+      const int64_t default_value = -1;
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next row", KR(ret));
+          }
+        } else {
+          SMART_VAR(ObWrSqlPlan, sqlplan)
+          EXTRACT_STRBUF_FIELD_MYSQL(
+              *result, "svr_ip", sqlplan.svr_ip_, OB_IP_STR_BUFF, tmp_real_str_len);
+          EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", sqlplan.svr_port_, int64_t);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "sql_id", sqlplan.sql_id_, sizeof(sqlplan.sql_id_), tmp_real_str_len);
+          EXTRACT_UINT_FIELD_MYSQL(*result, "plan_hash", sqlplan.plan_hash_, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_id", sqlplan.plan_id_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "id", sqlplan.id_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "db_id", sqlplan.db_id_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "gmt_create", sqlplan.gmt_create_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "operator", sqlplan.operator_, sizeof(sqlplan.operator_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "option", sqlplan.option_, sizeof(sqlplan.option_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_node", sqlplan.object_node_, sizeof(sqlplan.object_node_), tmp_real_str_len);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "object_id", sqlplan.object_id_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_owner", sqlplan.object_owner_, sizeof(sqlplan.object_owner_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_name", sqlplan.object_name_, sizeof(sqlplan.object_name_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_alias", sqlplan.object_alias_, sizeof(sqlplan.object_alias_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "object_type", sqlplan.object_type_, sizeof(sqlplan.object_type_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "optimizer", sqlplan.optimizer_, sizeof(sqlplan.optimizer_), tmp_real_str_len);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "parent_id", sqlplan.parent_id_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "depth", sqlplan.depth_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "position", sqlplan.position_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "is_last_child", sqlplan.is_last_child_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "cost", sqlplan.cost_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "real_cost", sqlplan.real_cost_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "cardinality", sqlplan.cardinality_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "real_cardinality", sqlplan.real_cardinality_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "bytes", sqlplan.bytes_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "rowset", sqlplan.rowset_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "other_tag", sqlplan.other_tag_, sizeof(sqlplan.other_tag_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "partition_start", sqlplan.partition_start_, sizeof(sqlplan.partition_start_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "other", sqlplan.other_, sizeof(sqlplan.other_), tmp_real_str_len);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "cpu_cost", sqlplan.cpu_cost_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "io_cost", sqlplan.io_cost_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "access_predicates", sqlplan.access_predicates_, sizeof(sqlplan.access_predicates_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "filter_predicates", sqlplan.filter_predicates_, sizeof(sqlplan.filter_predicates_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "startup_predicates", sqlplan.startup_predicates_, sizeof(sqlplan.startup_predicates_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "projection", sqlplan.projection_, sizeof(sqlplan.projection_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "special_predicates", sqlplan.special_predicates_, sizeof(sqlplan.special_predicates_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "qblock_name", sqlplan.qblock_name_, sizeof(sqlplan.qblock_name_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "remarks", sqlplan.remarks_, sizeof(sqlplan.remarks_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "other_xml", sqlplan.other_xml_, sizeof(sqlplan.other_xml_), tmp_real_str_len);
 
-  //         if (OB_SUCC(ret)) {
-  //           if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
-  //             LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
-  //           } else if (OB_FAIL(dml_splicer.add_pk_column(K(cluster_id)))) {
-  //             LOG_WARN("failed to add column cluster_id", KR(ret), K(cluster_id));
-  //           } else if (OB_FAIL(dml_splicer.add_pk_column("SNAP_ID", snap_id_))) {
-  //             LOG_WARN("failed to add column SNAP_ID", KR(ret), K(snap_id_));
-  //           } else if (OB_FAIL(dml_splicer.add_pk_column("svr_ip", sqlplan.svr_ip_))) {
-  //             LOG_WARN("failed to add column svr_ip", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", sqlplan.svr_port_))) {
-  //             LOG_WARN("failed to add column svr_port", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_pk_column("plan_hash", sqlplan.plan_hash_))) {
-  //             LOG_WARN("failed to add column plan_hash", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("plan_id", sqlplan.plan_id_))) {
-  //             LOG_WARN("failed to add column plan_id", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("id", sqlplan.id_))) {
-  //             LOG_WARN("failed to add column id", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("operator", sqlplan.operator_))) {
-  //             LOG_WARN("failed to add column operator", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("option", sqlplan.option_))) {
-  //             LOG_WARN("failed to add column option", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("object_id", sqlplan.object_id_))) {
-  //             LOG_WARN("failed to add column object_id", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("object_owner", sqlplan.object_owner_))) {
-  //             LOG_WARN("failed to add column object_owner", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("object_name", sqlplan.object_name_))) {
-  //             LOG_WARN("failed to add column object_name", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("object_alias", sqlplan.object_alias_))) {
-  //             LOG_WARN("failed to add column object_alias", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("object_type", sqlplan.object_type_))) {
-  //             LOG_WARN("failed to add column object_type", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("parent_id", sqlplan.parent_id_))) {
-  //             LOG_WARN("failed to add column parent_id", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("position", sqlplan.position_))) {
-  //             LOG_WARN("failed to add column position", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("depth", sqlplan.depth_))) {
-  //             LOG_WARN("failed to add column depth_", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("cost", sqlplan.cost_))) {
-  //             LOG_WARN("failed to add column cost", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("cardinality", sqlplan.cardinality_))) {
-  //             LOG_WARN("failed to add column cardinality", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.add_column("other", ObHexEscapeSqlStr(ObString::make_string(sqlplan.other_))))) {
-  //             LOG_WARN("failed to add column other", KR(ret), K(sqlplan));
-  //           } else if (OB_FAIL(dml_splicer.finish_row())) {
-  //             LOG_WARN("failed to finish row", KR(ret));
-  //           }
-  //         }
-  //       }
-  //       if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_INSERT_BATCH_SIZE) {
-  //         if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN, tenant_id))) {
-  //           LOG_WARN("failed to batch write to wr", KR(ret));
-  //         }
-  //       }
-  //     }
-  //     if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0 &&
-  //         OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN, tenant_id))) {
-  //       LOG_WARN("failed to batch write remaining part to wr", KR(ret));
-  //     }
-  //   }
-  // }
-  // return ret;
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
+              LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
+            } else if (OB_FAIL(dml_splicer.add_pk_column(K(cluster_id)))) {
+              LOG_WARN("failed to add column cluster_id", KR(ret), K(cluster_id));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("SNAP_ID", snap_id_))) {
+              LOG_WARN("failed to add column SNAP_ID", KR(ret), K(snap_id_));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("svr_ip", sqlplan.svr_ip_))) {
+              LOG_WARN("failed to add column svr_ip", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", sqlplan.svr_port_))) {
+              LOG_WARN("failed to add column svr_port", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("SQL_ID", sqlplan.sql_id_))) {
+              LOG_WARN("failed to add column SNAP_ID", KR(ret), K(sqlplan.sql_id_));
+            } else if (OB_FAIL(dml_splicer.add_uint64_pk_column("plan_hash", sqlplan.plan_hash_))) {
+              LOG_WARN("failed to add column plan_hash", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("plan_id", sqlplan.plan_id_))) {
+              LOG_WARN("failed to add column plan_id", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("id", sqlplan.id_))) {
+              LOG_WARN("failed to add column id", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("db_id", sqlplan.db_id_))) {
+              LOG_WARN("failed to add column db_id", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_time_column("gmt_create", sqlplan.gmt_create_))) {
+              LOG_WARN("failed to add gmt_create", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("operator", sqlplan.operator_))) {
+              LOG_WARN("failed to add column operator", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("options", sqlplan.option_))) {
+              LOG_WARN("failed to add column options", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("object_node", sqlplan.object_node_))) {
+              LOG_WARN("failed to add column object_node", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("object_id", sqlplan.object_id_))) {
+              LOG_WARN("failed to add column object_id", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("object_owner", sqlplan.object_owner_))) {
+              LOG_WARN("failed to add column object_owner", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("object_name", sqlplan.object_name_))) {
+              LOG_WARN("failed to add column object_name", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("object_alias", sqlplan.object_alias_))) {
+              LOG_WARN("failed to add column object_alias", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("object_type", sqlplan.object_type_))) {
+              LOG_WARN("failed to add column object_type", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("optimizer", ObHexEscapeSqlStr(ObString::make_string(sqlplan.optimizer_))))) {
+              LOG_WARN("failed to add column optimizer", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("parent_id", sqlplan.parent_id_))) {
+              LOG_WARN("failed to add column parent_id", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("depth", sqlplan.depth_))) {
+              LOG_WARN("failed to add column depth_", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("position", sqlplan.position_))) {
+              LOG_WARN("failed to add column position", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("is_last_child", sqlplan.is_last_child_))) {
+              LOG_WARN("failed to add column is_last_child", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("cost", sqlplan.cost_))) {
+              LOG_WARN("failed to add column cost", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("real_cost", sqlplan.real_cost_))) {
+              LOG_WARN("failed to add column real_cost", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("cardinality", sqlplan.cardinality_))) {
+              LOG_WARN("failed to add column cardinality", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("real_cardinality", sqlplan.real_cardinality_))) {
+              LOG_WARN("failed to add column real_cardinality", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("bytes", sqlplan.bytes_))) {
+              LOG_WARN("failed to add column bytes", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("rowset", sqlplan.rowset_))) {
+              LOG_WARN("failed to add column rowset", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("other_tag", ObHexEscapeSqlStr(ObString::make_string(sqlplan.other_tag_))))) {
+              LOG_WARN("failed to add column other_tag", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("partition_start", ObHexEscapeSqlStr(ObString::make_string(sqlplan.partition_start_))))) {
+              LOG_WARN("failed to add column partition_start", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("other", ObHexEscapeSqlStr(ObString::make_string(sqlplan.other_))))) {
+              LOG_WARN("failed to add column other", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("cpu_cost", sqlplan.cpu_cost_))) {
+              LOG_WARN("failed to add column cpu_cost", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("io_cost", sqlplan.io_cost_))) {
+              LOG_WARN("failed to add column io_cost", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("access_predicates", ObHexEscapeSqlStr(ObString::make_string(sqlplan.access_predicates_))))) {
+              LOG_WARN("failed to add column access_predicates", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("filter_predicates", ObHexEscapeSqlStr(ObString::make_string(sqlplan.filter_predicates_))))) {
+              LOG_WARN("failed to add column filter_predicates", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("startup_predicates", ObHexEscapeSqlStr(ObString::make_string(sqlplan.startup_predicates_))))) {
+              LOG_WARN("failed to add column startup_predicates", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("projection", ObHexEscapeSqlStr(ObString::make_string(sqlplan.projection_))))) {
+              LOG_WARN("failed to add column projection", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("special_predicates", ObHexEscapeSqlStr(ObString::make_string(sqlplan.special_predicates_))))) {
+              LOG_WARN("failed to add column special_predicates", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("qblock_name", sqlplan.qblock_name_))) {
+              LOG_WARN("failed to add column qblock_name", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("remarks", ObHexEscapeSqlStr(ObString::make_string(sqlplan.remarks_))))) {
+              LOG_WARN("failed to add column remarks", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.add_column("other_xml", ObHexEscapeSqlStr(ObString::make_string(sqlplan.other_xml_))))) {
+              LOG_WARN("failed to add column other_xml", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer.finish_row())) {
+              LOG_WARN("failed to finish row", KR(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_SQL_PLAN_BATCH_SIZE) {
+          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id))) {
+            LOG_WARN("failed to batch write to wr", KR(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0 &&
+          OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id))) {
+        LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObWrCollector::write_to_wr(
@@ -1408,7 +1509,7 @@ int ObWrCollector::fetch_snapshot_id_sequence_curval(int64_t &snap_id)
   return ret;
 }
 
-int ObWrCollector::get_cur_snapshot_id(int64_t &snap_id)
+int ObWrCollector::get_cur_snapshot_id_for_ahead_snapshot(int64_t &snap_id)
 {
   int ret = OB_SUCCESS;
   // we can't access sequence.currval in one new session
@@ -1430,17 +1531,15 @@ int ObWrCollector::get_cur_snapshot_id(int64_t &snap_id)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get mysql result", KR(ret), K(sql));
     } else if (OB_FAIL(result->next())) {
-      if (OB_ITER_END == ret) {
+      LOG_WARN("get next result failed", KR(ret), K(sql));
+    } else if (OB_FAIL(result->get_int(0L, snap_id))) {
+      if (ret == OB_ERR_NULL_VALUE) {
         // no record in __wr_snapshot table. this is the first time we take snapshot in this
         // cluster.
         ret = OB_SUCCESS;
-        snap_id = 0;
-        LOG_WARN("first time to take wr snapshot in this cluster", K(snap_id));
-      } else {
-        LOG_WARN("get next result failed", KR(ret), K(sql));
+        snap_id = 1;
+        LOG_WARN("first time to take wr snapshot in this cluster", K(snap_id), K(ret));
       }
-    } else if (OB_FAIL(result->get_int(0L, snap_id))) {
-      LOG_WARN("get column fail", KR(ret), K(sql));
     }
   }
 

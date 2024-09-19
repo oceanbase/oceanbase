@@ -124,6 +124,7 @@ DEF_SIMPLE_EXECUTOR(ObBackupManage);
 DEF_SIMPLE_EXECUTOR(ObBackupClean);
 DEF_SIMPLE_EXECUTOR(ObDeletePolicy);
 DEF_SIMPLE_EXECUTOR(ObBackupKey);
+DEF_SIMPLE_EXECUTOR(ObBackupClusterParam);
 DEF_SIMPLE_EXECUTOR(ObBackupBackupset);
 DEF_SIMPLE_EXECUTOR(ObBackupArchiveLog);
 DEF_SIMPLE_EXECUTOR(ObBackupBackupPiece);
@@ -230,6 +231,8 @@ private:
       obrpc::ObServerList &svr_list);
   DISALLOW_COPY_AND_ASSIGN(ObAdminZoneExecutor);
 };
+
+DEF_SIMPLE_EXECUTOR(ObModuleData);
 
 #undef DEF_SIMPLE_EXECUTOR
 

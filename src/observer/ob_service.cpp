@@ -54,6 +54,7 @@
 #include "observer/ob_server_schema_updater.h"
 #include "ob_server_event_history_table_operator.h"
 #include "share/ob_alive_server_tracer.h"
+#include "storage/ddl/ob_tablet_split_task.h"
 #include "storage/ddl/ob_complement_data_task.h" // complement data for drop column
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_build_index_task.h"
@@ -1232,6 +1233,27 @@ int ObService::check_schema_version_elapsed(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObService::prepare_tablet_split_task_ranges(
+    const obrpc::ObPrepareSplitRangesArg &arg,
+    obrpc::ObPrepareSplitRangesRes &result)
+{
+  int ret = OB_SUCCESS;
+  result.parallel_datum_rowkey_list_.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(ObTabletSplitUtil::split_task_ranges(result.rowkey_allocator_, arg.ls_id_,
+      arg.tablet_id_, arg.user_parallelism_, arg.schema_tablet_size_, result.parallel_datum_rowkey_list_))) {
+    LOG_WARN("split task ranges failed", K(ret));
+  } else {
+    LOG_INFO("tablet split task ranges", K(ret), K(arg), K(result.parallel_datum_rowkey_list_));
   }
   return ret;
 }

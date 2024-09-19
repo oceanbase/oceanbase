@@ -416,6 +416,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   MEMSET(sess_diag_info_index_, 0, SESSION_SYNC_MAX_TYPE * sizeof(int16_t));
   executing_sql_stat_record_.reset();
   job_info_ = nullptr;
+  need_send_feedback_proxy_info_ = false;
+  is_lock_session_ = false;
   failover_mode_ = false;
   service_name_.reset();
   unit_gc_min_sup_proxy_version_ = 0;
@@ -665,11 +667,11 @@ int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode)
 {
   int ret = OB_SUCCESS;
   spm_mode = get_sql_plan_management_mode();
-  if (0 == spm_mode) {
+  if (SPM_MODE_DISABLE == spm_mode) {
     bool sysvar_use_baseline = false;
     get_use_plan_baseline(sysvar_use_baseline);
     if (sysvar_use_baseline) {
-      spm_mode = 1;
+      spm_mode = SPM_MODE_ONLINE_EVOLVE;
     }
   }
   return ret;
@@ -3050,6 +3052,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       enable_sql_extension_ = tenant_config->enable_sql_extension;
       px_join_skew_handling_ = tenant_config->_px_join_skew_handling;
       px_join_skew_minfreq_ = tenant_config->_px_join_skew_minfreq;
+      enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
       sql_plan_management_mode_ = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
         tenant_config->sql_plan_management_mode.get_value_string());
       enable_enum_set_subschema_ = tenant_config->_enable_enum_set_subschema;
@@ -3315,25 +3318,34 @@ int ObSQLSessionInfo::set_diagnosis_info(uint16_t type,
 
 int ObSQLSessionInfo::set_module_name(const common::ObString &mod) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_MOD_NAME_LENGTH, mod.length());
   MEMSET(module_buf_, 0x00, common::OB_MAX_MOD_NAME_LENGTH);
-  MEMCPY(module_buf_, mod.ptr(), min(common::OB_MAX_MOD_NAME_LENGTH, mod.length()));
-  client_app_info_.module_name_.assign(&module_buf_[0], min(common::OB_MAX_MOD_NAME_LENGTH, mod.length()));
+  MEMCPY(module_buf_, mod.ptr(), size);
+  client_app_info_.module_name_.assign(&module_buf_[0], size);
+  MEMCPY(ObActiveSessionGuard::get_stat().module_, mod.ptr(),
+      min(static_cast<int64_t>(sizeof(ObActiveSessionGuard::get_stat().module_)), size));
   return ret;
 }
 
 int ObSQLSessionInfo::set_action_name(const common::ObString &act) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_ACT_NAME_LENGTH, act.length());
   MEMSET(action_buf_, 0x00, common::OB_MAX_ACT_NAME_LENGTH);
-  MEMCPY(action_buf_, act.ptr(), min(common::OB_MAX_ACT_NAME_LENGTH, act.length()));
-  client_app_info_.action_name_.assign(&action_buf_[0], min(common::OB_MAX_ACT_NAME_LENGTH, act.length()));
+  MEMCPY(action_buf_, act.ptr(), size);
+  client_app_info_.action_name_.assign(&action_buf_[0], size);
+  MEMCPY(ObActiveSessionGuard::get_stat().action_, act.ptr(),
+      min(static_cast<int64_t>(sizeof(ObActiveSessionGuard::get_stat().action_)), size));
   return ret;
 }
 
 int ObSQLSessionInfo::set_client_info(const common::ObString &client_info) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length());
   MEMSET(client_info_buf_, 0x00, common::OB_MAX_CLIENT_INFO_LENGTH);
-  MEMCPY(client_info_buf_, client_info.ptr(), min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length()));
-  client_app_info_.client_info_.assign(&client_info_buf_[0], min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length()));
+  MEMCPY(client_info_buf_, client_info.ptr(), size);
+  client_app_info_.client_info_.assign(&client_info_buf_[0], size);
+  MEMCPY(ObActiveSessionGuard::get_stat().client_id_, client_info.ptr(),
+      min(static_cast<int64_t>(sizeof(ObActiveSessionGuard::get_stat().client_id_)), size));
   return ret;
 }
 
@@ -4882,7 +4894,7 @@ int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRec
   if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
     LOG_WARN("failed to assign executing sql stat record");
   } else {
-    get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
+    ObLocalDiagnosticInfo::get()->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
   }
   return ret;
 }
@@ -4944,4 +4956,35 @@ int ObSQLSessionInfo::check_service_name_and_failover_mode() const
 {
   uint64_t tenant_id = get_effective_tenant_id();
   return check_service_name_and_failover_mode(tenant_id);
+}
+
+void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
+{
+  int ret = OB_SUCCESS;
+  ObBasicSessionInfo::set_ash_stat_value(ash_stat);
+  if (!get_module_name().empty()) {
+    int64_t size = get_module_name().length() > ASH_MODULE_STR_LEN
+                       ? ASH_MODULE_STR_LEN
+                       : get_module_name().length();
+    MEMCPY(ash_stat.module_, get_module_name().ptr(), size);
+    ash_stat.module_[size] = '\0';
+  }
+
+  // fill action for user session
+  if (!get_action_name().empty()) {
+    int64_t size = get_action_name().length() > ASH_ACTION_STR_LEN
+                       ? ASH_ACTION_STR_LEN
+                       : get_action_name().length();
+    MEMCPY(ash_stat.action_, get_action_name().ptr(), size);
+    ash_stat.action_[size] = '\0';
+  }
+
+  // fill client id for user session
+  if (!get_client_identifier().empty()) {
+    int64_t size = get_client_identifier().length() > ASH_CLIENT_ID_STR_LEN
+                       ? ASH_CLIENT_ID_STR_LEN
+                       : get_client_identifier().length();
+    MEMCPY(ash_stat.client_id_, get_client_identifier().ptr(), size);
+    ash_stat.client_id_[size] = '\0';
+  }
 }

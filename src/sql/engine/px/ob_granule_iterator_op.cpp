@@ -184,7 +184,8 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
   rf_start_wait_time_(0),
   tablet2part_id_map_(),
   real_child_(NULL),
-  is_parallel_runtime_filtered_(false)
+  is_parallel_runtime_filtered_(false),
+  splitter_type_(GIT_UNINITIALIZED)
 {
   op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::FILTERED_GRANULE_COUNT;
   op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::TOTAL_GRANULE_COUNT;
@@ -274,10 +275,11 @@ int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info)
       if (OB_FAIL(gi_task_pump->fetch_granule_task(taskset,
                                                    pos,
                                                    from_share_pool ? 0: worker_id_,
-                                                   tsc_op_id_))) {
+                                                   tsc_op_id_,
+                                                   splitter_type_))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("failed to fetch next granule task", K(ret),
-                   K(gi_task_pump), K(worker_id_), K(MY_SPEC.affinitize_));
+                   K(gi_task_pump), K(worker_id_), K(MY_SPEC.affinitize_), K(spec_.id_));
         } else {
           all_task_fetched_ = true;
         }
@@ -288,8 +290,10 @@ int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info)
         LOG_WARN("get task info failed", K(ret));
       } else if (FALSE_IT(info.task_id_ = worker_id_)) {
       } else if (OB_FAIL(rescan_tasks_info_.insert_rescan_task(pos, info))) {
-        LOG_WARN("array push back failed", K(ret), K(info));
+        LOG_WARN("array push back failed", K(ret), K(info), K(splitter_type_), K(pos), K(taskset));
       } else {
+        LOG_TRACE("gi op fetch task", K(get_spec().id_), K(pos), K(taskset),
+                  KPC(taskset),K(info), K(splitter_type_));
         if (NULL == rescan_taskset_) {
           rescan_taskset_ = taskset;
         } else if (rescan_taskset_ != taskset) {
@@ -456,6 +460,7 @@ int ObGranuleIteratorOp::inner_open()
 {
   int ret = OB_SUCCESS;
   ObOperator *real_child = nullptr;
+  splitter_type_ = ObGranuleUtil::calc_split_type(MY_SPEC.gi_attri_flag_);
   if (OB_FAIL(parameters_init())) {
     LOG_WARN("parameters init failed", K(ret));
   } else if (OB_FAIL(init_rescan_tasks_info())) {
@@ -675,7 +680,8 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
         LOG_WARN("reset table scan's ranges failed", K(ret),
           K(child_->get_spec().id_), K(gi_task_info));
       }
-      LOG_DEBUG("produce a gi task", K(tsc_op_id_), K(gi_task_info));
+      LOG_DEBUG("produce a gi task", K(tsc_op_id_), K(gi_task_info), K(get_spec().id_),
+               K(gi_task_info.tablet_loc_), KPC(gi_task_info.tablet_loc_));
     }
     if (OB_SUCC(ret)) {
       if (enable_single_runtime_filter_pruning() &&
@@ -839,7 +845,7 @@ int ObGranuleIteratorOp::fetch_full_pw_tasks(
   } else if (nullptr == (gi_task_pump = pump_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the pump can not be null", K(ret));
-  } else if (OB_FAIL(gi_task_pump->try_fetch_pwj_tasks(infos, op_ids, worker_id_))) {
+  } else if (OB_FAIL(gi_task_pump->try_fetch_pwj_tasks(infos, op_ids, worker_id_, splitter_type_))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to fetch next granule task", K(ret), K(gi_task_pump));
     }

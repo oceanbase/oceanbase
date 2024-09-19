@@ -124,13 +124,12 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
       if (OB_UNLIKELY(timeout <= 0)) {
         ret = OB_TIMEOUT;
         LOG_WARN("ctx time out", KR(ret), K(timeout));
-      } else if (OB_FAIL(databuff_printf(
+      } else if (OB_FAIL(databuff_print_multi_objs(
           non_empty_server_err_msg,
           ERR_MSG_BUF_LEN,
           pos,
-          "add non-empty server %s",
-          to_cstring(addr)))) {
-        LOG_WARN("fail to execute databuff_printf", KR(ret), K(addr));
+          "add non-empty server ", addr))) {
+          LOG_WARN("fail to execute databuff_print_multi_objs", KR(ret), K(addr), K(pos));
       } else if (OB_FAIL(fetch_new_server_id_(server_id))) {
         // fetch a new server id and insert the server into __all_server table
         LOG_WARN("fail to fetch new server id", KR(ret));
@@ -323,12 +322,12 @@ int ObServerZoneOpService::start_servers(
         if (OB_UNLIKELY(timeout <= 0)) {
           ret = OB_TIMEOUT;
           LOG_WARN("ctx time out", KR(ret), K(timeout));
-        } else if (OB_FAIL(databuff_printf(
+        } else if (OB_FAIL(databuff_print_multi_objs(
             disk_error_server_err_msg,
             ERR_MSG_BUF_LEN,
             pos,
-            "The target server %s may encounter device failures. Please check GV$OB_SERVERS for more information. START SERVER is",
-            to_cstring(server)))) {
+            "The target server ",
+            server, " may encounter device failures. Please check GV$OB_SERVERS for more information. START SERVER is"))) {
           LOG_WARN("fail to execute databuff_printf", KR(ret), K(server));
         } else if (OB_FAIL(rpc_arg.init(GCONF.self_addr_, server))) {
           LOG_WARN("fail to init rpc arg", KR(ret), K(GCONF.self_addr_), K(server));

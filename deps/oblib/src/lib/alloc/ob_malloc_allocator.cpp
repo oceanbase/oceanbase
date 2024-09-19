@@ -401,7 +401,14 @@ int ObMallocAllocator::with_resource_handle_invoke(uint64_t tenant_id, InvokeFun
   }
   return ret;
 }
-
+int ObMallocAllocator::set_tenant_max_min(int64_t tenant_id, int64_t max_memory, int64_t min_memory)
+{
+  return with_resource_handle_invoke(tenant_id, [&](ObTenantMemoryMgr *mgr) {
+      mgr->set_max(max_memory);
+      mgr->set_min(min_memory);
+      return OB_SUCCESS;
+    });
+}
 int ObMallocAllocator::set_tenant_limit(uint64_t tenant_id, int64_t bytes)
 {
   return with_resource_handle_invoke(tenant_id, [bytes](ObTenantMemoryMgr *mgr) {
@@ -435,6 +442,9 @@ int64_t ObMallocAllocator::get_tenant_remain(uint64_t tenant_id)
   int64_t remain = 0;
   with_resource_handle_invoke(tenant_id, [&remain](ObTenantMemoryMgr *mgr) {
       remain = mgr->get_limit() - mgr->get_sum_hold() + mgr->get_cache_hold();
+      if (remain < 0) {
+        remain = 0;
+      }
       return OB_SUCCESS;
     });
   return remain;
@@ -500,12 +510,11 @@ void ObMallocAllocator::print_tenant_memory_usage(uint64_t tenant_id) const
       }
       buf[std::min(ctx_pos, BUFLEN - 1)] = '\0';
       allow_next_syslog();
-      _LOG_INFO("[MEMORY] tenant: %lu, limit: %'lu hold: %'lu rpc_hold: %'lu cache_hold: %'lu "
+      _LOG_INFO("[MEMORY] tenant: %lu, limit: %'lu hold: %'lu cache_hold: %'lu "
                 "cache_used: %'lu cache_item_count: %'lu \n%s",
           tenant_id,
           mgr->get_limit(),
           mgr->get_sum_hold(),
-          mgr->get_rpc_hold(),
           mgr->get_cache_hold(),
           mgr->get_cache_hold(),
           mgr->get_cache_item_count(),
@@ -742,6 +751,30 @@ void ObMallocAllocator::get_unrecycled_tenant_ids(uint64_t *ids, int cap, int &c
     ids[cnt++] = (*cur)->get_tenant_id();
     cur = &(*cur)->get_next();
   }
+}
+
+bool ObMallocAllocator::is_tenant_allocator_exist(int64_t tenant_id)
+{
+  return NULL != get_tenant_ctx_allocator(tenant_id, ObCtxIds::DEFAULT_CTX_ID) ||
+      NULL != get_tenant_ctx_allocator_unrecycled(tenant_id, ObCtxIds::DEFAULT_CTX_ID);
+}
+
+void ObMallocAllocator::set_tenant_parent_limiter(int64_t tenant_id, ObResourceLimiter& parent)
+{
+  with_resource_handle_invoke(tenant_id, [&](ObTenantMemoryMgr *mgr) {
+    mgr->set_parent_limiter(parent);
+    return OB_SUCCESS;
+  });
+}
+
+ObResourceLimiter* ObMallocAllocator::get_tenant_parent_limiter(int64_t tenant_id)
+{
+  ObResourceLimiter* tenant_parent_limiter = NULL;
+  with_resource_handle_invoke(tenant_id, [&](ObTenantMemoryMgr *mgr) {
+    tenant_parent_limiter = mgr->get_parent_limiter();
+    return OB_SUCCESS;
+  });
+  return tenant_parent_limiter;
 }
 
 #ifdef ENABLE_SANITY

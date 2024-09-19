@@ -1047,6 +1047,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_USE_MERGE  { return NO_USE_MERGE; }
 <hint>USE_HASH  { return USE_HASH; }
 <hint>NO_USE_HASH  { return NO_USE_HASH; }
+<hint>USE_ADAPTIVE { return USE_ADAPTIVE; }
+<hint>NO_USE_ADAPTIVE { return NO_USE_ADAPTIVE; }
 <hint>USE_PLAN_CACHE  { return USE_PLAN_CACHE; }
 <hint>USE_HASH_AGGREGATION  { return USE_HASH_AGGREGATION; }
 <hint>NO_USE_HASH_AGGREGATION  { return NO_USE_HASH_AGGREGATION; }

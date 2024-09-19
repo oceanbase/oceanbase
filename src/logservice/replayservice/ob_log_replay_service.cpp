@@ -225,17 +225,11 @@ int ObLogReplayService::init(PalfEnv *palf_env,
 int ObLogReplayService::start()
 {
   int ret = OB_SUCCESS;
-  const ObAdaptiveStrategy adaptive_strategy(LEAST_THREAD_NUM,
-                                             ESTIMATE_TS,
-                                             EXPAND_RATE,
-                                             SHRINK_RATE);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObLogReplayService not inited!!!", K(ret));
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
     CLOG_LOG(ERROR, "start ObLogReplayService failed", K(ret));
-  } else if (OB_FAIL(TG_SET_ADAPTIVE_STRATEGY(tg_id_, adaptive_strategy))) {
-    CLOG_LOG(WARN, "set adaptive strategy failed", K(ret));
   } else {
     is_running_ = true;
     int tmp_ret = OB_SUCCESS;

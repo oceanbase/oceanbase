@@ -70,7 +70,7 @@ LATCH_DEF(SERVER_STATUS_LOCK, 53, "server status lock", LATCH_READ_PREFER, 2000,
 LATCH_DEF(SERVER_MAINTAINCE_LOCK, 54, "server maintaince lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(UNIT_MANAGER_LOCK, 55, "unit manager lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(ZONE_MANAGER_LOCK, 56, "zone manager maintaince lock", LATCH_READ_PREFER, 2000, 0, true)
-LATCH_DEF(ALLOC_OBJECT_LOCK, 57, "object set lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(ALLOC_OBJECT_LOCK, 57, "object set lock", LATCH_READ_PREFER, 1, 0, true)
 LATCH_DEF(ALLOC_BLOCK_LOCK, 58, "block set lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(TRACE_RECORDER_LOCK, 59, "normal trace recorder lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SESSION_TRACE_RECORDER_LOCK, 60, "session trace recorder lock", LATCH_FIFO, 2000, 0, true)
@@ -335,12 +335,18 @@ LATCH_DEF(OB_MAJOR_MERGE_INFO_MANAGER_LOCK, 314, "major merge info manager lock"
 LATCH_DEF(RESOURCE_SERVICE_LOCK, 315, "resource service lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(RESOURCE_SERVICE_SWITCH_LOCK, 316, "resource service switch lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(ASH_LOCK, 317, "ash lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_DEVICE_CREDENTIAL_MGR_LOCK, 322, "device credential mgr rw lock", LATCH_READ_PREFER, 2000, 0, true)
 
 LATCH_DEF(TRANS_ACCESS_LOCK, 328, "trans read/write access latch", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TRANS_FLUSH_REDO_LOCK, 329, "trans flush redo log latch", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SQL_AUDIT, 335, "sql audit release second level queue lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SEQUENCE_VALUE_FETCH_LOCK, 339, "sequence value fetch lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 336, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DI_SUMMARY_LOCK, 340, "diagnostic info summary lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DI_ALLOCATE_LOCK, 341, "diagnostic info allocator lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DI_COLLECTOR_LOCK, 342, "diagnostic info collector lock", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(LATCH_END, 343, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

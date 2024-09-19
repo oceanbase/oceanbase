@@ -18,7 +18,10 @@
 #include "lib/alloc/alloc_func.cpp"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_libeasy_mem_pool.h"
+#include "share/io/ob_io_define.h"
+#include "src/share/ob_device_manager.h"
 #include <algorithm>
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 
 namespace oceanbase
 {
@@ -36,6 +39,8 @@ char ObSimpleLogClusterTestBase::sig_buf_[sizeof(ObSignalWorker) + sizeof(observ
 ObSignalWorker *ObSimpleLogClusterTestBase::sig_worker_ = new (sig_buf_) ObSignalWorker();
 observer::ObSignalHandle *ObSimpleLogClusterTestBase::signal_handle_ = new (sig_worker_ + 1) observer::ObSignalHandle();
 bool ObSimpleLogClusterTestBase::disable_hot_cache_ = false;
+int64_t ObSimpleLogClusterTestBase::tenant_id_ = ObISimpleLogServer::DEFAULT_TENANT_ID;
+ObTenantIOManager *ObSimpleLogClusterTestBase::tio_manager_ = nullptr;
 
 void ObSimpleLogClusterTestBase::SetUpTestCase()
 {
@@ -68,11 +73,19 @@ int ObSimpleLogClusterTestBase::start()
   int ret = OB_SUCCESS;
   int64_t member_cnt = 0;
   ObTenantMutilAllocatorMgr::get_instance().init();
+  auto malloc = ObMallocAllocator::get_instance();
+  malloc->create_and_add_tenant_allocator(tenant_id_);
   ObMemoryDump::get_instance().init();
   // set easy allocator for watching easy memory holding
   easy_pool_set_allocator(ob_easy_realloc);
   ev_set_allocator(ob_easy_realloc);
   lib::set_memory_limit(10L * 1000L * 1000L * 1000L);
+  const uint64_t mittest_memory = 6L * 1024L * 1024L * 1024L;
+  ObTenantBase *tmp_base = OB_NEW(ObTenantBase, "mittest", tenant_id_);
+  share::ObTenantEnv::set_tenant(tmp_base);
+  const std::string clog_dir = test_name_;
+  const int64_t disk_io_thread_count = 8;
+  const int64_t max_io_depth = 256;
   if (sig_worker_ != nullptr && OB_FAIL(sig_worker_->start())) {
     SERVER_LOG(ERROR, "Start signal worker error", K(ret));
   } else if (signal_handle_ != nullptr && OB_FAIL(signal_handle_->start())) {
@@ -80,7 +93,28 @@ int ObSimpleLogClusterTestBase::start()
   } else if (OB_FAIL(member_region_map_.create(OB_MAX_MEMBER_NUMBER,
       ObMemAttr(MTL_ID(), ObModIds::OB_HASH_NODE, ObCtxIds::DEFAULT_CTX_ID)))) {
   } else if (OB_FAIL(generate_sorted_server_list_(node_cnt_))) {
+  } else if (OB_FAIL(G_RES_MGR.init())) {
+    SERVER_LOG(ERROR, "init ObResourceManager failed", K(ret));
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().init(mittest_memory))) {
+    SERVER_LOG(ERROR, "init ObIOManager failed");
+  } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+    SERVER_LOG(ERROR, "start ObIOManager failed");
+  } else if (OB_FAIL(ObTenantIOManager::mtl_new(tio_manager_))) {
+    SERVER_LOG(ERROR, "new tenant io manager failed", K(ret));
+  } else if (OB_FAIL(ObTenantIOManager::mtl_init(tio_manager_))) {
+    SERVER_LOG(ERROR, "init tenant io manager failed", K(ret));
+  } else if (OB_FAIL(tio_manager_->start())) {
+    SERVER_LOG(ERROR, "start tenant io manager failed", K(ret));
+  } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(clog_dir.c_str(), disk_io_thread_count, max_io_depth, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+    SERVER_LOG(ERROR, "LOG_IO_DEVICE_WRAPPER init failed", K(ret));
   } else {
+    ObTenantIOConfig io_config;
+    io_config.unit_config_.max_iops_ = 10000000;
+    io_config.unit_config_.min_iops_ = 10000000;
+    io_config.unit_config_.weight_ = 10000000;
+    tio_manager_->update_basic_io_config(io_config);
     // 如果需要新增arb server，将其作为memberlist最后一项
     // TODO by runlin, 这个是暂时的解决方法，以后可以走加减成员的流程
     const int64_t arb_idx = member_cnt_ - 1;
@@ -94,7 +128,7 @@ int ObSimpleLogClusterTestBase::start()
       }
       common::ObAddr server;
       if (OB_FAIL(node_list_.get_server_by_index(i, server))) {
-      } else if (OB_FAIL(svr->simple_init(test_name_, server, node_id, &member_region_map_, true))) {
+      } else if (OB_FAIL(svr->simple_init(test_name_, server, node_id, tio_manager_, &member_region_map_, true))) {
         SERVER_LOG(WARN, "simple_init failed", K(ret), K(i), K_(node_list));
       } else if (OB_FAIL(svr->simple_start(true))) {
         SERVER_LOG(WARN, "simple_start failed", K(ret), K(i), K_(node_list));
@@ -130,6 +164,11 @@ int ObSimpleLogClusterTestBase::close()
       break;
     }
   }
+
+  LOG_IO_DEVICE_WRAPPER.destroy();
+  ObIOManager::get_instance().stop();
+  ObIOManager::get_instance().destroy();
+  ObDeviceManager::get_instance().destroy();
   return ret;
 }
 

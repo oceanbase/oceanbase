@@ -620,6 +620,8 @@ bool ObRawDecoder::fast_filter_valid(
     case ObIntTC:
     case ObDateTimeTC:
     case ObDateTC:
+    case ObMySQLDateTC:
+    case ObMySQLDateTimeTC:
     case ObTimeTC: {
       is_signed_data = true;
       break;

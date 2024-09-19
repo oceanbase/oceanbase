@@ -204,12 +204,12 @@ int64_t ob_update_loop_ts()
 
 void ob_set_bkgd_session_active()
 {
-  ::oceanbase::common::ObActiveSessionGuard::set_bkgd_sess_active();
+  ::oceanbase::common::ObActiveSessionGuard::set_sess_active();
 }
 
 void ob_set_bkgd_session_inactive()
 {
-  ::oceanbase::common::ObActiveSessionGuard::set_bkgd_sess_inactive();
+  ::oceanbase::common::ObActiveSessionGuard::set_sess_inactive();
 }
 
 

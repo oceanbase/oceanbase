@@ -1960,7 +1960,8 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
     LOG_WARN("fail to encode op type", K(ret));
   } else if (OB_FAIL((seri_ctx == NULL ? root.serialize(buf, buf_len, pos) :
       root.serialize(buf, buf_len, pos, *seri_ctx)))) {
-    LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", to_cstring(root));
+    ObCStringHelper helper;
+    LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", helper.convert(root));
   } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == root.type_)
              && OB_FAIL(serialize_sub_plan(buf, buf_len, pos, root))) {
     LOG_WARN("fail to serialize sub plan", K(ret));

@@ -1530,7 +1530,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
                                             int64_t &var_idx) const
 {
   int ret = OB_SUCCESS;
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
   data_type.reset();
   ObSQLSessionInfo &session_info = resolve_ctx_.session_info_;
   ObSchemaGetterGuard &schema_guard = resolve_ctx_.schema_guard_;
@@ -1962,7 +1962,6 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
       buf->reset();
     }
   }
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -3254,7 +3253,7 @@ int ObPLBlockNS::get_pl_data_type_by_name(const ObPLResolveCtx &resolve_ctx,
                                           const ObString &type_name, const ObUserDefinedType *&user_type) const
 {
   int ret = OB_SUCCESS;
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
   user_type = NULL;
   if (OB_ISNULL(type_table_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3313,7 +3312,6 @@ int ObPLBlockNS::get_pl_data_type_by_name(const ObPLResolveCtx &resolve_ctx,
       }
     }
   }
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 

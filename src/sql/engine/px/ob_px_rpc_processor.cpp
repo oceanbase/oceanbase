@@ -36,10 +36,8 @@ int ObInitSqcP::init()
   ObPxSqcHandler *sqc_handler = nullptr;
   if (OB_ISNULL(sqc_handler = ObPxSqcHandler::get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
-    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
-    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("Failed to init sqc handler", K(ret));
     sqc_handler->reset();
     op_reclaim_free(sqc_handler);
@@ -62,12 +60,11 @@ void ObInitSqcP::destroy()
     int report_ret = OB_SUCCESS;
     ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 int ObInitSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().in_px_execution_ = true;
+  ObActiveSessionGuard::get_stat().exec_phase().in_px_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
@@ -240,7 +237,7 @@ int ObInitSqcP::after_process(int error_code)
     session->set_session_sleep();
   }
 
-  ObActiveSessionGuard::get_stat().in_px_execution_ = false;
+  ObActiveSessionGuard::get_stat().exec_phase().in_px_execution_ = false;
   /**
    * 此处需要清理中断，并把分配的线程数和handler释放.
    * worker正常启动后，此时它的引用计数被更新成了
@@ -368,10 +365,8 @@ int ObInitFastSqcP::init()
   ObPxSqcHandler *sqc_handler = nullptr;
  if (OB_ISNULL(sqc_handler = ObPxSqcHandler::get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
-    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
-    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("Failed to init sqc handler", K(ret));
     sqc_handler->reset();
     op_reclaim_free(sqc_handler);
@@ -394,12 +389,11 @@ void ObInitFastSqcP::destroy()
     int report_ret = OB_SUCCESS;
     ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 int ObInitFastSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
@@ -448,7 +442,7 @@ int ObInitFastSqcP::process()
     ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
   }
 
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
+  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = false;
   if (OB_NOT_NULL(sqc_handler)) {
     // link channel之前或者link过程可能会失败.
     // 如果sqc和qc没有link, 由response将 ret 通知给px.

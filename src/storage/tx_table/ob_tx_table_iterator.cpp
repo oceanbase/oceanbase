@@ -344,10 +344,12 @@ int ObTxDataMemtableScanIterator::drop_and_get_tx_data_(ObTxData *&tx_data)
       drop_tx_data_cnt_++;
       if (OB_UNLIKELY(next_tx_data->end_scn_ > tx_data->end_scn_)) {
         // pointer to next_tx_data cause its end_log_ts is larger
-        STORAGE_LOG(DEBUG, "drop one rollback tx data", "droped : ", to_cstring(tx_data), "keeped", to_cstring(next_tx_data));
+        ObCStringHelper helper;
+        STORAGE_LOG(DEBUG, "drop one rollback tx data", "droped : ", helper.convert(tx_data), "keeped", helper.convert(next_tx_data));
         tx_data = next_tx_data;
       } else {
-        STORAGE_LOG(DEBUG, "drop one rollback tx data", "droped : ", to_cstring(next_tx_data), "keeped", to_cstring(tx_data));
+        ObCStringHelper helper;
+        STORAGE_LOG(DEBUG, "drop one rollback tx data", "droped : ", helper.convert(next_tx_data), "keeped", helper.convert(tx_data));
       }
     } else {
       break;

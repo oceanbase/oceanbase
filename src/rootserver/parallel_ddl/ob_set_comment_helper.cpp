@@ -239,8 +239,9 @@ int ObSetCommentHelper::check_table_legitimacy_()
                             && !orig_table_schema_->is_view_table()
                             && !orig_table_schema_->is_external_table()))) {
     ret = OB_ERR_WRONG_OBJECT;
+    ObCStringHelper helper;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-    to_cstring(arg_.database_name_), to_cstring(arg_.table_name_), "BASE TABLE");
+    helper.convert(arg_.database_name_), helper.convert(arg_.table_name_), "BASE TABLE");
   } else if (OB_UNLIKELY(orig_table_schema_->is_sys_view() && !GCONF.enable_sys_table_ddl)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("comment on sys view is not allowed", KR(ret), K(orig_table_schema_->get_table_id()));
@@ -359,6 +360,7 @@ int ObSetCommentHelper::alter_schema_()
   ObSchemaService *schema_service_impl = nullptr;
   int64_t new_schema_version = OB_INVALID_VERSION;
   const ObString *ddl_stmt_str = &arg_.ddl_stmt_str_;
+  const bool need_del_stats = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_ISNULL(new_table_schema_) || OB_ISNULL(orig_table_schema_)) {
@@ -377,7 +379,7 @@ int ObSetCommentHelper::alter_schema_()
         LOG_WARN("new_column_schema is nullptr", KR(ret));
       } else if (FALSE_IT(new_column_schema->set_schema_version(new_schema_version))) {
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().update_single_column(
-                trans_, *orig_table_schema_, *new_table_schema_, *new_column_schemas_.at(column_idx), false /* record ddl operation*/))) {
+                trans_, *orig_table_schema_, *new_table_schema_, *new_column_schemas_.at(column_idx), false /* record ddl operation*/, need_del_stats))) {
         LOG_WARN("fail to update single column", KR(ret));
       }
     }

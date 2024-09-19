@@ -32,6 +32,14 @@ enum PartitionRelation
   COMPATIBLE_COMMON
 };
 
+enum Monotonicity
+{
+  NONE_MONO,
+  ASC,
+  DESC,
+  CONST
+};
+
 struct MergeKeyInfo
 {
   MergeKeyInfo(common::ObIAllocator &allocator, int64_t size)
@@ -69,6 +77,7 @@ class ObTablePartitionInfo;
 struct SubPlanInfo;
 class OptSelectivityCtx;
 class Path;
+class AccessPath;
 class ObSharedExprResolver;
 class ObTableMetaInfo;
 class ObOptimizerUtil
@@ -175,6 +184,23 @@ public:
                                      const common::ObIArray<ObRawExpr *> &const_exprs,
                                      const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                      int64_t &number);
+
+
+  static int get_expr_monotonicity(const ObRawExpr *expr,
+                                   const ObRawExpr *var,
+                                   ObExecContext &ctx,
+                                   Monotonicity &monotonicity,
+                                   bool &is_strict,
+                                   const ParamStore &param_store,
+                                   ObPCConstParamInfo& const_param_info);
+
+  static int get_expr_monotonicity_recursively(const ObRawExpr *expr,
+                                               const ObColumnRefRawExpr *var,
+                                               ObExecContext &ctx,
+                                               Monotonicity &monotonicity,
+                                               bool &is_strict,
+                                               const ParamStore &param_store,
+                                               ObPCConstParamInfo &const_param_info);
 
   static bool is_sub_expr(const ObRawExpr *sub_expr, const ObRawExpr *expr);
   static bool is_sub_expr(const ObRawExpr *sub_expr, const ObIArray<ObRawExpr*> &exprs);
@@ -624,6 +650,11 @@ public:
                              const EqualSets &equal_sets,
                              const ObIArray<ObRawExpr *> &const_exprs,
                              bool &is_unique);
+
+  static int is_expr_const_for_monotonicity(const ObRawExpr *expr,
+                                            const ObIArray<ObRawExpr *> &const_exprs,
+                                            ObExecContext *ctx,
+                                            bool& is_unique);
 
   static int get_fd_set_parent_exprs(const ObIArray<ObFdItem *> &fd_item_set,
                                      ObIArray<ObRawExpr *> &fd_set_parent_exprs);
@@ -1143,7 +1174,15 @@ public:
                                             ObIArray<ObExprResType> *res_types,
                                             const bool is_mysql_recursive_union = false,
                                             ObIArray<ObString> *rcte_col_name = NULL);
-
+  static int try_add_cast_to_set_child_list(ObIAllocator *allocator,
+                                            ObSQLSessionInfo *session_info,
+                                            ObRawExprFactory *expr_factory,
+                                            const bool is_distinct,
+                                            ObIArray<ObSelectStmt*> &left_stmts,
+                                            ObSelectStmt *right_stmt,
+                                            ObIArray<ObExprResType> *res_types,
+                                            const bool is_mysql_recursive_union = false,
+                                            ObIArray<ObString> *rcte_col_name = NULL);
   static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                   ObRawExprFactory *expr_factory,
                                   ObIArray<ObSelectStmt*> &stmts,
@@ -1418,13 +1457,9 @@ public:
 
   static int allocate_identify_seq_expr(ObOptimizerContext &opt_ctx, ObRawExpr *&identify_seq_expr);
 
-  static int check_contribute_query_range(ObLogicalOperator *tsc,
-                                          const ObIArray<ObExecParamRawExpr *> &params,
-                                          bool &is_valid);
-
-  static int check_pushdown_range_cond(ObLogicalOperator *root,
-                                       bool &cnt_pd_range_cond);
- 
+  static int check_exec_param_filter_exprs(const ObIArray<ObRawExpr*> &filters,
+                                           const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                           bool &used_in_filter);
   static int check_exec_param_filter_exprs(const ObIArray<ObRawExpr *> &input_filters,
                                            bool &has_exec_param_filters);
 
@@ -1562,8 +1597,6 @@ public:
                                          ObRawExpr *&temp_table_filter,
                                          ObSelectStmt *temp_table_query = NULL);
 
-  static int check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj);
-
   static int check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false);
 
   static int compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerContext *opt_ctx,
@@ -1572,6 +1605,23 @@ public:
                                                            int64_t compute_parallel,
                                                            int64_t &px_expected_work_count);
 
+  static int get_has_global_index_filters(const ObSqlSchemaGuard *schema_guard,
+                                          const uint64_t index_id,
+                                          const ObIArray<ObRawExpr*> &filter_exprs,
+                                          bool &has_index_scan_filter,
+                                          bool &has_index_lookup_filter);
+  static int get_has_global_index_filters(const ObIArray<ObRawExpr*> &filter_exprs,
+                                          const ObIArray<uint64_t> &index_columns,
+                                          bool &has_index_scan_filter,
+                                          bool &has_index_lookup_filter);
+  static int check_can_batch_rescan(const ObLogicalOperator *op,
+                                    const bool allow_normal_scan,
+                                    bool &can_batch_rescan);
+  static int check_can_batch_rescan_compat(const AccessPath &access_path, bool &can_batch_rescan);
+  static int check_can_batch_rescan_compat(ObLogicalOperator *op,
+                                           const ObIArray<ObExecParamRawExpr*> &rescan_params,
+                                           bool for_nlj,
+                                           bool &can_batch_rescan);
   template<typename T>
   static int choose_random_members(const uint64_t seed,
                                    const ObIArray<T> &input_array,

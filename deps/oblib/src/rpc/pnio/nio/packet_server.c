@@ -72,12 +72,13 @@ int pkts_init(pkts_t* io, eloop_t* ep, pkts_cfg_t* cfg) {
   int err = 0;
   int lfd = -1;
   io->ep = ep;
+  char cfg_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
   ef(err = pkts_sf_init(&io->sf, cfg));
   sc_queue_init(&io->req_queue);
   ef(err = evfd_init(io->ep, &io->evfd, (handle_event_t)pkts_evfd_cb));
   lfd = cfg->accept_qfd >= 0 ?cfg->accept_qfd: listen_create(cfg->addr);
   ef(err = listenfd_init(io->ep, &io->listenfd, (sf_t*)&io->sf, lfd));
-  rk_info("pkts listen at %s", T2S(addr, cfg->addr));
+  rk_info("pkts listen at %s", addr_str(cfg->addr, cfg_addr_buf, sizeof(cfg_addr_buf)));
   idm_init(&io->sk_map, arrlen(io->sk_table));
   io->on_req = cfg->handle_func;
   dlink_init(&io->sk_list);

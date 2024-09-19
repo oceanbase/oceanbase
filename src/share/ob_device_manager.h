@@ -16,11 +16,28 @@
 #include "common/storage/ob_io_device.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/restore/ob_storage_info.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
+class ObTenantStsCredentialMgr : public ObTenantStsCredentialBaseMgr
+{
+public:
+  ObTenantStsCredentialMgr() {}
+  virtual ~ObTenantStsCredentialMgr() {}
+  virtual int get_sts_credential(char *sts_credential, const int64_t sts_credential_buf_len) override;
+  virtual int check_sts_credential(omt::ObTenantConfigGuard &tenant_config) const;
+  static ObTenantStsCredentialBaseMgr &get_instance()
+  {
+    static ObTenantStsCredentialMgr mgr;
+    return mgr;
+  }
+  const static int64_t LOG_INTERVAL_US = 5 * 1000 * 1000; // 5s
+};
 
 class ObDeviceManager
 {
@@ -30,6 +47,10 @@ public:
   void destroy();
   static ObDeviceManager &get_instance();
 
+  int get_device_key(const common::ObString &storage_info,
+                     const common::ObString &storage_type_prefix,
+                     char *device_key,
+                     const int64_t device_key_len) const;
   /*for object device, will return a new object to caller*/
   /*ofs/local will share in upper logical*/
   int get_device(const common::ObString& storage_info,

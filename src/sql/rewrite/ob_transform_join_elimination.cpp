@@ -853,78 +853,86 @@ int ObTransformJoinElimination::extract_child_conditions(ObDMLStmt *stmt,
 }
 
 int ObTransformJoinElimination::eliminate_outer_join_in_joined_table(ObDMLStmt *stmt,
-                                                                     TableItem *&table_item,
-                                                                     const bool is_non_sens_dul_vals,
-                                                                     ObIArray<uint64_t> &table_ids,
-                                                                     ObIArray<ObRawExprPointer> &relation_exprs,
-                                                                     bool &trans_happen,
-                                                                     ObIArray<ObSEArray<TableItem *, 4>> &trans_tables)
+                                                  TableItem *&table_item,
+                                                  const bool is_non_sens_dul_vals,
+                                                  const bool is_root_table,
+                                                  ObIArray<uint64_t> &table_ids,
+                                                  ObIArray<ObRawExprPointer> &relation_exprs,
+                                                  bool &trans_happen,
+                                                  ObIArray<ObSEArray<TableItem *, 4>> &trans_tables)
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
+  JoinedTable *joined_table = NULL;
+  bool is_valid = false;
+  bool is_happened = false;
+  bool left_is_happend = false;
+  bool right_is_happend = false;
   trans_happen = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt or joined table is null.", K(stmt), K(table_item), K(ret));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (table_item->is_joined_table()) {
-    bool is_valid = false;
-    JoinedTable *joined_table = static_cast<JoinedTable*>(table_item);
-    if (OB_FAIL(check_transform_validity_outer_join(stmt,
-                                                    joined_table,
-                                                    is_non_sens_dul_vals,
-                                                    relation_exprs,
-                                                    is_valid))) {
+    joined_table = static_cast<JoinedTable*>(table_item);
+    // eliminate right branch
+    if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("left child or right child is null.", K(ret));
+    } else if (OB_FAIL(SMART_CALL(eliminate_outer_join_in_joined_table(stmt,
+                                  joined_table->right_table_, is_non_sens_dul_vals, false,
+                                  table_ids, relation_exprs, right_is_happend, trans_tables)))) {
+      LOG_WARN("failed to eliminate ouer join in joined table.", K(ret));
+    } else if (!right_is_happend) {
+      /* do nothing */
+    } else if (OB_FAIL(ObTransformUtils::adjust_single_table_ids(joined_table))) {
+      LOG_WARN("failed to construct single table ids.", K(ret));
+    } else {
+      trans_happen = true;
+      LOG_TRACE("right branch transforms happened");
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_transform_validity_outer_join(stmt, joined_table, is_non_sens_dul_vals,
+                                                           relation_exprs, is_valid))) {
       LOG_WARN("failed to check transform validity outer join.", K(ret));
     } else if (!is_valid) {
-      bool left_is_happend = false;
-      bool right_is_happend = false;
-      if (OB_FAIL(SMART_CALL(eliminate_outer_join_in_joined_table(stmt,
-                                                                  joined_table->right_table_,
-                                                                  is_non_sens_dul_vals,
-                                                                  table_ids,
-                                                                  relation_exprs,
-                                                                  right_is_happend,
-                                                                  trans_tables)))) {
+      // eliminate left branch
+      if (OB_FAIL(SMART_CALL(eliminate_outer_join_in_joined_table(stmt, joined_table->left_table_,
+                             is_non_sens_dul_vals, false, table_ids, relation_exprs,
+                             left_is_happend, trans_tables)))) {
         LOG_WARN("failed to eliminate ouer join in joined table.", K(ret));
-      } else if (OB_FAIL(SMART_CALL(eliminate_outer_join_in_joined_table(stmt,
-                                                                         joined_table->left_table_,
-                                                                         is_non_sens_dul_vals,
-                                                                         table_ids,
-                                                                         relation_exprs,
-                                                                         left_is_happend,
-                                                                         trans_tables)))) {
-        LOG_WARN("failed to eliminate ouer join in joined table.", K(ret));
-      } else if (!left_is_happend && !right_is_happend) {
+      } else if (!left_is_happend) {
         /* do nothing */
       } else if (OB_FAIL(ObTransformUtils::adjust_single_table_ids(joined_table))) {
         LOG_WARN("failed to construct single table ids.", K(ret));
       } else {
         trans_happen = true;
+        LOG_TRACE("left branch transforms happened");
       }
-    } else if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("left child or right child is null.", K(ret));
-    } else if (OB_FAIL(SMART_CALL(eliminate_outer_join_in_joined_table(stmt,
-                                                                       joined_table->left_table_,
-                                                                       is_non_sens_dul_vals,
-                                                                       table_ids,
-                                                                       relation_exprs,
-                                                                       trans_happen,
-                                                                       trans_tables)))) {
-      LOG_WARN("failed to eliminate ouer join in joined table.", K(ret));
-    } else if (OB_FAIL(construct_eliminated_table(stmt, joined_table->right_table_, trans_tables))) {
+    } else if (OB_FAIL(construct_eliminated_table(stmt, joined_table->right_table_,
+                                                  trans_tables))) {
       LOG_WARN("failed to construct eliminated tables", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::remove_tables_from_stmt(stmt,joined_table->right_table_,
+    } else if (OB_FAIL(ObTransformUtils::remove_tables_from_stmt(stmt, joined_table->right_table_,
                                                                  table_ids))) {
       LOG_WARN("failed to remove table items.", K(ret));
     } else {
       table_item = joined_table->left_table_;
       trans_happen = true;
+      relation_exprs.reset();
+      if (is_root_table) {
+        if (OB_FAIL(stmt->remove_joined_table_item(joined_table))) {
+          LOG_WARN("failed to remove joined table item.", K(ret));
+        } else if (table_item->is_joined_table() &&
+                   OB_FAIL(stmt->add_joined_table(static_cast<JoinedTable*>(table_item)))) {
+          LOG_WARN("failed to add joined table item.");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+        LOG_WARN("failed to get relation exprs", K(ret));
+      } else if (OB_FAIL(SMART_CALL(eliminate_outer_join_in_joined_table(stmt, table_item,
+                                    is_non_sens_dul_vals, is_root_table, table_ids, relation_exprs,
+                                    is_happened, trans_tables)))) {
+        LOG_WARN("failed to eliminate ouer join in joined table.", K(ret));
+      }
     }
   }
   return ret;
@@ -1357,10 +1365,10 @@ int ObTransformJoinElimination::eliminate_outer_join(ObIArray<ObParentDMLStmt> &
   } else {
     TableItem *table = NULL;
     bool is_happend = false;
-    common::ObArray<JoinedTable*> joined_tables;
     ObSEArray<uint64_t, 4> table_ids;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_from_item_size(); i++) {
       FromItem &from_item = stmt->get_from_item(i);
+      is_happend = false;
       if (!from_item.is_joined_) {
         /*do nothing*/
       } else if (OB_ISNULL(table = stmt->get_joined_table(from_item.table_id_))) {
@@ -1369,14 +1377,12 @@ int ObTransformJoinElimination::eliminate_outer_join(ObIArray<ObParentDMLStmt> &
       } else if (OB_FAIL(eliminate_outer_join_in_joined_table(stmt,
                                                               table,
                                                               is_non_sens_dul_vals,
+                                                              true,
                                                               table_ids,
                                                               relation_exprs,
                                                               is_happend,
                                                               trans_tables))) {
         LOG_WARN("failed to eliminate outer join in from items.", K(ret));
-      } else if (table->is_joined_table() &&
-                 OB_FAIL(joined_tables.push_back(static_cast<JoinedTable*>(table)))) {
-        LOG_WARN("failed to push back joined tables", K(ret), K(table));
       } else if (is_happend) {
         from_item.is_joined_ = table->is_joined_table();
         from_item.table_id_ = table->table_id_;
@@ -1403,8 +1409,6 @@ int ObTransformJoinElimination::eliminate_outer_join(ObIArray<ObParentDMLStmt> &
                  OB_FAIL(ObTransformUtils::add_const_param_constraints(stmt->get_limit_expr(),
                                                                        ctx_))) {
         LOG_WARN("failed to add const param constraints", K(ret));
-      } else if (OB_FAIL(stmt->get_joined_tables().assign(joined_tables))) {
-        LOG_WARN("failed to reset joined table container", K(ret));
       } else if (OB_FAIL(stmt->rebuild_tables_hash())) {
         LOG_WARN("failed to rebuild table hash", K(ret));
       } else if (OB_FAIL(stmt->update_column_item_rel_id())) {

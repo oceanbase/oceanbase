@@ -130,7 +130,7 @@ public:
            || type == ObNumberFloatType || type == ObTimestampTZType || type == ObTimestampLTZType
            || type == ObTimestampNanoType || type == ObIntervalDSType || type == ObVarcharType
            || type == ObNVarchar2Type || type == ObRawType || type == ObNCharType
-           || type == ObCharType)
+           || type == ObCharType || type == ObMySQLDateType || type == ObMySQLDateTimeType)
            && (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_BIN
               || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_UTF8MB4_GENERAL_CI
               || cs == CS_TYPE_GBK_CHINESE_CI

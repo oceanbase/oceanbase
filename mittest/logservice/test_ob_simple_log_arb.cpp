@@ -550,7 +550,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
   sleep(2);
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(get_cluster()[arb_replica_idx]);
   IPalfHandleImplGuard arb_guard;
-  ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+  ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
   PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
   LogEngine *log_engine = &arb_palf->log_engine_;
   LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
@@ -576,7 +576,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     IPalfHandleImplGuard arb_guard;
-    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
     LogStorage *meta_storage = &log_engine->log_meta_storage_;
@@ -591,7 +591,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     IPalfHandleImplGuard arb_guard;
-    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
     LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
@@ -611,7 +611,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 4000, id));
     IPalfHandleImplGuard arb_guard;
-    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(ObISimpleLogServer::DEFAULT_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
     LSN meta_tail = log_engine->log_meta_storage_.log_tail_;

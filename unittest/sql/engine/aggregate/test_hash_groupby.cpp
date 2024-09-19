@@ -365,7 +365,8 @@ TEST_F(ObHashGroupbyTest, test_serialize_and_deserialize)
   data_len = pos;
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, deserialize_op.deserialize(bin_buf, data_len, pos));
-  ASSERT_EQ(0, strcmp(to_cstring(hash_groupby), to_cstring(deserialize_op)));
+  ObCStringHelper helper;
+  ASSERT_EQ(0, strcmp(helper.convert(hash_groupby), helper.convert(deserialize_op)));
 }
 
 void  __attribute__((constructor(101))) init_SessionDIBuffer()

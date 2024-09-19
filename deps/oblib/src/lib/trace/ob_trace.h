@@ -238,7 +238,7 @@ struct ObTrace
 {
   static constexpr uint64_t MAGIC_CODE = 0x1234567887654321ul;
   static constexpr int64_t DEFAULT_BUFFER_SIZE = (1L << 16);
-  static constexpr int64_t MIN_BUFFER_SIZE = (1L << 13);
+  static constexpr int64_t MIN_BUFFER_SIZE = (1L << 12);  // 4KB
   static ObTrace* get_instance();
   static void set_trace_buffer(void* buffer, int64_t buffer_size);
   ObTrace(int64_t buffer_size);

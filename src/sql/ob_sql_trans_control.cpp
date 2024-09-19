@@ -488,11 +488,17 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
         LOG_WARN("fail to inc session ref", K(ret));
       } else {
         callback->handout();
-        ObActiveSessionGuard::get_stat().set_async_committing();
+        ObLocalDiagnosticInfo::get()->get_ash_stat().exec_phase().in_committing_ = true;
+        ObLocalDiagnosticInfo::get()->begin_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
+        callback->set_diagnostic_info(ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_
+                                          ? ObLocalDiagnosticInfo::get()
+                                          : nullptr);
         if(OB_FAIL(txs->submit_commit_tx(*tx_ptr, expire_ts, *callback, &trace_info))) {
           LOG_WARN("submit commit tx fail", K(ret), KP(callback), K(expire_ts), KPC(tx_ptr));
+          callback->reset_diagnostic_info();
           GCTX.session_mgr_->revert_session(session);
-          ObActiveSessionGuard::get_stat().finish_async_commiting();
+          ObLocalDiagnosticInfo::get()->get_ash_stat().exec_phase().in_committing_ = false;
+          ObLocalDiagnosticInfo::get()->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
           callback->handin();
         }
       }
@@ -710,7 +716,8 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
                                                              static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto())))) {
             LOG_WARN("failed to init dblink param ctx", K(ret), K(dblink_param_ctx), K(dblink_id));
           } else if (OB_FAIL(dblink_proxy->create_dblink_pool(dblink_param_ctx,
-                                                        dblink_schema->get_host_addr(),
+                                                        dblink_schema->get_host_name(),
+                                                        dblink_schema->get_host_port(),
                                                         dblink_schema->get_tenant_name(),
                                                         dblink_schema->get_user_name(),
                                                         dblink_schema->get_plain_password(),
@@ -1669,7 +1676,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
   if (part_ids.empty()) {
     ObLockTableRequest arg;
     arg.table_id_ = table_id;
-    arg.owner_id_ = 0;
+    arg.owner_id_.set_default();
     arg.lock_mode_ = lock_mode;
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;
@@ -1682,7 +1689,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
   } else {
     ObLockPartitionRequest arg;
     arg.table_id_ = table_id;
-    arg.owner_id_ = 0;
+    arg.owner_id_.set_default();
     arg.lock_mode_ = lock_mode;
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;

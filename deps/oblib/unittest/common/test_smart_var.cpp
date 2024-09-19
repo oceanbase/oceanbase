@@ -21,8 +21,6 @@
 const int64_t s_size = 2 << 20;
 using namespace std;
 
-#ifdef S
-#undef S
 namespace oceanbase
 {
 namespace common
@@ -361,6 +359,31 @@ TEST(utility, used_size)
   pthread_attr_destroy(&attr);
 }
 
+TEST(utility, independent)
+{
+  int ret = OB_SUCCESS;
+  {
+    SMART_VAR(int, a) {
+    } else {
+      ASSERT_TRUE(false);
+    }
+  }
+  {
+    ret = OB_INVALID_ARGUMENT;
+    SMART_VAR(int, a) {
+      ASSERT_TRUE(false);
+    } else {
+    }
+  }
+  {
+    ret = OB_INVALID_ARGUMENT;
+    SMART_VAR_INDEPENDENT(int, a) {
+    } else {
+      ASSERT_TRUE(false);
+    }
+  }
+}
+
 } // end namespace common
 } // end namespace oceanbase
 
@@ -371,4 +394,3 @@ int main(int argc, char **argv)
   ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
-#endif

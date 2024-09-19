@@ -86,16 +86,18 @@ public:
         has_index_scan_filter_(false),
         has_index_lookup_filter_(false),
         table_type_(share::schema::MAX_TABLE_TYPE),
-        index_prefix_(-1)
+        index_prefix_(-1),
+        is_adaptive_inner_scan_(false)
   {
   }
 
   virtual ~ObLogTableScan() {}
 
   const char *get_name() const;
+  int deep_copy_structures(ObRawExprCopier &expr_copier, ObIAllocator &alloc);
 
   // not used at the moment
-  TO_STRING_KV(K_(table_id), K_(index_table_id), K_(table_name), K_(index_name));
+  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(index_table_id), K_(table_name), K_(index_name));
   /**
    *  Get table id
    */
@@ -243,6 +245,8 @@ public:
 
   const common::ObIArray<uint64_t> &get_idx_columns() const
   { return idx_columns_; }
+  common::ObIArray<uint64_t> &get_idx_columns()
+  { return idx_columns_; }
 
   void set_est_cost_info(ObCostTableScanInfo *param)
   { est_cost_info_ = param; }
@@ -376,6 +380,7 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   inline common::ObIArray<bool> &get_filter_before_index_flags() { return filter_before_index_back_; }
   inline const common::ObIArray<bool> &get_filter_before_index_flags() const { return filter_before_index_back_; }
+  inline const ObRawExpr *get_limit_expr() const { return limit_count_expr_; }
   inline ObRawExpr *get_limit_expr() { return limit_count_expr_; }
   inline ObRawExpr *get_offset_expr() { return limit_offset_expr_; }
   int set_limit_offset(ObRawExpr *limit, ObRawExpr *offset);
@@ -470,14 +475,19 @@ public:
   void set_tablet_id_type(int64_t type) { tablet_id_type_ = type; }
   int64_t get_tablet_id_type() const { return tablet_id_type_; }
   const common::ObIArray<ObRawExpr*> &get_rowkey_exprs() const { return rowkey_exprs_; }
+  common::ObIArray<ObRawExpr*> &get_rowkey_exprs() { return rowkey_exprs_; }
   const common::ObIArray<ObRawExpr*> &get_part_exprs() const { return part_exprs_; }
+  common::ObIArray<ObRawExpr*> &get_part_exprs() { return part_exprs_; }
   inline const ObRawExpr *get_calc_part_id_expr() const { return calc_part_id_expr_; }
   int init_calc_part_id_expr();
   void set_table_type(share::schema::ObTableType table_type) { table_type_ = table_type; }
   share::schema::ObTableType get_table_type() const { return table_type_; }
+  void set_is_adaptive_inner_scan(bool v) { is_adaptive_inner_scan_ = v; }
+  bool is_adaptive_inner_scan() const { return is_adaptive_inner_scan_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   int print_est_method(ObBaseTableEstMethod method, char *buf, int64_t &buf_len, int64_t &pos);
+  int print_stats_version(OptTableMeta &table_meta, char *buf, int64_t &buf_len, int64_t &pos);
   int get_plan_object_info(PlanText &plan_text,
                            ObSqlPlanItem &plan_item);
   inline ObTablePartitionInfo *get_global_index_back_table_partition_info() { return global_index_back_table_partition_info_; }
@@ -505,6 +515,8 @@ public:
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
   virtual int get_card_without_filter(double &card) override;
+  inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
+  bool check_expr_will_be_used(const ObRawExpr &col_expr);
 
 private: // member functions
   //called when index_back_ set
@@ -636,6 +648,8 @@ protected: // memeber variables
 
   share::schema::ObTableType table_type_;
   int64_t index_prefix_;
+  // is right child of nlj when use adaptive join.
+  bool is_adaptive_inner_scan_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

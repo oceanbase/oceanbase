@@ -1349,13 +1349,13 @@ select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_
 +------+------+
 EXPLAIN select /*+ no_rewrite */ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 Query Plan
-==================================================
-|ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
---------------------------------------------------
-|0 |SUBPLAN FILTER   |     |58      |491         |
-|1 |├─TABLE FULL SCAN|xy_t1|116     |11          |
-|2 |└─TABLE FULL SCAN|xy_t2|1       |5           |
-==================================================
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |SUBPLAN FILTER               |     |58      |2376        |
+|1 |├─TABLE FULL SCAN            |xy_t1|116     |11          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|xy_t2|1       |21          |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c1], [xy_t1.c2]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
@@ -2221,13 +2221,13 @@ select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from
 +------+------+
 EXPLAIN select /*+ no_rewrite */ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 Query Plan
-==================================================
-|ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
---------------------------------------------------
-|0 |SUBPLAN FILTER   |     |58      |491         |
-|1 |├─TABLE FULL SCAN|xy_t1|116     |11          |
-|2 |└─TABLE FULL SCAN|xy_t2|1       |5           |
-==================================================
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |SUBPLAN FILTER               |     |58      |2376        |
+|1 |├─TABLE FULL SCAN            |xy_t1|116     |11          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|xy_t2|1       |21          |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c1], [xy_t1.c2]), filter([(T_OP_NOT_EXISTS, subquery(1))]), rowset=256
@@ -2748,15 +2748,15 @@ select /*+ use_hash(xy_t3, xy_t1) use_hash(xy_t2, xy_t1)*/ sum(c1), sum(c2) from
 +---------+---------+
 EXPLAIN select /*+ no_rewrite*/ sum(c1), sum(c2) from xy_t1 where exists (select 1 from xy_t3 where c1 = xy_t1.c1) and  exists (select 1 from xy_t2 where c1 = xy_t1.c1);
 Query Plan
-====================================================
-|ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SCALAR GROUP BY    |     |1       |993         |
-|1 |└─SUBPLAN FILTER   |     |42      |991         |
-|2 |  ├─TABLE FULL SCAN|xy_t1|116     |11          |
-|3 |  ├─TABLE FULL SCAN|xy_t3|1       |5           |
-|4 |  └─TABLE FULL SCAN|xy_t2|1       |5           |
-====================================================
+================================================================
+|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SCALAR GROUP BY                |     |1       |4762        |
+|1 |└─SUBPLAN FILTER               |     |42      |4760        |
+|2 |  ├─TABLE FULL SCAN            |xy_t1|116     |11          |
+|3 |  ├─DISTRIBUTED TABLE FULL SCAN|xy_t3|1       |21          |
+|4 |  └─DISTRIBUTED TABLE FULL SCAN|xy_t2|1       |21          |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(xy_t1.c1)], [T_FUN_SUM(xy_t1.c2)]), filter(nil), rowset=256
@@ -2828,11 +2828,11 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                        |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |             |1       |4666        |
-|1 |└─SUBPLAN FILTER                |             |42      |4664        |
+|0 |SCALAR GROUP BY                 |             |1       |4063        |
+|1 |└─SUBPLAN FILTER                |             |42      |4061        |
 |2 |  ├─TABLE FULL SCAN             |xy_t1        |116     |11          |
-|3 |  ├─DISTRIBUTED TABLE RANGE SCAN|xy_t3(idx_c2)|1       |21          |
-|4 |  └─DISTRIBUTED TABLE RANGE SCAN|xy_t2(idx_c2)|1       |21          |
+|3 |  ├─DISTRIBUTED TABLE RANGE SCAN|xy_t3(idx_c2)|1       |18          |
+|4 |  └─DISTRIBUTED TABLE RANGE SCAN|xy_t2(idx_c2)|1       |18          |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -3579,14 +3579,14 @@ select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where c2 in (select c2 from x
 +------+------+
 EXPLAIN select /*+ no_rewrite*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 Query Plan
-====================================================
-|ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SORT               |     |4       |38          |
-|1 |└─SUBPLAN FILTER   |     |4       |37          |
-|2 |  ├─TABLE FULL SCAN|xy_t1|8       |5           |
-|3 |  └─TABLE FULL SCAN|xy_t2|2       |5           |
-====================================================
+================================================================
+|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                           |     |4       |168         |
+|1 |└─SUBPLAN FILTER               |     |4       |167         |
+|2 |  ├─TABLE FULL SCAN            |xy_t1|8       |5           |
+|3 |  └─DISTRIBUTED TABLE FULL SCAN|xy_t2|2       |21          |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
@@ -3711,14 +3711,14 @@ select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where c2 in (select c2 from x
 +------+------+
 EXPLAIN select /*+ no_rewrite*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 Query Plan
-====================================================
-|ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SORT               |     |3       |26          |
-|1 |└─SUBPLAN FILTER   |     |3       |26          |
-|2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
-|3 |  └─TABLE FULL SCAN|xy_t1|3       |5           |
-====================================================
+================================================================
+|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                           |     |3       |107         |
+|1 |└─SUBPLAN FILTER               |     |3       |107         |
+|2 |  ├─TABLE FULL SCAN            |xy_t2|5       |5           |
+|3 |  └─DISTRIBUTED TABLE FULL SCAN|xy_t1|3       |21          |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
@@ -3800,13 +3800,13 @@ select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 fro
 +----+------+
 EXPLAIN select /*+ no_rewrite*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
 Query Plan
-==================================================
-|ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
---------------------------------------------------
-|0 |SUBPLAN FILTER   |     |3       |26          |
-|1 |├─TABLE FULL SCAN|xy_t2|5       |5           |
-|2 |└─TABLE FULL SCAN|xy_t1|3       |5           |
-==================================================
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |SUBPLAN FILTER               |     |3       |107         |
+|1 |├─TABLE FULL SCAN            |xy_t2|5       |5           |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|xy_t1|3       |21          |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c1], [xy_t2.c2]), filter([xy_t2.c1 = ANY(subquery(1))]), rowset=16
@@ -3919,13 +3919,13 @@ select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c2 from x
 +----+------+
 EXPLAIN select /*+ no_rewrite*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 Query Plan
-==================================================
-|ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
---------------------------------------------------
-|0 |SUBPLAN FILTER   |     |3       |26          |
-|1 |├─TABLE FULL SCAN|xy_t2|5       |5           |
-|2 |└─TABLE FULL SCAN|xy_t1|3       |5           |
-==================================================
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |SUBPLAN FILTER               |     |3       |107         |
+|1 |├─TABLE FULL SCAN            |xy_t2|5       |5           |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|xy_t1|3       |21          |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c1], [xy_t2.c2]), filter([xy_t2.c1 = ANY(subquery(1))]), rowset=16
@@ -4066,14 +4066,14 @@ select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where not exists (select 1 fr
 +------+------+
 EXPLAIN select /*+ no_rewrite*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 Query Plan
-====================================================
-|ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SORT               |     |4       |38          |
-|1 |└─SUBPLAN FILTER   |     |4       |38          |
-|2 |  ├─TABLE FULL SCAN|xy_t1|8       |5           |
-|3 |  └─TABLE FULL SCAN|xy_t2|1       |5           |
-====================================================
+================================================================
+|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                           |     |4       |168         |
+|1 |└─SUBPLAN FILTER               |     |4       |168         |
+|2 |  ├─TABLE FULL SCAN            |xy_t1|8       |5           |
+|3 |  └─DISTRIBUTED TABLE FULL SCAN|xy_t2|1       |21          |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
@@ -4213,14 +4213,14 @@ select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where not exists (select 1 fr
 +------+------+
 EXPLAIN select /*+ no_rewrite*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
 Query Plan
-====================================================
-|ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SORT               |     |3       |26          |
-|1 |└─SUBPLAN FILTER   |     |3       |26          |
-|2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
-|3 |  └─TABLE FULL SCAN|xy_t1|1       |5           |
-====================================================
+================================================================
+|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                           |     |3       |108         |
+|1 |└─SUBPLAN FILTER               |     |3       |107         |
+|2 |  ├─TABLE FULL SCAN            |xy_t2|5       |5           |
+|3 |  └─DISTRIBUTED TABLE FULL SCAN|xy_t1|1       |21          |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
@@ -4350,9 +4350,9 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SUBPLAN FILTER         |     |3       |105         |
+|0 |SUBPLAN FILTER         |     |3       |92          |
 |1 |├─TABLE FULL SCAN      |xy_t2|5       |5           |
-|2 |└─DISTRIBUTED TABLE GET|xy_t1|1       |21          |
+|2 |└─DISTRIBUTED TABLE GET|xy_t1|1       |18          |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -4496,9 +4496,9 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SUBPLAN FILTER         |     |3       |105         |
+|0 |SUBPLAN FILTER         |     |3       |92          |
 |1 |├─TABLE FULL SCAN      |xy_t2|5       |5           |
-|2 |└─DISTRIBUTED TABLE GET|xy_t1|1       |21          |
+|2 |└─DISTRIBUTED TABLE GET|xy_t1|1       |18          |
 ========================================================
 Outputs & filters:
 -------------------------------------

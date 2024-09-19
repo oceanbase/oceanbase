@@ -221,7 +221,10 @@ private:
   int generate_union_all_plans(const ObIArray<ObSelectLogPlan*> &child_plans,
                                const bool ignore_hint,
                                ObIArray<CandidatePlan> &all_plans);
-
+  int get_best_child_candidate_plans(const ObIArray<ObSelectLogPlan*> &child_plans,
+                                     ObIArray<ObLogicalOperator*> &best_child_ops,
+                                     ObIArray<ObLogicalOperator*> &best_das_child_ops,
+                                     ObIArray<ObLogicalOperator*> &best_px_child_ops);
   int create_union_all_plan(const ObIArray<ObLogicalOperator*> &child_plans,
                             const bool ignore_hint,
                             ObLogicalOperator *&top);
@@ -755,11 +758,10 @@ private:
                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
                                        const ObIArray<bool> &pushdown_info);
 
-  int sort_window_functions(const ObFdItemSet &fd_item_set,
-                            const EqualSets &equal_sets,
-                            const ObIArray<ObRawExpr *> &const_exprs,
-                            const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                            ObIArray<ObWinFunRawExpr *> &adjusted_winfunc_exprs,
+  int sort_window_functions(const ObIArray<ObWinFunRawExpr *> &win_func_exprs,
+                            ObIArray<ObWinFunRawExpr *> &ordered_win_func_exprs,
+                            const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+                            ObIArray<std::pair<int64_t, int64_t>> &ordered_pby_oby_prefixes,
                             bool &ordering_changed);
 
   int match_window_function_parallel(const ObIArray<ObWinFunRawExpr *> &win_exprs,
@@ -832,11 +834,6 @@ private:
                                               TableItem *table_item,
                                               uint64_t table_id,
                                               ObLogTableScan *&table_get);
-
-  int generate_late_materialization_table_item(ObSelectStmt *stmt,
-                                               uint64_t old_table_id,
-                                               uint64_t new_table_id,
-                                               TableItem *&new_table_item);
 
   int allocate_late_materialization_join_as_top(ObLogicalOperator *left_child,
                                                 ObLogicalOperator *right_child,

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #define private public
+#define protected public
 #include "ob_simple_log_server.h"
-#undef private
 
 #include "lib/file/file_directory_utils.h"
 #include "logservice/palf/log_define.h"
@@ -31,6 +31,10 @@
 #include "share/ob_thread_mgr.h"
 #include "logservice/palf/palf_options.h"
 #include "share/rpc/ob_batch_processor.h"
+#include "mittest/logservice/env/ob_simple_log_cluster_testbase.h"
+#include "share/ob_device_manager.h"                                // ObDeviceManager
+#undef protected
+#undef private
 
 namespace oceanbase
 {
@@ -138,6 +142,7 @@ int ObSimpleLogServer::simple_init(
     const std::string &cluster_name,
     const common::ObAddr &addr,
     const int64_t node_id,
+    ObTenantIOManager *tio_manager,
     LogMemberRegionMap *region_map,
     const bool is_bootstrap = false)
 {
@@ -149,10 +154,15 @@ int ObSimpleLogServer::simple_init(
     malloc->create_and_add_tenant_allocator(node_id);
   }
   if (is_bootstrap) {
-    tenant_base_ = OB_NEW(ObTenantBase, "TestBase", node_id);
+    OB_LOGGER.is_arb_replica_ = true;
+    // ObTenantIOManager depend static instance, need init it in ObSimpleLogCluster
+    tenant_base_ = OB_NEW(ObLogMittestTenantBase, "TestBase", cluster_id_, tenant_id_, node_id);
     tenant_base_->init();
     tenant_base_->set(&log_service_);
     tenant_base_->set(&detector_);
+    tenant_base_->set(tio_manager);
+    tenant_base_->unit_max_cpu_ = 100;
+    tenant_base_->unit_min_cpu_ = 100;
   }
   ObTenantEnv::set_tenant(tenant_base_);
   assert(&log_service_ == MTL(logservice::ObLogService*));
@@ -217,7 +227,7 @@ int ObSimpleLogServer::update_disk_opts_no_lock_(const PalfDiskOptions &opts)
   if (!opts.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(opts));
-  } else if (OB_FAIL(update_tenant_log_disk_size_(node_id_,
+  } else if (OB_FAIL(update_tenant_log_disk_size_(tenant_id_,
                                                   old_log_disk_size,
                                                   new_log_disk_size,
                                                   allowed_new_log_disk_size))) {
@@ -362,6 +372,7 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     iod_opt_array_[3].set("datafile_disk_percentage", storage_env.data_disk_percentage_);
     iod_opt_array_[4].set("datafile_size", storage_env.data_disk_size_);
     iod_opts_.opt_cnt_ = MAX_IOD_OPT_CNT;
+
     if (OB_FAIL(io_device_->init(iod_opts_))) {
       SERVER_LOG(ERROR, "init io device fail", K(ret));
     } else if (OB_FAIL(log_block_pool_.init(storage_env.clog_dir_))) {
@@ -403,7 +414,8 @@ int ObSimpleLogServer::init_log_service_()
     disk_opts_ = opts.disk_options_;
     inner_table_disk_opts_ = disk_opts_;
   }
-  std::string clog_dir = clog_dir_ + "/tenant_1";
+  std::string clog_dir = clog_dir_ + "/tenant_" + std::to_string(tenant_id_);
+  // 内存分配器仍使用不同的tenant_id
   allocator_ = OB_NEW(ObTenantMutilAllocator, "TestBase", node_id_);
   ObMemAttr attr(1, "SimpleLog");
   ObMemAttr ele_attr(1, ObNewModIds::OB_ELECTION);
@@ -417,9 +429,11 @@ int ObSimpleLogServer::init_log_service_()
     SERVER_LOG(ERROR, "crete tenant failed", K(ret));
   } else if (OB_FAIL(mock_election_map_.init(ele_attr))) {
     SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
+  } else if (OB_FAIL(log_service_.get_palf_env()->start())) {
+    SERVER_LOG(ERROR, "palf_env start fail", K(ret));
   } else {
     palf_env_ = log_service_.get_palf_env();
-    palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = OB_SERVER_TENANT_ID;
+    palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = tenant_id_;
     SERVER_LOG(INFO, "init_log_service_ success", K(ret), K(opts), K(disk_opts_));
   }
   return ret;
@@ -475,14 +489,16 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
   return ret;
 }
 
-int ObSimpleLogServer::simple_restart(const std::string &cluster_name, const int64_t node_idx)
+int ObSimpleLogServer::simple_restart(const std::string &cluster_name,
+                                      const int64_t node_idx,
+                                      ObTenantIOManager *tio_manager)
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(tenant_base_);
   ObTimeGuard guard("simple_restart", 0);
   if (OB_FAIL(simple_close())) {
     SERVER_LOG(ERROR, "simple_close failed", K(ret));
-  } else if (FALSE_IT(guard.click("simple_close")) || OB_FAIL(simple_init(cluster_name, addr_, node_idx, NULL))) {
+  } else if (FALSE_IT(guard.click("simple_close")) || OB_FAIL(simple_init(cluster_name, addr_, node_idx, tio_manager, NULL))) {
     SERVER_LOG(ERROR, "simple_init failed", K(ret));
   } else if (FALSE_IT(guard.click("simple_init")) || OB_FAIL(simple_start())) {
     SERVER_LOG(ERROR, "simple_start failed", K(ret));
@@ -624,7 +640,7 @@ int ObLogDeliver::init(const common::ObAddr &self, const bool is_bootstrap)
   // init_all_propocessor_();
   if (is_bootstrap && OB_FAIL(ObMittestBlacklist::init(self))) {
     SERVER_LOG(WARN, "ObMittestBlacklist init failed", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TEST7, tg_id_))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::COMMON_QUEUE_THREAD, tg_id_))) {
     SERVER_LOG(WARN, "ObSimpleThreadPool::init failed", K(ret));
   } else {
     is_inited_ = true;
@@ -736,8 +752,8 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
   // so set tenant_id of RpcPacket to OB_INVALID_TENANT_ID, this
   // will make the PALF_ENV_ID to OB_SERVER_TENANT_ID
   const ObRpcPacket &pkt = dynamic_cast<const ObRpcPacket&>(req.get_packet());
-  ObRpcPacket &modify_pkt = const_cast<ObRpcPacket&>(pkt);
-  modify_pkt.set_tenant_id(OB_SERVER_TENANT_ID);
+  //ObRpcPacket &modify_pkt = const_cast<ObRpcPacket&>(pkt);
+  //modify_pkt.set_tenant_id(OB_SERVER_TENANT_ID);
   SERVER_LOG(TRACE, "handle_req_ trace", K(pkt), K(node_id_));
   const ObRpcPacketCode pcode = pkt.get_pcode();
   ObFunction<bool(const ObAddr &src)> filter = [&](const ObAddr &src) -> bool {
@@ -829,39 +845,39 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       PROCESS(ElectionChangeLeaderMsgP)
     }
     case obrpc::OB_LOG_GET_MC_ST: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetMCStP)
     }
     case obrpc::OB_LOG_ARB_PROBE_MSG: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(logservice::LogServerProbeP)
     }
     case obrpc::OB_LOG_CONFIG_CHANGE_CMD: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogMembershipChangeP)
     }
     case obrpc::OB_LOG_GET_PALF_STAT: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetPalfStatReqP)
     }
     case obrpc::OB_LOG_CHANGE_ACCESS_MODE_CMD: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogChangeAccessModeP)
     }
     case obrpc::OB_LOG_FLASHBACK_CMD: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogFlashbackMsgP)
     }
     case obrpc::OB_LOG_GET_STAT: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetStatP)
     }
     case obrpc::OB_LOG_NOTIFY_FETCH_LOG: {
-      modify_pkt.set_tenant_id(node_id_);
+      //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogNotifyFetchLogReqP)
     }
     case obrpc::OB_BATCH: {
-      modify_pkt.set_tenant_id(node_id_);
+      // modify_pkt.set_tenant_id(node_id_);
       BATCH_RPC_PROCESS()
     }
     default:

@@ -610,6 +610,8 @@ int ObArchiveFetcher::init_iterator_(const ObLSID &id,
     }
   } else if (OB_FAIL(palf_handle_guard.seek(helper.get_start_offset(), iter))) {
     ARCHIVE_LOG(WARN, "iterator seek failed", K(ret), K(id), K(helper));
+  } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::ARCHIVE)))) {
+    ARCHIVE_LOG(WARN, "iterator set_io_context failed", K(ret), K(id), K(helper));
   } else {
     ARCHIVE_LOG(TRACE, "init iterator succ", K(id), K(helper));
   }

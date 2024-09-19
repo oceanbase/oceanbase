@@ -1891,6 +1891,8 @@ Outputs & filters:
        [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_timestamp_6]), partitions(p0)
       limit(5), offset(1), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([table2_bigint.pk]), range(MIN ; MAX)always true
+  Expr Constraints:
+      substr('g', 1, LEAST(58, 20)) != insert('lgeswk', 99, 8, trim(substr(cast(trim(substr(trim(0, substr(substr('nlge', 1, LEAST(58, 20)), 1, 2), substr('', 1, LEAST(58, 20))), 1, LEAST(58, 20))), CHAR(50)), 1, LEAST(58, 20)))) result is TRUE
 SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
        FROM
        (

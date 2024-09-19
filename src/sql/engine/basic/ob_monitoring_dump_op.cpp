@@ -32,7 +32,7 @@ ObMonitoringDumpSpec::ObMonitoringDumpSpec(ObIAllocator &alloc, const ObPhyOpera
 OB_SERIALIZE_MEMBER((ObMonitoringDumpSpec, ObOpSpec), flags_, dst_op_id_);
 
 ObMonitoringDumpOp::ObMonitoringDumpOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
-  : ObOperator(exec_ctx, spec, input),
+  : ObByPassOperator(exec_ctx, spec, input),
     op_name_(),
     tracefile_identifier_(),
     open_time_(0),
@@ -111,7 +111,7 @@ int ObMonitoringDumpOp::inner_rescan()
            K(tracefile_identifier_.get_string()),
            K(op_name_.get_string()),
            K(MY_SPEC.dst_op_id_));
-  if (OB_FAIL(ObOperator::inner_rescan())) {
+  if (OB_FAIL(ObByPassOperator::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   }
   return ret;

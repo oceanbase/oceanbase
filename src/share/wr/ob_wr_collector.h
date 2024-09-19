@@ -202,6 +202,9 @@ public:
     source_port_ = 0;
     route_miss_total_ = 0;
     route_miss_delta_ = 0;
+    first_load_time_ = 0;
+    plan_cache_hit_total_ = 0;
+    plan_cache_hit_delta_ = 0;
   };
 
   TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sql_id), K_(plan_hash), K_(plan_id));
@@ -260,6 +263,9 @@ public:
   int64_t source_port_;
   int64_t route_miss_total_;
   int64_t route_miss_delta_;
+  int64_t first_load_time_;
+  int64_t plan_cache_hit_total_;
+  int64_t plan_cache_hit_delta_;
 };
 
 
@@ -291,10 +297,14 @@ public:
     plan_hash_ = 0;
     plan_id_ = 0;
     id_ = 0;
+    db_id_ = 0;
+    gmt_create_= 0;
     operator_[0] = '\0';
     operator_[255] = '\0';
     option_[0] = '\0';
     option_[255] = '\0';
+    object_node_[0] = '\0';
+    object_node_[40] = '\0';
     object_id_ = 0;
     object_owner_[0] = '\0';
     object_owner_[128] = '\0';
@@ -304,13 +314,42 @@ public:
     object_alias_[261] = '\0';
     object_type_[0] = '\0';
     object_type_[20] = '\0';
+    optimizer_[0] = '\0';
+    optimizer_[4000] = '\0';
     parent_id_ = 0;
-    position_ = 0;
     depth_ = 0;
+    position_ = 0;
+    is_last_child_ = 0;
     cost_ = 0;
+    real_cost_ = 0;
     cardinality_ = 0;
+    real_cardinality_ = 0;
+    bytes_ = 0;
+    rowset_ = 0;
+    other_tag_[0] = '\0';
+    other_tag_[4000] = '\0';
+    partition_start_[0] = '\0';
+    partition_start_[4000] = '\0';
     other_[0] = '\0';
     other_[4000] = '\0';
+    cpu_cost_ = 0;
+    io_cost_ = 0;
+    access_predicates_[0] = '\0';
+    access_predicates_[4000] = '\0';
+    filter_predicates_[0] = '\0';
+    filter_predicates_[4000] = '\0';
+    startup_predicates_[0] = '\0';
+    startup_predicates_[4000] = '\0';
+    projection_[0] = '\0';
+    projection_[4000] = '\0';
+    special_predicates_[0] = '\0';
+    special_predicates_[4000] = '\0';
+    qblock_name_[0] = '\0';
+    qblock_name_[128] = '\0';
+    remarks_[0] = '\0';
+    remarks_[4000] = '\0';
+    other_xml_[0] = '\0';
+    other_xml_[4000] = '\0';
   }
   TO_STRING_KV(K_(sql_id), K_(plan_id), K_(id));
   char svr_ip_[OB_IP_STR_BUFF+1];
@@ -319,19 +358,40 @@ public:
   uint64_t plan_hash_;
   int64_t plan_id_;
   int64_t id_;
-  char operator_[255+1];
+  int64_t db_id_;
+  int64_t gmt_create_;
+  char operator_[255 + 1];
   char option_[255+1];
+  char object_node_[40 + 1];
   int64_t object_id_;
   char object_owner_[128+1];
   char object_name_[128+1];
   char object_alias_[261+1];
   char object_type_[20+1];
+  char optimizer_[4000 + 1];
   int64_t parent_id_;
-  int64_t position_;
   int64_t depth_;
+  int64_t position_;
+  int64_t is_last_child_;
   int64_t cost_;
+  int64_t real_cost_;
   int64_t cardinality_;
+  int64_t real_cardinality_;
+  int64_t bytes_;
+  int64_t rowset_;
+  char other_tag_[4000 + 1];
+  char partition_start_[4000+1];
   char other_[4000+1];
+  int64_t cpu_cost_;
+  int64_t io_cost_;
+  char access_predicates_[4000 + 1];
+  char filter_predicates_[4000 + 1];
+  char startup_predicates_[4000 + 1];
+  char projection_[4000 + 1];
+  char special_predicates_[4000 + 1];
+  char qblock_name_[128 + 1];
+  char remarks_[4000 + 1];
+  char other_xml_[4000 + 1];
 };
 
 class ObWrCollector
@@ -357,13 +417,14 @@ private:
   int collect_sql_plan();
   int write_to_wr(ObDMLSqlSplicer &dml_splicer, const char *table_name, int64_t tenant_id);
   int fetch_snapshot_id_sequence_curval(int64_t &snap_id);
-  int get_cur_snapshot_id(int64_t &snap_id);
+  int get_cur_snapshot_id_for_ahead_snapshot(int64_t &snap_id);
   int get_begin_interval_time(int64_t &begin_interval_time);
   int update_last_snapshot_end_time();
   int64_t snap_id_;
   int64_t snapshot_begin_time_;
   int64_t snapshot_end_time_;
   int64_t timeout_ts_;
+  bool snapshot_ahead_;
 };
 
 class ObWrDeleter

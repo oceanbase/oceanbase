@@ -121,7 +121,9 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
     LOG_WARN("failed to get data table schema", K(arg), K(ret));
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(arg.database_name_), to_cstring(arg.table_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(arg.database_name_),
+        helper.convert(arg.table_name_));
     LOG_WARN("table not found", K(arg), K(ret));
   } else if (arg.is_in_recyclebin_) {
     // internal delete index
@@ -196,9 +198,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
           LOG_WARN("not support to drop a building or dropping index", K(ret), K(arg.is_inner_), KPC(index_table_schema));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
         } else if (OB_FAIL(ddl_service_.rename_dropping_index_name(
-                                                      table_schema->get_table_id(),
-                                                      table_schema->get_database_id(),
-                                                      arg,
+                                                      *index_table_schema,
                                                       schema_guard,
                                                       ddl_operator,
                                                       trans,
@@ -365,6 +365,7 @@ int ObIndexBuilder::submit_build_index_task(
   int64_t table_row_cnt = 0;
   double table_avg_row_len = 0;
   uint64_t tenant_data_format_version = 0;
+  ObTableLockOwnerID owner_id;
   if (OB_ISNULL(data_schema) || OB_ISNULL(index_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is invalid", K(ret), K(data_schema), K(index_schema));
@@ -394,8 +395,11 @@ int ObIndexBuilder::submit_build_index_task(
                                 &create_index_arg);
       if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
         LOG_WARN("submit create index ddl task failed", K(ret));
+      } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                     task_record.task_id_))) {
+        LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
       } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-          *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+          *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, owner_id, trans))) {
         LOG_WARN("failed to lock online ddl lock", K(ret));
       }
     }
@@ -418,6 +422,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   } else {
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = index_schema.get_tenant_id();
+    ObTableLockOwnerID owner_id;
     ObCreateDDLTaskParam param(tenant_id,
                                ObDDLType::DDL_DROP_INDEX,
                                &index_schema,
@@ -430,8 +435,11 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                &arg);
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
+    } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                   task_record.task_id_))) {
+      LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
     } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-        data_schema, nullptr/*inc_data_tablet_ids*/, nullptr/*del_data_tablet_ids*/, index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+        data_schema, nullptr/*inc_data_tablet_ids*/, nullptr/*del_data_tablet_ids*/, index_schema, owner_id, trans))) {
       LOG_WARN("failed to lock online ddl lock", K(ret));
     }
   }
@@ -576,7 +584,9 @@ int ObIndexBuilder::do_create_index(
     LOG_WARN("get_table_schema failed", K(arg), K(ret));
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(arg.database_name_), to_cstring(arg.table_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(arg.database_name_),
+        helper.convert(arg.table_name_));
     LOG_WARN("table not exist", K(arg), K(ret));
   } else if (FALSE_IT(table_id = table_schema->get_table_id())) {
   } else if (OB_FAIL(ObSysTableChecker::is_tenant_space_table_id(table_id, in_tenant_space))) {
@@ -676,8 +686,9 @@ int ObIndexBuilder::generate_schema(
       if (!GCONF.enable_sys_table_ddl) {
         if (!data_schema.is_user_table() && !data_schema.is_tmp_table()) {
           ret = OB_ERR_WRONG_OBJECT;
-          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(arg.database_name_),
-                         to_cstring(arg.table_name_), "BASE_TABLE");
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(arg.database_name_),
+                         helper.convert(arg.table_name_), "BASE_TABLE");
           ObTableType table_type = data_schema.get_table_type();
           LOG_WARN("Not support to create index on non-normal table", K(table_type), K(arg), K(ret));
         } else if (OB_INVALID_ID != arg.index_table_id_ || OB_INVALID_ID != arg.data_table_id_) {

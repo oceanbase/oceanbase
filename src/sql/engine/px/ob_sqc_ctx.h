@@ -31,6 +31,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 #include "sql/dtl/ob_dtl_msg_type.h"
 #include "sql/engine/px/datahub/components/ob_dh_opt_stats_gather.h"
+#include "sql/engine/px/datahub/components/ob_dh_statistics_collector.h"
 
 namespace oceanbase
 {
@@ -96,6 +97,7 @@ public:
   ObRDWFWholeMsgP rd_wf_whole_msg_proc_;
   ObInitChannelWholeMsgP init_channel_whole_msg_proc_;
   ObReportingWFWholeMsgP reporting_wf_piece_msg_proc_;
+  ObStatisticsCollectorWholeMsgP statistics_collector_whole_msg_proc_;
   ObPxSqcInterruptedP interrupt_proc_;
   ObPxSQCProxy sqc_proxy_; // 给各个 worker 提供控制消息通信服务
   ObPxReceiveChProvider receive_data_ch_provider_;

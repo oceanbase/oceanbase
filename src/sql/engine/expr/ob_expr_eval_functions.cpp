@@ -151,7 +151,7 @@
 #include "ob_expr_shadow_uk_project.h"
 #include "ob_expr_char_length.h"
 #include "ob_expr_unix_timestamp.h"
-#include "ob_expr_aes_encrypt.h"
+#include "ob_expr_symmetric_encrypt.h"
 #include "ob_expr_case.h"
 #include "ob_expr_oracle_decode.h"
 #include "ob_expr_remove_const.h"
@@ -341,6 +341,7 @@
 #include "ob_expr_uniform.h"
 #include "ob_expr_prefix_pattern.h"
 #include "ob_expr_initcap.h"
+#include "ob_expr_lock_func.h"
 #include "ob_expr_sql_udt_construct.h"
 #include "ob_expr_priv_attribute_access.h"
 #include "ob_expr_temp_table_ssid.h"
@@ -1151,11 +1152,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprMod::mod_decimalint,                                  /* 678 */
   ObExprPrivSTGeoHash::eval_priv_st_geohash,                          /* 679 */
   ObExprPrivSTMakePoint::eval_priv_st_makepoint,                      /* 680 */
-  NULL, // ObExprGetLock::get_lock,                                   /* 681 */
-  NULL, // ObExprIsFreeLock::is_free_lock,                            /* 682 */
-  NULL, // ObExprIsUsedLock::is_used_lock,                            /* 683 */
-  NULL, // ObExprReleaseLock::release_lock,                           /* 684 */
-  NULL, // ObExprReleaseAllLocks::release_all_locks,                  /* 685 */
+  ObExprGetLock::get_lock,                                            /* 681 */
+  ObExprIsFreeLock::is_free_lock,                                     /* 682 */
+  ObExprIsUsedLock::is_used_lock,                                     /* 683 */
+  ObExprReleaseLock::release_lock,                                    /* 684 */
+  ObExprReleaseAllLocks::release_all_locks,                           /* 685 */
   ObExprGTIDSubset::eval_subset,                                      /* 686 */
   ObExprGTIDSubtract::eval_subtract,                                  /* 687 */
   ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set,      /* 688 */
@@ -1165,8 +1166,44 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
   ObExprIsEnabledRole::eval_is_enabled_role,                          /* 693 */
   ObExprCanAccessTrigger::can_access_trigger,                         /* 694 */
+  NULL, //ObRelationalExprOperator::eval_min_max_compare,             /* 695 */
+  NULL, //ObRelationalExprOperator::min_max_row_eval,                 /* 696 */
+  NULL, // ObExprRbBuildEmpty::eval_rb_build_empty,                   /* 697 */
+  NULL, // ObExprRbIsEmpty::eval_rb_is_empty,                         /* 698 */
+  NULL, // ObExprRbBuildVarbinary::eval_rb_build_varbinary,           /* 699 */
+  NULL, // ObExprRbToVarbinary::eval_rb_to_varbinary,                 /* 700 */
+  NULL, // ObExprRbCardinality::eval_rb_cardinality,                  /* 701 */
+  NULL, // ObExprRbAndCardinality::eval_rb_and_cardinality,           /* 702 */
+  NULL, // ObExprRbOrCardinality::eval_rb_or_cardinality,             /* 703 */
+  NULL, // ObExprRbXorCardinality::eval_rb_xor_cardinality,           /* 704 */
+  NULL, // ObExprRbAndnotCardinality::eval_rb_andnot_cardinality,     /* 705 */
+  NULL, // ObExprRbAndNull2emptyCardinality::eval_rb_and_null2empty_cardinality, /* 706 */
+  NULL, // ObExprRbOrNull2emptyCardinality::eval_rb_or_null2empty_cardinality, /* 707 */
+  NULL, // ObExprRbAndnotNull2emptyCardinality::eval_rb_andnot_null2empty_cardinality, /* 708 */
+  NULL, // ObExprRbAnd::eval_rb_and,                                  /* 709 */
+  NULL, // ObExprRbOr::eval_rb_or,                                    /* 710 */
+  NULL, // ObExprRbXor::eval_rb_xor,                                  /* 711 */
+  NULL, // ObExprRbAndnot::eval_rb_andnot,                            /* 712 */
+  NULL, // ObExprRbAndNull2empty::eval_rb_and_null2empty,             /* 713 */
+  NULL, // ObExprRbOrNull2empty::eval_rb_or_null2empty,               /* 714 */
+  NULL, // ObExprRbAndnotNull2empty::eval_rb_andnot_null2empty,       /* 715 */
+  NULL, //ObExprSdoRelate::eval_sdo_relate                            /* 716 */
+  NULL, // ObExprRbToString::eval_rb_to_string,                       /* 717 */
+  NULL, // ObExprRbFromString::eval_rb_from_string,                   /* 718 */
+  NULL, // ObExprRbIterate::eval_rb_iterate,                          /* 719 */
+  NULL, // ObExprArray::eval_array,                                   /* 720 */
+  NULL, // ObExprVectorL1Distance::calc_l1_distance,                  /* 721 */
+  NULL, // ObExprVectorL2Distance::calc_l2_distance,                  /* 722 */
+  NULL, // ObExprVectorCosineDistance::calc_cosine_distance,          /* 723 */
+  NULL, // ObExprVectorIPDistance::calc_inner_product,                /* 724 */
+  NULL, // ObExprVectorDims::calc_dims,                               /* 725 */
+  NULL, // ObExprVectorNorm::calc_norm,                               /* 726 */
+  NULL, // ObExprVectorDistance::calc_distance,                       /* 727 */
   ObExprInnerDoubleToInt::eval_inner_double_to_int,                   /* 728 */
   ObExprInnerDecimalToYear::eval_inner_decimal_to_year,               /* 729 */
+  ObExprSm3::eval_sm3,                                                /* 730 */
+  ObExprSm4Encrypt::eval_sm4_encrypt,                                 /* 731 */
+  ObExprSm4Decrypt::eval_sm4_decrypt,                                 /* 732 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

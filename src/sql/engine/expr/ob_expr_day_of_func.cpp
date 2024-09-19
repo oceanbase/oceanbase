@@ -324,8 +324,13 @@ int ObExprSubAddtime::calc_result_type2(ObExprResType &type,
     type.set_time();
     type.set_scale(MAX(scale1, scale2));
     type.set_precision(static_cast<ObPrecision>(TIME_MIN_LENGTH + type.get_scale()));
-  } else if (ObDateTimeType == date_arg.get_type() || ObTimestampType == date_arg.get_type()) {
-    type.set_datetime();
+  } else if (ObDateTimeType == date_arg.get_type() || ObTimestampType == date_arg.get_type()
+             || ObMySQLDateTimeType == date_arg.get_type()) {
+    ObObjType res_type = date_arg.get_type();
+    if (ObTimestampType == res_type) {
+      res_type = type_ctx.enable_mysql_compatible_dates() ? ObMySQLDateTimeType : ObDateTimeType;
+    }
+    type.set_type(res_type);
     type.set_scale(MAX(scale1, scale2));
     type.set_precision(static_cast<ObPrecision>(DATETIME_MIN_LENGTH + type.get_scale()));
   } else {
@@ -489,8 +494,9 @@ int ObExprSubAddtime::cg_expr(ObExprCGCtx &op_cg_ctx,
     } else {
       switch (result_type) {
         case ObDateTimeType :
+        case ObMySQLDateTimeType :
           if (ObNullType != param1_type && ObDateTimeType != param1_type
-              && ObTimestampType != param1_type) {
+              && ObMySQLDateTimeType != param1_type && ObTimestampType != param1_type) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid type of first argument", K(ret), K(result_type), K(param1_type));
           } else {
@@ -590,10 +596,27 @@ int ObExprSubAddtime::subaddtime_datetime(const ObExpr &expr, ObEvalCtx &ctx, Ob
   } else if (!null_res) {
     int64_t offset = ObTimestampType == expr.args_[0]->datum_meta_.type_
                                         ? tz_info->get_offset() : 0;
-    t_val1 = date_arg->get_datetime() + offset * USECS_PER_SEC;
+    int64_t dt_value;
+    if (ObMySQLDateTimeType == expr.args_[0]->datum_meta_.type_) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_datetime_without_check(date_arg->get_mysql_datetime(), dt_value))) {
+        LOG_WARN("cast mdatetime to datetime fail", K(ret));
+      }
+    } else {
+      dt_value = date_arg->get_datetime();
+    }
+    t_val1 = dt_value + offset * USECS_PER_SEC;
     int64_t int_usec = (expr.type_ == T_FUN_SYS_SUBTIME) ? t_val1 - t_val2 : t_val1 + t_val2;
-    if (ObTimeConverter::is_valid_datetime(int_usec)) {
-      expr_datum.set_datetime(int_usec);
+    if (OB_SUCC(ret) && ObTimeConverter::is_valid_datetime(int_usec)) {
+      if (ObMySQLDateTimeType == expr.datum_meta_.type_) {
+        ObMySQLDateTime mdt_value;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(int_usec, mdt_value))) {
+          LOG_WARN("cast datetime to mdatetime fail", K(ret));
+        } else {
+          expr_datum.set_mysql_datetime(mdt_value);
+        }
+      } else {
+        expr_datum.set_datetime(int_usec);
+      }
     } else {
       expr_datum.set_null();
     }

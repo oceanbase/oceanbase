@@ -1271,8 +1271,8 @@ int ObDelUpdLogPlan::create_online_ddl_plan(ObLogicalOperator *&top,
       LOG_WARN("failed to allocate exchange as top", K(ret));
     }
   } else {
-    if (OB_FAIL(allocate_stat_collector_as_top(top,
-        ObStatCollectorType::SAMPLE_SORT, sample_sort_keys,
+    if (OB_FAIL(allocate_px_object_sample_as_top(top,
+        ObPxObjectSampleType::SAMPLE_SORT, sample_sort_keys,
         table_partition_info->get_part_level()))) {
       LOG_WARN("fail to allocate stat collector as top", K(ret));
     } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {

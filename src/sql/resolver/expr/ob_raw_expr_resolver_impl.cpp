@@ -2143,7 +2143,8 @@ int ObRawExprResolverImpl::is_explict_func_expr(const ParseNode &node, bool &is_
       } else {
         //do nothing
         //ret = OB_ERR_FUNCTION_UNKNOWN;
-        //LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name));//throw this error to user
+        //ObCStringHelper helper;
+        //LOG_USER_ERROR(ret, "FUNCTION", helper.convert(func_name));//throw this error to user
       }
       LOG_DEBUG("is_explict_func_expr", K(func_name), K(is_func), K(exist), "node", SJ(ObParserResultPrintWrapper(node)));
     } else if (IS_FUN_SYS_TYPE(node.children_[0]->type_) || IS_AGGR_FUN(node.children_[0]->type_)) {
@@ -2271,7 +2272,7 @@ private:
   int64_t count_;
 };
 
-    SET_LOG_CHECK_MODE();
+    ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
     CK(OB_NOT_NULL(ctx_.secondary_namespace_->get_external_ns()));
     if (OB_SUCC(ret)) {
       ObArray<ObQualifiedName> fake_columns;
@@ -2315,7 +2316,6 @@ private:
         }
       } else { /*do nothing*/ }
     }
-    CANCLE_LOG_CHECK_MODE();
   }
   return ret;
 }
@@ -2381,7 +2381,7 @@ int ObRawExprResolverImpl::check_name_type(
 {
   int ret = OB_SUCCESS;
 
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
 
   type = UNKNOWN;
   bool check_success = false;
@@ -2427,7 +2427,6 @@ int ObRawExprResolverImpl::check_name_type(
     }
   }
 
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -2940,6 +2939,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
   int64_t server_collation = CS_TYPE_INVALID;
   ObCollationType nation_collation = OB_NOT_NULL(ctx_.session_info_) ? ctx_.session_info_->get_nls_collation_nation() : CS_TYPE_INVALID;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
@@ -2948,6 +2948,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(ctx_.session_info_,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&node,
                         // stmt_type is only used in oracle mode
                         lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
@@ -2960,6 +2963,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              &(ctx_.parents_expr_info_),
                                              session_info->get_sql_mode(),
                                              compat_type,
+                                             enable_mysql_compatible_dates,
                                              nullptr != ctx_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
@@ -5373,7 +5377,9 @@ int ObRawExprResolverImpl::process_timestamp_node(const ParseNode *node, ObStrin
 
       if (OB_UNLIKELY(scale > OB_MAX_DATETIME_PRECISION)) {
         ret = OB_ERR_TOO_BIG_PRECISION;
-        LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, to_cstring(err_info), OB_MAX_DATETIME_PRECISION);
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale,
+            helper.convert(err_info), OB_MAX_DATETIME_PRECISION);
       } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, c_expr))) {
         LOG_WARN("fail to create raw expr", K(ret));
       } else if (OB_ISNULL(c_expr)) {

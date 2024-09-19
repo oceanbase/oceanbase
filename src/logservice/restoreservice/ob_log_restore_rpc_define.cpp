@@ -160,6 +160,8 @@ int ObRemoteFetchLogP::fetch_log_(const share::ObLSID &id,
     CLOG_LOG(WARN, "open palf failed", K(ret), K(id));
   } else if (OB_FAIL(guard.seek(start_lsn, iter))) {
     CLOG_LOG(WARN, "seek iter failed", K(ret), K(id), K(start_lsn));
+  } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::RESTORE)))) {
+    CLOG_LOG(WARN, "set_io_context failed", K(ret), K(id));
   } else {
     int64_t pos = 0;
     int64_t append_data_len = 0;

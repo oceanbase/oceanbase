@@ -16,7 +16,9 @@
 #include "lib/oblog/ob_log_module.h"
 #include "ob_lock_inner_connection_util.h"
 #include "observer/ob_inner_sql_connection.h"
+#include "observer/ob_inner_sql_connection_pool.h"
 #include "observer/ob_inner_sql_result.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 
@@ -57,7 +59,7 @@ namespace tablelock
 
 int ObInnerConnectionLockUtil::process_lock_rpc(
     const ObInnerSQLTransmitArg &arg,
-    sqlclient::ObISQLConnection *conn)
+    common::sqlclient::ObISQLConnection *conn)
 {
   int ret = OB_SUCCESS;
   observer::ObInnerSQLConnection *inner_conn = static_cast<observer::ObInnerSQLConnection *>(conn);
@@ -211,23 +213,23 @@ int ObInnerConnectionLockUtil::lock_table(
     const uint64_t table_id,
     const ObTableLockMode lock_mode,
     const int64_t timeout_us,
-    observer::ObInnerSQLConnection *conn)
+    observer::ObInnerSQLConnection *conn,
+    const ObTableLockOwnerID owner_id,
+    const ObTableLockPriority lock_priority)
 {
   int ret = OB_SUCCESS;
-  ObTabletID no_used;
-  if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_0_0_0) {
-    ObLockTableRequest lock_arg;
-    lock_arg.owner_id_ = 0;
-    lock_arg.lock_mode_ = lock_mode;
-    lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
-    lock_arg.timeout_us_ = timeout_us;
-    lock_arg.table_id_ = table_id;
+  ObLockTableRequest lock_arg;
+  lock_arg.owner_id_ = owner_id;
+  lock_arg.lock_mode_ = lock_mode;
+  lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
+  lock_arg.timeout_us_ = timeout_us;
+  lock_arg.table_id_ = table_id;
+  lock_arg.lock_priority_ = lock_priority;
 
-    ret = request_lock_(tenant_id, lock_arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE, conn);
-  } else {
-    ret = request_lock_(tenant_id, table_id, no_used, lock_mode, timeout_us,
-                        ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE, conn);
-  }
+  ret = request_lock_(tenant_id,
+                      lock_arg,
+                      ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE,
+                      conn);
   return ret;
 }
 
@@ -311,7 +313,7 @@ int ObInnerConnectionLockUtil::lock_tablet(
   int ret = OB_SUCCESS;
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
     ObLockTabletsRequest lock_arg;
-    lock_arg.owner_id_ = 0;
+    lock_arg.owner_id_.set_default();
     lock_arg.lock_mode_ = lock_mode;
     lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
     lock_arg.timeout_us_ = timeout_us;
@@ -323,7 +325,7 @@ int ObInnerConnectionLockUtil::lock_tablet(
     }
   } else if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_0_0_0) {
     ObLockTabletRequest lock_arg;
-    lock_arg.owner_id_ = 0;
+    lock_arg.owner_id_.set_default();
     lock_arg.lock_mode_ = lock_mode;
     lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
     lock_arg.timeout_us_ = timeout_us;
@@ -349,7 +351,7 @@ int ObInnerConnectionLockUtil::lock_tablet(
 {
   int ret = OB_SUCCESS;
   ObLockTabletsRequest lock_arg;
-  lock_arg.owner_id_ = 0;
+  lock_arg.owner_id_.set_default();
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = timeout_us;
@@ -452,6 +454,141 @@ int ObInnerConnectionLockUtil::unlock_obj(
   } else {
     ret = request_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_OBJS, conn);
   }
+  return ret;
+}
+
+int ObInnerConnectionLockUtil::create_inner_conn(sql::ObSQLSessionInfo *session_info,
+                                                 common::ObMySQLProxy *sql_proxy,
+                                                 observer::ObInnerSQLConnection *&inner_conn)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObObj mysql_mode;
+  ObObj current_mode;
+  mysql_mode.set_int(0);
+  current_mode.set_int(-1);
+
+  observer::ObInnerSQLConnectionPool *pool = nullptr;
+  common::sqlclient::ObISQLConnection *conn = nullptr;
+
+  lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
+  if (OB_ISNULL(session_info) || OB_ISNULL(sql_proxy)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session or sql_proxy is NULL", KP(session_info), KP(sql_proxy));
+  } else if (OB_NOT_NULL(inner_conn = static_cast<observer::ObInnerSQLConnection *>(session_info->get_inner_conn()))) {
+    LOG_INFO("session has had inner connection, no need to create again", KPC(session_info));
+  } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(sql_proxy->get_pool()))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection pool is NULL", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
+    LOG_WARN("can not get the compat_mode", KPC(session_info));
+  } else if (current_mode != mysql_mode
+             && OB_FAIL(session_info->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, mysql_mode))) {
+    LOG_WARN("update session_info to msyql_mode failed", KR(ret), KPC(session_info));
+  } else if (common::sqlclient::INNER_POOL != pool->get_type()) {
+    LOG_WARN("connection pool type is not inner", K(ret), K(pool->get_type()));
+    // NOTICE: although we can set is_oracle_mode here, internally it will prioritize referencing
+    // the system variables on the session, so this parameter actually has no effect
+  } else if (OB_FAIL(pool->acquire(session_info, conn, false /* is_oracle_mode */))) {
+    LOG_WARN("acquire connection from inner sql connection pool failed", KR(ret), KPC(session_info));
+  } else if (OB_ISNULL(conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("acquire new connection but it's null", KR(ret), KPC(session_info));
+  } else {
+    inner_conn = static_cast<observer::ObInnerSQLConnection *>(conn);
+    // we must use mysql_mode connection to write inner_table
+    if (OB_UNLIKELY(inner_conn->is_oracle_compat_mode())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("create an oracle mode inner connection", K(ret));
+    }
+  }
+
+  if (current_mode != mysql_mode && current_mode.get_int() != -1 && OB_NOT_NULL(session_info)
+      && OB_TMP_FAIL(session_info->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    LOG_WARN("failed to update sys variable for compatibility mode", K(current_mode), KPC(session_info));
+  }
+
+  return ret;
+}
+
+int ObInnerConnectionLockUtil::execute_write_sql(observer::ObInnerSQLConnection *conn,
+                                                 const ObSqlString &sql,
+                                                 int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool need_reset_sess_mode = false;
+  bool need_reset_conn_mode = false;
+
+  // NOTICE: This will be overwritten by the oracle_made_ field on connection,
+  // but for safety reason, we still set up a compat_guard here.
+  lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
+
+  if (OB_ISNULL(conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("inner_conn is nullptr", K(ret), K(sql));
+  } else {
+    if (OB_FAIL(set_to_mysql_compat_mode_(conn, need_reset_sess_mode, need_reset_conn_mode))) {
+      LOG_WARN("set to mysql compat_mode failed", K(ret), K(sql));
+    } else if (OB_FAIL(conn->execute_write(MTL_ID(), sql.ptr(), affected_rows))) {
+      LOG_WARN("execute write sql failed", K(ret), K(sql));
+    }
+    if (OB_TMP_FAIL(reset_compat_mode_(conn, need_reset_sess_mode, need_reset_conn_mode))) {
+      LOG_WARN("reset compat_mode failed", K(ret), K(tmp_ret), K(sql));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObInnerConnectionLockUtil::execute_read_sql(observer::ObInnerSQLConnection *conn,
+                                                const ObSqlString &sql,
+                                                ObISQLClient::ReadResult &res)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool need_reset_sess_mode = false;
+  bool need_reset_conn_mode = false;
+
+  // NOTICE: This will be overwritten by the oracle_made_ field on connection,
+  // but for safety reason, we still set up a compat_guard here.
+  lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
+
+  if (OB_ISNULL(conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("inner_conn is nullptr", K(ret), K(sql));
+  } else {
+    if (OB_FAIL(set_to_mysql_compat_mode_(conn, need_reset_sess_mode, need_reset_conn_mode))) {
+      LOG_WARN("set to mysql compat_mode failed", K(ret), K(sql));
+    } else if (OB_FAIL(conn->execute_read(MTL_ID(), sql.ptr(), res))) {
+      LOG_WARN("execute read sql failed", K(ret), K(sql));
+    }
+    if (OB_TMP_FAIL(reset_compat_mode_(conn, need_reset_sess_mode, need_reset_conn_mode))) {
+      LOG_WARN("reset compat_mode failed", K(ret), K(tmp_ret), K(sql));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObInnerConnectionLockUtil::build_tx_param(sql::ObSQLSessionInfo *session_info, ObTxParam &tx_param, const bool *readonly)
+{
+  int ret = OB_SUCCESS;
+  int64_t org_cluster_id = OB_INVALID_ORG_CLUSTER_ID;
+  int64_t tx_timeout_us = 0;
+  OZ (get_org_cluster_id_(session_info, org_cluster_id));
+  OX (
+    session_info->get_tx_timeout(tx_timeout_us);
+
+    tx_param.timeout_us_ = tx_timeout_us;
+    tx_param.lock_timeout_us_ = session_info->get_trx_lock_timeout();
+    bool ro = OB_NOT_NULL(readonly) ? *readonly : session_info->get_tx_read_only();
+    tx_param.access_mode_ = ro ? ObTxAccessMode::RD_ONLY : ObTxAccessMode::RW;
+    tx_param.isolation_ = session_info->get_tx_isolation();
+    tx_param.cluster_id_ = org_cluster_id;
+  )
+
   return ret;
 }
 
@@ -733,7 +870,7 @@ int ObInnerConnectionLockUtil::request_lock_(
         switch (operation_type) {
         case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE: {
           lock_arg = &lock_table_arg;
-          lock_table_arg.owner_id_ = 0;
+          lock_table_arg.owner_id_.set_default();
           lock_table_arg.lock_mode_ = lock_mode;
           lock_table_arg.op_type_ = IN_TRANS_COMMON_LOCK;
           lock_table_arg.timeout_us_ = timeout_us;
@@ -742,7 +879,7 @@ int ObInnerConnectionLockUtil::request_lock_(
         }
         case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLET: {
           lock_arg = &lock_tablet_arg;
-          lock_tablet_arg.owner_id_ = 0;
+          lock_tablet_arg.owner_id_.set_default();
           lock_tablet_arg.lock_mode_ = lock_mode;
           lock_tablet_arg.op_type_ = IN_TRANS_COMMON_LOCK;
           lock_tablet_arg.timeout_us_ = timeout_us;
@@ -811,8 +948,64 @@ int ObInnerConnectionLockUtil::request_lock_(
   return ret;
 }
 
-#undef REQUEST_LOCK_4_1
+int ObInnerConnectionLockUtil::get_org_cluster_id_(ObSQLSessionInfo *session, int64_t &org_cluster_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session->get_ob_org_cluster_id(org_cluster_id))) {
+    LOG_WARN("fail to get ob_org_cluster_id", K(ret));
+  } else if (OB_INVALID_ORG_CLUSTER_ID == org_cluster_id || OB_INVALID_CLUSTER_ID == org_cluster_id) {
+    org_cluster_id = ObServerConfig::get_instance().cluster_id;
+    if (org_cluster_id < OB_MIN_CLUSTER_ID || org_cluster_id > OB_MAX_CLUSTER_ID) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("org_cluster_id is set to cluster_id, but it is out of range",
+                K(ret),
+                K(org_cluster_id),
+                K(OB_MIN_CLUSTER_ID),
+                K(OB_MAX_CLUSTER_ID));
+    }
+  }
+  return ret;
+}
 
+int ObInnerConnectionLockUtil::set_to_mysql_compat_mode_(observer::ObInnerSQLConnection *conn, bool &need_reset_sess_mode, bool &need_reset_conn_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj current_mode;
+  ObObj mysql_mode;
+  current_mode.set_int(-1);
+  mysql_mode.set_int(0);
+  need_reset_sess_mode = false;
+  need_reset_conn_mode = false;
+
+  if (OB_FAIL(conn->get_session().get_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
+    LOG_WARN("can not get the compat_mode", );
+  } else if (FALSE_IT(need_reset_sess_mode = (current_mode != mysql_mode))) {
+  } else if (need_reset_sess_mode
+             && OB_FAIL(conn->get_session().update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, mysql_mode))) {
+    LOG_WARN("update compat_mode to mysql_mode failed");
+  } else if (conn->is_oracle_compat_mode()) {
+    need_reset_conn_mode = true;
+    conn->set_mysql_compat_mode();
+  }
+  return ret;
+}
+
+int ObInnerConnectionLockUtil::reset_compat_mode_(observer::ObInnerSQLConnection *conn, const bool need_reset_sess_mode, const bool need_reset_conn_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj oracle_mode;
+  oracle_mode.set_int(1);
+
+  if (need_reset_sess_mode
+      && OB_FAIL(conn->get_session().update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, oracle_mode))) {
+    LOG_WARN("failed to update sys variable for compatibility mode", K(ret));
+  }
+  if (need_reset_conn_mode) {
+    conn->set_oracle_compat_mode();
+  }
+  return ret;
+}
+#undef REQUEST_LOCK_4_1
 } // tablelock
 } // transaction
 } // oceanbase

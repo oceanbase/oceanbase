@@ -147,7 +147,9 @@ public:
   int check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func);
   int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
+  int set_transformation_parameters(ObQueryCtx *query_ctx);
 private:
+  int init_trans_ctx(ObDMLStmt *stmt);
 
   int collect_trans_stat(const ObTransformRule &rule);
   int get_stmt_trans_info(ObDMLStmt *stmt, bool is_root);

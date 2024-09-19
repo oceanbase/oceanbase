@@ -258,6 +258,10 @@ public:
   virtual int64_t get_used_count() const { return used_list_.get_size(); }
   virtual int64_t get_used_mem() const { return alloc_.used(); }
   virtual int64_t get_total_mem() const { return alloc_.total(); }
+  void reset() {
+    free_all();
+    alloc_.reset();
+  }
 private:
   void free_all();
 private:
@@ -354,7 +358,7 @@ struct ObTableOperationType
   {
     return type == PUT || type == GET || type == INSERT ||
         type == DEL || type == UPDATE || type == INSERT_OR_UPDATE ||
-        type == REPLACE || type == INCREMENT || type == APPEND;
+        type == REPLACE || type == INCREMENT || type == APPEND || type == REDIS;
   }
 };
 
@@ -456,7 +460,7 @@ public:
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   int get_entity(ObITableEntity *&entity);
   uint64_t get_checksum();
-  TO_STRING_KV(K_(operation_type), "entity", to_cstring(entity_));
+  TO_STRING_KV(K_(operation_type), "entity", entity_);
 public:
   static const char *get_op_name(ObTableOperationType::Type op_type);
 private:
@@ -514,7 +518,7 @@ public:
       }
     }
   }
-  void set_errno(int err) { errno_ = err; }
+  void set_errno(int err);
   int get_errno() const { return errno_; }
   int assign(const ObTableResult &other);
   void reset()
@@ -546,7 +550,7 @@ public:
   ObITableEntity *get_entity() { return entity_; }
   const ObITableEntity *get_entity() const { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
-  int get_return_rows() { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
+  int get_return_rows() const { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
   OB_INLINE bool get_insertup_do_insert() { return is_insertup_do_insert_; }
   OB_INLINE bool get_is_insertup_do_put() { return is_insertup_do_put_; }
   OB_INLINE bool get_is_insertup_do_update() { return !is_insertup_do_put_ && !is_insertup_do_insert_; }
@@ -658,7 +662,7 @@ class ObTableBatchOperation
   OB_UNIS_VERSION(1);
 public:
   static const int64_t MAX_BATCH_SIZE = 1000;
-  static const int64_t COMMON_BATCH_SIZE = 8;
+  static const int64_t COMMON_BATCH_SIZE = 32;
 public:
   ObTableBatchOperation()
       :table_operations_(common::ObModIds::TABLE_BATCH_OPERATION, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -928,6 +932,7 @@ public:
   uint64_t get_checksum() const;
   const ObString &get_filter_string() const { return filter_string_; }
   void clear_scan_range() { key_ranges_.reset(); }
+  void clear_select_columns() { select_columns_.reset(); }
   void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_allocator_ = allocator; }
   int deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const;
   const common::ObIArray<ObTableAggregation> &get_aggregations() const { return aggregations_; }
@@ -1185,6 +1190,7 @@ public:
   uint64_t hash_val_;
 public:
   int hash(uint64_t &hash_val, uint64_t seed = 0) const;
+  void reset();
   TO_STRING_KV(K_(cluster_id),
                K_(tenant_id),
                K_(user_id),

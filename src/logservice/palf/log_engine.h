@@ -109,7 +109,8 @@ public:
            LogPlugins *plugins,
            const int64_t palf_epoch,
            const int64_t log_storage_block_size,
-           const int64_t log_meta_storage_block_size);
+           const int64_t log_meta_storage_block_size,
+           LogIOAdapter *io_adapter);
   void destroy();
 
   int load(const int64_t palf_id,
@@ -123,9 +124,10 @@ public:
            LogPlugins *plugins,
            LogGroupEntryHeader &entry_header,
            const int64_t palf_epoch,
-           bool &is_integrity,
            const int64_t log_storage_size,
-           const int64_t log_meta_storage_size);
+           const int64_t log_meta_storage_size,
+           LogIOAdapter *io_adapter,
+           bool &is_integrity);
 
   // ==================== Submit async task start ================
   //
@@ -181,7 +183,8 @@ public:
                const int64_t in_read_size,
                const bool need_read_block_header,
                ReadBuf &read_buf,
-               int64_t &out_read_size);
+               int64_t &out_read_size,
+               LogIOContext &io_ctx);
   //
   // ====================== LogStorage end =======================
 

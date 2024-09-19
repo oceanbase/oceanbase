@@ -167,7 +167,9 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
             false /* not index table */,
             table_schema))) {
           if (OB_TABLE_NOT_EXIST == ret) {
-            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(drop_index_stmt->get_database_name()), to_cstring(drop_index_stmt->get_table_name()));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(drop_index_stmt->get_database_name()),
+                helper.convert(drop_index_stmt->get_table_name()));
           }
           LOG_WARN("fail to get table schema", K(ret));
         } else if (OB_ISNULL(table_schema)) {

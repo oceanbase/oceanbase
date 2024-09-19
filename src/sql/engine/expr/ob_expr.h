@@ -1117,30 +1117,43 @@ OB_INLINE int ObExpr::deep_copy_datum(ObEvalCtx &ctx, const common::ObDatum &dat
   return ret;
 }
 
-inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
-                                          const ObExprPtrIArray &exprs,
-                                          int64_t index)
+class VectorizedRowsWrapper final
 {
-  char *buffer = NULL;
-  int64_t str_len = 0;
-  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
-  mgr.inc_level();
-  const int64_t buf_len = mgr.acquire(buffer);
-  if (OB_ISNULL(buffer)) {
-    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
-  } else {
-    databuff_printf(buffer, buf_len, str_len, "vectorized_rows(%ld)=", index);
-    str_len += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + str_len, buf_len - str_len - 1);
-    if (str_len >= 0 && str_len < buf_len) {
-      buffer[str_len] = '\0';
+public:
+  VectorizedRowsWrapper(ObEvalCtx &eval_ctx, const ObExprPtrIArray &exprs, int64_t index)
+    : eval_ctx_(eval_ctx), exprs_(exprs), index_(index)
+  {}
+  ~VectorizedRowsWrapper() = default;
+  OB_INLINE int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  DISABLE_COPY_ASSIGN(VectorizedRowsWrapper);
+private:
+  ObEvalCtx &eval_ctx_;
+  const ObExprPtrIArray &exprs_;
+  int64_t index_;
+};
+
+OB_INLINE int64_t VectorizedRowsWrapper::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (nullptr != buf && buf_len > 0) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "vectorized_rows(%ld)=", index_))) {
+      LIB_LOG(WARN, "call databuff_printf failed", K(pos), K(ret));
     } else {
-      buffer[0] = '\0';
+      int64_t str_len = oceanbase::common::to_string(ROWEXPR2STR(eval_ctx_, exprs_),
+          buf + pos,
+          buf_len - pos - 1);
+      pos += str_len;
+      if (pos >= 0 && pos < buf_len) {
+        buf[pos] = '\0';
+      } else {
+        buf[0] = '\0';
+        pos = 0;
+      }
     }
-    mgr.update_position(str_len + 1);
   }
-  mgr.try_clear_list();
-  mgr.dec_level();
-  return buffer;
+  return pos;
 }
 
 #define PRINT_VECTORIZED_ROWS(parMod, level, eval_ctx, exprs, batch_size, skip, args...)       \
@@ -1157,8 +1170,10 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
           continue;                                                                              \
         }                                                                                        \
         _batch_info_guard.set_batch_idx(i);                                                      \
+        VectorizedRowsWrapper wrapper(eval_ctx, exprs, i);                                       \
+        ObCStringHelper helper;                                                                  \
         ::oceanbase::common::OB_PRINT("["#parMod"] ", OB_LOG_LEVEL(level),                       \
-                                      get_vectorized_row_str(eval_ctx, exprs, i),                \
+                                      helper.convert(wrapper),                                   \
                                       LOG_KVS(args)); }                                          \
       }                                                                                          \
     }(__FUNCTION__); } } while (false)

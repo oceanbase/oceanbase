@@ -437,6 +437,7 @@ int ObTableEntity::get_property(const ObString &prop_name, ObObj &prop_value) co
       prop_value = properties_values_.at(idx);
     } else {
       ret = OB_SEARCH_NOT_FOUND;
+      LOG_WARN("property name not exists in properties", K(ret), K(prop_name));
     }
   }
   return ret;
@@ -998,6 +999,10 @@ int ObTableResult::assign(const ObTableResult &other)
   strncpy(sqlstate_, other.sqlstate_, sizeof(sqlstate_));
   strncpy(msg_, other.msg_, sizeof(msg_));
   return OB_SUCCESS;
+}
+
+void ObTableResult::set_errno(int err) {
+  errno_ = err;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -2276,6 +2281,16 @@ int ObTableApiCredential::hash(uint64_t &hash_val, uint64_t seed /*= 0*/) const
   hash_val = murmurhash(&database_id_, sizeof(database_id_), hash_val);
   hash_val = murmurhash(&expire_ts_, sizeof(expire_ts_), hash_val);
   return OB_SUCCESS;
+}
+
+void ObTableApiCredential::reset()
+{
+  cluster_id_ = 0;
+  tenant_id_ = 0;
+  user_id_ = 0;
+  database_id_ = 0;
+  expire_ts_ = 0;
+  hash_val_ = 0;
 }
 
 ////////////////////////////////////////////////////////////////

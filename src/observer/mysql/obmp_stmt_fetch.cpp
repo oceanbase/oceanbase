@@ -148,7 +148,6 @@ int ObMPStmtFetch::set_session_active(ObSQLSessionInfo &session) const
   if (OB_FAIL(session.set_session_state(QUERY_ACTIVE))) {
     LOG_WARN("fail to set session state", K(ret));
   } else {
-    session.setup_ash();
     session.set_query_start_time(get_receive_timestamp());
     session.set_mysql_cmd(obmysql::COM_STMT_FETCH);
     session.update_last_active_time();

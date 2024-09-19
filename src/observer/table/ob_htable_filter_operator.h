@@ -39,6 +39,7 @@ public:
   {}
   void reset();
   int from_string(const common::ObString &kv_attributes);
+  void from_kv_attribute(const ObKVAttr &kv_attributes);
 
   void set_time_to_live(int32_t v) { time_to_live_ = v; }
   int32_t get_time_to_live() const { return time_to_live_; }

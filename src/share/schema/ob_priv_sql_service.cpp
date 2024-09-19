@@ -1037,6 +1037,7 @@ int ObPrivSqlService::gen_db_priv_dml(
   priv_others |= (priv_set & OB_PRIV_CREATE_ROUTINE) != 0 ? OB_PRIV_OTHERS_CREATE_ROUTINE : 0;
   priv_others |= (priv_set & OB_PRIV_REFERENCES) != 0 ? OB_PRIV_OTHERS_REFERENCES : 0;
   priv_others |= (priv_set & OB_PRIV_TRIGGER) != 0 ? OB_PRIV_OTHERS_TRIGGER : 0;
+  priv_others |= (priv_set & OB_PRIV_LOCK_TABLE) != 0 ? OB_PRIV_OTHERS_LOCK_TABLE : 0;
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));

@@ -642,17 +642,17 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
     new_line();
     append_ptr(join_path);
     new_line();
+    append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
+            ", is adaptive:", join_path->is_adaptive_);
+
     if (HASH_JOIN == join_path->join_algo_) {
-      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
-            ",can use join filter:", !join_path->join_filter_infos_.empty(),
+      append(",can use join filter:", !join_path->join_filter_infos_.empty(),
             ",is naaj:", join_path->is_naaj_, ",is sna:", join_path->is_sna_);
     } else if (NESTED_LOOP_JOIN == join_path->join_algo_) {
-      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
-            ",right need materia:", join_path->need_mat_,
+      append(",right need materia:", join_path->need_mat_,
             ",use batch nlj:", join_path->can_use_batch_nlj_);
     } else {
-      append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
-            ",left need sort:", join_path->left_need_sort_, ",left prefix pos:", join_path->left_prefix_pos_,
+      append(",left need sort:", join_path->left_need_sort_, ",left prefix pos:", join_path->left_prefix_pos_,
             ",right need sort:", join_path->right_need_sort_, ",right prefix pos:", join_path->right_prefix_pos_);
     }
     new_line();

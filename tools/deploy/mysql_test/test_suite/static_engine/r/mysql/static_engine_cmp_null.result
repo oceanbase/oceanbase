@@ -481,7 +481,7 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |1       |4           |
+|0 |TABLE FULL SCAN|t   |1       |11          |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -500,7 +500,7 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |1       |4           |
+|0 |TABLE FULL SCAN|t   |1       |11          |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -519,7 +519,7 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |1       |4           |
+|0 |TABLE FULL SCAN|t   |1       |11          |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -904,7 +904,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t.tinyint_t, 110, 17) = t.datetime_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, MYSQL_DATETIME(-1, -1)) = t.datetime_t]), filter(nil), rowset=16
       access([t.tinyint_t], [t.datetime_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -942,7 +942,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t.tinyint_t, 110, 19) = t.date_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, MYSQL_DATE(-1, -1)) = t.date_t]), filter(nil), rowset=16
       access([t.tinyint_t], [t.date_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1033,7 +1033,7 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |1       |4           |
+|0 |TABLE FULL SCAN|t   |1       |11          |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -1052,7 +1052,7 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |1       |4           |
+|0 |TABLE FULL SCAN|t   |1       |11          |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -1071,7 +1071,7 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t   |1       |4           |
+|0 |TABLE FULL SCAN|t   |1       |11          |
 ===============================================
 Outputs & filters:
 -------------------------------------

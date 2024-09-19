@@ -27,20 +27,25 @@ namespace table
 class ObTableGroupService final
 {
 public:
-  static int process(ObTableGroupCtx &ctx, ObTableGroupCommitSingleOp *op);
+  static int process(ObTableGroupCtx &ctx, ObITableOp *op, bool is_direct_execute = false);
   static int process_trigger();
-  static int process_one_by_one(ObTableGroupCommitOps &group);
+  static int process_one_by_one(ObTableGroup &group);
 private:
+  static int add_and_try_to_get_batch(ObITableOp *op, ObITableGroupValue *group, ObIArray<ObITableOp *> &ops);
+  static int execute_batch(ObTableGroupCtx &ctx,
+                           ObIArray<ObITableOp *> &ops,
+                           bool is_direct_execute,
+                          bool add_fail_group);
   static int process_failed_group();
   static int process_other_group();
   static int process_expired_group();
-  static int check_legality(const ObTableGroupCtx &ctx);
+  static int check_legality(const ObTableGroupCtx &ctx, const ObITableGroupKey *key, const ObITableOp *op);
   static int start_trans(ObTableBatchCtx &batch_ctx);
   static int end_trans(const ObTableBatchCtx &batch_ctx,
                        ObTableGroupCommitEndTransCb *cb,
                        bool is_rollback);
-  static int init_table_ctx(ObTableGroupCommitOps &group, ObTableCtx &tb_ctx);
-  static int init_batch_ctx(ObTableGroupCommitOps &group, ObTableBatchCtx &batch_ctx);
+  static int init_table_ctx(ObTableGroup &group, ObTableCtx &tb_ctx);
+  static int init_batch_ctx(ObTableGroup &group, ObTableBatchCtx &batch_ctx);
 };
 
 } // end namespace table

@@ -82,13 +82,13 @@ struct ObLoadArgument
                K_(file_iter));
 
   void assign(const ObLoadArgument &other) {
+    int ret = OB_SUCCESS;
     load_file_storage_ = other.load_file_storage_;
     is_default_charset_ = other.is_default_charset_;
     ignore_rows_ = other.ignore_rows_;
     dupl_action_ = other.dupl_action_;
     file_cs_type_ = other.file_cs_type_;
     file_name_ = other.file_name_;
-    access_info_ = other.access_info_;
     database_name_ = other.database_name_;
     table_name_ = other.table_name_;
     combined_name_ = other.combined_name_;
@@ -98,6 +98,10 @@ struct ObLoadArgument
     is_csv_format_ = other.is_csv_format_;
     part_level_ = other.part_level_;
     file_iter_.copy(other.file_iter_);
+    // TODO(baifan): The function should return errcode
+    if (OB_FAIL(access_info_.assign(other.access_info_))) {
+      OB_LOG(WARN, "fail to assign access info", K(ret), K_(other.access_info));
+    }
   }
 
   ObLoadFileLocation load_file_storage_;

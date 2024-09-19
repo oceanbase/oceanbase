@@ -16,7 +16,8 @@ OBP20_EXTRA_INFO_DEF(OBP20_DRIVER_END, 1, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINE
 OBP20_EXTRA_INFO_DEF(OBP20_DRIVER_MAX_TYPE, 1000, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 
 // here to add proxy's id
-OBP20_EXTRA_INFO_DEF(OBP20_PROXY_END, 1001, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
+OBP20_EXTRA_INFO_DEF(FEEDBACK_PROXY_INFO, 1001, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
+OBP20_EXTRA_INFO_DEF(OBP20_PROXY_END, 1002, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 OBP20_EXTRA_INFO_DEF(OBP20_PROXY_MAX_TYPE, 2000, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 
 // here to add server's id
@@ -35,6 +36,8 @@ OBP20_EXTRA_INFO_DEF(OBP20_SVR_MAX_TYPE, 65535, EMySQLFieldType::MYSQL_TYPE_NOT_
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "lib/utility/ob_proto_trans_util.h"
 #include "common/object/ob_object.h"
+#include "deps/oblib/src/lib/string/ob_string_holder.h"
+
 namespace oceanbase {
 namespace obmysql {
 
@@ -46,6 +49,8 @@ enum ExtraInfoKeyType {
 
 class Obp20Encoder {
   public:
+  static const int64_t TYPE_KEY_PLACEHOLDER_LENGTH = 2;
+  static const int64_t TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH = 4;
   ExtraInfoKeyType type_;
   bool is_serial_; // indicate this encoder has accomplish serialization
   Obp20Encoder() : type_(OBP20_SVR_END), is_serial_(false) {}
@@ -66,6 +71,18 @@ class Obp20Decoder {
   TO_STRING_KV(K_(type));
 };
 
+class Obp20FeedbackProxyInfoEncoder : public Obp20Encoder{
+public:
+  ObString feedback_proxy_info_;
+  Obp20FeedbackProxyInfoEncoder() : feedback_proxy_info_() {
+    type_ = FEEDBACK_PROXY_INFO;
+  }
+  ~Obp20FeedbackProxyInfoEncoder() { reset(); }
+  int serialize(char *buf, int64_t len, int64_t &pos);
+  int get_serialize_size();
+  bool has_value() { return !feedback_proxy_info_.empty(); }
+  void reset() { feedback_proxy_info_.reset(); }
+};
 
 // proxy -> server verify sess info required: addr, sess_id, proxy_sess_id.
 // no need encoder.

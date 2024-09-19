@@ -18,6 +18,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_utility.h"
 #include "lib/function/ob_function.h"   // ObFunction
+#include "log_io_context.h"
 #include "log_storage_interface.h"
 #include "lsn.h"
 #include "log_reader_utils.h"
@@ -44,7 +45,8 @@ public:
             const int64_t in_read_size,
             char *&buf,
             int64_t &out_read_size);
-  VIRTUAL_TO_STRING_KV(K_(start_lsn), K_(end_lsn), K_(read_buf), K_(block_size), KP(log_storage_));
+  int set_io_context(const LogIOContext &io_ctx);
+  VIRTUAL_TO_STRING_KV(K_(start_lsn), K_(end_lsn), K_(read_buf), K_(block_size), KP(log_storage_), K_(io_ctx));
 protected:
   inline int64_t get_valid_data_len_()
   { return end_lsn_ - start_lsn_; }
@@ -62,6 +64,7 @@ protected:
   int64_t block_size_;
   ILogStorage *log_storage_;
   GetFileEndLSN get_file_end_lsn_;
+  LogIOContext io_ctx_;
   bool is_inited_;
 };
 
@@ -73,7 +76,7 @@ public:
   void destroy();
   bool is_inited() const { return is_inited_; }
   int append(const char *buf, const int64_t buf_len);
-  int pread(const LSN& lsn, const int64_t in_read_size, ReadBuf &read_buf, int64_t &out_read_size) final;
+  int pread(const LSN& lsn, const int64_t in_read_size, ReadBuf &read_buf, int64_t &out_read_size, LogIOContext &io_ctx) final;
   TO_STRING_KV(K_(start_lsn), K_(log_tail), K_(buf), K_(buf_len), K_(is_inited));
 private:
   const char *buf_;

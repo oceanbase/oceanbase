@@ -35,7 +35,9 @@ struct ObTableApiCacheKey: public ObILibCacheKey
         index_table_id_(common::OB_INVALID_ID),
         schema_version_(-1),
         operation_type_(ObTableOperationType::Type::INVALID),
-        is_ttl_table_(false)
+        is_ttl_table_(false),
+        need_dist_das_(false),
+        is_count_all_(false)
   {}
   void reset();
   virtual int deep_copy(common::ObIAllocator &allocator, const ObILibCacheKey &other);
@@ -48,14 +50,17 @@ struct ObTableApiCacheKey: public ObILibCacheKey
               K_(operation_type),
               K_(index_table_id),
               K_(op_column_ids),
-              K_(namespace));
+              K_(namespace),
+              K_(is_count_all));
 
   common::ObTableID table_id_;
   common::ObTableID index_table_id_;
   int64_t schema_version_;
   ObTableOperationType::Type operation_type_;
   bool is_ttl_table_;
+  bool need_dist_das_;
   common::ObSEArray<uint64_t, 32> op_column_ids_;
+  bool is_count_all_;
 };
 
 class ObTableApiCacheNode: public ObILibCacheNode

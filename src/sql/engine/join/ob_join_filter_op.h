@@ -26,6 +26,7 @@
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
 #include "share/detect/ob_detectable_id.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
+#include "src/sql/engine/ob_by_pass_operator.h"
 
 
 namespace oceanbase
@@ -215,7 +216,7 @@ public:
   int64_t send_bloom_filter_size_; // how many KB a piece bloom filter has
 };
 
-class ObJoinFilterOp : public ObOperator
+class ObJoinFilterOp : public ObByPassOperator
 {
   struct ObJoinFilterMsg {
     ObJoinFilterMsg() : bf_msg_(nullptr), range_msg_(nullptr), in_msg_(nullptr) {}

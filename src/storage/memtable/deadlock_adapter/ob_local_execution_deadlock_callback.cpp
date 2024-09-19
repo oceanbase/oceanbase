@@ -90,16 +90,17 @@ int LocalDeadLockCollectCallBack::operator()(const ObDependencyHolder &, ObDetec
   } else if (OB_UNLIKELY(nullptr == (buffer_current_sql = (char*)mtl_malloc(current_sql_str_len, "deadlockCB")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
+    ObCStringHelper helper;
     ObSharedGuard<char> temp_guard;
     (void) databuff_printf(buffer_trans_id, trans_id_str_len, "{session_id:%ld}(associated:%ld):%s",
                             (int64_t)sess_id_pair_.sess_id_,
                             (int64_t)sess_id_pair_.assoc_sess_id_,
-                            to_cstring(self_trans_id_));
+                            helper.convert(self_trans_id_));
     char temp_key_buffer[NODE_KEY_BUFFER_MAX_LENGTH] = {0};
     (void) databuff_printf(temp_key_buffer,
                             NODE_KEY_BUFFER_MAX_LENGTH,
                             "{addr:%s}:{ls:%ld}:{tablet:%ld}:{row_key:%s}",
-                            to_cstring(GCTX.self_addr()),
+                            helper.convert(GCTX.self_addr()),
                             ls_id_,
                             tablet_id_,
                             node_key_buffer_);
@@ -110,7 +111,7 @@ int LocalDeadLockCollectCallBack::operator()(const ObDependencyHolder &, ObDetec
                                                                       row_key_str_len);
     const ObString &cur_query_str = sess_guard->get_current_query_string();
     int64_t pos = 0;
-    databuff_printf(buffer_current_sql, current_sql_str_len, pos, "%s:", to_cstring(trace_id_));
+    databuff_printf(buffer_current_sql, current_sql_str_len, pos, "%s:", helper.convert(trace_id_));
      ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(cur_query_str.ptr(),
                                                                         cur_query_str.length(),
                                                                         buffer_current_sql + pos,
@@ -168,6 +169,7 @@ int LocalExecutionWaitingForRowFillVirtualInfoOperation::operator()(const bool n
   char sess_id_buffer[buffer_size] = {0};
   char trans_id_buffer[buffer_size] = {0};
   int64_t pos_begin = 0;
+  ObCStringHelper helper;
   if (CUSTOM_FAIL(mapper_.get_hash_holder(hash_, row_holder_info))) {
     DETECT_LOG(WARN, "get hash holder failed", PRINT_WRAPPER);
   } else if (CUSTOM_FAIL(ObTransDeadlockDetectorAdapter::get_trans_info_on_participant(row_holder_info.tx_id_,
@@ -188,7 +190,7 @@ int LocalExecutionWaitingForRowFillVirtualInfoOperation::operator()(const bool n
                                                                   (int64_t)sess_id_pair.sess_id_,
                                                                   (int64_t)sess_id_pair.assoc_sess_id_,
                                                                   row_holder_info.tx_id_.get_id(),
-                                                                  to_cstring(conflict_tx_scheduler)))) {
+                                                                  helper.convert(conflict_tx_scheduler)))) {
     DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
   } else if (FALSE_IT(virtual_info.dynamic_block_list_.assign(buffer + pos_begin, pos - pos_begin))) {
   } else {
@@ -210,7 +212,8 @@ int LocalExecutionWaitingForRowFillVirtualInfoOperation::operator()(const bool n
         }
       } else {
         int64_t pos_begin = pos;
-        if (CUSTOM_FAIL(databuff_printf(buffer, buffer_len, pos, "%s:%s", to_cstring(holding_sql_request_time), to_cstring(holding_sql)))) {
+        ObCStringHelper helper;
+        if (CUSTOM_FAIL(databuff_printf(buffer, buffer_len, pos, "%s:%s", helper.convert(holding_sql_request_time), helper.convert(holding_sql)))) {
           DETECT_LOG(WARN, "failed to print sql to buffer", PRINT_WRAPPER);
         } else if (FALSE_IT(virtual_info.conflict_actions_.assign(buffer + pos_begin, pos - pos_begin))) {
         }
@@ -252,6 +255,7 @@ int LocalExecutionWaitingForTransFillVirtualInfoOperation::operator()(const bool
   ObStringHolder holding_sql;
   ObStringHolder holding_sql_request_time;
   int64_t pos_begin = 0;
+  ObCStringHelper helper;
   char sess_id_buffer[buffer_size] = {0};
   char trans_id_buffer[buffer_size] = {0};
   if (CUSTOM_FAIL(ObTransDeadlockDetectorAdapter::get_trans_info_on_participant(conflict_tx_id_,
@@ -272,7 +276,7 @@ int LocalExecutionWaitingForTransFillVirtualInfoOperation::operator()(const bool
                                                                   (int64_t)sess_id_pair.sess_id_,
                                                                   (int64_t)sess_id_pair.assoc_sess_id_,
                                                                   conflict_tx_id_.get_id(),
-                                                                  to_cstring(conflict_tx_scheduler)))) {
+                                                                  helper.convert(conflict_tx_scheduler)))) {
     DETECT_LOG(WARN, "failed to_string", PRINT_WRAPPER);
   } else if (FALSE_IT(virtual_info.static_block_list_.assign(buffer + pos_begin, pos - pos_begin))) {
   } else {
@@ -295,8 +299,8 @@ int LocalExecutionWaitingForTransFillVirtualInfoOperation::operator()(const bool
       } else {
         int64_t pos_begin = pos;
         if (CUSTOM_FAIL(databuff_printf(buffer, buffer_len, pos, "%s:%s",
-                                        to_cstring(holding_sql_request_time),
-                                        to_cstring(holding_sql)))) {
+                                        helper.convert(holding_sql_request_time),
+                                        helper.convert(holding_sql)))) {
           DETECT_LOG(WARN, "failed to print sql to buffer", PRINT_WRAPPER);
         } else if (FALSE_IT(virtual_info.conflict_actions_.assign(buffer + pos_begin, pos - pos_begin))) {
         }
@@ -364,16 +368,17 @@ int RemoteExecutionSideNodeDeadLockCollectCallBack::operator()(const ObDependenc
   } else if (OB_UNLIKELY(nullptr == (buffer_current_sql = (char*)mtl_malloc(current_sql_str_len, "deadlockCB")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
+    ObCStringHelper helper;
     ObSharedGuard<char> temp_guard;
     (void) databuff_printf(buffer_trans_id, trans_id_str_len, "{session_id:%ld}(associated:%ld):%s",
                             (int64_t)sess_id_pair_.sess_id_,
                             (int64_t)sess_id_pair_.assoc_sess_id_,
-                            to_cstring(self_trans_id_));
+                            helper.convert(self_trans_id_));
     char temp_key_buffer[NODE_KEY_BUFFER_MAX_LENGTH] = {0};
     (void) databuff_printf(temp_key_buffer,
                             NODE_KEY_BUFFER_MAX_LENGTH,
                             "{addr:%s}:{ls:%ld}:{tablet:%ld}:{row_key:%s}",
-                            to_cstring(GCTX.self_addr()),
+                            helper.convert(GCTX.self_addr()),
                             ls_id_,
                             tablet_id_,
                             node_key_buffer_);
@@ -383,7 +388,7 @@ int RemoteExecutionSideNodeDeadLockCollectCallBack::operator()(const ObDependenc
                                                                       buffer_row_key,
                                                                       row_key_str_len);
     int64_t pos = 0;
-    databuff_printf(buffer_current_sql, current_sql_str_len, pos, "%s:", to_cstring(trace_id_));
+    databuff_printf(buffer_current_sql, current_sql_str_len, pos, "%s:", helper.convert(trace_id_));
     ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(query_sql_buffer_,
                                                                       QUERY_SQL_BUFFER_MAX_LENGTH,
                                                                       buffer_current_sql + pos,

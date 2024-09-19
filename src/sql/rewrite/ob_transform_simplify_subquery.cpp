@@ -740,6 +740,7 @@ int ObTransformSimplifySubquery::transform_any_all(ObDMLStmt *stmt, bool &trans_
   int ret = OB_SUCCESS;
   bool is_happened = false;
   ObSEArray<ObRawExprPointer, 16> relation_expr_pointers;
+  trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
@@ -1162,6 +1163,7 @@ int ObTransformSimplifySubquery::transform_exists_query(ObDMLStmt *stmt, bool &t
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExprPointer, 16> relation_expr_pointers;
+  trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
@@ -1280,7 +1282,6 @@ int ObTransformSimplifySubquery::eliminate_subquery(ObDMLStmt *stmt,
           LOG_WARN("failed to eliminate subquery in exists", K(ret), KP(expr));
         }
         LOG_TRACE("finish to eliminate subquery", K(can_be_eliminated), K(ret));
-
       } else if (OB_FAIL(empty_table_subquery_can_be_eliminated_in_exists(expr, can_be_eliminated))) {
         LOG_WARN("failed to check empty table subquery can be eliminate", K(ret));
       } else if (can_be_eliminated) {
@@ -1288,16 +1289,28 @@ int ObTransformSimplifySubquery::eliminate_subquery(ObDMLStmt *stmt,
           LOG_WARN("failed to do trans empty table subquery as expr", K(ret));
         }
         LOG_TRACE("finish to eliminate empty table subquery", K(ret));
-      } else if (!can_be_eliminated) {
-        if (OB_FAIL(simplify_select_items(stmt, expr->get_expr_type(), subquery, false, trans_happened))) {
+      } else {
+        bool is_happened = false;
+        if (OB_FAIL(simplify_select_items(stmt, expr->get_expr_type(), subquery, false, is_happened))) {
           LOG_WARN("Simplify select items in EXISTS fails", K(ret));
-        } else if (OB_FAIL(eliminate_groupby_in_exists(stmt, expr->get_expr_type(),
-                                                       subquery, trans_happened))) {
-          LOG_WARN("Subquery elimination of group by in EXISTS fails", K(ret));
-        //EXISTS, NOT EXISTS子查询中的order by可以消除
-        } else if (subquery->get_order_items().count() > 0) {
+        } else if (is_happened) {
+          trans_happened |= is_happened;
+          LOG_TRACE("simplify select item happened", K(is_happened), K(trans_happened));
+        }
+        if (OB_SUCC(ret)) {
+          is_happened = false;
+          if (OB_FAIL(eliminate_groupby_in_exists(stmt, expr->get_expr_type(),
+                                                  subquery, is_happened))) {
+            LOG_WARN("Subquery elimination of group by in EXISTS fails", K(ret));
+          } else if (is_happened) {
+            trans_happened |= is_happened;
+            LOG_TRACE("eliminate group by in exists happened", K(is_happened), K(trans_happened));
+          }
+        }
+        if (OB_SUCC(ret) && subquery->get_order_items().count() > 0) {
           trans_happened = true;
           subquery->get_order_items().reset();
+          LOG_TRACE("eliminate order by in exists happened", K(trans_happened));
         }
         if (OB_SUCC(ret) && trans_happened) {
           subq_expr->set_output_column(subquery->get_select_item_size());
@@ -1409,7 +1422,17 @@ int ObTransformSimplifySubquery::select_items_can_be_simplified(const ObItemType
              stmt->get_select_item(0).expr_->is_const_raw_expr()) {
     // do nothing
   } else {
-    can_be_simplified = true;
+    bool is_all_const = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_all_const && i < stmt->get_select_item_size(); ++i) {
+      if (OB_ISNULL(stmt->get_select_item(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select item expr is null", K(ret));
+      } else if (!stmt->get_select_item(i).expr_->is_const_raw_expr()) {
+        is_all_const = false;
+      }
+    }
+    // select_list is all const raw expr, do not simplify. otherwise it will rewrite not iter.
+    can_be_simplified = !is_all_const;
   }
   return ret;
 }
@@ -1431,9 +1454,9 @@ int ObTransformSimplifySubquery::groupby_can_be_eliminated_in_exists(const ObIte
     // Only non-set stmt will be eliminated and do nothing for other DML stmts:
     // 1. set -> No elimination
     // 2. select 1 + floor(2) (table_size == 0) -> No elimination
-  } else if (stmt->has_group_by()
-             && 0 == stmt->get_aggr_item_size()
-             && !stmt->has_having()){ // No having, no limit, no aggr
+  } else if (0 < stmt->get_group_expr_size() &&
+             0 == stmt->get_aggr_item_size() &&
+             !stmt->has_having()) { // No having, no limit, no aggr
     bool has_limit = false;
     if (OB_FAIL(check_limit(op_type, stmt, has_limit))) {
       LOG_WARN("failed to check subquery has unremovable limit", K(ret));
@@ -1444,45 +1467,44 @@ int ObTransformSimplifySubquery::groupby_can_be_eliminated_in_exists(const ObIte
   return ret;
 }
 
-int ObTransformSimplifySubquery::groupby_can_be_eliminated_in_any_all(const ObSelectStmt *stmt,
-                                                                bool &can_be_eliminated) const
+// 当Any/all/in(subq)满足以下所有条件时，可消除group by子句:
+// 1. 当前stmt不是set stmt
+// 2. 没有having子句
+// 3. 没有limit子句
+// 4. 无聚集函数（select item中）
+// 5. 非常量select item列，全部包含在group exprs中
+int ObTransformSimplifySubquery::eliminate_groupby_in_any_all(ObSelectStmt *stmt,
+                                                              bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  can_be_eliminated = false;
-  // 当Any/all/in(subq)满足以下所有条件时，可消除group by子句:
-  // 1. 当前stmt不是set stmt
-  // 2. 没有having子句
-  // 3. 没有limit子句
-  // 4. 无聚集函数（select item中）
-  // 5. 非常量select item列，全部包含在group exprs中
+  ObRawExpr *s_expr = NULL;
+  bool all_in_group_exprs = true;
+  trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
-  } else if (0 == stmt->get_table_size() || stmt->is_set_stmt()) {
-    // Only non-set stmt will be eliminated and do nothing for other DML stmts:
-    // 1. set -> No elimination
-    // 2. select 1 + floor(2) (table_size == 0) -> No elimination
-  } else if (stmt->has_group_by()
-             && !stmt->has_having()
-             && !stmt->has_limit()
-             && 0 == stmt->get_aggr_item_size()) {
-    // Check if select list is involved in group exprs
-    ObRawExpr *s_expr = NULL;
-    bool all_in_group_exprs = true;
+  } else if (0 == stmt->get_table_size() ||
+             stmt->is_set_stmt() ||
+             0 == stmt->get_group_expr_size() ||
+             stmt->has_having() ||
+             stmt->has_limit() ||
+             0 != stmt->get_aggr_item_size()) {
+    /* do nothing */
+  } else {
     for (int i = 0; OB_SUCC(ret) && all_in_group_exprs && i < stmt->get_select_item_size(); ++i) {
       if (OB_ISNULL(s_expr = stmt->get_select_item(i).expr_)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("select list expr is NULL", K(ret));
-      } else if ((s_expr)->has_flag(CNT_COLUMN)) {
-        if (!ObOptimizerUtil::find_item(stmt->get_group_exprs(), s_expr)) {
-          all_in_group_exprs = false;
-        } else { /* do nothing */ }
+      } else if (s_expr->has_flag(CNT_COLUMN) &&
+                 !ObOptimizerUtil::find_item(stmt->get_group_exprs(), s_expr)) {
+        all_in_group_exprs = false;
       } else { /* do nothing */ }
-    } // for
-    if (OB_SUCCESS == ret && all_in_group_exprs) {
-      can_be_eliminated = true;
-    } else { /* do nothing */ }
-  } else { /* do nothing */ }
+    }
+    if (OB_SUCC(ret) && all_in_group_exprs) {
+      stmt->get_group_exprs().reset();
+      trans_happened = true;
+    }
+  }
   return ret;
 }
 
@@ -1594,7 +1616,7 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
         for(int64_t i = 0; OB_SUCC(ret) && i < max_select_item_size; i++) {
            ObConstRawExpr *c_expr = NULL;
           if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType,
-                                                          const_value, c_expr))) {
+                                                           const_value, c_expr))) {
             LOG_WARN("failed to create expr", K(ret));
           } else if (OB_ISNULL(c_expr)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1652,56 +1674,35 @@ int ObTransformSimplifySubquery::eliminate_groupby_in_exists(ObDMLStmt *stmt,
     }
   } else if (OB_FAIL(groupby_can_be_eliminated_in_exists(op_type, subquery, can_be_eliminated))) {
     LOG_WARN("Checking if group by can be eliminated in subquery in exists failed", K(ret));
-  } else if (!can_be_eliminated) {
-    /*do nothing*/
-  } else if (subquery->has_group_by()) {
-      // Eliminate group by
-      trans_happened = true;
-      bool add_limit_constraint = false;
-      //Just in case different parameters hit same plan, firstly we need add const param constraint
-      if(OB_FAIL(need_add_limit_constraint(op_type, subquery, add_limit_constraint))){
-        LOG_WARN("failed to check limit constraints", K(ret));
-      } else if (add_limit_constraint &&
-                 OB_FAIL(ObTransformUtils::add_const_param_constraints(subquery->get_limit_expr(), ctx_))) {
-        LOG_WARN("failed to add const param constraints", K(ret));
-      } else {
-        subquery->get_group_exprs().reset();
-        trans_happened = true;
-      }
-  } else { /* do nothing */ }
-  return ret;
-}
-
-int ObTransformSimplifySubquery::eliminate_groupby_in_any_all(ObSelectStmt *&subquery, bool &trans_happened)
-{
-  int ret = OB_SUCCESS;
-  bool can_be_eliminated = false;
-  if (OB_ISNULL(subquery)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Subquery is NULL", K(ret));
-  } else if (OB_FAIL(groupby_can_be_eliminated_in_any_all(subquery, can_be_eliminated))) {
-    LOG_WARN("Checking if group by can be eliminated in subquery failed", K(ret));
   } else if (can_be_eliminated) {
-    if (subquery->has_group_by()) {
-      // Eliminate group by
-      trans_happened = true;
+    // Eliminate group by
+    bool add_limit_constraint = false;
+    //Just in case different parameters hit same plan, firstly we need add const param constraint
+    if(OB_FAIL(need_add_limit_constraint(op_type, subquery, add_limit_constraint))){
+      LOG_WARN("failed to check limit constraints", K(ret));
+    } else if (add_limit_constraint &&
+               OB_FAIL(ObTransformUtils::add_const_param_constraints(subquery->get_limit_expr(), ctx_))) {
+      LOG_WARN("failed to add const param constraints", K(ret));
+    } else {
       subquery->get_group_exprs().reset();
-    } else { /* do nothing */ }
-  } else { /* do nothing */ }
-
+      trans_happened = true;
+    }
+  }
   return ret;
 }
-
 
 int ObTransformSimplifySubquery::eliminate_groupby_distinct_in_any_all(ObRawExpr *expr, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   ObQueryRefRawExpr *subq_expr = NULL;
   ObSelectStmt *subquery = NULL;
+  bool is_happened = false;
+  trans_happened = false;
   if (OB_ISNULL(expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(ret), K(expr));
   } else if (!expr->has_flag(IS_WITH_ALL) && !expr->has_flag(IS_WITH_ANY)) {
+    /* do nothing */
   } else if (OB_UNLIKELY(2 != expr->get_param_count())
              || OB_UNLIKELY(!expr->get_param_expr(1)->is_query_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1713,22 +1714,31 @@ int ObTransformSimplifySubquery::eliminate_groupby_distinct_in_any_all(ObRawExpr
   } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("subquery stmt is NULL", K(ret));
-  } else if (OB_FAIL(eliminate_groupby_in_any_all(subquery, trans_happened))) {
-        LOG_WARN("Subquery elimination of group by in ANY, ALL fails", K(ret));
-  } else if (!subq_expr->get_exec_params().empty()) {
-    // correlated subquery
-    if (OB_FAIL(eliminate_distinct_in_any_all(subquery, trans_happened))) {
-      LOG_WARN("Subquery elimination of distinct in ANY, ALL fails", K(ret));
-    } else {/*do nothing*/}
+  } else {
+    if (OB_FAIL(eliminate_groupby_in_any_all(subquery, is_happened))) {
+      LOG_WARN("Subquery elimination of group by in ANY, ALL fails", K(ret));
+    } else {
+      trans_happened |= is_happened;
+      LOG_TRACE("eliminate group by in ANY, ALL happened", K(is_happened), K(trans_happened));
+    }
+    if (OB_SUCC(ret) && !subq_expr->get_exec_params().empty()) {
+      is_happened = false;
+      if (OB_FAIL(eliminate_distinct_in_any_all(subquery, is_happened))) {
+        LOG_WARN("Subquery elimination of distinct in ANY, ALL fails", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        LOG_TRACE("eliminate distinct in ANY, ALL happened", K(is_happened), K(trans_happened));
+      }
+    }
   }
-
   return ret;
 }
 int ObTransformSimplifySubquery::eliminate_distinct_in_any_all(ObSelectStmt *subquery,
-                                                         bool &trans_happened)
+                                                               bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   bool contain_rownum = false;
+  trans_happened = false;
   if (OB_ISNULL(subquery)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Subquery is NULL", K(ret));
@@ -1751,6 +1761,7 @@ int ObTransformSimplifySubquery::add_limit_for_any_all_subquery(ObRawExpr *expr,
   ObQueryRefRawExpr *subq_expr = NULL;
   ObSelectStmt *subquery = NULL;
   bool check_status = false;
+  trans_happened = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -1849,8 +1860,8 @@ int ObTransformSimplifySubquery::need_add_limit_constraint(const ObItemType op_t
   return ret;
 }
 int ObTransformSimplifySubquery::check_limit(const ObItemType op_type,
-                                       const ObSelectStmt *subquery,
-                                       bool &has_limit) const
+                                             const ObSelectStmt *subquery,
+                                             bool &has_limit) const
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = NULL;
@@ -2337,13 +2348,13 @@ int ObTransformSimplifySubquery::transform_any_all_as_exists(ObDMLStmt *stmt, bo
 {
   int ret = OB_SUCCESS;
   bool is_happened = false;
+  trans_happened = false;
   if (OB_ISNULL(stmt) ||
       OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
     ObNotNullContext not_null_ctx(*ctx_, stmt);
-
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_joined_tables().count(); ++i) {
       if (OB_FAIL(transform_any_all_as_exists_joined_table(stmt,
                                                            stmt->get_joined_tables().at(i),

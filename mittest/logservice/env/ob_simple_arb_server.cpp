@@ -13,8 +13,10 @@
 #define private public
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
 #include "logservice/arbserver/ob_arb_server_timer.h"
-#undef private
 #include "ob_simple_arb_server.h"
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
+#include "share/ob_device_manager.h"                          // ObDeviceManager
+#undef private
 
 namespace oceanbase
 {
@@ -64,6 +66,7 @@ ObSimpleArbServer::~ObSimpleArbServer()
 int ObSimpleArbServer::simple_init(const std::string &cluster_name,
                                    const common::ObAddr &addr,
                                    const int64_t node_id,
+                                   ObTenantIOManager *tio_manager,
                                    LogMemberRegionMap *region_map,
                                    bool is_bootstrap)
 {
@@ -91,6 +94,7 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
     malloc->create_and_add_tenant_allocator(node_id);
   }
   tenant_base_->init();
+  tenant_base_->set(tio_manager);
   ObTenantEnv::set_tenant(tenant_base_);
   std::vector<std::string> dirs{logserver_dir, clog_dir};
 
@@ -108,6 +112,8 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
   }
   cfg.group_commit_max_item_cnt_ = 1;
   cfg.group_commit_min_item_cnt_ = 1;
+  const int64_t disk_io_thread_count = 256;
+  const int64_t max_io_depth = 8;
   if (is_bootstrap && OB_FAIL(OB_LOGGER.init(cfg, true))) {
     SERVER_LOG(ERROR, "OB_LOGGER init failed");
   }
@@ -116,8 +122,10 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
     CLOG_LOG(WARN, "blacklist_ init failed", K(ret), K(opts));
   } else if (is_bootstrap && OB_FAIL(srv_network_frame_.init(arb_opts, &palf_env_mgr_))) {
     CLOG_LOG(WARN, "ObArbSrvNetWorkFrame init failed", K(ret), K(opts));
+  } else if (!LOG_IO_DEVICE_WRAPPER.is_inited_ && OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(clog_dir.c_str(), disk_io_thread_count, max_io_depth, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+    CLOG_LOG(ERROR, "LOG_IO_DEVICE_WRAPPER init failed", K(ret));
   } else if (OB_FAIL(palf_env_mgr_.init(logserver_dir.c_str(), addr,
-          srv_network_frame_.get_req_transport()))) {
+             srv_network_frame_.get_req_transport(), LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
     CLOG_LOG(WARN, "PalfEnvLiteMgr init failed", K(ret), K(addr), K(clog_dir.c_str()));
   } else if (OB_FAIL(mock_election_map_.init(ele_attr))) {
     SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
@@ -154,13 +162,14 @@ void ObSimpleArbServer::destroy()
   srv_network_frame_.destroy();
   palf_env_mgr_.destroy();
   timer_.destroy();
+  LOG_IO_DEVICE_WRAPPER.destroy();
 }
 
 
 int ObSimpleArbServer::simple_start(const bool is_bootstrat)
 {
   int ret = OB_SUCCESS;
-  palflite::PalfEnvKey key(cluster_id_, OB_SERVER_TENANT_ID);
+  palflite::PalfEnvKey key(cluster_id_, ObISimpleLogServer::DEFAULT_TENANT_ID);
   arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
   if (OB_FAIL(srv_network_frame_.start())) {
     CLOG_LOG(WARN, "start ObArbSrvNetWorkFrame failed", K(ret));
@@ -186,13 +195,14 @@ int ObSimpleArbServer::simple_close(const bool is_shutdown)
 }
 
 int ObSimpleArbServer::simple_restart(const std::string &cluster_name,
-                                      const int64_t node_idx)
+                                      const int64_t node_idx,
+                                      ObTenantIOManager *tio_manager)
 {
   int ret = OB_SUCCESS;
   srv_network_frame_.deliver_.stop();
   palf_env_mgr_.destroy();
   timer_.destroy();
-  if (OB_FAIL(simple_init(cluster_name, self_, node_idx, NULL, false))) {
+  if (OB_FAIL(simple_init(cluster_name, self_, node_idx, tio_manager, NULL, false))) {
     CLOG_LOG(WARN, "simple_init failed", K(ret));
   } else if (OB_FAIL(srv_network_frame_.deliver_.start(srv_network_frame_.normal_rpc_qhandler_,
       srv_network_frame_.server_rpc_qhandler_))) {

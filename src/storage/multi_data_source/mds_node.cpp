@@ -106,7 +106,7 @@ int64_t MdsNodeStatus::to_string(char *buf, const int64_t buf_len) const// ATOMI
   databuff_printf(buf, buf_len, pos, "%s|", obj_to_string(node_status.union_.field_.node_type_));
   databuff_printf(buf, buf_len, pos, "%s|", obj_to_string(node_status.union_.field_.writer_type_));
   databuff_printf(buf, buf_len, pos, "%s|", obj_to_string(node_status.union_.field_.state_));
-  databuff_printf(buf, buf_len, pos, "%s", to_cstring(node_status.union_.field_.is_dumped_));
+  databuff_printf(buf, buf_len, pos, true == node_status.union_.field_.is_dumped_);
   return pos;
 }
 

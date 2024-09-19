@@ -96,7 +96,7 @@ signal_handler_t &get_signal_handler()
 bool g_redirect_handler = false;
 static __thread int g_coredump_num = 0;
 
-#define COMMON_FMT "timestamp=%ld, tid=%ld, tname=%s, trace_id=%s, extra_info=(%s), lbt=%s"
+#define COMMON_FMT "timestamp=%ld, tid=%ld, tname=%s, trace_id=%s, lbt=%s"
 
 void coredump_cb(int, int, void*, void*);
 void ob_signal_handler(int sig, siginfo_t *si, void *context)
@@ -228,8 +228,7 @@ void coredump_cb(volatile int sig, volatile int sig_code, void* volatile sig_add
     ssize_t print_len = lnprintf(print_buf, sizeof(print_buf),
                                  "%s IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT", ",
                                   crash_info, ip, bp, sig, sig_code, sig_addr, rlimit_core,
-                                  ts, GETTID(), tname, trace_id_buf,
-                                  (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
+                                  ts, GETTID(), tname, trace_id_buf, bt);
     ObSqlInfo sql_info = ObSqlInfoGuard::get_tl_sql_info();
     char sql_id[] = "SQL_ID=";
     char sql_string[] = ", SQL_STRING=";

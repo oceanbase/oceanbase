@@ -74,6 +74,7 @@ private:
     ObCostBasedPushDownCtx() {};
     int64_t stmt_id_;
     ObSqlBitSet<> new_table_relids_;
+    ObSEArray<int64_t, 2> new_stmt_ids_;
   };
 
   int check_groupby_push_down_validity(ObSelectStmt *stmt, bool &is_valid);
@@ -170,6 +171,18 @@ private:
 
   int has_group_by_op(ObLogicalOperator *op,
                       bool &bret);
+
+  int check_cut_ratio(ObLogicalOperator *op,
+                      ObCostBasedPushDownCtx *push_down_ctx,
+                      bool &is_valid);
+  int check_all_cut_ratio(ObLogicalOperator *op,
+                          ObCostBasedPushDownCtx *push_down_ctx,
+                          bool is_in_cartesian,
+                          ObIArray<bool> &invalid_stmts);
+  int check_single_cut_ratio(ObLogicalOperator *op,
+                             bool &is_valid);
+  int compute_group_by_cut_ratio(ObLogicalOperator *op,
+                                 double &cut_ratio);
 
   int check_group_by_subset(ObRawExpr *expr, const ObIArray<ObRawExpr *> &group_exprs, bool &bret);
 

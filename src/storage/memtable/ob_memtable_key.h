@@ -113,14 +113,12 @@ public:
   {
     int64_t pos = 0;
     if (OB_NOT_NULL(rowkey_)) {
-      common::databuff_printf(buf, buf_len, pos, "%s",
-                              common::to_cstring(*rowkey_));
+      common::databuff_printf(buf, buf_len, pos, *rowkey_);
     } else {
       common::databuff_printf(buf, buf_len, pos, "NULL");
     }
     return pos;
   }
-  const char *repr() const { return common::to_cstring(*this); }
 
   template <class Allocator>
   int dup(ObMemtableKey *&new_key, Allocator &allocator) const
@@ -300,7 +298,6 @@ public:
   int checksum(common::ObBatchChecksum &bc) const { return rowkey_->checksum(bc); }
   int64_t to_string(char *buf, const int64_t buf_len) const { return rowkey_->to_string(buf, buf_len); }
   const ObObj *get_ptr() const { return rowkey_->get_obj_ptr(); }
-  const char *repr() const { return rowkey_->repr(); }
 public:
   const common::ObStoreRowkey *rowkey_;
 };

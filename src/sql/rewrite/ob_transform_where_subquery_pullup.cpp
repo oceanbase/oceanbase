@@ -1342,12 +1342,19 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
     LOG_WARN("failed to compute const exprs", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < columns.count(); ++i) {
-    if (!ObOptimizerUtil::find_item(const_exprs, columns.at(i))) {
+    bool is_const = false;
+    // null first or null last both are ok for desc in one -- one scene
+    // const_param_info 如果不是空说明有substr 若单调性这个场景不会加入
+    if (OB_FAIL(ObOptimizerUtil::is_expr_const_for_monotonicity(columns.at(i), const_exprs,
+                                                                ctx_->exec_ctx_, is_const))) {
+      LOG_WARN("failed to get monotonicity of expr", K(ret));
+    } else if (!is_const) {
       // do nothing
     } else if (OB_FAIL(const_columns.push_back(columns.at(i)))) {
       LOG_WARN("failed to push back const column", K(ret));
     }
   }
+
   //1.检查是否是single set query
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(ObTransformUtils::check_stmt_unique(subquery, ctx_->session_info_,

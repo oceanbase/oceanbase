@@ -199,8 +199,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
     ObLLVMType ir_type;
     ObLLVMValue value, allocator;
     bool is_complex_type_var = false;
-    ObLLVMValue stack;
-    OZ (generator_.get_helper().stack_save(stack));
     OZ (generator_.extract_allocator_from_context(generator_.get_vars().at(generator_.CTX_IDX), allocator));
     for (int64_t i = 0; OB_SUCC(ret) && i < s.get_index().count(); ++i) {
       const ObPLVar *var = s.get_var(i);
@@ -280,6 +278,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
         && OB_INVALID_INDEX != s.get_default()
         && PL_CONSTRUCT_COLLECTION != s.get_default()) {
       ObLLVMValue p_result_obj;
+      ObLLVMValue stack;
+      OZ (generator_.get_helper().stack_save(stack));
       OZ (generator_.generate_expr(s.get_default(),
                                    s,
                                    is_complex_type_var ? OB_INVALID_ID : s.get_index(0),
@@ -400,6 +400,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
           }
         }
       }
+      OZ (generator_.get_helper().stack_restore(stack));
     }
     if (lib::is_mysql_mode()) {
       ObLLVMValue ret_err;
@@ -415,7 +416,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
     }
 
     OZ (generator_.generate_spi_pl_profiler_after_record(s));
-    OZ (generator_.get_helper().stack_restore(stack));
   }
   return ret;
 }
@@ -5437,6 +5437,7 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
           } else { // 构造函数场景
             ObDataType ext_type;
             ext_type.set_obj_type(ObExtendType);
+            ext_type.set_udt_id(pl_data_type->get_user_type_id());
             OZ (store_data_type(ext_type, type_value));
           }
         }
@@ -9231,6 +9232,8 @@ int ObPLCodeGenerator::extract_value_ptr_from_obj(ObLLVMValue &p_obj, ObObjType 
     case ObDateTimeType:
     case ObTimestampType:
     case ObDateType:
+    case ObMySQLDateType:
+    case ObMySQLDateTimeType:
     case ObTimeType:
     case ObYearType:
     case ObBitType:

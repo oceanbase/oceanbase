@@ -77,6 +77,8 @@
 #include "storage/ob_storage_schema.h"  // ObCreateTabletSchema
 #include "share/ob_service_name_proxy.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
+#include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
+#include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/ob_heartbeat_handler.h"
 
 namespace oceanbase
@@ -1628,16 +1630,22 @@ struct ObRenameTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObRenameTableArg():
+  ObRenameTableArg() :
       ObDDLArg(),
       tenant_id_(common::OB_INVALID_ID),
-      rename_table_items_()
+      rename_table_items_(),
+      client_session_id_(0),
+      client_session_create_ts_(0),
+      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL)
   {}
   bool is_valid() const;
   DECLARE_TO_STRING;
 
   uint64_t tenant_id_;
   common::ObSArray<ObRenameTableItem> rename_table_items_;
+  uint32_t client_session_id_;
+  int64_t client_session_create_ts_;
+  transaction::tablelock::ObTableLockPriority lock_priority_;
 };
 struct ObStartRedefTableArg final
 {
@@ -2176,7 +2184,12 @@ public:
       inner_sql_exec_addr_(),
       local_session_var_(&allocator_),
       mview_refresh_info_(),
-      alter_algorithm_(INPLACE)
+      alter_algorithm_(INPLACE),
+      alter_auto_partition_attr_(false),
+      rebuild_index_arg_list_(),
+      client_session_id_(0),
+      client_session_create_ts_(0),
+      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2226,31 +2239,35 @@ public:
     return set_nls_formats(tmp_str);
   }
   INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
-               K_(session_id),
-               K_(index_arg_list),
-               K_(foreign_key_arg_list),
-               K_(alter_table_schema),
-               K_(alter_constraint_type),
-               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
-               K_(ddl_task_type),
-               K_(compat_mode),
-               K_(is_alter_columns),
-               K_(is_alter_indexs),
-               K_(is_alter_options),
-               K_(is_alter_partitions),
-               K_(is_inner),
-               K_(is_update_global_indexes),
-               K_(is_convert_to_character),
-               K_(skip_sys_table_check),
-               K_(need_rebuild_trigger),
-               K_(foreign_key_checks),
-               K_(is_add_to_scheduler),
-               K_(table_id),
-               K_(hidden_table_id),
-               K_(inner_sql_exec_addr),
-               K_(local_session_var),
-               K_(mview_refresh_info),
-               K_(alter_algorithm));
+                       K_(session_id),
+                       K_(index_arg_list),
+                       K_(foreign_key_arg_list),
+                       K_(alter_table_schema),
+                       K_(alter_constraint_type),
+                       "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
+                       K_(ddl_task_type),
+                       K_(compat_mode),
+                       K_(is_alter_columns),
+                       K_(is_alter_indexs),
+                       K_(is_alter_options),
+                       K_(is_alter_partitions),
+                       K_(is_inner),
+                       K_(is_update_global_indexes),
+                       K_(is_convert_to_character),
+                       K_(skip_sys_table_check),
+                       K_(need_rebuild_trigger),
+                       K_(foreign_key_checks),
+                       K_(is_add_to_scheduler),
+                       K_(table_id),
+                       K_(hidden_table_id),
+                       K_(inner_sql_exec_addr),
+                       K_(local_session_var),
+                       K_(mview_refresh_info),
+                       K_(alter_algorithm),
+                       K_(alter_auto_partition_attr),
+                       K_(client_session_id),
+                       K_(client_session_create_ts),
+                       K_(lock_priority));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2285,6 +2302,11 @@ public:
   ObLocalSessionVar local_session_var_;
   ObMViewRefreshInfo mview_refresh_info_;
   AlterAlgorithm alter_algorithm_;
+  bool alter_auto_partition_attr_;
+  common::ObSArray<ObTableSchema> rebuild_index_arg_list_;  // pre split
+  uint32_t client_session_id_;
+  int64_t client_session_create_ts_;
+  transaction::tablelock::ObTableLockPriority lock_priority_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -5849,6 +5871,7 @@ public:
   common::ObString restore_timestamp_;
   uint64_t initiator_job_id_;
   uint64_t initiator_tenant_id_;
+  common::ObString sts_credential_;
 };
 
 struct ObServerZoneArg
@@ -9638,6 +9661,48 @@ public:
   common::ObAddr server_addr_;
 };
 
+// === RPC for tablet split start. ===
+struct ObPrepareSplitRangesArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPrepareSplitRangesArg()
+    : ls_id_(),
+      tablet_id_(),
+      user_parallelism_(0),
+      schema_tablet_size_(0)
+  {}
+  ~ObPrepareSplitRangesArg() {}
+  bool is_valid() const
+  {
+    return ls_id_.is_valid() && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K(ls_id_), K(tablet_id_), K_(user_parallelism), K_(schema_tablet_size));
+public:
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  int64_t user_parallelism_;
+  int64_t schema_tablet_size_;
+DISALLOW_COPY_AND_ASSIGN(ObPrepareSplitRangesArg);
+};
+
+struct ObPrepareSplitRangesRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPrepareSplitRangesRes()
+    : rowkey_allocator_("SplitRangeRPC"),
+      parallel_datum_rowkey_list_()
+  {}
+  ~ObPrepareSplitRangesRes() = default;
+  TO_STRING_KV(K_(parallel_datum_rowkey_list));
+public:
+  common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
+  common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPrepareSplitRangesRes);
+};
+
 struct ObLogReqLoadProxyRequest
 {
   OB_UNIS_VERSION(1);
@@ -11052,6 +11117,22 @@ public:
   uint8_t task_status_;
   int err_code_;
 };
+
+struct ObSeqCleanCacheRes final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSeqCleanCacheRes();
+  int assign(const ObSeqCleanCacheRes &other);
+  TO_STRING_KV(K_(inited), K_(with_prefetch_node), K_(cache_node), K_(prefetch_node));
+
+public:
+  bool inited_;
+  bool with_prefetch_node_;
+  share::SequenceCacheNode cache_node_;
+  share::SequenceCacheNode prefetch_node_;
+};
+
 struct ObAdminUnlockMemberListOpArg final
 {
   OB_UNIS_VERSION(1);
@@ -11116,6 +11197,29 @@ public:
   TO_STRING_KV(K_(can_kill_client_sess));
   bool can_kill_client_sess_;
 };
+
+// kill query client session arg
+struct ObKillQueryClientSessionArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKillQueryClientSessionArg() : client_sess_id_(0) {}
+  ~ObKillQueryClientSessionArg() {}
+  bool is_valid() const;
+  void reset() { client_sess_id_ = 0; }
+  int assign(const ObKillQueryClientSessionArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    client_sess_id_ = other.client_sess_id_;
+    return ret;
+  }
+  void set_client_sess_id(uint32_t client_sess_id) { client_sess_id_ = client_sess_id; }
+  uint32_t get_client_sess_id() { return client_sess_id_; }
+  TO_STRING_KV(K_(client_sess_id));
+private:
+  uint32_t client_sess_id_;
+};
+
 
 // kill client session arg & Authentication
 struct ObClientSessionCreateTimeAndAuthArg

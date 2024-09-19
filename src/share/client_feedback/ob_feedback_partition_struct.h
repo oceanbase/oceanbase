@@ -145,6 +145,9 @@ protected:
   ObFeedbackReplicaLocationArray replicas_;
 };
 
+// TODO: support a more compatible reroute framework.
+// For example, reroute for session (without tbl_name_
+// and other related information)
 class ObFeedbackRerouteInfo: public ObAbstractFeedbackObject<ObFeedbackRerouteInfo>
 {
 public:
@@ -161,7 +164,9 @@ public:
     MEMSET(tbl_name_, 0, sizeof(tbl_name_));
     tbl_name_len_ = 0;
     tbl_schema_version_ = OB_INVALID_VERSION;
+    for_session_reroute_ = false;
   }
+  void assign(const ObFeedbackRerouteInfo &info);
 
   int set_tbl_name(const common::ObString &table_name);
 
@@ -176,6 +181,7 @@ public:
   char tbl_name_[common::OB_MAX_TABLE_NAME_LENGTH]; // used to store table name in reroute feedback
   int64_t tbl_name_len_;
   int64_t tbl_schema_version_;
+  bool for_session_reroute_;
 };
 
 inline bool ObFeedbackPartitionLocation::is_valid_obj() const
@@ -186,12 +192,13 @@ inline bool ObFeedbackPartitionLocation::is_valid_obj() const
 
 inline bool ObFeedbackRerouteInfo::is_valid_obj() const
 {
-  return server_.is_valid()
+  return (for_session_reroute_ && server_.is_valid()) ||
+         (!for_session_reroute_ && server_.is_valid()
          && (common::INVALID_ROLE != role_)
          && (common::REPLICA_TYPE_MAX != replica_type_)
          && tbl_name_len_ > 0
          && tbl_name_len_ <= common::OB_MAX_TABLE_NAME_LENGTH
-         && OB_INVALID_VERSION != tbl_schema_version_;
+         && OB_INVALID_VERSION != tbl_schema_version_);
 }
 
 } // end namespace share

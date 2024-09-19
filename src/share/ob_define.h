@@ -271,6 +271,7 @@ inline bool is_schema_error(int err)
     case OB_SCHEMA_EAGAIN:
     case OB_SCHEMA_NOT_UPTODATE:
     case OB_ERR_PARALLEL_DDL_CONFLICT:
+    case OB_ERR_DDL_RESOURCE_NOT_ENOUGH:
       ret = true;
       break;
     default:

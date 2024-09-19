@@ -19,6 +19,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/worker.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -59,8 +60,9 @@ int Threads::do_set_thread_count(int64_t n_threads)
       n_threads_ = n_threads;
     } else if (n_threads == n_threads_) {
     } else {
-      auto new_threads = reinterpret_cast<Thread**>(
-          ob_malloc(sizeof (Thread*) * n_threads, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
+      uint64_t tenant_id = NULL != run_wrapper_ ? run_wrapper_->id() : OB_SERVER_TENANT_ID;
+      Thread** new_threads = reinterpret_cast<Thread**>(
+          ob_malloc(sizeof (Thread*) * n_threads, ObMemAttr(tenant_id, "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
       if (new_threads == nullptr) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
@@ -166,7 +168,7 @@ int Threads::start()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Threads::start tenant ctx not match", KP(expect_wrapper), KP(run_wrapper_));
     ob_abort();
-  } else {
+  } else if (n_threads_ > 0) {
     threads_ = reinterpret_cast<Thread**>(
       ob_malloc(sizeof (Thread*) * n_threads_, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
     if (threads_ == nullptr) {
@@ -197,6 +199,7 @@ int Threads::start()
 void Threads::run(int64_t idx)
 {
   ObTLTaGuard ta_guard(GET_TENANT_ID() ?:OB_SERVER_TENANT_ID);
+  common::ObBackGroundSessionGuard backgroud_session_guard(GET_TENANT_ID(), THIS_WORKER.get_group_id());
   thread_idx_ = static_cast<uint64_t>(idx);
   Worker worker;
   Worker::set_worker_to_thread_local(&worker);
@@ -207,7 +210,8 @@ int Threads::create_thread(Thread *&thread, int64_t idx)
 {
   int ret = OB_SUCCESS;
   thread = nullptr;
-  const auto buf = ob_malloc(sizeof (Thread), ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC));
+  uint64_t tenant_id = NULL != run_wrapper_ ? run_wrapper_->id() : OB_SERVER_TENANT_ID;
+  void* buf = ob_malloc(sizeof (Thread), ObMemAttr(tenant_id, "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC));
   if (buf == nullptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {

@@ -103,7 +103,9 @@ int ObCreateTableResolver::add_primary_key_part(const ObString &column_name,
     if (OB_ISNULL(col)) {
       ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
       LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-      SQL_RESV_LOG(WARN, "column '%s' does not exists", K(ret), K(to_cstring(column_name)));
+      ObCStringHelper helper;
+      SQL_RESV_LOG(WARN, "column '%s' does not exists", K(ret),
+          "column_name", helper.convert(column_name));
     } else if (OB_FAIL(check_add_column_as_pk_allowed(*col))) {
       LOG_WARN("the column can not be primary key", K(ret));
     } else {

@@ -38,6 +38,13 @@ class ObCodeGeneratorImpl;
 class ObLogPlan;
 class StmtUniqueKeyProvider;
 
+enum TransPolicy
+{
+  DISABLE_TRANS = 0,
+  LIMITED_TRANS = 1,
+  ENABLE_TRANS = 2,
+};
+
 struct ObTransformerCtx
 {
   ObTransformerCtx()
@@ -67,9 +74,17 @@ struct ObTransformerCtx
     outline_trans_hints_(),
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
+    is_groupby_placement_enabled_(true),
+    is_force_inline_(false),
+    is_force_materialize_(false),
     is_spm_outline_(false),
     in_accept_transform_(false),
-    push_down_filters_()
+    push_down_filters_(),
+    inline_blacklist_(),
+    materialize_blacklist_(),
+    cbqt_policy_(TransPolicy::DISABLE_TRANS),
+    complex_cbqt_table_num_(0),
+    max_table_num_(0)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -128,9 +143,22 @@ struct ObTransformerCtx
   ObSEArray<const ObHint*, 8> used_trans_hints_;
   ObSEArray<uint64_t, 4> groupby_pushdown_stmts_;
   /* end used for hint and outline below */
+
+  // used for transform parameters
+  bool is_groupby_placement_enabled_;
+  bool is_force_inline_;
+  bool is_force_materialize_;
+
   bool is_spm_outline_;
   bool in_accept_transform_;
   ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
+  /* used for CTE inline && materialize */
+  ObSEArray<ObString, 8, common::ModulePageAllocator, true> inline_blacklist_;
+  ObSEArray<ObString, 8, common::ModulePageAllocator, true> materialize_blacklist_;
+  // used for cost based query transformation control
+  TransPolicy cbqt_policy_;
+  int64_t complex_cbqt_table_num_;
+  int64_t max_table_num_;
 };
 
 enum TransMethod
@@ -178,6 +206,7 @@ enum TRANSFORM_TYPE {
   PROCESS_DBLINK                ,
   DECORRELATE                   ,
   CONDITIONAL_AGGR_COALESCE     ,
+  LATE_MATERIALIZATION          ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -277,7 +306,20 @@ public:
       (1L << GROUPBY_PUSHDOWN) |
       (1L << GROUPBY_PULLUP) |
       (1L << SUBQUERY_COALESCE) |
-      (1L << SEMI_TO_INNER);
+      (1L << SEMI_TO_INNER) |
+      (1L << TEMP_TABLE_OPTIMIZATION) |
+      (1L << LATE_MATERIALIZATION);
+
+  static const uint64_t ALL_EXPR_LEVEL_HEURISTICS_RULES =
+      (1L << SIMPLIFY_EXPR) |
+      (1L << SIMPLIFY_DISTINCT) |
+      (1L << SIMPLIFY_WINFUNC) |
+      (1L << SIMPLIFY_ORDERBY) |
+      (1L << SIMPLIFY_LIMIT) |
+      (1L << PROJECTION_PRUNING) |
+      (1L << PREDICATE_MOVE_AROUND) |
+      (1L << JOIN_LIMIT_PUSHDOWN) |
+      (1L << CONST_PROPAGATE);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,
@@ -394,7 +436,15 @@ protected:
                            ObRawExprFactory &expr_factory,
                            ObIArray<ObSelectStmt*> &old_temp_table_stmts,
                            ObIArray<ObSelectStmt*> &new_temp_table_stmts);
-
+  int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                              ObDMLStmt *stmt,
+                              ObDMLStmt *&orgin_stmt,
+                              ObDMLStmt *&root_stmt);
+  void reset_stmt_cost() { stmt_cost_ = -1; }
+  int prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                             ObDMLStmt &stmt,
+                             ObDMLStmt *&copied_stmt,
+                             bool is_trans_stmt);
 private:
   // pre-order transformation
   int transform_pre_order(common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -417,10 +467,6 @@ private:
   int transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stmts,
                             const int64_t current_level,
                             ObDMLStmt *&stmt);
-  int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                              ObDMLStmt *stmt,
-                              ObDMLStmt *&orgin_stmt,
-                              ObDMLStmt *&root_stmt);
 
   int evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stms,
                     ObDMLStmt *&stmt,
@@ -428,18 +474,14 @@ private:
                     double &plan_cost,
                     bool &is_expected,
                     void *check_ctx = NULL);
-
-  int prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                             ObDMLStmt &stmt,
-                             ObDMLStmt *&copied_stmt,
-                             bool is_trans_stmt);
-
   int prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_stmt, ObDMLStmt *&root_stmt_with_filter);
 
   virtual int is_expected_plan(ObLogPlan *plan,
                                void *check_ctx,
                                bool is_trans_plan,
                                bool& is_valid);
+  int update_trans_ctx(ObDMLStmt *stmt);
+  int update_max_table_num(ObDMLStmt *stmt);
 
   bool skip_move_trans_loc() const
   {

@@ -126,6 +126,9 @@ private:
                                 ObIArray<ObRawExpr*> &columns,
                                 ObRawExpr *&null_propagate_column,
                                 bool &is_valid);
+  int check_table_items(ObDMLStmt *stmt,
+                        ObSelectStmt *child_stmt,
+                        bool &is_valid);
 
   int do_groupby_pull_up(ObSelectStmt *stmt,
                          PullupHelper &helper,
@@ -191,6 +194,10 @@ private:
                             double &card);
 
   int check_all_table_has_statistics(ObLogicalOperator *op, bool &has_stats);
+  int check_view_table_in_inner_path(ObIArray<ObLogicalOperator*> &parent_ops,
+                                     const ObDMLStmt &stmt,
+                                     uint64_t table_id,
+                                     bool &is_inner_path);
 
 private:
   // help functions

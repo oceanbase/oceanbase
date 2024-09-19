@@ -16,6 +16,8 @@ Outputs & filters:
       is_index_back=true, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t1.b = 1])
+  Expr Constraints:
+      cast(1, INT(11, 0)) = 1 result is TRUE
 explain select/*+index(t1 k1), NO_USE_HASH_AGGREGATION*/ * from t1 where b = 1 group by b, c;
 Query Plan
 ====================================================
@@ -5391,217 +5393,283 @@ partition p4 values less than (maxvalue)
 );
 explain select/*+leading(t1,t2,t3)*/ * from t1, t2 where t1.a = t2.a and t1.b = t2.b;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |117         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |116         |
-|2 |  └─PX PARTITION ITERATOR|        |1       |113         |
-|3 |    └─NESTED-LOOP JOIN   |        |1       |113         |
-|4 |      ├─TABLE FULL SCAN  |t1      |1       |95          |
-|5 |      └─TABLE RANGE SCAN |t2      |1       |436         |
-=============================================================
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |PX COORDINATOR                |        |1       |117         |
+|1 |└─EXCHANGE OUT DISTR          |:EX10000|1       |116         |
+|2 |  └─PX PARTITION ITERATOR     |        |1       |113         |
+|3 |    └─HASH JOIN               |        |1       |113         |
+|4 |      ├─NESTED-LOOP JOIN      |        |1       |113         |
+|5 |      │ ├─STATISTICS COLLECTOR|        |1       |95          |
+|6 |      │ │ └─TABLE FULL SCAN   |t1      |1       |95          |
+|7 |      │ └─TABLE RANGE SCAN    |t2_alias|1       |436         |
+|8 |      └─TABLE FULL SCAN       |t2      |1       |95          |
+==================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t2.a], [t1.b], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t2.a], [t1.b], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  4 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  5 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  7 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  8 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.b = t2.b and t2.a = t3.a and t2.b = t3.b;
 Query Plan
-==============================================================
-|ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |PX COORDINATOR            |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR      |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR |        |1       |131         |
-|3 |    └─NESTED-LOOP JOIN    |        |1       |131         |
-|4 |      ├─NESTED-LOOP JOIN  |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN|t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN  |t3      |1       |436         |
-==============================================================
+====================================================================
+|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR            |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR       |        |1       |131         |
+|3 |    └─NESTED-LOOP JOIN          |        |1       |131         |
+|4 |      ├─HASH JOIN               |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP JOIN      |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR|        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN   |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN    |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN       |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN        |t3      |1       |436         |
+====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t2.b], [t2.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t2.b(:3)]), use_batch=false
-  4 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t2.b], [t2.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t2.b(:3)]), use_batch=true
+  4 - output([t1.a], [t2.b], [t2.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
 explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.b = t2.b and t1.a = t3.a and t1.b = t3.b;
 Query Plan
-==============================================================
-|ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |PX COORDINATOR            |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR      |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR |        |1       |131         |
-|3 |    └─NESTED-LOOP JOIN    |        |1       |131         |
-|4 |      ├─NESTED-LOOP JOIN  |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN|t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN  |t3      |1       |436         |
-==============================================================
+====================================================================
+|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR            |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR       |        |1       |131         |
+|3 |    └─NESTED-LOOP JOIN          |        |1       |131         |
+|4 |      ├─HASH JOIN               |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP JOIN      |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR|        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN   |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN    |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN       |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN        |t3      |1       |436         |
+====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=true
+  4 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
 explain select/*+leading(t1,t2)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b;
 Query Plan
-=================================================================
-|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------
-|0 |PX COORDINATOR               |        |1       |117         |
-|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |116         |
-|2 |  └─PX PARTITION ITERATOR    |        |1       |113         |
-|3 |    └─NESTED-LOOP OUTER JOIN |        |1       |113         |
-|4 |      ├─TABLE FULL SCAN      |t1      |1       |95          |
-|5 |      └─TABLE RANGE SCAN     |t2      |1       |436         |
-=================================================================
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |PX COORDINATOR                 |        |1       |117         |
+|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |116         |
+|2 |  └─PX PARTITION ITERATOR      |        |1       |113         |
+|3 |    └─HASH OUTER JOIN          |        |1       |113         |
+|4 |      ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
+|5 |      │ ├─STATISTICS COLLECTOR |        |1       |95          |
+|6 |      │ │ └─TABLE FULL SCAN    |t1      |1       |95          |
+|7 |      │ └─TABLE RANGE SCAN     |t2_alias|1       |436         |
+|8 |      └─TABLE FULL SCAN        |t2      |1       |95          |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t2.a], [t1.b], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t2.a], [t1.b], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  4 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  5 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  7 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  8 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
 Query Plan
-===================================================================
-|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR      |        |1       |131         |
-|3 |    └─NESTED-LOOP OUTER JOIN   |        |1       |131         |
-|4 |      ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN      |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN     |t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN       |t3      |1       |436         |
-===================================================================
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR             |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR        |        |1       |131         |
+|3 |    └─NESTED-LOOP OUTER JOIN     |        |1       |131         |
+|4 |      ├─HASH OUTER JOIN          |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR |        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN    |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN     |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN        |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN         |t3      |1       |436         |
+=====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=true
+  4 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
 explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
 Query Plan
-===================================================================
-|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR      |        |1       |131         |
-|3 |    └─NESTED-LOOP OUTER JOIN   |        |1       |131         |
-|4 |      ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN      |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN     |t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN       |t3      |1       |436         |
-===================================================================
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR             |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR        |        |1       |131         |
+|3 |    └─NESTED-LOOP OUTER JOIN     |        |1       |131         |
+|4 |      ├─HASH OUTER JOIN          |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR |        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN    |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN     |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN        |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN         |t3      |1       |436         |
+=====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t2.a], [t2.b], [t1.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t2.a(:2)], [t2.b(:3)]), use_batch=false
-  4 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t2.a], [t2.b], [t1.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t2.a(:2)], [t2.b(:3)]), use_batch=true
+  4 - output([t2.a], [t2.b], [t1.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
@@ -5713,79 +5781,101 @@ Outputs & filters:
       range_key([t3.a], [t3.b], [t3.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
 Query Plan
-=================================================================
-|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------
-|0 |PX COORDINATOR               |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR    |        |1       |131         |
-|3 |    └─NESTED-LOOP OUTER JOIN |        |1       |131         |
-|4 |      ├─NESTED-LOOP JOIN     |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN    |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN   |t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN     |t3      |1       |436         |
-=================================================================
+====================================================================
+|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR            |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR       |        |1       |131         |
+|3 |    └─NESTED-LOOP OUTER JOIN    |        |1       |131         |
+|4 |      ├─HASH JOIN               |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP JOIN      |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR|        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN   |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN    |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN       |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN        |t3      |1       |436         |
+====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=true
+  4 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
 explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
 Query Plan
-=================================================================
-|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------
-|0 |PX COORDINATOR               |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR    |        |1       |131         |
-|3 |    └─NESTED-LOOP OUTER JOIN |        |1       |131         |
-|4 |      ├─NESTED-LOOP JOIN     |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN    |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN   |t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN     |t3      |1       |436         |
-=================================================================
+====================================================================
+|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR            |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR       |        |1       |131         |
+|3 |    └─NESTED-LOOP OUTER JOIN    |        |1       |131         |
+|4 |      ├─HASH JOIN               |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP JOIN      |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR|        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN   |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN    |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN       |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN        |t3      |1       |436         |
+====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t2.a], [t2.b], [t1.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t2.a(:2)], [t2.b(:3)]), use_batch=false
-  4 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t2.a], [t2.b], [t1.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t2.a(:2)], [t2.b(:3)]), use_batch=true
+  4 - output([t2.a], [t2.b], [t1.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
@@ -5814,13 +5904,13 @@ Outputs & filters:
       equal_conds([t1.a = t3.a], [t1.b = t3.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
   4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
   5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      access([GROUP_ID], [t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
       range_cond([:0 = t2.a], [:1 = t2.b])
@@ -5853,13 +5943,13 @@ Outputs & filters:
       equal_conds([t2.a = t3.a], [t2.b = t3.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
   4 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
   5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      access([GROUP_ID], [t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
       range_cond([:0 = t2.a], [:1 = t2.b])
@@ -5869,118 +5959,151 @@ Outputs & filters:
       range_key([t3.a], [t3.b], [t3.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t1.a = t3.a and t1.b = t3.b;
 Query Plan
-===================================================================
-|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR      |        |1       |131         |
-|3 |    └─NESTED-LOOP JOIN         |        |1       |131         |
-|4 |      ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN      |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN     |t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN       |t3      |1       |436         |
-===================================================================
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR             |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR        |        |1       |131         |
+|3 |    └─NESTED-LOOP JOIN           |        |1       |131         |
+|4 |      ├─HASH OUTER JOIN          |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR |        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN    |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN     |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN        |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN         |t3      |1       |436         |
+=====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=true
+  4 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
 explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t2.a = t3.a and t2.b = t3.b;
 Query Plan
-==============================================================
-|ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |PX COORDINATOR            |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR      |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR |        |1       |131         |
-|3 |    └─NESTED-LOOP JOIN    |        |1       |131         |
-|4 |      ├─NESTED-LOOP JOIN  |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN|t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN  |t3      |1       |436         |
-==============================================================
+====================================================================
+|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR            |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR       |        |1       |131         |
+|3 |    └─NESTED-LOOP JOIN          |        |1       |131         |
+|4 |      ├─HASH JOIN               |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP JOIN      |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR|        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN   |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN    |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN       |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN        |t3      |1       |436         |
+====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t2.b], [t2.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t2.b(:3)]), use_batch=false
-  4 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t2.b], [t2.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t2.b(:3)]), use_batch=true
+  4 - output([t1.a], [t2.b], [t2.a], [t1.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([t3.a = :2], [:3 = t3.b])
 explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t1.a = t3.a and t1.b = t3.b;
 Query Plan
-===================================================================
-|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |1       |137         |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR      |        |1       |131         |
-|3 |    └─NESTED-LOOP JOIN         |        |1       |131         |
-|4 |      ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
-|5 |      │ ├─TABLE FULL SCAN      |t1      |1       |95          |
-|6 |      │ └─TABLE RANGE SCAN     |t2      |1       |436         |
-|7 |      └─TABLE RANGE SCAN       |t3      |1       |436         |
-===================================================================
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |1       |137         |
+|1 |└─EXCHANGE OUT DISTR             |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR        |        |1       |131         |
+|3 |    └─NESTED-LOOP JOIN           |        |1       |131         |
+|4 |      ├─HASH OUTER JOIN          |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP OUTER JOIN |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR |        |1       |95          |
+|7 |      │ │ │ └─TABLE FULL SCAN    |t1      |1       |95          |
+|8 |      │ │ └─TABLE RANGE SCAN     |t2_alias|1       |436         |
+|9 |      │ └─TABLE FULL SCAN        |t2      |1       |95          |
+|10|      └─TABLE RANGE SCAN         |t3      |1       |436         |
+=====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
-  5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=true
+  4 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.c], [t2.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
+  5 - output([t1.a], [t1.b], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
+  6 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  6 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  8 - output([t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t2_alias.a], [t2_alias.b], [t2_alias.c], [t2_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t2_alias.a], [t2_alias.b], [t2_alias.c]), range(MIN ; MAX), 
+      range_cond([:0 = t2_alias.a], [:1 = t2_alias.b])
+  9 - output([t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c], [t2.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:0 = t2.a], [:1 = t2.b])
-  7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 10 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
@@ -6006,7 +6129,7 @@ Outputs & filters:
   2 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t2.a(:0)], [t2.b(:1)]), use_batch=false
+      conds(nil), nl_params_([t2.a(:0)], [t2.b(:1)]), use_batch=true
   4 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
@@ -6019,7 +6142,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:0 = t3.a], [:1 = t3.b])
@@ -6045,7 +6168,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t2.a], [t2.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output([t1.a], [t1.b], [t2.a], [t2.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
+      conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=true
   4 - output([t1.a], [t1.b], [t2.a], [t2.b], [t1.c], [t1.d], [t2.c], [t2.d]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
@@ -6058,7 +6181,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:0 = t3.a], [:1 = t3.b])
@@ -6084,7 +6207,7 @@ Outputs & filters:
   2 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t2.a(:0)], [t2.b(:1)]), use_batch=false
+      conds(nil), nl_params_([t2.a(:0)], [t2.b(:1)]), use_batch=true
   4 - output([t2.a], [t2.b], [t1.a], [t1.b], [t1.c], [t1.d], [t2.c], [t2.d]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
@@ -6097,24 +6220,27 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   7 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      access([GROUP_ID], [t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:0 = t3.a], [:1 = t3.b])
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2);
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |PX COORDINATOR             |        |1       |115         |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000|1       |114         |
-|2 |  └─PX PARTITION ITERATOR  |        |1       |113         |
-|3 |    └─NESTED-LOOP JOIN     |        |1       |113         |
-|4 |      ├─SUBPLAN SCAN       |VIEW2   |1       |95          |
-|5 |      │ └─MERGE DISTINCT   |        |1       |95          |
-|6 |      │   └─TABLE FULL SCAN|t2      |1       |95          |
-|7 |      └─TABLE RANGE SCAN   |t1      |1       |436         |
-===============================================================
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |PX COORDINATOR                 |        |1       |115         |
+|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |114         |
+|2 |  └─PX PARTITION ITERATOR      |        |1       |113         |
+|3 |    └─HASH JOIN                |        |1       |113         |
+|4 |      ├─NESTED-LOOP JOIN       |        |1       |113         |
+|5 |      │ ├─STATISTICS COLLECTOR |        |1       |95          |
+|6 |      │ │ └─SUBPLAN SCAN       |VIEW2   |1       |95          |
+|7 |      │ │   └─MERGE DISTINCT   |        |1       |95          |
+|8 |      │ │     └─TABLE FULL SCAN|t2      |1       |95          |
+|9 |      │ └─TABLE RANGE SCAN     |t1_alias|1       |436         |
+|10|      └─TABLE FULL SCAN        |t1      |1       |95          |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d)]), filter(nil), rowset=16
@@ -6123,47 +6249,55 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([VIEW2.VIEW1.a(:0)], [VIEW2.VIEW1.b(:1)]), use_batch=false
-  4 - output([VIEW2.VIEW1.a], [VIEW2.VIEW1.b]), filter(nil), rowset=16
+      equal_conds([t1.a = VIEW2.VIEW1.a], [t1.b = VIEW2.VIEW1.b]), other_conds(nil)
+  4 - output([t1_alias.a], [t1_alias.b], [t1_alias.c], [t1_alias.d], [VIEW2.VIEW1.a], [VIEW2.VIEW1.b]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.VIEW1.a(:0)], [VIEW2.VIEW1.b(:1)]), use_batch=true
+  5 - output([VIEW2.VIEW1.a], [VIEW2.VIEW1.b]), filter(nil), rowset=16
+      threshold: 0
+  6 - output([VIEW2.VIEW1.a], [VIEW2.VIEW1.b]), filter(nil), rowset=16
       access([VIEW2.VIEW1.a], [VIEW2.VIEW1.b])
-  5 - output([t2.a], [t2.b]), filter(nil), rowset=16
+  7 - output([t2.a], [t2.b]), filter(nil), rowset=16
       distinct([t2.a], [t2.b])
-  6 - output([t2.a], [t2.b]), filter(nil), rowset=16
+  8 - output([t2.a], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.b]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  7 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+  9 - output([t1_alias.a], [t1_alias.b], [t1_alias.c], [t1_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t1_alias.a], [t1_alias.b], [t1_alias.c], [t1_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1_alias.a], [t1_alias.b], [t1_alias.c]), range(MIN ; MAX), 
+      range_cond([t1_alias.a = :0], [t1_alias.b = :1])
+ 10 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t1.a], [t1.b], [t1.c]), range(MIN ; MAX), 
-      range_cond([t1.a = :0], [t1.b = :1])
+      range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
 Query Plan
-=================================================================
-|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------
-|0 |PX COORDINATOR               |        |1       |136         |
-|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR    |        |1       |134         |
-|3 |    └─NESTED-LOOP SEMI JOIN  |        |1       |134         |
-|4 |      ├─NESTED-LOOP JOIN     |        |1       |113         |
-|5 |      │ ├─SUBPLAN SCAN       |VIEW3   |1       |95          |
-|6 |      │ │ └─MERGE DISTINCT   |        |1       |95          |
-|7 |      │ │   └─TABLE FULL SCAN|t2      |1       |95          |
-|8 |      │ └─TABLE RANGE SCAN   |t1      |1       |436         |
-|9 |      └─TABLE RANGE SCAN     |t3      |1       |501         |
-=================================================================
+======================================================================
+|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |PX COORDINATOR                    |        |1       |136         |
+|1 |└─EXCHANGE OUT DISTR              |:EX10000|1       |135         |
+|2 |  └─NESTED-LOOP SEMI JOIN         |        |1       |134         |
+|3 |    ├─PX PARTITION ITERATOR       |        |1       |113         |
+|4 |    │ └─NESTED-LOOP JOIN          |        |1       |113         |
+|5 |    │   ├─SUBPLAN SCAN            |VIEW3   |1       |95          |
+|6 |    │   │ └─MERGE DISTINCT        |        |1       |95          |
+|7 |    │   │   └─TABLE FULL SCAN     |t2      |1       |95          |
+|8 |    │   └─TABLE RANGE SCAN        |t1      |1       |436         |
+|9 |    └─DISTRIBUTED TABLE RANGE SCAN|t3      |1       |501         |
+======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
-      partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
+  3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      partition wise, force partition granule
   4 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([VIEW3.VIEW1.a(:0)], [VIEW3.VIEW1.b(:1)]), use_batch=false
+      conds(nil), nl_params_([VIEW3.VIEW1.a(:0)], [VIEW3.VIEW1.b(:1)]), use_batch=true
   5 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=16
       access([VIEW3.VIEW1.a], [VIEW3.VIEW1.b])
   6 - output([t2.a], [t2.b]), filter(nil), rowset=16
@@ -6173,7 +6307,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   8 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
-      access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      access([GROUP_ID], [t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c]), range(MIN ; MAX), 
       range_cond([t1.a = :0], [t1.b = :1])
@@ -6187,17 +6321,17 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |1       |102         |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |102         |
-|2 |  └─PX PARTITION ITERATOR      |        |1       |100         |
-|3 |    └─NESTED-LOOP SEMI JOIN    |        |1       |100         |
+|0 |PX COORDINATOR                 |        |1       |119         |
+|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |118         |
+|2 |  └─PX PARTITION ITERATOR      |        |1       |117         |
+|3 |    └─NESTED-LOOP SEMI JOIN    |        |1       |117         |
 |4 |      ├─TABLE FULL SCAN        |t1      |1       |95          |
-|5 |      └─SUBPLAN SCAN           |VIEW2   |1       |113         |
-|6 |        └─NESTED-LOOP JOIN     |        |1       |113         |
-|7 |          ├─SUBPLAN SCAN       |VIEW3   |1       |95          |
-|8 |          │ └─MERGE DISTINCT   |        |1       |95          |
-|9 |          │   └─TABLE FULL SCAN|t3      |1       |95          |
-|10|          └─TABLE RANGE SCAN   |t2      |1       |436         |
+|5 |      └─SUBPLAN SCAN           |VIEW2   |1       |522         |
+|6 |        └─NESTED-LOOP JOIN     |        |1       |522         |
+|7 |          ├─SUBPLAN SCAN       |VIEW3   |1       |501         |
+|8 |          │ └─MERGE DISTINCT   |        |1       |501         |
+|9 |          │   └─TABLE FULL SCAN|t3      |1       |501         |
+|10|          └─TABLE RANGE SCAN   |t2      |1       |501         |
 ===================================================================
 Outputs & filters:
 -------------------------------------
@@ -6272,59 +6406,75 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1, t2 where t1.a + 1 = t2.a + 1;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |41          |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |40          |
-|2 |  └─PX PARTITION ITERATOR|        |1       |39          |
-|3 |    └─HASH JOIN          |        |1       |39          |
-|4 |      ├─TABLE FULL SCAN  |t1      |1       |19          |
-|5 |      └─TABLE FULL SCAN  |t2      |1       |19          |
-=============================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |HASH JOIN                  |        |1       |41          |
+|1 |├─PX COORDINATOR           |        |1       |20          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|3 |│   └─PX PARTITION ITERATOR|        |1       |19          |
+|4 |│     └─TABLE FULL SCAN    |t1      |1       |19          |
+|5 |└─PX COORDINATOR           |        |1       |20          |
+|6 |  └─EXCHANGE OUT DISTR     |:EX20000|1       |20          |
+|7 |    └─PX PARTITION ITERATOR|        |1       |19          |
+|8 |      └─TABLE FULL SCAN    |t2      |1       |19          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b)]), filter(nil), rowset=16
-      dop=1
-  2 - output([t1.a], [t2.a], [t1.b], [t2.b]), filter(nil), rowset=16
-      partition wise, force partition granule
-  3 - output([t1.a], [t2.a], [t1.b], [t2.b]), filter(nil), rowset=16
+  0 - output([t1.a], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
       equal_conds([t1.a + 1 = t2.a + 1]), other_conds(nil)
+  1 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      dop=1
+  3 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      force partition granule
   4 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t2.a], [t2.b]), filter(nil), rowset=16
+  6 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      dop=1
+  7 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      force partition granule
+  8 - output([t2.a], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1, t3 where t1.a + 1 = t3.a + 2;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |41          |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |40          |
-|2 |  └─PX PARTITION ITERATOR|        |1       |39          |
-|3 |    └─HASH JOIN          |        |1       |39          |
-|4 |      ├─TABLE FULL SCAN  |t1      |1       |19          |
-|5 |      └─TABLE FULL SCAN  |t3      |1       |19          |
-=============================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |HASH JOIN                  |        |1       |41          |
+|1 |├─PX COORDINATOR           |        |1       |20          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|3 |│   └─PX PARTITION ITERATOR|        |1       |19          |
+|4 |│     └─TABLE FULL SCAN    |t1      |1       |19          |
+|5 |└─PX COORDINATOR           |        |1       |20          |
+|6 |  └─EXCHANGE OUT DISTR     |:EX20000|1       |20          |
+|7 |    └─PX PARTITION ITERATOR|        |1       |19          |
+|8 |      └─TABLE FULL SCAN    |t3      |1       |19          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t3.a, t3.b)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t3.a, t3.b)]), filter(nil), rowset=16
-      dop=1
-  2 - output([t1.a], [t3.a], [t1.b], [t3.b]), filter(nil), rowset=16
-      partition wise, force partition granule
-  3 - output([t1.a], [t3.a], [t1.b], [t3.b]), filter(nil), rowset=16
+  0 - output([t1.a], [t1.b], [t3.a], [t3.b]), filter(nil), rowset=16
       equal_conds([t1.a + 1 = t3.a + 2]), other_conds(nil)
+  1 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      dop=1
+  3 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      force partition granule
   4 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t3.a], [t3.b]), filter(nil), rowset=16
+  6 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      dop=1
+  7 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      force partition granule
+  8 - output([t3.a], [t3.b]), filter(nil), rowset=16
       access([t3.a], [t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -6367,78 +6517,114 @@ Outputs & filters:
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1, t2, t3 where t1.a + 1 = t2.a + 1 and t1.a + 1 = t3.a + 2;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |61          |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |60          |
-|2 |  └─PX PARTITION ITERATOR|        |1       |58          |
-|3 |    └─HASH JOIN          |        |1       |58          |
-|4 |      ├─TABLE FULL SCAN  |t3      |1       |19          |
-|5 |      └─HASH JOIN        |        |1       |39          |
-|6 |        ├─TABLE FULL SCAN|t1      |1       |19          |
-|7 |        └─TABLE FULL SCAN|t2      |1       |19          |
-=============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |HASH JOIN                    |        |1       |61          |
+|1 |├─PX COORDINATOR             |        |1       |20          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |20          |
+|3 |│   └─PX PARTITION ITERATOR  |        |1       |19          |
+|4 |│     └─TABLE FULL SCAN      |t3      |1       |19          |
+|5 |└─HASH JOIN                  |        |1       |41          |
+|6 |  ├─PX COORDINATOR           |        |1       |20          |
+|7 |  │ └─EXCHANGE OUT DISTR     |:EX20000|1       |20          |
+|8 |  │   └─PX PARTITION ITERATOR|        |1       |19          |
+|9 |  │     └─TABLE FULL SCAN    |t1      |1       |19          |
+|10|  └─PX COORDINATOR           |        |1       |20          |
+|11|    └─EXCHANGE OUT DISTR     |:EX30000|1       |20          |
+|12|      └─PX PARTITION ITERATOR|        |1       |19          |
+|13|        └─TABLE FULL SCAN    |t2      |1       |19          |
+=================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
-      dop=1
-  2 - output([t1.a], [t3.a], [t3.b], [t2.a], [t1.b], [t2.b]), filter(nil), rowset=16
-      partition wise, force partition granule
-  3 - output([t1.a], [t3.a], [t3.b], [t2.a], [t1.b], [t2.b]), filter(nil), rowset=16
+  0 - output([t1.a], [t1.b], [t2.a], [t2.b], [t3.a], [t3.b]), filter(nil), rowset=16
       equal_conds([t1.a + 1 = t3.a + 2]), other_conds(nil)
+  1 - output([t3.a], [t3.b]), filter(nil), rowset=16
+  2 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      dop=1
+  3 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      force partition granule
   4 - output([t3.a], [t3.b]), filter(nil), rowset=16
       access([t3.a], [t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([t1.a], [t1.a + 1], [t2.a], [t1.b], [t2.b]), filter(nil), rowset=16
+  5 - output([t1.a], [t1.b], [t2.a], [t2.b], [t1.a + 1]), filter(nil), rowset=16
       equal_conds([t1.a + 1 = t2.a + 1]), other_conds(nil)
   6 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  7 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      dop=1
+  8 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      force partition granule
+  9 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([t2.a], [t2.b]), filter(nil), rowset=16
+ 10 - output([t2.a], [t2.b]), filter(nil), rowset=16
+ 11 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      dop=1
+ 12 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      force partition granule
+ 13 - output([t2.a], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :0 = :2
 explain select * from t1, t2, t3 where t1.a + 1 = t2.a + 1 and t2.a + 1 = t3.a + 2;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |61          |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |60          |
-|2 |  └─PX PARTITION ITERATOR|        |1       |58          |
-|3 |    └─HASH JOIN          |        |1       |58          |
-|4 |      ├─TABLE FULL SCAN  |t3      |1       |19          |
-|5 |      └─HASH JOIN        |        |1       |39          |
-|6 |        ├─TABLE FULL SCAN|t1      |1       |19          |
-|7 |        └─TABLE FULL SCAN|t2      |1       |19          |
-=============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |HASH JOIN                    |        |1       |61          |
+|1 |├─PX COORDINATOR             |        |1       |20          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |20          |
+|3 |│   └─PX PARTITION ITERATOR  |        |1       |19          |
+|4 |│     └─TABLE FULL SCAN      |t3      |1       |19          |
+|5 |└─HASH JOIN                  |        |1       |41          |
+|6 |  ├─PX COORDINATOR           |        |1       |20          |
+|7 |  │ └─EXCHANGE OUT DISTR     |:EX20000|1       |20          |
+|8 |  │   └─PX PARTITION ITERATOR|        |1       |19          |
+|9 |  │     └─TABLE FULL SCAN    |t1      |1       |19          |
+|10|  └─PX COORDINATOR           |        |1       |20          |
+|11|    └─EXCHANGE OUT DISTR     |:EX30000|1       |20          |
+|12|      └─PX PARTITION ITERATOR|        |1       |19          |
+|13|        └─TABLE FULL SCAN    |t2      |1       |19          |
+=================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
-      dop=1
-  2 - output([t2.a], [t3.a], [t3.b], [t1.a], [t1.b], [t2.b]), filter(nil), rowset=16
-      partition wise, force partition granule
-  3 - output([t2.a], [t3.a], [t3.b], [t1.a], [t1.b], [t2.b]), filter(nil), rowset=16
+  0 - output([t1.a], [t1.b], [t2.a], [t2.b], [t3.a], [t3.b]), filter(nil), rowset=16
       equal_conds([t2.a + 1 = t3.a + 2]), other_conds(nil)
+  1 - output([t3.a], [t3.b]), filter(nil), rowset=16
+  2 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      dop=1
+  3 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      force partition granule
   4 - output([t3.a], [t3.b]), filter(nil), rowset=16
       access([t3.a], [t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([t2.a], [t1.a], [t2.a + 1], [t1.b], [t2.b]), filter(nil), rowset=16
+  5 - output([t1.a], [t1.b], [t2.a], [t2.b], [t2.a + 1]), filter(nil), rowset=16
       equal_conds([t1.a + 1 = t2.a + 1]), other_conds(nil)
   6 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  7 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      dop=1
+  8 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      force partition granule
+  9 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([t2.a], [t2.b]), filter(nil), rowset=16
+ 10 - output([t2.a], [t2.b]), filter(nil), rowset=16
+ 11 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      dop=1
+ 12 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      force partition granule
+ 13 - output([t2.a], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :1 = :2
 drop table if exists t1, t2, t3;
 create table t1(a int, b int, c int) partition by hash(a) partitions 5;
 create table t2(a int, b int, c int) partition by hash(a) partitions 5;
@@ -8137,6 +8323,8 @@ Outputs & filters:
       access([t2.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :1 = :0
 explain select a from t1 intersect select a from t2 intersect select b from t3;
 Query Plan
 =====================================================================
@@ -8285,6 +8473,8 @@ Outputs & filters:
       access([t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :1 = :0
 explain select 1 a intersect select a from t1 intersect select a from t2;
 Query Plan
 ==========================================================
@@ -8774,6 +8964,8 @@ Outputs & filters:
       access([t2.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :1 = :0
 explain select a from t1 except select a from t2 except select b from t3;
 Query Plan
 =====================================================================
@@ -8935,6 +9127,8 @@ Outputs & filters:
       access([t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :1 = :0
 explain select 1 a except select a from t1 except select a from t2;
 Query Plan
 =======================================================

@@ -142,7 +142,10 @@ int ObWrAsyncSnapshotTaskP::process()
   ObWrSnapshotArg &arg = ObWrAsyncSnapshotTaskP::arg_;
   LOG_DEBUG("wr snapshot task", K(MTL_ID()), K(arg));
   // gather inner table data
-  if (GCONF.in_upgrade_mode()) {
+  bool tenant_need_upgrade = false;
+  if (OB_FAIL(TENANT_NEED_UPGRADE(MTL_ID(), tenant_need_upgrade))) {
+    LOG_WARN("failed to get tenant_need_upgrade", K(ret), K(MTL_ID()));
+  } else if (GCONF.in_upgrade_mode() || tenant_need_upgrade) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
   } else if (WrTaskType::TAKE_SNAPSHOT == arg.get_task_type()) {
@@ -153,9 +156,25 @@ int ObWrAsyncSnapshotTaskP::process()
 
     // gurantee one snapshot task processing
     bool exit = true;
-    if (snapshot_arg.get_snap_id() == -1) {
+    if (snapshot_arg.get_snap_id() == LAST_SNAPSHOT_RECORD_SNAP_ID || snapshot_arg.get_task_type() == WrTaskType::USER_SNAPSHOT) {
       if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->try_lock())) {
-        LOG_WARN("snapshot ahead request failed to lock", K(arg));
+        if (snapshot_arg.get_snap_id() == LAST_SNAPSHOT_RECORD_SNAP_ID) {
+          LOG_WARN("snapshot ahead request failed to lock", K(arg));
+        } else {
+          LOG_WARN("manual snapshot request failed to lock", K(arg));
+          status = ObWrSnapshotStatus::FAILED;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(WorkloadRepositoryTask::modify_tenant_snapshot_status_and_startup_time(
+                  snapshot_arg.get_snap_id(), snapshot_arg.get_tenant_id(), GCONF.cluster_id,
+                  GCONF.self_addr_, GCTX.start_service_time_, status))) {
+            LOG_WARN("failed to modify snapshot info", KR(tmp_ret), K(snapshot_arg), K(status));
+          } else if (is_sys_tenant(snapshot_arg.get_tenant_id())) {
+            if (OB_TMP_FAIL(WorkloadRepositoryTask::update_snap_info_in_wr_control(snapshot_arg.get_tenant_id(),
+                    snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_end_time()))) {
+              LOG_WARN("failed to update wr control info", KR(tmp_ret), K(snapshot_arg));
+            }
+          }
+        }
       } else {
         exit = false;
       }
@@ -189,18 +208,15 @@ int ObWrAsyncSnapshotTaskP::process()
         LOG_WARN("wr snapshot task tenant_id mismatch!", K(MTL_ID()), K(snapshot_arg));
       } else if (OB_FAIL(collector.init())) {
         LOG_WARN("failed to init wr collector", K(ret));
-      } else if (snapshot_arg.get_snap_id() == -1) {  // snapshot ahead
-        if (OB_UNLIKELY(MTL_ID() != snapshot_arg.get_tenant_id())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("wr snapshot ahead task should be trigger by sys tenant!", K(MTL_ID()), K(snapshot_arg));        
-        } else if (OB_FAIL(collector.collect_ash())) {
-          LOG_WARN("failed to wr snapshot ahead", K(ret), K(snapshot_arg), K(MTL_ID()));
+      } else if (snapshot_arg.get_snap_id() == LAST_SNAPSHOT_RECORD_SNAP_ID) {  // snapshot ahead
+        if (OB_FAIL(collector.collect_ash())) {
+          LOG_WARN("failed to take wr snapshot ahead", K(ret), K(snapshot_arg), K(MTL_ID()));
         }
       } else if (OB_FAIL(collector.collect())) {  // scheduled snapshot
         LOG_WARN("failed to collect wr data", K(ret), K(snapshot_arg), K(MTL_ID()));
       }
       // update scheduled snapshot info
-      if (snapshot_arg.get_snap_id() != -1) {
+      if (snapshot_arg.get_snap_id() != LAST_SNAPSHOT_RECORD_SNAP_ID) {
         if (OB_FAIL(ret)) {
           status = ObWrSnapshotStatus::FAILED;
         } else {
@@ -235,7 +251,10 @@ int ObWrAsyncPurgeSnapshotTaskP::process()
   ObWrSnapshotArg &arg = ObWrAsyncPurgeSnapshotTaskP::arg_;
   LOG_DEBUG("wr snapshot task", K(MTL_ID()), K(arg));
   // gather inner table data
-  if (GCONF.in_upgrade_mode()) {
+  bool tenant_need_upgrade = false;
+  if (OB_FAIL(TENANT_NEED_UPGRADE(MTL_ID(), tenant_need_upgrade))) {
+    LOG_WARN("failed to get tenant_need_upgrade", K(ret), K(MTL_ID()));
+  } else if (GCONF.in_upgrade_mode() || tenant_need_upgrade) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
   } else if (WrTaskType::PURGE == arg.get_task_type()) {
@@ -265,11 +284,14 @@ int ObWrSyncUserSubmitSnapshotTaskP::process()
   WR_STAT_GUARD(WR_SNAPSHOT);
   ObWrSnapshotArg &arg = ObWrSyncUserSubmitSnapshotTaskP::arg_;
   ObWrUserSubmitSnapResp &resp = ObWrSyncUserSubmitSnapshotTaskP::result_;
+  bool tenant_need_upgrade = false;
   if (OB_ISNULL(GCTX.wr_service_) || OB_ISNULL(GCTX.net_frame_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN(
         "wr service  or net frame is nullptr", K(ret), K(GCTX.net_frame_), K(GCTX.wr_service_));
-  } else if (GCONF.in_upgrade_mode()) {
+  } else if (OB_FAIL(TENANT_NEED_UPGRADE(MTL_ID(), tenant_need_upgrade))) {
+    LOG_WARN("failed to get tenant_need_upgrade", K(ret), K(MTL_ID()));
+  } else if (GCONF.in_upgrade_mode() || tenant_need_upgrade) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
   } else if (GCTX.wr_service_->is_running_task()) {
@@ -341,10 +363,13 @@ int ObWrSyncUserModifySettingsTaskP::process()
   int64_t tmp_interval = 0;
   ObWrUserModifySettingsArg &arg = ObWrSyncUserModifySettingsTaskP::arg_;
   LOG_DEBUG("user submit modify snapshot settings task", K(MTL_ID()), K(arg));
+  bool tenant_need_upgrade = false;
   if (OB_ISNULL(GCTX.wr_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wr service is nullptr", K(ret),K(GCTX.wr_service_));
-  } else if (GCONF.in_upgrade_mode()) {
+  } else if (OB_FAIL(TENANT_NEED_UPGRADE(MTL_ID(), tenant_need_upgrade))) {
+    LOG_WARN("failed to get tenant_need_upgrade", K(ret), K(MTL_ID()));
+  } else if (GCONF.in_upgrade_mode() || tenant_need_upgrade) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
   } else if (OB_FAIL(WorkloadRepositoryTask::fetch_interval_num_from_wr_control(tmp_interval))) {

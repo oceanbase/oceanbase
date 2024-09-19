@@ -353,7 +353,7 @@ REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX,
 class ObLogJoin;
 class ObNLConnectBySpec;
 class ObNLConnectByOp;
-REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY, ObNLConnectBySpec,
+REGISTER_OPERATOR(ObLogJoin, PHY_CONNECT_BY, ObNLConnectBySpec,
                   ObNLConnectByOp, NOINPUT);
 
 class ObLogJoin;
@@ -581,10 +581,10 @@ REGISTER_OPERATOR(ObLogInsertAll, PHY_MULTI_TABLE_INSERT,
                   ObTableInsertAllSpec, ObTableInsertAllOp,
                   ObTableInsertAllOpInput);
 
-class ObLogStatCollector;
-class ObStatCollectorSpec;
-class ObStatCollectorOp;
-REGISTER_OPERATOR(ObLogStatCollector, PHY_STAT_COLLECTOR, ObStatCollectorSpec, ObStatCollectorOp, NOINPUT,
+class ObLogPxObjectSample;
+class ObPxObjectSampleSpec;
+class ObPxObjectSampleOp;
+REGISTER_OPERATOR(ObLogPxObjectSample, PHY_PX_OBJECT_SAMPLE, ObPxObjectSampleSpec, ObPxObjectSampleOp, NOINPUT,
                   VECTORIZED_OP);
 
 class ObLogJsonTable;
@@ -598,6 +598,12 @@ class ObOptimizerStatsGatheringSpec;
 class ObOptimizerStatsGatheringOp;
 REGISTER_OPERATOR(ObLogOptimizerStatsGathering, PHY_OPTIMIZER_STATS_GATHERING,
                   ObOptimizerStatsGatheringSpec, ObOptimizerStatsGatheringOp, NOINPUT, VECTORIZED_OP);
+
+class ObLogStatisticsCollector;
+class ObStatisticsCollectorSpec;
+class ObStatisticsCollectorOp;
+REGISTER_OPERATOR(ObLogStatisticsCollector, PHY_STATISTICS_COLLECTOR, ObStatisticsCollectorSpec, ObStatisticsCollectorOp, NOINPUT,
+                  VECTORIZED_OP);
 
 #undef REGISTER_OPERATOR
 #undef REGISTER_OPERATOR_FULL

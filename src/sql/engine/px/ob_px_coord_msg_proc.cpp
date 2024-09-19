@@ -147,3 +147,10 @@ int ObPxSubCoordMsgProc::on_whole_msg(
   ObDhWholeeMsgProc<ObOptStatsGatherWholeMsg> proc;
   return proc.on_whole_msg(sqc_ctx_, dtl::DH_OPT_STATS_GATHER_WHOLE_MSG, pkt);
 }
+
+int ObPxSubCoordMsgProc::on_whole_msg(
+    const ObStatisticsCollectorWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<ObStatisticsCollectorWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_STATISTICS_COLLECTOR_WHOLE_MSG, pkt);
+}

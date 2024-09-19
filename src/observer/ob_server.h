@@ -79,6 +79,7 @@
 
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
+#include "share/ob_device_credential_task.h"
 
 namespace oceanbase
 {
@@ -457,6 +458,7 @@ private:
   ObRefreshIOCalibrationTimeTask refresh_io_calibration_task_; // retry to success & no repeat
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
+  ObDeviceCredentialTask device_credential_task_;
 
   // for locality
   ObLocalityManager locality_manager_;

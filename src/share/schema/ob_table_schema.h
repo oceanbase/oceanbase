@@ -1037,6 +1037,13 @@ public:
       index_attributes_set_ |= (1 << INDEX_ROW_MOVEABLE);
     }
   }
+  inline void set_is_in_deleting(const bool is_deleting)
+  {
+    index_attributes_set_ &= ~((uint64_t)(1) << INDEX_IS_IN_DELETING);
+    if (is_deleting) {
+      index_attributes_set_ |= (1 << INDEX_IS_IN_DELETING);
+    }
+  }
   inline void set_rowkey_column_num(const int64_t rowkey_column_num) { rowkey_column_num_ = rowkey_column_num; }
   inline void set_index_column_num(const int64_t index_column_num) { index_column_num_ = index_column_num; }
   inline void set_rowkey_split_pos(int64_t pos) { rowkey_split_pos_ = pos;}
@@ -1232,6 +1239,10 @@ public:
   inline bool is_enable_row_movement() const
   {
     return 0 != (index_attributes_set_ & ((uint64_t)(1) << INDEX_ROW_MOVEABLE));
+  }
+  inline bool is_in_deleting() const
+  {
+    return 0 != (index_attributes_set_ & ((uint64_t)(1) << INDEX_IS_IN_DELETING));
   }
   inline void reset_rowkey_info()
   {
@@ -1529,12 +1540,14 @@ public:
   int is_multiple_key_column(ObSchemaGetterGuard &schema_guard,
                              uint64_t column_id,
                              bool &is_mul) const;
+  int delete_column_update_prev_id(ObColumnSchemaV2 *column);
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   bool has_lob_column() const;
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
+  int get_unused_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   // ObColumnIterByPrevNextID's column id is not in order, it means table has add column instant and return true
   int has_add_column_instant(bool &add_column_instant) const;
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
@@ -1575,7 +1588,6 @@ protected:
   int add_col_to_column_array(ObColumnSchemaV2 *column);
   int remove_col_from_column_array(const ObColumnSchemaV2 *column);
   int add_column_update_prev_id(ObColumnSchemaV2 *local_column);
-  int delete_column_update_prev_id(ObColumnSchemaV2 *column);
   int64_t column_cnt_;
 
 protected:

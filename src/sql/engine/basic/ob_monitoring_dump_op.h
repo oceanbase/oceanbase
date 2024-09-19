@@ -15,6 +15,7 @@
 
 #include "sql/engine/ob_operator.h"
 #include "share/datum/ob_datum.h"
+#include "sql/engine/ob_by_pass_operator.h"
 
 namespace oceanbase
 {
@@ -34,7 +35,7 @@ public:
 
 };
 
-class ObMonitoringDumpOp : public ObOperator
+class ObMonitoringDumpOp : public ObByPassOperator
 {
 public:
   ObMonitoringDumpOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);

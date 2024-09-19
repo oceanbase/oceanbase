@@ -35,6 +35,7 @@
 #include "rpc/obrpc/ob_listener.h"
 #include "common/ob_clock_generator.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 
@@ -1264,6 +1265,7 @@ int __attribute__((weak)) sql_nio_add_cgroup(const uint64_t tenant_id)
 void ObSqlNio::run(int64_t idx)
 {
   if (NULL != impl_) {
+    common::ObBackGroundSessionGuard backgroud_session_guard(GET_TENANT_ID(), THIS_WORKER.get_group_id());
     lib::set_thread_name("sql_nio", idx);
     // if (tenant_id_ != common::OB_INVALID_ID) {
     //   obmysql::sql_nio_add_cgroup(tenant_id_);

@@ -85,6 +85,7 @@ public:
   {
     return update_loop_ts(common::ObTimeUtility::fast_current_time());
   }
+  OB_INLINE static void set_doing_ddl(const bool v) { is_doing_ddl_ = v; }
 public:
   class BaseWaitGuard
   {
@@ -163,6 +164,7 @@ public:
   static thread_local ObAddr rpc_dest_addr_;
   static thread_local obrpc::ObRpcPacketCode pcode_;
   static thread_local uint8_t wait_event_;
+  static thread_local bool is_doing_ddl_;
 private:
   static void* __th_start(void *th);
   int try_wait();

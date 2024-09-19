@@ -39,7 +39,8 @@ static pktc_sk_t* pktc_try_connect(pktc_t* cl, addr_t dest) {
   }
   return sk;
   el();
-  rk_warn("sk create fail: %s sk=%p", T2S(addr, dest), sk);
+  char dest_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
+  rk_warn("sk create fail: %s sk=%p", addr_str(dest, dest_addr_buf, sizeof(dest_addr_buf)), sk);
   if (sk) {
     pktc_sk_destroy(&cl->sf, sk);
   }

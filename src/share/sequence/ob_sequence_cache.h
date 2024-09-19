@@ -26,6 +26,10 @@ namespace common
 class ObMySQLProxy;
 class ObMySQLTransaction;
 }
+namespace obrpc
+{
+  struct ObSeqCleanCacheRes;
+}
 namespace share
 {
 namespace schema
@@ -37,10 +41,12 @@ class ObMultiVersionSchemaService;
 
 struct SequenceCacheNode
 {
+  OB_UNIS_VERSION(1);
+public:
   SequenceCacheNode()
       : start_(), end_()
   {}
-
+  int assign(const SequenceCacheNode &other);
   void reset()
   {
   }
@@ -95,6 +101,12 @@ public:
   uint64_t key_;
 };
 
+enum SequenceCacheStatus
+{
+  DELETED,
+  INITED
+};
+
 struct ObSequenceCacheItem : public common::LinkHashValue<CacheItemKey>
 {
 public:
@@ -102,8 +114,9 @@ public:
       : prefetching_(false),
         with_prefetch_node_(false),
         base_on_last_number_(false),
-        last_refresh_ts_(0),
+        last_refresh_ts_(INITED),
         alloc_mutex_(common::ObLatchIds::SEQUENCE_VALUE_ALLOC_LOCK),
+        fetch_(common::ObLatchIds::SEQUENCE_VALUE_FETCH_LOCK),
         last_number_()
   {}
   int combine_prefetch_node()
@@ -140,6 +153,7 @@ public:
   // 记录上次取得的值，用于 cycle 模式下判断下次取值是否需要加上 increment_by
   int64_t last_refresh_ts_;
   lib::ObMutex alloc_mutex_;
+  lib::ObMutex fetch_;
 private:
   ObSequenceValue last_number_;
 public:
@@ -167,15 +181,17 @@ public:
   int nextval(const share::schema::ObSequenceSchema &schema,
               common::ObIAllocator &allocator, // 用于各种临时计算
               ObSequenceValue &nextval);
-  int remove(uint64_t tenant_id, uint64_t sequence_id);
+  int remove(uint64_t tenant_id, uint64_t sequence_id, obrpc::ObSeqCleanCacheRes &cache_res);
+
 private:
   /* functions */
   int get_item(CacheItemKey &key, ObSequenceCacheItem *&item);
 
-  int del_item(CacheItemKey &key);
+  int del_item(uint64_t tenant_id, CacheItemKey &key, obrpc::ObSeqCleanCacheRes &cache_res);
 
   int prefetch_sequence_cache(const schema::ObSequenceSchema &schema,
-                              ObSequenceCacheItem &cache);
+                              ObSequenceCacheItem &cache,
+                              ObSequenceCacheItem &old_cache);
   int find_sequence_cache(const schema::ObSequenceSchema &schema,
                           ObSequenceCacheItem &cache);
   int move_next(const schema::ObSequenceSchema &schema,

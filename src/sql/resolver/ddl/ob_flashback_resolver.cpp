@@ -254,7 +254,9 @@ int ObFlashBackIndexResolver::resolve(const ParseNode &parser_tree)
       LOG_WARN("failed to resolve_table_relation_node", K(ret));
     } else if (!origin_db_name.empty() && origin_db_name != OB_RECYCLEBIN_SCHEMA_NAME) {
       ret = OB_TABLE_NOT_EXIST;
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(origin_db_name), to_cstring(origin_table_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(origin_db_name),
+          helper.convert(origin_table_name));
       LOG_WARN("flashback index db.xx should not specified with db name", K(ret));
     } else {
       UNUSED(schema_checker_->get_table_schema(flashback_index_stmt->get_tenant_id(),

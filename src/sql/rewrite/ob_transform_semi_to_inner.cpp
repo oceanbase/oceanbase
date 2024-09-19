@@ -1016,17 +1016,15 @@ int ObTransformSemiToInner::check_need_add_cast(const ObRawExpr *left_arg,
   if (OB_ISNULL(left_arg) || OB_ISNULL(right_arg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("left arg and right arg should not be NULL", K(ret), K(left_arg), K(right_arg));
-  } else if (OB_FAIL(ObRelationalExprOperator::is_equivalent(left_arg->get_result_type(),
-                                                             left_arg->get_result_type(),
-                                                             right_arg->get_result_type(),
-                                                             is_valid))) {
+  } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_arg->get_result_type(),
+                                                                   right_arg->get_result_type(),
+                                                                   is_valid))) {
     LOG_WARN("failed to check expr is equivalent", K(ret));
   } else if (!is_valid) {
     LOG_TRACE("can not use left expr type as the (left, right) compare type", K(is_valid));
-  } else if (OB_FAIL(ObRelationalExprOperator::is_equivalent(left_arg->get_result_type(),
-                                                             right_arg->get_result_type(),
-                                                             right_arg->get_result_type(),
-                                                             is_equal))) {
+  } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_arg->get_result_type(),
+                                                                   right_arg->get_result_type(),
+                                                                   is_equal))) {
     LOG_WARN("failed to check expr is equivalent", K(ret));
   } else if (!is_equal) {
     need_add_cast = true;

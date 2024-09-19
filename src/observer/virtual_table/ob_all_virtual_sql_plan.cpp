@@ -538,21 +538,22 @@ int ObAllVirtualSqlPlan::dump_tenant_plans(int64_t tenant_id)
 int ObAllVirtualSqlPlan::prepare_next_plan()
 {
   int ret = OB_SUCCESS;
-
+  //init plan item array
+  plan_items_.reuse();
+  plan_item_idx_ = 0;
   if (plan_idx_ >= plan_ids_.count()) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "no more plan", K(ret));
   } else if (OB_INVALID_INDEX == plan_ids_.at(plan_idx_).tenant_id_ ||
              OB_INVALID_INDEX == plan_ids_.at(plan_idx_).plan_id_) {
     SERVER_LOG(DEBUG, "invalid tenant_id or plan_id");
+    //next plan
+    ++plan_idx_;
   } else {
     tenant_id_ = plan_ids_.at(plan_idx_).tenant_id_;
     plan_id_ = plan_ids_.at(plan_idx_).plan_id_;
     //next plan
     ++plan_idx_;
-    //init plan item array
-    plan_items_.reuse();
-    plan_item_idx_ = 0;
     ObPhysicalPlan *plan = NULL;
     // !!!引用plan cache资源之前必须加ObReqTimeGuard
     ObReqTimeGuard req_timeinfo_guard;

@@ -133,8 +133,12 @@ protected:
             ret = OB_INVALID_ARGUMENT;
             RS_LOG(WARN, "exec tenant id is invalid", K(ret), "arg", *ddl_arg_);
           } else {
-            // tenant_id_ will be reset in ~ObRPCActiveGuard()
-            ObActiveSessionGuard::get_stat().tenant_id_ = ddl_arg_->exec_tenant_id_;
+            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ddl_arg_->exec_tenant_id_));
+            if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation) {
+              THIS_WORKER.set_group_id(share::OBCG_DDL);
+            } else {
+              THIS_WORKER.set_group_id(share::OBCG_DEFAULT);
+            }
             // TODO (linqiucen.lqc): check whether the tenant is standby
             //                       it will be done after DDL is executed by the tenant itself rather than sys tenant
             auto *tsi_value = GET_TSI(share::schema::TSIDDLVar);
@@ -371,6 +375,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_ROUTINE, ObRpcRevokeRoutineP, revok
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_SYSPRIV, ObRpcRevokeSysPrivP, revoke_syspriv(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPDATE_INDEX_TABLE_STATUS, ObUpdateIndexTableStatusP, update_index_status(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS, ObUpdateIndexStatusP, parallel_update_index_status(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_LOB, ObDropLobP, drop_lob(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_TABLE_FROM_RECYCLEBIN, ObRpcFlashBackTableFromRecyclebinP, flashback_table_from_recyclebin(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_INDEX, ObRpcFlashBackIndexP, flashback_index(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PURGE_TABLE, ObRpcPurgeTableP, purge_table(arg_));

@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_ENGINE_JOIN_OB_JOIN_OP_
 
 #include "sql/engine/ob_operator.h"
+#include "sql/engine/ob_by_pass_operator.h"
 
 namespace oceanbase
 {
@@ -36,11 +37,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObJoinSpec);
 };
 
-class ObJoinOp: public ObOperator
+class ObJoinOp: public ObByPassOperator
 {
 public:
   ObJoinOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
-    : ObOperator(exec_ctx, spec, input),
+    : ObByPassOperator(exec_ctx, spec, input),
       output_row_produced_(false),
       left_row_joined_(false)
   {}

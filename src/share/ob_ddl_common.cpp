@@ -157,6 +157,8 @@ int ObColumnNameMap::init(const ObTableSchema &orig_table_schema,
       if (OB_ISNULL(column)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column", K(ret));
+      } else if (column->is_unused()) {
+        // unused column, extra column compared to the hidden table.
       } else if (OB_FAIL(set(column->get_column_name_str(), column->get_column_name_str()))) {
         LOG_WARN("failed to set colum name map", K(ret));
       }
@@ -2075,12 +2077,29 @@ int ObDDLUtil::check_table_empty_in_oracle_mode(
   return ret;
 }
 
+int ObDDLUtil::get_temp_store_compress_type(const share::schema::ObTableSchema *table_schema,
+                                            const int64_t parallel,
+                                            ObCompressorType &compr_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret  = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(table_schema));
+  } else {
+    ObCompressorType schema_compr_type = table_schema->get_compressor_type();
+    if (NONE_COMPRESSOR == schema_compr_type && table_schema->get_row_store_type() != FLAT_ROW_STORE) { // encoding without compress
+      schema_compr_type = ZSTD_COMPRESSOR;
+    }
+    ret = get_temp_store_compress_type(schema_compr_type, parallel, compr_type);
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_type,
                                             const int64_t parallel,
                                             ObCompressorType &compr_type)
 {
   int ret = OB_SUCCESS;
-  const int64_t COMPRESS_PARALLELISM_THRESHOLD = 8;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   compr_type = NONE_COMPRESSOR;
   if (OB_UNLIKELY(!tenant_config.is_valid())) {
@@ -2094,7 +2113,8 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
     } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("LZ4")) {
       compr_type = LZ4_COMPRESSOR;
     } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("AUTO")) {
-      if (parallel >= COMPRESS_PARALLELISM_THRESHOLD) {
+      UNUSED(parallel);
+      if (schema_compr_type > INVALID_COMPRESSOR && schema_compr_type < MAX_COMPRESSOR) {
         compr_type = schema_compr_type;
       } else {
         compr_type = NONE_COMPRESSOR;
@@ -2104,7 +2124,7 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
       LOG_WARN("the temp store format config is unexpected", K(ret), K(tenant_config->_ob_ddl_temp_file_compress_func.get_value_string()));
     }
   }
-  LOG_INFO("get compressor type", K(ret), K(compr_type));
+  LOG_INFO("get compressor type", K(ret), K(compr_type), K(schema_compr_type));
   return ret;
 }
 
@@ -2762,6 +2782,40 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
   if (OB_EAGAIN != ret) {
     LOG_INFO("end to check and wait complement task", K(ret),
       K(table_id), K(is_old_task_session_exist), K(is_dst_checksums_all_report), K(need_exec_new_inner_sql));
+  }
+  return ret;
+}
+
+// for partition split.
+int ObSplitUtil::deserializ_parallel_datum_rowkey(
+      common::ObIAllocator &rowkey_allocator,
+      const char *buf, const int64_t data_len, int64_t &pos,
+      ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list)
+{
+  int ret = OB_SUCCESS;
+  parallel_datum_rowkey_list.reset();
+  if (pos == data_len) {
+    LOG_INFO("no parallel info", K(pos), K(data_len), KP(buf));
+  } else if (OB_UNLIKELY(nullptr == buf || pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), KP(buf), K(pos), K(data_len));
+  } else {
+    int64_t rowkey_arr_cnt = 0;
+    LST_DO_CODE(OB_UNIS_DECODE, rowkey_arr_cnt);
+    if (FAILEDx(parallel_datum_rowkey_list.prepare_allocate(rowkey_arr_cnt))) {
+      LOG_WARN("reserve failed", K(ret), K(rowkey_arr_cnt));
+    } else {
+      ObStorageDatum tmp_storage_datum[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
+      ObDatumRowkey tmp_datum_rowkey;
+      tmp_datum_rowkey.assign(tmp_storage_datum, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER);
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_arr_cnt; i++) {
+        if (OB_FAIL(tmp_datum_rowkey.deserialize(buf, data_len, pos))) {
+          LOG_WARN("failed to decode concurrent cnt", K(ret), K(i), K(rowkey_arr_cnt), K(data_len), K(pos));
+        } else if (OB_FAIL(tmp_datum_rowkey.deep_copy(parallel_datum_rowkey_list.at(i), rowkey_allocator))) {
+          LOG_WARN("failed to deep copy end key", K(ret), K(i), K(tmp_datum_rowkey));
+        }
+      }
+    }
   }
   return ret;
 }

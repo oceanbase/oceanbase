@@ -83,7 +83,8 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
       low_free(ptr, size);
 
       uint64_t new_size = size + ACHUNK_ALIGN_SIZE;
-      ptr = low_alloc(new_size, can_use_huge_page, huge_page_used, alloc_shadow);
+      /* alloc_shadow should be set to false since partitial sanity_munmap is not supported */
+      ptr = low_alloc(new_size, can_use_huge_page, huge_page_used, false/*alloc_shadow*/);
       if (nullptr != ptr) {
         const uint64_t addr = align_up2((uint64_t)ptr, ACHUNK_ALIGN_SIZE);
         if (addr - (uint64_t)ptr > 0) {
@@ -167,10 +168,12 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
 void AChunkMgr::low_free(const void *ptr, const uint64_t size)
 {
   set_ob_mem_mgr_path();
-  AChunk *chunk = (AChunk*)ptr;
-  void *ref = chunk->ref_;
-  *(void**)ptr = ref;
   if (SANITY_ADDR_IN_RANGE(ptr, size)) {
+    AChunk *chunk = (AChunk*)ptr;
+#ifdef ENABLE_SANITY
+    void *ref = chunk->ref_;
+    *(void**)ptr = ref;
+#endif
     SANITY_MUNMAP((void*)ptr, size);
   } else {
     this->munmap((void*)ptr, size);
@@ -225,10 +228,14 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
     if (updated) {
       bool hugetlb_used = false;
       void *ptr = direct_alloc(all_size, true, hugetlb_used, SANITY_BOOL_EXPR(true));
-      void *ref = *(void**)ptr;
       if (ptr != nullptr) {
+#ifdef ENABLE_SANITY
+        void *ref = *(void**)ptr;
         chunk = new (ptr) AChunk();
         chunk->ref_ = ref;
+#else
+        chunk = new (ptr) AChunk();
+#endif
         chunk->is_hugetlb_ = hugetlb_used;
       } else {
         IGNORE_RETURN update_hold(-hold_size, false);

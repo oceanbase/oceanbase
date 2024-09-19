@@ -96,6 +96,20 @@ struct ObOptParamHint
     DEF(INLIST_REWRITE_THRESHOLD,)        \
     DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,) \
+    DEF(HASH_JOIN_ENABLED,)               \
+    DEF(OPTIMIZER_SORTMERGE_JOIN_ENABLED,) \
+    DEF(NESTED_LOOP_JOIN_ENABLED,)        \
+    DEF(ENABLE_RANGE_EXTRACTION_FOR_NOT_IN,) \
+    DEF(OPTIMIZER_INDEX_COST_ADJ,)        \
+    DEF(OPTIMIZER_SKIP_SCAN_ENABLED,)     \
+    DEF(OPTIMIZER_BETTER_INLIST_COSTING,) \
+    DEF(OPTIMIZER_GROUP_BY_PLACEMENT,)    \
+    DEF(WITH_SUBQUERY,)                   \
+    DEF(ENABLE_SPF_BATCH_RESCAN,)         \
+    DEF(NLJ_BATCHING_ENABLED,)            \
+    DEF(RUNTIME_FILTER_TYPE,)             \
+    DEF(BLOOM_FILTER_RATIO,)              \
+    DEF(OPTIMIZER_COST_BASED_TRANSFORMATION,)   \
     DEF(CARDINALITY_ESTIMATION_MODEL,) \
     DEF(_PUSH_JOIN_PREDICATE,)   \
     DEF(RANGE_INDEX_DIVE_LIMIT,) \
@@ -112,10 +126,12 @@ struct ObOptParamHint
   int get_opt_param(const OptParamType param_type, ObObj &val) const;
   int has_enable_opt_param(const OptParamType param_type, bool &enabled) const;
   int print_opt_param_hint(PlanText &plan_text) const;
-  int get_bool_opt_param(const OptParamType param_type, bool &val, bool& is_exists) const;
+  int get_bool_opt_param(const OptParamType param_type, bool &val, bool &is_exists) const;
   // if the corresponding opt_param is specified, the `val` will be overwritten
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
+  int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
 
@@ -488,6 +504,7 @@ public:
       orig_hint_(NULL) {
         hint_type_ = get_hint_type(hint_type);
         is_enable_hint_ = (hint_type_ == hint_type);
+        is_trans_added_ = false;
       }
   virtual ~ObHint() {}
   int assign(const ObHint &other);
@@ -547,10 +564,13 @@ public:
   bool is_decorrelate_hint() const { return T_DECORRELATE == hint_type_; }
   bool is_pq_subquery_hint() const { return T_PQ_SUBQUERY == hint_type_; }
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
+  bool is_trans_added() const { return is_trans_added_; }
+  bool set_trans_added(bool is_trans_added) { return is_trans_added_ = is_trans_added; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
-                       K_(orig_hint), K_(is_enable_hint));
+                       K_(orig_hint), K_(is_enable_hint),
+                       K_(is_trans_added));
 
 private:
   // only used in create_push_down_hint
@@ -562,6 +582,7 @@ protected:
   ObString qb_name_;
   const ObHint *orig_hint_;
   bool is_enable_hint_;
+  bool is_trans_added_; // It means that hint is added by rewriter, and it needn't print the hint when explain extended
 };
 
 class ObTransHint : public ObHint
@@ -889,6 +910,9 @@ public:
   const int64_t &get_index_prefix() const { return index_prefix_; }
   bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
   bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type(); }
+  bool is_match_index(const ObCollationType cs_type,
+                      const TableItem &ref_table,
+                      const ObTableSchema &index_schema) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name), K_(index_prefix));
 
@@ -941,14 +965,18 @@ public:
 
   ObIArray<ObTableInHint> &get_tables() { return tables_; }
   const ObIArray<ObTableInHint> &get_tables() const { return tables_; }
+  ObIArray<ObHint*> &get_aj_table_hints() { return aj_table_hints_; }
+  const ObIArray<ObHint*> &get_aj_table_hints() const { return aj_table_hints_; }
   DistAlgo get_dist_algo() const { return dist_algo_; }
   void set_dist_algo(DistAlgo dist_algo) { dist_algo_ = dist_algo; }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo), K_(aj_table_hints));
 
 private:
   common::ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> tables_;
   DistAlgo dist_algo_;
+  // hints for table scan of adaptive join.
+  common::ObSEArray<ObHint*, 4, common::ModulePageAllocator, true> aj_table_hints_;
 };
 
 class ObJoinFilterHint : public ObOptHint

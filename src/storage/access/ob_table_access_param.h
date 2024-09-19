@@ -126,6 +126,8 @@ public:
   { return ss_rowkey_prefix_cnt_; }
   OB_INLINE void disable_blockscan()
   { pd_blockscan_ = 0; }
+  OB_INLINE void disable_pd_filter()
+  { pd_filter_ = 0; }
   OB_INLINE bool enable_pd_blockscan() const
   { return pd_blockscan_; }
   OB_INLINE bool enable_pd_filter() const

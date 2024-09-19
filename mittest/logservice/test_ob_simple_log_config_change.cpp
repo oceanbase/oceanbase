@@ -168,7 +168,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
     EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->remove_palf_handle_impl(id));
     // step 5
     const int64_t node_id = follower_B_idx * 2 + get_node_idx_base();
-    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_init(get_test_name(), follower_b_addr, node_id, NULL, false));
+    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_init(get_test_name(), follower_b_addr, node_id, tio_manager_, NULL, false));
     EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_start(false));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     PalfBaseInfo palf_base_info;

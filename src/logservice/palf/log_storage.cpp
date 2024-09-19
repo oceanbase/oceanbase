@@ -17,6 +17,7 @@
 #include "log_reader_utils.h"         // ReadBuf
 #include "palf_handle_impl.h"         // LogHotCache
 #include "share/scn.h"
+#include "log_io_adapter.h"           // LogIOAdapter
 
 namespace oceanbase
 {
@@ -57,7 +58,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                      const int64_t align_size, const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool, LogPlugins *plugins,
-                     LogHotCache *hot_cache)
+                     LogHotCache *hot_cache, LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -72,7 +73,8 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              hot_cache))) {
+                              hot_cache,
+                              io_adapter))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
     PALF_LOG(INFO, "LogStorage init success", K(ret), K(base_dir), K(sub_dir),
@@ -271,8 +273,11 @@ int LogStorage::append_meta(const char *buf, const int64_t buf_len)
   return ret;
 }
 
-int LogStorage::pread(const LSN &read_lsn, const int64_t in_read_size, ReadBuf &read_buf,
-                      int64_t &out_read_size)
+int LogStorage::pread(const LSN &read_lsn,
+                      const int64_t in_read_size,
+                      ReadBuf &read_buf,
+                      int64_t &out_read_size,
+                      LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   bool need_read_with_block_header = false;
@@ -287,7 +292,7 @@ int LogStorage::pread(const LSN &read_lsn, const int64_t in_read_size, ReadBuf &
       && OB_SUCCESS == (hot_cache_->read(read_lsn, in_read_size, read_buf.buf_, out_read_size))
       && out_read_size > 0) {
     // read data from hot_cache successfully
-  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size))) {
+  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "inner_pread_ failed", K(ret), K(read_lsn), K(in_read_size), KPC(this));
   } else {
   }
@@ -297,7 +302,8 @@ int LogStorage::pread(const LSN &read_lsn, const int64_t in_read_size, ReadBuf &
 int LogStorage::pread_with_block_header(const LSN &read_lsn,
                                         const int64_t in_read_size,
                                         ReadBuf &read_buf,
-                                        int64_t &out_read_size)
+                                        int64_t &out_read_size,
+                                        LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   bool need_read_with_block_header = true;
@@ -307,7 +313,7 @@ int LogStorage::pread_with_block_header(const LSN &read_lsn,
   } else if (false == read_lsn.is_valid() || 0 >= in_read_size || false == read_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(read_lsn), K(in_read_size), K(read_buf));
-  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size))) {
+  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "inner_pread_ failed", K(ret), K(read_lsn), K(in_read_size), KPC(this));
   } else {
   }
@@ -620,7 +626,8 @@ int LogStorage::do_init_(const char *base_dir,
                          const UpdateManifestCallback &update_manifest_cb,
                          ILogBlockPool *log_block_pool,
                          LogPlugins *plugins,
-                         LogHotCache *hot_cache)
+                         LogHotCache *hot_cache,
+                         LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -635,9 +642,10 @@ int LogStorage::do_init_(const char *base_dir,
                                      align_size,
                                      align_buf_size,
                                      logical_block_size + MAX_INFO_BLOCK_SIZE,
-                                     log_block_pool))) {
+                                     log_block_pool,
+                                     io_adapter))) {
     PALF_LOG(ERROR, "LogBlockMgr init failed", K(ret), K(log_dir));
-  } else if (OB_FAIL(log_reader_.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE))) {
+  } else if (OB_FAIL(log_reader_.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE, io_adapter))) {
     PALF_LOG(ERROR, "LogReader init failed", K(ret), K(log_dir));
   } else {
     log_tail_ = readable_log_tail_ = base_lsn;
@@ -865,7 +873,8 @@ int LogStorage::read_block_header_(const block_id_t block_id,
     PALF_LOG(WARN, "block_id is large than max_block_id", K(ret), K(block_id),
              K(readable_log_tail), K(max_block_id), K(log_block_header));
   } else {
-    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size))) {
+    LogIOContext io_ctx(LogIOUser::META_INFO);
+    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size, io_ctx))) {
       PALF_LOG(WARN, "read info block failed", K(ret), K(read_buf));
     } else if (OB_FAIL(log_block_header.deserialize(read_buf.buf_, out_read_size, pos))) {
       PALF_LOG(WARN, "deserialize info block failed", K(ret), K(read_buf),
@@ -918,7 +927,8 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
                              const int64_t in_read_size,
                              const bool need_read_log_block_header,
                              ReadBuf &read_buf,
-                             int64_t &out_read_size)
+                             int64_t &out_read_size,
+                             LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   // NB: don't support read data from diffent file.
@@ -942,7 +952,8 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
                                   real_read_offset,
                                   real_in_read_size,
                                   read_buf,
-                                  out_read_size))) {
+                                  out_read_size,
+                                  io_ctx))) {
       PALF_LOG(
           WARN, "LogReader pread failed", K(ret), K(read_lsn), K(log_tail_), K(real_in_read_size));
     } else {

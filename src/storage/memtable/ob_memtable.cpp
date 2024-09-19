@@ -1259,7 +1259,7 @@ int ObMemtable::check_row_locked_on_frozen_stores_(
         }
 
         if (OB_SUCC(ret)) {
-          row_is_decided = check_exist && lock_state.is_row_decided();
+          row_is_decided = lock_state.is_row_decided();
 
           // Case1: Check row with concurrency control conflict
             // Step1.1: Check row with lost-update conflict
@@ -2685,12 +2685,18 @@ int ObMemtable::dump2text(const char *fname)
     ret = OB_IO_ERROR;
     TRANS_LOG(WARN, "open file fail:", K(fname));
   } else {
-    fprintf(fd, "memtable: key=%s\n", S(key_));
-    fprintf(fd, "hash_item_count=%ld, hash_alloc_size=%ld\n",
-            get_hash_item_count(), get_hash_alloc_memory());
-    fprintf(fd, "btree_item_count=%ld, btree_alloc_size=%ld\n",
-            get_btree_item_count(), get_btree_alloc_memory());
-    query_engine_.dump2text(fd);
+    ObCStringHelper helper;
+    const char *key_ptr = helper.convert(key_);
+    if (OB_ISNULL(key_ptr)) {
+      TRANS_LOG(WARN, "convert key fail", K_(key), K(ret));
+    } else {
+      fprintf(fd, "memtable: key=%s\n", key_ptr);
+      fprintf(fd, "hash_item_count=%ld, hash_alloc_size=%ld\n",
+              get_hash_item_count(), get_hash_alloc_memory());
+      fprintf(fd, "btree_item_count=%ld, btree_alloc_size=%ld\n",
+              get_btree_item_count(), get_btree_alloc_memory());
+      query_engine_.dump2text(fd);
+    }
   }
   if (NULL != fd) {
     fprintf(fd, "end of memtable\n");
@@ -3037,6 +3043,12 @@ int ObMemtable::set_(
   // search), the old row data(heap allocated for row commit callback build) and
   // the new row data(stack allocated currently and heap allocated later for tx
   // node build)
+  } else if (FALSE_IT(write_epoch = mem_ctx->get_write_epoch())) {
+  } else if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
+    TRANS_LOG(WARN, "get write seq failed", K(ret));
+  } else if (writer_dml_flag == blocksstable::ObDmlFlag::DF_UPDATE
+             // for elr optimization with update dml
+             && FALSE_IT(mem_ctx->set_row_updated())) {
   } else if (OB_FAIL(build_row_data_(mem_ctx,             /*old row allocator*/
                                      schema_rowkey_count, /*rowkey column cnt*/
                                      memtable_set_arg,    /*new, old row data arg*/
@@ -3045,11 +3057,6 @@ int ObMemtable::set_(
                                      old_row_data,        /*heap allocated old row*/
                                      mtd))) {             /*stack allocated new row*/
     TRANS_LOG(WARN, "build row data failed", K(ret));
-  } else if (writer_dml_flag == blocksstable::ObDmlFlag::DF_UPDATE
-             // for elr optimization with update dml
-             && FALSE_IT(mem_ctx->set_row_updated())) {
-  } else if (FALSE_IT(write_epoch = mem_ctx->get_write_epoch())) {
-  } else if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
   } else if (FALSE_IT(tx_node_args[0].set(ctx.mvcc_acc_ctx_.tx_id_,  /*trans id*/
                                           &mtd,                      /*memtable_data*/
                                           old_row_data,              /*heap allocated old row*/
@@ -3105,16 +3112,18 @@ int ObMemtable::set_(
     set_max_data_schema_version(ctx.table_version_);
     set_max_column_cnt(new_row->row_val_.count_);
 
-    TRANS_LOG(TRACE, "set end, success",
-              "ret", ret,
-              "tablet_id_", key_.tablet_id_,
-              "dml_flag", writer_dml_flag,
-              "columns", strarray<ObColDesc>(*columns),
-              "old_row", to_cstring(old_row),
-              "new_row", to_cstring(new_row),
-              "update_idx", (update_idx == NULL ? "" : to_cstring(update_idx)),
-              "mtd", to_cstring(mtd),
-              KPC(this));
+    SMART_VAR_INDEPENDENT(ObCStringHelper, helper) {
+      TRANS_LOG(TRACE, "set end, success",
+                "ret", ret,
+                "tablet_id_", key_.tablet_id_,
+                "dml_flag", writer_dml_flag,
+                "columns", strarray<ObColDesc>(*columns),
+                "old_row", helper.convert(old_row),
+                "new_row", helper.convert(new_row),
+                "update_idx", (update_idx == NULL ? "" : helper.convert(update_idx)),
+                "mtd", helper.convert(mtd),
+                KPC(this));
+    }
   } else {
     // Step5.1: undo the side effects of mvcc_write which ensure the interface
     // of memtable has no side effect at all
@@ -3125,13 +3134,15 @@ int ObMemtable::set_(
     (void)cleanup_old_row_(mem_ctx, tx_node_args);
 
     if (!is_mvcc_write_related_error_(ret)) {
-      TRANS_LOG(WARN, "set end, fail",
-                "ret", ret,
-                "tablet_id_", key_.tablet_id_,
-                "columns", strarray<ObColDesc>(*columns),
-                "new_row", to_cstring(new_row),
-                "mem_ctx", STR_PTR(mem_ctx),
-                "store_ctx", ctx);
+      SMART_VAR_INDEPENDENT(ObCStringHelper, helper) {
+        TRANS_LOG(WARN, "set end, fail",
+                  "ret", ret,
+                  "tablet_id_", key_.tablet_id_,
+                  "columns", strarray<ObColDesc>(*columns),
+                  "new_row", helper.convert(new_row),
+                  "mem_ctx", mem_ctx ? helper.convert(mem_ctx) : "nil",
+                  "store_ctx", ctx);
+      }
     } else {
       // Tip1: we need notice that txn cannot be serializable when TSC occurs in
       // the serializable and repeatable read isolation level
@@ -3330,17 +3341,18 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
 
   for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
     int64_t permutation_idx = rows_info.get_permutation_idx(i);
-    if (OB_FAIL(build_row_data_(mem_ctx,             /*old row allocator*/
-                                schema_rowkey_count, /*rowkey column cnt*/
-                                memtable_set_arg,    /*new, old row data arg*/
-                                i,                   /*row index in arg*/
-                                row_writer,          /*stack allocated memory pool*/
-                                old_row_data,        /*heap allocated old row*/
-                                mtd))) {             /*stack allocated new row*/
-      TRANS_LOG(WARN, "build row data failed", K(ret));
-    } else if (FALSE_IT(write_epoch = mem_ctx->get_write_epoch())) {
-    } else if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
+    write_epoch = mem_ctx->get_write_epoch();
+
+    if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
       TRANS_LOG(WARN, "get write seq failed", K(ret));
+    } else if (OB_FAIL(build_row_data_(mem_ctx,             /*old row allocator*/
+                                       schema_rowkey_count, /*rowkey column cnt*/
+                                       memtable_set_arg,    /*new, old row data arg*/
+                                       i,                   /*row index in arg*/
+                                       row_writer,          /*stack allocated memory pool*/
+                                       old_row_data,        /*heap allocated old row*/
+                                       mtd))) {             /*stack allocated new row*/
+      TRANS_LOG(WARN, "build row data failed", K(ret));
     } else if (FALSE_IT(tx_node_args[i].set(ctx.mvcc_acc_ctx_.tx_id_,  /*trans id*/
                                             &mtd,                      /*memtable_data*/
                                             old_row_data,              /*heap allocated old row*/
@@ -3429,6 +3441,16 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
         mvcc_results[i].value_ = stored_kvs[i].value_;
 
         pos += aligned_data_size;
+      }
+    }
+
+    // Step5: failure handler for mvcc write. we need ensure the atomicity of
+    // interface which ensures that no side effects will remain exist when the
+    // batch_mvcc_write reports error
+    if (OB_FAIL(ret)) {
+      if (mvcc_results[i].has_insert()) {
+        (void)mvcc_engine_.mvcc_undo(stored_kvs[i].value_);
+        mvcc_results[i].is_mvcc_undo_ = true;
       }
     }
   }
@@ -3838,6 +3860,14 @@ int ObMemtable::build_row_data_(ObMemtableCtx *mem_ctx,
       (void)mtd.set(new_row->flag_.get_dml_flag(), len, buf);
     }
   }
+
+  if (OB_FAIL(ret)
+      && old_row_data.size_ > 0
+      && NULL != old_row_data.data_) {
+    mem_ctx->old_row_free((void *)(old_row_data.data_));
+    old_row_data.reset();
+  }
+
   return ret;
 }
 

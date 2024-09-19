@@ -92,9 +92,14 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_JSON,       BLOB_FLAG | BINARY_FLAG, 0}, /* ObJsonType */
   {EMySQLFieldType::MYSQL_TYPE_GEOMETRY,   BLOB_FLAG | BINARY_FLAG, 0}, /* ObGeometryType */
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObUserDefinedSQLType */
+  {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL, 0, 0}, /* ObDecimalIntType */
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObCollectionSQLType */
+  {EMySQLFieldType::MYSQL_TYPE_DATE,      BINARY_FLAG, 0}, /* ObMySQLDateType */
+  {EMySQLFieldType::MYSQL_TYPE_DATETIME,  BINARY_FLAG, 0}, /* ObMySQLDateTimeType */
   /* ObMaxType */
 };
+
+static_assert(sizeof(type_maps_) / sizeof(ObMySQLTypeMap) == ObMaxType, "Not enough initializer");
 
 //called by handle COM_STMT_EXECUTE offset is 0
 bool ObSMUtils::update_from_bitmap(ObObj &param, const char *bitmap, int64_t field_index)
@@ -385,6 +390,12 @@ int ObSMUtils::cell_str(
         }
         break;
       }
+      case ObMySQLDateTC:
+        ret = ObMySQLUtil::mdate_cell_str(buf, len, obj.get_mysql_date(), type, pos);
+        break;
+      case ObMySQLDateTimeTC:
+        ret = ObMySQLUtil::mdatetime_cell_str(buf, len, obj.get_mysql_datetime(), type, pos, NULL, scale);
+        break;
       default:
         _OB_LOG(ERROR, "invalid ob type=%d", obj.get_type());
         ret = OB_ERROR;

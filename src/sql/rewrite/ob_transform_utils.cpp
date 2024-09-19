@@ -2268,7 +2268,8 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
     bool is_null = false;
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null, is_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
-    } else if (is_not_null && NULL != constraints &&
+    } else if (is_not_null && !expr->is_const_raw_expr() &&
+               NULL != constraints &&
                OB_FAIL(constraints->push_back(const_cast<ObRawExpr*>(expr)))) {
       LOG_WARN("failed to push back constraint expr", K(ret));
     }
@@ -2348,7 +2349,7 @@ int ObTransformUtils::is_const_expr_not_null(ObNotNullContext &ctx,
     LOG_WARN("failed to calc const or calculable expr", K(ret));
   } 
   
-  if (OB_SUCC(ret) && got_result) {
+  if (OB_SUCC(ret) && got_result && !result.is_ext()) {
     if (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())) {
       is_not_null = false;
       is_null = true;
@@ -2372,7 +2373,7 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
   if (OB_ISNULL(stmt = ctx.stmt_) || OB_ISNULL(expr) ||
       OB_ISNULL(table = stmt->get_table_item_by_id(expr->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(ret), K(expr), K(stmt));
+    LOG_WARN("table item is null", K(ret), K(expr->get_table_id()), K(*stmt));
   } else if (is_virtual_table(table->ref_id_)) {
     // 'NOT NULL' of the virtual table is unreliable
   } else if (ObOptimizerUtil::find_item(ctx.right_table_ids_, table->table_id_)) {
@@ -2384,6 +2385,7 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
       is_not_null = expr->get_result_type().has_result_flag(NOT_NULL_FLAG);
     }
   } else if (table->is_generated_table() || table->is_temp_table() || table->is_lateral_table()) {
+    // TODO RUINAO NOTE : every col expr will go this path, and we can modify this logic oneday
     int64_t idx = expr->get_column_id() - OB_APP_MIN_COLUMN_ID;
     ObRawExpr *child_expr = NULL;
     ObSelectStmt *child_stmt = table->ref_query_;
@@ -3473,10 +3475,12 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
   void *tmp_ptr = NULL;
   ObQueryRange *query_range = NULL;
   const ParamStore *params = NULL;
+  ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)
-      || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())) {
+      || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())
+      || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(stmt), K(ctx));
+    LOG_WARN("params have null", K(ret), K(stmt), K(ctx), K(query_ctx));
   } else {
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx->session_info_);
     params = &ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
@@ -3494,6 +3498,7 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
                                                                     predicate_exprs,
                                                                     dtc_params,
                                                                     ctx->exec_ctx_,
+                                                                    query_ctx,
                                                                     NULL,
                                                                     params))) {
       LOG_WARN("failed to extract query range", K(ret));
@@ -4533,6 +4538,7 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
                                               check_helper.session_info_,
                                               stmt, set_exprs, equal_conds))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
+  } else if (FALSE_IT(res_info.equal_sets_.reuse())) {
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(check_helper.alloc_, equal_conds,
                                                         tmp_equal_sets, res_info.equal_sets_))) {
     LOG_WARN("failed to compute compute equal set", K(ret));
@@ -5455,10 +5461,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (source_ids.is_superset2(child1->get_relation_ids())
                   && target_ids.is_superset2(child2->get_relation_ids())) {
         // child2 contain target exprs
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child1->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child1->get_result_type(),
+                                                                  child2->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child1 expr type as the (child1, child2) compare type");
@@ -5472,10 +5477,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (target_ids.is_superset2(child1->get_relation_ids())
                   && source_ids.is_superset2(child2->get_relation_ids())) {
         // child1 contain target column
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child2->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child2->get_result_type(),
+                                                                  child1->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child2 expr type as the (child2, child1) compare type");
@@ -5489,10 +5493,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (target_ids.is_superset2(child1->get_relation_ids())
                   && target_ids.is_superset2(child2->get_relation_ids())) {
         // child1 contain target column and child2 contain target column too.
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child1->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child1->get_result_type(),
+                                                                  child2->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child2 expr type as the (child2, child1) compare type");
@@ -5504,10 +5507,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (source_ids.is_superset2(child1->get_relation_ids())
                   && source_ids.is_superset2(child2->get_relation_ids())) {
         // child1 contain source column and child2 contain source column too.
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child2->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child2->get_result_type(),
+                                                                  child1->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child2 expr type as the (child2, child1) compare type");
@@ -5595,9 +5597,8 @@ int ObTransformUtils::is_equal_correlation(const ObIArray<ObExecParamRawExpr *> 
       }
     }
     if (OB_SUCC(ret) && is_valid) {
-      if (OB_FAIL(ObRelationalExprOperator::is_equivalent(
-                    left->get_result_type(), right->get_result_type(),
-                    right->get_result_type(), is_valid))) {
+      if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(
+                    left->get_result_type(), right->get_result_type(), is_valid))) {
         LOG_WARN("failed to check is expr result equivalent", K(ret));
       } else if (!is_valid) {
         // left = right <=> group by right (right = right)
@@ -12551,31 +12552,47 @@ int ObTransformUtils::extract_const_bool_expr_info(ObTransformerCtx *ctx,
                                                    common::ObIArray<int64_t> &false_exprs)
 {
   int ret = OB_SUCCESS;
+  bool is_true = false;
+  bool is_false = false;
+  ObRawExpr *temp = NULL;
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ctx), K(ret));
   } else {
-    ObObj result;
-    bool is_true = false;
-    bool is_valid = false;
-    ObRawExpr *temp = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
-      is_valid = false;
       if (OB_ISNULL(temp = exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(calc_const_expr_result(temp, ctx, result, is_valid))) {
-        LOG_WARN("fail to calc const expr", K(ret));
-      }
-      if (OB_FAIL(ret) || !is_valid) {
-      } else if (OB_FAIL(ObObjEvaluator::is_true(result, is_true))) {
-        LOG_WARN("failed to get bool value", K(ret));
-      } else if (!is_true && OB_FAIL(false_exprs.push_back(i))) {
-        LOG_WARN("failed to push back into array", K(ret));
+      } else if (OB_FAIL(extract_const_bool_expr_result(ctx, temp, is_true, is_false))) {
+        LOG_WARN("failed to extract_const_bool_expr_result", K(ret));
       } else if (is_true && OB_FAIL(true_exprs.push_back(i))) {
+        LOG_WARN("failed to push back into array", K(ret));
+      } else if (is_false && OB_FAIL(false_exprs.push_back(i))) {
         LOG_WARN("failed to push back into array", K(ret));
       } else { /*do nothing*/ }
     }
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_const_bool_expr_result(ObTransformerCtx *ctx,
+                                                   ObRawExpr *expr,
+                                                   bool &is_true,
+                                                   bool &is_false)
+{
+  int ret = OB_SUCCESS;
+  ObObj result;
+  bool is_valid = false;
+  is_true = false;
+  is_false = false;
+  if (OB_FAIL(calc_const_expr_result(expr, ctx, result, is_valid))) {
+    LOG_WARN("fail to calc const expr", K(ret));
+  } else if (!is_valid) {
+    /* do nothing */
+  } else if (OB_FAIL(ObObjEvaluator::is_true(result, is_true))) {
+    LOG_WARN("failed to get bool value", K(ret));
+  } else if (!is_true) {
+    is_false = true;
   }
   return ret;
 }
@@ -14106,7 +14123,7 @@ int ObTransformUtils::get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
   return ret;
 }
 
-int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid)
+int ObTransformUtils::check_inline_temp_table_valid(ObSelectStmt *stmt, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> exprs;
@@ -14133,7 +14150,7 @@ int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is
       LOG_WARN("failed to get child stmts", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_stmts.count(); i++) {
-      if (OB_FAIL(SMART_CALL(check_expand_temp_table_valid(child_stmts.at(i), is_valid)))) {
+      if (OB_FAIL(SMART_CALL(check_inline_temp_table_valid(child_stmts.at(i), is_valid)))) {
         LOG_WARN("failed to check expand temp table valid", K(ret));
       }
     }
@@ -14141,7 +14158,7 @@ int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is
   return ret;
 }
 
-int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info)
+int ObTransformUtils::inline_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *temp_table_query = NULL;
@@ -14153,6 +14170,7 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
   for (int64_t j = 0; OB_SUCC(ret) && j < table_info.table_items_.count(); ++j) {
     TableItem *table = table_info.table_items_.at(j);
     ObDMLStmt *upper_stmt = table_info.upper_stmts_.at(j);
+    ObString qb_name;
     if (OB_ISNULL(table) || OB_ISNULL(upper_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -14199,6 +14217,10 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
       } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
                                                                    ctx->session_info_))) {
         LOG_WARN("failed to formalize stmt reference", K(ret));
+      } else if (OB_FAIL(child_stmt->get_qb_name(qb_name))) {
+        LOG_WARN("failed to get qb name", K(ret));
+      } else if (OB_FAIL(ctx->materialize_blacklist_.push_back(qb_name))) {
+        LOG_WARN("failed to push back qb name", K(ret));
       } else {
         table->ref_query_ = child_stmt;
       }
@@ -15703,6 +15725,24 @@ int ObTransformUtils::check_left_join_chain_recursively(ObDMLStmt *stmt,
     }
   } else {
     is_valid_join_chain = false;
+  }
+  return ret;
+}
+
+int ObTransformUtils::is_cost_based_trans_enable(ObTransformerCtx *ctx,
+                                                 const ObGlobalHint &global_hint,
+                                                 bool &is_enabled)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (global_hint.disable_cost_based_transform()) {
+    is_enabled = false;
+  } else {
+    is_enabled = TransPolicy::ENABLE_TRANS == ctx->cbqt_policy_ ||
+      (TransPolicy::LIMITED_TRANS == ctx->cbqt_policy_ &&
+        !(ctx->complex_cbqt_table_num_ > 0 && ctx->max_table_num_ > ctx->complex_cbqt_table_num_));
   }
   return ret;
 }

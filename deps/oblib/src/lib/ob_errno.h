@@ -120,6 +120,7 @@ constexpr int OB_HASH_PLACEMENT_RETRY = -4205;
 constexpr int OB_HASH_FULL = -4206;
 constexpr int OB_WAIT_NEXT_TIMEOUT = -4208;
 constexpr int OB_MAJOR_FREEZE_NOT_FINISHED = -4213;
+constexpr int OB_CURL_ERROR = -4216;
 constexpr int OB_INVALID_DATE_VALUE = -4219;
 constexpr int OB_INACTIVE_SQL_CLIENT = -4220;
 constexpr int OB_INACTIVE_RPC_PROXY = -4221;

@@ -400,6 +400,7 @@ public:
   int set_child(const uint32_t idx, ObOperator *child);
 
   int get_real_child(ObOperator *&child, const int32_t child_idx);
+  ObOperator *get_left_child() { return left_; }
 
   int init();
 
@@ -561,9 +562,10 @@ protected:
     }
     return ret;
   }
-private:
+protected:
   // for sql plan monitor
   int try_register_rt_monitor_node(int64_t rows);
+private:
   int try_deregister_rt_monitor_node();
   int submit_op_monitor_node();
   bool match_rt_monitor_condition(int64_t rows);

@@ -1137,5 +1137,32 @@ int ObNestedLoopJoinOp::get_next_row_from_right()
   return ret;
 }
 
+int ObNestedLoopJoinOp::process_after_set_passed()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(right_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("right is null.", K(ret));
+  } else if (get_by_pass()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < right_->get_spec().output_.count(); ++i) {
+      ObExpr *expr = right_->get_spec().output_.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null.", K(ret), K(i));
+      } else if (expr->is_batch_result()) {
+        ObDatum *datums = expr->locate_batch_datums(eval_ctx_);
+        for (int64_t j = 0; j < get_spec().max_batch_size_; ++j) {
+          datums[j].set_null();
+        }
+        expr->set_evaluated_projected(eval_ctx_);
+      } else {
+        expr->locate_expr_datum(eval_ctx_).set_null();
+        expr->set_evaluated_projected(eval_ctx_);
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

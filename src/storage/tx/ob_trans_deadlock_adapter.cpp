@@ -151,6 +151,10 @@ int ObTransDeadlockDetectorAdapter::kill_tx(const SessionIDPair sess_id_pair)
   } else if (OB_FAIL(GCTX.session_mgr_->kill_deadlock_tx(session_info))) {
     DETECT_LOG(WARN, "fail to kill transaction", K(ret), K(sess_id_pair), K(*session_info));
   } else {
+    if (session_info->associated_xa()) {
+      session_info->get_trans_result().reset();
+      session_info->disassociate_xa();
+    }
     session_info->reset_tx_variable();
     mgr->notify_deadlocked_session(sess_id_pair.get_valid_sess_id());
     DETECT_LOG(INFO, "set query dealocked success in mysql mode", K(ret), K(sess_id_pair), K(*session_info));
@@ -218,6 +222,7 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
   #define PRINT_WRAPPER KR(ret), K(self_tx_id), K(sess_id_pair), K(conflict_array), K(query_timeout), K(self_tx_scheduler)
   int ret = OB_SUCCESS;
   int64_t query_timeout = 0;
+  int64_t tx_active_ts = 0;
   ObAddr self_tx_scheduler;
   RemoteDeadLockCollectCallBack on_collect_op(sess_id_pair);
   ObTransOnDetectOperation on_detect_op(sess_id_pair, self_tx_id);
@@ -233,9 +238,22 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
   } else if (OB_FAIL(session_guard->get_query_timeout(query_timeout))) {
     DETECT_LOG(ERROR, "get query timeout ts failed", PRINT_WRAPPER);
   } else if (OB_ISNULL(session_guard->get_tx_desc())) {
-    ret = OB_ERR_UNEXPECTED;
-    DETECT_LOG(ERROR, "tx desc on session is NULL", PRINT_WRAPPER);
-  } else if (FALSE_IT(self_tx_scheduler = session_guard->get_tx_desc()->get_addr())) {
+    bool autocommit = false;
+    if (OB_FAIL(session_guard->get_autocommit(autocommit))) {
+      DETECT_LOG(WARN, "get autocommit on session fail", PRINT_WRAPPER);
+    } else if (autocommit) {
+      self_tx_scheduler = GCTX.self_addr();
+      tx_active_ts = common::ObTimeUtil::current_time();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      DETECT_LOG(ERROR, "tx desc on session is NULL", PRINT_WRAPPER);
+    }
+  } else {
+    self_tx_scheduler = session_guard->get_tx_desc()->get_addr();
+    tx_active_ts = session_guard->get_tx_desc()->get_active_ts();
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(gen_dependency_resource_array_(conflict_array, blocked_resources))) {
     DETECT_LOG(WARN, "fail to generate block resource", PRINT_WRAPPER);
   } else if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
@@ -245,8 +263,8 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
                                                                on_detect_op,
                                                                on_collect_op,
                                                                fill_virtual_info_callback,
-                                                               session_guard->get_tx_desc()->get_active_ts(),
-                                                               ~session_guard->get_tx_desc()->get_active_ts(),
+                                                               tx_active_ts,
+                                                               ~tx_active_ts,
                                                                start_delay,
                                                                count_down_allow_detect))) {
     DETECT_LOG(WARN, "fail to register deadlock", PRINT_WRAPPER);

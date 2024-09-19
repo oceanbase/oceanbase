@@ -44,6 +44,7 @@ EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
 #include "lib/net/ob_addr.h"
 #include "sql/ob_sql_define.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "lib/stat/ob_diagnostic_info.h"
 namespace oceanbase
 {
 namespace sql
@@ -83,7 +84,7 @@ struct ObExecRecord
 
 #define RECORD(se) \
   do { \
-    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info = \
+    oceanbase::common::ObDiagnosticInfo *diag_session_info = \
         oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
     if (NULL != diag_session_info) { \
       oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats(); \
@@ -151,8 +152,8 @@ struct ObExecRecord
     UPDATE_EVENT(network_wait_time);
   }
 
-  uint64_t get_cur_memstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
-    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+  uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
+    oceanbase::common::ObDiagnosticInfo *diag_session_info =
         (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
     uint64_t cur_memstore_read_row_count = 0;
     if (NULL != diag_session_info) {
@@ -164,8 +165,8 @@ struct ObExecRecord
     return cur_memstore_read_row_count;
   }
 
-  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
-    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
+    oceanbase::common::ObDiagnosticInfo *diag_session_info =
         (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
     uint64_t cur_ssstore_read_row_count = 0;
     if (NULL != diag_session_info) {

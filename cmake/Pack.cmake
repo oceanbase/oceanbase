@@ -273,6 +273,7 @@ install(FILES
   deps/oblib/src/lib/resource/achunk_mgr.h
   deps/oblib/src/lib/resource/ob_cache_washer.h
   deps/oblib/src/lib/resource/ob_resource_mgr.h
+  deps/oblib/src/lib/resource/ob_resource_limiter.h
   deps/oblib/src/lib/stat/ob_latch_define.h
   deps/oblib/src/lib/string/ob_fixed_length_string.h
   deps/oblib/src/lib/string/ob_string.h

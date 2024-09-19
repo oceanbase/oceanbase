@@ -11,45 +11,7 @@ static const double EASY_DOUBLE_EPSINON = 1e-14;
 extern char *parray_c(char *buf, int64_t len, int64_t *array, int size);
 const char *easy_lbt()
 {
-    static __thread void *addrs[100];
-    static __thread char buf[1024];
-    int size = ob_backtrace_c(addrs, 100);
-    return parray_c(buf, sizeof(buf), (int64_t *)addrs, size);
-}
-
-const char *easy_lbt_str()
-{
-    static __thread void *addrs[100];
-    static __thread char buf[STACK_BT_BUFFER_LENGTH];
-    int size, len, pos = 0;
-    char **symbols = NULL;
-    char *sym;
-    int idx;
-
-    sprintf(buf, "\n");
-    pos++;
-
-    size    = ob_backtrace_c(addrs, 100);
-    symbols = backtrace_symbols(addrs, 100);
-    if (NULL == symbols) {
-        return buf;
-    }
-
-    for (idx = 0; idx < size; idx++) {
-        sym = symbols[idx];
-        if (NULL != sym) {
-            len = strlen(sym);
-            if ((pos + len + 1) > STACK_BT_BUFFER_LENGTH) {
-                break;
-            } else {
-                sprintf(buf + pos, "%s\n", sym);
-                pos += len + 1;
-            }
-        }
-    }
-
-    free(symbols);
-    return buf;
+    return lbt_c();
 }
 
 const char* easy_get_func_name(void *addr)

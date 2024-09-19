@@ -35,6 +35,7 @@
 #include "palf/palf_callback.h"
 #include "palf/palf_options.h"
 #include "logservice/ob_net_keepalive_adapter.h"  // ObNetKeepAliveAdapter
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 
 namespace oceanbase
 {
@@ -137,7 +138,9 @@ void ObLogService::mtl_destroy(ObLogService* &logservice)
 int ObLogService::start()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(apply_service_.start())) {
+  if (OB_FAIL(palf_env_->start())) {
+    PALF_LOG(WARN, "start palf env failed", K(ret));
+  } else if (OB_FAIL(apply_service_.start())) {
     CLOG_LOG(WARN, "failed to start apply_service_", K(ret));
   } else if (OB_FAIL(replay_service_.start())) {
     CLOG_LOG(WARN, "failed to start replay_service_", K(ret));
@@ -264,7 +267,8 @@ int ObLogService::init(const PalfOptions &options,
              KP(alloc_mgr), KP(transport), KP(batch_rpc), KP(ls_service), KP(location_service), KP(reporter),
              KP(log_block_pool), KP(sql_proxy), KP(net_keepalive_adapter));
   } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport, batch_rpc,
-                                              alloc_mgr, log_block_pool, &monitor_, palf_env_))) {
+                                              alloc_mgr, log_block_pool, &monitor_, LOG_IO_DEVICE_WRAPPER.get_local_device(),
+                                              &G_RES_MGR, &OB_IO_MANAGER, palf_env_))) {
     CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
   } else if (OB_ISNULL(palf_env_)) {
     ret = OB_ERR_UNEXPECTED;

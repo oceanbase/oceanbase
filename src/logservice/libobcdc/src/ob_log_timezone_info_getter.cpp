@@ -462,6 +462,49 @@ int ObCDCTimeZoneInfoGetter::create_tenant_tz_info_(
   return ret;
 }
 
+int ObCDCTimeZoneInfoGetter::create_sys_tenant_tz_info()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
+  ObCDCTenantTimeZoneInfo* tenant_tz_info = nullptr;
+
+  if (OB_FAIL(oblog_tz_info_map_.get_refactored(exec_tenant_id, tenant_tz_info))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      if (OB_ISNULL(tenant_tz_info = static_cast<ObCDCTenantTimeZoneInfo*>(allocator_.alloc()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("oblog_tz_info is not valid", KR(ret), K(exec_tenant_id), KP(tenant_tz_info));
+      } else if (OB_ISNULL(timezone_str_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("timezone_str is null", KR(ret), K(exec_tenant_id), K(timezone_str_));
+      } else {
+        new(tenant_tz_info) ObCDCTenantTimeZoneInfo();
+        if (OB_FAIL(tenant_tz_info->init(exec_tenant_id))) {
+          LOG_ERROR("tenant_tz_info init failed", KR(ret), K(exec_tenant_id), KPC(tenant_tz_info));
+        } else if (OB_FAIL(tenant_tz_info->set_time_zone(ObString(timezone_str_)))) {
+          LOG_ERROR("set tenant_tz_info failed", KR(ret), K(exec_tenant_id), KPC(tenant_tz_info));
+          // regist into tz_info_map even if OB_ENTRY_NOT_EXIST(tenant doesn't have timezone info)
+        } else if (OB_FAIL(oblog_tz_info_map_.set_refactored(exec_tenant_id, tenant_tz_info))) {
+          LOG_ERROR("insert obcdc_tenant_tz_info into tz_info_map failed", KR(ret), K(exec_tenant_id));
+        } else {
+          LOG_INFO("create tenant timezone info for obcdc success", KR(ret), K(exec_tenant_id), K(exec_tenant_id));
+        }
+      }
+
+      if (OB_FAIL(ret) && OB_NOT_NULL(tenant_tz_info)) {
+        allocator_.free(tenant_tz_info);
+        tenant_tz_info = nullptr;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_ISNULL(tenant_tz_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_tz_info should no be null", KR(ret), K(exec_tenant_id));
+  }
+
+  return ret;
+}
+
 int ObCDCTimeZoneInfoGetter::refresh_tenant_timezone_info_based_on_version_(
     const uint64_t tenant_id,
     ObCDCTenantTimeZoneInfo &oblog_tz_info)

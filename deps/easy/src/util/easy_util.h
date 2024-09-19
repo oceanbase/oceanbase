@@ -4,8 +4,8 @@
 #include "easy_define.h"
 
 extern int ob_backtrace_c(void **buffer, int size);
+extern char *lbt_c();
 const char* easy_lbt();
-const char* easy_lbt_str();
 const char* easy_get_func_name(void *addr);
 #if defined(__x86_64__)
 static inline cycles_t easy_get_cycles()

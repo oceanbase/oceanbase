@@ -1004,6 +1004,7 @@ private:
                              bool &is_range_get,
                              const common::ObDataTypeCastParams &dtc_params,
                              ObExecContext *exec_ctx,
+                             ObQueryCtx *query_ctx,
                              const bool is_in_range_optimization_enabled,
                              const bool use_new_query_range);
 
@@ -1024,6 +1025,7 @@ private:
                            ObPartLocCalcNode *&calc_node,
                            const common::ObDataTypeCastParams &dtc_params,
                            ObExecContext *exec_ctx,
+                           ObQueryCtx *query_ctx,
                            const bool is_in_range_optimization_enabled);
 
   int get_pre_range_graph_node(const ObPartitionLevel part_level,
@@ -1031,7 +1033,8 @@ private:
                                const ObIArray<ObRawExpr*> &filter_exprs,
                                bool &always_true,
                                ObPartLocCalcNode *&calc_node,
-                               ObExecContext *exec_ctx);
+                               ObExecContext *exec_ctx,
+                               ObQueryCtx *query_ctx);
 
   int extract_eq_op(ObExecContext *exec_ctx,
                     const ObRawExpr *l_expr,

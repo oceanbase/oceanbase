@@ -519,6 +519,14 @@ int ObPxMsgProc::on_piece_msg(
   return proc.on_piece_msg(coord_info_, ctx, pkt);
 }
 
+int ObPxMsgProc::on_piece_msg(
+    ObExecContext &ctx,
+    const ObStatisticsCollectorPieceMsg &pkt)
+{
+  ObDhPieceMsgProc<ObStatisticsCollectorPieceMsg> proc;
+  return proc.on_piece_msg(coord_info_, ctx, pkt);
+}
+
 int ObPxMsgProc::on_eof_row(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;

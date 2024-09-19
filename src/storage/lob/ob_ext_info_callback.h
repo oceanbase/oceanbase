@@ -30,6 +30,8 @@ enum ObExtInfoLogType
 {
   OB_INVALID_EXT_INFO_LOG = 0,
   OB_JSON_DIFF_EXT_INFO_LOG = 1,
+  OB_OUTROW_DISK_LOB_LOCATOR_EXT_INFO_LOG = 2,
+  OB_VALID_OLD_LOB_VALUE_LOG = 3,
 };
 
 
@@ -43,6 +45,7 @@ struct ObExtInfoLogHeader
 
   ObExtInfoLogType get_type() const { return static_cast<ObExtInfoLogType>(type_); }
   bool is_json_diff() const { return get_type() == OB_JSON_DIFF_EXT_INFO_LOG; }
+  void init(ObObj &obj, const bool is_update);
 
   uint8_t type_;
 
@@ -136,6 +139,7 @@ public:
       header_(),
       ext_info_data_(),
       lob_param_(nullptr),
+      lob_locator_(),
       data_iter_(nullptr),
       data_buffer_(),
       timeout_(0),
@@ -149,37 +153,29 @@ public:
 
   int register_cb(
     memtable::ObIMvccCtx *ctx,
+    storage::ObStoreCtx &store_ctx,
     const int64_t timeout,
     const blocksstable::ObDmlFlag dml_flag,
-    transaction::ObTxDesc *tx_desc,
-    transaction::ObTxSEQ &parent_seq_no,
     ObObj &index_data,
-    ObObj &ext_info_data);
+    ObObj &ext_info_data,
+    const transaction::ObTxReadSnapshot &snapshot,
+    const ObExtInfoLogHeader &header,
+    const ObTabletID &tabelt_id);
 
 private:
 
-  static ObExtInfoLogType get_type(ObObjType obj_type)
-  {
-    ObExtInfoLogType res = OB_INVALID_EXT_INFO_LOG;
-    switch (obj_type)
-    {
-    case ObJsonType:
-      res = OB_JSON_DIFF_EXT_INFO_LOG;
-      break;
-    default:
-      break;
-    }
-    return res;
-  }
-
-  int build_data_iter(ObObj &ext_info_data);
+  int build_data_iter(
+    ObObj &ext_info_data,
+    transaction::ObTxDesc *tx_desc,
+    const transaction::ObTxSEQ &tx_scn,
+    const transaction::ObTxReadSnapshot &snapshot,
+    const share::ObLSID &ls_id,
+    const ObTabletID &tabelt_id);
 
   int set_index_data(ObObj &index_data);
   int set_outrow_ctx_seq_no(ObObj& index_data);
 
   int get_data(ObString &data);
-
-  int init_header(ObObj& index_data, ObObj &ext_info_data);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));
@@ -190,6 +186,7 @@ private:
   ObExtInfoLogHeader header_;
   ObObj ext_info_data_;
   ObLobAccessParam *lob_param_;
+  ObLobLocatorV2 lob_locator_;
   ObLobQueryIter *data_iter_;
   ObString data_buffer_;
   int64_t timeout_;

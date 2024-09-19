@@ -1537,6 +1537,62 @@ int ObUpgradeFor4240Processor::post_upgrade_for_spm()
 }
 /* =========== 4240 upgrade processor end ============= */
 
+/* =========== 4250 upgrade processor start ============= */
+int ObUpgradeFor4250Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(add_spm_stats_scheduler_job())) {
+    LOG_WARN("fail to create standby replication role in oracle", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4250Processor::add_spm_stats_scheduler_job()
+{
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  bool is_primary_tenant = false;
+  bool job_exists = false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *var_schema = NULL;
+  ObSqlString insert_sql;
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP_(sql_proxy), KP_(schema_service), K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("tenant isn't primary tenant", K(tenant_id_));
+  } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::check_job_exists(sql_proxy_,
+                                                                    tenant_id_,
+                                                                    "SPM_STATS_MANAGER",
+                                                                    job_exists))) {
+    LOG_WARN("failed to check job exists");
+  } else if (job_exists) {
+    LOG_INFO("spm schedular job already exists", K(tenant_id_), "job_name", "SPM_STATS_MANAGER");
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, var_schema))) {
+    LOG_WARN("fail to get sys variable schema", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::get_spm_stats_upgrade_jobs_sql(sql_proxy_,
+                                                                                  *var_schema,
+                                                                                  tenant_id_,
+                                                                                  lib::Worker::CompatMode::ORACLE == compat_mode,
+                                                                                  insert_sql))) {
+    LOG_WARN("failed to get spm stats upgrade jobs sql");
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, insert_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write spm stats job", K(ret), K(tenant_id_), K(affected_rows), K(insert_sql));
+  }
+
+  return ret;
+}
+/* =========== 4250 upgrade processor end ============= */
+
 /* =========== special upgrade processor end   ============= */
 } // end share
 } // end oceanbase

@@ -53,7 +53,9 @@ bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
       type_class == ColumnTypeClass::ObBitTC ||
       type_class == ColumnTypeClass::ObEnumSetTC ||
       type_class == ColumnTypeClass::ObIntervalTC ||
-      (lib::is_mysql_mode() && type_class == ColumnTypeClass::ObTextTC)) {
+      (lib::is_mysql_mode() && type_class == ColumnTypeClass::ObTextTC) ||
+      type_class == ColumnTypeClass::ObMySQLDateTC ||
+      type_class == ColumnTypeClass::ObMySQLDateTimeTC) {
     ret = true;
   }
   return ret;
@@ -188,6 +190,10 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   hist_sample_info_.is_block_sample_ = other.hist_sample_info_.is_block_sample_;
   hist_sample_info_.sample_type_ = other.hist_sample_info_.sample_type_;
   hist_sample_info_.sample_value_ = other.hist_sample_info_.sample_value_;
+  consumer_group_id_ = other.consumer_group_id_;
+  min_iops_ = other.min_iops_;
+  max_iops_ = other.max_iops_;
+  weight_iops_ = other.weight_iops_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {
@@ -234,6 +240,10 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   hist_sample_info_.is_block_sample_ = other.hist_sample_info_.is_block_sample_;
   hist_sample_info_.sample_type_ = other.hist_sample_info_.sample_type_;
   hist_sample_info_.sample_value_ = other.hist_sample_info_.sample_value_;
+  consumer_group_id_ = other.consumer_group_id_;
+  min_iops_ = other.min_iops_;
+  max_iops_ = other.max_iops_;
+  weight_iops_ = other.weight_iops_;
   return ret;
 }
 
@@ -266,6 +276,7 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   hist_sample_info_.is_block_sample_ = other.hist_sample_info_.is_block_sample_;
   hist_sample_info_.sample_type_ = other.hist_sample_info_.sample_type_;
   hist_sample_info_.sample_value_ = other.hist_sample_info_.sample_value_;
+  consumer_group_id_ = other.consumer_group_id_;
   if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {

@@ -21,6 +21,9 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
 {
   ObString ret_name;
   switch (function_type) {
+    case share::ObFunctionType::DEFAULT_FUNCTION:
+      ret_name = "DEFAULT_FUNCTION";
+      break;
     case ObFunctionType::PRIO_COMPACTION_HIGH:
       ret_name = ObString("COMPACTION_HIGH");
       break;
@@ -45,8 +48,20 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_DDL_HIGH:
       ret_name = ObString("DDL_HIGH");
       break;
-    case ObFunctionType::PRIO_OTHER_BACKGROUND:
-      ret_name = ObString("OTHER_BACKGROUND");
+    case ObFunctionType::PRIO_GC_MACRO_BLOCK:
+      ret_name = ObString("GC_MACRO_BLOCK");
+      break;
+    case ObFunctionType::PRIO_OPT_STATS:
+      ret_name = ObString("OPT_STATS");
+      break;
+    case ObFunctionType::PRIO_CLOG_LOW:
+      ret_name = ObString("CLOG_LOW");
+      break;
+    case ObFunctionType::PRIO_CLOG_MID:
+      ret_name = ObString("CLOG_MID");
+      break;
+    case ObFunctionType::PRIO_CLOG_HIGH:
+      ret_name = ObString("CLOG_HIGH");
       break;
     default:
       ret_name = ObString("OTHER_GROUPS");

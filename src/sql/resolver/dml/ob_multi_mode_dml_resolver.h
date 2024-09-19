@@ -122,6 +122,7 @@ public:
                                                               ObDMLResolver* dml_resolver);
   // other json expr:
   static int json_expand_column_in_json_object_star(ParseNode *node, ObDMLResolver* dml_resolver);
+  static int json_pre_process_one_expr(ParseNode &node, ObDMLResolver* dml_resolver);
   static int json_pre_process_expr(ParseNode &node, ObDMLResolver* dml_resolver);
   static int json_process_object_array_expr_node(ParseNode *node, ObDMLResolver* dml_resolver);
   static int json_process_json_agg_node(ParseNode*& node, ObDMLResolver* dml_resolver);

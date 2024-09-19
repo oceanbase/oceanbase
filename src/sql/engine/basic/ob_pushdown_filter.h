@@ -366,7 +366,7 @@ public:
       const common::ObIArray<share::schema::ObColumnParam *> &col_params,
       const common::ObIArray<int32_t> &output_projector,
       const bool need_padding);
-  virtual int init_evaluated_datums() { return common::OB_NOT_SUPPORTED; }
+  virtual int init_evaluated_datums(bool &is_valid) { return common::OB_NOT_SUPPORTED; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   int find_evaluated_datums(
@@ -408,7 +408,7 @@ public:
   { return filter_.get_col_ids(); }
   int filter(common::ObObj *objs, int64_t col_cnt, bool &ret_val);
   int filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, bool &ret_val);
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   OB_INLINE bool can_vectorized();
   int filter_batch(ObPushdownFilterExecutor *parent,
                    const int64_t start,
@@ -453,7 +453,7 @@ public:
   OB_INLINE ObPushdownWhiteFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   OB_INLINE const common::ObIArray<common::ObObj> &get_objs() const
   { return params_; }
   OB_INLINE bool null_param_contained() const { return null_param_contained_; }
@@ -485,7 +485,7 @@ public:
   OB_INLINE ObPushdownAndFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   INHERIT_TO_STRING_KV("ObPushdownAndFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownAndFilterNode &filter_;
@@ -503,7 +503,7 @@ public:
   OB_INLINE ObPushdownOrFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums() override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   INHERIT_TO_STRING_KV("ObPushdownOrFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownOrFilterNode &filter_;

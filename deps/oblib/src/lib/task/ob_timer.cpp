@@ -476,7 +476,9 @@ void ObTimer::run1()
       }
 
       if (elapsed_time > ELAPSED_TIME_LOG_THREASHOLD) {
-        OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task cost too much time", "task", to_cstring(*token.task),
+        ObCStringHelper helper;
+        OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task cost too much time",
+            "task", helper.convert(*token.task),
             K(start_time), K(end_time), K(elapsed_time), KP(this), K_(thread_id));
       }
     }

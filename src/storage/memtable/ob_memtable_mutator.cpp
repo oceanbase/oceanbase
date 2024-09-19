@@ -704,7 +704,7 @@ int ObMemtableMutatorRow::deserialize(const char *buf, const int64_t buf_len, in
 
 ObMutatorTableLock::ObMutatorTableLock():
     lock_id_(),
-    owner_id_(0),
+    owner_id_(ObTableLockOwnerID::default_owner()),
     mode_(NO_LOCK),
     lock_type_(ObTableLockOpType::UNKNOWN_TYPE),
     create_timestamp_(0),
@@ -741,7 +741,7 @@ void ObMutatorTableLock::reset()
 {
   ObMutator::reset();
   lock_id_.reset();
-  owner_id_ = 0;
+  owner_id_.set_default();
   mode_ = NO_LOCK;
   lock_type_ = ObTableLockOpType::UNKNOWN_TYPE;
   create_timestamp_ = 0;

@@ -32,6 +32,7 @@
 #include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -349,7 +350,6 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
     if (free_total_count > 0 && free_total_count % 10000 == 0) {
       LOG_INFO("free_session_count", K(free_total_count));
     }
-    ObActiveSessionGuard::setup_default_ash();
   }
 }
 
@@ -502,6 +502,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
                                     const uint32_t client_sessid,
                                     const int64_t client_create_time)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_connection_mgr);
   int ret = OB_SUCCESS;
   int err = OB_SUCCESS;
   session_info = NULL;
@@ -630,6 +631,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
 
 int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_connection_mgr);
   int ret = OB_SUCCESS;
   uint32_t sessid = ctx.sessid_;
   uint64_t proxy_sessid = ctx.proxy_sessid_;
@@ -858,7 +860,7 @@ int ObSQLSessionMgr::kill_tenant(const uint64_t tenant_id, bool force_kill)
   OZ (for_each_session(kt_func));
   OX (ret = kt_func.get_ret_code());
   OZ (sessinfo_map_.clean_tenant(tenant_id));
-  LOG_INFO("kill tenant", K(tenant_id), K(force_kill));
+  LOG_TRACE("kill tenant", K(tenant_id), K(force_kill));
   // OZ (proxy_sess_map_.clean_tenant(tenant_id));
   return ret;
 }
@@ -983,7 +985,7 @@ bool ObSQLSessionMgr::KillTenant::operator() (
         ret_ = OB_EAGAIN;
         LOG_TRACE("unit gc needs to wait", K(ret_));
       } else if (need_kill) {
-        LOG_INFO("force kill session", K(sess_info->get_sessid()));
+        LOG_TRACE("force kill session", K(sess_info->get_sessid()));
         ret = mgr_->kill_session(*sess_info);
       }
     }

@@ -596,19 +596,7 @@ int ObMulSourceTxDataNotifier::notify_ddl_barrier(const NotifyType type,
                                                   const ObMulSourceDataNotifyArg &arg)
 {
   int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  ObDDLBarrierLog log;
-  if (OB_FAIL(log.deserialize(buf, len, pos))) {
-    TRANS_LOG(WARN, "failed to deserialize buf", K(ret));
-  } else if (OB_UNLIKELY(!log.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "invalid ddl barrier log", K(ret), K(type), K(arg));
-  } else {
-    TRANS_LOG(INFO, "notify ddl barrier", K(type), K(arg), K(log));
-  }
-
   ob_abort_log_cb_notify_(type, ret, arg.for_replay_);
-
   return ret;
 }
 
@@ -616,7 +604,11 @@ int ObMulSourceTxDataNotifier::notify_ddl_barrier(const NotifyType type,
 // ObMulSourceTxDataDump
 //#####################################################
 const char *
-ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf, const int64_t len)
+ObMulSourceTxDataDump::dump_buf(
+    ObTxDataSourceType source_type,
+    const char *buf,
+    const int64_t len,
+    ObCStringHelper &helper)
 {
   int ret = OB_SUCCESS;
   const char *dump_str = "Unkown Multi Data Source";
@@ -635,7 +627,7 @@ ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
       } else {
-        dump_str = to_cstring(lock_op);
+        dump_str = helper.convert(lock_op);
       }
       break;
     }
@@ -647,7 +639,7 @@ ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
       } else {
-        dump_str = to_cstring(ls_attr);
+        dump_str = helper.convert(ls_attr);
       }
       break;
     }
@@ -659,7 +651,7 @@ ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
       } else {
-        dump_str = to_cstring(create_arg);
+        dump_str = helper.convert(create_arg);
       }
       break;
     }
@@ -671,7 +663,7 @@ ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
       } else {
-        dump_str = to_cstring(remove_arg);
+        dump_str = helper.convert(remove_arg);
       }
       break;
     }
@@ -683,7 +675,7 @@ ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
       } else {
-        dump_str = to_cstring(log);
+        dump_str = helper.convert(log);
       }
       break;
     }
@@ -695,7 +687,19 @@ ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
       } else {
-        dump_str = to_cstring(modify_arg);
+        dump_str = helper.convert(modify_arg);
+      }
+      break;
+    }
+    case ObTxDataSourceType::UNBIND_LOB_TABLET: {
+      ObBatchUnbindLobTabletArg modify_arg;
+      if (OB_FAIL(modify_arg.deserialize(buf, len, pos))) {
+        TRANS_LOG(WARN, "failed to deserialize arg", K(ret));
+      } else if (pos > len) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
+      } else {
+        dump_str = helper.convert(modify_arg);
       }
       break;
     }

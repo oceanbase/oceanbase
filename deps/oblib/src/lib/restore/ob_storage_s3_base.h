@@ -68,9 +68,6 @@ static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t MAX_S3_CONNECTIONS_PER_CLIENT = 128;
 static constexpr int64_t STOP_S3_TIMEOUT_US = 10 * 1000L;   // 10ms
-// max allowed idle duration for a s3 client: 12h
-static constexpr int64_t MAX_S3_CLIENT_IDLE_DURATION = 12 * 3600 * 1000 * 1000L;
-static constexpr int64_t MAX_S3_CLIENT_MAP_THRESHOLD = 500;
 
 // TODO: check length
 static constexpr int MAX_S3_REGION_LENGTH = 128;
@@ -85,6 +82,9 @@ static constexpr char OB_S3_APPENDABLE_FORMAT_CONTENT_V1[] = "version=1";
 static constexpr char OB_STORAGE_S3_ALLOCATOR[] = "StorageS3";
 static constexpr char S3_SDK[] = "S3SDK";
 
+int set_max_s3_client_idle_duration_us(const int64_t duration_us);
+int64_t get_max_s3_client_idle_duration_us();
+
 struct ObS3Account
 {
   ObS3Account();
@@ -92,10 +92,9 @@ struct ObS3Account
   void reset();
   bool is_valid() const { return is_valid_; }
   int64_t hash() const;
-  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id));
+  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id), KP_(secret_key), K_(sts_token));
 
   int parse_from(const char *storage_info_str, const int64_t size);
-  int set_field(const char *value, char *field, const uint32_t field_length);
 
   bool is_valid_;
   int64_t delete_mode_;
@@ -103,6 +102,7 @@ struct ObS3Account
   char endpoint_[MAX_S3_ENDPOINT_LENGTH];
   char access_id_[MAX_S3_ACCESS_ID_LENGTH];     // ak
   char secret_key_[MAX_S3_SECRET_KEY_LENGTH];   // sk
+  ObSTSToken sts_token_;
 };
 
 class ObS3MemoryManager : public Aws::Utils::Memory::MemorySystemInterface
@@ -303,7 +303,6 @@ protected:
 private:
   bool is_inited_;
   ObS3Account s3_account_;
-
   friend class ObStorageS3Util;
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3Base);
 };

@@ -238,8 +238,10 @@ int ObExprTimestamp::calc_result_typeN(ObExprResType &type,
     LOG_WARN("invalid argument count of funtion timestmap", K(ret));
   } else {
     //param will be casted to ObDatetimeType before calculation
-    type.set_type(ObDateTimeType);
-    types_array[0].set_calc_type(ObDateTimeType);
+    bool use_mysql_compatible = type_ctx.enable_mysql_compatible_dates()
+                                && types_array[0].get_type() != ObDateTimeType && 2 != param_num;
+    type.set_type(use_mysql_compatible ? ObMySQLDateTimeType : ObDateTimeType);
+    types_array[0].set_calc_type(type.get_type());
     if (2 == param_num) {
       types_array[1].set_calc_type(ObTimeType);
     }
@@ -265,7 +267,7 @@ int ObExprTimestamp::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   UNUSED(raw_expr);
   if (1 == rt_expr.arg_cnt_) {
     ObObjType type = rt_expr.args_[0]->datum_meta_.type_;
-    CK(ObNullType == type || ObDateTimeType == type);
+    CK(ObNullType == type || ObDateTimeType == type || ObMySQLDateTimeType == type);
     if (OB_SUCC(ret)) {
       rt_expr.eval_func_ = ObExprTimestamp::calc_timestamp1;
     }

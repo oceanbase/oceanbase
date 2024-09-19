@@ -178,7 +178,7 @@ TEST(ObDiagnoseSessionInfo, normal)
           ::usleep(i*200);
         }
       }
-      ObDiagnoseSessionInfo *info = ObDiagnoseSessionInfo::get_local_diagnose_info();
+      ObDiagnosticInfo *info = ObDiagnoseSessionInfo::get_local_diagnose_info();
       EXPECT_EQ(1, info->get_tenant_id());
       ObWaitEventDesc *last_wait = NULL;
       info->get_event_history().get_last_wait(last_wait);

@@ -131,7 +131,10 @@ private:
     SOURCE_IP,
     SOURCE_PORT,
     ROUTE_MISS_TOTAL,
-    ROUTE_MISS_DELTA
+    ROUTE_MISS_DELTA,
+    FIRST_LOAD_TIME,
+    PLAN_CACHE_HIT_TOTAL,
+    PLAN_CACHE_HIT_DELTA
   };
   int fill_row(const uint64_t tenant_id,
                const ObExecutedSqlStatRecord *sql_stat_record,

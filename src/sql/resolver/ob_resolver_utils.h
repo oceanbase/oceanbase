@@ -375,6 +375,7 @@ public:
                            ObExprInfo *parents_expr_info,
                            const ObSQLMode mode,
                            const ObCompatType compat_type,
+                           const bool enable_mysql_compatible_dates,
                            bool is_from_pl = false);
 
   static int set_string_val_charset(ObIAllocator &allocator,
@@ -391,6 +392,7 @@ public:
                                const bool is_for_pl_type,
                                const ObSessionNLSParams &nls_session_param,
                                uint64_t tenant_id,
+                               const bool enable_mysql_compatible_dates,
                                const bool convert_real_type_to_decimal = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,

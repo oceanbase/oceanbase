@@ -107,6 +107,7 @@ ob_set_subtarget(ob_server mysql
   mysql/obmp_set_option.cpp
   mysql/ob_dl_queue.cpp
   mysql/ob_construct_queue.cpp
+  mysql/ob_feedback_proxy_utils.cpp
 )
 
 ob_set_subtarget(ob_server omt
@@ -181,6 +182,7 @@ ob_set_subtarget(ob_server table
   table/ob_redis_execute_processor.cpp
   table/redis/ob_redis_command_factory.cpp
   table/redis/ob_redis_service.cpp
+  table/redis/ob_redis_context.cpp
   table/redis/cmd/ob_redis_list_cmd.cpp
   table/redis/operator/ob_redis_list_operator.cpp
   table/redis/operator/ob_redis_operator.cpp
@@ -194,9 +196,23 @@ ob_set_subtarget(ob_server table
   table/redis/cmd/ob_redis_string_cmd.cpp
   table/redis/operator/ob_redis_string_operator.cpp
   table/ob_table_audit.cpp
+  table/redis/ob_redis_iterator.cpp
+  table/redis/ob_redis_meta.cpp
+  table/redis/cmd/ob_redis_generic_cmd.cpp
+  table/redis/operator/ob_redis_generic_operator.cpp
+  table/redis/ob_redis_ttl.cpp
+  table/redis/ob_redis_rkey.cpp
   table/ob_table_mode_control.cpp
   table/ob_htable_rowkey_mgr.cpp
   table/ob_table_client_info_mgr.cpp
+  table/group/ob_i_table_struct.cpp
+  table/redis/ob_redis_context.cpp
+  table/group/ob_table_group_factory.cpp
+  table/group/ob_table_group_register.cpp
+  table/redis/group/ob_redis_group_processor.cpp
+  table/ob_table_batch_common.cpp
+  table/ob_table_multi_batch_common.cpp
+  table/ob_table_multi_batch_service.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -351,6 +367,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sys_event.cpp
   virtual_table/ob_all_virtual_sys_parameter_stat.cpp
   virtual_table/ob_all_virtual_sys_stat.cpp
+  virtual_table/ob_all_virtual_res_mgr_sys_stat.cpp
   virtual_table/ob_all_virtual_sys_task_status.cpp
   virtual_table/ob_all_virtual_table_mgr.cpp
   virtual_table/ob_all_virtual_unit.cpp
@@ -520,8 +537,8 @@ endif()
 add_library(ob_main OBJECT main.cpp)
 config_ccls_flag(ob_main)
 target_link_libraries(ob_main PUBLIC ob_base)
-add_executable(observer)
-target_link_libraries(observer
+add_executable(observer_without_bolt)
+target_link_libraries(observer_without_bolt
   PRIVATE
   -Wl,--start-group
   ob_main
@@ -557,9 +574,16 @@ if (OB_ENABLE_BOLT)
   add_custom_command(
     OUTPUT fake_observer_bolt
     COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/do_bolt_opt --build_dir=${CMAKE_BINARY_DIR}
-    DEPENDS observer)
-  add_custom_target(observer_bolt ALL
+    DEPENDS observer_without_bolt)
+  add_custom_target(observer ALL
     DEPENDS fake_observer_bolt)
+else()
+  add_custom_command(
+    OUTPUT fake_observer
+    COMMAND mv ${CMAKE_BINARY_DIR}/src/observer/observer_without_bolt ${CMAKE_BINARY_DIR}/src/observer/observer
+    DEPENDS observer_without_bolt)
+  add_custom_target(observer ALL
+    DEPENDS fake_observer)
 endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)

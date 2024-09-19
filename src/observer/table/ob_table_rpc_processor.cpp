@@ -260,7 +260,6 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      is_tablegroup_req_(false),
      retry_count_(0),
      user_client_addr_(),
-     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_),
      audit_ctx_(retry_count_, user_client_addr_)
 {
 }
@@ -698,6 +697,7 @@ int ObTableRpcProcessor<T>::before_response(int error_code)
 {
   const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
   ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
+  request_finish_callback(); // clear thread local variables used to wait in queue
   return RpcProcessor::before_response(error_code);
 }
 
@@ -707,8 +707,6 @@ int ObTableRpcProcessor<T>::response(int error_code)
   int ret = OB_SUCCESS;
   // if it is waiting for retry in queue, the response can NOT be sent.
   if (!need_retry_in_queue_ && !had_do_response()) {
-    // clear thread local variables used to wait in queue
-    request_finish_callback();
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(this->req_->get_packet());
     if (ObTableRpcProcessorUtil::need_do_move_response(error_code, *rpc_pkt)) {
       // response rerouting packet

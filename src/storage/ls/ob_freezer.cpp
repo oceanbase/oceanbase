@@ -1347,7 +1347,8 @@ namespace {
     DECLARE_TO_STRING
     {
       int64_t pos = 0;
-      BUF_PRINTF(fmt_, ObCurTraceId::get_trace_id_str(), ret_);
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      BUF_PRINTF(fmt_, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)), ret_);
       return pos;
     }
   };

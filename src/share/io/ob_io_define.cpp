@@ -44,6 +44,17 @@ const char *oceanbase::common::get_io_mode_string(const ObIOMode mode)
   return ret_name;
 }
 
+const char *oceanbase::common::get_io_mode_string(const ObIOGroupMode group_mode)
+{
+  const char *str = "INVALID";
+  switch (group_mode) {
+    case ObIOGroupMode::LOCALREAD:   str = "LOCAL READ";   break;
+    case ObIOGroupMode::LOCALWRITE:  str = "LOCAL WRITE";  break;
+    default: str = "EXCEPTION"; break;
+  }
+  return str;
+}
+
 ObIOMode oceanbase::common::get_io_mode_enum(const char *mode_string)
 {
   ObIOMode mode = ObIOMode::MAX_MODE;
@@ -134,6 +145,7 @@ const char *oceanbase::common::get_io_sys_group_name(ObIOModule module)
 ObIOFlag::ObIOFlag()
   : flag_(0),
     group_id_(USER_RESOURCE_OTHER_GROUP_ID),
+    func_type_(share::ObFunctionType::DEFAULT_FUNCTION),
     sys_module_id_(OB_INVALID_ID)
 {
 
@@ -177,6 +189,15 @@ void ObIOFlag::set_resource_group_id(const uint64_t group_id)
   }
 }
 
+void ObIOFlag::set_func_type(const uint8_t func_type)
+{
+  func_type_ = func_type;
+}
+
+uint8_t ObIOFlag::get_func_type() const
+{
+  return func_type_;
+}
 void ObIOFlag::set_wait_event(int64_t wait_event_id)
 {
   wait_event_id_ = wait_event_id;
@@ -461,6 +482,7 @@ int ObIORequest::init(const ObIOInfo &info)
   } else {
     time_log_.begin_ts_ = ObTimeUtility::fast_current_time();
     io_info_ = info;
+    io_info_.flag_.set_func_type(GET_FUNC_TYPE());
     if (nullptr == io_info_.fd_.device_handle_) {
       io_info_.fd_.device_handle_ = THE_IO_DEVICE; // for test
     }
@@ -599,6 +621,32 @@ const ObIOFlag &ObIORequest::get_flag() const
 ObIOMode ObIORequest::get_mode() const
 {
   return io_info_.flag_.get_mode();
+}
+
+ObIOGroupMode ObIORequest::get_group_mode() const
+{
+  ObIOGroupMode group_mode = ObIOGroupMode::MODECNT;
+  if (get_mode() == ObIOMode::READ) {
+    group_mode = ObIOGroupMode::LOCALREAD;
+  } else if (get_mode() == ObIOMode::WRITE) {
+    group_mode = ObIOGroupMode::LOCALWRITE;
+  }
+  if (group_mode == ObIOGroupMode::MODECNT) {
+    int ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get wrong mode", K(ret), K(*this), K(group_mode));
+  }
+  return group_mode;
+}
+
+int ObIORequest::cal_delay_us(int64_t &prepare_delay, int64_t &schedule_delay, int64_t &submit_delay, int64_t &device_delay, int64_t &total_delay)
+{
+  int ret = OB_SUCCESS;
+  prepare_delay = get_io_interval(this->time_log_.enqueue_ts_, this->time_log_.begin_ts_);
+  schedule_delay = get_io_interval(this->time_log_.dequeue_ts_, this->time_log_.enqueue_ts_);
+  submit_delay = get_io_interval(this->time_log_.submit_ts_, this->time_log_.dequeue_ts_);
+  device_delay = get_io_interval(this->time_log_.return_ts_, this->time_log_.submit_ts_);
+  total_delay = get_io_interval(this->time_log_.return_ts_, this->time_log_.begin_ts_);
+  return ret;
 }
 
 uint64_t ObIORequest::get_tenant_id() const
@@ -761,6 +809,7 @@ void ObIORequest::finish(const ObIORetCode &ret_code)
           tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this);
         }
         tenant_io_mgr_.get_ptr()->io_usage_.record_request_finish(*this);
+        tenant_io_mgr_.get_ptr()->io_func_infos_.accumulate(*this);
       }
       if (OB_UNLIKELY(OB_SUCCESS != ret_code_.io_ret_)) {
         OB_IO_MANAGER.get_device_health_detector().record_failure(*this);
@@ -969,7 +1018,8 @@ int ObIOHandle::wait(const int64_t timeout_ms)
     ObWaitEventGuard wait_guard(req_->io_info_.flag_.get_wait_event(),
                                 timeout_ms,
                                 req_->io_info_.size_);
-    const int64_t real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms);
+    const int64_t data_storage_timeout = OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_;
+    const int64_t real_wait_timeout = min(data_storage_timeout, timeout_ms);
 
     if (real_wait_timeout > 0) {
       ObThreadCondGuard guard(req_->cond_);
@@ -991,7 +1041,10 @@ int ObIOHandle::wait(const int64_t timeout_ms)
           LOG_WARN("fail to wait request condition due to spurious wakeup", 
               K(ret), K(wait_ms), K(*req_));
         }
-        if (OB_TIMEOUT == ret) {
+        if (OB_TIMEOUT == ret && data_storage_timeout == real_wait_timeout) {
+          ret = OB_IO_TIMEOUT;
+        }
+        if (OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) {
           OB_IO_MANAGER.get_device_health_detector().record_failure(*req_);
         }
       }
@@ -1003,7 +1056,7 @@ int ObIOHandle::wait(const int64_t timeout_ms)
     if (OB_FAIL(req_->ret_code_.io_ret_)) {
       LOG_WARN("IO error, ", K(ret), K(*req_));
     }
-  } else if (OB_TIMEOUT == ret) {
+  } else if (OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) {
     LOG_WARN("IO wait timeout", K(timeout_ms), K(ret), K(*req_));
   }
   estimate();
@@ -1517,7 +1570,8 @@ int ObMClockQueue::push_phyqueue(ObPhyQueue *phy_queue)
     if (OB_SUCCESS != tmp_ret) {
       LOG_ERROR("remove queue from reservation queue failed", K(ret));
     }
-  } 
+  }
+  LOG_DEBUG("push phy queue success", K(ret), KP(phy_queue));
   return ret;
 }
 
@@ -1620,11 +1674,13 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
   int64_t iter_count = 0;
   ObPhyQueue *tmp_phy_queue = nullptr;
   req = nullptr;
+  LOG_DEBUG("group heap size", K(gl_heap_.count()));
   while (OB_SUCC(ret) && !gl_heap_.empty() && !gl_heap_.top()->req_list_.is_empty()) {
     tmp_phy_queue = gl_heap_.top();
     deadline_ts = 0 == iter_count ? tmp_phy_queue->group_limitation_ts_ : deadline_ts;
     ++iter_count;
-    if (tmp_phy_queue->group_limitation_ts_ > current_ts) {
+    // push more phy queue to tenant heap
+    if (tmp_phy_queue->group_limitation_ts_ - POP_MORE_PHY_QUEUE_USEC > current_ts) {
       break;
     } else if (OB_FAIL(gl_heap_.pop())) {
       LOG_WARN("remove PhyQueue from c_limitation queue failed", K(ret));
@@ -1634,6 +1690,8 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
         tmp_phy_queue->is_tenant_ready_ = true;
         if (OB_FAIL(ready_heap_.push(tmp_phy_queue))) {
           LOG_WARN("push phy_queue from gl_heap to ready_heap failed", K(ret));
+        } else {
+          LOG_DEBUG("push ready heap", KP(tmp_phy_queue));
         }
       } else {
         if (OB_FAIL(tl_heap_.push(tmp_phy_queue))) {
@@ -1643,6 +1701,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
     }
   }
   iter_count = 0;
+  LOG_DEBUG("tenant heap size", K(tl_heap_.count()));
   while (OB_SUCC(ret) && !tl_heap_.empty() && !tl_heap_.top()->req_list_.is_empty()) {
     tmp_phy_queue = tl_heap_.top();
     if (0 == iter_count) {
@@ -1653,7 +1712,8 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
       }
     }
     ++iter_count;
-    if (tmp_phy_queue->tenant_limitation_ts_ > current_ts) {
+    // push more phy queue to ready heap
+    if (tmp_phy_queue->tenant_limitation_ts_ - POP_MORE_PHY_QUEUE_USEC > current_ts) {
       break;
     } else if (OB_FAIL(tl_heap_.pop())) {
       LOG_WARN("remove PhyQueue from t_limitation queue failed", K(ret));
@@ -1661,9 +1721,12 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
       tmp_phy_queue->is_tenant_ready_ = true;
       if (OB_FAIL(ready_heap_.push(tmp_phy_queue))) {
         LOG_WARN("push phy_queue from tl_heap to ready_heap failed", K(ret));
+      } else {
+        LOG_DEBUG("push ready heap", KP(tmp_phy_queue));
       }
     }
   }
+  LOG_DEBUG("ready heap size", K(ready_heap_.count()));
   if (OB_SUCC(ret) && !ready_heap_.empty()) {
     tmp_phy_queue = ready_heap_.top();
     if (OB_ISNULL(tmp_phy_queue)) {
@@ -1679,7 +1742,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
           LOG_WARN("req is null", K(ret), KP(req));
         } else {
           req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
-          LOG_DEBUG("req pop from phy queue succcess(P schedule)", KP(req), K(iter_count), "time_cost", ObTimeUtility::fast_current_time() - current_ts, K(ready_heap_.count()), K(current_ts));
+          LOG_DEBUG("req pop from phy queue succcess(P schedule)", KP(tmp_phy_queue), KP(req), K(iter_count), "time_cost", ObTimeUtility::fast_current_time() - current_ts, K(ready_heap_.count()), K(current_ts));
           if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
           } else if (OB_NOT_NULL(req->tenant_io_mgr_.get_ptr())) {

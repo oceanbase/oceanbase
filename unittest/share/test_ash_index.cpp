@@ -790,7 +790,6 @@ TEST_F(TestAshIndex, reverse_index)
   push_back_sample_time(1);
   push_back_sample_time(2);
   iter = ObActiveSessHistList::get_instance().create_reverse_iterator_no_lock();
-  LOG_INFO("[roland_debug]", K(iter));
   ASSERT_EQ(true, iter.has_next());
   ASSERT_EQ(1, iter.next().sample_time_);
   ASSERT_EQ(true, iter.has_next());

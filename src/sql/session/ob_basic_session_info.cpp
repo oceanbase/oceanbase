@@ -43,6 +43,7 @@
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ob_compatibility_control.h"
 #include "sql/ob_optimizer_trace_impl.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -161,6 +162,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       process_query_time_(0),
       last_update_tz_time_(0),
       is_client_sessid_support_(false),
+      is_feedback_proxy_info_support_(false),
       use_rich_vector_format_(false),
       is_real_inner_session_(false),
       sys_var_config_hash_val_(0)
@@ -515,6 +517,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   process_query_time_ = 0;
   last_update_tz_time_ = 0;
   is_client_sessid_support_ = false;
+  is_feedback_proxy_info_support_ = false;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -730,6 +733,7 @@ int ObBasicSessionInfo::set_user(const ObString &user_name, const ObString &host
       LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
     } else {
       user_id_ = user_id;
+      ObActiveSessionGuard::get_stat().user_id_ = get_user_id();
     }
   }
   return ret;
@@ -1507,8 +1511,9 @@ int ObBasicSessionInfo::cast_sys_variable(ObIAllocator &calc_buf,
                                        cast_ctx,
                                        value,
                                        casted_cell))) {
+        ObCStringHelper helper;
         _LOG_WARN("failed to cast object, cell=%s from_type=%s to_type=%s ret=%d ",
-                  to_cstring(value), ob_obj_type_str(value.get_type()),
+                  helper.convert(value), ob_obj_type_str(value.get_type()),
                   ob_obj_type_str(type.get_type()), ret);
       } else if (OB_FAIL(base_sys_var_alloc_.write_obj(casted_cell, &out_value))) {
         LOG_WARN("fail to store variable value", K(casted_cell), K(value), K(ret));
@@ -2175,14 +2180,41 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
   } else {
     cur_phy_plan_ = cur_phy_plan;
     plan_id_ = cur_phy_plan->get_plan_id();
-    ash_stat_.plan_id_ = plan_id_;
-    ash_stat_.plan_hash_ = plan_hash_;
     plan_hash_ = cur_phy_plan->get_plan_hash_value();
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
     sql_id_[len] = '\0';
+    ObActiveSessionGuard::get_stat().plan_id_ = plan_id_;
+    ObActiveSessionGuard::get_stat().plan_hash_ = plan_hash_;
+    MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
+        min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
   }
   return ret;
+}
+
+void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
+{
+  int ret = OB_SUCCESS;
+  ash_stat.stmt_type_ = get_stmt_type();
+  ash_stat.plan_id_ = plan_id_;
+  ash_stat.plan_hash_ = plan_hash_;
+  MEMMOVE(ash_stat.sql_id_, sql_id_,
+      min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
+  ash_stat.tenant_id_ = tenant_id_;
+  ash_stat.user_id_ = get_user_id();
+  ash_stat.session_id_ = get_sessid();
+  ash_stat.trace_id_ = get_current_trace_id();
+  ash_stat.tid_ = GETTID();
+  ash_stat.group_id_ = THIS_WORKER.get_group_id();
+}
+
+void ObBasicSessionInfo::set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
+{
+  if (OB_ISNULL(trace_id)) {
+  } else {
+    curr_trace_id_ = *trace_id;
+    ObActiveSessionGuard::get_stat().trace_id_ = curr_trace_id_;
+  }
 }
 
 void ObBasicSessionInfo::reset_cur_phy_plan_to_null()
@@ -2198,6 +2230,8 @@ void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
   } else {
     MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH);
     sql_id_[32] = '\0';
+    MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
+        min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
   }
 }
 
@@ -3823,6 +3857,12 @@ int ObBasicSessionInfo::get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mod
 int ObBasicSessionInfo::get_sql_quote_show_create(bool &sql_quote_show_create) const
 {
   return get_bool_sys_var(SYS_VAR_SQL_QUOTE_SHOW_CREATE, sql_quote_show_create);
+}
+
+int ObBasicSessionInfo::get_optimizer_cost_based_transformation(int64_t &cbqt_policy) const
+{
+  int ret = get_int64_sys_var(SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION, cbqt_policy);
+  return ret;
 }
 ////////////////////////////////////////////////////////////////
 int ObBasicSessionInfo::replace_user_variables(const ObSessionValMap &user_var_map)
@@ -6058,9 +6098,12 @@ int ObBasicSessionInfo::is_timeout(bool &is_timeout)
                                                     OB_IP_PORT_STR_BUFF))) {
         LOG_WARN("failed to get peer addr string", K(ret), K(get_peer_addr()), K(addr_buf));
       } else {
+        char time_buf_1[OB_MAX_TIME_STR_LENGTH] = {'\0'};
+        char time_buf_2[OB_MAX_TIME_STR_LENGTH] = {'\0'};
         _LOG_INFO("sessionkey %u, proxy_sessid %lu: %.*s from %s timeout: last active time=%s, cur=%s, timeout=%lds",
                   sessid_, proxy_sessid_, user_name.length(), user_name.ptr(), addr_buf,
-                  time2str(thread_data_.last_active_time_), time2str(cur_time), timeout);
+                  time2str(thread_data_.last_active_time_, time_buf_1, sizeof(time_buf_1)),
+                  time2str(cur_time, time_buf_2, sizeof(time_buf_2)), timeout);
       }
       is_timeout = true;
     }
@@ -6286,40 +6329,27 @@ int ObBasicSessionInfo::set_session_active(const ObString &label,
   return ret;
 }
 
-void ObBasicSessionInfo::setup_ash()
-{
-  ash_stat_.tenant_id_ = get_priv_tenant_id();
-  ash_stat_.user_id_ = get_user_id();
-  ash_stat_.session_id_ = get_compatibility_sessid();
-  ash_stat_.trace_id_ = get_current_trace_id();
-  ash_stat_.tid_ = GETTID();
-  ash_stat_.group_id_ = THIS_WORKER.get_group_id();
-  ash_stat_.set_retry_ash_diag_info_ptr(get_retry_info_for_update().get_query_retry_ash_diag_info_ptr());
-  ObActiveSessionGuard::setup_ash(ash_stat_);
-}
-
 int ObBasicSessionInfo::set_session_active()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(set_session_state_(QUERY_ACTIVE))) {
     LOG_WARN("fail to set session state", K(ret));
   } else {
-    setup_ash();
     thread_data_.is_request_end_ = false;
+    set_ash_stat_value(ObActiveSessionGuard::get_stat());
   }
   return ret;
 }
 
 void ObBasicSessionInfo::set_session_sleep()
 {
-  ash_stat_.accumulate_elapse_time();
   LockGuard lock_guard(thread_data_mutex_);
   int ret = OB_SUCCESS;
   set_session_state_(SESSION_SLEEP);
   thread_data_.mysql_cmd_ = obmysql::COM_SLEEP;
   thread_id_ = 0;
-  ash_stat_.end_retry_wait_event();
-  ObActiveSessionGuard::resetup_thread_local_ash();
+  ObActiveSessionGuard::get_stat().end_retry_wait_event();
+  ObActiveSessionGuard::get_stat().block_sessid_ = 0;
 }
 
 int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables)

@@ -275,6 +275,10 @@ public:
   bool is_shared_ht_;
   // record which equal cond is null safe equal
   common::ObFixedArray<bool, common::ObIAllocator> is_ns_equal_cond_;
+  ExprFixedArray adaptive_hj_scan_cols_;
+  ExprFixedArray adaptive_nlj_scan_cols_;
+  bool is_adaptive_;
+  ExprFixedArray left_join_row_;
 };
 
 // hash join has no expression result overwrite problem:
@@ -790,6 +794,8 @@ public:
   virtual int inner_drain_exch() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
+  virtual int after_by_pass_next_row() override;
+  virtual int after_by_pass_next_batch(const ObBatchRows *&batch_rows) override;
   virtual void destroy() override;
   virtual int inner_close() override;
 
@@ -1270,6 +1276,9 @@ private:
   bool skip_left_null_;
   bool skip_right_null_;
   ObChunkDatumStore::IterationAge iter_age_;
+  bool statistics_collect_done_;
+  ObStatisticsCollectorOp *statistics_collector_op_;
+  const ExprFixedArray *left_join_row_;
 };
 
 inline int ObHashJoinOp::init_mem_context(uint64_t tenant_id)

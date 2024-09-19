@@ -4,6 +4,22 @@ ob_set_subtarget(ob_share ALONE
   datum/ob_datum_funcs.cpp
   schema/ob_schema_service_sql_impl.cpp
   parameter/ob_parameter_attr.cpp
+  datum/ob_datum_funcs_compilation_0.cpp
+  datum/ob_datum_funcs_compilation_1.cpp
+  datum/ob_datum_funcs_compilation_2.cpp
+  datum/ob_datum_funcs_compilation_3.cpp
+  datum/ob_datum_funcs_compilation_4.cpp
+  datum/ob_datum_funcs_compilation_5.cpp
+  datum/ob_datum_funcs_compilation_6.cpp
+  datum/ob_datum_funcs_compilation_7.cpp
+  datum/ob_datum_funcs_compilation_8.cpp
+  datum/ob_datum_funcs_compilation_9.cpp
+  datum/ob_datum_funcs_compilation_10.cpp
+  datum/ob_datum_funcs_compilation_11.cpp
+  datum/ob_datum_funcs_compilation_12.cpp
+  datum/ob_datum_funcs_compilation_13.cpp
+  datum/ob_datum_funcs_compilation_14.cpp
+  datum/ob_datum_funcs_compilation_15.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -20,6 +36,7 @@ ob_set_subtarget(ob_share allocator
   allocator/ob_tenant_mutil_allocator.cpp
   allocator/ob_tenant_mutil_allocator_mgr.cpp
   allocator/ob_tx_data_allocator.cpp
+  allocator/ob_lob_ext_info_log_allocator.cpp
 )
 
 ob_set_subtarget(ob_share backup
@@ -185,6 +202,7 @@ ob_set_subtarget(ob_share common
   ob_storage_ha_diagnose_operator.cpp
   ob_service_name_proxy.cpp
   ob_compatibility_control.cpp
+  ob_device_credential_task.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -277,11 +295,15 @@ ob_set_subtarget(ob_share common_mixed
   ash/ob_active_sess_hist_list.cpp
   ash/ob_active_sess_hist_task.cpp
   ash/ob_ash_refresh_task.cpp
+  ash/ob_di_util.cpp
   throttle/ob_throttle_common.cpp
   index_usage/ob_index_usage_info_mgr.cpp
   index_usage/ob_index_usage_report_task.cpp
-  table/ob_redis_parser.cpp
-  table/ob_redis_common.cpp
+  table/redis/ob_redis_parser.cpp
+  table/redis/ob_redis_common.cpp
+  table/redis/ob_redis_util.cpp
+  table/redis/ob_redis_error.cpp
+  table/ob_redis_importer.cpp
 )
 
 ob_set_subtarget(ob_share tablet

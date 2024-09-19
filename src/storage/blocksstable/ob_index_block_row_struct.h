@@ -379,7 +379,8 @@ public:
       uint16_t is_right_border_ : 1;
       uint16_t can_blockscan_ : 1;
       uint16_t is_filter_applied_ : 1;
-      uint16_t reserved_ : 11;
+      uint16_t is_rowkey_begin_idx_overlap_ : 1;
+      uint16_t reserved_ : 10;
     };
   };
   int64_t range_idx_;

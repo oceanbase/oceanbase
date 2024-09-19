@@ -106,7 +106,7 @@ enum JoinFilterSharedType
   SHARED_PARTITION_JOIN_FILTER, // bc2host
   NONSHARED_PARTITION_JOIN_FILTER, // except bc2host
 };
-enum ObStatCollectorType
+enum ObPxObjectSampleType
 {
   NOT_INIT_TYPE,
   SAMPLE_SORT,

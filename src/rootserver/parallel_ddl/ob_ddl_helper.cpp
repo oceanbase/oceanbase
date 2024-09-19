@@ -460,7 +460,7 @@ int ObDDLHelper::lock_objects_in_map_(
         } else {
           transaction::tablelock::ObLockObjRequest lock_arg;
           lock_arg.obj_type_ = obj_type;
-          lock_arg.owner_id_ = ObTableLockOwnerID(0);
+          lock_arg.owner_id_.set_default();
           lock_arg.obj_id_ = it->get_obj_id();
           lock_arg.lock_mode_ = it->get_lock_mode();
           lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
@@ -718,17 +718,22 @@ int ObDDLHelper::obj_lock_with_lock_id_(
     LOG_WARN("trans conn is NULL", KR(ret));
   } else {
     ObTimeoutCtx ctx;
-    transaction::tablelock::ObLockObjRequest lock_arg;
-    lock_arg.obj_type_ = obj_type;
-    lock_arg.owner_id_ = ObTableLockOwnerID(0);
-    lock_arg.obj_id_ = obj_id;
-    lock_arg.lock_mode_ = lock_mode;
-    lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
-    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
-      LOG_WARN("fail to set timeout ctx", KR(ret));
-    } else if (FALSE_IT(lock_arg.timeout_us_ = ctx.get_timeout())) {
-    } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
-      LOG_WARN("lock obj failed", KR(ret), K(tenant_id), K(lock_arg));
+    ObTableLockOwnerID owner_id;
+    if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 0))) {
+      LOG_WARN("owner_id convert from value failed", K(ret));
+    } else {
+      transaction::tablelock::ObLockObjRequest lock_arg;
+      lock_arg.obj_type_ = obj_type;
+      lock_arg.owner_id_ = owner_id;
+      lock_arg.obj_id_ = obj_id;
+      lock_arg.lock_mode_ = lock_mode;
+      lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
+      if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+        LOG_WARN("fail to set timeout ctx", KR(ret));
+      } else if (FALSE_IT(lock_arg.timeout_us_ = ctx.get_timeout())) {
+      } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
+        LOG_WARN("lock obj failed", KR(ret), K(tenant_id), K(lock_arg));
+      }
     }
   }
   return ret;

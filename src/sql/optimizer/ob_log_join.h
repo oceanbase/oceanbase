@@ -43,7 +43,9 @@ namespace sql
         connect_by_extra_exprs_(),
         enable_px_batch_rescan_(false),
         can_use_batch_nlj_(false),
-        join_path_(nullptr)
+        join_path_(nullptr),
+        is_adaptive_(false),
+        adaptive_dist_algo_(DistAlgo::DIST_INVALID_METHOD)
     { }
     virtual ~ObLogJoin() {}
 
@@ -60,8 +62,11 @@ namespace sql
     inline bool is_cartesian() const { return join_conditions_.empty() && join_filters_.empty() &&
                                               nl_params_.empty() && filter_exprs_.empty(); }
     inline DistAlgo get_dist_method() const { return join_dist_algo_; }
-    inline bool is_shared_hash_join() const
-    { return HASH_JOIN == join_algo_ && DIST_BC2HOST_NONE == join_dist_algo_; }
+    inline DistAlgo get_adaptive_dist_method() const { return adaptive_dist_algo_; }
+    inline DistAlgo get_real_dist_method() const {
+      return is_adaptive_ ? adaptive_dist_algo_ : join_dist_algo_;
+    }
+    bool is_shared_hash_join();
     int is_left_unique(bool &left_unique) const;
     inline int add_join_condition(ObRawExpr *expr) { return join_conditions_.push_back(expr); }
     inline int add_join_filter(ObRawExpr *expr) { return join_filters_.push_back(expr); }
@@ -156,8 +161,9 @@ namespace sql
 
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
-    int check_and_set_use_batch();
-    int check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj);
+    inline bool is_adaptive() const { return is_adaptive_; }
+    inline void set_is_adaptive(bool v) { is_adaptive_ = v; }
+    inline void set_adaptive_dist_algo(DistAlgo algo) { adaptive_dist_algo_ = algo; }
     void set_join_path(JoinPath *path) { join_path_ = path; }
     JoinPath *get_join_path() { return join_path_; }
     bool is_my_exec_expr(const ObRawExpr *expr);
@@ -166,9 +172,10 @@ namespace sql
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
     virtual int get_card_without_filter(double &card) override;
+    common::ObIArray<ObRawExpr *> &get_adaptive_hj_scan_cols() { return adaptive_hj_scan_cols_; }
+    common::ObIArray<ObRawExpr *> &get_adaptive_nlj_scan_cols() { return adaptive_nlj_scan_cols_; }
 
   private:
-    int set_use_batch(ObLogicalOperator* root);
     inline bool can_enable_gi_partition_pruning()
     {
       return (NESTED_LOOP_JOIN == join_algo_)
@@ -200,8 +207,8 @@ namespace sql
     bool find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
                            const ObRelIds &l_set,
                            const ObRelIds &r_set);
-    const ObLogicalOperator *find_child_join(const ObLogicalOperator *input_op);
-    bool is_scan_operator(log_op_def::ObLogOpType type);
+    const ObLogicalOperator *find_child_join_or_scan(const ObLogicalOperator *input_op) const;
+    bool is_scan_operator(log_op_def::ObLogOpType type) const;
     int append_used_join_hint(ObIArray<const ObHint*> &used_hints);
     int append_used_join_filter_hint(ObIArray<const ObHint*> &used_hints);
     int print_join_hint_outline(const ObDMLStmt &stmt,
@@ -209,6 +216,9 @@ namespace sql
                                 const ObString &qb_name,
                                 const ObRelIds &table_set,
                                 PlanText &plan_text);
+    int print_adaptive_mock_scan_hint_outline(const ObDMLStmt &stmt,
+                                              const ObString &qb_name,
+                                              PlanText &plan_text);
     int print_join_filter_hint_outline(const ObDMLStmt &stmt,
                                        const ObString &qb_name,
                                        const ObRelIds &left_table_set,
@@ -252,6 +262,10 @@ namespace sql
     JoinPath *join_path_;
     common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
     common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
+    bool is_adaptive_;
+    DistAlgo adaptive_dist_algo_;
+    common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> adaptive_hj_scan_cols_;
+    common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> adaptive_nlj_scan_cols_;
 
     DISALLOW_COPY_AND_ASSIGN(ObLogJoin);
   };

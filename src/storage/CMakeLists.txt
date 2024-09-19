@@ -437,6 +437,7 @@ ob_set_subtarget(ob_storage access
 ob_set_subtarget(ob_storage ddl
   ddl/ob_build_index_task.cpp
   ddl/ob_complement_data_task.cpp
+  ddl/ob_tablet_split_task.cpp
   ddl/ob_ddl_clog.cpp
   ddl/ob_ddl_merge_task.cpp
   ddl/ob_ddl_redo_log_replayer.cpp
@@ -604,12 +605,15 @@ ob_set_subtarget(ob_storage multi_data_source
 )
 
 ob_set_subtarget(ob_storage tablelock
+  tablelock/ob_lock_executor.cpp
+  tablelock/ob_lock_func_executor.cpp
   tablelock/ob_lock_memtable.cpp
   tablelock/ob_lock_memtable_mgr.cpp
   tablelock/ob_lock_inner_connection_util.cpp
   tablelock/ob_lock_table.cpp
   tablelock/ob_lock_utils.cpp
   tablelock/ob_mem_ctx_table_lock.cpp
+  tablelock/ob_mysql_lock_table_executor.cpp
   tablelock/ob_obj_lock.cpp
   tablelock/ob_table_lock_callback.cpp
   tablelock/ob_table_lock_common.cpp
@@ -619,6 +623,7 @@ ob_set_subtarget(ob_storage tablelock
   tablelock/ob_table_lock_service.cpp
   tablelock/ob_table_lock_rpc_processor.cpp
   tablelock/ob_table_lock_rpc_client.cpp
+  tablelock/ob_table_lock_live_detector.cpp
 )
 
 ob_set_subtarget(ob_storage direct_load
@@ -712,6 +717,7 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_handler.cpp
   lob/ob_lob_meta_manager.cpp
   lob/ob_lob_retry.cpp
+  lob/ob_lob_tablet_dml.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

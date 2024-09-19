@@ -272,9 +272,10 @@ int ObCreateViewHelper::lock_and_check_view_name_()
     } else if (OB_UNLIKELY(OB_INVALID_ID != mock_table_id)) {
       if (arg_.is_alter_view_) {
         ret = OB_ERR_WRONG_OBJECT;
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-            to_cstring(database_name),
-            to_cstring(table_name), "VIEW");
+            helper.convert(database_name),
+            helper.convert(table_name), "VIEW");
         LOG_WARN("table exist", KR(ret), K_(tenant_id), K(database_id), K(table_name));
       } else {
         ret = OB_ERR_TABLE_EXIST;
@@ -291,9 +292,10 @@ int ObCreateViewHelper::lock_and_check_view_name_()
       // alter view asks for existed view
       if (arg_.is_alter_view_) {
         ret = OB_TABLE_NOT_EXIST;
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_TABLE_NOT_EXIST,
-                       to_cstring(database_name),
-                       to_cstring(table_name));
+                       helper.convert(database_name),
+                       helper.convert(table_name));
       }
     } else {
       // view should not exist when create view
@@ -313,9 +315,10 @@ int ObCreateViewHelper::lock_and_check_view_name_()
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "replace sys view when enable_sys_table_ddl is false");
       } else {
         ret = OB_ERR_WRONG_OBJECT;
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-                       to_cstring(database_name),
-                       to_cstring(table_name), "VIEW");
+                       helper.convert(database_name),
+                       helper.convert(table_name), "VIEW");
         LOG_WARN("table exist", KR(ret), K_(tenant_id), K(database_id), K(table_name));
       }
     }

@@ -1494,7 +1494,7 @@ int ObBlockManager::set_group_id(const uint64_t tenant_id)
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
   } else {
     uint64_t consumer_group_id = 0;
-    if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id, ObFunctionType::PRIO_OTHER_BACKGROUND, consumer_group_id))) {
+    if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id, ObFunctionType::PRIO_GC_MACRO_BLOCK, consumer_group_id))) {
       //function level
       LOG_WARN("fail to get group id by function", K(ret), K(tenant_id), K(consumer_group_id));
     } else if (consumer_group_id != group_id_) {
@@ -1509,6 +1509,7 @@ int ObBlockManager::set_group_id(const uint64_t tenant_id)
     if (OB_SUCC(ret)) {
       group_id_ = consumer_group_id;
       THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
+      SET_FUNCTION_TYPE(static_cast<uint8_t>(ObFunctionType::PRIO_GC_MACRO_BLOCK));
     }
   }
   return ret;

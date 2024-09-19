@@ -748,6 +748,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     dtl::ObDtlPacketEmptyProc<ObInitChannelPieceMsg> init_channel_piece_msg_proc;
     dtl::ObDtlPacketEmptyProc<ObReportingWFPieceMsg> reporting_wf_piece_msg_proc;
     dtl::ObDtlPacketEmptyProc<ObOptStatsGatherPieceMsg> opt_stats_gather_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObStatisticsCollectorPieceMsg> statistics_collector_piece_msg_proc;
 
     // 这个注册会替换掉旧的proc.
     (void)msg_loop_.clear_all_proc();
@@ -763,7 +764,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       .register_processor(rd_wf_piece_msg_proc)
       .register_processor(init_channel_piece_msg_proc)
       .register_processor(reporting_wf_piece_msg_proc)
-      .register_processor(opt_stats_gather_piece_msg_proc);
+      .register_processor(opt_stats_gather_piece_msg_proc)
+      .register_processor(statistics_collector_piece_msg_proc);
     loop.ignore_interrupt();
 
     ObPxControlChannelProc control_channels;
@@ -824,6 +826,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
           case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
           case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
           case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
+          case ObDtlMsgType::DH_STATISTICS_COLLECTOR_PIECE_MSG:
             break;
           default:
             ret = OB_ERR_UNEXPECTED;

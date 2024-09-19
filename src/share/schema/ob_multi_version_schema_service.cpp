@@ -2007,11 +2007,12 @@ int ObMultiVersionSchemaService::check_database_exist(
                                                          database_name,
                                                          exist,
                                                          &database_id))) {
+      ObCStringHelper helper;
       LOG_WARN(
           "failed to check database exist, ",
           K(tenant_id),
           "tablegroup_name",
-          to_cstring(database_name),
+          helper.convert(database_name),
           K(ret));
     }
   }
@@ -2042,11 +2043,12 @@ int ObMultiVersionSchemaService::check_tablegroup_exist(
                                                            tablegroup_name,
                                                            exist,
                                                            &tablegroup_id))) {
+      ObCStringHelper helper;
       LOG_WARN(
           "failed to check tablegroup exist, ",
           K(tenant_id),
           "tablegroup_name",
-          to_cstring(tablegroup_name),
+          helper.convert(tablegroup_name),
           K(ret));
     }
   }

@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "common/ob_smart_call.h"
 #include "sql/monitor/ob_sql_plan.h"
+#include "share/config/ob_config_helper.h"
 
 namespace oceanbase
 {
@@ -760,12 +761,24 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
 {
   bool is_valid = false;
   switch (param_type) {
-    case HIDDEN_COLUMN_VISIBLE: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case ROWSETS_ENABLED: {
+    case HIDDEN_COLUMN_VISIBLE:
+    case ROWSETS_ENABLED:
+    case ENABLE_NEWSORT:
+    case USE_PART_SORT_MGB:
+    case USE_DEFAULT_OPT_STAT:
+    case ENABLE_IN_RANGE_OPTIMIZATION:
+    case XSOLAPI_GENERATE_WITH_CLAUSE:
+    case _ENABLE_STORAGE_CARDINALITY_ESTIMATION:
+    case PRESERVE_ORDER_FOR_PAGINATION:
+    case HASH_JOIN_ENABLED:
+    case OPTIMIZER_SORTMERGE_JOIN_ENABLED:
+    case NESTED_LOOP_JOIN_ENABLED:
+    case ENABLE_RANGE_EXTRACTION_FOR_NOT_IN:
+    case OPTIMIZER_SKIP_SCAN_ENABLED:
+    case OPTIMIZER_BETTER_INLIST_COSTING:
+    case OPTIMIZER_GROUP_BY_PLACEMENT:
+    case ENABLE_SPF_BATCH_RESCAN:
+    case NLJ_BATCHING_ENABLED: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -774,52 +787,26 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 <= val.get_int() && 65535 >= val.get_int());
       break;
     }
+    case OPTIMIZER_INDEX_COST_ADJ:
+    case BLOOM_FILTER_RATIO: {
+      is_valid = val.is_int() && (0 <= val.get_int() && 100 >= val.get_int());
+      break;
+    }
+    case WITH_SUBQUERY: {
+      is_valid = val.is_int() && (0 <= val.get_int() && 2 >= val.get_int());
+      break;
+    }
     case DDL_EXECUTION_ID: {
       is_valid = val.is_int() && (0 <= val.get_int());
       break;
     }
-    case DDL_TASK_ID: {
-      is_valid = val.is_int() && (0 < val.get_int());
-      break;
-    }
-    case ENABLE_NEWSORT: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case USE_PART_SORT_MGB: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case USE_DEFAULT_OPT_STAT: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case ENABLE_IN_RANGE_OPTIMIZATION: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case XSOLAPI_GENERATE_WITH_CLAUSE: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case _ENABLE_STORAGE_CARDINALITY_ESTIMATION: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
+    case DDL_TASK_ID:
     case INLIST_REWRITE_THRESHOLD: {
       is_valid = val.is_int() && (0 < val.get_int());
       break;
     }
-    case PRESERVE_ORDER_FOR_PAGINATION: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
+    case OPTIMIZER_COST_BASED_TRANSFORMATION: {
+      is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 2);
     }
     case CORRELATION_FOR_CARDINALITY_ESTIMATION:
     case CARDINALITY_ESTIMATION_MODEL: {
@@ -829,6 +816,18 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
         int64_t type = OB_INVALID_ID;
         ObSysVarCardinalityEstimationModel sv;
         is_valid = (OB_SUCCESS == sv.find_type(val.get_varchar(), type));
+      }
+      break;
+    }
+    case RUNTIME_FILTER_TYPE: {
+      is_valid = false;
+      if (!val.is_varchar()) {
+        // do nothing
+      } else {
+        ObString str_val = val.get_varchar();
+        int64_t rf_type = ObConfigRuntimeFilterChecker::get_runtime_filter_type(str_val.ptr(),
+                                                                                str_val.length());
+        is_valid = rf_type >= 0;
       }
       break;
     }
@@ -894,7 +893,7 @@ int ObOptParamHint::get_bool_opt_param(const OptParamType param_type, bool &val,
   is_exists = false;
   ObObj obj;
   if (OB_FAIL(get_opt_param(param_type, obj))) {
-    LOG_WARN("fail to get rowsets_enabled opt_param", K(ret));
+    LOG_WARN("fail to get bool opt_param", K(ret));
   } else if (obj.is_nop_value()) {
     // do nothing
   } else if (!obj.is_varchar()) {
@@ -913,12 +912,13 @@ int ObOptParamHint::get_bool_opt_param(const OptParamType param_type, bool &val)
   return get_bool_opt_param(param_type, val, is_exists);
 }
 
-int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t &val) const
+int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const
 {
   int ret = OB_SUCCESS;
+  is_exists = false;
   ObObj obj;
   if (OB_FAIL(get_opt_param(param_type, obj))) {
-    LOG_WARN("fail to get rowsets_enabled opt_param", K(ret));
+    LOG_WARN("fail to get integer opt_param", K(ret));
   } else if (obj.is_nop_value()) {
     // do nothing
   } else if (!obj.is_int()) {
@@ -926,6 +926,32 @@ int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t
     LOG_WARN("param obj is invalid", K(ret), K(obj));
   } else {
     val = obj.get_int();
+    is_exists = true;
+  }
+  return ret;
+}
+
+int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t &val) const
+{
+  bool is_exists = false;
+  return get_integer_opt_param(param_type, val, is_exists);
+}
+
+int ObOptParamHint::get_opt_param_runtime_filter_type(int64_t &rf_type) const
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  if (OB_FAIL(get_opt_param(OptParamType::RUNTIME_FILTER_TYPE, obj))) {
+    LOG_WARN("fail to get runtime filter opt param", K(ret));
+  } else if (obj.is_nop_value()) {
+    // do nothing
+  } else if (!obj.is_varchar()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("runtime filter opt param obj is invalid", K(ret), K(obj));
+  } else {
+    ObString str_val = obj.get_varchar();
+    rf_type = ObConfigRuntimeFilterChecker::get_runtime_filter_type(str_val.ptr(),
+                                                                    str_val.length());
   }
   return ret;
 }
@@ -1065,17 +1091,18 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_JOIN_FIRST_UNNEST:           return T_JOIN_FIRST_UNNEST;
     case T_NO_DECORRELATE :       return T_DECORRELATE;
     case T_NO_COALESCE_AGGR:      return T_COALESCE_AGGR;
+    case T_NO_USE_LATE_MATERIALIZATION: return T_USE_LATE_MATERIALIZATION;
 
     // optimize hint
     case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
     case T_ORDERED:             return T_LEADING;
     case T_NO_USE_MERGE:        return T_USE_MERGE;
     case T_NO_USE_HASH:         return T_USE_HASH;
+    case T_NO_USE_ADAPTIVE:     return T_USE_ADAPTIVE;
     case T_NO_USE_NL:           return T_USE_NL;
     case T_NO_USE_NL_MATERIALIZATION:  return T_USE_NL_MATERIALIZATION;
     case T_NO_PX_JOIN_FILTER:   return T_PX_JOIN_FILTER;
     case T_NO_PX_PART_JOIN_FILTER:      return T_PX_PART_JOIN_FILTER;
-    case T_NO_USE_LATE_MATERIALIZATION: return T_USE_LATE_MATERIALIZATION;
     case T_NO_USE_HASH_AGGREGATE:       return T_USE_HASH_AGGREGATE;
     case T_NO_GBY_PUSHDOWN:      return T_GBY_PUSHDOWN;
     case T_NO_USE_HASH_DISTINCT: return T_USE_HASH_DISTINCT;
@@ -1122,6 +1149,8 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_JOIN_FIRST_UNNEST:           return is_enable_hint ? "JOIN_FIRST_UNNEST" : "NO_JOIN_FIRST_UNNEST";
     case T_DECORRELATE :        return is_enable_hint ? "DECORRELATE" : "NO_DECORRELATE";
     case T_COALESCE_AGGR:       return is_enable_hint ? "COALESCE_AGGR" : "NO_COALESCE_AGGR";
+    case T_USE_LATE_MATERIALIZATION:   return is_enable_hint ? "USE_LATE_MATERIALIZATION"
+                                                          : "NO_USE_LATE_MATERIALIZATION";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";
@@ -1133,6 +1162,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_LEADING:             return is_enable_hint ? "LEADING" : "ORDERED";
     case T_USE_MERGE:           return is_enable_hint ? "USE_MERGE" : "NO_USE_MERGE";
     case T_USE_HASH:            return is_enable_hint ? "USE_HASH" : "NO_USE_HASH";
+    case T_USE_ADAPTIVE:        return is_enable_hint ? "USE_ADAPTIVE" : "NO_USE_ADAPTIVE";
     case T_USE_NL:              return is_enable_hint ? "USE_NL" : "NO_USE_NL";
     case T_USE_NL_MATERIALIZATION:     return is_enable_hint ? "USE_NL_MATERIALIZATION"
                                                              : "NO_USE_NL_MATERIALIZATION";
@@ -1141,8 +1171,6 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PQ_DISTRIBUTE:       return "PQ_DISTRIBUTE";
     case T_PQ_MAP:              return "PQ_MAP";
     case T_PQ_SET:              return "PQ_SET";
-    case T_USE_LATE_MATERIALIZATION:   return is_enable_hint ? "USE_LATE_MATERIALIZATION"
-                                                             : "NO_USE_LATE_MATERIALIZATION";
     case T_USE_HASH_AGGREGATE:       return is_enable_hint ? "USE_HASH_AGGREGATION"
                                                            : "NO_USE_HASH_AGGREGATION";
     case T_TABLE_PARALLEL:      return "PARALLEL";
@@ -2098,6 +2126,8 @@ int ObJoinHint::assign(const ObJoinHint &other)
     LOG_WARN("fail to assign table", K(ret));
   } else if (OB_FAIL(ObOptHint::assign(other))) {
     LOG_WARN("fail to assign hint", K(ret));
+  } else if (OB_FAIL(aj_table_hints_.assign(other.aj_table_hints_))) {
+    LOG_WARN("fail to assign adaptive join table hints", K(ret));
   }
   return ret;
 }
@@ -2121,6 +2151,17 @@ int ObJoinHint::print_hint_desc(PlanText &plan_text) const
   } else if (T_PQ_DISTRIBUTE == hint_type_ && NULL != algo_str
              && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("failed to print dist algo", K(ret));
+  } else if (hint_type_ == T_USE_ADAPTIVE && aj_table_hints_.count() > 0) {
+    bool is_oneline = plan_text.is_oneline_;
+    plan_text.is_oneline_ = true;
+    for (int64_t i = 0; i < aj_table_hints_.count() && OB_SUCC(ret); i++) {
+      if (OB_NOT_NULL(aj_table_hints_.at(i))) {
+        if (OB_FAIL(aj_table_hints_.at(i)->print_hint(plan_text))) {
+          LOG_WARN("print hint failed", K(ret), KPC(aj_table_hints_.at(i)));
+        }
+      }
+    }
+    plan_text.is_oneline_ = is_oneline;
   }
   return ret;
 }
@@ -2130,13 +2171,16 @@ bool ObJoinHint::is_match_local_algo(JoinAlgo join_algo) const
   bool bret = false;
   if (NESTED_LOOP_JOIN == join_algo) {
     bret = is_enable_hint() ? T_USE_NL == hint_type_
-                            : (T_USE_HASH == hint_type_ || T_USE_MERGE == hint_type_);
+                            : (T_USE_HASH == hint_type_ || T_USE_MERGE == hint_type_ || T_USE_ADAPTIVE == hint_type_);
   } else if (HASH_JOIN == join_algo) {
     bret = is_enable_hint() ? T_USE_HASH == hint_type_
-                            : (T_USE_NL == hint_type_ || T_USE_MERGE == hint_type_);
+                            : (T_USE_NL == hint_type_ || T_USE_MERGE == hint_type_ || T_USE_ADAPTIVE == hint_type_);
   } else if (MERGE_JOIN == join_algo) {
     bret = is_enable_hint() ? T_USE_MERGE == hint_type_
-                            : (T_USE_HASH == hint_type_ || T_USE_NL == hint_type_);
+                            : (T_USE_HASH == hint_type_ || T_USE_NL == hint_type_ || T_USE_ADAPTIVE == hint_type_);
+  } else if (ADAPTIVE_JOIN == join_algo) {
+    bret = is_enable_hint() ? T_USE_ADAPTIVE == hint_type_
+                            : (T_USE_HASH == hint_type_ || T_USE_NL == hint_type_ || T_USE_MERGE == hint_type_);
   }
   return bret;
 }
@@ -3041,6 +3085,30 @@ int ObTableDynamicSamplingHint::print_hint_desc(PlanText &plan_text) const
     LOG_WARN("fail to print dynamic sampling sample percent", K(ret));
   }
   return ret;
+}
+
+bool ObIndexHint::is_match_index(const ObCollationType cs_type,
+                                 const TableItem &ref_table,
+                                 const ObTableSchema &index_schema) const
+{
+  bool match = false;
+  int ret = OB_SUCCESS;
+  ObString table_name;
+  ObString index_name;
+  if (OB_UNLIKELY(!index_schema.is_index_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected param", K(ret));
+  } else if (!table_.is_match_table_item(cs_type, ref_table)) {
+    /* do nothing */
+  } else if (OB_FAIL(index_schema.get_index_name(index_name))) {
+    LOG_WARN("failed to get index name", K(ret));
+  } else {
+    match = 0 == ObCharset::strcmp(cs_type, index_name_, index_name) ? true : false;
+  }
+  if (OB_FAIL(ret)) {
+    match = false;
+  }
+  return match;
 }
 
 }//end of namespace sql

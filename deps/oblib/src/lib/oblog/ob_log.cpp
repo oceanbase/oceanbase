@@ -51,7 +51,6 @@ const char* __attribute__((weak)) ob_strerror(const int oberr)
   const char* ret = "ob_strerror";
   return ret;
 }
-_RLOCAL(ByteBuf<ObLogger::LOCAL_BUF_SIZE>, ObLogger::local_buf_);
 extern void update_easy_log_level();
 lib::ObRateLimiter *ObLogger::default_log_limiter_ = nullptr;
 _RLOCAL(lib::ObRateLimiter*, ObLogger::tl_log_limiter_);
@@ -236,7 +235,7 @@ int ObLogIdLevelMap::set_level(const uint64_t par_mod_id, const uint64_t sub_mod
 ObLogNameIdMap::ObLogNameIdMap()
 {
   for (uint64_t par_index = 0; par_index < MAX_PAR_MOD_SIZE; ++par_index) {
-    for (uint64_t sub_index = 0; sub_index < MAX_SUB_MOD_SIZE; ++sub_index) {
+    for (uint64_t sub_index = 0; sub_index < MAX_SUB_MOD_SIZE + 1; ++sub_index) {
       name_id_map_[par_index][sub_index] = NULL;
     }
   }
@@ -475,11 +474,10 @@ void ObLogger::print_trace_buffer(const char* mod_name,
                                   const uint64_t location_hash_val)
 {
   TraceBuffer *tb = get_trace_buffer();
-  if (tb->get_pos() > 0) {
+  if (nullptr != tb && tb->get_pos() > 0) {
     auto &&log_data_func = [&](char *buf, const int64_t buf_len, int64_t &pos) {
                              int64_t len = min(buf_len - pos, tb->get_pos());
-                             // overlap
-                             memmove(buf, tb->buffer_, len);
+                             memcpy(buf, tb->buffer_, len);
                              pos += len;
                              return OB_SUCCESS;
     };
@@ -505,6 +503,7 @@ ObLogger::ObLogger()
     is_arb_replica_(false), new_file_info_(nullptr), info_as_wdiag_(true)
 {
   id_level_map_.set_level(OB_LOG_LEVEL_DBA_ERROR);
+  init_log_modules();
 
   (void)pthread_mutex_init(&file_size_mutex_, NULL);
   (void)pthread_mutex_init(&file_index_mutex_, NULL);
@@ -554,7 +553,16 @@ void ObLogger::destroy()
 void ObLogger::set_trace_mode(bool trace_mode)
 {
   trace_mode_ = trace_mode;
-  get_trace_buffer()->reset();
+  if (trace_mode) { // set trace_mode
+    // do nothing else
+  } else { // cancel trace_mode
+    TraceBuffer *&tb = get_trace_buffer();
+    if (nullptr != tb) {
+      tb->~TraceBuffer();
+      ob_free(tb);
+      tb = nullptr;
+    }
+  }
 }
 
 void ObLogger::set_log_level(const char *level, const char *wf_level, int64_t version)
@@ -641,12 +649,17 @@ void ObLogger::set_file_name(const char *filename,
   }
 }
 
-ObLogger::TraceBuffer *ObLogger::get_trace_buffer()
+ObLogger::TraceBuffer *&ObLogger::get_trace_buffer()
 {
+  void *buf = nullptr;
   RLOCAL_INLINE(TraceBuffer*, tb);
-  if (OB_UNLIKELY(NULL == tb)) {
-    STATIC_ASSERT(sizeof(TraceBuffer) <= LOCAL_BUF_SIZE - LOG_ITEM_SIZE, "check sizeof TraceBuffer failed");
-    tb = new (&local_buf_[0] + LOG_ITEM_SIZE) TraceBuffer(); /* LOG_ITEM_SIZE is reserved for ObPlogitem */
+  if (OB_UNLIKELY(NULL == tb && true == trace_mode_)) {
+    if (OB_ISNULL(buf = ob_malloc(sizeof(TraceBuffer), "TraceBuffer"))) {
+      LOG_STDERR("alloc failed");
+    } else {
+      tb = new (buf) TraceBuffer();
+      tb->reset();
+    }
   }
   return tb;
 }
@@ -732,6 +745,7 @@ int ObLogger::log_head(const int64_t ts,
     char errcode_buf[errcode_buf_size];
     errcode_buf[0] = '\0';
     ObPLogFDType log_type = get_fd_type(mod_name, level, dba_event);
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     if (log_type == FD_ALERT_FILE) {
       dba_event = dba_event == nullptr ? "none" : dba_event;
       ret = logdata_printf(buf, buf_len, pos,
@@ -739,7 +753,8 @@ int ObLogger::log_head(const int64_t ts,
                            "|%s|%s|%s|%d|%lu|%ld|%s|%s|%s|%s:%d|",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, dba_event, errcode,
-                           GET_TENANT_ID(), GETTID(), GETTNAME(), ObCurTraceId::get_trace_id_str(),
+                           GET_TENANT_ID(), GETTID(), GETTNAME(),
+                           ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                            function, base_file_name, line);
     } else {
       if (level == OB_LOG_LEVEL_DBA_ERROR
@@ -754,7 +769,8 @@ int ObLogger::log_head(const int64_t ts,
                              "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
                              "[%ld][%s][T%lu][%s] ",
                              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
-                             tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), ObCurTraceId::get_trace_id_str());
+                             tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(),
+                             ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)));
       } else {
         constexpr int cluster_id_buf_len = 8;
         char cluster_id_buf[cluster_id_buf_len] = {'\0'};
@@ -765,7 +781,8 @@ int ObLogger::log_head(const int64_t ts,
                              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                              tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
                              base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
-                             is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), ObCurTraceId::get_trace_id_str(),
+                             is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(),
+                             ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                              last_logging_cost_time_us_, errcode_buf);
       }
     }
@@ -1513,16 +1530,12 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
                   "observer syslog service init begin.");
 
   static const char *thread_name = "OB_PLOG";
-  void *buf = nullptr;
   if (OB_UNLIKELY(is_inited())) {
     ret = OB_INIT_TWICE;
     LOG_STDERR("ObLogger has inited twice");
   } else if (OB_UNLIKELY(!log_cfg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_STDERR("log_cfg is not valid");
-  } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObBlockAllocMgr) + sizeof(ObVSliceAlloc) + sizeof(ObFIFOAllocator), "LoggerAlloc"))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_STDERR("alloc failed");
   } else {
     for (int i = 0; i < ARRAYSIZEOF(per_log_limiters_); i++) {
       new (&per_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
@@ -1530,27 +1543,7 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     for (int i = 0; i < ARRAYSIZEOF(per_error_log_limiters_); i++) {
       new (&per_error_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
     }
-    const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 8; // 256M
-    log_mem_limiter_ = new (buf) ObBlockAllocMgr(limit);
-    allocator_ = new (log_mem_limiter_ + 1) ObVSliceAlloc();
-    error_allocator_ = new (allocator_ + 1) ObFIFOAllocator(OB_SERVER_TENANT_ID, false);
-    if (OB_FAIL(allocator_->init(OB_MALLOC_BIG_BLOCK_SIZE,
-                                 *log_mem_limiter_,
-                                 SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "Logger",
-                                                common::ObCtxIds::LOGGER_CTX_ID))))) {
-      LOG_STDERR("init fifo error. ret=%d\n", ret);
-    } else if (OB_FAIL(error_allocator_->init(lib::ObMallocAllocator::get_instance(),
-                                              OB_MALLOC_BIG_BLOCK_SIZE,
-                                              SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "ErrorLogger",
-                                                             common::ObCtxIds::LOGGER_CTX_ID)),
-                                              ERROR_LOG_INIT_MEM,
-                                              ERROR_LOG_INIT_MEM << 1,
-                                              limit))) {
-      LOG_STDERR("init error_fifo error. ret=%d\n", ret);
-    }
     if (OB_SUCC(ret)) {
-      allocator_->set_limit(limit);
-      allocator_->set_nway(8);
       if (OB_FAIL(ObBaseLogWriter::init(log_cfg, thread_name))) {
         LOG_STDERR("init ObBaseLogWriter error. ret=%d\n", ret);
       } else if (OB_FAIL(ObBaseLogWriter::start())) {
@@ -1565,21 +1558,6 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
                      DBA_STEP_INC_INFO(server_start),
                      "observer syslog service init fail. "
                      "you may find solutions in previous error logs or seek help from official technicians.");
-    if (error_allocator_) {
-      error_allocator_->~ObFIFOAllocator();
-      error_allocator_ = nullptr;
-    }
-    if (allocator_) {
-      allocator_->~ObVSliceAlloc();
-      allocator_ = nullptr;
-    }
-    if (log_mem_limiter_) {
-      log_mem_limiter_->~ObBlockAllocMgr();
-      log_mem_limiter_ = nullptr;
-    }
-    if (buf) {
-      ob_free(buf);
-    }
     destroy();
   } else {
     LOG_DBA_INFO_V2(OB_SERVER_SYSLOG_SERVICE_INIT_SUCCESS,
@@ -2045,7 +2023,97 @@ bool ObLogger::need_to_print_dba(const int32_t level, bool force)
   return need_to_print;
 }
 
-}
+void ObLogger::init_log_modules()
+{
+#define LOG_PAR_MOD_BEGIN
+#define DEFINE_LOG_PAR_MOD(ModName) register_mod(OB_LOG_ROOT::M_##ModName, #ModName);
+#define LOG_PAR_MOD_END
+#define LOG_SUB_MOD_BEGIN(ModName)
+#define DEFINE_LOG_SUB_MOD(ModName)
+#define LOG_SUB_MOD_END(ModName)
+#include "lib/oblog/ob_log_module.ipp"
+#undef LOG_PAR_MOD_BEGIN
+#undef DEFINE_LOG_PAR_MOD
+#undef LOG_PAR_MOD_END
+#undef LOG_SUB_MOD_BEGIN
+#undef DEFINE_LOG_SUB_MOD
+#undef LOG_SUB_MOD_END
+
+  uint64_t par_mod_id = 0;
+  uint64_t sub_mod_id = 0;
+#define LOG_PAR_MOD_BEGIN
+#define DEFINE_LOG_PAR_MOD(ModName)
+#define LOG_PAR_MOD_END
+#define LOG_SUB_MOD_BEGIN(ModName)       \
+  par_mod_id = OB_LOG_ROOT::M_##ModName; \
+  sub_mod_id = -1;
+#define DEFINE_LOG_SUB_MOD(ModName)
+#define LOG_SUB_MOD_END(ModName)         \
+  ++sub_mod_id;                          \
+  register_mod(par_mod_id, sub_mod_id, #ModName);
+#include "lib/oblog/ob_log_module.ipp"
+#undef LOG_PAR_MOD_BEGIN
+#undef DEFINE_LOG_PAR_MOD
+#undef LOG_PAR_MOD_END
+#undef LOG_SUB_MOD_BEGIN
+#undef DEFINE_LOG_SUB_MOD
+#undef LOG_SUB_MOD_END
 }
 
-#include "ob_log_module.ipp"
+void ObLogger::init_allocator()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (OB_UNLIKELY(OB_NOT_NULL(log_mem_limiter_) || OB_NOT_NULL(allocator_) || OB_NOT_NULL(error_allocator_))) {
+    ret = OB_INIT_TWICE;
+    LOG_STDERR("allocator has been initialized before");
+  } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObBlockAllocMgr) + sizeof(ObVSliceAlloc) + sizeof(ObFIFOAllocator), "LoggerAlloc"))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_STDERR("alloc failed");
+  } else {
+    const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 8; // 256M
+    log_mem_limiter_ = new (buf) ObBlockAllocMgr(limit);
+    allocator_ = new (log_mem_limiter_ + 1) ObVSliceAlloc();
+    error_allocator_ = new (allocator_ + 1) ObFIFOAllocator(OB_SERVER_TENANT_ID, false);
+    if (OB_FAIL(allocator_->init(OB_MALLOC_BIG_BLOCK_SIZE,
+                                 *log_mem_limiter_,
+                                 SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "Logger",
+                                                common::ObCtxIds::LOGGER_CTX_ID))))) {
+      LOG_STDERR("init fifo error. ret=%d\n", ret);
+    } else if (OB_FAIL(error_allocator_->init(lib::ObMallocAllocator::get_instance(),
+                                              OB_MALLOC_BIG_BLOCK_SIZE,
+                                              SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "ErrorLogger",
+                                                             common::ObCtxIds::LOGGER_CTX_ID)),
+                                              ERROR_LOG_INIT_MEM,
+                                              ERROR_LOG_INIT_MEM << 1,
+                                              limit))) {
+      LOG_STDERR("init error_fifo error. ret=%d\n", ret);
+    }
+    if (OB_SUCC(ret)) {
+      allocator_->set_limit(limit);
+      allocator_->set_nway(8);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (error_allocator_) {
+      error_allocator_->~ObFIFOAllocator();
+      error_allocator_ = nullptr;
+    }
+    if (allocator_) {
+      allocator_->~ObVSliceAlloc();
+      allocator_ = nullptr;
+    }
+    if (log_mem_limiter_) {
+      log_mem_limiter_->~ObBlockAllocMgr();
+      log_mem_limiter_ = nullptr;
+    }
+    if (buf) {
+      ob_free(buf);
+    }
+  }
+  // if init allocator failed, abort
+  abort_unless(OB_SUCC(ret));
+}
+
+}
+}

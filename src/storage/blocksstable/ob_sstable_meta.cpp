@@ -73,11 +73,18 @@ bool ObSSTableBasicMeta::operator!=(const ObSSTableBasicMeta &other) const
 }
 bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
 {
-  // don't need to compare upper_trans_version, because meta's upper_trans_version
-  // may be different from sstable shell's
-  return version_ == other.version_
-      && length_ == other.length_
-      && row_count_ == other.row_count_
+  return use_old_macro_block_count_ == other.use_old_macro_block_count_
+      && upper_trans_version_ == other.upper_trans_version_
+      && check_basic_meta_equality(other);
+}
+
+bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &other) const
+{
+  // don't need to compare upper_trans_version and use_old_macro_block_count_
+  // 1. meta's upper_trans_version may be different from sstable shell's
+  // 2. defragmentation changes use_old_macro_block_count_
+  // 3. we can not check length_ & version_ for upgrade compatible scenario
+  return row_count_ == other.row_count_
       && occupy_size_ == other.occupy_size_
       && original_size_ == other.original_size_
       && data_checksum_ == other.data_checksum_
@@ -86,7 +93,6 @@ bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
       && column_cnt_ == other.column_cnt_
       && data_macro_block_count_ == other.data_macro_block_count_
       && data_micro_block_count_ == other.data_micro_block_count_
-      && use_old_macro_block_count_ == other.use_old_macro_block_count_
       && index_macro_block_count_ == other.index_macro_block_count_
       && sstable_format_version_ == other.sstable_format_version_
       && schema_version_ == other.schema_version_
@@ -879,11 +885,13 @@ int ObSSTableMetaChecker::check_sstable_meta_strict_equality(
     const ObSSTableMeta &new_sstable_meta)
 {
   int ret = OB_SUCCESS;
+  const ObSSTableBasicMeta &old_basic_meta = old_sstable_meta.get_basic_meta();
+  const ObSSTableBasicMeta &new_basic_meta = new_sstable_meta.get_basic_meta();
 
   if (!old_sstable_meta.is_valid() || !new_sstable_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("old sstable meta or new sstable meta is invalid", K(ret));
-  } else if (OB_UNLIKELY(old_sstable_meta.get_basic_meta() != new_sstable_meta.get_basic_meta())) {
+  } else if (OB_UNLIKELY(!old_basic_meta.check_basic_meta_equality(new_basic_meta))) {
     ret = OB_INVALID_DATA;
     LOG_WARN("new sstable basic meta is not equal to old one", K(ret));
   } else if (OB_UNLIKELY(old_sstable_meta.get_col_checksum_cnt() != new_sstable_meta.get_col_checksum_cnt())) {

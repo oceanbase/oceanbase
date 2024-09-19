@@ -191,7 +191,8 @@ int ObTableLSExecuteP::try_process()
     if (ret == OB_TABLE_NOT_EXIST) {
       ObString db("");
       const ObString &table_name = ls_op.get_table_name();
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db), to_cstring(table_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db), helper.convert(table_name));
     }
     LOG_WARN("fail to init schema info", K(ret), K(table_id));
   } else if (OB_FAIL(get_ls_id(ls_id))) {
@@ -352,19 +353,23 @@ int ObTableLSExecuteP::execute_tablet_query_and_mutate(const ObTableTabletOp &ta
   return ret;
 }
 
-int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op, ObTableTabletOpResult &tablet_result)
+int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op,
+                                                ObTableTabletOpResult &tablet_result)
 {
   int ret = OB_SUCCESS;
   if (tablet_op.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected operation count", KR(ret), K(tablet_op.count()));
   } else {
-    ObSEArray<ObTableOperation, 16> table_operations;
+    ObSEArray<ObTableOperation, 16> ops;
     SMART_VAR(ObTableBatchCtx, batch_ctx, cb_->get_allocator(), audit_ctx_) {
-      if (OB_FAIL(init_batch_ctx(batch_ctx, tablet_op, table_operations, tablet_result))) {
+      if (OB_FAIL(init_batch_ctx(batch_ctx, tablet_op, ops, tablet_result))) {
         LOG_WARN("fail to init batch ctx", K(ret));
-      } else if (OB_FAIL(ObTableBatchService::execute(batch_ctx))) {
+      } else if (OB_FAIL(ObTableBatchService::execute(batch_ctx, ops, tablet_result))) {
         LOG_WARN("fail to execute batch operation", K(ret));
+      } else if (OB_FAIL(arg_.ls_op_.return_one_result())
+          && OB_FAIL(ObTableBatchService::aggregate_one_result(tablet_result))) {
+        LOG_WARN("fail to aggregate one result", K(ret), K(tablet_result));
       } else if (OB_FAIL(add_dict_and_bm_to_result_entity(tablet_op, tablet_result))) {
         LOG_WARN("fail to add dictionary and bitmap", K(ret));
       }
@@ -375,32 +380,14 @@ int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op
   return ret;
 }
 
-int ObTableLSExecuteP::init_batch_ctx(table::ObTableBatchCtx &batch_ctx,
-                                      const table::ObTableTabletOp &tablet_op,
-                                      ObIArray<table::ObTableOperation> &table_operations,
-                                      table::ObTableTabletOpResult &tablet_result)
+int ObTableLSExecuteP::init_batch_ctx(ObTableBatchCtx &batch_ctx,
+                                      const ObTableTabletOp &tablet_op,
+                                      ObIArray<ObTableOperation> &ops,
+                                      ObTableTabletOpResult &tablet_result)
 {
   int ret = OB_SUCCESS;
-  ObTableLSOp &ls_op = arg_.ls_op_;
-  // 1. 构造batch_service需要的入参
-  batch_ctx.stat_event_type_ = &stat_event_type_;
-  batch_ctx.trans_param_ = &trans_param_;
-  batch_ctx.entity_type_ = arg_.entity_type_;
-  batch_ctx.consistency_level_ = arg_.consistency_level_;
-  batch_ctx.credential_ = &credential_;
-  batch_ctx.table_id_ = simple_table_schema_->get_table_id();
-  batch_ctx.tablet_id_ = tablet_op.get_tablet_id();
-  batch_ctx.is_atomic_ = true; /* batch atomic always true*/
-  batch_ctx.is_readonly_ = tablet_op.is_readonly();
-  batch_ctx.is_same_type_ = tablet_op.is_same_type();
-  batch_ctx.is_same_properties_names_ = tablet_op.is_same_properties_names();
-  batch_ctx.use_put_ = tablet_op.is_use_put();
-  batch_ctx.returning_affected_entity_ = tablet_op.is_returning_affected_entity();
-  batch_ctx.returning_rowkey_ = tablet_op.is_returning_rowkey();
-  batch_ctx.entity_factory_ = &cb_->get_entity_factory();
-  batch_ctx.return_one_result_ = ls_op.return_one_result();
+
   // construct batch operation
-  batch_ctx.ops_ = &table_operations;
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_op.count(); i++) {
     const ObTableSingleOp &single_op = tablet_op.at(i);
     if (single_op.get_op_type() == ObTableOperationType::CHECK_AND_INSERT_UP) {
@@ -411,29 +398,40 @@ int ObTableLSExecuteP::init_batch_ctx(table::ObTableBatchCtx &batch_ctx,
       ObTableOperation table_op;
       table_op.set_entity(single_op.get_entities().at(0));
       table_op.set_type(single_op.get_op_type());
-      if (OB_FAIL(table_operations.push_back(table_op))) {
+      if (OB_FAIL(ops.push_back(table_op))) {
         LOG_WARN("fail to push table operation", K(ret));
       }
     }
   }
-  // construct batch operation result
-  if (OB_SUCC(ret)) {
-    batch_ctx.results_ = &tablet_result;
-    batch_ctx.result_entity_ = cb_->get_entity_factory().alloc(); // only use in hbase mutation
-    if (OB_ISNULL(batch_ctx.result_entity_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memroy for result_entity", K(ret));
-    } else if (OB_FAIL(init_tb_ctx(batch_ctx.tb_ctx_, tablet_op, table_operations.at(0)))) { // init tb_ctx
-      LOG_WARN("fail to init table context", K(ret));
-    }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTableBatchService::prepare_results(ops, cb_->get_entity_factory(), tablet_result))) {
+    LOG_WARN("fail to prepare results", K(ret), K(ops));
+  } else if (OB_FAIL(batch_ctx.tablet_ids_.push_back(tablet_op.get_tablet_id()))) {
+    LOG_WARN("fail to push back tablet id", K(ret));
+  } else if (OB_FAIL(init_tb_ctx(batch_ctx.tb_ctx_, tablet_op, ops.at(0)))) { // init tb_ctx
+    LOG_WARN("fail to init table context", K(ret));
+  } else {
+    ObTableLSOp &ls_op = arg_.ls_op_;
+    batch_ctx.stat_event_type_ = &stat_event_type_;
+    batch_ctx.trans_param_ = &trans_param_;
+    batch_ctx.consistency_level_ = arg_.consistency_level_;
+    batch_ctx.credential_ = &credential_;
+    batch_ctx.is_atomic_ = true; /* batch atomic always true*/
+    batch_ctx.is_readonly_ = tablet_op.is_readonly();
+    batch_ctx.is_same_type_ = tablet_op.is_same_type();
+    batch_ctx.is_same_properties_names_ = tablet_op.is_same_properties_names();
+    batch_ctx.use_put_ = tablet_op.is_use_put();
+    batch_ctx.returning_affected_entity_ = tablet_op.is_returning_affected_entity();
+    batch_ctx.returning_rowkey_ = tablet_op.is_returning_rowkey();
   }
 
   return ret;
 }
 
-int ObTableLSExecuteP::init_tb_ctx(table::ObTableCtx &tb_ctx,
-                                   const table::ObTableTabletOp &tablet_op,
-                                   const table::ObTableOperation &table_operation)
+int ObTableLSExecuteP::init_tb_ctx(ObTableCtx &tb_ctx,
+                                   const ObTableTabletOp &tablet_op,
+                                   const ObTableOperation &table_operation)
 {
   int ret = OB_SUCCESS;
   tb_ctx.set_entity(&table_operation.entity());
@@ -525,8 +523,8 @@ int ObTableLSExecuteP::init_tb_ctx(table::ObTableCtx &tb_ctx,
   return ret;
 }
 
-int ObTableLSExecuteP::add_dict_and_bm_to_result_entity(const table::ObTableTabletOp &tablet_op,
-                                                        table::ObTableTabletOpResult &tablet_result)
+int ObTableLSExecuteP::add_dict_and_bm_to_result_entity(const ObTableTabletOp &tablet_op,
+                                                        ObTableTabletOpResult &tablet_result)
 {
   int ret = OB_SUCCESS;
   ObTableLSOp &ls_op = arg_.ls_op_;

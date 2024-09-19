@@ -123,8 +123,10 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
                  is_successfully_constructed()) {
       ret = OB_INIT_FAIL;
       DETECT_LOG(WARN, "construct ObLCLNode obj failed", KR(ret));
+      mtl_free(p_detector);
+    } else {
+      ATOMIC_INC(&create_count_);
     }
-    ATOMIC_INC(&create_count_);
   }
 
   return ret;
@@ -671,11 +673,12 @@ int ObDeadLockDetectorMgr::get_sql_history_(const ObStringHolder &sess_id,
   int ret = OB_SUCCESS;
   constexpr int64_t BUFFER_SIZE = 512;
   char condition_buffer[BUFFER_SIZE] = {0};
+  ObCStringHelper helper;
   if (OB_FAIL(databuff_printf(condition_buffer,
                               BUFFER_SIZE,
                               "where session_id = %s and transaction_id = %s order by request_time limit 128",
-                              to_cstring(sess_id),
-                              to_cstring(trans_id)))) {
+                              helper.convert(sess_id),
+                              helper.convert(trans_id)))) {
     DETECT_LOG(WARN, "fail to construct where condition", KR(ret), K(sess_id), K(trans_id));
   } else if (OB_FAIL(ObTableAccessHelper::read_multi_row(OB_SYS_TENANT_ID,
                                                          {"CAST(USEC_TO_TIME(request_time) AS CHAR(32))", "query_sql", "seq_num"},
@@ -700,11 +703,12 @@ int ObDeadLockDetectorMgr::get_holding_sql(const ObStringHolder &sess_id,
   char *sql_translate_buffer = nullptr;
   constexpr int64_t BUFFER_SIZE = 1_MB;
   int64_t pos = 0;
+  ObCStringHelper helper;
   if (OB_FAIL(databuff_printf(condition_buffer,
                               BUFFER_SIZE,
                               "where session_id = %s and transaction_id = %s and seq_num <= %ld order by seq_num desc limit 1",
-                              to_cstring(sess_id),
-                              to_cstring(trans_id),
+                              helper.convert(sess_id),
+                              helper.convert(trans_id),
                               hold_seq.get_seq()))) {
     DETECT_LOG(WARN, "fail to construct where condition", PRINT_WRAPPER);
   } else if (OB_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID,

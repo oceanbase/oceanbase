@@ -128,6 +128,8 @@ struct ObDatumPtr {
     const char *inner_enumset_;
     const ObLobCommon *lob_data_;
     const ObLobLocator *lob_locator_;
+    const ObMySQLDate *mysql_date_;
+    const ObMySQLDateTime *mysql_datetime_;
     const ObObj *extend_obj_; // for extend type
   };
 
@@ -161,6 +163,7 @@ struct ObDatumDesc {
   bool is_ext() const { return flag_ == FlagType::EXT; }
   void set_outrow() { null_ = 0; flag_ = FlagType::OUTROW; }
   bool is_outrow() const { return flag_ == FlagType::OUTROW; }
+  bool has_lob_header() const { return flag_ == FlagType::HAS_LOB_HEADER; }
 } __attribute__ ((packed)) ;
 
 // Datum structure, multiple inheritance from ObDatumPtr and ObDatumDesc makes
@@ -247,8 +250,10 @@ public:
   inline int64_t get_interval_nmonth() const { return *interval_nmonth_; }
   inline const ObIntervalDSValue &get_interval_ds() const { return *interval_ds_; }
   inline int64_t get_datetime() const { return *datetime_;  }
+  inline ObMySQLDateTime get_mysql_datetime() const { return *mysql_datetime_; }
   inline int64_t get_timestamp() const { return *datetime_;  }
   inline int32_t get_date() const { return *date_; }
+  inline ObMySQLDate get_mysql_date() const { return *mysql_date_; }
   inline int64_t get_time() const { return *time_; }
   inline uint8_t get_year() const { return *year_; }
   // for ObTimestampTZType (which is ObOTimestampTC type class)
@@ -377,6 +382,10 @@ public:
     lob_data_ = &value;
     pack_ = static_cast<uint32_t>(length);//TODO(yuanzhi.zy):need check
   }
+  inline void set_mysql_date(const ObMySQLDate v)
+  { memcpy(no_cv(ptr_), &v, sizeof(v)); pack_ = sizeof(v); }
+  inline void set_mysql_datetime(const ObMySQLDateTime v)
+  { *no_cv(mysql_datetime_) = v; pack_ = sizeof(int64_t);  }
   inline void set_datum(const ObDatum &other) { *this = other; }
   inline int64_t get_deep_copy_size() const { return is_null() ? 0 : len_; }
   inline int deep_copy(const ObDatum &src, char *buf, int64_t max_size, int64_t &pos)
@@ -500,6 +509,15 @@ template <> struct ObDatumPayload<ObBitTC>
 
 template <> struct ObDatumPayload<ObEnumSetTC>
 { static inline uint64_t get(const ObDatum &d) { return *d.uint_; } };
+
+template <> struct ObDatumPayload<ObMySQLDateTC>
+{
+  static inline int32_t get(const ObDatum &d)
+  { return *reinterpret_cast<const int32_t *>(d.ptr_); }
+};
+
+template <> struct ObDatumPayload<ObMySQLDateTimeTC>
+{ static inline int64_t get(const ObDatum &d) { return *d.int_; } };
 
 // ObEnumSetInnerTC: default implement, return ptr_
 // ObOTimestampTC: no corresponding structure defined, need interpret ptr_
@@ -833,13 +851,15 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObBitType:
       case ObEnumType:
       case ObSetType:
-      case ObIntervalYMType: {
+      case ObIntervalYMType:
+      case ObMySQLDateTimeType: {
         obj2datum<OBJ_DATUM_8BYTE_DATA>(obj);
         break;
       }
       case ObFloatType:
       case ObUFloatType:
-      case ObDateType: {
+      case ObDateType:
+      case ObMySQLDateType: {
         obj2datum<OBJ_DATUM_4BYTE_DATA>(obj);
         break;
       }
@@ -963,13 +983,15 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObBitType:
       case ObEnumType:
       case ObSetType:
-      case ObIntervalYMType: {
+      case ObIntervalYMType:
+      case ObMySQLDateTimeType: {
         datum2obj<OBJ_DATUM_8BYTE_DATA>(obj);
         break;
       }
       case ObFloatType:
       case ObUFloatType:
-      case ObDateType: {
+      case ObDateType:
+      case ObMySQLDateType: {
         datum2obj<OBJ_DATUM_4BYTE_DATA>(obj);
         break;
       }

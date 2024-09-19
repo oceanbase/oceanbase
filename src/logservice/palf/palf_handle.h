@@ -101,6 +101,7 @@ public:
   // @param[in] buffer, the start of 'buffer', must be aligned with LOG_DIO_ALIGN_SIZE.
   // @param[in] nbytes, the read size, must aligned with LOG_DIO_ALIGN_SIZE
   // @param[out] read_size, the number of bytes read return.
+  // @param[out] io_ctx, io context
   //
   // @return value
   // OB_SUCCESS.
@@ -117,7 +118,8 @@ public:
   int raw_read(const palf::LSN &lsn,
                void *buffer,
                const int64_t nbytes,
-               int64_t &read_size);
+               int64_t &read_size,
+               LogIOContext &io_ctx);
 
   // iter->next返回的是append调用写入的值，不会在返回的buf中携带Palf增加的header信息
   //           返回的值不包含未确认日志

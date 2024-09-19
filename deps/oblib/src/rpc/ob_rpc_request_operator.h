@@ -36,9 +36,7 @@ public:
   virtual void* alloc_response_buffer(ObRequest* req, int64_t size) override {
     return get_operator(req).alloc_response_buffer(req, size);
   }
-  virtual void response_result(ObRequest* req, obrpc::ObRpcPacket* pkt) override {
-    return get_operator(req).response_result(req, pkt);
-  }
+  virtual void response_result(ObRequest* req, obrpc::ObRpcPacket* pkt) override;
   virtual common::ObAddr get_peer(const ObRequest* req) override {
     return get_operator(req).get_peer(req);
   }

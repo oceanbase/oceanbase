@@ -997,7 +997,7 @@ ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     oceanbase::common::CS_TYPE_GB18030_CHINESE_CI,
     0,
     0,                                               /* number        */
-    OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM,                 /* state         */
+    OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM | OB_CS_CI,  /* state         */
     "gb18030",                                       /* cs name       */
     "gb18030_chinese_ci",                            /* name          */
     "",                                              /* comment       */
@@ -1669,7 +1669,7 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_ci =
   oceanbase::common::CS_TYPE_GB18030_2022_PINYIN_CI,
   0,
   0,
-  OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM, /* state         */
+  OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM | OB_CS_CI, /* state         */
   "gb18030_2022",                                  /* cs name       */
   "gb18030_2022_chinese_ci",                       /* name          */
   "",                                              /* comment       */
@@ -1743,7 +1743,7 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_ci =
   oceanbase::common::CS_TYPE_GB18030_2022_RADICAL_CI,
   0,
   0,
-  OB_CS_COMPILED | OB_CS_STRNXFRM,                 /* state         */
+  OB_CS_COMPILED | OB_CS_STRNXFRM | OB_CS_CI,                 /* state         */
   "gb18030_2022",                                  /* cs name       */
   "gb18030_2022_radical_ci",                       /* name          */
   "",                                              /* comment       */
@@ -1817,7 +1817,7 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_ci =
   oceanbase::common::CS_TYPE_GB18030_2022_STROKE_CI,
   0,
   0,
-  OB_CS_COMPILED | OB_CS_STRNXFRM,                 /* state         */
+  OB_CS_COMPILED | OB_CS_STRNXFRM | OB_CS_CI,                 /* state         */
   "gb18030_2022",                                  /* cs name       */
   "gb18030_2022_stroke_ci",                        /* name          */
   "",                                              /* comment       */

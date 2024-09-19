@@ -246,6 +246,12 @@ int ObDDLResolver::get_primary_key_default_value(const ObObjType type, ObObj &de
     case ObIntervalDSType:
       default_value.set_interval_ds(ObIntervalDSValue());
       break;
+    case ObMySQLDateType:
+      default_value.set_mysql_date(ObTimeConverter::MYSQL_ZERO_DATE);
+      break;
+    case ObMySQLDateTimeType:
+      default_value.set_mysql_datetime(ObTimeConverter::MYSQL_ZERO_DATETIME);
+      break;
     default:
       ret = OB_ERR_ILLEGAL_TYPE;
       SQL_RESV_LOG(WARN, "invalid  type of default value", K(type), K(ret));
@@ -372,17 +378,34 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
        */
       case T_DATE: {
         ObString time_str(static_cast<int32_t>(def_val->str_len_), def_val->str_value_);
-        int32_t time_val = 0;
         ObDateSqlMode date_sql_mode;
+        bool enable_mysql_compatible_dates = false;
+        ObCStringHelper helper;
         if (OB_ISNULL(session_info_)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "session_info_ is null", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_,
+                      enable_mysql_compatible_dates))) {
+          LOG_WARN("fail to check enable mysql compatible dates", K(ret));
         } else if (FALSE_IT(date_sql_mode.init(session_info_->get_sql_mode()))) {
-        } else if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
-          ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+        } else if (enable_mysql_compatible_dates) {
+          ObMySQLDate mdate;
+          if (OB_FAIL(ObTimeConverter::str_to_mdate(time_str, mdate, date_sql_mode))) {
+            ret = OB_ERR_WRONG_VALUE;
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
+          } else {
+            default_value.set_mysql_date(mdate);
+          }
         } else {
-          default_value.set_date(time_val);
+          int32_t time_val = 0;
+          if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
+            ret = OB_ERR_WRONG_VALUE;
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
+          } else {
+            default_value.set_date(time_val);
+          }
+        }
+        if (OB_SUCC(ret)) {
           default_value.set_scale(0);
           default_value.set_param_meta();
         }
@@ -393,7 +416,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         int64_t time_val = 0;
         if (OB_FAIL(ObTimeConverter::str_to_time(time_str, time_val, &scale))) {
           ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIME", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIME", helper.convert(time_str));
         } else {
           default_value.set_time(time_val);
           default_value.set_scale(scale);
@@ -413,7 +437,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         } else if (FALSE_IT(date_sql_mode.allow_invalid_dates_ = false)) {
         } else if (OB_FAIL(ObTimeConverter::str_to_datetime(time_str, cvrt_ctx, time_val, &scale, date_sql_mode))) {
           ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", helper.convert(time_str));
         } else {
           default_value.set_datetime(time_val);
           default_value.set_scale(scale);
@@ -429,7 +454,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         //if (OB_FAIL(ObTimeConverter::str_to_otimestamp(time_str, cvrt_ctx, tmp_type, ot_data))) {
         if (OB_FAIL(ObTimeConverter::literal_timestamp_validate_oracle(time_str, cvrt_ctx, value_type, tz_value))) {
           ret = OB_INVALID_DATE_VALUE;
-          LOG_USER_ERROR(OB_INVALID_DATE_VALUE, 9, "TIMESTAMP", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_INVALID_DATE_VALUE, 9, "TIMESTAMP", helper.convert(time_str));
         } else {
           /* use max scale bug:#18093350 */
           default_value.set_otimestamp_value(value_type, tz_value);
@@ -444,7 +470,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_info_), false);
         if (OB_FAIL(ObTimeConverter::literal_date_validate_oracle(time_str, cvrt_ctx, time_val))) {
           ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
         } else {
           default_value.set_datetime(time_val);
           default_value.set_scale(OB_MAX_DATE_PRECISION);
@@ -757,7 +784,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
     default_value.set_param_meta();
   }
   if (OB_SUCC(ret)) {
-    _OB_LOG(DEBUG, "resolve default value: %s", to_cstring(default_value));
+    ObCStringHelper helper;
+    _OB_LOG(DEBUG, "resolve default value: %s", helper.convert(default_value));
   }
   return ret;
 }
@@ -1234,7 +1262,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             //do nothing
           } else if (OB_ISNULL(find_compress_name)) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, to_cstring(compress_method_));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, helper.convert(compress_method_));
           } else if (OB_FAIL(ob_write_string(*allocator_, find_compress_name, compress_method_))) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "write string failed", K(ret));
@@ -2452,15 +2481,14 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           } else {
             ObRawExpr *expr = NULL;
             ObString tmp_str;
-            int32_t max_versions = 0;
-            int32_t time_to_live = 0;
+            ObKVAttr attr; // used for check validity
             tmp_str.assign_ptr(const_cast<char *>(option_node->children_[0]->str_value_),
                                   static_cast<int32_t>(option_node->children_[0]->str_len_));
             LOG_INFO("resolve kv attributes", K(tmp_str));
             if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
                           *allocator_, session_info_->get_dtc_params(), tmp_str))) {
               LOG_WARN("fail to convert comment to utf8", K(ret));
-            } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tmp_str, max_versions, time_to_live))) {
+            } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tmp_str, attr))) {
               LOG_WARN("fail to parse kv attributes", K(ret));
             } else if (OB_FAIL(ob_write_string(*allocator_, tmp_str, kv_attributes_))) {
               SQL_RESV_LOG(WARN, "write string failed", K(ret));
@@ -2937,13 +2965,18 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         TENANT_CONF(session_info_->get_effective_tenant_id()));
     bool convert_real_to_decimal =
         (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
-    if (OB_FAIL(ObResolverUtils::resolve_data_type(*type_node,
+    bool enable_mysql_compatible_dates = false;
+    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_,
+                              enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_data_type(*type_node,
                                                    column.get_column_name_str(),
                                                    data_type,
                                                    (OB_NOT_NULL(session_info_) && is_oracle_mode()),
                                                    false,
                                                    session_info_->get_session_nls_params(),
                                                    session_info_->get_effective_tenant_id(),
+                                                   enable_mysql_compatible_dates,
                                                    convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret), K(column.get_column_name_str()));
     } else if (ObExtendType == data_type.get_obj_type()) {
@@ -3435,7 +3468,9 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
         SQL_RESV_LOG(WARN, "Illegal type of default value",K(ret));
       }
     } else if (IS_DEFAULT_NOW_OBJ(default_value)) {
-      if ((ObDateTimeTC != column.get_data_type_class() && ObOTimestampTC != column.get_data_type_class())
+      if ((ObDateTimeTC != column.get_data_type_class() &&
+             ObOTimestampTC != column.get_data_type_class() &&
+             ObMySQLDateTimeTC != column.get_data_type_class())
           || default_value.get_scale() != column.get_accuracy().get_scale()) {
         ret = OB_INVALID_DEFAULT;
         LOG_USER_ERROR(OB_INVALID_DEFAULT, column.get_column_name_str().length(),
@@ -3669,7 +3704,8 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         break;
       }
       case T_ON_UPDATE:
-        if (ObDateTimeType == column.get_data_type() || ObTimestampType == column.get_data_type()) {
+        if (ObDateTimeType == column.get_data_type() || ObTimestampType == column.get_data_type()
+            || ObMySQLDateTimeType == column.get_data_type()) {
           if (T_FUN_SYS_CUR_TIMESTAMP != attr_node->children_[0]->type_) {
             ret = OB_ERR_PARSER_SYNTAX;
             SQL_RESV_LOG(WARN, "on_update attribute can only be timestamp or synonyms type",
@@ -4688,7 +4724,8 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
         LOG_WARN("fail to cast enum or set default value", K(default_value), K(column_schema), K(ret));
       }
     } else if (IS_DEFAULT_NOW_OBJ(default_value)) {
-      if (ObDateTimeTC == column_schema.get_data_type_class()) {
+      if (ObDateTimeTC == column_schema.get_data_type_class() ||
+            ObMySQLDateTimeTC == column_schema.get_data_type_class()) {
         if (OB_FAIL(column_schema.set_cur_default_value(
                 default_value, column_schema.is_default_expr_v2_column()))) {
           SQL_RESV_LOG(WARN, "set current default value failed", K(ret));
@@ -6214,6 +6251,16 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
         }
         break;
       }
+      case ObMySQLDateTimeType: {
+        ObMySQLDateTime mdt_value = 0;
+        if (OB_FAIL(ObTimeConverter::timestamp_to_mdatetime(cur_time, tz_info_wrap.get_time_zone_info(), mdt_value))) {
+          LOG_WARN("failed to convert timestamp to datetime", K(ret));
+        } else {
+          ObTimeConverter::round_mdatetime(column.get_data_scale(), mdt_value);
+          default_value.set_mysql_datetime(mdt_value);
+        }
+        break;
+      }
       case ObTimestampType: {
         ObTimeConverter::round_datetime(column.get_data_scale(), cur_time);
         default_value.set_timestamp(cur_time);
@@ -6787,8 +6834,6 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     LOG_WARN("unexpected null", K(ret), K(session_info_), K(allocator_));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check oracle compat mode failed", K(ret));
-  } else if (is_oracle_mode) {
-    // oracle mode not support geometry
   } else if (is_func_index && is_mysql_mode()) {
     ObRawExprFactory expr_factory(*allocator_);
     ObRawExpr *expr = NULL;
@@ -6886,7 +6931,7 @@ int ObDDLResolver::resolve_spatial_index_constraint(
   int ret = OB_SUCCESS;
   bool is_spatial_index = index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY);
   bool is_default_index = index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::NORMAL_KEY);
-  uint64_t tenant_id = column_schema.get_tenant_id();
+  uint64_t tenant_id = session_info_->get_effective_tenant_id();
   bool is_geo_column = ob_is_geometry_tc(column_schema.get_data_type());
   uint64_t tenant_data_version = 0;
 
@@ -7181,49 +7226,70 @@ int ObDDLResolver::check_column_in_foreign_key(const ObTableSchema &table_schema
 
 int ObDDLResolver::check_column_in_check_constraint(
     const share::schema::ObTableSchema &table_schema,
-    const ObString &column_name,
+    const ObReducedVisibleColSet &drop_column_names_set,
     ObAlterTableStmt *alter_table_stmt)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *alter_column = table_schema.get_column_schema(column_name);
   int64_t cst_cnt = table_schema.get_constraint_count();
-  if (OB_ISNULL(alter_column)) {
-    // do nothing
-    // 根据列名查不到列是因为表中不存在该列，后面会在 RS 端再检查一遍表中是否存在该列，并在 RS 端根据操作的不同报不同的错误
-  } else {
-    AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
-    for (ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
-         OB_SUCC(ret) && (iter != table_schema.constraint_end());
-         ++iter) {
-      if (CONSTRAINT_TYPE_CHECK == (*iter)->get_constraint_type()
-          || CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
-        for (ObConstraint::const_cst_col_iterator cst_col_iter = (*iter)->cst_col_begin();
-             OB_SUCC(ret) && (cst_col_iter != (*iter)->cst_col_end());
-             ++cst_col_iter) {
-          if (*cst_col_iter == alter_column->get_column_id()) {
-            if (0 == (*iter)->get_column_cnt()) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "check/not null cst don't have column info", K(ret), K(**iter));
-            } else {
-              // drop check constraint cascaded
-              bool is_dropped = false;
-              // check if constraints have been dropped
-              ObTableSchema::const_constraint_iterator iter_dropped = alter_table_schema.constraint_begin();
-              for (int64_t i = 0; i < cst_cnt && (iter_dropped != alter_table_schema.constraint_end()); ++i) {
-                if ((*iter)->get_constraint_id() == (*iter_dropped)->get_constraint_id()) {
-                  is_dropped = true;
-                  break;
-                }
+  AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+  for (ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
+        OB_SUCC(ret) && (iter != table_schema.constraint_end());
+        ++iter) {
+    if (CONSTRAINT_TYPE_CHECK == (*iter)->get_constraint_type()
+        || CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
+      ObArray<common::ObString> cst_columns_name;
+      for (ObConstraint::const_cst_col_iterator cst_col_iter = (*iter)->cst_col_begin();
+            OB_SUCC(ret) && (cst_col_iter != (*iter)->cst_col_end());
+            ++cst_col_iter) {
+        const ObColumnSchemaV2 *cst_column_schema = nullptr;
+        if (0 == (*iter)->get_column_cnt()) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "check/not null cst don't have column info", KR(ret), K(**iter));
+        } else if (OB_ISNULL(cst_column_schema = table_schema.get_column_schema(*cst_col_iter))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("can not find column", KR(ret), "col_id", *cst_col_iter, K(table_schema));
+        } else if (OB_FAIL(cst_columns_name.push_back(cst_column_schema->get_column_name_str()))) {
+          LOG_WARN("push back failed", KR(ret));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        // drop check constraint cascaded
+        bool is_dropped = false;
+        // check if constraints have been dropped
+        ObTableSchema::const_constraint_iterator iter_dropped = alter_table_schema.constraint_begin();
+        for (; OB_SUCC(ret) && !is_dropped && iter_dropped != alter_table_schema.constraint_end(); ++iter_dropped) {
+          is_dropped = ((*iter)->get_constraint_id() == (*iter_dropped)->get_constraint_id()) ? true : is_dropped;
+        }
+        if (OB_SUCC(ret) && !is_dropped) {
+          // check whether the constraint should be dropped caused by drop column.
+          // 1. If not null constraint and check constraint rely on one column only,
+          // drop the constraint internally when dropping the related column.
+          // 2. If check constraint rely on more than one column,
+          // drop the constraint internally when dropping all related columns under oracle mode.
+          // can not drop the constraint even all related columns are dropped under mysql mode.
+          bool need_drop_cst = true;
+          if ((*iter)->get_column_cnt() >= 2 && lib::is_mysql_mode()) {
+            need_drop_cst = false;
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && need_drop_cst && i < cst_columns_name.count(); i++) {
+            ObColumnSchemaHashWrapper col_key(cst_columns_name.at(i));
+            if (OB_FAIL(drop_column_names_set.exist_refactored(col_key))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                need_drop_cst = false;
+                ret = OB_SUCCESS;
+              } else if (OB_HASH_EXIST == ret) {
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("exist refactored failed", KR(ret), K(cst_columns_name.at(i)));
               }
-              if (is_dropped) {
-                // skip this constraint
-              } else if (1 == (*iter)->get_column_cnt()) {
-                if (OB_FAIL(alter_table_schema.add_constraint(**iter))) {
-                  SQL_RESV_LOG(WARN, "add constraint failed!", K(ret), K(**iter));
-                } else {
-                  alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
-                }
-              } else {/* do nothing. */}
+            }
+          }
+          if (OB_SUCC(ret) && need_drop_cst) {
+            if (OB_FAIL(alter_table_schema.add_constraint(**iter))) {
+              SQL_RESV_LOG(WARN, "add constraint failed!", KR(ret), K(**iter));
+            } else {
+              alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
             }
           }
         }
@@ -7678,8 +7744,9 @@ int ObDDLResolver::generate_global_index_schema(
           false/* is index table*/,
           table_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(crt_idx_stmt->get_create_index_arg().database_name_),
-                     to_cstring(crt_idx_stmt->get_create_index_arg().table_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
+                     helper.convert(crt_idx_stmt->get_create_index_arg().table_name_));
       LOG_WARN("table not exist", K(ret),
                "database_name", crt_idx_stmt->get_create_index_arg().database_name_,
                "table_name", crt_idx_stmt->get_create_index_arg().table_name_);
@@ -7688,15 +7755,17 @@ int ObDDLResolver::generate_global_index_schema(
     }
   } else if (OB_UNLIKELY(NULL == table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(crt_idx_stmt->get_create_index_arg().database_name_),
-                   to_cstring(crt_idx_stmt->get_create_index_arg().table_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
+                   helper.convert(crt_idx_stmt->get_create_index_arg().table_name_));
     LOG_WARN("table not exist", K(ret),
              "database_name", crt_idx_stmt->get_create_index_arg().database_name_,
              "table_name", crt_idx_stmt->get_create_index_arg().table_name_);
   } else if (!GCONF.enable_sys_table_ddl && !table_schema->is_user_table() && !table_schema->is_tmp_table()) {
     ret = OB_ERR_WRONG_OBJECT;
-    LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(crt_idx_stmt->get_create_index_arg().database_name_),
-                   to_cstring(crt_idx_stmt->get_create_index_arg().table_name_), "BASE_TABLE");
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
+                   helper.convert(crt_idx_stmt->get_create_index_arg().table_name_), "BASE_TABLE");
     ObTableType table_type = table_schema->get_table_type();
     LOG_WARN("Not support to create index on non-normal table", K(ret), K(table_type),
              "arg", crt_idx_stmt->get_create_index_arg());
@@ -11771,7 +11840,8 @@ int ObDDLResolver::check_ttl_definition(const ParseNode *node)
         ret = OB_TTL_COLUMN_NOT_EXIST;
         LOG_USER_ERROR(OB_TTL_COLUMN_NOT_EXIST, column_name.length(), column_name.ptr());
         LOG_WARN("ttl column is not exists", K(ret), K(column_name));
-      } else if ((!ob_is_datetime_tc(column_schema->get_data_type()))) {
+      } else if ((!ob_is_datetime_tc(column_schema->get_data_type()) &&
+                  !ob_is_mysql_datetime_tc(column_schema->get_data_type()))) {
         ret = OB_TTL_COLUMN_TYPE_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, column_name.length(), column_name.ptr());
         LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp",

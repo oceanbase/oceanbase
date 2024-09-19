@@ -147,15 +147,12 @@ public:
            const bool is_resource_conn = false);
   int destroy(void);
   inline void reset() { destroy(); }
-  virtual int execute_read(const uint64_t tenant_id, const char *sql,
+  virtual int execute_read(const uint64_t tenant_id, const ObString &sql,
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
-  virtual int execute_write(const uint64_t tenant_id, const char *sql,
-                            int64_t &affected_rows, bool is_user_sql = false,
-                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
                             int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr) override;
@@ -184,6 +181,7 @@ public:
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) override;
   virtual int set_session_variable(const ObString &name, int64_t val) override;
+  virtual int set_session_variable(const ObString &name, const ObString &val) override;
   inline void set_spi_connection(bool is_spi_conn) { is_spi_conn_ = is_spi_conn; }
   int set_primary_schema_version(const common::ObIArray<int64_t> &primary_schema_versions);
 
@@ -428,25 +426,21 @@ private:
   //support set user timeout of stream rpc but not depend on internal_sql_execute_timeout
   int64_t user_timeout_;
   sql::ObFreeSessionCtx free_session_ctx_;
+  ObDiagnosticInfo *diagnostic_info_;
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };
 
 class ObInnerSqlWaitGuard
 {
 public:
-  explicit ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session);
+  explicit ObInnerSqlWaitGuard(const bool is_inner_session, common::ObDiagnosticInfo *di);
   ~ObInnerSqlWaitGuard();
 private:
   bool is_inner_session_;
   int64_t inner_session_id_;
-  ObSessionDIBuffer *di_buffer_;
-  int64_t prev_tenant_id_;
-  int64_t prev_session_id_;
-  ObActiveSessionStat *prev_stat_;
+  ObDiagnosticInfo *inner_sql_di_;
+  ObDiagnosticInfo *prev_di_;
   bool need_record_;
-  bool prev_is_bkgd_active_;
-  ObWaitEventDesc *prev_max_wait_;
-  ObWaitEventStat *prev_total_wait_;
   bool has_finish_switch_di_;
 };
 } // end of namespace observer

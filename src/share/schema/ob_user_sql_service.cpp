@@ -1079,6 +1079,7 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_CREATE_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_ROLE; }
     if ((user.get_priv_set() & OB_PRIV_DROP_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_DROP_ROLE; }
     if ((user.get_priv_set() & OB_PRIV_TRIGGER) != 0) { priv_others |= OB_PRIV_OTHERS_TRIGGER; }
+    if ((user.get_priv_set() & OB_PRIV_LOCK_TABLE) != 0) { priv_others |= OB_PRIV_OTHERS_LOCK_TABLE; }
   }
   if (OB_FAIL(ret)) {
   } else if (compat_version < DATA_VERSION_4_2_2_0) {

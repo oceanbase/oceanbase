@@ -1028,6 +1028,26 @@ int ObPartTransCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return ret;
 }
 
+int ObPartTransCtx::iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (is_exiting_) {
+    // do nothing
+    // we just consider the active trans
+  } else if (OB_FAIL(mt_ctx_.iterate_tx_lock_priority_list(iter))) {
+    TRANS_LOG(WARN, "iter tx obj lock op failed", K(ret));
+  } else {
+    // do nothing
+    // should not set iterator is ready here,
+    // because it may iterate other tx_ctx then
+  }
+
+  return ret;
+}
+
 int ObPartTransCtx::iterate_tx_lock_stat(ObTxLockStatIterator &iter)
 {
   int ret = OB_SUCCESS;
@@ -3277,6 +3297,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   bool has_redo = false;
   ObRedoLogSubmitHelper helper;
   const bool parallel_logging = is_parallel_logging_();
+  ObTableLockPrioOpArray prio_op_array;
   if (parallel_logging && OB_FAIL(submit_parallel_redo_())) {
   } else if (OB_FAIL(init_log_block_(log_block))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
@@ -3289,6 +3310,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   } else if (exec_info_.redo_lsns_.count() > 0 && OB_FAIL(submit_record_log_())) {
     TRANS_LOG(WARN, "submit record log failed", KR(ret), K(*this));
   } else {
+    // get table lock priority info of this trans
+    (void)mt_ctx_.get_prio_op_array(prio_op_array);
     ObTxActiveInfoLog active_info_log(exec_info_.scheduler_, exec_info_.trans_type_, session_id_,
                                       associated_session_id_,
                                       trace_info_.get_app_trace_id(),
@@ -3301,7 +3324,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
                                       last_scn_, exec_info_.max_submitted_seq_no_,
                                       cluster_version_,
                                       exec_info_.xid_,
-                                      exec_info_.serial_final_seq_no_);
+                                      exec_info_.serial_final_seq_no_,
+                                      prio_op_array);
     ObTxLogCb *log_cb = nullptr;
     if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), KP(log_cb), K(*this));
@@ -4752,7 +4776,9 @@ int ObPartTransCtx::push_replaying_log_ts(const SCN log_ts_ns, const int64_t log
     }
     if (OB_UNLIKELY(replay_completeness_.is_unknown())) {
       const bool replay_continous = exec_info_.next_log_entry_no_ == log_entry_no;
-      set_replay_completeness_(replay_continous, log_ts_ns);
+      if (OB_FAIL(set_replay_completeness_(replay_continous, log_ts_ns))) {
+        TRANS_LOG(WARN, "set replay completeness failed", KR(ret), K(ls_id_), K(trans_id_), KP(this));
+      }
     }
   }
   return ret;
@@ -5252,8 +5278,9 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
           // all previous log replayed
           // the txn must not replay from its first log, aka. incomplete-replay
           TRANS_LOG(INFO, "detect txn replayed from middle", K(ret), K(timestamp), K_(trans_id), K_(ls_id), K_(exec_info));
-          set_replay_completeness_(false, timestamp);
-          ret = OB_SUCCESS;
+          if (OB_FAIL(set_replay_completeness_(false, timestamp))) {
+            TRANS_LOG(WARN, "set replay completeness failed", KR(ret), K(ls_id_), K(trans_id_), KP(this));
+          }
         } else if (min_unreplayed_scn > timestamp) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "incorrect min unreplayed scn", K(ret), K(timestamp), K(min_unreplayed_scn), K_(trans_id));
@@ -5370,6 +5397,10 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
     last_op_sn_ = log.get_last_op_sn();
     first_scn_ = log.get_first_seq_no();
     last_scn_ = log.get_last_seq_no();
+    // for table lock priority array
+    // ignore the result
+    const tablelock::ObTableLockPrioOpArray &prio_op_array = log.get_prio_op_array();
+    (void)mt_ctx_.prepare_prio_op_list(prio_op_array);
 
     exec_info_.max_submitted_seq_no_.inc_update(log.get_max_submitted_seq_no());
     exec_info_.serial_final_seq_no_ = log.get_serial_final_seq_no();
@@ -10736,8 +10767,12 @@ inline bool ObPartTransCtx::has_replay_serial_final_() const
 }
 
 int ObPartTransCtx::set_replay_incomplete(const share::SCN log_ts) {
+  int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
-  return set_replay_completeness_(false, log_ts);
+  if (OB_FAIL(set_replay_completeness_(false, log_ts))) {
+    TRANS_LOG(WARN, "set replay completeness failed", KR(ret), K(ls_id_), K(trans_id_), KP(this));
+  }
+  return ret;
 }
 
 int ObPartTransCtx::set_replay_completeness_(const bool complete, const SCN replay_scn)

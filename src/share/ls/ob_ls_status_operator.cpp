@@ -1314,8 +1314,12 @@ int ObLSStatusOperator::construct_ls_log_stat_replica_(
   EXTRACT_INT_FIELD_MYSQL(result, "paxos_replica_num", paxos_replica_num, int64_t);
   EXTRACT_UINT_FIELD_MYSQL(result, "end_scn", end_scn, int64_t);
 
-  if (FAILEDx(ObLSReplica::text2member_list(
-      to_cstring(paxos_member_list_str), 
+  ObCStringHelper helper;
+  const char *paxos_member_list_ptr = nullptr;
+  if (FAILEDx(helper.convert(paxos_member_list_str, paxos_member_list_ptr))) {
+    LOG_WARN("convert paxos_member_list failed", KR(ret), K(paxos_member_list_str));
+  } else if (OB_FAIL(ObLSReplica::text2member_list(
+      paxos_member_list_ptr,
       member_list))) {
     LOG_WARN("text2member_list failed", KR(ret), K(paxos_member_list_str));
   } else if (OB_UNLIKELY(!server.set_ip_addr(svr_ip, static_cast<uint32_t>(svr_port)))) {

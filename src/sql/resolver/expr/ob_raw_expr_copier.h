@@ -147,7 +147,7 @@ public:
   int copy_on_replace(ObRawExpr *from,
                       ObRawExpr *&to,
                       ObIRawExprReplacer *replacer = NULL);
-  
+
   template <typename T>
   int copy_on_replace(const ObIArray<T *> &from_exprs,
                       ObIArray<T *> &to_exprs,
@@ -160,6 +160,7 @@ public:
   int get_copied_exprs(ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &from_to_exprs);
 
   int find_in_copy_context(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
+  hash::ObHashSet<uint64_t> &get_new_exprs() { return new_exprs_; }
 
 private:
 

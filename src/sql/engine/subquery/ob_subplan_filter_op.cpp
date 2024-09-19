@@ -94,7 +94,7 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
 {
   //根据subplan filter的语义，reset row iterator，其它的成员保持不变
   int ret = OB_SUCCESS;
-  if (onetime_plan_ && !reset_onetime_plan) {
+  if (onetime_plan_ && !reset_onetime_plan && !parent_->need_reset_onetime_expr()) {
     // for onetime expr
   } else if (init_plan_) {
     // for init plan
@@ -381,6 +381,7 @@ ObSubPlanFilterOp::ObSubPlanFilterOp(
     cur_param_idxs_(),
     cur_param_expr_idxs_(),
     last_store_row_mem_(NULL),
+    need_reset_onetime_expr_(false),
     group_rescan_cnt_(0),
     rescan_params_info_()
 {
@@ -484,6 +485,8 @@ int ObSubPlanFilterOp::rescan()
     }
   }
   if (OB_SUCC(ret)) {
+    // reset onetime exprs for each spf rescan
+    ResetOneTimeExprGuard guard(*this);
     if (OB_FAIL(prepare_onetime_exprs())) {
       LOG_WARN("prepare onetime exprs failed", K(ret));
     } else if (OB_FAIL(child_->rescan())) {

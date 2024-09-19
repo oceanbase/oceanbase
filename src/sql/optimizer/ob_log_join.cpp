@@ -81,7 +81,10 @@ int ObLogJoin::set_granule_repart_ref_table_id_recursively(ObLogicalOperator *op
 int ObLogJoin::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(append(all_exprs, join_conditions_))) {
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan is null", K(ret));
+  } else if (OB_FAIL(append(all_exprs, join_conditions_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(all_exprs, join_filters_))) {
     LOG_WARN("failed to append exprs", K(ret));
@@ -95,6 +98,47 @@ int ObLogJoin::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     // otherwise, will report 4002 in cg
   } else if (OB_FAIL(append(all_exprs, nl_params_))) {
     LOG_WARN("failed to append exprs", K(ret));
+  } else if (is_adaptive_ && HASH_JOIN == join_algo_) {
+    ObLogicalOperator *left_join = const_cast<ObLogicalOperator *>(find_child_join_or_scan(get_child(0)));
+    ObLogicalOperator *right_scan = const_cast<ObLogicalOperator *>(find_child_join_or_scan(get_child(1)));
+    ObRawExpr *trans_info_expr = NULL;
+    if (OB_ISNULL(left_join) || OB_ISNULL(right_scan) ||
+        OB_UNLIKELY(LOG_JOIN != left_join->get_type() ||
+                    LOG_TABLE_SCAN != right_scan->get_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected child", K(ret), KPC(left_join), KPC(right_scan));
+    } else if (NULL != (trans_info_expr = (static_cast<ObLogTableScan *>(right_scan))->get_trans_info_expr())) {
+      ObLogicalOperator *nlj_right_scan = const_cast<ObLogicalOperator *>(find_child_join_or_scan(left_join->get_child(1)));
+      if (OB_ISNULL(nlj_right_scan) || OB_UNLIKELY(LOG_TABLE_SCAN != nlj_right_scan->get_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected child", K(ret), KPC(nlj_right_scan));
+      } else {
+        ObRawExpr *new_trans_info_expr = NULL;
+        if (OB_FAIL(ObRawExprCopier::copy_expr(
+                    get_plan()->get_optimizer_context().get_expr_factory(),
+                    trans_info_expr, new_trans_info_expr))) {
+          LOG_WARN("copy on replace failed", K(ret));
+        } else if (OB_FAIL(adaptive_nlj_scan_cols_.push_back(new_trans_info_expr))) {
+          LOG_WARN("push back failed", K(ret));
+        } else if (OB_FAIL(adaptive_hj_scan_cols_.push_back(trans_info_expr))) {
+          LOG_WARN("push back failed", K(ret));
+        } else if (OB_UNLIKELY(!new_trans_info_expr->is_op_pseudo_column_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected expr type", K(ret), K(new_trans_info_expr->get_expr_class()));
+        } else {
+          static_cast<ObLogTableScan *>(nlj_right_scan)->set_trans_info_expr(
+                      static_cast<ObOpPseudoColumnRawExpr *>(new_trans_info_expr));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(all_exprs, adaptive_nlj_scan_cols_))) {
+      LOG_WARN("append failed", K(ret));
+    } else if (OB_FAIL(append(all_exprs, adaptive_hj_scan_cols_))) {
+      LOG_WARN("append failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < nl_params_.count(); i++) {
       if (OB_ISNULL(nl_params_.at(i)) ||
@@ -159,8 +203,7 @@ int ObLogJoin::get_explain_name_internal(char *buf,
     ret = BUF_PRINTF("NESTED-LOOP ");
   } else if (MERGE_JOIN == join_algo_) {
     ret = BUF_PRINTF("MERGE ");
-  } else if (HASH_JOIN == join_algo_ &&
-             DIST_BC2HOST_NONE == join_dist_algo_) {
+  } else if (is_shared_hash_join()) {
     ret = BUF_PRINTF("SHARED HASH ");
   } else {
     ret = BUF_PRINTF("HASH ");
@@ -391,6 +434,13 @@ int ObLogJoin::inner_replace_op_exprs(ObRawExprReplacer &replacer)
       LOG_WARN("failed to replace sys connect by extra exprs", K(ret));
     }
   }
+  if (OB_SUCC(ret) && is_adaptive_) {
+    if (OB_FAIL(replace_exprs_action(replacer, get_adaptive_hj_scan_cols()))) {
+      LOG_WARN("failed to repalce adaptive hj scan exprs", K(ret));
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_adaptive_nlj_scan_cols()))) {
+      LOG_WARN("failed to replace adaptive nlj scan exprs", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -416,9 +466,9 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
   ObLogicalOperator *left_child = get_child(ObLogicalOperator::first_child);
   ObLogicalOperator *right_child = get_child(ObLogicalOperator::second_child);
   const int64_t parallel = param.need_parallel_;
-  if (OB_ISNULL(left_child) || OB_ISNULL(right_child)) {
+  if (OB_ISNULL(left_child) || OB_ISNULL(right_child) || OB_UNLIKELY(param.need_batch_rescan_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null join path", K(ret));
+    LOG_WARN("unexpected params", K(ret), K(left_child), K(right_child), K(param));
   } else if (OB_ISNULL(join_path_)) {
     card = get_card();
     op_cost = get_op_cost();
@@ -432,14 +482,10 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
                                               left_output_rows,
                                               left_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
-  } else if (OB_FAIL(join_path_->try_set_batch_nlj_for_right_access_path(true))) {
-    LOG_WARN("failed to try set batch nlj for right access path", K(ret));
   } else if (OB_FAIL(SMART_CALL(right_child->re_est_cost(right_param,
                                               right_output_rows,
                                               right_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
-  } else if (OB_FAIL(join_path_->try_set_batch_nlj_for_right_access_path(false))) {
-    LOG_WARN("failed to try set batch nlj for right access path", K(ret));
   } else if (OB_FAIL(join_path_->re_estimate_rows(param.join_filter_infos_,
                                                   left_output_rows,
                                                   right_output_rows,
@@ -455,6 +501,8 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
                                                 op_cost, 
                                                 cost))) {
       LOG_WARN("failed to cost nest loop join", K(*this), K(ret));
+    } else if (is_adaptive_) {
+      card = left_output_rows;
     }
   } else if(MERGE_JOIN == join_algo_) {
     if (OB_FAIL(join_path_->cost_merge_join(parallel,
@@ -477,6 +525,10 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
                                             op_cost, 
                                             cost))) {
       LOG_WARN("failed to cost hash join", K(*this), K(ret));
+    } else if (is_adaptive_) {
+      //ignore hash join cost for adaptive join
+      cost -= op_cost;
+      cost -= right_cost;
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -511,6 +563,8 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
   ObString qb_name;
   if (is_late_mat()) {
     // need not print outline for late material join
+  } else if (is_adaptive() && NESTED_LOOP_JOIN == get_join_algo()) {
+    // not print outline for adaptive nlj.
   } else {
    if (OB_ISNULL(get_plan())
       || OB_ISNULL(stmt = get_plan()->get_stmt())
@@ -526,7 +580,7 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
     } else if (MERGE_JOIN == get_join_algo()) {
       use_join_type = T_USE_MERGE;
     } else if (HASH_JOIN == get_join_algo()) {
-      use_join_type = T_USE_HASH;
+      use_join_type = is_adaptive() ? T_USE_ADAPTIVE : T_USE_HASH;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected join algo", K(ret), K(get_join_algo()));
@@ -539,7 +593,7 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
                                                 qb_name.length(), qb_name.ptr()))) {
         LOG_WARN("fail to print leading hint head", K(ret));
       } else if (OB_FAIL(print_leading_tables(*stmt, plan_text, this))) {
-        LOG_WARN("fail to print leading tables", K(ret));
+        LOG_WARN("fail to print leading tables", K(ret), K(id_), K(is_adaptive_), K(join_algo_));
       } else if (OB_FAIL(BUF_PRINTF(")"))) {
       } else {
         get_plan()->set_added_leading();
@@ -554,7 +608,7 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
                                               plan_text))) {
       LOG_WARN("fail to print use join hint", K(ret));
     // 3. print pq distribute hint
-    } else if (ObJoinHint::need_print_dist_algo(get_dist_method()) &&
+    } else if (ObJoinHint::need_print_dist_algo(get_real_dist_method()) &&
               OB_FAIL(print_join_hint_outline(*stmt,
                                               T_PQ_DISTRIBUTE,
                                               qb_name,
@@ -614,7 +668,9 @@ int ObLogJoin::print_used_hint(PlanText &plan_text)
   int ret = OB_SUCCESS;
   ObSEArray<const ObHint*, 8> used_hints;
   if (is_late_mat()) {
-    // need not print outline for late material join
+    // need not print used hint for late material join
+  } else if (is_adaptive() && NESTED_LOOP_JOIN == get_join_algo()) {
+    // not print used hint for adaptive nlj.
   } else if (OB_FAIL(add_used_leading_hint(used_hints))) {
     LOG_WARN("failed to add used leading hint", K(ret), K(get_join_algo()));
   } else if (OB_FAIL(append_used_join_hint(used_hints))) {
@@ -627,7 +683,8 @@ int ObLogJoin::print_used_hint(PlanText &plan_text)
       if (OB_ISNULL(hint = used_hints.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(hint));
-      } else if (OB_FAIL(hint->print_hint(plan_text))) {
+      } else if (!hint->is_trans_added() &&
+                 OB_FAIL(hint->print_hint(plan_text))) {
         LOG_WARN("failed to print hint in log join", K(ret), K(*hint));
       }
     }
@@ -649,7 +706,7 @@ int ObLogJoin::add_used_leading_hint(ObIArray<const ObHint*> &used_hints)
   } else {
     get_plan()->set_added_leading();
     bool used_hint = false;
-    const ObLogicalOperator *op = this;
+    const ObLogicalOperator *op = is_adaptive() && HASH_JOIN == join_algo_ ? find_child_join_or_scan(get_child(first_child)) : this;
     while (OB_SUCC(ret) && NULL != op) {
       if (op->get_table_set().equal(leading_hint->leading_tables_)) {
         used_hint = 1 == leading_hint->leading_tables_.num_members();  // leading hint with single table like leading(t1)
@@ -660,7 +717,7 @@ int ObLogJoin::add_used_leading_hint(ObIArray<const ObHint*> &used_hints)
           op = NULL;
         }
       } else if (LOG_JOIN == op->get_type()) {
-        op = find_child_join(op->get_child(first_child)); // only check left table recursively
+        op = find_child_join_or_scan(op->get_child(first_child)); // only check left table recursively
       } else {
         op = NULL;
       }
@@ -681,7 +738,7 @@ int ObLogJoin::check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
   used_hint = true;
   ObLogicalOperator *l_child = NULL;
   ObLogicalOperator *r_child = NULL;
-  if (OB_ISNULL(op = find_child_join(op))
+  if (OB_ISNULL(op = find_child_join_or_scan(op))
       || OB_UNLIKELY(LOG_JOIN != op->get_type())
       || OB_ISNULL(l_child = op->get_child(first_child))
       || OB_ISNULL(r_child = op->get_child(second_child))) {
@@ -715,14 +772,14 @@ bool ObLogJoin::find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
   return find;
 }
 
-const ObLogicalOperator *ObLogJoin::find_child_join(const ObLogicalOperator *op) {
+const ObLogicalOperator *ObLogJoin::find_child_join_or_scan(const ObLogicalOperator *op) const {
   while (NULL != op && !is_scan_operator(op->get_type()) && LOG_JOIN != op->get_type()) {
     op = op->get_child(first_child);
   }
   return op;
 }
 
-bool ObLogJoin::is_scan_operator(log_op_def::ObLogOpType type)
+bool ObLogJoin::is_scan_operator(log_op_def::ObLogOpType type) const
 {
   return LOG_TABLE_SCAN == type || LOG_SUBPLAN_SCAN == type ||
          LOG_FUNCTION_TABLE == type || LOG_UNPIVOT == type ||
@@ -741,12 +798,14 @@ int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
     bool find = false;
     const ObJoinHint *join_hint = NULL;
     // add used use join hint
-    if (get_join_algo() & log_join_hint->local_methods_) {
+    LOG_TRACE("append used join hint", K(get_op_id()), K(join_algo_), KPC(log_join_hint));
+    JoinAlgo join_algo = is_adaptive() && HASH_JOIN == get_join_algo() ? ADAPTIVE_JOIN : get_join_algo();
+    if (join_algo & log_join_hint->local_methods_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < log_join_hint->local_method_hints_.count(); ++i) {
         if (OB_ISNULL(join_hint = log_join_hint->local_method_hints_.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL", K(ret), K(join_hint));
-        } else if (!join_hint->is_match_local_algo(get_join_algo())) {
+        } else if (!join_hint->is_match_local_algo(join_algo)) {
           /* do nothing */
         } else if (OB_FAIL(used_hints.push_back(join_hint))) {
           LOG_WARN("failed to append pq distribute hint", K(ret));
@@ -776,7 +835,7 @@ int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
       if (OB_ISNULL(join_hint = log_join_hint->dist_method_hints_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(join_hint));
-      } else if (get_dist_method() != join_hint->get_dist_algo()) {
+      } else if (get_real_dist_method() != join_hint->get_dist_algo()) {
         /* do nothing */
       } else if (OB_FAIL(used_hints.push_back(join_hint))) {
         LOG_WARN("failed to append pq distribute hint", K(ret));
@@ -814,16 +873,23 @@ int ObLogJoin::print_leading_tables(const ObDMLStmt &stmt,
   int64_t &buf_len = plan_text.buf_len_;
   int64_t &pos = plan_text.pos_;
   int64_t table_num = -1;
+  const ObLogJoin *join_op = NULL;
   if (OB_ISNULL(op) || OB_UNLIKELY(1 > (table_num = op->get_table_set().num_members()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected op", K(ret), K(op), K(table_num));
+    LOG_WARN("unexpected op", K(ret), K(op), K(table_num), "op_id:", OB_ISNULL(op) ? OB_INVALID_ID : op->get_op_id());
   } else if (1 == table_num) {
     if (OB_FAIL(print_join_tables_in_hint(stmt, plan_text, op->get_table_set()))) {
       LOG_WARN("fail to print join tables", K(ret));
     }
-  } else if (OB_ISNULL(op = find_child_join(op)) || OB_UNLIKELY(LOG_JOIN != op->get_type())) {
+  } else if (OB_ISNULL(op = find_child_join_or_scan(op)) || OB_UNLIKELY(LOG_JOIN != op->get_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected op", K(ret), K(op));
+  } else if (FALSE_IT(join_op = static_cast<const ObLogJoin *>(op))) {
+  } else if (OB_FAIL(join_op->is_adaptive() && join_op->get_join_algo() == HASH_JOIN)) {
+    if (OB_FAIL(SMART_CALL(print_leading_tables(stmt, plan_text,
+                                                     op->get_child(first_child))))) {
+      LOG_WARN("fail to print leading tables", K(ret));
+    }
   } else if (OB_FAIL(BUF_PRINTF("("))) {
   } else if (OB_FAIL(SMART_CALL(print_leading_tables(stmt, plan_text,
                                                      op->get_child(first_child))))) {
@@ -845,7 +911,7 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
 {
   int ret = OB_SUCCESS;
   const char* algo_str = T_PQ_DISTRIBUTE == hint_type
-                         ? ObJoinHint::get_dist_algo_str(get_dist_method())
+                         ? ObJoinHint::get_dist_algo_str(get_real_dist_method())
                          : NULL;
   char *buf = plan_text.buf_;
   int64_t &buf_len = plan_text.buf_len_;
@@ -856,10 +922,87 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
     LOG_WARN("fail to print pq map hint head", K(ret));
   } else if (OB_FAIL(print_join_tables_in_hint(stmt, plan_text, table_set))) {
     LOG_WARN("fail to print join tables", K(ret));
+  } else if (hint_type == T_USE_ADAPTIVE && OB_FAIL(print_adaptive_mock_scan_hint_outline(
+              stmt, qb_name, plan_text))) {
+    LOG_WARN("print adaptive mock scan hint outline failed", K(ret));
   } else if (NULL != algo_str && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("fail to print distribute method", K(ret));
   } else if (OB_FAIL(BUF_PRINTF(")"))) {
   } else { /* do nothing */ }
+  return ret;
+}
+
+int ObLogJoin::print_adaptive_mock_scan_hint_outline(const ObDMLStmt &stmt,
+                                                     const ObString &qb_name,
+                                                     PlanText &plan_text)
+{
+  int ret = OB_SUCCESS;
+  const ObLogicalOperator *child_join = find_child_join_or_scan(get_child(first_child));
+  const ObLogJoin *nlj = NULL;
+  TableItem *table_item = NULL;
+  const ObLogicalOperator *nlj_scan = NULL;
+  const ObLogicalOperator *hj_scan = NULL;
+  if (OB_ISNULL(child_join) || OB_UNLIKELY(LOG_JOIN != child_join->get_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child nlj not found", K(ret), KPC(child_join));
+  } else if (FALSE_IT(nlj = static_cast<const ObLogJoin *>(child_join))) {
+  } else if (OB_UNLIKELY(NESTED_LOOP_JOIN != nlj->get_join_algo() || !nlj->is_adaptive())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is not adaptive nlj", K(ret), K(nlj->get_join_algo()));
+  } else if (OB_ISNULL(nlj_scan = find_child_join_or_scan(nlj->get_child(second_child)))
+             || OB_ISNULL(hj_scan = find_child_join_or_scan(get_child(second_child)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child scan not found", K(ret), K(nlj_scan), K(hj_scan));
+  } else if (OB_UNLIKELY(LOG_TABLE_SCAN != nlj_scan->get_type() ||
+                         LOG_TABLE_SCAN != hj_scan->get_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child scan not found", K(ret), K(nlj_scan->get_type()), K(hj_scan->get_type()));
+  } else if (OB_ISNULL(table_item = stmt.get_table_item_by_id(
+              static_cast<const ObLogTableScan *>(hj_scan)->get_table_id()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get table item by id", K(ret), K(stmt),
+             K(static_cast<const ObLogTableScan *>(hj_scan)->get_table_id()));
+  } else {
+    const ObLogTableScan *scan = static_cast<const ObLogTableScan *>(nlj_scan);
+    ObItemType index_type = T_INDEX_HINT;
+    const ObString *index_name = NULL;
+    int64_t index_prefix = -1;
+    // TODO: shanting check whether use index_prefix
+    if (scan->get_ref_table_id() == scan->get_index_table_id() && index_prefix < 0) {
+      index_type = T_FULL_HINT;
+      index_name = &ObIndexHint::PRIMARY_KEY;
+    } else {
+      index_type = T_INDEX_HINT;
+      if (scan->get_ref_table_id() == scan->get_index_table_id()) {
+        index_name = &ObIndexHint::PRIMARY_KEY;
+      } else {
+        index_name = &scan->get_index_name();
+      }
+    }
+    ObIndexHint index_hint(index_type);
+    index_hint.get_table().set_table(*table_item);
+    index_hint.get_table().qb_name_.reset();
+    index_hint.get_table().db_name_.reset();
+    index_hint.get_index_prefix() = index_prefix;
+    if (NULL != index_name) {
+      index_hint.get_index_name().assign_ptr(index_name->ptr(), index_name->length());
+    }
+    bool is_oneline = plan_text.is_oneline_;
+    plan_text.is_oneline_ = true;
+    if (OB_FAIL(index_hint.print_hint(plan_text))) {
+      LOG_WARN("failed to print index hint", K(ret));
+    } else if (scan->use_das()) {
+      ObIndexHint use_das_hint(T_USE_DAS_HINT);
+      use_das_hint.get_table().set_table(*table_item);
+      use_das_hint.get_table().qb_name_.reset();
+      use_das_hint.get_table().db_name_.reset();
+      if (OB_FAIL(use_das_hint.print_hint(plan_text))) {
+        LOG_WARN("failed to print use das hint", K(ret));
+      }
+    }
+    plan_text.is_oneline_ = is_oneline;
+  }
+
   return ret;
 }
 
@@ -957,7 +1100,8 @@ int ObLogJoin::allocate_granule_pre(AllocGIContext &ctx)
     ctx.slave_mapping_type_ = slave_mapping_type_;
   } else if (!ctx.is_in_partition_wise_state()
              && !ctx.is_in_pw_affinity_state()
-             && DistAlgo::DIST_PARTITION_WISE == join_dist_algo_) {
+             && (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_ ||
+                 (is_adaptive() && DistAlgo::DIST_PARTITION_WISE == get_adaptive_dist_method()))) {
     /**
      *        (partition wise join)
      *                   |
@@ -1049,7 +1193,8 @@ int ObLogJoin::allocate_granule_post(AllocGIContext &ctx)
       LOG_WARN("set granule nodes affinity failed", K(ret));
     }
     LOG_TRACE("set left child gi to affinity");
-  } else if (DIST_PARTITION_NONE == join_dist_algo_) {
+  } else if (DIST_PARTITION_NONE == join_dist_algo_ ||
+             (is_adaptive() && DIST_PARTITION_NONE == get_adaptive_dist_method())) {
     if (OB_FAIL(set_granule_nodes_affinity(ctx, 1))) {
       LOG_WARN("set granule nodes affinity failed", K(ret));
     }
@@ -1276,191 +1421,6 @@ int ObLogJoin::allocate_startup_expr_post()
   return ret;
 }
 
-int ObLogJoin::set_use_batch(ObLogicalOperator* root)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid input", K(ret));
-  } else if (root->is_table_scan()) {
-    ObLogTableScan *ts = static_cast<ObLogTableScan*>(root);
-    // dblink can not support batch nlj
-    bool has_param = false;
-    ObSEArray<int64_t, 1> idx_array;
-    if (OB_FAIL(ts->extract_bnlj_param_idxs(idx_array))) {
-      LOG_WARN("extract param indexes failed", KR(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && !has_param && i < nl_params_.count(); i++) {
-      int64_t param_idx = nl_params_.at(i)->get_param_index();
-      for (int64_t j = 0; OB_SUCC(ret) && j < idx_array.count(); j++) {
-        if (param_idx == idx_array.at(j)) {
-          has_param = true;
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
-        // For the global index lookup, if there is a pushdown filter when scanning the index,
-        // batch cannot be used.
-        ts->set_use_batch(false);
-      } else {
-        ts->set_use_batch(ts->use_batch() || (can_use_batch_nlj_ && has_param));
-      }
-    }
-  } else if (root->get_num_of_child() == 1) {
-    if(OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    }
-  } else if (log_op_def::LOG_SET == root->get_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child", K(ret));
-      } else if (OB_FAIL(SMART_CALL(set_use_batch(child)))) {
-        LOG_WARN("failed to check use batch nlj", K(ret));
-      }
-    }
-  } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    ObLogJoin *join = NULL;
-    ObLogicalOperator *left_child = NULL;
-    ObLogicalOperator *rigtht_child = NULL;
-    if (OB_ISNULL(join = static_cast<ObLogJoin *>(root))
-        || OB_ISNULL(left_child = join->get_child(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid input", K(ret));
-    } else if (OB_FAIL(SMART_CALL(set_use_batch(left_child)))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    } else if (!join->can_use_batch_nlj()) {
-      // do nothing
-    } else if (OB_ISNULL(rigtht_child = join->get_child(1))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid child", K(ret));
-    } else if (OB_FAIL(SMART_CALL(set_use_batch(rigtht_child)))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    }
-  } else { /*do nothing*/ }
-  return ret;
-}
-
-int ObLogJoin::check_and_set_use_batch()
-{
-  int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = NULL;
-  ObLogPlan *plan = NULL;
-  if (OB_ISNULL(plan = get_plan())
-      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (!can_use_batch_nlj_) {
-    // do nothing
-  } else if (OB_FAIL(session_info->get_nlj_batching_enabled(can_use_batch_nlj_))) {
-    LOG_WARN("failed to get enable batch variable", K(ret));
-  } else if (NESTED_LOOP_JOIN != get_join_algo()) {
-    can_use_batch_nlj_ = false;
-  }
-  // check use batch
-  if (OB_SUCC(ret) && can_use_batch_nlj_) {
-    bool contains_invalid_startup = false;
-    bool contains_limit = false;
-    bool enable_group_rescan_test_mode = false;
-    enable_group_rescan_test_mode = (OB_SUCCESS != (OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS));
-    if (get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR && !enable_group_rescan_test_mode) {
-      can_use_batch_nlj_ = false;
-    } else if (OB_FAIL(plan->contains_startup_with_exec_param(get_child(1),
-                                                              contains_invalid_startup))) {
-      LOG_WARN("failed to check contains invalid startup", K(ret));
-    } else if (contains_invalid_startup) {
-      can_use_batch_nlj_ = false;
-    } else if (OB_FAIL(plan->contains_limit_or_pushdown_limit(get_child(1), contains_limit))) {
-      LOG_WARN("failed to check contains limit", K(ret));
-    } else if (contains_limit) {
-      can_use_batch_nlj_ = false;
-    } else if (OB_FAIL(check_if_disable_batch(get_child(1), can_use_batch_nlj_))) {
-      LOG_WARN("failed to check if disable batch", K(ret));
-    } else if (can_use_batch_nlj_ && OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, can_use_batch_nlj_))) {
-      LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
-    }
-  }
-  // set use batch
-  if (OB_SUCC(ret) && can_use_batch_nlj_) {
-    if (OB_FAIL(set_use_batch(get_child(1)))) {
-      LOG_WARN("failed to set use batch nlj", K(ret));
-    }
-  }
-  return ret;
-}
-
-
-int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (!can_use_batch_nlj) {
-    // do nothing
-  } else if (root->is_table_scan()) {
-    ObLogTableScan *ts = NULL;
-    ObLogPlan *plan = NULL;
-    ObTablePartitionInfo *info = NULL;
-    if (OB_ISNULL(ts = static_cast<ObLogTableScan *>(root)) ||
-        OB_ISNULL(plan = get_plan()) ||
-        OB_ISNULL(info = ts->get_table_partition_info())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid input", K(ret));
-    } else if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
-      // For the global index lookup, if there is a pushdown filter when scanning the index,
-      // batch cannot be used.
-      can_use_batch_nlj = false;
-    } else if (ts->get_scan_direction() != default_asc_direction() && ts->get_scan_direction() != ObOrderDirection::UNORDERED) {
-      can_use_batch_nlj = false;
-    } else {
-      SMART_VAR(ObTablePartitionInfo, tmp_info) {
-        ObTablePartitionInfo *tmp_info_ptr = &tmp_info;
-        if (OB_FAIL(plan->gen_das_table_location_info(ts, tmp_info_ptr))) {
-          LOG_WARN("failed to gen das table location info", K(ret));
-        } else {
-          if (tmp_info.get_table_location().use_das() &&
-              tmp_info.get_table_location().get_has_dynamic_exec_param()) {
-            // dynamic partition pruning, no need to check
-          } else if (10 < info->get_phy_tbl_location_info().get_phy_part_loc_info_list().count()) {
-            can_use_batch_nlj = false;
-          }
-        }
-      }
-    }
-  } else if (1 == root->get_num_of_child()) {
-    if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0), can_use_batch_nlj)))) {
-      LOG_WARN("failed to check if disable batch", K(ret));
-    }
-  } else if (log_op_def::LOG_SET == root->get_type()) {
-    ObLogSet *log_set = static_cast<ObLogSet *>(root);
-    if (log_set->get_set_op() != ObSelectStmt::UNION) {
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_3_0) {
-        // if the min cluster version is less than 4.2.3.0, don't uses NLJ group-rescan because the old version don't adaptive group-rescan
-        can_use_batch_nlj = false;
-        LOG_TRACE("updrade stage don't support group-rescan if the min cluster version is less than 4.2.3.0 for distinct and except operator");
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child", K(ret));
-      } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(child, can_use_batch_nlj)))) {
-        LOG_WARN("failed to check if disable batch", K(ret));
-      }
-    }
-  } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    // multi level nlj use batch is disabled
-    can_use_batch_nlj = false;
-  } else {
-    can_use_batch_nlj = false;
-  }
-  return ret;
-}
-
 bool ObLogJoin::is_my_exec_expr(const ObRawExpr *expr)
 {
   return ObOptimizerUtil::find_item(nl_params_, expr);
@@ -1548,4 +1508,17 @@ int ObLogJoin::check_use_child_ordering(bool &used, int64_t &inherit_child_order
     inherit_child_ordering_index = first_child;
   }
   return ret;
+}
+
+bool ObLogJoin::is_shared_hash_join()
+{
+  bool b_ret = false;
+  if (HASH_JOIN != join_algo_) {
+    b_ret = false;
+  } else if (is_adaptive()) {
+    b_ret = DIST_BC2HOST_NONE == get_adaptive_dist_method();
+  } else {
+    b_ret = DIST_BC2HOST_NONE == join_dist_algo_;
+  }
+  return b_ret;
 }

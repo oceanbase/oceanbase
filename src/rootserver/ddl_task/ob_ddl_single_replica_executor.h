@@ -99,7 +99,7 @@ private:
     static const int64_t PARTITION_BUILD_HEART_BEAT_TIME = 10 * 1000 * 1000;
     ObPartitionBuildInfo()
       : ret_code_(common::OB_SUCCESS), stat_(ObPartitionBuildStat::BUILD_INIT), heart_beat_time_(0),
-        row_inserted_(0), row_scanned_(0)
+        row_inserted_(0), row_scanned_(0), sess_not_found_times_(0)
     {}
     ~ObPartitionBuildInfo() = default;
     bool need_schedule() const {
@@ -108,13 +108,16 @@ private:
         || (ObPartitionBuildStat::BUILD_REQUESTED == stat_
           && ObTimeUtility::current_time() - heart_beat_time_ > PARTITION_BUILD_HEART_BEAT_TIME);
     }
-    TO_STRING_KV(K_(ret_code), K_(stat), K_(heart_beat_time), K_(row_inserted), K_(row_scanned));
+    TO_STRING_KV(K_(ret_code), K_(stat), K_(heart_beat_time), K_(row_inserted), K_(row_scanned), K_(sess_not_found_times));
   public:
     int64_t ret_code_;
     ObPartitionBuildStat stat_;
     int64_t heart_beat_time_;
     int64_t row_inserted_;
     int64_t row_scanned_;
+    /* special variable is only used to reduce table recovery retry parallelism
+     * when the session not found error code appear in data complement. */
+    int64_t sess_not_found_times_;
   };
 private:
   uint64_t tenant_id_;

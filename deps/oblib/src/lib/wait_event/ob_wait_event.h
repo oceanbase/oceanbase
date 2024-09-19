@@ -38,16 +38,16 @@ WAIT_EVENT_DEF(OMT_IDLE, 12002, "sched idle", "wait start timestamp", "", "", ID
 
 // NETWORK
 WAIT_EVENT_DEF(SYNC_RPC, 13000, "sync rpc", "pcode", "size", "", NETWORK, true, true)
-WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", "", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", "", "", "", IDLE, true, true)
 WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, true, true)
-WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait for network request in queue", "pcode", "level", "priority", CONFIGURATION, true, true)
+WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait in request queue", "pcode", "level", "priority", CONFIGURATION, true, true)
 
 // APPLICATION
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,false, true)
 WAIT_EVENT_DEF(MT_WRITE_LOCK_WAIT,14002,"memstore write lock wait","lock","waiter","owner",APPLICATION,false, false)
 WAIT_EVENT_DEF(ROW_LOCK_WAIT,14003,"row lock wait","lock holder tx id","data seq number","holder lock time",APPLICATION,false, true)
-WAIT_EVENT_DEF(ROW_LOCK_RETRY, 14004, "retry wait because of row lock wait", "lock holder tx id","data seq number","holder lock time", APPLICATION, false , true)
+WAIT_EVENT_DEF(ROW_LOCK_RETRY, 14004, "retry wait because of row lock wait", "lock holder tx id","data seq number","holder lock time", APPLICATION, false , false)
 // CONCURRENCY
 // condition wait has one parameter e.g. address of the condition variable
 WAIT_EVENT_DEF(IO_QUEUE_COND_WAIT, 15066, "io queue condition wait", "address", "", "", CONCURRENCY, true, true)
@@ -98,7 +98,7 @@ WAIT_EVENT_DEF(END_STMT_WAIT, 16003, "wait end stmt", "rollback", "trans_hash_va
 WAIT_EVENT_DEF(REMOVE_PARTITION_WAIT, 16004, "wait remove partition", "tenant_id", "table_id", "partition_id", ADMINISTRATIVE, false, false)
 WAIT_EVENT_DEF(TABLET_LOCK_WAIT, 16016, "tablet lock wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(IND_NAME_CACHE_LOCK_WAIT, 16017, "latch:index name cache lock wait", "address", "number", "tries", CONCURRENCY, true, false)
-WAIT_EVENT_DEF(ASYNC_COMMITTING_WAIT, 16018, "async commiting wait", "", "", "", COMMIT, false, true)
+WAIT_EVENT_DEF(ASYNC_COMMITTING_WAIT, 16018, "tx commiting wait", "", "", "", COMMIT, false, true)
 WAIT_EVENT_DEF(OBCDC_PART_MGR_SCHEMA_VERSION_WAIT, 18000, "oblog part mgr schema version wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(SYNC_GET_GTS_WAIT, 18101, "sync get gts timestamp wait", "address", "", "", NETWORK, true, true)
 
@@ -125,14 +125,14 @@ WAIT_EVENT_DEF(INNER_SESSION_IDLE_WAIT, 30001, "inner session wait to be called"
 WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "sleep_interval", "schema_version", "", CONFIGURATION, true, true)
 WAIT_EVENT_DEF(PALF_THROTTLING, 30101, "palf throttling sleep", "sleep_interval", "", "", USER_IO, false, true)
 WAIT_EVENT_DEF(SLOG_NORMAL_RETRY_SLEEP, 30102, "sleep: slog has io error and retrying", "sleep_interval", "", "", USER_IO, true, true)
-WAIT_EVENT_DEF(INSUFFICIENT_PX_WORKER_RETRY_WAIT, 30103, "retry wait event because of insufficient px worker", "degree of parallel", "number of px workers required", "the total number of idle PX workers currently", CONFIGURATION, true, true)
+WAIT_EVENT_DEF(INSUFFICIENT_PX_WORKER_RETRY_WAIT, 30103, "retry: insufficient px worker wait", "degree of parallel", "number of px workers required", "the total number of idle PX workers currently", CONFIGURATION, true, true)
 
 // cluster 32000-32999
-WAIT_EVENT_DEF(GTS_NOT_READEY_RETRY_WAIT, 32000, "retry wait because of GTS service not ready", "error code", "ls leader addr", "ls leader port", CLUSTER, true, true)
-WAIT_EVENT_DEF(REPLICA_NOT_READABLE_RETRY_WAIT, 32001, "retry wait because of replica not readable", "ls_id", "tablet_id", "", CLUSTER, true, true)
-WAIT_EVENT_DEF(SCHEMA_RETRY_WAIT, 32002, "retry wait because of schema", "error code", "table id", "table schema version", CLUSTER, true, true)
-WAIT_EVENT_DEF(LOCATION_RETRY_WAIT, 32003, "retry wait because of location", "error", "ls_id", "", CLUSTER, true, true)
-WAIT_EVENT_DEF(OTHER_RETRY_WAIT, 32004, "retry wait because of other", "error", "", "", CLUSTER, true, true)
+WAIT_EVENT_DEF(GTS_NOT_READEY_RETRY_WAIT, 32000, "retry: wait GTS ready", "error code", "ls leader addr", "ls leader port", CLUSTER, true, true)
+WAIT_EVENT_DEF(REPLICA_NOT_READABLE_RETRY_WAIT, 32001, "retry: wait replica readable", "ls_id", "tablet_id", "", CLUSTER, true, true)
+WAIT_EVENT_DEF(SCHEMA_RETRY_WAIT, 32002, "retry: wait schema cache load", "error code", "table id", "table schema version", CLUSTER, true, true)
+WAIT_EVENT_DEF(LOCATION_RETRY_WAIT, 32003, "retry: wait location cache load", "error", "ls_id", "", CLUSTER, true, true)
+WAIT_EVENT_DEF(OTHER_RETRY_WAIT, 32004, "retry: other retry wait", "error", "", "", CLUSTER, true, true)
 
 // END. DO NOT MODIFY.
 WAIT_EVENT_DEF(WAIT_EVENT_DEF_END, 99999, "event end", "", "", "", OTHER, false, true)

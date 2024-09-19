@@ -21,7 +21,6 @@ namespace oceanbase
 namespace sql
 {
 
-typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_INDEX_PER_TABLE> ObReducedVisibleColSet;
 typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> ObColumnNameSet;
 /*
 #define ADD_COLUMN_NOT_NULL       (1UL << 0)
@@ -51,7 +50,8 @@ public:
                              bool &is_modify_column_visibility,
                              bool &is_drop_column,
                              ObColumnNameSet &add_column_names_set,
-                             ObReducedVisibleColSet &reduced_visible_col_set);
+                             ObReducedVisibleColSet &reduced_visible_col_set,
+                             ObReducedVisibleColSet &drop_column_names_set);
   int resolve_index_options_oracle(const ParseNode &node);
   int resolve_index_options(const ParseNode &action_node_list, const ParseNode &node,
                             bool &is_add_index);
@@ -75,8 +75,14 @@ public:
                             bool &is_modify_column_visibility,
                             ObReducedVisibleColSet &reduced_visible_col_set);
   int resolve_drop_column(const ParseNode &node,
-                          ObReducedVisibleColSet &reduced_visible_col_set);
-  int resolve_drop_column_nodes_for_mysql(const ParseNode& node, ObReducedVisibleColSet &reduced_visible_col_set);
+                          ObReducedVisibleColSet &reduced_visible_col_set,
+                          ObReducedVisibleColSet &drop_column_names_set);
+  int resolve_drop_column_nodes_for_mysql(
+      const ParseNode& node,
+      ObReducedVisibleColSet &reduced_visible_col_set,
+      ObReducedVisibleColSet &drop_column_names_set);
+  int resolve_alter_table_force(const ParseNode &node);
+  int resolve_drop_unused_columns(const ParseNode &node);
   int resolve_rename_column(const ParseNode &node);
   int fill_table_option(const share::schema::ObTableSchema *table_schema);
   //save table option to AlterTableArg

@@ -17,6 +17,7 @@
 #include "lib/profile/ob_perf_event.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 using namespace oceanbase::transaction;
 using namespace oceanbase::common;
 namespace oceanbase
@@ -44,12 +45,14 @@ ObExclusiveEndTransCallback::~ObExclusiveEndTransCallback()
 
 ObEndTransAsyncCallback::ObEndTransAsyncCallback() :
     ObExclusiveEndTransCallback(),
-    mysql_end_trans_cb_()
+    mysql_end_trans_cb_(),
+    diagnostic_info_(nullptr)
 {
 }
 
 ObEndTransAsyncCallback::~ObEndTransAsyncCallback()
 {
+  reset_diagnostic_info();
 }
 
 void ObEndTransAsyncCallback::callback(int cb_param, const transaction::ObTransID &trans_id)
@@ -60,14 +63,15 @@ void ObEndTransAsyncCallback::callback(int cb_param, const transaction::ObTransI
 
 void ObEndTransAsyncCallback::callback(int cb_param)
 {
-  sql::ObSQLSessionInfo *session_info = mysql_end_trans_cb_.get_sess_info_ptr();
   // Add ASH flags to async commit of transactions
   // In the start of async commit in func named ` ObSqlTransControl::do_end_trans_() `,
   // set the ash flag named  `in_committing_` to true.
-  if (NULL != session_info) {
-    ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
-    ObActiveSessionGuard::resetup_ash(session_info->get_ash_stat());
-    ObActiveSessionGuard::get_stat().finish_async_commiting();
+  ObDiagnosticInfoSwitchGuard g(diagnostic_info_);
+  if (OB_NOT_NULL(diagnostic_info_)) {
+    reset_diagnostic_info();
+    ObActiveSessionGuard::get_stat().exec_phase().in_committing_ = false;
+    ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = true;
+    ObLocalDiagnosticInfo::get()->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
   }
   bool need_disconnect = false;
   if (OB_UNLIKELY(!has_set_need_rollback_)) {
@@ -92,7 +96,22 @@ void ObEndTransAsyncCallback::callback(int cb_param)
     cb_param = this->last_err_;
     mysql_end_trans_cb_.callback(cb_param);
   }
+}
 
+void ObEndTransAsyncCallback::set_diagnostic_info(common::ObDiagnosticInfo *diagnostic_info)
+{
+  if (nullptr == diagnostic_info_) {
+    diagnostic_info_ = diagnostic_info;
+    common::ObLocalDiagnosticInfo::inc_ref(diagnostic_info_);
+  }
+
+};
+void ObEndTransAsyncCallback::reset_diagnostic_info()
+{
+  if (nullptr != diagnostic_info_) {
+    common::ObLocalDiagnosticInfo::dec_ref(diagnostic_info_);
+    diagnostic_info_ = nullptr;
+  }
 }
 
 }/* ns sql*/

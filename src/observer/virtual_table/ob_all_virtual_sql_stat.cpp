@@ -611,6 +611,23 @@ int ObAllVirtualSqlStat::fill_row(
         cells[cell_idx].set_int(sql_stat_record->get_route_miss_delta());
         break;
       }
+      case FIRST_LOAD_TIME: {
+        int64_t first_load_timestamp = sql_stat_record->get_sql_stat_info().get_first_load_time();
+        if (first_load_timestamp == 0) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_timestamp(first_load_timestamp);
+        }
+        break;
+      }
+      case PLAN_CACHE_HIT_TOTAL: {
+        cells[cell_idx].set_int(sql_stat_record->get_plan_cache_hit_total());
+        break;
+      }
+      case PLAN_CACHE_HIT_DELTA: {
+        cells[cell_idx].set_int(sql_stat_record->get_plan_cache_hit_delta());
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column id", K(col_id));

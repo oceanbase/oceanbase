@@ -105,10 +105,12 @@ const int64_t MAX_LOCK_ID_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_ROWKEY_BUF_LENGTH = 512;
 const int64_t MAX_LOCK_REMOTE_ADDR_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_MODE_BUF_LENGTH = 8;
-const int64_t MAX_LOCK_OBJ_TYPE_BUF_LENGTH = 16;
+const int64_t MAX_LOCK_OBJ_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_LOCK_OP_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_LOCK_OP_STATUS_BUF_LENGTH = 16;
 const int64_t MAX_LOCK_OP_EXTRA_INFO_LENGTH = 256;
+const int64_t MAX_LOCK_DETECT_PARAM_LENGTH = 512;
+const int64_t MAX_LOCK_OP_PRIORITY_BUF_LENGTH = 16;
 const int64_t MAX_SERVICE_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_CHECKPOINT_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_FREEZE_CHECKPOINT_LOCATION_BUF_LENGTH = 16;
@@ -444,7 +446,7 @@ const int64_t OB_SCHEMA_START_VERSION = 100;
 const int64_t OB_SYS_PARAM_ROW_KEY_LENGTH = 192;
 const int64_t OB_MAX_SYS_PARAM_NAME_LENGTH = 128;
 const int64_t OB_MAX_SYS_PARAM_VALUE_LENGTH = 1024;
-const int64_t OB_MAX_SYS_PARAM_NUM = 600;
+const int64_t OB_MAX_SYS_PARAM_NUM = 700;
 const int64_t OB_MAX_PREPARE_STMT_NUM_PER_SESSION = 512;
 const uint32_t INVALID_SESSID = UINT32_MAX;
 const int64_t OB_MAX_VAR_NUM_PER_SESSION = 1024;
@@ -1574,19 +1576,22 @@ OB_INLINE bool is_not_virtual_tenant_id(const uint64_t tenant_id)
   return !is_virtual_tenant_id(tenant_id);
 }
 
+bool is_valid_tenant_id(const uint64_t tenant_id);
 const uint64_t META_TENANT_MASK = (uint64_t)0x1;
 OB_INLINE bool is_meta_tenant(const uint64_t tenant_id)
 {
   return !is_sys_tenant(tenant_id)
          && !is_virtual_tenant_id(tenant_id)
-         && 1 == (tenant_id & META_TENANT_MASK);
+         && 1 == (tenant_id & META_TENANT_MASK)
+         && is_valid_tenant_id(tenant_id);
 }
 
 OB_INLINE bool is_user_tenant(const uint64_t tenant_id)
 {
   return !is_sys_tenant(tenant_id)
          && !is_virtual_tenant_id(tenant_id)
-         && 0 == (tenant_id & META_TENANT_MASK);
+         && 0 == (tenant_id & META_TENANT_MASK)
+         && is_valid_tenant_id(tenant_id);
 }
 
 OB_INLINE uint64_t gen_user_tenant_id(const uint64_t tenant_id)
@@ -2442,7 +2447,8 @@ struct ObNumberDesc
   if (OB_SUCCESS == ret  \
       && OB_SUCCESS != (ret = row.set_cell(table_id, ++column_id, obj))) \
   {\
-    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", to_cstring(obj), ret); \
+    ObCStringHelper helper; \
+    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", helper.convert(obj), ret); \
   }
 
 OB_INLINE int64_t &get_tid_cache()

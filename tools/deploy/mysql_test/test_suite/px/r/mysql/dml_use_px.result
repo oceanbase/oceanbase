@@ -294,34 +294,38 @@ call dbms_stats.gather_table_stats('test','t_p');
 call dbms_stats.gather_table_stats('test','t_p4');
 explain basic delete /*+no_use_px, use_nl(t_p,t_p4), parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
 Query Plan
-========================================
-|ID|OPERATOR                  |NAME    |
-----------------------------------------
-|0 |PX COORDINATOR            |        |
-|1 |└─EXCHANGE OUT DISTR      |:EX10000|
-|2 |  └─PX PARTITION ITERATOR |        |
-|3 |    └─DELETE              |        |
-|4 |      └─NESTED-LOOP JOIN  |        |
-|5 |        ├─TABLE RANGE SCAN|t_p4    |
-|6 |        └─TABLE GET       |t_p     |
-========================================
+===================================================
+|ID|OPERATOR                             |NAME    |
+---------------------------------------------------
+|0 |DISTRIBUTED DELETE                   |        |
+|1 |└─PX COORDINATOR                     |        |
+|2 |  └─EXCHANGE OUT DISTR               |:EX10001|
+|3 |    └─NESTED-LOOP JOIN               |        |
+|4 |      ├─EXCHANGE IN DISTR            |        |
+|5 |      │ └─EXCHANGE OUT DISTR (RANDOM)|:EX10000|
+|6 |      │   └─PX BLOCK ITERATOR        |        |
+|7 |      │     └─TABLE RANGE SCAN       |t_p4    |
+|8 |      └─DISTRIBUTED TABLE GET        |t_p     |
+===================================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=16
-  1 - output(nil), filter(nil), rowset=16
-      dop=4
-  2 - output(nil), filter(nil), rowset=16
-      partition wise, force partition granule
-  3 - output(nil), filter(nil)
+  0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+      dop=10
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_([t_p4.c1(:0)]), use_batch=true
+  4 - output([t_p4.c1]), filter(nil), rowset=16
   5 - output([t_p4.c1]), filter(nil), rowset=16
+      dop=10
+  6 - output([t_p4.c1]), filter(nil), rowset=16
+  7 - output([t_p4.c1]), filter(nil), rowset=16
       access([t_p4.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t_p4.c1]), range[5 ; MAX), 
       range_cond([t_p4.c1 >= 5])
-  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([GROUP_ID], [t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t_p.c1]), range(MIN ; MAX), 
@@ -1016,7 +1020,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
-      update([t_s.c2=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
+      update([t_s.c2=column_conv(INT,PS:(11,0),NULL,20)])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
   2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
@@ -1041,7 +1045,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
-      update([t_s.c2=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
+      update([t_s.c2=column_conv(INT,PS:(11,0),NULL,20)])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
   2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
@@ -1086,7 +1090,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
-      update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
+      update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,20)])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
   2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
@@ -1110,7 +1114,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
-      update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
+      update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,20)])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
   2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
@@ -1159,7 +1163,7 @@ Outputs & filters:
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
-      update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
+      update([t_p.c3=column_conv(INT,PS:(11,0),NULL,20)])
   4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c3], [t_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1185,7 +1189,7 @@ Outputs & filters:
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
-      update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
+      update([t_p.c3=column_conv(INT,PS:(11,0),NULL,20)])
   4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c3], [t_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1226,7 +1230,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
-      update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
+      update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,20)])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
   2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
@@ -1251,7 +1255,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
-      update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
+      update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,20)])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
   2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
@@ -1301,7 +1305,7 @@ Outputs & filters:
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
-      update([pp.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
+      update([pp.c3=column_conv(INT,PS:(11,0),NULL,20)])
   4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=16
       access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1327,7 +1331,7 @@ Outputs & filters:
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
-      update([pp.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
+      update([pp.c3=column_conv(INT,PS:(11,0),NULL,20)])
   4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=16
       access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1368,7 +1372,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
-      update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))], [t_no_p.__pk_increment=T_HIDDEN_PK])
+      update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,20)], [t_no_p.__pk_increment=T_HIDDEN_PK])
   1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
   2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
       dop=10
@@ -1392,7 +1396,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
-      update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))], [t_no_p.__pk_increment=T_HIDDEN_PK])
+      update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,20)], [t_no_p.__pk_increment=T_HIDDEN_PK])
   1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
   2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
       dop=10
@@ -2281,7 +2285,7 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)]),
-      update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))])
+      update([t_p.c3=column_conv(INT,PS:(11,0),NULL,2)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
   2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10

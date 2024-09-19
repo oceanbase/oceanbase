@@ -108,6 +108,8 @@ int TestTenantTransferService::gen_mock_data(const ObTransferTaskID task_id, con
   int ret = OB_SUCCESS;
   ObLSID src_ls(1001);
   ObLSID dest_ls(1002);
+  ObTableLockOwnerID owner_id;
+  owner_id.convert_from_value(static_cast<ObLockOwnerType>(0), 999);
   share::SCN start_scn;
   share::SCN finish_scn;
   start_scn.convert_for_inner_table_field(1666844202200632);
@@ -117,7 +119,7 @@ int TestTenantTransferService::gen_mock_data(const ObTransferTaskID task_id, con
   uint64_t data_version = 0;
   ret = task.init(task_id, src_ls, dest_ls, ObString::make_string("500016:500014"), ObString("500030:500031"), ObString("500016:500015"),
       ObString::make_string("1152921504606846983"), ObString::make_string("1152921504606846983:0"), start_scn, finish_scn, status, trace_id, OB_SUCCESS,
-      ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), ObTableLockOwnerID(999), data_version);
+      ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), owner_id, data_version);
   return ret;
 }
 

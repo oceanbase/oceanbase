@@ -37,53 +37,44 @@ extern bool USE_CO_LATCH;
   do {                              \
   } while(0)
 
-#define TRY_LOCK_RECORD_STAT(latch_id, spin_cnt, ret)                             \
-  do {                                                                            \
-    if (record_stat_ && lib::is_diagnose_info_enabled()) {                        \
-      ObDiagnoseTenantInfo *di = ObDiagnoseTenantInfo::get_local_diagnose_info(); \
-      if (NULL != di) {                                                           \
-        ObLatchStat *p_latch_stat = di->get_latch_stats().get_or_create_item(latch_id); \
-        if (OB_ISNULL(p_latch_stat)) {                                              \
-        } else {                                                                    \
-          ObLatchStat &latch_stat = *p_latch_stat;                                  \
-          if (OB_SUCC(ret)) {                                                       \
-            ++latch_stat.immediate_gets_;                                           \
-          } else {                                                                  \
-            ++latch_stat.immediate_misses_;                                         \
-          }                                                                         \
-          latch_stat.spin_gets_ += spin_cnt;                                        \
-        } \
-      }                                                                           \
-    }                                                                             \
-  } while(0)
+#define TRY_LOCK_RECORD_STAT(latch_id, spin_cnt, ret)                                     \
+  // do {                                                                                    \
+  //   if (record_stat_ && lib::is_diagnose_info_enabled()) {                                \
+  //     ObTenantDiagnosticInfoSummaryGuard g(ObLocalDiagnosticInfo::get()->get_tenant_id(), \
+  //         ObLocalDiagnosticInfo::get()->get_group_id(), true);                            \
+  //     ObLatchStat *latch_stat = ObLocalDiagnosticInfo::get_latch_stat(latch_id);          \
+  //     if (NULL != latch_stat) {                                                           \
+  //       if (OB_SUCC(ret)) {                                                               \
+  //         ++latch_stat->immediate_gets_;                                                  \
+  //       } else {                                                                          \
+  //         ++latch_stat->immediate_misses_;                                                \
+  //       }                                                                                 \
+  //       latch_stat->spin_gets_ += spin_cnt;                                               \
+  //     }                                                                                   \
+  //   }                                                                                     \
+  // } while (0)
 
-#define LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt)                            \
-  do {                                                                                     \
-    if (record_stat_ && lib::is_diagnose_info_enabled()) {                                 \
-      ObDiagnoseTenantInfo *di = ObDiagnoseTenantInfo::get_local_diagnose_info();          \
-      if (NULL != di) {                                                                    \
-        ObLatchStat *p_latch_stat = di->get_latch_stats().get_or_create_item(latch_id);      \
-        if (OB_ISNULL(p_latch_stat)) {                                                       \
-        } else {                                                                             \
-          ObLatchStat &latch_stat = *p_latch_stat;                                           \
-          ++latch_stat.gets_;                                                                \
-          latch_stat.spin_gets_ += spin_cnt;                                                 \
-          latch_stat.sleeps_ += yield_cnt;                                                   \
-          if (OB_UNLIKELY(waited)) {                                                         \
-            ++latch_stat.misses_;                                                            \
-            ObDiagnoseSessionInfo *dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();   \
-            if (NULL != dsi) {                                                               \
-              latch_stat.wait_time_ += dsi->get_curr_wait().wait_time_;                      \
-              if (dsi->get_curr_wait().wait_time_ > 1000 * 1000) {                           \
-                COMMON_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "The Latch wait too much time, ", \
-                    K(dsi->get_curr_wait()), KCSTRING(lbt()));                               \
-              }                                                                              \
-            }                                                                                \
-          }                                                                                   \
-        } \
-      }                                                                                    \
-    }                                                                                      \
-  } while(0)
+#define LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt)                               \
+  // do {                                                                                        \
+  //   if (record_stat_ && lib::is_diagnose_info_enabled()) {                                    \
+  //     ObTenantDiagnosticInfoSummaryGuard g(ObLocalDiagnosticInfo::get()->get_tenant_id(),     \
+  //         ObLocalDiagnosticInfo::get()->get_group_id(), true);                                \
+  //     ObLatchStat *latch_stat = ObLocalDiagnosticInfo::get_latch_stat(latch_id);              \
+  //     if (NULL != latch_stat) {                                                               \
+  //       ++latch_stat->gets_;                                                                  \
+  //       latch_stat->spin_gets_ += spin_cnt;                                                   \
+  //       latch_stat->sleeps_ += yield_cnt;                                                     \
+  //       if (OB_UNLIKELY(waited)) {                                                            \
+  //         ++latch_stat->misses_;                                                              \
+  //         latch_stat->wait_time_ += ObLocalDiagnosticInfo::get()->get_curr_wait().wait_time_; \
+  //         if (ObLocalDiagnosticInfo::get()->get_curr_wait().wait_time_ > 1000 * 1000) {       \
+  //           COMMON_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "The Latch wait too much time, ",      \
+  //               K(ObLocalDiagnosticInfo::get()->get_curr_wait()), KCSTRING(lbt()));           \
+  //         }                                                                                   \
+  //       }                                                                                     \
+  //     }                                                                                       \
+  //   }                                                                                         \
+  // } while (0)
 
 struct ObLatchWaitMode
 {

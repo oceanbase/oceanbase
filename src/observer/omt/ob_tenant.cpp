@@ -52,6 +52,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/engine/px/ob_px_worker.h"
 #include "lib/thread/protected_stack_allocator.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -269,7 +270,6 @@ void ObPxPool::set_px_thread_name()
 void ObPxPool::run(int64_t idx)
 {
   ATOMIC_INC(&active_threads_);
-  ObBKGDSessInActiveGuard inactive_guard;
   set_thread_idx(idx);
   // Create worker for current thread.
   ObPxWorker worker;
@@ -283,6 +283,7 @@ void ObPxPool::run1()
   int ret = OB_SUCCESS;
   set_px_thread_name();
   ObTLTaGuard ta_guard(tenant_id_);
+  common::ObBackGroundSessionGuard backgroud_session_guard(tenant_id_, group_id_);
   auto *pm = common::ObPageManager::thread_local_instance();
   if (OB_LIKELY(nullptr != pm)) {
     pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::DEFAULT_CTX_ID);
@@ -758,6 +759,7 @@ ObTenant::ObTenant(const int64_t id,
       tenant_meta_(),
       shrink_(0),
       total_worker_cnt_(0),
+      total_ddl_thread_cnt_(0),
       gc_thread_(nullptr),
       has_created_(false),
       stopped_(0),
@@ -1337,7 +1339,6 @@ int ObTenant::get_new_request(
   }
 
   if (OB_SUCC(ret)) {
-    EVENT_INC(REQUEST_DEQUEUE_COUNT);
     if (nullptr == req && nullptr != task) {
       req = static_cast<rpc::ObRequest*>(task);
     }
@@ -1730,7 +1731,7 @@ void ObTenant::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    int64_t token = 3;
+    int64_t token = min_worker_cnt();
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
     int64_t threshold = 3 * 1000;
@@ -1746,8 +1747,7 @@ void ObTenant::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
-                 && 0 != w->blocking_ts()
-                 && now - w->blocking_ts() >= threshold
+                 && ((0 != w->blocking_ts() && now - w->blocking_ts() >= threshold) || w->is_doing_ddl())
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
         ++token;

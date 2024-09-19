@@ -95,6 +95,26 @@ void ObS3Logger::LogStream(Logging::LogLevel logLevel, const char* tag, const Aw
 }
 
 /*--------------------------------ObS3Client--------------------------------*/
+// max allowed idle duration for a s3 client: 20min
+static int64_t MAX_S3_CLIENT_IDLE_DURATION_US = 20LL * 600LL * 1000LL * 1000LL;
+
+int set_max_s3_client_idle_duration_us(const int64_t duration_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(duration_us <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arg", K(ret), K(duration_us));
+  } else {
+    MAX_S3_CLIENT_IDLE_DURATION_US = duration_us;
+  }
+  return ret;
+}
+
+int64_t get_max_s3_client_idle_duration_us()
+{
+  return MAX_S3_CLIENT_IDLE_DURATION_US;
+}
+
 ObS3Client::ObS3Client()
     : lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       is_inited_(false),
@@ -148,7 +168,13 @@ int ObS3Client::init(const ObS3Account &account)
   S3ClientConfiguration config(init_values);
   // Re-enables IMDS access for subsequent operations if needed
   config.disableIMDS = false;
-  Aws::Auth::AWSCredentials credentials(account.access_id_, account.secret_key_);
+  Aws::Auth::AWSCredentials credentials;
+  if (OB_ISNULL(account.sts_token_.data_)) {
+    credentials = Aws::Auth::AWSCredentials(account.access_id_, account.secret_key_);
+  } else {
+    credentials = Aws::Auth::AWSCredentials(account.access_id_, account.secret_key_, account.sts_token_.data_);
+  }
+
   SpinWLockGuard guard(lock_);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -209,8 +235,9 @@ bool ObS3Client::try_stop(const int64_t timeout)
   bool is_stopped = true;
   if (OB_SUCCESS == lock_.wrlock(timeout)) {
     if (is_inited_) {
-      const int64_t cur_time = ObTimeUtility::current_time();
-      if (ref_cnt_ <= 0 && cur_time - last_modified_ts_ >= MAX_S3_CLIENT_IDLE_DURATION) {
+      const int64_t cur_time_us = ObTimeUtility::current_time();
+      if (ref_cnt_ <= 0
+          && cur_time_us - last_modified_ts_ >= get_max_s3_client_idle_duration_us()) {
         stopped_ = true;
       } else {
         is_stopped = false;
@@ -429,6 +456,11 @@ ObS3Env::ObS3Env()
   ObS3Logger s3_logger;
   aws_options_.loggingOptions.logLevel = s3_logger.GetLogLevel();
   aws_options_.loggingOptions.logger_create_fn = s3_logger_create_fn;
+  // Adhere to RFC 3986, supporting encoding of reserved characters
+  // such as '-', '_', '.', '$', '@', etc.
+  // Thus, it alleviates the issue of inconsistent server behavior when accessing
+  // COS using S3 SDK.
+  aws_options_.httpOptions.compliantRfc3986Encoding = true;
 }
 
 ObS3Env &ObS3Env::get_instance()
@@ -486,6 +518,7 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
 {
   int ret = OB_SUCCESS;
   const int64_t key = account.hash();
+  client = nullptr;
   SpinWLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -493,29 +526,39 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
   } else if (OB_UNLIKELY(!account.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "S3 account not valid", K(ret));
-  } else if (OB_FAIL(s3_client_map_.get_refactored(key, client))) {
+  } else if (REACH_TIME_INTERVAL(get_max_s3_client_idle_duration_us())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(clean_s3_client_map_())) {
+      OB_LOG(WARN, "failed to clean s3 client map", K(tmp_ret), K(s3_client_map_.size()));
+    }
+  }
+
+  if (FAILEDx(s3_client_map_.get_refactored(key, client))) {
     if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
-      void *client_buf = NULL;
-      if (s3_client_map_.size() > MAX_S3_CLIENT_MAP_THRESHOLD && OB_FAIL(clean_s3_client_map_())) {
-        OB_LOG(WARN, "failed to clean s3 client map", K(ret), K(s3_client_map_.size()));
-      } else if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
+      void *client_buf = nullptr;
+      if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "failed to alloc buf for ob s3 client", K(ret));
       } else {
         client = new(client_buf) ObS3Client();
         if (OB_FAIL(client->init(account))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to init ObS3Client", K(ret), K(account));
         } else if (OB_FAIL(s3_client_map_.set_refactored(key, client))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to insert into s3 client map", K(ret), K(account));
         } else {
           OB_LOG(DEBUG, "succeed create new s3 client", K(account), K(s3_client_map_.size()));
+        }
+
+        if (OB_FAIL(ret)) {
+          if (OB_NOT_NULL(client)) {
+            client->~ObS3Client();
+            client = nullptr;
+          }
+          if (OB_NOT_NULL(client_buf)) {
+            ob_free(client_buf);
+            client_buf = nullptr;
+          }
         }
       }
     } else {
@@ -596,8 +639,13 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       } else if (err_msg.find("region") != std::string::npos
                  && err_msg.find("is wrong; expecting") != std::string::npos) {
         ob_errcode = OB_S3_REGION_MISMATCH;
+      } else if (exception == "InvalidRegionName" || exception == "InvalidBucketName") {
+        // When accessing COS and OSS using the S3 SDK, if the endpoint parameter is incorrect,
+        // S3 does not capture the exception. Instead, we need to set ob_errorcode individually
+        // based on the HTTP response code and the exception name.
+        ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
       } else {
-        ob_errcode = OB_S3_ERROR;
+        ob_errcode = OB_BACKUP_PERMISSION_DENIED;
       }
       break;
     }
@@ -840,6 +888,7 @@ void ObS3Account::reset()
   MEMSET(endpoint_, 0, sizeof(endpoint_));
   MEMSET(access_id_, 0, sizeof(access_id_));
   MEMSET(secret_key_, 0, sizeof(secret_key_));
+  sts_token_.reset();
 }
 
 int64_t ObS3Account::hash() const
@@ -872,23 +921,23 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
       if (OB_ISNULL(token)) {
         break;
       } else if (0 == strncmp(REGION, token, strlen(REGION))) {
-        if (OB_FAIL(set_field(token + strlen(REGION), region_, sizeof(region_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(REGION), region_, sizeof(region_)))) {
           OB_LOG(WARN, "failed to set s3 region", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
-        if (OB_FAIL(set_field(token + strlen(HOST), endpoint_, sizeof(endpoint_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(HOST), endpoint_, sizeof(endpoint_)))) {
           OB_LOG(WARN, "failed to set s3 endpoint", K(ret), KCSTRING(token));
         } else {
           bitmap |= 1;
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
-        if (OB_FAIL(set_field(token + strlen(ACCESS_ID), access_id_, sizeof(access_id_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_ID), access_id_, sizeof(access_id_)))) {
           OB_LOG(WARN, "failed to set s3 access id", K(ret), KCSTRING(token));
         } else {
           bitmap |= (1 << 1);
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
-        if (OB_FAIL(set_field(token + strlen(ACCESS_KEY), secret_key_, sizeof(secret_key_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_KEY), secret_key_, sizeof(secret_key_)))) {
           OB_LOG(WARN, "failed to set s3 secret key", K(ret), KP(token));
         } else {
           bitmap |= (1 << 2);
@@ -920,25 +969,6 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
         KCSTRING(region_), KCSTRING(endpoint_), KCSTRING(access_id_));
   } else {
     reset();
-  }
-  return ret;
-}
-
-int ObS3Account::set_field(const char *value, char *field, const uint32_t field_length)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(value) || OB_ISNULL(field)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invliad arguments", K(ret), KP(value), KP(field));
-  } else {
-    const int64_t value_len = strlen(value);
-    if (value_len >= field_length) {
-      ret = OB_SIZE_OVERFLOW;
-      OB_LOG(WARN, "value is too long", K(ret), KP(value), K(value_len), K(field_length));
-    } else {
-      MEMCPY(field, value, value_len);
-      field[value_len] = '\0';
-    }
   }
   return ret;
 }
@@ -984,8 +1014,8 @@ int ObStorageS3Base::open(const ObString &uri, ObObjectStorageInfo *storage_info
     OB_LOG(WARN, "failed to init s3 base, invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(build_bucket_and_object_name(allocator_, uri, bucket_, object_))) {
     OB_LOG(WARN, "failed to parse uri", K(ret), K(uri));
-  } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
-    OB_LOG(WARN, "failed to get storage info str", K(ret), KPC(storage_info));
+  } else if (OB_FAIL(storage_info->get_authorization_str(info_str, sizeof(info_str), s3_account_.sts_token_))) {
+    OB_LOG(WARN, "failed to get authorization str", K(ret), KPC(storage_info));
   } else if (OB_FAIL(s3_account_.parse_from(info_str, strlen(info_str)))) {
     OB_LOG(WARN, "failed to build s3 account", K(ret));
   } else if (OB_FAIL(ObS3Env::get_instance().get_or_create_s3_client(s3_account_, s3_client_))) {

@@ -11,6 +11,7 @@
  */
 
 #include "ob_learner_list.h"
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {

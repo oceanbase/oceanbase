@@ -241,36 +241,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStmtHint);
 };
 
-struct LogJoinHint
-{
-  LogJoinHint() : join_tables_(),
-                  local_methods_(0),
-                  dist_methods_(0),
-                  slave_mapping_(NULL),
-                  nl_material_(NULL),
-                  local_method_hints_(),
-                  dist_method_hints_() {}
-  int assign(const LogJoinHint &other);
-  int add_join_hint(const ObJoinHint &join_hint);
-  int init_log_join_hint();
-
-  TO_STRING_KV(K_(join_tables),
-               K_(local_methods),
-               K_(dist_methods),
-               K_(slave_mapping),
-               K_(nl_material),
-               K_(local_method_hints),
-               K_(dist_method_hints));
-
-  ObRelIds join_tables_;
-  int64_t local_methods_;
-  int64_t dist_methods_;
-  const ObJoinHint *slave_mapping_;
-  const ObJoinHint *nl_material_;
-  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> local_method_hints_;
-  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> dist_method_hints_;
-};
-
 struct LogTableHint
 {
   LogTableHint() :  table_(NULL),
@@ -301,6 +271,8 @@ struct LogTableHint
                            const ObJoinFilterHint &hint);
   int allowed_skip_scan(const uint64_t index_id, bool &allowed) const;
   int get_index_prefix(const uint64_t index_id, int64_t &index_prefix) const;
+  int check_use_das(uint64_t table_id, bool is_outline_data,
+                     bool &hint_force_das, bool &hint_force_no_das) const;
 
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint),
@@ -316,6 +288,45 @@ struct LogTableHint
   ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
   bool is_ds_hint_conflict_;
+};
+
+struct LogJoinHint
+{
+  LogJoinHint() : join_tables_(),
+                  local_methods_(0),
+                  dist_methods_(0),
+                  slave_mapping_(NULL),
+                  nl_material_(NULL),
+                  local_method_hints_(),
+                  dist_method_hints_() {}
+  int assign(const LogJoinHint &other);
+  int add_join_hint(const ObJoinHint &join_hint);
+  int init_log_join_hint(const ObDMLStmt &stmt,
+                         const ObQueryHint &query_hint,
+                         ObSqlSchemaGuard &schema_guard);
+  int add_init_aj_table_hint(const ObDMLStmt &stmt,
+                             const ObQueryHint &query_hint,
+                             const ObJoinHint &join_hint,
+                             ObSqlSchemaGuard &schema_guard);
+
+  TO_STRING_KV(K_(join_tables),
+               K_(local_methods),
+               K_(dist_methods),
+               K_(slave_mapping),
+               K_(nl_material),
+               K_(local_method_hints),
+               K_(dist_method_hints),
+               K_(aj_scan_hint));
+
+  ObRelIds join_tables_;
+  int64_t local_methods_;
+  int64_t dist_methods_;
+  const ObJoinHint *slave_mapping_;
+  const ObJoinHint *nl_material_;
+  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> local_method_hints_;
+  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> dist_method_hints_;
+  // hint for right scan of nlj when use adaptive join.
+  LogTableHint aj_scan_hint_;
 };
 
 struct LeadingInfo {
@@ -380,7 +391,7 @@ struct ObLogPlanHint
 {
   ObLogPlanHint() { reset(); }
   void reset();
-  int init_normal_hints(const ObIArray<ObHint*> &normal_hints);
+  int init_normal_hints(const ObIArray<ObHint*> &normal_hints, const ObQueryCtx &query_ctx);
 #ifndef OB_BUILD_SPM
   int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
@@ -396,7 +407,9 @@ struct ObLogPlanHint
                            const ObQueryHint &query_hint,
                            const ObIArray<ObHint*> &hints);
   int init_log_table_hints(ObSqlSchemaGuard &schema_guard);
-  int init_log_join_hints();
+  int init_log_join_hints(const ObDMLStmt &stmt,
+                          const ObQueryHint &query_hint,
+                          ObSqlSchemaGuard &schema_guard);
   int add_join_filter_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
                            const ObJoinFilterHint &join_filter_hint);

@@ -270,6 +270,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 493	__all_ncomp_dll	0	201001	1
 494	__all_aux_stat	0	201001	1
 495	__all_index_usage_info	0	201001	1
+496	__all_detect_lock_info	0	201001	1
+497	__all_client_to_server_session_info	0	201001	1
 498	__all_transfer_partition_task	0	201001	1
 499	__all_transfer_partition_task_history	0	201001	1
 501	__wr_sqltext	0	201001	1
@@ -284,9 +286,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 515	__all_user_proxy_role_info_history	0	201001	1
 516	__all_service	0	201001	1
 519	__all_scheduler_job_run_detail_v2	0	201001	1
+520	__all_spm_evo_result	0	201001	1
+521	__all_detect_lock_info_v2	0	201001	1
 522	__all_pkg_type	0	201001	1
 523	__all_pkg_type_attr	0	201001	1
 524	__all_pkg_coll_type	0	201001	1
+525	__wr_sql_plan	0	201001	1
+527	__all_kv_redis_table	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -377,6 +383,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11116	__all_virtual_server_compaction_event_history	2	201001	1
 11118	__all_virtual_ddl_sim_point	2	201001	1
 11119	__all_virtual_ddl_sim_point_stat	2	201001	1
+11120	__all_virtual_res_mgr_sysstat	2	201001	1
 12001	SESSION_VARIABLES	2	201002	1
 12006	GLOBAL_STATUS	2	201002	1
 12008	SESSION_STATUS	2	201002	1
@@ -703,10 +710,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12445	__all_virtual_sqlstat	2	201001	1
 12446	__all_virtual_wr_sqlstat	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
+12448	__all_virtual_detect_lock_info	2	201001	1
+12449	__all_virtual_client_to_server_session_info	2	201001	1
 12450	__all_virtual_sys_variable_default_value	2	201001	1
 12451	__all_virtual_transfer_partition_task	2	201001	1
 12452	__all_virtual_transfer_partition_task_history	2	201001	1
 12454	__all_virtual_wr_sqltext	2	201001	1
+12456	__all_virtual_dbms_lock_allocated	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
 12460	__all_virtual_audit_log_filter	2	201001	1
 12461	__all_virtual_audit_log_user	2	201001	1
@@ -728,10 +738,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12489	__all_virtual_deadlock_detector_stat	2	201001	1
 12491	__all_virtual_log_transport_dest_stat	2	201001	1
 12493	__all_virtual_kv_group_commit_status	2	201001	1
+12495	__all_virtual_spm_evo_result	2	201001	1
 12497	__all_virtual_pkg_type	2	201001	1
 12498	__all_virtual_pkg_type_attr	2	201001	1
 12499	__all_virtual_pkg_coll_type	2	201001	1
 12500	__all_virtual_kv_client_info	2	201001	1
+12501	__all_virtual_wr_sql_plan	2	201001	1
+12503	__all_virtual_kv_redis_table	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1198,6 +1211,14 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21605	INNODB_SYS_FOREIGN_COLS	1	201002	1
 21607	GV$OB_KV_CLIENT_INFO	1	201001	1
 21608	V$OB_KV_CLIENT_INFO	1	201001	1
+21610	GV$OB_RES_MGR_SYSSTAT	1	201001	1
+21611	V$OB_RES_MGR_SYSSTAT	1	201001	1
+21612	DBA_WR_SQL_PLAN	1	201001	1
+21613	CDB_WR_SQL_PLAN	1	201001	1
+21616	DBA_OB_SPM_EVO_RESULT	1	201001	1
+21617	CDB_OB_SPM_EVO_RESULT	1	201001	1
+21618	DBA_OB_KV_REDIS_TABLE	1	201001	1
+21619	CDB_OB_KV_REDIS_TABLE	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

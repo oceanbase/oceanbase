@@ -521,6 +521,10 @@ STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_IDLE_WAIT_TIME, "idle wait time", ObStatClassI
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_DB_TIME, "background database time", ObStatClassIds::SYS, 200012, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, "background database non-idle wait time", ObStatClassIds::SYS, 200013, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, "background database idle wait time", ObStatClassIds::SYS, 200014, false, true, true)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_ALLOC_COUNT, "diagnostic info object allocated count", ObStatClassIds::SYS, 200015, false, true, true)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_ALLOC_FAIL_COUNT, "diagnostic info object allocate failure count", ObStatClassIds::SYS, 200016, false, true, true)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_RETURN_COUNT, "diagnostic info object returned count", ObStatClassIds::SYS, 200017, false, true, true)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_RETURN_FAIL_COUNT, "diagnostic info object return failure count", ObStatClassIds::SYS, 200018, false, true, true)
 
 // wr and ash related  (2100xx)
 STAT_EVENT_ADD_DEF(WR_SNAPSHOT_ELAPSE_TIME, "wr snapshot task elapse time", ObStatClassIds::WR, 210001, false, true, true)
@@ -559,12 +563,12 @@ STAT_EVENT_SET_DEF(STANDBY_FETCH_LOG_BANDWIDTH_LIMIT, "standby fetch log bandwid
 // SQL
 
 // CACHE
-STAT_EVENT_SET_DEF(LOCATION_CACHE_SIZE, "location cache size", ObStatClassIds::CACHE, 120000, false, true, true)
+STAT_EVENT_SET_DEF(LOCATION_CACHE_SIZE, "location cache size", ObStatClassIds::CACHE, 120000, false, true, false)
 STAT_EVENT_SET_DEF(TABLET_LS_CACHE_SIZE, "tablet ls cache size", ObStatClassIds::CACHE, 120001, false, true, true)
 STAT_EVENT_SET_DEF(OPT_TAB_STAT_CACHE_SIZE, "table stat cache size", ObStatClassIds::CACHE, 120002, false, true, true)
 STAT_EVENT_SET_DEF(OPT_TAB_COL_STAT_CACHE_SIZE, "table col stat cache size", ObStatClassIds::CACHE, 120003, false, true, true)
 STAT_EVENT_SET_DEF(INDEX_BLOCK_CACHE_SIZE, "index block cache size", ObStatClassIds::CACHE, 120004, false, true, true)
-STAT_EVENT_SET_DEF(SYS_BLOCK_CACHE_SIZE, "sys block cache size", ObStatClassIds::CACHE, 120005, false, true, true)
+STAT_EVENT_SET_DEF(SYS_BLOCK_CACHE_SIZE, "sys block cache size", ObStatClassIds::CACHE, 120005, false, true, false)
 STAT_EVENT_SET_DEF(USER_BLOCK_CACHE_SIZE, "user block cache size", ObStatClassIds::CACHE, 120006, false, true, true)
 STAT_EVENT_SET_DEF(USER_ROW_CACHE_SIZE, "user row cache size", ObStatClassIds::CACHE, 120008, false, true, true)
 STAT_EVENT_SET_DEF(BLOOM_FILTER_CACHE_SIZE, "bloom filter cache size", ObStatClassIds::CACHE, 120009, false, true, true)
@@ -632,7 +636,7 @@ STAT_EVENT_SET_DEF(OBSERVER_PARTITION_TABLE_UPATER_SYS_QUEUE_SIZE, "observer par
 STAT_EVENT_SET_DEF(OBSERVER_PARTITION_TABLE_UPATER_CORE_QUEUE_SIZE, "observer partition table updater core table queue size", ObStatClassIds::OBSERVER, 170003, false, true, true)
 
 // rootservice
-STAT_EVENT_SET_DEF(RS_START_SERVICE_TIME, "rootservice start time", ObStatClassIds::RS, 180001, false, true, true)
+STAT_EVENT_SET_DEF(RS_START_SERVICE_TIME, "rootservice start time", ObStatClassIds::RS, 180001, false, true, false)
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
 #endif
@@ -678,6 +682,7 @@ struct ObStatEventAddStat
   ObStatEventAddStat();
   int add(const ObStatEventAddStat &other);
   int add(int64_t value);
+  int atomic_add(int64_t value);
   int64_t get_stat_value();
   void reset();
   inline bool is_valid() const { return true; }
@@ -692,7 +697,6 @@ struct ObStatEventSetStat
 {
   //value for a stat
   int64_t stat_value_;
-  int64_t set_time_;
   ObStatEventSetStat();
   int add(const ObStatEventSetStat &other);
   void set(int64_t value);
@@ -709,7 +713,6 @@ inline int64_t ObStatEventSetStat::get_stat_value()
 inline void ObStatEventSetStat::set(int64_t value)
 {
   stat_value_ = value;
-  set_time_ = ObTimeUtility::current_time();
 }
 
 struct ObStatEvent

@@ -103,7 +103,8 @@ public:
   static int print_ash_activity_over_time(const AshReportParams &ash_report_params,
       const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
   static int print_top_sql_with_top_db_time(const AshReportParams &ash_report_params,
-      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff)
+      __attribute__((deprecated));
   static int print_top_sql_with_top_wait_events(const AshReportParams &ash_report_params,
       const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
   static int print_top_sql_command_type(const AshReportParams &ash_report_params,

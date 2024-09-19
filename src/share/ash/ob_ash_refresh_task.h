@@ -24,7 +24,7 @@ namespace share
 class ObAshRefreshTask : public common::ObTimerTask
 {
 public:
-  ObAshRefreshTask(): is_inited_(false), last_scheduled_snapshot_time_(OB_INVALID_TIMESTAMP), prev_write_pos_(0) {}
+  ObAshRefreshTask(): is_inited_(false), last_scheduled_snapshot_time_(OB_INVALID_TIMESTAMP), prev_write_pos_(0), prev_sched_time_(0) {}
   virtual ~ObAshRefreshTask() = default;
   static ObAshRefreshTask &get_instance();
   int start();
@@ -36,6 +36,7 @@ private:
   bool is_inited_;
   int64_t last_scheduled_snapshot_time_;
   int64_t prev_write_pos_;
+  int64_t prev_sched_time_;
 
 };
 }

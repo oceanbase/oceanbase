@@ -92,7 +92,7 @@ def parse_json(json_file_name):
   json_file = open(json_file_name,'r')
   all_the_vars = json_file.read( )
   json_Dict = json.loads(all_the_vars)
-  list_sorted_by_name= sorted(json_Dict.iteritems(), key=lambda d:d[0])
+  list_sorted_by_name= sorted(json_Dict.iteritems(), key=lambda d:d[0].lower())
   list_sorted_by_id= sorted(json_Dict.iteritems(), key=lambda d:d[1]['id'])
   json_file.close()
   return (json_Dict, list_sorted_by_name, list_sorted_by_id)

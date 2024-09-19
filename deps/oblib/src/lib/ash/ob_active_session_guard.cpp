@@ -16,64 +16,23 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "lib/time/ob_tsc_timestamp.h"
+#include "lib/stat/ob_diagnostic_info_util.h"
 
 using namespace oceanbase::common;
-
-thread_local ObActiveSessionStat ObActiveSessionGuard::thread_local_stat_;
 
 // a sample would be taken place up to 20ms after ash iteration begins.
 // if sample time is above this threshold, mean ash execution too slow
 constexpr int64_t ash_iteration_time = 40000;   // 40ms
 
-ObActiveSessionStat *&ObActiveSessionGuard::get_stat_ptr()
-{
-  // before ObActiveSessionGuard constructed,
-  // ensure it can get the dummy value if anyone call get_stat
-  RLOCAL_INIT(ObActiveSessionStat *, stat, &thread_local_stat_);
-  return stat;
-}
+extern uint64_t lib_get_cpu_khz();
 
 ObActiveSessionStat &ObActiveSessionGuard::get_stat()
 {
-  return *get_stat_ptr();
-}
-
-// called when forground session ends.
-void ObActiveSessionGuard::setup_default_ash()
-{
-  resetup_thread_local_ash();
-}
-
-void ObActiveSessionGuard::setup_ash(ObActiveSessionStat &stat)
-{
-  OB_ASSERT(&stat != &thread_local_stat_);
-  if (thread_local_stat_.is_bkgd_active_) {
-    // some case(e.g. rpc) thread_local_stat_ is first activated and then session in session mgr is created.
-    thread_local_stat_.accumulate_elapse_time();
-    thread_local_stat_.is_bkgd_active_ = false;
-  }
-  get_stat_ptr() = &stat;
-  stat.last_ts_ = common::ObTimeUtility::current_time();
-}
-
-void ObActiveSessionGuard::resetup_ash(ObActiveSessionStat &stat)
-{
-  get_stat_ptr() = &stat;
-}
-
-void ObActiveSessionGuard::resetup_thread_local_ash()
-{
-  thread_local_stat_.last_ts_ = common::ObTimeUtility::current_time();
-  get_stat_ptr() = &thread_local_stat_;
-}
-
-// called when background session start to activate.
-void ObActiveSessionGuard::setup_thread_local_ash()
-{
-  get_stat_ptr() = &thread_local_stat_;
-  thread_local_stat_.last_ts_ = common::ObTimeUtility::current_time();
-  thread_local_stat_.tid_ = GETTID();
+  return ObLocalDiagnosticInfo::get()->get_ash_stat();
 }
 
 void ObActiveSessionStat::fixup_last_stat(ObWaitEventDesc &desc)
@@ -89,21 +48,6 @@ void ObActiveSessionStat::fixup_last_stat(ObWaitEventDesc &desc)
   }
 }
 
-const ObActiveSessionStatItem &ObAshBuffer::get(int64_t pos) const
-{
-  return buffer_[pos];
-}
-int64_t ObAshBuffer::copy_from_ash_buffer(const ObActiveSessionStatItem &stat)
-{
-  int64_t idx = (write_pos_++ + buffer_.size()) % buffer_.size();
-  MEMCPY(&buffer_[idx], &stat, sizeof(ObActiveSessionStatItem));
-  buffer_[idx].id_ = write_pos_;
-  if (0 == write_pos_ % WR_ASH_SAMPLE_INTERVAL) {
-    buffer_[idx].is_wr_sample_ = true;
-  }
-  return idx;
-}
-
 // con only be called from ash sample thread(mutex protected).
 void ObActiveSessionStat::set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &ash_buffer)
 {
@@ -113,130 +57,47 @@ void ObActiveSessionStat::set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &a
     fixup_ash_buffer_ = ash_buffer;
   }
 }
-void ObActiveSessionStat::set_async_committing()
+
+ObExecPhase &ObActiveSessionStat::exec_phase()
 {
-  in_committing_ = true;
-  set_ash_waiting(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
-}
+  static thread_local ObExecPhase tl_exec_phase;
+  return this == &ObDiagnosticInfo::dummy_di_.get_ash_stat() ? tl_exec_phase : time_model_;
+};
 
-void ObActiveSessionStat::finish_async_commiting() {
-  in_committing_ = false;
-  finish_ash_waiting();
-}
-
-void ObActiveSessionStat::set_ash_waiting(
-  const int64_t event_no,
-  const int64_t p1 /* = 0 */,
-  const int64_t p2 /* = 0 */,
-  const int64_t p3 /* = 0 */)
+void ObActiveSessionStat::set_sess_active()
 {
-  int ret = OB_SUCCESS;
-  wait_event_begin_ts_ = ObTimeUtility::current_time();
-  set_event(event_no, p1, p2, p3);
-}
-
-void ObActiveSessionStat::finish_ash_waiting() {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(event_no_ == 0 || wait_event_begin_ts_ == 0)) {
-    // if happened. caller of set_ash_waiting should check and revert the wait event.
-  } else {
-    reset_event();
-    const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
-    wait_event_begin_ts_ = 0;
-    if (OB_LIKELY(cur_wait_time > 0)) {
-      if (OB_WAIT_EVENTS[event_no_].wait_class_ != ObWaitClassIds::IDLE) {
-        total_non_idle_wait_time_ += cur_wait_time;
-      } else {
-        total_idle_wait_time_ += cur_wait_time;
-      }
-    }
+  if (!is_active_session_) {
+    last_ts_ = rdtsc();
+    is_active_session_ = true;
+    trace_id_ = *common::ObCurTraceId::get_trace_id();
   }
 }
 
-int64_t ObAshBuffer::append(const ObActiveSessionStatItem &stat)
-{
-  // TODO: optimize performance, eliminate '%'
-  OB_ASSERT(stat.wait_time_ == 0);
-  int64_t idx = (write_pos_++ + buffer_.size()) % buffer_.size();
-  MEMCPY(&buffer_[idx], &stat, sizeof(ObActiveSessionStatItem));
-  buffer_[idx].id_ = write_pos_;
-  const ObActiveSessionStat & ash_stat = static_cast<const ObActiveSessionStat &>(stat);
-  int ret = OB_SUCCESS;
-  if (ash_stat.retry_wait_event_no_ > 0) {
-    // We think retry wait event is more import than normal wait event
-    buffer_[idx].event_no_ = ash_stat.retry_wait_event_no_;
-    buffer_[idx].p1_ = ash_stat.retry_wait_event_p1_;
-    buffer_[idx].p2_ = ash_stat.retry_wait_event_p2_;
-    buffer_[idx].p3_ = ash_stat.retry_wait_event_p3_;
-  }
-  if (0 == write_pos_ % WR_ASH_SAMPLE_INTERVAL) {
-    buffer_[idx].is_wr_sample_ = true;
-  }
-  return idx;
-}
-
-void ObAshBuffer::fixup_stat(int64_t index, const ObWaitEventDesc &desc)
-{
-  if (OB_UNLIKELY(index < 0 || index >= write_pos_)) {
-    // index invalid for fixup, do noting.
-  } else {
-    ObActiveSessionStatItem &stat = buffer_[(index + buffer_.size()) % buffer_.size()];
-    if (OB_UNLIKELY(stat.wait_time_ != 0 || stat.event_no_ != desc.event_no_)) {
-      // wait event invalid for fix up, do noting.
-    } else {
-      stat.wait_time_ = desc.wait_time_;
-      stat.p1_ = desc.p1_;
-      stat.p2_ = desc.p2_;
-      stat.p3_ = desc.p3_;
-#ifndef NDEBUG
-      const char *bt = lbt();
-      int64_t size = std::min(sizeof(stat.bt_) - 1, STRLEN(bt));
-      MEMCPY(stat.bt_, bt, size);
-      stat.bt_[size] = '\0';
-#endif
-    }
-  }
-}
-
-void ObAshBuffer::set_read_pos(int64_t pos)
-{
-  if (OB_UNLIKELY(pos >= write_pos_ || pos < 0)) {
-    // index invalid for read_pos, do nothing.
-  } else {
-    read_pos_ = pos;
-  }
-}
-
-void ObActiveSessionStat::set_bkgd_sess_active()
-{
-  last_ts_ = common::ObTimeUtility::current_time();
-  is_bkgd_active_ = true;
-  trace_id_ = *common::ObCurTraceId::get_trace_id();
-}
-
-void ObActiveSessionStat::set_bkgd_sess_inactive()
+void ObActiveSessionStat::set_sess_inactive()
 {
   accumulate_elapse_time();
-  is_bkgd_active_ = false;
+  is_active_session_ = false;
 }
 
 void ObActiveSessionStat::accumulate_elapse_time()
 {
   if (last_ts_ > 0) {
-    const int64_t cur = common::ObTimeUtility::current_time();
-    bkgd_elapse_time_ += cur - last_ts_;
+    // When set_sess_inactive() is called, there is some time left after last_ts_. So we mark it as
+    // extra time to calculat in next round of calc_db_time when session is active again.
+    const int64_t cur = rdtsc();
+    extra_elapse_time_ += cur - last_ts_;
     last_ts_ = cur;
   }
 }
 
-void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time)
+void ObActiveSessionStat::calc_db_time(
+    ObDiagnosticInfo *di, const int64_t sample_time, const int64_t tsc_sample_time)
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
-    const int64_t delta_time = sample_time - stat.last_ts_ + stat.bkgd_elapse_time_;
-    if (delta_time > 10000000/*10s*/) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "db time up to 10s for one calculation", K(delta_time), K(sample_time), K(stat));
-    }
-    stat.bkgd_elapse_time_ = 0;
+    ObActiveSessionStat &stat = di->get_ash_stat();
+    const int64_t delta_time = (tsc_sample_time - stat.last_ts_ + stat.extra_elapse_time_) * 1000 /
+                               lib_get_cpu_khz();
+    stat.extra_elapse_time_ = 0;
     if (OB_UNLIKELY(delta_time <= 0)) {
       // ash sample happened before set_session_active
       if (delta_time < -ash_iteration_time) {
@@ -253,11 +114,12 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
       stat.delta_db_time_ = 0;
     } else {
       const uint64_t cur_wait_begin_ts = stat.wait_event_begin_ts_;
-      const int64_t cur_event_no = stat.retry_wait_event_no_ ? stat.retry_wait_event_no_ : stat.event_no_;
+      const int64_t cur_event_no = stat.retry_wait_event_no_ > 0 ? stat.retry_wait_event_no_ : stat.event_no_;
       if (OB_UNLIKELY(cur_wait_begin_ts != 0 && cur_event_no != 0)) {
         // has unfinished wait event
-        stat.wait_event_begin_ts_ = sample_time;
-        const uint64_t cur_wait_time = sample_time - cur_wait_begin_ts;
+        stat.wait_event_begin_ts_ = tsc_sample_time;
+        const uint64_t cur_wait_time =
+            (tsc_sample_time - cur_wait_begin_ts) * 1000 / lib_get_cpu_khz();
         if (OB_WAIT_EVENTS[cur_event_no].wait_class_ != ObWaitClassIds::IDLE) {
           stat.total_non_idle_wait_time_ += cur_wait_time;
         } else {
@@ -276,59 +138,51 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
         // LOG_WARN_RET(OB_SUCCESS, "negative db time happened, could be a race condition", K(stat),
         //     K(delta_time), K(delta_non_idle_wait_time), K(delta_idle_wait_time));
       } else {
-        stat.last_ts_ = sample_time;
+        stat.last_ts_ = tsc_sample_time;
         stat.prev_non_idle_wait_time_ = stat.total_non_idle_wait_time_;
         stat.prev_idle_wait_time_ = stat.total_idle_wait_time_;
         // TODO: verify cpu time
         stat.delta_time_ = delta_time;
         stat.delta_cpu_time_ = delta_time - delta_non_idle_wait_time - delta_idle_wait_time;
         stat.delta_db_time_ = delta_time - delta_idle_wait_time;
-
+        // no need to lock, only this function modifies time model related stats.
         if (stat.session_type_ == ObActiveSessionStatItem::SessionType::BACKGROUND) {
-          ObTenantStatEstGuard guard(stat.tenant_id_);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, delta_time);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, stat.delta_cpu_time_);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_DB_TIME, stat.delta_db_time_);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, delta_idle_wait_time);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_BKGD_TIME, delta_time);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_BKGD_CPU, stat.delta_cpu_time_);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_BKGD_DB_TIME, stat.delta_db_time_);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, delta_idle_wait_time);
         } else {
-          ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_, false /* reset_wait_stat*/);
-          EVENT_ADD(SYS_TIME_MODEL_DB_TIME, stat.delta_db_time_);
-          EVENT_ADD(SYS_TIME_MODEL_DB_CPU, stat.delta_cpu_time_);
-          EVENT_ADD(SYS_TIME_MODEL_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
-          EVENT_ADD(SYS_TIME_MODEL_IDLE_WAIT_TIME, delta_idle_wait_time);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_DB_TIME, stat.delta_db_time_);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_DB_CPU, stat.delta_cpu_time_);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
+          di->add_stat(ObStatEventIds::SYS_TIME_MODEL_IDLE_WAIT_TIME, delta_idle_wait_time);
         }
       }
     }
   }
 }
-
-void ObActiveSessionStat::calc_retry_wait_event(ObActiveSessionStat &stat, const int64_t sample_time, const sql::ObSQLSessionInfo* sess_info)
+void ObActiveSessionStat::calc_retry_wait_event(ObActiveSessionStat &stat, const int64_t sample_time)
 {
   int ret = OB_SUCCESS;
   int64_t retry_wait_event_no = stat.retry_wait_event_no_;
-  if (retry_wait_event_no > 0 && retry_wait_event_no != ObWaitEventIds::ROW_LOCK_WAIT
-        && stat.need_calc_wait_event_end_) {
-    if (OB_NOT_NULL(sess_info)) {
-      if (sess_info->get_is_in_retry()) {
-        LOG_DEBUG("[retry wait event] end query retry wait event", K(ret), K(sess_info->get_sessid()),
-                      K(sample_time), K(stat.curr_query_start_time_), K(stat.last_query_exec_use_time_us_));
-        if (stat.curr_query_start_time_ > 0 &&
-              sample_time - stat.curr_query_start_time_ > stat.last_query_exec_use_time_us_)  {
-          // end query retry wait event
-          stat.end_retry_wait_event();
-          if (retry_wait_event_no == ObWaitEventIds::ROW_LOCK_RETRY) {
-            stat.block_sessid_ = 0;
-          }
-        }
-      } else {
-        LOG_DEBUG("[retry wait event] end query retry wait event", K(ret), K(sess_info->get_sessid()),
-                      K(sample_time), K(stat.curr_das_task_start_time_), K(stat.last_das_task_exec_use_time_us_));
-        if (stat.curr_das_task_start_time_ > 0 &&
-              sample_time - stat.curr_das_task_start_time_ > stat.last_das_task_exec_use_time_us_)  {
-          // end das retry wait event
-          stat.end_retry_wait_event();
-        }
+  if (retry_wait_event_no > 0 && stat.need_calc_wait_event_end_) {
+    LOG_DEBUG("[retry wait event] end query retry wait event", K(ret), K(stat.session_id_),
+                  K(sample_time), K(stat.curr_query_start_time_), K(stat.last_query_exec_use_time_us_));
+    if (stat.curr_query_start_time_ > 0 &&
+          sample_time - stat.curr_query_start_time_ > stat.last_query_exec_use_time_us_)  {
+      // end query retry wait event
+      stat.end_retry_wait_event();
+      if (retry_wait_event_no == ObWaitEventIds::ROW_LOCK_WAIT) {
+        stat.block_sessid_ = 0;
+      }
+    } else {
+      LOG_DEBUG("[retry wait event] end query retry wait event", K(ret), K(stat.session_id_),
+                    K(sample_time), K(stat.curr_das_task_start_time_), K(stat.last_das_task_exec_use_time_us_));
+      if (stat.curr_das_task_start_time_ > 0 &&
+            sample_time - stat.curr_das_task_start_time_ > stat.last_das_task_exec_use_time_us_)  {
+        // end das retry wait event
+        stat.end_retry_wait_event();
       }
     }
   }
@@ -361,14 +215,10 @@ void ObActiveSessionStat::end_retry_wait_event()
 
 void ObActiveSessionStat::begin_row_lock_wait_event()
 {
-  if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_RETRY || retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT) {
-    retry_wait_event_no_ =  ObWaitEventIds::ROW_LOCK_WAIT;
-  } else if (retry_wait_event_no_ == 0) {
-    begin_retry_wait_event(
-        ObWaitEventIds::ROW_LOCK_WAIT,
-        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_tx_id_),
-        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_data_seq_num_),
-        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_lock_timestamp_));
+  if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT) {
+    need_calc_wait_event_end_ = false;
+    // After entering the wait lock queue, query may wait for a long time.
+    // ASH will no longer calculate the end of the ROW_LOCK waiting event in this case.
   } else {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid retry wait event no", K(ret), K(retry_wait_event_no_));
   }
@@ -376,45 +226,90 @@ void ObActiveSessionStat::begin_row_lock_wait_event()
 
 void ObActiveSessionStat::end_row_lock_wait_event()
 {
-  if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT || retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_RETRY) {
+  if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT) {
     end_retry_wait_event();
     block_sessid_ = 0;
   } else {
+    block_sessid_ = 0;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "error wait event no", K(ret), K(retry_wait_event_no_));
   }
 }
 
-void ObActiveSessionGuard::set_bkgd_sess_active()
+void ObActiveSessionGuard::set_sess_active()
 {
-  get_stat().set_bkgd_sess_active();
+  get_stat().set_sess_active();
 }
 
-void ObActiveSessionGuard::set_bkgd_sess_inactive()
+void ObActiveSessionGuard::set_sess_inactive()
 {
-  get_stat().set_bkgd_sess_inactive();
+  get_stat().set_sess_inactive();
 }
 
-ObRPCActiveGuard::ObRPCActiveGuard(int pcode, int64_t tenant_id)
-    : prev_is_bkgd_active_(true)
+const ObActiveSessionStatItem &ObAshBuffer::get(int64_t pos) const
 {
-  prev_is_bkgd_active_ = ObActiveSessionGuard::get_stat().is_bkgd_active_;
-  prev_tenant_id_ = ObActiveSessionGuard::get_stat().tenant_id_;
-  ObActiveSessionGuard::get_stat().pcode_ = pcode;
-  ObActiveSessionGuard::get_stat().tenant_id_ = tenant_id;
-  ObActiveSessionGuard::set_bkgd_sess_active();
+  return buffer_[pos];
 }
-
-ObRPCActiveGuard::~ObRPCActiveGuard()
+int64_t ObAshBuffer::copy_from_ash_buffer(const ObActiveSessionStatItem &stat)
 {
-  const ObActiveSessionStat *stat = &ObActiveSessionGuard::get_stat();
-  if (OB_UNLIKELY(stat != &ObActiveSessionGuard::thread_local_stat_)) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ash stat didn't reset to thread local ash",
-        KPC(stat), K_(ObActiveSessionGuard::thread_local_stat), K(stat), K(&ObActiveSessionGuard::thread_local_stat_));
-    ObActiveSessionGuard::setup_default_ash();
+  int64_t idx = (write_pos_++ + buffer_.size()) % buffer_.size();
+  MEMCPY(&buffer_[idx], &stat, sizeof(ObActiveSessionStatItem));
+  buffer_[idx].id_ = write_pos_;
+  if (0 == write_pos_ % WR_ASH_SAMPLE_INTERVAL) {
+    buffer_[idx].is_wr_sample_ = true;
   }
-  ObActiveSessionGuard::get_stat().is_bkgd_active_ = prev_is_bkgd_active_;
-  ObActiveSessionGuard::get_stat().pcode_ = 0;
-  ObActiveSessionGuard::get_stat().tenant_id_ = prev_tenant_id_;
+  return idx;
+}
+
+int64_t ObAshBuffer::append(const ObActiveSessionStat &stat)
+{
+  // TODO: optimize performance, eliminate '%'
+  OB_ASSERT(stat.wait_time_ == 0);
+  int64_t idx = (write_pos_++ + buffer_.size()) % buffer_.size();
+  MEMCPY(&buffer_[idx], &stat, sizeof(ObActiveSessionStatItem));
+  buffer_[idx].id_ = write_pos_;
+  if (0 == write_pos_ % WR_ASH_SAMPLE_INTERVAL) {
+    buffer_[idx].is_wr_sample_ = true;
+  }
+  if (stat.retry_wait_event_no_ > 0) {
+    // We think retry wait event is more import than normal wait event
+    buffer_[idx].event_no_ = stat.retry_wait_event_no_;
+    buffer_[idx].p1_ = stat.retry_wait_event_p1_;
+    buffer_[idx].p2_ = stat.retry_wait_event_p2_;
+    buffer_[idx].p3_ = stat.retry_wait_event_p3_;
+  }
+  return idx;
+}
+
+void ObAshBuffer::fixup_stat(int64_t index, const ObWaitEventDesc &desc)
+{
+  if (OB_UNLIKELY(index < 0 || index >= write_pos_)) {
+    // index invalid for fixup, do noting.
+  } else {
+    ObActiveSessionStatItem &stat = buffer_[(index + buffer_.size()) % buffer_.size()];
+    if (OB_UNLIKELY(stat.wait_time_ != 0 || stat.event_no_ != desc.event_no_)) {
+      // wait event invalid for fix up, do noting.
+    } else {
+      stat.wait_time_ = desc.wait_time_;
+      stat.p1_ = desc.p1_;
+      stat.p2_ = desc.p2_;
+      stat.p3_ = desc.p3_;
+#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+      const char *bt = lbt();
+      int64_t size = std::min(sizeof(stat.bt_) - 1, STRLEN(bt));
+      MEMCPY(stat.bt_, bt, size);
+      stat.bt_[size] = '\0';
+#endif
+    }
+  }
+}
+
+void ObAshBuffer::set_read_pos(int64_t pos)
+{
+  if (OB_UNLIKELY(pos >= write_pos_ || pos < 0)) {
+    // index invalid for read_pos, do nothing.
+  } else {
+    read_pos_ = pos;
+  }
 }
 
 ObBackgroundSessionIdGenerator &ObBackgroundSessionIdGenerator::get_instance() {
@@ -433,7 +328,12 @@ uint64_t ObBackgroundSessionIdGenerator::get_next_sess_id() {
   uint64_t sessid = 0;
   const uint64_t local_seq = static_cast<uint32_t>(ATOMIC_AAF(&local_seq_, 1));
   sessid |= (local_seq << 32);
-  LOG_INFO("succ to generate background session id", K(sessid));
+  LOG_DEBUG("succ to generate background session id", K(local_seq), K(sessid));
 
   return sessid;
+}
+
+bool ObBackgroundSessionIdGenerator::is_background_session_id(uint64_t session_id)
+{
+  return session_id & 0xFFFFF;
 }

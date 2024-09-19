@@ -1345,6 +1345,12 @@ int ObObj::build_not_strict_default_value()
       set_urowid(urowid_data);
       break;
     }
+    case ObMySQLDateType:
+      set_mysql_date(ObTimeConverter::MYSQL_ZERO_DATE);
+      break;
+    case ObMySQLDateTimeType:
+      set_mysql_datetime(ObTimeConverter::MYSQL_ZERO_DATETIME);
+      break;
     default:
       ret = OB_INVALID_ARGUMENT;
       _OB_LOG(WARN, "unexpected data type=%u", data_type);
@@ -1861,6 +1867,8 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
   DEF_FUNC_ENTRY(ObNullType),           // 50, decimal_int type place holder
   DEF_FUNC_ENTRY(ObCollectionSQLType), // 51, collection
+  DEF_FUNC_ENTRY(ObMySQLDateType),     // 52, mysql date
+  DEF_FUNC_ENTRY(ObMySQLDateTimeType), // 53, mysql datetime
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -2054,7 +2062,8 @@ bool ObObj::check_collation_integrity() const
   }
   if (!is_ok) {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-      BACKTRACE_RET(WARN, true, common::OB_ERR_UNEXPECTED, "unexpected collation type: %s", to_cstring(get_meta()));
+      ObCStringHelper helper;
+      BACKTRACE_RET(WARN, true, common::OB_ERR_UNEXPECTED, "unexpected collation type: %s", helper.convert(get_meta()));
     }
   }
 #endif
@@ -2116,7 +2125,9 @@ void ObObj::checksum(ObBatchChecksum &bc) const
 
 void ObObj::dump(const int32_t log_level /*= OB_LOG_LEVEL_DEBUG*/) const
 {
-  _OB_NUM_LEVEL_LOG(log_level, 0, "%s", S(*this));
+  ObCStringHelper helper;
+  const char *ptr = helper.convert(*this);
+  _OB_NUM_LEVEL_LOG(log_level, 0, "%s", nullptr != ptr ? ptr : "NULL");
 }
 
 int ObObj::print_varchar_literal(const ObIArray<ObString> &type_infos, char *buffer, int64_t length, int64_t &pos) const

@@ -15,6 +15,48 @@
 namespace oceanbase {
 namespace obmysql {
 
+int Obp20FeedbackProxyInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t org_pos = pos;
+  // resrver for type and len
+  if (pos + TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH > len) {
+    ret = OB_SIZE_OVERFLOW;
+    OB_LOG(WARN, "buffer size overflow", K(ret), K(pos), K(len));
+  } else {
+    MEMSET(buf + pos, 0x00, len - pos);
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(ObProtoTransUtil::store_str(buf,
+                                                 len,
+                                                 pos,
+                                                 feedback_proxy_info_.ptr(),
+                                                 feedback_proxy_info_.length(),
+                                                 type_))) {
+    // ATTENTION: the response packet should be little-endian order.
+    // Please read example in file: ob_feedback_proxy_utils.h
+    OB_LOG(WARN, "failed to store extra info id", K(type_), K(feedback_proxy_info_), K(buf));
+  } else {
+    is_serial_ = true;
+  }
+  OB_LOG(DEBUG,
+         "Obp20FeedbackProxyInfoEncoder::serialize",
+         K(ret),
+         K(len),
+         K(org_pos),
+         K(pos),
+         KPHEX(buf + org_pos, pos - org_pos));
+
+  return ret;
+}
+
+int Obp20FeedbackProxyInfoEncoder::get_serialize_size()
+{
+  return TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH
+         + feedback_proxy_info_.length();
+}
+
 // proxy -> server verify sess info required: addr, sess_id, proxy_sess_id.
 int Obp20SessInfoVeriDecoder::deserialize(const char *buf, int64_t len, int64_t &pos,
                                                             Ob20ExtraInfo &extra_info)
@@ -41,7 +83,7 @@ int Obp20TraceInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
   int ret = OB_SUCCESS;
   // resrver for type and len
   int64_t org_pos = pos;
-  if (pos + 6 > len) {
+  if (pos + TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH > len) {
     ret = OB_SIZE_OVERFLOW;
     OB_LOG(WARN,"buffer size overflow", K(ret), K(pos), K(len));
   } else {
@@ -60,7 +102,7 @@ int Obp20TraceInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
 
 int Obp20TraceInfoEncoder::get_serialize_size() {
   // type, len, val
-  return 2 + 4 + trace_info_.length();
+  return TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH + trace_info_.length();
 }
 
 int Obp20TaceInfoDecoder::deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info) {
@@ -88,7 +130,7 @@ int Obp20SessInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
   int ret = OB_SUCCESS;
   // resrver for type and len
   int64_t org_pos = pos;
-  if (pos + 6 > len) {
+  if (pos + TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH > len) {
     ret = OB_SIZE_OVERFLOW;
     OB_LOG(WARN,"buffer size overflow", K(ret), K(pos), K(len));
   }
@@ -106,7 +148,7 @@ int Obp20SessInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
 
 int Obp20SessInfoEncoder::get_serialize_size() {
   // type, len, val
-  return 2 + 4 + sess_info_.length();
+  return TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH + sess_info_.length();
 }
 
 int Obp20SessInfoDecoder::deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info) {
@@ -131,7 +173,7 @@ int Obp20FullTrcEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
   int ret = OB_SUCCESS;
   // resrver for type and len
   int64_t org_pos = pos;
-  if (pos + 6 > len) {
+  if (pos + TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH > len) {
     ret = OB_SIZE_OVERFLOW;
     OB_LOG(WARN,"buffer size overflow", K(ret), K(pos), K(len));
   } else {
@@ -148,7 +190,7 @@ int Obp20FullTrcEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
 
 int Obp20FullTrcEncoder::get_serialize_size() {
   // type, len, val
-  return 2 + 4 + full_trc_.length();
+  return TYPE_KEY_PLACEHOLDER_LENGTH + TYPE_VALUE_LEGNTH_PLACEHOLDER_LENGTH + full_trc_.length();
 }
 
 int Obp20FullTrcDecoder::deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info) {

@@ -803,6 +803,7 @@ public:
                                  range_optimizer_max_mem_size_(128*1024*1024),
                                  _query_record_size_limit_(65536),
                                  _ob_sqlstat_enable_(true),
+                                 enable_mysql_compatible_dates_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  sql_plan_management_mode_(0),
@@ -831,6 +832,7 @@ public:
     int64_t get_range_optimizer_max_mem_size() const { return range_optimizer_max_mem_size_; }
     int64_t get_query_record_size_limit() const { return _query_record_size_limit_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
+    bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
   private:
@@ -854,6 +856,7 @@ public:
     int64_t range_optimizer_max_mem_size_;
     int64_t _query_record_size_limit_;
     bool _ob_sqlstat_enable_;
+    bool enable_mysql_compatible_dates_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -1309,6 +1312,7 @@ public:
   }
 
   int set_client_id(const common::ObString &client_identifier);
+  virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
 
   bool has_sess_info_modified() const;
   int set_diagnosis_info( uint16_t type,
@@ -1497,6 +1501,11 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_print_sample_ppm();
   }
+  bool is_enable_mysql_compatible_dates()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_mysql_compatible_dates();
+  }
   bool enable_audit_log()
   {
     cached_tenant_config_info_.refresh();
@@ -1566,6 +1575,10 @@ public:
   int on_user_disconnect();
   virtual void reset_tx_variable(bool reset_next_scope = true);
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
+  void set_need_send_feedback_proxy_info(bool v) { need_send_feedback_proxy_info_ = v; }
+  bool is_need_send_feedback_proxy_info() const { return need_send_feedback_proxy_info_; }
+  void set_is_lock_session(bool v) { is_lock_session_ = v; }
+  bool is_lock_session() const { return is_lock_session_; }
   int64_t get_plsql_exec_time();
   void update_pure_sql_exec_time(int64_t elapsed_time);
   const ObServiceNameString& get_service_name() const { return service_name_; }
@@ -1594,9 +1607,9 @@ public:
         }
       }
     }
-    SQL_ENG_LOG(INFO, "check tenant status", K(is_in_transaction()), K(is_obproxy_mode()),
-                K(proxy_version_), K(unit_gc_min_sup_proxy_version_), K(GCONF._enable_unit_gc_wait),
-                K(ret));
+    // SQL_ENG_LOG(INFO, "check tenant status", K(is_in_transaction()), K(is_obproxy_mode()),
+    //             K(proxy_version_), K(unit_gc_min_sup_proxy_version_), K(GCONF._enable_unit_gc_wait),
+    //             K(ret));
     return ret;
   }
   int can_kill_session_immediately(bool &need_kill)
@@ -1623,9 +1636,9 @@ public:
         (void)unlock_query();
       }
     }
-    SQL_ENG_LOG(INFO, "can kill session immediately", K(need_kill), K(is_obproxy_mode()),
-                K(proxy_version_), K(unit_gc_min_sup_proxy_version_), K(GCONF._enable_unit_gc_wait),
-                K(ret));
+    // SQL_ENG_LOG(INFO, "can kill session immediately", K(need_kill), K(is_obproxy_mode()),
+    //             K(proxy_version_), K(unit_gc_min_sup_proxy_version_), K(GCONF._enable_unit_gc_wait),
+    //             K(ret));
     return ret;
   }
 public:
@@ -1812,6 +1825,8 @@ private:
   bool is_send_control_info_ = false;  // whether send control info to client
   bool auto_flush_trace_ = false;
   bool coninfo_set_by_sess_ = false;
+  bool need_send_feedback_proxy_info_ = false;
+  bool is_lock_session_ = false;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {
                             //&usr_var_encoder_,

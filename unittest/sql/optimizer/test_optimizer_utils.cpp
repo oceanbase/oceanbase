@@ -154,7 +154,7 @@ int TestOptimizerUtils::generate_logical_plan(ObResultSet &result, //ObIAllocato
       memory_parser = allocator_.total() - memory_parser;
       memory_resolver = allocator_.total();
 
-      resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+      resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
       ObPhysicalPlanCtx *pctx = exec_ctx_.get_physical_plan_ctx();
       if (OB_SUCC(ret)) {
         pctx->set_original_param_cnt(pctx->get_param_store().count());

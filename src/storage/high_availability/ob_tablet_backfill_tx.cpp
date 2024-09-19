@@ -208,10 +208,13 @@ int ObTabletBackfillTXDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   ls_id_.id(), static_cast<int64_t>(tablet_info_.tablet_id_.id()),
-                                  "dag_net_id", to_cstring(dag_net_id_)))){
-    LOG_WARN("failed to fill info param", K(ret));
+                                  "dag_net_id", helper.convert(dag_net_id_)))){
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -222,10 +225,15 @@ int ObTabletBackfillTXDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletBackfillTXDag: ls_id = %s, tablet_id = %s",
-       to_cstring(ls_id_), to_cstring(tablet_info_.tablet_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(backfill_tx_ctx_), KPC(ha_dag_net_ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletBackfillTXDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, tablet_info_.tablet_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(backfill_tx_ctx_), KPC(ha_dag_net_ctx_));
+    }
   }
   return ret;
 }
@@ -676,6 +684,14 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
             is_memtable_ready = false;
           } else if (table->get_start_scn() >= backfill_tx_ctx_->log_sync_scn_ && table->get_scn_range().is_empty()) {
             // do nothing
+          } else if (table->get_end_scn() > backfill_tx_ctx_->log_sync_scn_) {
+            if (tablet_info_.is_committed_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("memtable end log ts is bigger than log sync scn", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
+            } else {
+              ret = OB_EAGAIN;
+              LOG_WARN("memtable end log ts is bigger than log sync scn, need retry", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
+            }
           } else if (OB_FAIL(table_array.push_back(memtables.at(i)))) {
             LOG_WARN("failed to push table into array", K(ret), KPC(table));
           }
@@ -1114,7 +1130,17 @@ int ObTabletTableFinishBackfillTXTask::prepare_merge_ctx_()
   param_.need_swap_tablet_flag_ = false;
   param_.report_ = nullptr;
 
-  if (OB_FAIL(tablet_merge_ctx_.inner_init_for_backfill(backfill_tx_ctx_->log_sync_scn_, ls_id_, tablet_handle_, table_handle_))) {
+  if (table_handle_.get_table()->get_end_scn() > backfill_tx_ctx_->log_sync_scn_) {
+    ret = OB_EAGAIN;
+    LOG_WARN("sstable end scn is bigger than log sync scn, need retry", K(ret), K(table_handle_), KPC_(backfill_tx_ctx));
+    //backfill tx ctx is batch context, log sync scn is for batch tablets which have same log sync scn
+    //single tablet log sync scn which is changed can not retry batch tablets task.
+    int tmp_ret = OB_SUCCESS;
+    const bool need_retry = false;
+    if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->set_result(ret, need_retry))) {
+      LOG_ERROR("failed to set result", K(ret), K(tmp_ret), KPC(backfill_tx_ctx_));
+    }
+  } else if (OB_FAIL(tablet_merge_ctx_.inner_init_for_backfill(backfill_tx_ctx_->log_sync_scn_, ls_id_, tablet_handle_, table_handle_))) {
     LOG_WARN("failed to do inner init for backfill", K(ret), K(ls_id_), K(tablet_id_));
   }
   return ret;
@@ -1124,6 +1150,8 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
+  ObTablet *tablet = nullptr;
+  ObTabletCreateDeleteMdsUserData user_data;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet table finish backfill tx task do not init", K(ret));
@@ -1132,10 +1160,13 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id_));
   } else if (OB_FAIL(tablet_merge_ctx_.merge_info_.create_sstable(tablet_merge_ctx_))) {
     LOG_WARN("fail to create sstable", K(ret), K(tablet_merge_ctx_));
+  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle_), K(ls_id_));
   } else {
     ObTabletHandle new_tablet_handle;
     const int64_t rebuild_seq = tablet_merge_ctx_.rebuild_seq_;
-    const int64_t transfer_seq = tablet_handle_.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_;
+    const int64_t transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
     ObUpdateTableStoreParam param(&(tablet_merge_ctx_.merged_sstable_),
                                   tablet_merge_ctx_.sstable_version_range_.snapshot_version_,
                                   tablet_merge_ctx_.sstable_version_range_.multi_version_start_,
@@ -1162,6 +1193,18 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
 #endif
 
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
+      LOG_WARN("failed to get tablet status", K(ret), K(ls_id_), KPC(tablet));
+    } else if (user_data.transfer_scn_ != backfill_tx_ctx_->log_sync_scn_) {
+      ret = OB_EAGAIN;
+      LOG_WARN("transfer start scn is invalid, may transfer transaction rollback, need retry", K(ret), K(user_data), KPC(backfill_tx_ctx_));
+      //backfill tx ctx is batch context, log sync scn is for batch tablets which have same log sync scn
+      //single tablet log sync scn which is changed can not retry batch tablets task.
+      int tmp_ret = OB_SUCCESS;
+      const bool need_retry = false;
+      if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->set_result(ret, need_retry))) {
+        LOG_ERROR("failed to set result", K(ret), K(tmp_ret), KPC(backfill_tx_ctx_));
+      }
     } else if (OB_FAIL(ls->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(param));
     } else if (is_mini_merge(tablet_merge_ctx_.param_.merge_type_)) {
@@ -1217,10 +1260,13 @@ int ObFinishBackfillTXDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   backfill_tx_ctx_.ls_id_.id(),
-                                  "dag_net_id", to_cstring(backfill_tx_ctx_.task_id_)))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                  "dag_net_id", helper.convert(backfill_tx_ctx_.task_id_)))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -1231,9 +1277,14 @@ int ObFinishBackfillTXDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObFinishBackfillTXDag: ls_id = %s ", to_cstring(backfill_tx_ctx_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(backfill_tx_ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObFinishBackfillTXDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, backfill_tx_ctx_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, " ");
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(backfill_tx_ctx_));
+    }
   }
   return ret;
 }

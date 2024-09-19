@@ -548,7 +548,8 @@ int ObMPStmtExecute::before_process()
     }
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
-    analysis_checker_.init(pos, pkt.get_clen());
+    // pkt.get_cdata() do not include 1 byte for `request command code`
+    analysis_checker_.init(pos, pkt.get_clen() - 1);
     int32_t stmt_id = -1; //INVALID_STMT_ID
     uint32_t ps_stmt_checksum = 0;
     ObSQLSessionInfo *session = NULL;
@@ -1097,7 +1098,6 @@ int ObMPStmtExecute::set_session_active(ObSQLSessionInfo &session) const
   if (OB_FAIL(session.set_session_state(QUERY_ACTIVE))) {
     LOG_WARN("fail to set session state", K(ret));
   } else {
-    session.setup_ash();
     session.set_query_start_time(get_receive_timestamp());
     session.set_mysql_cmd(obmysql::COM_STMT_EXECUTE);
     session.update_last_active_time();
@@ -1389,6 +1389,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
         sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
         sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+        sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
         ObString sql_id = ObString::make_string(ctx_.sql_id_);
         sqlstat_record.move_to_sqlstat_cache(result.get_session(),
                                                    ctx_.cur_sql_,
@@ -1983,7 +1984,8 @@ int ObMPStmtExecute::process()
       LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
     } else {
       FLTSpanGuard(ps_execute);
-      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                     receive_ts, get_receive_timestamp(),
                     client_info, session.get_client_info(),
                     module_name, session.get_module_name(),

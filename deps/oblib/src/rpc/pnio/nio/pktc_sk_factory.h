@@ -22,7 +22,8 @@ static int pktc_sk_check_connect(pktc_sk_t* s) {
   } else {
     s->conn_ok = 1;
     s->sk_diag_info.local_addr = get_local_addr(s->fd);
-    rk_info("sock connect OK: %p %s", s, T2S(sock_fd, s->fd));
+    char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
+    rk_info("sock connect OK: %p %s", s, sock_fd_str(s->fd, sock_fd_buf, sizeof(sock_fd_buf)));
 	  //send handshake by ussl back-ground thread
     /*
     pktc_t* pc = structof(s->fty, pktc_t, sf);

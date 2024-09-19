@@ -283,6 +283,16 @@ DEF_BOOL(_auto_drop_recovering_auxiliary_tenant, OB_CLUSTER_PARAMETER, "True",
          "control whether to delete auxiliary tenant after recovering tables failed",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(recover_table_concurrency, OB_TENANT_PARAMETER, "0", "[0,16]",
+        "The maximum number of tables that can be recovered concurrently during the cross-tenant table import stage of tables recovery."
+        "Range: [0,16] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(recover_table_dop, OB_TENANT_PARAMETER, "0", "[0,)",
+        "The maximum degree of parallel of the single table recovery during the cross-tenant table import stage of tables recovery."
+        "Range: [0,) in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(_min_malloc_sample_interval, OB_CLUSTER_PARAMETER, "16", "[1, 10000]",
         "the min malloc times between two samples, "
         "which is not more than _max_malloc_sample_interval. "
@@ -382,6 +392,13 @@ DEF_BOOL(_optimizer_sortmerge_join_enabled, OB_TENANT_PARAMETER, "True",
 //
 DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
          "enable/disable nested loop join",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_adaptive_join_enabled, OB_TENANT_PARAMETER, "True",
+         "enable/disable adaptive join",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+//
+DEF_BOOL(_enable_mysql_compatible_dates, OB_TENANT_PARAMETER, "False",
+         "Specifies whether to use MySQL-compatible date format that allows for invalid dates.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //
 DEF_BOOL(_enable_enum_set_subschema, OB_TENANT_PARAMETER, "True",
@@ -1285,7 +1302,7 @@ DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,)",
 DEF_STR_WITH_CHECKER(_ob_ddl_temp_file_compress_func, OB_TENANT_PARAMETER, "AUTO",
         common::ObConfigTempStoreFormatChecker,
         "specific compression in ObTempBlockStore."\
-        "AUTO: use dop to determine compression;"\
+        "AUTO: use compression algorithm from table schema;"\
         "ZSTD: use ZSTD compression algorithm;"\
         "LZ4: use LZ4 compression algorithm;"\
         "NONE: do not use compression.",
@@ -1372,6 +1389,11 @@ DEF_BOOL(plsql_debug, OB_TENANT_PARAMETER, "False",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(plsql_v2_compatibility, OB_TENANT_PARAMETER, "False",
          "allows to control store routine compile action at DDL stage",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(sts_credential, OB_TENANT_PARAMETER, "",
+        common::ObConfigSTScredentialChecker,
+        "STS credential for object storage, "
+        "values: sts_url=xxx&sts_ak=xxx&sts_sk=xxx",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // for bloom filter
 DEF_BOOL(_bloom_filter_enabled, OB_TENANT_PARAMETER, "True",
@@ -1808,6 +1830,9 @@ DEF_BOOL(_xsolapi_generate_with_clause, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_optimizer_group_by_placement, OB_TENANT_PARAMETER, "True",
         "enable group by placement transform rule",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_complex_cbqt_table_num, OB_TENANT_PARAMETER, "10", "[0,)",
+        "cost-based transform will be disabled when table count in a single stmt exceeds threshold",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_wait_interval_after_parallel_ddl, OB_TENANT_PARAMETER, "30s", "[0s,)",
         "time interval for waiting other servers to refresh schema after parallel ddl is done",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1865,14 +1890,18 @@ DEF_INT(_ha_tablet_info_batch_count, OB_TENANT_PARAMETER, "0", "[0,]",
 DEF_TIME(_ha_rpc_timeout, OB_TENANT_PARAMETER, "0", "[0,120s]",
          "the rpc timeout for storage high availability. Range:[0, 120s]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "2147483647", "[1, 2147483647]"
+DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
          "specifies transform how much const params in IN list to values table",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_ob_ash_size, OB_CLUSTER_PARAMETER, "0", "[0,1G]",
-        "to limit the memory size for ash buffer. Range: [0,1G]",
+DEF_CAP(_ob_ash_size, OB_CLUSTER_PARAMETER, "0M", "[0,1G]",
+        "to limit the memory size for ash buffer. Range: [0,1G] 0 means using default ash size"
+        ", 30MB in normal case, 10M in mini mode",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_ash_enable, OB_CLUSTER_PARAMETER, "True",
          "enable active session history",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_ash_disk_write_enable, OB_CLUSTER_PARAMETER, "True",
+         "enable active session history early flush",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_sqlstat_enable, OB_TENANT_PARAMETER, "True", "enable/disable sql stat",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2055,11 +2084,20 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
 DEF_BOOL(_enable_dbms_lob_partial_update, OB_TENANT_PARAMETER, "False",
          "Enable the capability of dbms_lob to perform partial updates on LOB",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_lock_priority, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable lock priority, which, when activated, gives certain DDL operations the highest table lock precedence.",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(query_memory_limit_percentage, OB_TENANT_PARAMETER, "50", "[0,100]",
+        "the percentage of tenant memory that can be used by a single SQL. The default value is 50. Range: [0,100]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
         "The maximum number of threads that an observer node can compile PL concurrently.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_ddl_worker_isolation, OB_TENANT_PARAMETER, "False",
+         "a switch controling ddl thread isolation",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(enable_parallel_migration, OB_CLUSTER_PARAMETER, "False",
          "turn on parallel migration, observer preferentially choose same zone as src",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2074,3 +2112,14 @@ DEF_TIME(unit_gc_wait_time, OB_CLUSTER_PARAMETER, "1m", "[0, 30d]",
 DEF_BOOL(_enable_unit_gc_wait, OB_CLUSTER_PARAMETER, "True",
          "Used to control enable or disable the unit smooth gc feature, enabled by default.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_disable_record_outrow_lob_in_clog, OB_TENANT_PARAMETER, "False",
+         "Whether to force outrow lob data to be written to CLOG for OBCDC synchronization when lob columns are not updated",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "default",
+                     common::ObConfigS3URLEncodeTypeChecker,
+                     "Determines the URL encoding method for S3 requests."
+                     "\"default\": Uses the S3 standard URL encoding method."
+                     "\"compliantRfc3986Encoding\": Uses URL encoding that adheres to the RFC 3986 standard.",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

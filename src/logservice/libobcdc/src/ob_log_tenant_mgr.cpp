@@ -1946,12 +1946,13 @@ int ObLogTenantMgr::check_tenant_served_(
   need_add_tenant = false;
   is_tenant_served = false;
 
+  ObCStringHelper helper;
   if (OB_UNLIKELY(is_meta_tenant(tenant_info.get_tenant_id()))) {
-    _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: META_TENANT_NOT_SYNC], tenant_info: %s", check_reason, to_cstring(tenant_info));
+    _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: META_TENANT_NOT_SYNC], tenant_info: %s", check_reason, helper.convert(tenant_info));
   } else if (OB_SYS_TENANT_ID == tenant_info.get_tenant_id()) {
     // check sys_tenant first in case of tenant_info of sys_tenant not valid in data_dict mode
     if (TCTX.enable_filter_sys_tenant_) {
-      _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: enable_filter_sys_tenant=true OR data_dict mode], tenant_info: %s", check_reason, to_cstring(tenant_info));
+      _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: enable_filter_sys_tenant=true OR data_dict mode], tenant_info: %s", check_reason, helper.convert(tenant_info));
     } else if (OB_FAIL(filter_tenant(OB_SYS_TENANT_NAME, is_tenant_served))) {
       LOG_ERROR("match sys_tenant with whitelist failed", KR(ret), K(tenant_info));
     } else {
@@ -1961,9 +1962,9 @@ int ObLogTenantMgr::check_tenant_served_(
     }
   } else if (OB_UNLIKELY(! tenant_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    _LOG_ERROR("[ADD_TENANT][FILTE][%s][REASON: TENANT_INFO_NOT_VALID], tenant_info: %s", check_reason, to_cstring(tenant_info));
+    _LOG_ERROR("[ADD_TENANT][FILTE][%s][REASON: TENANT_INFO_NOT_VALID], tenant_info: %s", check_reason, helper.convert(tenant_info));
   } else if (OB_UNLIKELY(share::schema::ObTenantStatus::TENANT_STATUS_NORMAL != tenant_info.get_tenant_status())) {
-    _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: TENANT_STATUS_NOT_NORMAL], tenant_info: %s", check_reason, to_cstring(tenant_info));
+    _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: TENANT_STATUS_NOT_NORMAL], tenant_info: %s", check_reason, helper.convert(tenant_info));
   } else if (! is_current_tenant_info) {
     need_add_tenant = true;
     is_tenant_served = true;
@@ -1971,13 +1972,13 @@ int ObLogTenantMgr::check_tenant_served_(
   } else if (OB_FAIL(filter_tenant(tenant_info.get_tenant_name(), is_tenant_served))) {
     LOG_ERROR("match tenant with whitelist failed", KR(ret), K(tenant_info));
   } else if (! is_tenant_served) {
-    _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: TENANT_STATUS_NOT_MATCH_WHITE_LIST], tenant_info: %s", check_reason, to_cstring(tenant_info));
+    _LOG_INFO("[ADD_TENANT][FILTE][%s][REASON: TENANT_STATUS_NOT_MATCH_WHITE_LIST], tenant_info: %s", check_reason, helper.convert(tenant_info));
   } else {
     need_add_tenant = true;
   }
 
   if (need_add_tenant) {
-    _LOG_INFO("[ADD_TENANT][%s], is_tenant_served = %d, tenant_info: %s", check_reason, is_tenant_served, to_cstring(tenant_info));
+    _LOG_INFO("[ADD_TENANT][%s], is_tenant_served = %d, tenant_info: %s", check_reason, is_tenant_served, helper.convert(tenant_info));
   }
 
   return ret;

@@ -35,7 +35,8 @@ TEST(ObCommitLogSpec, normal)
   log_spec.log_dir_ = NULL;
   ASSERT_FALSE(log_spec.is_valid());
   //to_string() test
-  const char *out = to_cstring(log_spec);
+  ObCStringHelper helper;
+  const char *out = helper.convert(log_spec);
   ASSERT_STRNE(NULL, out);
 }
 
@@ -43,7 +44,8 @@ TEST(ObStorageEnv, normal)
 {
   //to_string() test
   ObStorageEnv env;
-  const char *out = to_cstring(env);
+  ObCStringHelper helper;
+  const char *out = helper.convert(env);
   ASSERT_STRNE(NULL, out);
 }
 
@@ -51,7 +53,8 @@ TEST(ObMicroBlockHeader, normal)
 {
   //to_string() test
   ObMicroBlockHeader micro_header;
-  const char *out = to_cstring(micro_header);
+  ObCStringHelper helper;
+  const char *out = helper.convert(micro_header);
   ASSERT_STRNE(NULL, out);
 }
 
@@ -62,7 +65,8 @@ TEST(ObMacroBlockCommonHeader, normal)
   common_header.set_attr(ObMacroBlockCommonHeader::LinkedBlock);
   ASSERT_TRUE(common_header.is_valid());
   //to_string() test
-  const char *out = to_cstring(common_header);
+  ObCStringHelper helper;
+  const char *out = helper.convert(common_header);
   ASSERT_STRNE(NULL, out);
   //serialization length test
   ASSERT_EQ(common_header.header_size_, common_header.get_serialize_size());
@@ -72,7 +76,8 @@ TEST(ObSSTableMacroBlockHeader, normal)
 {
   //to_string() test
   ObSSTableMacroBlockHeader sstable_header;
-  const char *out = to_cstring(sstable_header);
+  ObCStringHelper helper;
+  const char *out = helper.convert(sstable_header);
   ASSERT_STRNE(NULL, out);
 }
 }//blocksstable

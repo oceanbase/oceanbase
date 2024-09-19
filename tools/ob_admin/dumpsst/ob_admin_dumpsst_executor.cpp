@@ -234,7 +234,8 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
 
 void ObAdminDumpsstExecutor::print_super_block()
 {
-  fprintf(stdout, "SuperBlock: %s\n", to_cstring(OB_SERVER_BLOCK_MGR.get_server_super_block()));
+  ObCStringHelper helper;
+  fprintf(stdout, "SuperBlock: %s\n", helper.convert(OB_SERVER_BLOCK_MGR.get_server_super_block()));
 }
 
 void ObAdminDumpsstExecutor::print_macro_block()

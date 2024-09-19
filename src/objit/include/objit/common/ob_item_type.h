@@ -2591,6 +2591,8 @@ typedef enum ObItemType
   T_PQ_GBY_HINT = 4734,
   T_PQ_DISTINCT_HINT = 4735,
   T_DISTRIBUTE_BASIC = 4736,
+  T_MODULE_DATA = 4738,
+  T_MODULE_NAME = 4739,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

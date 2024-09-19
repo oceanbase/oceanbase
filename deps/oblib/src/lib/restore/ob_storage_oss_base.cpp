@@ -218,7 +218,12 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       }
 
       case OSS_OBJECT_NOT_EXIST: {
-        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        if (OB_NOT_NULL(aos_ret->error_code)
+            && (0 == STRCMP("NoSuchBucket", aos_ret->error_code))) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+        } else {
+          ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        }
         break;
       }
 
@@ -308,7 +313,7 @@ int ObOssEnvIniter::global_init()
 
   common::SpinWLockGuard guard(lock_);
   apr_thread_mutex_t *mutex = nullptr;
-  ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "OSS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
 
   if (is_global_inited_) {
     ret = OB_INIT_TWICE;
@@ -365,9 +370,10 @@ int ObOssEnvIniter::global_init()
 
 void ObOssEnvIniter::global_destroy()
 {
+  int ret = OB_SUCCESS;
   common::SpinWLockGuard guard(lock_);
   if (is_global_inited_) {
-    ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+    OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "OSS_GLOBAL_DESTROY", IO_HANDLED_SIZE_ZERO);
     if (OB_NOT_NULL(OSS_GLOBAL_APR_POOL)) {
       // After successful initialization,
       // the owner of OSS_GLOBAL_APR_ALLOCATOR is set to OSS_GLOBAL_APR_POOL.
@@ -388,6 +394,7 @@ void ObOssAccount::reset_account()
   memset(oss_id_, 0, MAX_OSS_ID_LENGTH);
   memset(oss_key_, 0, MAX_OSS_KEY_LENGTH);
   delete_mode_ = ObIStorageUtil::DELETE;
+  sts_token_.reset();
   is_inited_ = false;
 }
 
@@ -441,10 +448,10 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
   } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "oss account is invalid, fail to init oss base!", K(ret), KPC(storage_info));
-  } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
-    OB_LOG(WARN, "fail to get storage info str", K(ret), KPC(storage_info));
+  } else if (OB_FAIL(storage_info->get_authorization_str(info_str, sizeof(info_str), oss_account_.sts_token_))) {
+    OB_LOG(WARN, "fail to get authorization str", K(ret), KPC(storage_info));
   } else if (OB_FAIL(oss_account_.parse_oss_arg(info_str))) {
-    OB_LOG(WARN, "fail to build oss account", K(ret));
+    OB_LOG(WARN, "fail to build oss account", K(ret), KP(info_str), KPC(storage_info));
   } else if (OB_FAIL(init_oss_options(aos_pool_, oss_option_))) {
     OB_LOG(WARN, "fail to init oss options", K(aos_pool_), K(oss_option_), K(ret));
   } else if (OB_ISNULL(aos_pool_) || OB_ISNULL(oss_option_)) {
@@ -507,15 +514,15 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
       if (NULL == token) {
         break;
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
-        if (OB_FAIL(set_oss_field(token + strlen(HOST), oss_domain_, sizeof(oss_domain_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(HOST), oss_domain_, sizeof(oss_domain_)))) {
           OB_LOG(WARN, "failed to set oss_domain", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
-        if (OB_FAIL(set_oss_field(token + strlen(ACCESS_ID), oss_id_, sizeof(oss_id_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_ID), oss_id_, sizeof(oss_id_)))) {
           OB_LOG(WARN, "failed to set oss_id_", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
-        if (OB_FAIL(set_oss_field(token + strlen(ACCESS_KEY), oss_key_, sizeof(oss_key_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_KEY), oss_key_, sizeof(oss_key_)))) {
           OB_LOG(WARN, "failed to set oss_key_", K(ret));
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
@@ -539,25 +546,6 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
   return ret;
 }
 
-int ObOssAccount::set_oss_field(const char *info, char *field, const int64_t length)
-{
-  int ret = OB_SUCCESS;
-
-  if (NULL == info || NULL == field) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid args", K(ret), KP(info), KP(field));
-  } else {
-    const int64_t info_len = strlen(info);
-    if (info_len >= length) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "info is too long ", K(ret), K(info_len), K(length));
-    } else {
-      MEMCPY(field, info, info_len);
-      field[info_len] = '\0';
-    }
-  }
-  return ret;
-}
 /* only used by pread and init. Initialize one aos_pol and oss_option. Other methods shouldn't call this method.
  * pread need alloc memory on aos_pol and release after read finish */
 int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_options_t *&oss_option)
@@ -588,6 +576,11 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     aos_str_set(&oss_option->config->endpoint, oss_endpoint_);
     aos_str_set(&oss_option->config->access_key_id, oss_account_.oss_id_);
     aos_str_set(&oss_option->config->access_key_secret, oss_account_.oss_key_);
+
+    if (OB_NOT_NULL(oss_account_.sts_token_.data_)) {
+      aos_str_set(&oss_option->config->sts_token, oss_account_.sts_token_.data_);
+    }
+
     oss_option->config->is_cname = 0;
 
     // Set connection timeout, the default value is 10s
@@ -623,6 +616,30 @@ int ObStorageOssBase::reinit_oss_option()
   return ret;
 }
 
+int ObStorageOssBase::check_endpoint_validaty() const
+{
+  int ret = OB_SUCCESS;
+  ObString host(oss_endpoint_);
+  int64_t proto_len = 0;
+  if (host.prefix_match(AOS_HTTP_PREFIX)) {
+    proto_len = strlen(AOS_HTTP_PREFIX);
+  } else if (host.prefix_match(AOS_HTTPS_PREFIX)) {
+    proto_len = strlen(AOS_HTTPS_PREFIX);
+  }
+
+  host += proto_len;
+  if (OB_UNLIKELY(host.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "endpoint is empty", K(ret), K(host), K(oss_endpoint_), K(proto_len));
+  } else if (OB_UNLIKELY(host[0] == '/' || host[0] == '?' || host[0] == '#')) {
+    // If the provided 'host' field, after removing the protocol prefix (http:// or https://),
+    // starts with any of the characters '/', '?', or '#', the OSS C SDK will result in a core dump.
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "endpoint is invalid", K(ret), K(host), K(oss_endpoint_), K(proto_len));
+  }
+  return ret;
+}
+
 int ObStorageOssBase::init_oss_endpoint()
 {
   int ret = OB_SUCCESS;
@@ -640,6 +657,9 @@ int ObStorageOssBase::init_oss_endpoint()
     }
   }
 
+  if (FAILEDx(check_endpoint_validaty())) {
+    OB_LOG(WARN, "endpoint is invalid", K(ret), K(oss_account_));
+  }
   return ret;
 }
 
@@ -854,11 +874,12 @@ static int add_content_md5(oss_request_options_t *options, const char *buf, cons
   } else {
     unsigned char *md5 = nullptr;
     char *b64_value = nullptr;    // store the base64-encoded MD5 value
-    const int in_len = APR_MD5_DIGESTSIZE + 1;  // including trailing '\0'
+    // in_len indicates encoding only for an MD5 of 16 bytes in length, excluding the trailing '\0'.
+    const int in_len = APR_MD5_DIGESTSIZE;
     // Calculate the buffer size needed for the base64-encoded string including the null terminator.
     // Base64 encoding represents every 3 bytes of input with 4 bytes of output,
     // so allocate enough space based on this ratio and add extra byte for the null terminator.
-    const int b64_buf_len = (in_len + 1) * 4 / 3 + 1;
+    const int b64_buf_len = (in_len + 2) * 4 / 3 + 1;
 
     if (OB_ISNULL(md5 = aos_md5(options->pool, buf, (apr_size_t)size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

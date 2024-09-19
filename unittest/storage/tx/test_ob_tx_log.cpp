@@ -62,6 +62,7 @@ ObTxSEQ TEST_MAX_SUBMITTED_SEQ_NO = ObTxSEQ(12345, 0);
 ObTxSEQ TEST_SERIAL_FINAL_SEQ_NO = ObTxSEQ(12346, 0);
 LSKey TEST_LS_KEY;
 ObXATransID TEST_XID;
+tablelock::ObTableLockPrioOpArray TEST_LOCK_OP_ARRAY;
 ObTxPrevLogType TEST_PREV_LOG_TYPE(ObTxPrevLogType::TypeEnum::TRANSFER_IN);
 
 
@@ -214,7 +215,8 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                                        TEST_MAX_SUBMITTED_SEQ_NO,
                                        TEST_CLUSTER_VERSION,
                                        TEST_XID,
-                                       TEST_SERIAL_FINAL_SEQ_NO);
+                                       TEST_SERIAL_FINAL_SEQ_NO,
+                                       TEST_LOCK_OP_ARRAY);
   ObTxPrepareLog filll_prepare(TEST_LS_ARRAY, TEST_LOG_OFFSET, TEST_PREV_LOG_TYPE);
   ObTxCommitLog fill_commit(share::SCN::base_scn(),
                             TEST_CHECKSUM,
@@ -592,6 +594,8 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   EXPECT_EQ(fill_active_state.get_xid(), replay_active_state.get_xid());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_serial_final_seq_no(), replay_active_state.get_serial_final_seq_no());
+  replay_member_cnt++;
+  EXPECT_EQ(fill_active_state.get_prio_op_array().count(), replay_active_state.get_prio_op_array().count());
   replay_member_cnt++;
   EXPECT_EQ(replay_member_cnt, fill_member_cnt);
 

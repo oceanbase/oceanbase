@@ -31,6 +31,8 @@ public:
   static const int64_t TABLE_LIST = 0;
   static const int64_t LOCK_MODE = 1;
   static const int64_t WAIT = 2;
+  static const int64_t MYSQL_LOCK_LIST = 0;
+  static const int64_t LOCK_TABLE_NODE = 0;
 public:
   explicit ObLockTableResolver(ObResolverParams &params)
     : ObDMLResolver(params)
@@ -40,11 +42,13 @@ public:
   virtual int resolve(const ParseNode &parse_tree);
   inline ObLockTableStmt *get_lock_table_stmt() { return static_cast<ObLockTableStmt*>(stmt_); }
 private:
-  int resolve_mysql_mode(const ParseNode &parse_tree);
-  int resolve_oracle_mode(const ParseNode &parse_tree);
-  int resolve_table_list(const ParseNode &table_list);
-  int resolve_lock_mode(const ParseNode &parse_tree);
-  int resolve_wait_lock(const ParseNode &parse_tree);
+  int resolve_mysql_mode_(const ParseNode &parse_tree);
+  int resolve_oracle_mode_(const ParseNode &parse_tree);
+  int resolve_oracle_table_list_(const ParseNode &table_list);
+  int resolve_oracle_lock_mode_(const ParseNode &parse_tree);
+  int resolve_oracle_wait_lock_(const ParseNode &parse_tree);
+
+  int resolve_mysql_lock_node_(const ParseNode &parse_node);
 
   DISALLOW_COPY_AND_ASSIGN(ObLockTableResolver);
 };

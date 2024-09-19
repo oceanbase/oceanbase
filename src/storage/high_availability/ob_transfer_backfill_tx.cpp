@@ -560,10 +560,19 @@ int ObTransferBackfillTXCtx::fill_comment(char *buf, const int64_t buf_len) cons
   } else if (NULL == buf || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "transfer backfill TX :tenant_id = %s, task_id = %s, "
-      "src_ls_id = %s, dest_ls_id = %s, transfer_scn = %s", to_cstring(tenant_id_),
-      to_cstring(task_id_), to_cstring(src_ls_id_), to_cstring(dest_ls_id_), to_cstring(backfill_scn_)))) {
-    LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+  } else {
+    ret = databuff_printf(buf, buf_len, pos,
+        "transfer backfill TX :tenant_id = %lu, task_id = ", tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, task_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", src_ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, src_ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", dest_ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, dest_ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", transfer_scn = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, backfill_scn_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+    }
   }
   return ret;
 }
@@ -754,11 +763,18 @@ int ObTransferBackfillTXDagNet::fill_comment(char *buf, const int64_t buf_len) c
     LOG_WARN("transfer backfill tx dag net do not init ", K(ret));
   } else if (OB_FAIL(ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     LOG_WARN("failed to trace task id to string", K(ret), K(ctx_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObTransferBackfillTXDagNet: tenant_id=%s, src_ls_id=%s, dest_ls_id=%s, trace_id=%s, start_scn=%s",
-      to_cstring(ctx_.tenant_id_), to_cstring(ctx_.src_ls_id_), to_cstring(ctx_.dest_ls_id_),
-      task_id_str, to_cstring(ctx_.backfill_scn_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos,
+        "ObTransferBackfillTXDagNet: tenant_id=%lu, src_ls_id=", ctx_.tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.src_ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", dest_ls_id=");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.dest_ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", trace_id=%s, start_scn=", task_id_str);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.backfill_scn_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+    }
   }
   return ret;
 }
@@ -769,11 +785,20 @@ int ObTransferBackfillTXDagNet::fill_dag_net_key(char *buf, const int64_t buf_le
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer backfill tx dag net do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObTransferBackfillTXDagNet: tenant_id=%s, src_ls_id = %s, dest_ls_id = %s, task_id=%s, start_scn=%s",
-      to_cstring(ctx_.tenant_id_), to_cstring(ctx_.src_ls_id_), to_cstring(ctx_.dest_ls_id_),
-      to_cstring(ctx_.task_id_),to_cstring(ctx_.backfill_scn_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos,
+        "ObTransferBackfillTXDagNet: tenant_id = %lu, src_ls_id =", ctx_.tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.src_ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", dest_ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.dest_ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", task_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.task_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", start_scn = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_.backfill_scn_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+    }
   }
   return ret;
 }
@@ -912,11 +937,18 @@ int ObStartTransferBackfillTXDag::fill_dag_key(char *buf, const int64_t buf_len)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObTransferBackfillTXCtx *>(ha_dag_net_ctx_))) {
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObStartTransferBackfillTXDag: tenant_id=%s, ls_id=%s, task_id=%s, start_scn=%s",
-         to_cstring(self_ctx->tenant_id_), to_cstring(self_ctx->src_ls_id_),
-         to_cstring(self_ctx->task_id_),to_cstring(self_ctx->backfill_scn_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos,
+        "ObStartTransferBackfillTXDag: tenant_id=%lu, ls_id=", self_ctx->tenant_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, self_ctx->src_ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", task_id=");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, self_ctx->task_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", start_scn=");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, self_ctx->backfill_scn_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
+    }
   }
   return ret;
 }
@@ -967,12 +999,15 @@ int ObStartTransferBackfillTXDag::fill_info_param(compaction::ObIBasicInfoParam 
     ret = OB_NOT_INIT;
     LOG_WARN("start transfer backfill tx dag do not init", K(ret));
   } else if (FALSE_IT(ctx = static_cast<ObTransferBackfillTXCtx *>(ha_dag_net_ctx_))) {
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 static_cast<int64_t>(ctx->tenant_id_),
                                 ctx->src_ls_id_.id(),
                                 static_cast<int64_t>(ctx->backfill_scn_.get_val_for_inner_table_field()),
-                                "dag_net_task_id", to_cstring(ctx->task_id_)))){
-    LOG_WARN("failed to fill info param", K(ret));
+                                "dag_net_task_id", helper.convert(ctx->task_id_)))){
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -1421,7 +1456,7 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
   tables_handle.reset();
   ObTabletCreateDeleteMdsUserData src_user_data;
   ObTabletCreateDeleteMdsUserData dest_user_data;
- int64_t src_transfer_seq = 0;
+  int64_t src_transfer_seq = 0;
   int64_t dest_transfer_seq = 0;
   bool need_backill = false;
   share::SCN transfer_scn;
@@ -1472,6 +1507,21 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     } else {
       ret = OB_EAGAIN;
       LOG_WARN("the transfer start transaction was rolledback and the task needs to be retried", K(ret), K(tablet_info), K(src_user_data));
+    }
+  } else if (src_user_data.transfer_scn_ != ctx_->backfill_scn_) {
+    if (tablet_info.is_committed_) {
+      ret = OB_TRANSFER_SYS_ERROR;
+      LOG_ERROR("transfer trans has committed but transfer scn is not same", K(ret), KPC(ctx_), KPC(tablet), K(src_user_data));
+    } else {
+      ret = OB_EAGAIN;
+      LOG_WARN("transfer scn is not equal to user data transfer scn, may transfer", K(ret), K(src_user_data), KPC(ctx_));
+      //backfill tx ctx is batch context, log sync scn is for batch tablets which have same log sync scn
+      //single tablet log sync scn which is changed can not retry batch tablets task.
+      int tmp_ret = OB_SUCCESS;
+      const bool need_retry = false;
+      if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry))) {
+        LOG_WARN("failed to set result", K(tmp_ret), K(ret), KPC(ctx_));
+      }
     }
   } else if (OB_FAIL(tablet->get_tablet_meta().ha_status_.get_restore_status(restore_status))) {
     LOG_WARN("failed to get tablet restore status", K(ret));

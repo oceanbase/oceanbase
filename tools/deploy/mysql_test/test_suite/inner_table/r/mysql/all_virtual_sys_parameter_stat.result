@@ -95,6 +95,7 @@ enable_ddl
 enable_early_lock_release
 enable_global_background_resource_isolation
 enable_kv_ttl
+enable_lock_priority
 enable_major_freeze
 enable_monotonic_weak_read
 enable_ob_ratelimit
@@ -190,6 +191,7 @@ ob_query_switch_leader_retry_timeout
 ob_ratelimit_stat_period
 ob_ssl_invited_common_names
 ob_startup_mode
+ob_storage_s3_url_encode_type
 open_cursors
 optimizer_index_cost_adj
 opt_tab_stat_cache_priority
@@ -200,10 +202,13 @@ plsql_debug
 plsql_v2_compatibility
 px_task_size
 px_workers_per_cpu_quota
+query_memory_limit_percentage
 query_response_time_flush
 query_response_time_range_base
 query_response_time_stats
 range_optimizer_max_mem_size
+recover_table_concurrency
+recover_table_dop
 recyclebin_object_expire_time
 redundancy_level
 replica_parallel_migration_mode
@@ -240,6 +245,7 @@ standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
 storage_meta_cache_priority
 strict_check_os_params
+sts_credential
 syslog_compress_func
 syslog_disk_size
 syslog_file_uncompressed_count
@@ -276,6 +282,7 @@ workers_per_cpu_quota
 writing_throttling_maximum_duration
 writing_throttling_trigger_percentage
 zone
+_adaptive_join_enabled
 _advance_checkpoint_timeout
 _allow_skip_replay_redo_after_detete_tablet
 _audit_mode
@@ -292,11 +299,13 @@ _bloom_filter_ratio
 _cache_wash_interval
 _checkpoint_diagnose_preservation_count
 _chunk_row_store_mem_limit
+_complex_cbqt_table_num
 _ctx_memory_limit
 _datafile_usage_lower_bound_percentage
 _datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
 _delay_resource_recycle_after_correctness_issue
+_disable_record_outrow_lob_in_clog
 _display_mysql_version
 _enable_active_txn_transfer
 _enable_adaptive_compaction
@@ -310,6 +319,7 @@ _enable_convert_real_to_decimal
 _enable_dblink_reuse_connection
 _enable_dbms_job_package
 _enable_dbms_lob_partial_update
+_enable_ddl_worker_isolation
 _enable_defensive_check
 _enable_easy_keepalive
 _enable_enhanced_cursor_validation
@@ -322,6 +332,7 @@ _enable_inner_session_mgr
 _enable_insertup_replace_gts_opt
 _enable_in_range_optimization
 _enable_memleak_light_backtrace
+_enable_mysql_compatible_dates
 _enable_newsort
 _enable_new_query_range_extraction
 _enable_new_sql_nio
@@ -392,6 +403,7 @@ _multimodel_memory_trace_level
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
 _obkv_feature_mode
+_ob_ash_disk_write_enable
 _ob_ash_enable
 _ob_ash_size
 _ob_ddl_temp_file_compress_func

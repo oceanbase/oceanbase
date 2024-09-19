@@ -20,6 +20,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/time/ob_tsc_timestamp.h"
 #include "common/ob_clock_generator.h"
+#include "common/ob_smart_var.h"
 
 namespace oceanbase
 {
@@ -62,53 +63,55 @@ void flush_trace()
       ObSpanCtx* next = span->get_next();
       if (nullptr != span->tags_ || 0 != span->end_ts_) {
         int64_t pos = 0;
-        thread_local char buf[MAX_TRACE_LOG_SIZE];
         int ret = OB_SUCCESS;
         ObTagCtxBase* tag = span->tags_;
         bool first = true;
         char tagstr[] = "\"tags\":[";
         INIT_SPAN(span);
-        while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
-          if (pos + sizeof(tagstr) + 1 >= MAX_TRACE_LOG_SIZE) {
-            ret = OB_BUF_NOT_ENOUGH;
-          } else {
-            buf[pos++] = ',';
-            if (first) {
-              strncpy(buf + pos, tagstr, MAX_TRACE_LOG_SIZE - pos);
-              pos += sizeof(tagstr) - 1;
-              first = false;
+        SMART_VAR(char[MAX_TRACE_LOG_SIZE], buf) {
+          while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
+            if (pos + sizeof(tagstr) + 1 >= MAX_TRACE_LOG_SIZE) {
+              ret = OB_BUF_NOT_ENOUGH;
+            } else {
+              buf[pos++] = ',';
+              if (first) {
+                strncpy(buf + pos, tagstr, MAX_TRACE_LOG_SIZE - pos);
+                pos += sizeof(tagstr) - 1;
+                first = false;
+              }
+              ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);
+              tag = tag->next_;
             }
-            ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);
-            tag = tag->next_;
           }
-        }
-        if (0 != pos) {
-          if (pos + 1 < MAX_TRACE_LOG_SIZE) {
-            buf[pos++] = ']';
-            buf[pos++] = 0;
-          } else {
-            buf[MAX_TRACE_LOG_SIZE - 2] = ']';
-            buf[MAX_TRACE_LOG_SIZE - 1] = 0;
+
+          if (0 != pos) {
+            if (pos + 1 < MAX_TRACE_LOG_SIZE) {
+              buf[pos++] = ']';
+              buf[pos++] = 0;
+            } else {
+              buf[MAX_TRACE_LOG_SIZE - 2] = ']';
+              buf[MAX_TRACE_LOG_SIZE - 1] = 0;
+            }
           }
+          INIT_SPAN(span->source_span_);
+          _FLT_LOG(INFO,
+                   TRACE_PATTERN "%s}",
+                   UUID_TOSTRING(trace.get_trace_id()),
+                   __span_type_mapper[span->span_type_],
+                   UUID_TOSTRING(span->span_id_),
+                   span->start_ts_,
+                   span->end_ts_,
+                   UUID_TOSTRING(OB_ISNULL(span->source_span_) ? OBTRACE->get_root_span_id() : span->source_span_->span_id_),
+                   span->is_follow_ ? "true" : "false",
+                   buf);
+          buf[0] = '\0';
+          IGNORE_RETURN sql::handle_span_record(sql::get_flt_span_manager(), buf, pos, span);
+          if (0 != span->end_ts_) {
+            current_span.remove(span);
+            trace.freed_span_.add_first(span);
+          }
+          span->tags_ = nullptr;
         }
-        INIT_SPAN(span->source_span_);
-        _FLT_LOG(INFO,
-                      TRACE_PATTERN "%s}",
-                      UUID_TOSTRING(trace.get_trace_id()),
-                      __span_type_mapper[span->span_type_],
-                      UUID_TOSTRING(span->span_id_),
-                      span->start_ts_,
-                      span->end_ts_,
-                      UUID_TOSTRING(OB_ISNULL(span->source_span_) ? OBTRACE->get_root_span_id() : span->source_span_->span_id_),
-                      span->is_follow_ ? "true" : "false",
-                      buf);
-        buf[0] = '\0';
-        IGNORE_RETURN sql::handle_span_record(sql::get_flt_span_manager(), buf, pos, span);
-        if (0 != span->end_ts_) {
-          current_span.remove(span);
-          trace.freed_span_.add_first(span);
-        }
-        span->tags_ = nullptr;
       }
       span = next;
     }
@@ -117,8 +120,7 @@ void flush_trace()
 }
 uint64_t UUID::gen_rand()
 {
-  static thread_local std::random_device dev;
-  static thread_local std::mt19937 rng(dev());
+  static thread_local std::mt19937_64 rng(std::random_device{}());
   static thread_local std::uniform_int_distribution<uint64_t> dist;
   return dist(rng);
 }

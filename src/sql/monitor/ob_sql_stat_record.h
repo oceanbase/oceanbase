@@ -73,6 +73,7 @@ public:
     sql_type_ = 0;
     parsing_db_name_[0] = '\0';
     parsing_db_name_[OB_MAX_DATABASE_NAME_LENGTH] = '\0';
+    first_load_time_ = 0;
   }
   ~ObSqlStatInfo() = default;
   int init(const ObSqlStatRecordKey& key,
@@ -92,6 +93,8 @@ public:
   int64_t get_parsing_db_id() const { return parsing_db_id_; }
   const char* get_parsing_db_name() const { return parsing_db_name_; }
   int64_t get_parsing_user_id() const { return parsing_user_id_; }
+  int64_t get_first_load_time() const { return first_load_time_; }
+  void set_first_load_time(const int64_t first_load_time) { first_load_time_ = first_load_time; }
   TO_STRING_KV(K_(key), K_(plan_id), K_(plan_type), K_(query_sql), K_(sql_type), K_(parsing_db_id), K_(parsing_user_id));
 private:
   ObSqlStatRecordKey key_;
@@ -103,6 +106,7 @@ private:
   int64_t parsing_db_id_;
   char parsing_db_name_[OB_MAX_DATABASE_NAME_LENGTH+1];
   int64_t parsing_user_id_;
+  int64_t first_load_time_;
 };
 
 struct ObSqlCtx;
@@ -133,6 +137,8 @@ public:
   void set_partition_cnt(int64_t partition_cnt) { partition_end_ = partition_cnt; }
   bool is_route_miss() const { return is_route_miss_; }
   void set_is_route_miss(const bool is_route_miss) { is_route_miss_ = is_route_miss; }
+  bool is_plan_cache_hit() const { return is_plan_cache_hit_;}
+  void set_is_plan_cache_hit(const bool is_plan_cache_hit) { is_plan_cache_hit_ = is_plan_cache_hit; }
 #define DEF_SQL_STAT_ITEM_DELTA_FUNC(def_name)                 \
     int64_t get_##def_name##_delta() const {                   \
       int64_t delta = def_name##_end_ - def_name##_start_;     \
@@ -160,6 +166,7 @@ public:
 public:
   bool is_in_retry_;
   bool is_route_miss_;
+  bool is_plan_cache_hit_;
 #define DEF_SQL_STAT_ITEM(def_name)           \
   int64_t def_name##_start_;                  \
   int64_t def_name##_end_;
@@ -213,6 +220,7 @@ public:
     DEF_SQL_STAT_ITEM_CONSTRUCT(partition);
     DEF_SQL_STAT_ITEM_CONSTRUCT(nested_sql);
     DEF_SQL_STAT_ITEM_CONSTRUCT(route_miss);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(plan_cache_hit);
 #undef DEF_SQL_STAT_ITEM_CONSTRUCT
   }
 
@@ -255,6 +263,7 @@ public:
     DEF_SQL_STAT_ITEM_DELTA_FUNC(partition);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(nested_sql);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(route_miss);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(plan_cache_hit);
   #undef DEF_SQL_STAT_ITEM_DELTA_FUNC
 
   TO_STRING_KV(K_(sql_stat_info));
@@ -284,6 +293,7 @@ private:
     DEF_SQL_STAT_ITEM(partition);
     DEF_SQL_STAT_ITEM(nested_sql);
     DEF_SQL_STAT_ITEM(route_miss);
+    DEF_SQL_STAT_ITEM(plan_cache_hit);
   #undef DEF_SQL_STAT_ITEM
 };
 

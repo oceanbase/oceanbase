@@ -822,7 +822,12 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
       }
     }
     //将计算后的obj转换成partition 表达式的类型
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx.get_my_session()->get_stmt_type(),
+                                                  ctx.get_my_session(), expr_ctx.cast_mode_))) {
+      LOG_WARN("get_default_cast_mode failed", K(ret));
+    } else {
       ObObjType expected_obj_type = fun_expr_type;
       //对value表达式类型进行cast的时候，要进行提升
       //create table t1 (c1 tinyint) partition by range(c1) (partitions p0 values less than (2500));

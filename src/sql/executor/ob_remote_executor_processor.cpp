@@ -57,7 +57,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
                                                  int64_t sys_schema_version,
                                                  const DependenyTableStore &dependency_tables)
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = true;
   bool table_version_equal = false;
   int ret = OB_SUCCESS;
   process_timestamp_ = ObTimeUtility::current_time();
@@ -763,6 +763,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
 
       if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
         sqlstat_record.record_sqlstat_end_value();
+        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
         sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_ ,plan);
       }
       //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
@@ -853,14 +854,13 @@ int ObRemoteBaseExecuteP<T>::base_after_process()
     //slow mini task, print trace info
     FORCE_PRINT_TRACE(THE_TRACE, "[slow remote task]");
   }
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
+  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = false;
   return ret;
 }
 
 template<typename T>
 void ObRemoteBaseExecuteP<T>::base_cleanup()
 {
-  ObActiveSessionGuard::setup_default_ash();
   exec_ctx_.cleanup_session();
   exec_errcode_ = OB_SUCCESS;
   obrpc::ObRpcProcessor<T>::cleanup();
@@ -1072,6 +1072,7 @@ int ObRpcRemoteExecuteP::process()
       }
       if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
         sqlstat_record.record_sqlstat_end_value();
+        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
         sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_, &phy_plan_);
       }
 

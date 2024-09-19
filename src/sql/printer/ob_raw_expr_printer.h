@@ -29,7 +29,6 @@ namespace sql
 class ObRawExprPrinter
 {
 #define LEN_AND_PTR(str) (str.length()), (str.ptr())
-#define SQL_ESCAPE_STR(str) (to_cstring(ObHexEscapeSqlStr(str)))
 #define _DATA_PRINTF(...) databuff_printf(buf_, buf_len_, *pos_, __VA_ARGS__)
 #define DATA_PRINTF(...)                                           \
   do {                                                              \

@@ -99,7 +99,7 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   int ret = shared_blk_mgr->rebuild_sstable(allocator,
       *(tablet_handle.get_obj()), sstable_, 0, *sstable_index_builder, *index_block_rebuilder, sstable);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, sstable_.meta_->basic_meta_ == sstable.meta_->basic_meta_);
+  ASSERT_EQ(true, sstable_.meta_->basic_meta_.check_basic_meta_equality(sstable.meta_->basic_meta_));
 
   // get old and new sstable
   ObMacroBlockHandle old_handle;

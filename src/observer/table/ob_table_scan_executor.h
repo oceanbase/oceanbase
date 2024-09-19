@@ -90,6 +90,7 @@ private:
   int get_next_row_with_das();
   int check_filter(bool &filter);
   int get_next_row_for_tsc();
+  int gen_scan_ranges(ObIArray<ObNewRange> &scan_ranges);
   bool has_das_scan_task(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op)
   {
     das_op = static_cast<ObDASScanOp*>(das_ref_.find_das_task( tablet_loc, DAS_OP_TABLE_SCAN));
@@ -115,6 +116,8 @@ public:
   virtual int get_next_row(ObNewRow *&row, common::ObIAllocator &allocator);
   virtual ObTableApiScanExecutor *get_scan_executor() { return scan_executor_; };
   virtual int close();
+private:
+  int adjust_output_obj_type(ObObj &obj);
 private:
   ObTableApiScanExecutor *scan_executor_;
   common::ObArenaAllocator row_allocator_; // alloc the memory of result row

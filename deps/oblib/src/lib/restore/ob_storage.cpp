@@ -13,11 +13,13 @@
 #include "ob_storage.h"
 #include "lib/restore/ob_i_storage.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/utility/ob_sort.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/container/ob_array_iterator.h"
 #include "common/ob_smart_var.h"
 #include "common/storage/ob_device_common.h"
 #include "lib/atomic/ob_atomic.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -329,6 +331,7 @@ ObExternalIOCounterGuard::~ObExternalIOCounterGuard()
 /**
  * ------------------------------ObStorageUtil------------------------------
  */
+
 ObStorageUtil::ObStorageUtil()
   : file_util_(),
     oss_util_(),
@@ -345,7 +348,7 @@ ObStorageUtil::ObStorageUtil()
 int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info);
+  OBJECT_STORAGE_GUARD(storage_info, "", IO_HANDLED_SIZE_ZERO);
 
   if (is_init()) {
     ret = OB_INIT_TWICE;
@@ -381,7 +384,8 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
 
 void ObStorageUtil::close()
 {
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  int ret = OB_SUCCESS;
+  OBJECT_STORAGE_GUARD(storage_info_, "", IO_HANDLED_SIZE_ZERO);
   if (NULL != util_) {
     util_->close();
     util_ = NULL;
@@ -545,7 +549,7 @@ int ObStorageUtil::is_exist(const common::ObString &uri, const bool is_adaptive,
   const int64_t start_ts = ObTimeUtility::current_time();
   exist = false;
   ObStorageObjectMeta obj_meta;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_IS_EXIST) OB_SUCCESS;
@@ -562,7 +566,6 @@ int ObStorageUtil::is_exist(const common::ObString &uri, const bool is_adaptive,
     exist = obj_meta.is_exist_;
   }
 
-  print_access_storage_log("is_exist", uri, start_ts);
   return ret;
 }
 
@@ -572,7 +575,7 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, const bool is_ad
   const int64_t start_ts = ObTimeUtility::current_time();
   file_length = -1;
   ObStorageObjectMeta obj_meta;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
@@ -600,7 +603,6 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, const bool is_ad
     }
   }
 
-  print_access_storage_log("get_file_length", uri, start_ts);
   return ret;
 }
 
@@ -609,7 +611,7 @@ int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   ObStorageObjectMeta obj_meta;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_BEFORE_DEL_FILE) OB_SUCCESS;
@@ -649,7 +651,6 @@ int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
     ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_DEL_FILE) OB_SUCCESS;
   }
 #endif
-  print_access_storage_log("del_file", uri, start_ts);
 
   if (OB_FAIL(ret)) {
     EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
@@ -690,7 +691,7 @@ int ObStorageUtil::list_files(
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   char uri_buf[OB_MAX_URI_LENGTH] = {0};
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
   if (OB_UNLIKELY(!is_init())) {
     ret = OB_NOT_INIT;
@@ -710,13 +711,11 @@ int ObStorageUtil::list_files(
     STORAGE_LOG(WARN, "fail to list files", K(ret), K(uri));
   }
 
-  print_access_storage_log("list_files", uri, start_ts, 0);
   if (OB_FAIL(ret)) {
     EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
   }
 
   EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
-
   return ret;
 }
 
@@ -725,7 +724,7 @@ int ObStorageUtil::list_adaptive_files(
     common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
   ObArenaAllocator allocator(APPENDABLE_OBJECT_ALLOCATOR);
   ObStorageListObjectsCtx list_obj_ctx;
@@ -972,7 +971,7 @@ int ObStorageUtil::list_directories(
   int ret = OB_SUCCESS;
   char uri_buf[OB_MAX_URI_LENGTH] = {0};
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
@@ -997,7 +996,6 @@ int ObStorageUtil::list_directories(
   } else if (OB_FAIL(util_->list_directories(uri_buf, op))) {
     STORAGE_LOG(WARN, "failed to list_files", K(ret), K(uri), K(uri_buf));
   }
-  print_access_storage_log("list_files", uri, start_ts, 0);
   return ret;
 }
 
@@ -1008,7 +1006,7 @@ int ObStorageUtil::is_exist(const common::ObString &uri, bool &exist)
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   exist = false;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_IS_EXIST) OB_SUCCESS;
@@ -1029,7 +1027,6 @@ int ObStorageUtil::is_exist(const common::ObString &uri, bool &exist)
     STORAGE_LOG(WARN, "failed to check is exist", K(ret), K(uri));
   }
 
-  print_access_storage_log("is_exist", uri, start_ts);
   return ret;
 }
 
@@ -1038,7 +1035,7 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_le
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   file_length = -1;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
@@ -1071,7 +1068,6 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_le
     }
   }
 
-  print_access_storage_log("get_file_length", uri, start_ts);
   return ret;
 }
 
@@ -1081,7 +1077,7 @@ int ObStorageUtil::get_adaptive_file_length(const common::ObString &uri, int64_t
   const int64_t start_ts = ObTimeUtility::current_time();
   file_length = 0;
   ObStorageObjectMeta obj_meta;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
 #endif
@@ -1123,7 +1119,6 @@ int ObStorageUtil::get_adaptive_file_length(const common::ObString &uri, int64_t
     }
   }
 
-  print_access_storage_log("get_adaptive_file_length", uri, start_ts);
   return ret;
 }
 
@@ -1131,7 +1126,7 @@ int ObStorageUtil::del_file(const common::ObString &uri)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_BEFORE_DEL_FILE) OB_SUCCESS;
@@ -1171,7 +1166,6 @@ int ObStorageUtil::del_file(const common::ObString &uri)
     ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_DEL_FILE) OB_SUCCESS;
   }
 #endif
-  print_access_storage_log("del_file", uri, start_ts);
 
   if (OB_FAIL(ret)) {
     EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
@@ -1185,7 +1179,7 @@ int ObStorageUtil::mkdir(const common::ObString &uri)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
   STORAGE_LOG(DEBUG, "mkdir", K(uri));
 #ifdef ERRSIM
@@ -1210,7 +1204,6 @@ int ObStorageUtil::mkdir(const common::ObString &uri)
     ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_MKDIR) OB_SUCCESS;
   }
 #endif
-  print_access_storage_log("mkdir", uri, start_ts);
   return ret;
 }
 
@@ -1219,7 +1212,7 @@ int ObStorageUtil::list_files(const common::ObString &uri, common::ObBaseDirEntr
   int ret = OB_SUCCESS;
   char uri_buf[OB_MAX_URI_LENGTH] = {0};
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
@@ -1242,13 +1235,11 @@ int ObStorageUtil::list_files(const common::ObString &uri, common::ObBaseDirEntr
     STORAGE_LOG(WARN, "failed to list_files", K(ret), K(uri), K(uri_buf));
   }
 
-  print_access_storage_log("list_files", uri, start_ts, 0);
   if (OB_FAIL(ret)) {
     EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
   }
 
   EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
-
   return ret;
 }
 
@@ -1256,7 +1247,7 @@ int ObStorageUtil::write_single_file(const common::ObString &uri, const char *bu
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, size);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_BEFORE_WRITE_SINGLE_FILE) OB_SUCCESS;
@@ -1273,7 +1264,7 @@ int ObStorageUtil::write_single_file(const common::ObString &uri, const char *bu
     STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
         K(ret), K(uri), K_(device_type));
   } else if (OB_FAIL(util_->write_single_file(uri, buf, size))) {
-        STORAGE_LOG(WARN, "failed to write single file", K(ret), K(uri));
+    STORAGE_LOG(WARN, "failed to write single file", K(ret), K(uri));
   } else {
     EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
@@ -1283,7 +1274,6 @@ int ObStorageUtil::write_single_file(const common::ObString &uri, const char *bu
     ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_WRITE_SINGLE_FILE) OB_SUCCESS;
   }
 #endif
-  print_access_storage_log("write_single_file", uri, start_ts, size);
 
   if (OB_FAIL(ret)) {
     EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
@@ -1291,7 +1281,6 @@ int ObStorageUtil::write_single_file(const common::ObString &uri, const char *bu
 
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
-
   return ret;
 }
 
@@ -1299,7 +1288,7 @@ int ObStorageUtil::del_dir(const common::ObString &uri)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_init())) {
@@ -1312,7 +1301,6 @@ int ObStorageUtil::del_dir(const common::ObString &uri)
   } else if (OB_FAIL(util_->del_dir(uri))) {
     STORAGE_LOG(WARN, "failed to del_file", K(ret), K(uri));
   }
-  print_access_storage_log("del_file", uri, start_ts);
   return ret;
 }
 
@@ -1321,7 +1309,7 @@ int ObStorageUtil::list_directories(const common::ObString &uri, common::ObBaseD
   int ret = OB_SUCCESS;
   char uri_buf[OB_MAX_URI_LENGTH] = {0};
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
@@ -1343,7 +1331,6 @@ int ObStorageUtil::list_directories(const common::ObString &uri, common::ObBaseD
   } else if (OB_FAIL(util_->list_directories(uri_buf, op))) {
     STORAGE_LOG(WARN, "failed to list_directories", K(ret), K(uri), K(uri_buf));
   } 
-  print_access_storage_log("list_directories", uri, start_ts, 0);
   return ret;
 }
 
@@ -1352,7 +1339,7 @@ int ObStorageUtil::is_tagging(const common::ObString &uri, bool &is_tagging)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
   is_tagging = false;
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_init())) {
@@ -1368,7 +1355,6 @@ int ObStorageUtil::is_tagging(const common::ObString &uri, bool &is_tagging)
   } else if (OB_FAIL(util_->is_tagging(uri, is_tagging))) {
     STORAGE_LOG(WARN, "failed to check is tagging", K(ret), K(uri));
   }
-  print_access_storage_log("is_tagging", uri, start_ts, 0);
   return ret;
 }
 
@@ -1376,7 +1362,7 @@ int ObStorageUtil::del_unmerged_parts(const common::ObString &uri)
 {
   int ret = OB_NOT_SUPPORTED;
   OB_LOG(WARN, "del_unmerged_parts is not supported yet", K(ret), K(uri));
-  // ObObjectStorageMallocHookGuard guard(storage_info_);
+  // OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
   // const int64_t start_ts = ObTimeUtility::current_time();
   // if (OB_FAIL(ret)) {
   // } else if (OB_UNLIKELY(!is_init())) {
@@ -1392,7 +1378,6 @@ int ObStorageUtil::del_unmerged_parts(const common::ObString &uri)
   // } else if (OB_FAIL(util_->del_unmerged_parts(uri))) {
   //   STORAGE_LOG(WARN, "fail to del unmerged parts!", K(ret), K(uri));
   // }
-  // print_access_storage_log("del_unmerged_parts", uri, start_ts, 0);
   return ret;
 }
 
@@ -1425,7 +1410,7 @@ int ObStorageReader::open(const common::ObString &uri, common::ObObjectStorageIn
   int tmp_ret = OB_SUCCESS;
   ObStorageType type = OB_STORAGE_MAX_TYPE;
   start_ts_ = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_READER_OPEN) OB_SUCCESS;
@@ -1469,6 +1454,7 @@ int ObStorageReader::open(const common::ObString &uri, common::ObObjectStorageIn
       STORAGE_LOG(WARN, "failed to open reader", K(ret), K(uri));
     } else {
       file_length_ = reader_->get_length();
+      storage_info_ = storage_info;
     }
   }
 
@@ -1480,7 +1466,6 @@ int ObStorageReader::open(const common::ObString &uri, common::ObObjectStorageIn
     storage_info_ = storage_info;
   }
 
-  print_access_storage_log("ObStorageReader::open", uri_, start_ts_, 0);
   return ret;
 }
 
@@ -1488,7 +1473,7 @@ int ObStorageReader::pread(char *buf,const int64_t buf_size, int64_t offset, int
 {
   int ret = OB_SUCCESS;
   read_size = 0;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, read_size);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_READER_PREAD) OB_SUCCESS;
@@ -1515,14 +1500,13 @@ int ObStorageReader::pread(char *buf,const int64_t buf_size, int64_t offset, int
   EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
 
-  print_access_storage_log("ObStorageReader::pread", uri_, start_ts, read_size);
   return ret;
 }
 
 int ObStorageReader::close()
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
 
   if (NULL != reader_) {
     print_access_storage_log("storage reader", uri_, start_ts_, file_length_);
@@ -1573,7 +1557,7 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
   ObStorageType type = OB_STORAGE_MAX_TYPE;
   start_ts_ = ObTimeUtility::current_time();
   ObStorageUtil util;
-  ObObjectStorageMallocHookGuard guard(storage_info);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
 
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -1632,7 +1616,6 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     }
   }
 
-  print_access_storage_log("ObStorageAdaptiveReader::open", uri_, start_ts_, 0);
   return ret;
 }
 
@@ -1642,7 +1625,7 @@ int ObStorageAdaptiveReader::pread(char *buf,
   int ret = OB_SUCCESS;
   read_size = 0;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, read_size);
 
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -1726,14 +1709,13 @@ int ObStorageAdaptiveReader::pread(char *buf,
 
   // TODO @fangdan: add event
   EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
-  print_access_storage_log("ObStorageAdaptiveReader::pread", uri_, start_ts, read_size);
   return ret;
 }
 
 int ObStorageAdaptiveReader::close()
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
 
   if (NULL != reader_) {
     print_access_storage_log("storage adaptive reader", uri_, start_ts_, meta_.length_);
@@ -1779,7 +1761,7 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
   int tmp_ret = OB_SUCCESS;
   ObStorageType type = OB_STORAGE_MAX_TYPE;
   start_ts_ = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_OPEN) OB_SUCCESS;
@@ -1821,6 +1803,8 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
       STORAGE_LOG(WARN, "writer_ is null", K(ret), K(uri));
     } else if (OB_FAIL(writer_->open(uri, storage_info))) {
       STORAGE_LOG(WARN, "failed to open writer", K(ret), K(uri));
+    } else {
+      storage_info_ = storage_info;
     }
   }
 
@@ -1830,14 +1814,13 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
     }
   }
 
-  print_access_storage_log("ObStorageWriter::open", uri_, start_ts_, 0);
   return ret;
 }
 
 int ObStorageWriter::write(const char *buf,const int64_t size)
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, size);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
@@ -1861,14 +1844,13 @@ int ObStorageWriter::write(const char *buf,const int64_t size)
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
-  print_access_storage_log("ObStorageWriter::write", uri_, start_ts, size);
   return ret;
 }
 
 int ObStorageWriter::close()
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
 
   if (NULL != writer_) {
     print_access_storage_log("storage writer", uri_, start_ts_, writer_->get_length());
@@ -1931,7 +1913,7 @@ int ObStorageAppender::open(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   start_ts_ = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_APPENDER_OPEN) OB_SUCCESS;
@@ -1986,14 +1968,13 @@ int ObStorageAppender::open(
     }
   }
 
-  print_access_storage_log("ObStorageAppender::open", uri_, start_ts_, 0);
   return ret;
 }
 
 int ObStorageAppender::write(const char *buf,const int64_t size)
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, size);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
@@ -2017,7 +1998,6 @@ int ObStorageAppender::write(const char *buf,const int64_t size)
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
-  print_access_storage_log("ObStorageAppender::write", uri_, start_ts, size);
   return ret;
 }
 
@@ -2064,7 +2044,6 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   if (OB_SUCCESS != (tmp_ret = reader.close())) {
     STORAGE_LOG(WARN, "failed to close reader", K(tmp_ret));
   }
-
   return ret;
 }
 
@@ -2072,7 +2051,7 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, size);
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
@@ -2098,7 +2077,6 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
     }
   }
 
-  print_access_storage_log("ObStorageAppender::pwrite", uri_, start_ts, size);
   return ret;
 }
 
@@ -2106,7 +2084,8 @@ int64_t ObStorageAppender::get_length()
 {
   int64_t ret_int = -1;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  int ret = OB_SUCCESS;
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
 
   if (OB_ISNULL(appender_)) {
     STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "appender not opened");
@@ -2128,14 +2107,13 @@ int64_t ObStorageAppender::get_length()
     util.close();
   }
 
-  print_access_storage_log("ObStorageAppender::get_length", uri_, start_ts, 0);
   return ret_int;
 }
 
 int ObStorageAppender::close()
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
 
   if (NULL != appender_) {
     print_access_storage_log("storage appender_", uri_, start_ts_, appender_->get_length());
@@ -2160,11 +2138,7 @@ int ObStorageAppender::seal_for_adaptive()
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   int64_t handled_size = 0;
-  ObObjectStorageMallocHookGuard guard(storage_info_);
-
-  if (OB_NOT_NULL(appender_)) {
-    print_access_storage_log("storage appender_", uri_, start_ts_, appender_->get_length());
-  }
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
 
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
@@ -2208,7 +2182,6 @@ int ObStorageAppender::seal_for_adaptive()
     util.close();
   }
 
-  print_access_storage_log("ObStorageAppender::seal_for_adaptive", uri_, start_ts, handled_size);
   return ret;
 }
 
@@ -2240,7 +2213,7 @@ int ObStorageMultiPartWriter::open(
   int tmp_ret = OB_SUCCESS;
   ObStorageType type = OB_STORAGE_MAX_TYPE;
   start_ts_ = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
 
   if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
     ret = OB_BACKUP_IO_PROHIBITED;
@@ -2291,7 +2264,6 @@ int ObStorageMultiPartWriter::open(
     }
   }
 
-  print_access_storage_log("ObStorageMultiPartWriter::open", uri_, start_ts_, 0);
   return ret;
 }
 
@@ -2299,7 +2271,7 @@ int ObStorageMultiPartWriter::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, size);
 
   if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
     ret = OB_BACKUP_IO_PROHIBITED;
@@ -2316,7 +2288,6 @@ int ObStorageMultiPartWriter::write(const char *buf, const int64_t size)
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
-  print_access_storage_log("ObStorageMultiPartWriter::write", uri_, start_ts, size);
   return ret;
 }
 
@@ -2324,7 +2295,7 @@ int ObStorageMultiPartWriter::pwrite(const char *buf, const int64_t size, const 
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, size);
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
     ret = OB_BACKUP_IO_PROHIBITED;
@@ -2336,7 +2307,6 @@ int ObStorageMultiPartWriter::pwrite(const char *buf, const int64_t size, const 
     STORAGE_LOG(WARN, "failed to write", K(ret));
   }
 
-  print_access_storage_log("ObStorageMultiPartWriter::pwrite", uri_, start_ts, size);
   return ret;
 }
 
@@ -2344,14 +2314,14 @@ int64_t ObStorageMultiPartWriter::get_length()
 {
   int64_t ret_int = -1;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  int ret = OB_SUCCESS;
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
   if (OB_ISNULL(multipart_writer_)) {
     STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "multipart_writer_ not opened");
   } else {
     ret_int = multipart_writer_->get_length();
   }
 
-  print_access_storage_log("ObStorageMultiPartWriter::get_length", uri_, start_ts, 0);
   return ret_int;
 }
 
@@ -2359,7 +2329,7 @@ int ObStorageMultiPartWriter::complete()
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
     ret = OB_BACKUP_IO_PROHIBITED;
@@ -2371,7 +2341,6 @@ int ObStorageMultiPartWriter::complete()
     STORAGE_LOG(WARN, "failed to complete", K(ret));
   }
 
-  print_access_storage_log("ObStorageMultiPartWriter::complete", uri_, start_ts, 0);
   return ret;
 }
 
@@ -2379,7 +2348,7 @@ int ObStorageMultiPartWriter::abort()
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
     ret = OB_BACKUP_IO_PROHIBITED;
@@ -2391,7 +2360,6 @@ int ObStorageMultiPartWriter::abort()
     STORAGE_LOG(WARN, "failed to abort", K(ret));
   }
 
-  print_access_storage_log("ObStorageMultiPartWriter::abort", uri_, start_ts, 0);
   return ret;
 }
 
@@ -2399,7 +2367,7 @@ int ObStorageMultiPartWriter::close()
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObObjectStorageMallocHookGuard guard(storage_info_);
+  OBJECT_STORAGE_GUARD(storage_info_, uri_, IO_HANDLED_SIZE_ZERO);
   if (NULL != multipart_writer_) {
     print_access_storage_log("storage multipart writer", uri_, start_ts_, multipart_writer_->get_length());
   }
@@ -2414,9 +2382,7 @@ int ObStorageMultiPartWriter::close()
   uri_[0] = '\0';
   is_opened_ = false;
   storage_info_ = nullptr;
-  print_access_storage_log("ObStorageMultiPartWriter::close", uri_, start_ts, 0);
   return ret;
 }
-
 }
 }//oceanbase

@@ -463,39 +463,12 @@ int MutatorRow::parse_columns_(
 
               if (! is_out_row) {
                 OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage in row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common), K(obj));
-                obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
-              } else {
-                const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
-
-                const ObLobDataOutRowCtx *lob_data_out_row_ctx =
-                  reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
-
-                OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
-                    K(lob_data), K(obj), KPC(lob_data_out_row_ctx));
-
-                if (is_parse_new_col) {
-                  ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
-
-                  if (OB_ISNULL(lob_data_get_ctx)) {
-                    ret = OB_ALLOCATE_MEMORY_FAILED;
-                    LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
-                  } else {
-                    new(lob_data_get_ctx) ObLobDataGetCtx();
-                    lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag_, &lob_data);
-
-                    new_lob_ctx_cols_.add(lob_data_get_ctx);
-                  }
-                } else {
-                  if (OB_FAIL(new_lob_ctx_cols_.set_old_lob_data(column_id, &lob_data))) {
-                    if (OB_ENTRY_NOT_EXIST != ret) {
-                      LOG_ERROR("new_lob_ctx_cols_ set_old_lob_data failed", KR(ret), K(column_id), K(lob_data));
-                    } else {
-                      // Not finding it is a possibility, eg:
-                      // LOB old row is out row storage, but new row is in row storage
-                      ret = OB_SUCCESS;
-                    }
-                  }
+                // only DML needs to reserve lob header
+                if (OB_NOT_NULL(all_ddl_operation_table_schema_info)) {
+                  obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
                 }
+              } else if (OB_FAIL(parse_outrow_lob_column_(is_parse_new_col, column_id, lob_common))) {
+                LOG_ERROR("parse_outrow_lob_column_ failed", K(ret), K(obj), K(column_id));
               }
             } // is_lob_storage
 
@@ -519,6 +492,71 @@ int MutatorRow::parse_columns_(
     } // for
 
     ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  }
+
+  return ret;
+}
+
+int MutatorRow::parse_outrow_lob_column_(
+    const bool is_parse_new_col,
+    const uint64_t column_id,
+    const ObLobCommon &lob_common)
+{
+  int ret = OB_SUCCESS;
+
+  const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
+
+  const ObLobDataOutRowCtx *lob_data_out_row_ctx =
+    reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
+
+  OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
+                    K(lob_data), KPC(lob_data_out_row_ctx));
+
+  if (is_parse_new_col) {
+    ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
+
+    if (OB_ISNULL(lob_data_get_ctx)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
+    } else {
+      new(lob_data_get_ctx) ObLobDataGetCtx();
+      if (OB_FAIL(lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag_, &lob_data, true/*is_new_col*/))) {
+        LOG_ERROR("lob_data_get_ctx reset failed", K(new_lob_ctx_cols_));
+      } else {
+        new_lob_ctx_cols_.add(lob_data_get_ctx);
+      }
+    }
+  } else {
+    if (OB_FAIL(new_lob_ctx_cols_.set_old_lob_data(column_id, &lob_data))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("new_lob_ctx_cols_ set_old_lob_data failed", KR(ret), K(column_id), K(lob_data));
+      } else {
+        // Not finding it is a possibility, eg:
+        //   1. LOB old row is out row storage, but new row is in row storage.
+        //   2. Delete outrow lob.
+        ret = OB_SUCCESS;
+
+        if (blocksstable::ObDmlFlag::DF_DELETE != dml_flag_ && blocksstable::ObDmlFlag::DF_UPDATE != dml_flag_) {
+          // If neither of the above two possibilities, do nothing.
+        } else if (!lob_data_out_row_ctx->is_valid_old_value() && !lob_data_out_row_ctx->is_valid_old_value_ext_info_log()) {
+          // Among the two possibilities above, the lob_data_out_row_ctx op_type will be set to either 'VALID_OLD_VALUE' or
+          // 'VALID_OLD_VALUE_EXT_INFO_LOG'. If it is neither of these two types, do nothing.
+        } else {
+          ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
+          if (OB_ISNULL(lob_data_get_ctx)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
+          } else {
+            new(lob_data_get_ctx) ObLobDataGetCtx();
+            if(OB_FAIL(lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag_, &lob_data, false/*is_new_col*/))) {
+              LOG_ERROR("lob data get ctx reset failed", KR(ret));
+            } else {
+              new_lob_ctx_cols_.add(lob_data_get_ctx);
+            }
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -604,7 +642,7 @@ int MutatorRow::add_column_(
 
     // Set meta information and scale information if column schema is valid
     if (NULL != column_schema_info) {
-      column_cast(cv_node->value_, *column_schema_info);
+      column_cast(cv_node->value_, *column_schema_info, is_out_row);
       column_schema_info->get_extended_type_info(extended_type_info);
       accuracy = column_schema_info->get_accuracy();
       collation_type = column_schema_info->get_collation_type();
@@ -1343,6 +1381,16 @@ bool DdlStmtTask::is_sub_tls_id_alter_ddl_(const int64_t ddl_operation_type)
   return bool_ret;
 }
 
+bool DdlStmtTask::is_table_recover_end_ddl_(const int64_t ddl_operation_type)
+{
+  bool bool_ret = false;
+
+  ObSchemaOperationType op_type = static_cast<ObSchemaOperationType>(ddl_operation_type);
+  bool_ret = (OB_DDL_RECOVER_TABLE_END == op_type);
+
+  return bool_ret;
+}
+
 int DdlStmtTask::parse_ddl_info(
     ObLogBR *br,
     const uint64_t row_index,
@@ -1450,6 +1498,11 @@ int DdlStmtTask::parse_ddl_info(
       if (is_sub_tls_id_alter_ddl_(ddl_operation_type_)) {
         is_valid_ddl = true;
       }
+
+      // table revoer
+      if (is_table_recover_end_ddl_(ddl_operation_type_)) {
+        is_valid_ddl = true;
+      }
     }
 
     if (OB_SUCCESS == ret && is_valid_ddl) {
@@ -1476,6 +1529,7 @@ int DdlStmtTask::parse_ddl_info(
   }
 
   if (OB_SUCCESS == ret) {
+    ObCStringHelper helper;
     _LOG_INFO("[STAT] [DDL] [PARSE] OP_TYPE=%s(%ld) SCHEMA_VERSION=%ld "
         "VERSION_DELAY=%s EXEC_TENANT_ID=%ld TABLE_ID=%ld TENANT_ID=%ld DB_ID=%ld "
         "TG_ID=%ld DDL_STMT=[%s] CONTAIN_DDL=%d IS_VALID=%d",
@@ -1483,7 +1537,7 @@ int DdlStmtTask::parse_ddl_info(
         ddl_operation_type_, ddl_op_schema_version_, TS_TO_DELAY(ddl_op_schema_version_),
         ddl_exec_tenant_id_, ddl_op_table_id_, ddl_op_tenant_id_,
         ddl_op_database_id_, ddl_op_tablegroup_id_,
-        to_cstring(ddl_stmt_str_), contain_ddl_stmt, is_valid_ddl);
+        helper.convert(ddl_stmt_str_), contain_ddl_stmt, is_valid_ddl);
   }
 
   return ret;
@@ -1689,8 +1743,7 @@ int DdlStmtTask::init_ddl_unique_id_(common::ObString &ddl_unique_id)
     if (OB_ISNULL(buf)) {
       LOG_ERROR("allocate memory for trans id buffer fail", K(buf));
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-            "%s", to_cstring(ddl_stmt_unique_id)))) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ddl_stmt_unique_id))) {
       LOG_ERROR("init_ddl_unique_id_ fail", KR(ret), K(buf), K(buf_len), K(pos),
           K(ddl_stmt_unique_id));
     } else {

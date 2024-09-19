@@ -29,7 +29,7 @@ class ObActiveSessHistTask : public common::ObTimerTask
 {
 public:
   ObActiveSessHistTask()
-      : is_inited_(false), sample_time_(OB_INVALID_TIMESTAMP), prev_sample_time_(OB_INVALID_TIMESTAMP) {}
+      : is_inited_(false), sample_time_(OB_INVALID_TIMESTAMP), tsc_sample_time_(0) {}
   virtual ~ObActiveSessHistTask() = default;
   static ObActiveSessHistTask &get_instance();
   int init();
@@ -38,12 +38,11 @@ public:
   void wait();
   void destroy();
   virtual void runTimerTask() override;
-  bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
-  void process_net_request(const ObNetInfo &net_info);
 private:
+  bool process_running_di(const SessionID &session_id, ObDiagnosticInfo *di);
   bool is_inited_;
   int64_t sample_time_;
-  int64_t prev_sample_time_;  // record prev sample time for rpc db time calculation.
+  int64_t tsc_sample_time_;
 };
 
 }

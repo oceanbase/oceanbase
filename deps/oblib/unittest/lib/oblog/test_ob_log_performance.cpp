@@ -63,17 +63,21 @@ void ObLogTestThread::run1()
 {
   int ret = 0;
   OB_LOG(ERROR, "error log would print lbt");
-  SET_OB_LOG_TRACE_MODE();
-  PRINT_OB_LOG_TRACE_BUF(COMMON, INFO);
-  int64_t b_time = ::oceanbase::common::ObTimeUtility::current_time();
-  ObString str("Our destiny offers not the cup of despair, but the chalice of opportunity. So let us seize it, not in fear, but in gladness.");
-  for (int64_t i = 0; i < NUM_OF_LOG; i++) {
-    OB_LOG(WARN, "oblog test", K(i), K(str));
-    _OB_LOG(WARN, "oblog test %ld", i);
-    OB_LOG(ERROR, "trace error log also would print lbt");
+  int64_t b_time = 0;
+
+  {
+    ObLogger::ObTraceLogGuard trace_log_guard;
+    PRINT_OB_LOG_TRACE_BUF(COMMON, INFO);
+    b_time = ::oceanbase::common::ObTimeUtility::current_time();
+    ObString str("Our destiny offers not the cup of despair, but the chalice of opportunity. So let us seize it, not in fear, but in gladness.");
+    for (int64_t i = 0; i < NUM_OF_LOG; i++) {
+      OB_LOG(WARN, "oblog test", K(i), K(str));
+      _OB_LOG(WARN, "oblog test %ld", i);
+      OB_LOG(ERROR, "trace error log also would print lbt");
+    }
+    PRINT_OB_LOG_TRACE_BUF(FLT, INFO);
   }
-  PRINT_OB_LOG_TRACE_BUF(FLT, INFO);
-  CANCLE_OB_LOG_TRACE_MODE();
+
   int64_t e_time = ::oceanbase::common::ObTimeUtility::current_time();
   OB_LOG(WARN, "yangze one thread time","u_time", e_time - b_time);
 

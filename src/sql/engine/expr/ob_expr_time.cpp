@@ -174,6 +174,12 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
         has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
     } else {
+      if (ob_is_mysql_datetime_tc(type) || ob_is_mysql_date_tc(type)) {
+        if (OB_FAIL(ObTimeConverter::validate_datetime(ot2, date_sql_mode))) {
+          ret = OB_SUCCESS;
+          ot2.parts_[DT_DATE] = ObTimeConverter::ZERO_DATE;
+        }
+      }
       ot = ot2;
     }
   } else {

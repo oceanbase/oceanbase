@@ -64,6 +64,17 @@ public:
     return ret;
   }
 
+  int set_io_context(const LogIOContext &io_ctx)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+    } else {
+      ret = iterator_storage_.set_io_context(io_ctx);
+    }
+    return ret;
+  }
+
   int reuse(const LSN &start_lsn)
   {
     int ret = OB_SUCCESS;

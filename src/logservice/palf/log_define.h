@@ -342,7 +342,8 @@ int block_id_to_tmp_string(const block_id_t block_id,
 int block_id_to_flashback_string(const block_id_t block_id,
 																 char *str,
 																 const int64_t str_len);
-
+int construct_absolute_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_block_path);
+int construct_absolute_tmp_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_tmp_block_path);
 int convert_sys_errno();
 
 bool is_number(const char *);

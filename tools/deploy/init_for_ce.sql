@@ -46,6 +46,9 @@ alter system set_tp tp_no = 1200, error_code = 4001, frequency = 1;
 alter system set_tp tp_no = 509, error_code = 4016, frequency = 1;
 alter system set_tp tp_no = 368, error_code = 4016, frequency = 1;
 alter system set_tp tp_no = 551, error_code = 5434, frequency = 1;
+alter system set_tp tp_no = 558, error_code = 4016, frequency = 1;
+alter system set_tp tp_no = 559, error_code = 1, frequency = 1;
+
 alter system set _enable_spf_batch_rescan = true tenant = sys;
 alter system set _enable_spf_batch_rescan = true tenant = all_user;
 alter system set _enable_spf_batch_rescan = true tenant = all_meta;

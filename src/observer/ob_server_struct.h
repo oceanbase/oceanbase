@@ -287,6 +287,7 @@ struct ObGlobalContext
   storage::ObLocalityManager *locality_manager_;
   obrpc::ObExtenralTableRpcProxy *external_table_proxy_;
   share::ObWorkloadRepositoryService *wr_service_;
+  bool is_obcdc_;
 
   ObGlobalContext() { MEMSET(this, 0, sizeof(*this)); init(); }
   ObGlobalContext &operator = (const ObGlobalContext &other);
@@ -295,6 +296,8 @@ struct ObGlobalContext
   // Refer to the high availability zone design document
   //
   bool is_observer() const;
+  OB_INLINE void set_is_obcdc(const bool is_obcdc) { is_obcdc_ = is_obcdc; }
+  OB_INLINE bool is_obcdc() const { return is_obcdc_; }
   common::ObClusterRole get_cluster_role() const;
   share::ServerServiceStatus get_server_service_status() const;
   void set_upgrade_stage(obrpc::ObUpgradeStage upgrade_stage) { upgrade_stage_ = upgrade_stage; }

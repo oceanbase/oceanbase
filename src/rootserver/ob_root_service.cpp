@@ -2014,6 +2014,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("fail to set one phase commit config", K(ret));
     } else if (OB_FAIL(disable_dbms_job())) {
       LOG_WARN("failed to update _enable_dbms_job_package", K(ret));
+    } else if (OB_FAIL(enable_mysql_compatible_dates_config_())) {
+      LOG_WARN("fail to update _enable_mysql_compatible_dates config", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -3195,9 +3197,10 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                 LOG_WARN("db schema is null", K(ret));
               } else {
                 ret = OB_ERR_WRONG_OBJECT;
+                ObCStringHelper helper;
                 LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-                    to_cstring(db_schema->get_database_name_str()),
-                    to_cstring(table_schema.get_table_name_str()), "VIEW");
+                    helper.convert(db_schema->get_database_name_str()),
+                    helper.convert(table_schema.get_table_name_str()), "VIEW");
                 LOG_WARN("table exist", K(ret), K(table_schema));
               }
             }
@@ -3226,9 +3229,10 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           LOG_WARN("db schema is null", K(ret));
         } else {
           ret = OB_TABLE_NOT_EXIST;
+          ObCStringHelper helper;
           LOG_USER_ERROR(OB_TABLE_NOT_EXIST,
-                         to_cstring(simple_db_schema->get_database_name_str()),
-                         to_cstring(table_schema.get_table_name_str()));
+                         helper.convert(simple_db_schema->get_database_name_str()),
+                         helper.convert(table_schema.get_table_name_str()));
           LOG_WARN("table not exist", K(ret), K(table_schema));
         }
       }
@@ -3429,7 +3433,9 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                            && 0 != parent_schema->get_session_id()
                            && OB_INVALID_ID != schema_guard.get_session_id()) {
               ret = OB_TABLE_NOT_EXIST;
-              LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(foreign_key_arg.parent_database_), to_cstring(foreign_key_arg.parent_table_));
+              ObCStringHelper helper;
+              LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(foreign_key_arg.parent_database_),
+                  helper.convert(foreign_key_arg.parent_table_));
             } else if (!arg.is_inner_ && parent_schema->is_in_recyclebin()) {
               ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
               LOG_WARN("parent table is in recyclebin", K(ret), K(foreign_key_arg));
@@ -4687,6 +4693,11 @@ int ObRootService::drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropInd
   return ret;
 }
 
+int ObRootService::drop_lob(const ObDropLobArg &arg)
+{
+  return ddl_service_.drop_lob(arg);
+}
+
 int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -5450,7 +5461,6 @@ int ObRootService::do_restart()
     FLOG_INFO("root_inspection_ started");
     int64_t now = ObTimeUtility::current_time();
     core_meta_table_version_ = now;
-    EVENT_SET(RS_START_SERVICE_TIME, now);
     // reset fail count for self checker and print log.
     reset_fail_count();
   }
@@ -9848,7 +9858,9 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg)
   } else if (OB_ISNULL(schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("invalid schema", K(ret));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(origin_database_name), to_cstring(origin_table_name));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(origin_database_name),
+        helper.convert(origin_table_name));
   } else if (schema->is_in_splitting()) {
     //TODO ddl must not execute on splitting table due to split not unstable
     ret = OB_OP_NOT_ALLOW;
@@ -11178,6 +11190,19 @@ int ObRootService::disable_dbms_job()
   if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _enable_dbms_job_package = false;", affected_rows))) {
     LOG_WARN("update _enable_dbms_job_package to false failed", K(ret));
   } else if (OB_FAIL(check_config_result("_enable_dbms_job_package", "false"))) {
+    LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::enable_mysql_compatible_dates_config_()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _enable_mysql_compatible_dates = true;",
+              affected_rows))) {
+    LOG_WARN("update _enable_mysql_compatible_dates to false failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_enable_mysql_compatible_dates", "true"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
   return ret;

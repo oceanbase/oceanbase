@@ -323,7 +323,11 @@ private:
                         ObIArray<ObRawExpr *> &conds,
                         ObIArray<ObRawExpr *> &properties,
                         ObIArray<ObRawExpr *> &new_conds);
-
+  int accept_outjoin_predicates(ObDMLStmt &stmt,
+                                ObIArray<ObRawExpr *> &conds,
+                                ObSqlBitSet <> &filter_table_set,
+                                ObIArray<ObRawExpr *> &properties,
+                                ObIArray<ObRawExpr *> &new_conds);
   int extract_generalized_column(ObRawExpr *expr,
                                  ObIArray<ObRawExpr *> &output);
 

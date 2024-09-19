@@ -27,12 +27,27 @@ int ObHColumnDescriptor::from_string(const common::ObString &kv_attributes)
 {
   reset();
   int ret = OB_SUCCESS;
+  ObKVAttr attr;
   if (kv_attributes.empty()) {
     // do nothing
-  } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, max_version_, time_to_live_))) {
+  } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, attr))) {
     LOG_WARN("fail to parse kv attributes", K(ret), K(kv_attributes));
+  } else {
+    from_kv_attribute(attr);
   }
   return ret;
+}
+
+// format: {"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}
+void ObHColumnDescriptor::from_kv_attribute(const ObKVAttr &kv_attributes)
+{
+  reset();
+  if (kv_attributes.is_empty()) {
+    // do nothing
+  } else {
+    max_version_ = kv_attributes.max_version_;
+    time_to_live_ = kv_attributes.ttl_;
+  }
 }
 
 void ObHColumnDescriptor::reset()

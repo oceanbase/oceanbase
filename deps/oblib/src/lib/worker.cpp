@@ -56,6 +56,7 @@ Worker::Worker()
       worker_level_(INT32_MAX),
       curr_request_level_(0),
       group_id_(0),
+      func_type_(0),
       rpc_stat_srv_(nullptr),
       timeout_ts_(INT64_MAX),
       ntp_offset_(0),

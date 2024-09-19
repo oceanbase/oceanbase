@@ -68,11 +68,10 @@ class ObAccessService : public common::ObITabletScan
 public:
   ObAccessService();
   virtual ~ObAccessService();
-  int init(const uint64_t tenant_id, ObLSService *ls_service);
+  int init(ObLSService *ls_service);
   static int mtl_init(ObAccessService* &access_service);
 
   void destroy();
-  void stop();
 public:
   // pre_check_lock
   // @param [in] ls_id, this check op will be processed at which logstream.
@@ -98,6 +97,9 @@ public:
       const share::ObLSID &ls_id,
       transaction::ObTxDesc &tx_desc,
       const transaction::tablelock::ObLockParam &param);
+  int add_lock_into_queue(const share::ObLSID &ls_id,
+                          transaction::ObTxDesc &tx_desc,
+                          const transaction::tablelock::ObLockParam &param);
   // ObITabletScan interface
   virtual int table_scan(
       ObVTableScanParam &vparam,
@@ -266,7 +268,6 @@ protected:
 
 private:
   bool is_inited_;
-  uint64_t tenant_id_;
   ObLSService *ls_svr_;
 };
 

@@ -35,6 +35,34 @@ using namespace oceanbase;
 namespace oceanbase
 {
 using namespace logservice;
+
+namespace logservice
+{
+int ObLogService::start()
+{
+  int ret = OB_SUCCESS;
+  // palf_env has been started in log_server.init()
+  if (OB_FAIL(apply_service_.start())) {
+    CLOG_LOG(WARN, "failed to start apply_service_", K(ret));
+  } else if (OB_FAIL(replay_service_.start())) {
+    CLOG_LOG(WARN, "failed to start replay_service_", K(ret));
+  } else if (OB_FAIL(role_change_service_.start())) {
+    CLOG_LOG(WARN, "failed to start role_change_service_", K(ret));
+  } else if (OB_FAIL(cdc_service_.start())) {
+    CLOG_LOG(WARN, "failed to start cdc_service_", K(ret));
+  } else if (OB_FAIL(restore_service_.start())) {
+    CLOG_LOG(WARN, "failed to start restore_service_", K(ret));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (OB_FAIL(arb_service_.start())) {
+    CLOG_LOG(WARN, "failed to start arb_service_", K(ret));
+#endif
+  } else {
+    is_running_ = true;
+    FLOG_INFO("ObLogService is started");
+  }
+  return ret;
+}
+}
 namespace unittest
 {
 class TestObSimpleLogClusterSingleReplica : public ObSimpleLogClusterTestEnv
@@ -537,7 +565,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_truncate_failed)
     LSN max_lsn = leader.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 1000));
     wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
-    int64_t fd = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.curr_writable_handler_.io_fd_;
+    int64_t fd = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.curr_writable_handler_.io_fd_.second_id_;
     block_id_t block_id = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.curr_writable_block_id_;
     char *log_dir = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.log_dir_;
     convert_to_normal_block(log_dir, block_id, block_path, OB_MAX_FILE_NAME_LENGTH);
@@ -1751,16 +1779,17 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
     const int64_t invalid_nbytes = 1;
 
     // 非DIO对齐度
+    palf::LogIOContext io_ctx(palf::LogIOUser::DEFAULT);
     EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
-      invalid_lsn, invalid_read_buf, invalid_nbytes, out_read_size));
+      invalid_lsn, invalid_read_buf, invalid_nbytes, out_read_size, io_ctx));
     EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
-      LSN(PALF_INITIAL_LSN_VAL), invalid_read_buf, invalid_nbytes, out_read_size));
+      LSN(PALF_INITIAL_LSN_VAL), invalid_read_buf, invalid_nbytes, out_read_size, io_ctx));
     EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
-      LSN(PALF_INITIAL_LSN_VAL), read_buf, invalid_nbytes, out_read_size));
+      LSN(PALF_INITIAL_LSN_VAL), read_buf, invalid_nbytes, out_read_size, io_ctx));
     PALF_LOG(INFO, "raw read success");
 
     // 读取成功
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->raw_read(LSN(PALF_INITIAL_LSN_VAL), read_buf, PALF_BLOCK_SIZE, out_read_size));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->raw_read(LSN(PALF_INITIAL_LSN_VAL), read_buf, PALF_BLOCK_SIZE, out_read_size, io_ctx));
     EXPECT_LE(out_read_size, PALF_BLOCK_SIZE);
     EXPECT_EQ(out_read_size, curr_real_size);
 
@@ -1768,7 +1797,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
     PALF_LOG(INFO, "raw read return OB_ERR_OUT_OF_UPPER_BOUND");
     LSN out_of_upper_bound(PALF_BLOCK_SIZE);
     EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, leader.palf_handle_impl_->raw_read(
-      out_of_upper_bound, read_buf, PALF_BLOCK_SIZE, out_read_size));
+      out_of_upper_bound, read_buf, PALF_BLOCK_SIZE, out_read_size, io_ctx));
 
     // 模拟生成2个文件
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 40, leader_idx, MAX_LOG_BODY_SIZE));
@@ -1779,7 +1808,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
     LSN curr_read_lsn(lower_align(PALF_BLOCK_SIZE/2, LOG_DIO_ALIGN_SIZE));
     int64_t expected_read_size = LSN(PALF_BLOCK_SIZE) - curr_read_lsn;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->raw_read(
-      curr_read_lsn, read_buf, PALF_BLOCK_SIZE, out_read_size));
+      curr_read_lsn, read_buf, PALF_BLOCK_SIZE, out_read_size, io_ctx));
     EXPECT_EQ(out_read_size, expected_read_size);
 
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->delete_block(0));
@@ -1787,7 +1816,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
     // 模拟lower_bound
     PALF_LOG(INFO, "raw read return OB_ERR_OUT_OF_LOWER_BOUND");
     LSN out_of_lower_bound(PALF_INITIAL_LSN_VAL);
-    EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, leader.palf_handle_impl_->raw_read(out_of_lower_bound, read_buf, PALF_BLOCK_SIZE, out_read_size));
+    EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, leader.palf_handle_impl_->raw_read(out_of_lower_bound, read_buf, PALF_BLOCK_SIZE, out_read_size, io_ctx));
     if (NULL != read_buf_ptr) {
       mtl_free_align(read_buf_ptr);
     }

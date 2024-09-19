@@ -227,7 +227,8 @@ int ObMPStmtPrepare::process()
       LOG_WARN("failed to init flt extra info", K(ret));
     } else {
       FLTSpanGuard(ps_prepare);
-      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                     receive_ts, get_receive_timestamp(),
                     client_info, session.get_client_info(),
                     module_name, session.get_module_name(),
@@ -512,6 +513,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
             sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
             sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
             sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+            sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
             sqlstat_record.move_to_sqlstat_cache(result.get_session(),
                                                        ctx_.cur_sql_,
                                                        result.get_physical_plan());

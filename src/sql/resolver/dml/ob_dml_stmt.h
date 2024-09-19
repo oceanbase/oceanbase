@@ -278,6 +278,7 @@ struct TableItem
                N_TABLE_TYPE, static_cast<int32_t>(type_),
                //"recursive union fake table", is_recursive_union_fake_table_,
                N_REF_ID, ref_id_,
+               K_(is_index_table),
                N_DATABASE_NAME, database_name_,
                N_FOR_UPDATE, for_update_,
                N_WAIT, for_update_wait_us_,

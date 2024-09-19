@@ -149,12 +149,17 @@ inline common::ObString concat_qualified_name(const common::ObString &db_name, c
   int64_t pos = 0;
   if (OB_LIKELY(buffer != nullptr)) {
     if (tbl_name.length() > 0 && db_name.length() > 0) {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s.%s.%s",
-                              to_cstring(db_name), to_cstring(tbl_name), to_cstring(col_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, db_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, col_name);
     } else if (tbl_name.length() > 0) {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s.%s", to_cstring(tbl_name), to_cstring(col_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, col_name);
     } else {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s", to_cstring(col_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, col_name);
     }
   }
   return common::ObString(pos, buffer);
@@ -166,9 +171,11 @@ inline common::ObString concat_table_name(const common::ObString &db_name, const
   int64_t pos = 0;
   if (OB_LIKELY(buffer != nullptr)) {
     if (db_name.length() > 0) {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s.%s", to_cstring(db_name), to_cstring(tbl_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, db_name);
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, ".");
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
     } else {
-      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, "%s", to_cstring(tbl_name));
+      common::databuff_printf(buffer, CSTRING_BUFFER_LEN, pos, tbl_name);
     }
   }
   return common::ObString(pos, buffer);

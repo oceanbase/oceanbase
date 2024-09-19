@@ -49,6 +49,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "logservice/ob_net_keepalive_adapter.h"
 #include "logservice/leader_coordinator/ob_failure_detector.h"
+#include "logservice/arbserver/arb_tg_helper.h"
 #include <memory>
 #include <map>
 
@@ -219,6 +220,7 @@ typedef common::ObLinkHashMap<palf::LSKey, MockElection, MockElectionAlloc> Mock
 class ObISimpleLogServer
 {
 public:
+  static const uint64_t DEFAULT_TENANT_ID = 1002;
   ObISimpleLogServer() {}
   virtual ~ObISimpleLogServer() {}
   virtual bool is_valid() const = 0;
@@ -238,11 +240,14 @@ public:
   virtual int simple_init(const std::string &cluster_name,
                           const common::ObAddr &addr,
                           const int64_t node_id,
+                          ObTenantIOManager *tio_manager,
                           LogMemberRegionMap *region_map,
                           const bool is_bootstrap) = 0;
   virtual int simple_start(const bool is_bootstrap) = 0;
   virtual int simple_close(const bool is_shutdown) = 0;
-  virtual int simple_restart(const std::string &cluster_name, const int64_t node_idx) = 0;
+  virtual int simple_restart(const std::string &cluster_name,
+                             const int64_t node_idx,
+                             ObTenantIOManager *tio_manager) = 0;
   virtual ILogBlockPool *get_block_pool() = 0;
   virtual ObILogAllocator *get_allocator() = 0;
   virtual int update_disk_opts(const PalfDiskOptions &opts) = 0;
@@ -258,11 +263,39 @@ public:
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
+class ObLogMittestTenantBase : public arbserver::ArbTGHelper {
+public:
+  ObLogMittestTenantBase(int64_t cluster_id, uint64_t tenant_id, int64_t node_id)
+    : ArbTGHelper(cluster_id, tenant_id, node_id) {}
+  virtual int pre_run() override final
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(arbserver::ArbTGHelper::pre_run())) {
+      CLOG_LOG(ERROR, "ArbTGHelper pre_run failed");
+    } else if (OB_FAIL(ObTenantBase::pre_run())) {
+      CLOG_LOG(ERROR, "ObTenantBase pre_run failed");
+    }
+    return ret;
+  }
+  virtual int end_run() override final
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObTenantBase::end_run())) {
+      CLOG_LOG(ERROR, "ObTenantBase pre_run failed");
+    } else if (OB_FAIL(arbserver::ArbTGHelper::end_run())) {
+      CLOG_LOG(ERROR, "ArbTGHelper pre_run failed");
+    }
+    return ret;
+  }
+};
+
 class ObSimpleLogServer : public ObISimpleLogServer
 {
 public:
   ObSimpleLogServer()
-    : handler_(deliver_),
+    : cluster_id_(1),
+      tenant_id_(ObISimpleLogServer::DEFAULT_TENANT_ID), // the tenant in mittest must be 1002, otherwise, arb server can not start service.
+      handler_(deliver_),
       transport_(NULL),
       batch_rpc_transport_(NULL),
       high_prio_rpc_transport_(NULL)
@@ -280,11 +313,14 @@ public:
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
                   const int64_t node_id,
+                  ObTenantIOManager *tio_manager,
                   LogMemberRegionMap *region_map,
                   const bool is_bootstrap) override final;
   int simple_start(const bool is_bootstrap) override final;
   int simple_close(const bool is_shutdown) override final;
-  int simple_restart(const std::string &cluster_name, const int64_t node_idx) override final;
+  int simple_restart(const std::string &cluster_name,
+                     const int64_t node_idx,
+                     ObTenantIOManager *tio_manager) override final;
 public:
   int64_t get_node_id() {return node_id_;}
   ILogBlockPool *get_block_pool() override final
@@ -392,6 +428,8 @@ protected:
   int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
 
 private:
+  int64_t cluster_id_;
+  int64_t tenant_id_;
   int64_t node_id_;
   common::ObAddr addr_;
   rpc::frame::ObNetEasy net_;

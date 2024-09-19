@@ -772,6 +772,7 @@ int ObCgroupCtrl::set_group_iops(const uint64_t tenant_id,
                                                                group_io.weight_percent_))) {
     LOG_WARN("modify consumer group iops failed", K(ret), K(group_id), K(tenant_id), K(group_id));
   }
+  LOG_INFO("set group iops", K(ret), K(tenant_id), K(group_id), K(group_io));
   return ret;
 }
 

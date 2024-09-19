@@ -211,7 +211,7 @@ int ObLoadDataBase::make_parameterize_stmt(ObExecContext &ctx,
           LOG_WARN("invalid argument", K(ret), KP(ctx.get_stmt_factory()->get_query_ctx()));
         } else {
           resolver_ctx.query_ctx_ = ctx.get_stmt_factory()->get_query_ctx();
-          resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+          resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
           resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(ctx.get_sql_ctx()->schema_guard_);
           ObResolver resolver(resolver_ctx);
           ObStmt *astmt = NULL;
@@ -2772,8 +2772,9 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   if (OB_SUCC(ret)) {
     file_read_param.file_location_   = load_file_storage;
     file_read_param.filename_        = load_args.file_name_;
-    file_read_param.access_info_     = load_args.access_info_;
-    file_read_param.packet_handle_   = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
+    if (OB_NOT_NULL(ctx.get_my_session()->get_pl_query_sender())) {
+      file_read_param.packet_handle_   = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
+    }
     file_read_param.session_         = ctx.get_my_session();
     file_read_param.timeout_ts_      = THIS_WORKER.get_timeout_ts();
 
@@ -2782,6 +2783,13 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("load data format not support", KR(ret), K(load_args.access_info_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-csv format in load data is");
+    } else if (ObLoadFileLocation::CLIENT_DISK == load_file_storage &&
+               OB_ISNULL(file_read_param.packet_handle_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("load client disk data with inner sql", KR(ret), K(load_args.access_info_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "load client disk data with inner sql");
+    } else if (OB_FAIL(file_read_param.access_info_.assign(load_args.access_info_))) {
+      LOG_WARN("fail to assign access info", K(ret), K(load_args.access_info_));
     } else if (OB_FAIL(ObFileReader::open(file_read_param, ctx.get_allocator(), file_reader))) {
       LOG_WARN("failed to open file.", KR(ret), K(file_read_param), K(load_args.file_name_));
 
@@ -2896,7 +2904,8 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
         bool is_valid = false;
         hint_batch_buffer_size_str = hint_batch_buffer_size_str.trim();
         if (!hint_batch_buffer_size_str.empty()) {
-          hint_max_batch_buffer_size = ObConfigCapacityParser::get(to_cstring(hint_batch_buffer_size_str), is_valid);
+          ObCStringHelper helper;
+          hint_max_batch_buffer_size = ObConfigCapacityParser::get(helper.convert(hint_batch_buffer_size_str), is_valid);
         }
         if (!is_valid) {
           hint_max_batch_buffer_size = 1L << 30; // 1G
@@ -3096,6 +3105,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       LOG_WARN("no memory", K(ret), K(buf_len));
     } else {
       const ObString &cur_query_str = ctx.get_my_session()->get_current_query_string();
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       OZ (databuff_printf(buf, buf_len, pos,
                           "Tenant name:\t%.*s\n"
                           "File name:\t%.*s\n"
@@ -3108,7 +3118,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
                           load_args.combined_name_.length(), load_args.combined_name_.ptr(),
                           parallel,
                           batch_row_count,
-                          ObCurTraceId::get_trace_id_str()
+                          ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))
                           ));
       OZ (databuff_printf(buf, buf_len, pos, "Start time:\t"));
       OZ (ObTimeConverter::datetime_to_str(cur_ts,

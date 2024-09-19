@@ -49,6 +49,7 @@
 #include "sql/rewrite/ob_transform_dblink.h"
 #include "sql/rewrite/ob_transform_conditional_aggr_coalesce.h"
 #include "sql/rewrite/ob_transform_decorrelate.h"
+#include "sql/rewrite/ob_transform_late_materialization.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -66,6 +67,8 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(set_transformation_parameters(stmt->get_query_ctx()))) {
+    LOG_WARN("failed to extract trans ctx param", K(ret));
   } else if (OB_FAIL(do_transform_dblink_write(stmt, trans_happended))) {
     LOG_WARN("failed to do transform dblink write", K(ret));
   } else if (trans_happended) {
@@ -88,6 +91,60 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed deal after transform", K(ret));
   } else {
     print_trans_stat();
+  }
+  return ret;
+}
+
+int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  bool enable_group_by_placement_transform = false;
+  bool opt_param_exists = false;
+  int64_t opt_param_val = 0;
+  if (OB_ISNULL(query_ctx) || OB_ISNULL(ctx_) || OB_ISNULL(session_info = ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(query_ctx), K(ctx_));
+  } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
+    LOG_WARN("failed to check group by placement transform enabled", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::OPTIMIZER_GROUP_BY_PLACEMENT, enable_group_by_placement_transform))) {
+    LOG_WARN("fail to check opt param group by placement", K(ret));
+  } else {
+    ctx_->is_groupby_placement_enabled_ = enable_group_by_placement_transform;
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_integer_opt_param(ObOptParamHint::WITH_SUBQUERY, opt_param_val, opt_param_exists))) {
+    LOG_WARN("fail to check opt param with subquery", K(ret));
+  } else if (opt_param_exists) {
+    ctx_->is_force_inline_ = 2 == opt_param_val;
+    ctx_->is_force_materialize_ = 1 == opt_param_val;
+  } else if (OB_FAIL(session_info->is_force_temp_table_inline(ctx_->is_force_inline_))) {
+    LOG_WARN("failed to check temp table force inline", K(ret));
+  } else if (OB_FAIL(session_info->is_force_temp_table_materialize(ctx_->is_force_materialize_))) {
+    LOG_WARN("failed to check temp table force materialize", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (query_ctx->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_5 ||
+             query_ctx->get_query_hint().has_outline_data()) {
+    ctx_->cbqt_policy_ = TransPolicy::ENABLE_TRANS;
+  } else if (OB_FAIL(session_info->get_optimizer_cost_based_transformation(opt_param_val))) {
+    LOG_WARN("failed to get optimizer cost based transformation", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_integer_opt_param(
+                            ObOptParamHint::OPTIMIZER_COST_BASED_TRANSFORMATION, opt_param_val))) {
+    LOG_WARN("failed to get integer opt param", K(ret));
+  } else {
+    ctx_->cbqt_policy_ = static_cast<TransPolicy>(opt_param_val);
+  }
+  if (OB_SUCC(ret)) {
+    uint64_t tenant_id = session_info->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      ctx_->complex_cbqt_table_num_ = tenant_config->_complex_cbqt_table_num;
+    }
   }
   return ret;
 }
@@ -407,8 +464,13 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
       LOG_TRACE("succeed to transform one iteration", K(i), K(need_next_iteration), K(ret));
       OPT_TRACE("-- end ", i, " iteration");
     }
-    if (OB_SUCC(ret) && i == max_iteration_count_) {
-      LOG_INFO("transformer ends without convergence", K(max_iteration_count_));
+    if (OB_SUCC(ret) && need_next_iteration && i == max_iteration_count_) {
+      ret = OB_E(EventTable::EN_CHECK_REWRITE_ITER_CONVERGE) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("transformer ends without convergence", K(ret), K(max_iteration_count_), K(ctx_->outline_trans_hints_));
+      } else {
+        LOG_INFO("transformer ends without convergence", K(max_iteration_count_));
+      }
     }
   }
   return ret;
@@ -459,6 +521,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(FASTMINMAX, ObTransformMinMax);
     APPLY_RULE_IF_NEEDED(PREDICATE_MOVE_AROUND, ObTransformPredicateMoveAround);
     APPLY_RULE_IF_NEEDED(OR_EXPANSION, ObTransformOrExpansion);
+    APPLY_RULE_IF_NEEDED(LATE_MATERIALIZATION, ObTransformLateMaterialization);
   }
   return ret;
 }
@@ -717,6 +780,10 @@ int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt)
 int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecParamRawExpr*> & exec_params)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or query ctx is null", K(ret));
+  }
   for (int64_t j = 0; OB_SUCC(ret) && j < exec_params.count(); ++j) {
     ObExecParamRawExpr *exec_param = NULL;
     if (OB_ISNULL(exec_param = exec_params.at(j))) {
@@ -725,8 +792,8 @@ int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecPara
     } else if (exec_param->get_param_index() >= 0) {
       // do nothing
     } else {
-      exec_param->set_param_index(stmt->get_question_marks_count());
-      stmt->increase_question_marks_count();
+      exec_param->set_param_index(*stmt->query_ctx_);
+      exec_param->set_result_type(exec_param->get_ref_expr()->get_result_type());
     }
   }
   return ret;

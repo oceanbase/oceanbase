@@ -945,29 +945,29 @@ int ObPushdownFilterExecutor::prepare_skip_filter()
 }
 
 // 初始化需要被清理的标记
-int ObAndFilterExecutor::init_evaluated_datums()
+int ObAndFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  for (uint32_t i = 0; i < n_child_ && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(childs_[i]->init_evaluated_datums())) {
+  for (uint32_t i = 0; i < n_child_ && OB_SUCC(ret) && OB_LIKELY(is_valid); ++i) {
+    if (OB_FAIL(childs_[i]->init_evaluated_datums(is_valid))) {
       LOG_WARN("failed to filter child", K(ret));
     }
   }
   return ret;
 }
 
-int ObOrFilterExecutor::init_evaluated_datums()
+int ObOrFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  for (uint32_t i = 0; i < n_child_ && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(childs_[i]->init_evaluated_datums())) {
+  for (uint32_t i = 0; i < n_child_ && OB_SUCC(ret) && OB_LIKELY(is_valid); ++i) {
+    if (OB_FAIL(childs_[i]->init_evaluated_datums(is_valid))) {
       LOG_WARN("failed to filter child", K(ret));
     }
   }
   return ret;
 }
 
-int ObWhiteFilterExecutor::init_evaluated_datums()
+int ObWhiteFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = op_.get_eval_ctx();
@@ -988,7 +988,11 @@ int ObWhiteFilterExecutor::init_evaluated_datums()
         ObObj param;
         ObDatum *datum = NULL;
         if (OB_FAIL(filter_.expr_->args_[i]->eval(eval_ctx, datum))) {
-          LOG_WARN("evaluate filter arg expr failed", K(ret), K(i));
+          if (lib::is_oracle_mode()) {
+            is_valid = false;
+          } else {
+            LOG_WARN("evaluate filter arg expr failed", K(ret), K(i));
+          }
         } else if (OB_FAIL(datum->to_obj(param, filter_.expr_->args_[i]->obj_meta_, filter_.expr_->args_[i]->obj_datum_map_))) {
           LOG_WARN("convert datum to obj failed", K(ret));
         } else if (OB_FAIL(params_.push_back(param))) {
@@ -1004,6 +1008,9 @@ int ObWhiteFilterExecutor::init_evaluated_datums()
     if (WHITE_OP_IN == filter_.get_op_type() && OB_FAIL(init_obj_set())) {
       LOG_WARN("Failed to init Object hash set in filter node", K(ret));
     }
+  }
+  if (OB_UNLIKELY(!is_valid)) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -1144,9 +1151,10 @@ int ObBlackFilterExecutor::filter(blocksstable::ObStorageDatum *datums, int64_t 
 // 根据calc expr来设置每个列（空集）对应的清理Datum
 // 这里将clear的datum放在filter node是为了更精准处理，其实只有涉及到的表达式清理即可，其他不需要清理
 // 还有类似空集需要清理
-int ObBlackFilterExecutor::init_evaluated_datums()
+int ObBlackFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
+  is_valid = true;
   const int32_t cur_eval_info_cnt = n_eval_infos_;
   n_eval_infos_ = 0;
   n_datum_eval_flags_ = 0;

@@ -172,7 +172,7 @@ int ObPxTaskProcess::process()
     ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
     ObActiveSessionGuard::get_stat().group_id_ = THIS_WORKER.get_group_id();
-
+    session->set_ash_stat_value(ObActiveSessionGuard::get_stat());
     if (enable_perf_event) {
       exec_record.record_start();
     }
@@ -220,6 +220,7 @@ int ObPxTaskProcess::process()
       sqlstat_record.record_sqlstat_end_value();
       ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
       ObString sql = ObString::make_string("PX DFO EXECUTING");
+      sqlstat_record.set_is_plan_cache_hit(arg_.exec_ctx_->get_sql_ctx()->plan_cache_hit_);
       sqlstat_record.move_to_sqlstat_cache(*session,
                             sql, phy_plan, true/*is_px_remote_exec*/);
     }

@@ -273,6 +273,7 @@ private:
   ObPxTablet2PartIdMap tablet2part_id_map_;
   ObOperator *real_child_;
   bool is_parallel_runtime_filtered_;
+  ObGranuleSplitterType splitter_type_;
 };
 
 } // end namespace sql

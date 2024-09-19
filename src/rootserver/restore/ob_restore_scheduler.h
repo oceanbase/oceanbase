@@ -130,6 +130,8 @@ private:
       const bool is_restore_stat_start,
       const bool is_restore_finish);
   int set_restoring_start_ts_(common::ObISQLClient &proxy, const share::ObPhysicalRestoreJob &job_info);
+  int set_tenant_sts_crendential_config_(common::ObISQLClient &proxy,
+      const uint64_t tenant_id, const share::ObPhysicalRestoreJob &job_info);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

@@ -2879,7 +2879,7 @@ ObCollationHandler ob_collation_uca_900_handler = {
 ObCharsetInfo ob_charset_utf8mb4_unicode_ci=
 {
   224,0,0,
-  OB_CS_UTF8MB4_UCA_FLAGS,
+  OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_CI,
   OB_UTF8MB4,
   OB_UTF8MB4_UNICODE_CI,
   "",
@@ -3017,7 +3017,7 @@ ObCharsetInfo ob_charset_utf8mb4_zh3_0900_as_cs = {
 
 ObCharsetInfo ob_charset_utf8mb4_0900_ai_ci = {
     255, 0, 0,
-    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_PRIMARY,
+    OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_PRIMARY | OB_CS_CI,
     OB_UTF8MB4,
     OB_UTF8MB4 "_0900_ai_ci",
     "UTF-8 Unicode",
@@ -6113,7 +6113,7 @@ static ObCollationHandler ob_collation_utf16_uca_handler =
 ObCharsetInfo ob_charset_utf16_unicode_ci=
 {
     101,0,0,
-    OB_CS_UTF16_UCA_FLAGS,
+    OB_CS_UTF16_UCA_FLAGS | OB_CS_CI,
     OB_UTF16,
     OB_UTF16_UNICODE_CI,
     "",

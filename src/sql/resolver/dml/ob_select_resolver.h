@@ -105,12 +105,9 @@ public:
 
 protected:
   int resolve_set_query(const ParseNode &parse_node);
-  int do_resolve_set_query_in_cte(const ParseNode &parse_tree, bool swap_branch);
-  int do_resolve_set_query(const ParseNode &parse_tree);
+  int do_resolve_set_query_in_recursive_cte(const ParseNode &parse_tree);
+  int do_resolve_set_query_in_normal(const ParseNode &parse_tree);
   int resolve_set_query_hint();
-  int do_resolve_set_query(const ParseNode &parse_tree,
-                           common::ObIArray<ObSelectStmt*> &child_stmt,
-                           const bool is_left_child = false);
   virtual int do_resolve_set_query(const ParseNode &parse_tree,
                                    ObSelectStmt *&child_stmt,
                                    const bool is_left_child = false);
@@ -269,11 +266,12 @@ protected:
                                const ObItemType func_type,
                                common::ObIArray<ObRawExpr *> &arg_exp_arr,
                                common::ObIArray<ObRawExpr *> &partition_exp_arr);
-  int check_query_is_recursive_union(const ParseNode &parse_tree, bool &recursive_union, bool &need_swap_child);
+  int check_query_is_recursive_union(const ParseNode &parse_tree, bool &recursive_union);
   int do_check_basic_table_in_cte_recursive_union(const ParseNode &parse_tree, bool &recursive_union);
   int do_check_node_in_cte_recursive_union(const ParseNode* node, bool &recursive_union);
   int resolve_fetch_clause(const ParseNode *node);
   int resolve_check_option_clause(const ParseNode *node);
+  int check_set_child_stmt_pullup(const ObSelectStmt &child_stmt, bool &enable_pullup);
 private:
   int parameterize_fields_name(const ParseNode *project_node,
                                const ObString &org_alias_name,

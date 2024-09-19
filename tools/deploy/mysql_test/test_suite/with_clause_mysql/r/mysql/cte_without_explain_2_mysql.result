@@ -725,15 +725,15 @@ with RECURSIVE subdepartment(lev, id, parent_department, name) AS
 	SELECT sd.lev + 1, d.* FROM department  d, subdepartment sd WHERE d.parent_department = sd.id
 )
 SELECT * FROM subdepartment ORDER BY name;
-+------+----+-------------------+------+
-| lev  | id | parent_department | name |
-+------+----+-------------------+------+
-|    1 |  1 |                 0 | A    |
-|    2 |  2 |                 1 | B    |
-|    3 |  3 |                 2 | C    |
-|    3 |  4 |                 2 | D    |
-|    4 |  6 |                 4 | F    |
-+------+----+-------------------+------+
++------+------+-------------------+------+
+| lev  | id   | parent_department | name |
++------+------+-------------------+------+
+|    1 |    1 |                 0 | A    |
+|    2 |    2 |                 1 | B    |
+|    3 |    3 |                 2 | C    |
+|    3 |    4 |                 2 | D    |
+|    4 |    6 |                 4 | F    |
++------+------+-------------------+------+
 
 with RECURSIVE subdepartment(lev, id, parent_department, name) AS
 (
@@ -742,14 +742,14 @@ with RECURSIVE subdepartment(lev, id, parent_department, name) AS
 	SELECT sd.lev + 1, d.* FROM department  d, subdepartment  sd WHERE d.parent_department = sd.id
 )
 SELECT * FROM subdepartment WHERE lev >= 2 ORDER BY name;
-+------+----+-------------------+------+
-| lev  | id | parent_department | name |
-+------+----+-------------------+------+
-|    2 |  2 |                 1 | B    |
-|    3 |  3 |                 2 | C    |
-|    3 |  4 |                 2 | D    |
-|    4 |  6 |                 4 | F    |
-+------+----+-------------------+------+
++------+------+-------------------+------+
+| lev  | id   | parent_department | name |
++------+------+-------------------+------+
+|    2 |    2 |                 1 | B    |
+|    3 |    3 |                 2 | C    |
+|    3 |    4 |                 2 | D    |
+|    4 |    6 |                 4 | F    |
++------+------+-------------------+------+
 
 with RECURSIVE subdepartment AS
 (

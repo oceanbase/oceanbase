@@ -117,10 +117,10 @@ int ObExprResultTypeUtil::get_relational_equal_type(ObObjType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("the wrong type", K(type1), K(type2), K(ret));
   } else {
-    // we donot have ORACLE_RELATIONAL_EQUAL_TYPE, just use ORACLE_RELATIONAL_CMP_TYPE instead.
-    type = (lib::is_oracle_mode()
-            ? ORACLE_RELATIONAL_CMP_TYPE[type1][type2]
-            : RELATIONAL_EQUAL_TYPE[type1][type2]);
+    const ObObjType *equal_type_array = lib::is_oracle_mode()
+                                        ? ORACLE_RELATIONAL_EQUAL_TYPE
+                                        : RELATIONAL_EQUAL_TYPE;
+    type = equal_type_array[type1] == equal_type_array[type2] ? equal_type_array[type1] : ObMaxType;
   }
   return ret;
 }

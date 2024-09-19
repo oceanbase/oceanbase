@@ -336,6 +336,8 @@ int ObCdcFetcher::fetch_log_in_palf_(const ObLSID &ls_id,
   int ret = OB_SUCCESS;
   if (need_init_iter && OB_FAIL(palf_guard.seek(start_lsn, iter))) {
     LOG_WARN("PalfHandleGuard seek fail", KR(ret), K(ls_id), K(lsn));
+  } else if (need_init_iter && OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
+    LOG_WARN("set_io_context fail", KR(ret), K(ls_id), K(lsn));
   } else if (OB_FAIL(iter.next(replayable_point_scn))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("palf_iter next fail", KR(ret), K(tenant_id_), K(ls_id));
@@ -903,6 +905,8 @@ int ObCdcFetcher::fetch_missing_logs_in_palf_(const ObLSID &ls_id,
       if (OB_ERR_OUT_OF_LOWER_BOUND != ret) {
         LOG_WARN("failed to seek log entry iterator", K(curr_lsn), K(ls_id));
       }
+    } else if (OB_FAIL(log_entry_iter.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
+      LOG_WARN("set_io_context fail", K(ret), K(ls_id), K(curr_lsn));
     } else {
       LogEntry log_entry;
       palf::LSN log_entry_lsn;
@@ -1456,6 +1460,7 @@ int ObCdcFetcher::fetch_raw_log_in_palf_(const ObLSID &ls_id,
   int64_t read_size = 0;
   const int64_t buffer_len = resp.get_buffer_len();
   fetch_log_succ = false;
+  LogIOContext io_ctx(LogIOUser::CDC);
 
   if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_guard))) {
     if (OB_LS_NOT_EXIST != ret) {
@@ -1472,7 +1477,7 @@ int ObCdcFetcher::fetch_raw_log_in_palf_(const ObLSID &ls_id,
     LOG_WARN("req_size is larger than buffer_len, buf not enough", K(req_size), K(buffer_len),
         K(resp));
   } else if (OB_FAIL(palf_handle->raw_read(start_lsn, resp.get_log_buffer(),
-      req_size, read_size))) {
+      req_size, read_size, io_ctx))) {
     if (OB_ERR_OUT_OF_LOWER_BOUND != ret &&
         OB_ERR_OUT_OF_UPPER_BOUND != ret &&
         OB_NEED_RETRY != ret) {

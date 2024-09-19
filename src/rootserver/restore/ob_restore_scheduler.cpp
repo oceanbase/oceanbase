@@ -248,6 +248,9 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
       LOG_WARN("update restore option", K(ret), K(new_tenant_id), K(job_id), K(tenant_id_));
     } else if (OB_FAIL(may_update_restore_concurrency_(new_tenant_id, job_info))) {
       LOG_WARN("failed to update restore concurrency", K(ret), K(new_tenant_id), K(job_info));
+    } else if (!job_info.get_sts_credential().empty()
+      && OB_FAIL(set_tenant_sts_crendential_config_(*sql_proxy_, new_tenant_id, job_info))) {
+      LOG_WARN("fail to set tenant sts credential config", K(ret), K(new_tenant_id));
     } else {
       restore_service_->wakeup();
     }
@@ -430,6 +433,26 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
 
   LOG_INFO("[RESTORE] restore pre", K(ret), K(job_info));
 
+  return ret;
+}
+int ObRestoreScheduler::set_tenant_sts_crendential_config_(
+    common::ObISQLClient &proxy, const uint64_t tenant_id, const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_row = 0;
+  ObSqlString sql;
+  const ObString &sts_credential = job_info.get_sts_credential();
+  bool is_exist = false;
+  if (!is_user_tenant(tenant_id) || sts_credential.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not user tenant or sts credential is empty", K(job_info));
+  } else if (OB_FAIL(sql.assign_fmt("alter system set sts_credential='%.*s'", sts_credential.length(), sts_credential.ptr()))) {
+    LOG_WARN("failed to assign fmt", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
+    LOG_WARN("failed to set sts credential", K(ret), K(tenant_id));
+  } else {
+    LOG_INFO("update restore tenant sts credential", K(tenant_id));
+  }
   return ret;
 }
 

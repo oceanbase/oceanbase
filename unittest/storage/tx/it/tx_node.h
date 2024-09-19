@@ -453,6 +453,7 @@ public:
   ObLinkQueue req_msg_queue_;
   QueueConsumer<ObFakeRequestMsg> req_msg_consumer_;
   ObMockLockWaitMgr fake_lock_wait_mgr_;
+  common::ObMySQLProxy sql_proxy_;
 };
 
 } // transaction

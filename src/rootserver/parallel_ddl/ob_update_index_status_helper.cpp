@@ -212,6 +212,7 @@ int ObUpdateIndexStatusHelper::update_status_()
 {
   int ret = OB_SUCCESS;
   int64_t new_schema_version = OB_INVALID_VERSION;
+  ObTableLockOwnerID owner_id;
   const ObString *ddl_stmt_str = arg_.ddl_stmt_str_.empty() ? nullptr : &arg_.ddl_stmt_str_;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
@@ -244,9 +245,11 @@ int ObUpdateIndexStatusHelper::update_status_()
         if (OB_ISNULL(new_data_table_schema_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data_table_schema is null", KR(ret));
+        } else if(OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, arg_.task_id_))) {
+          LOG_WARN("owner_id convert from value failed", K(ret), K_(arg_.task_id));
         } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*new_data_table_schema_,
                                                                 *orig_index_table_schema_,
-                                                                ObTableLockOwnerID(arg_.task_id_),
+                                                                owner_id,
                                                                 trans_))) {
           LOG_WARN("failed to unlock ddl lock", KR(ret));
         }

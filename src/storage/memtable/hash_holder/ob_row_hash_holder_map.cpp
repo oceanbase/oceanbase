@@ -45,17 +45,18 @@ RowHolderBucketHead::~RowHolderBucketHead() {
 }
 
 int64_t RowHolderBucketHead::to_string(char *buf, const int64_t buf_len) const {
+  ObCStringHelper helper;
   int64_t pos = 0;
   if (OB_ISNULL(list_)) {
     common::databuff_printf(buf, buf_len, pos, "EMPTY");
   } else {
-    common::databuff_printf(buf, buf_len, pos, "{stack_list:%s}", to_cstring(*list_));
+    common::databuff_printf(buf, buf_len, pos, "{stack_list:%s}", helper.convert(*list_));
     const RowHolderList *list = list_->next_list_;
     constexpr int64_t MAX_PRINT_ITEM = 3;
     int64_t iter_item_cnt = 1;// head list has been printed
     while (OB_NOT_NULL(list) && ++iter_item_cnt) {
       if (OB_LIKELY(iter_item_cnt <= MAX_PRINT_ITEM)) {
-        common::databuff_printf(buf, buf_len, pos, "->{%lx:%s}", (unsigned long)list, to_cstring(*list));
+        common::databuff_printf(buf, buf_len, pos, "->{%lx:%s}", (unsigned long)list, helper.convert(*list));
       }
       list = list->next_list_;
     }
@@ -307,6 +308,7 @@ int RowHolderMapper::get_hash_holder(uint64_t hash, RowHolderInfo &holder_info) 
 
 template <typename T>
 static void print_cache_statics_to_buffer(T &cache, char *buffer, int64_t &pos, const int64_t buffer_len) {
+  ObCStringHelper helper;
   for (int64_t idx = 0; idx < cache.thread_size_; ++idx) {
     int64_t revert_cnt = ATOMIC_LOAD(&cache.thread_cache_[idx].revert_times_);
     int64_t fetch_cnt = ATOMIC_LOAD(&cache.thread_cache_[idx].fetch_times_);
@@ -318,11 +320,12 @@ static void print_cache_statics_to_buffer(T &cache, char *buffer, int64_t &pos, 
     "[DETECT.CACHE][T%ld][% '2ld] total_cnt=% '10ld history_fetch_cnt=% '16ld history_revert_cnt=% '16ld "
     "free_cnt=% '10ld, total_size=%s, free_size=%s\n",
     MTL_ID(), idx, total_cnt, fetch_cnt, revert_cnt,
-    free_cnt, to_cstring(total_size), to_cstring(free_size));
+    free_cnt, helper.convert(total_size), helper.convert(free_size));
   }
 }
 
 void RowHolderMapper::print_summary_info_to_buffer_(char *buffer, int64_t &pos, const int64_t buffer_len) const {
+  ObCStringHelper helper;
   ObSizeLiteralPrettyPrinter tenant_memory_limit = lib::get_tenant_memory_limit(MTL_ID());
   ObSizeLiteralPrettyPrinter bucket_head_alloc_size = sizeof(RowHolderBucketHead) * bucket_cnt_;
   ObSizeLiteralPrettyPrinter cache_node_alloc_size_for_one_thread =
@@ -344,7 +347,7 @@ void RowHolderMapper::print_summary_info_to_buffer_(char *buffer, int64_t &pos, 
   "[T%ld]tenant_memory_limit:%s, total_used:%s, bucket_used:%s, "
   "valid_bucket:%ld, valid_list:%ld, valid_node:%ld, "
   "history_node_alloc_cnt:%ld, history_node_free_cnt:%ld, history_list_alloc_cnt:%ld, history_list_free_cnt:%ld",
-  MTL_ID(), to_cstring(tenant_memory_limit), to_cstring(total_size), to_cstring(bucket_head_alloc_size),
+  MTL_ID(), helper.convert(tenant_memory_limit), helper.convert(total_size), helper.convert(bucket_head_alloc_size),
   valid_bucket_cnt, valid_list_cnt, valid_node_cnt,
   dynamic_alloc_node_cnt, dynamic_free_node_cnt, dynamic_alloc_list_cnt, dynamic_free_list_cnt);
 }

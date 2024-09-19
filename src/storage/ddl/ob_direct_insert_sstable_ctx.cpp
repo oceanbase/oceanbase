@@ -1352,6 +1352,9 @@ int ObSSTableInsertManager::update_table_context(
       LOG_WARN("update context failed", K(ret));
     }
   }
+  if (OB_EAGAIN == ret) {
+    ret = OB_STATE_NOT_MATCH; // avoid px hang
+  }
   return ret;
 }
 

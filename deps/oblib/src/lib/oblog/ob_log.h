@@ -46,9 +46,6 @@
 #include "common/ob_common_utility.h"
 #include "lib/oblog/ob_log_dba_event.h"
 
-#define OB_LOG_MAX_PAR_MOD_SIZE 64
-#define OB_LOG_MAX_SUB_MOD_SIZE 64
-
 namespace oceanbase {
 namespace lib {
 class ObRateLimiter;
@@ -79,8 +76,8 @@ extern ObPLogFDType get_fd_type(const char *mod_name, int32_t level, const char 
 //       To be used for SQL hint, this class should be POD-type.
 struct ObLogIdLevelMap
 {
-  static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_MAX_PAR_MOD_SIZE;
-  static const uint64_t MAX_SUB_MOD_SIZE = OB_LOG_MAX_SUB_MOD_SIZE;
+  static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_ROOT::M_ITEM_END;
+  static const uint64_t MAX_SUB_MOD_SIZE = max_sub_mod_num();
 
   //@brief Set to default value OB_LOG_LEVEL_INFO.
   inline void reset_level() {set_level(OB_LOG_LEVEL_INFO);}
@@ -115,8 +112,8 @@ struct ObLogIdLevelMap
 class ObLogNameIdMap
 {
 public:
-  static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_MAX_PAR_MOD_SIZE;
-  static const uint64_t MAX_SUB_MOD_SIZE = OB_LOG_MAX_SUB_MOD_SIZE;
+  static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_ROOT::M_ITEM_END;
+  static const uint64_t MAX_SUB_MOD_SIZE = max_sub_mod_num();
 
   ObLogNameIdMap();
 
@@ -266,16 +263,11 @@ public:
   static const int64_t FILE_SAMPLE_TIME = 5 * 1000 * 1000;
   //stat async flush speed every 1s.
   static const int64_t FLUSH_SAMPLE_TIME = 1* 1000 * 1000;
-  static const uint64_t MAX_THREAD_LOG_NUM = 1;
   static const uint64_t MAX_TASK_LOG_TYPE = 5;//ObTaskType::MAX
   static const uint64_t CAN_PRINT_DISK_SIZE = 32 * 1024 * 1024; //32MB
-  static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_MAX_PAR_MOD_SIZE;
-  static const uint64_t MAX_SUB_MOD_SIZE = OB_LOG_MAX_SUB_MOD_SIZE;
   static const int32_t MAX_LOG_FILE_COUNT = 10 * 1024;
 
-  static const int64_t MAX_LOG_HEAD_SIZE = 256;
   static const int64_t MAX_LOG_SIZE = 64 * 1024; //64kb
-  static const int64_t LOCAL_BUF_SIZE = 65 * 1024; //64kb
 
   static const int64_t GROUP_COMMIT_MAX_WAIT_US = 500*1000;//0.5s
   static const int64_t GROUP_COMMIT_MIN_ITEM_COUNT = 1;
@@ -333,6 +325,58 @@ private:
     int8_t level_;
   };
 
+public:
+  class ObTraceLogPrintGuard final
+  {
+  public:
+    explicit ObTraceLogPrintGuard(const int &ret, const char *const mod_name)
+      : ret_(ret), mod_name_(mod_name)
+    {
+#ifdef NDEBUG
+      if (!OB_LOGGER.is_trace_mode()) {
+        OB_LOGGER.set_trace_mode(true);
+      }
+#endif
+    }
+    ~ObTraceLogPrintGuard()
+    {
+#ifdef NDEBUG
+      if (OB_LOGGER.is_trace_mode()) {
+        if (OB_SUCCESS != ret_) {
+          if (OB_LOG_NEED_TO_PRINT(DEBUG)) {
+            OB_LOGGER.print_trace_buffer(mod_name_, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DEBUG));
+          } else if (OB_LOG_NEED_TO_PRINT(INFO)) {
+            OB_LOGGER.print_trace_buffer(mod_name_, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(INFO));
+          } else {}
+        }
+        OB_LOGGER.set_trace_mode(false);
+      }
+#endif
+    }
+  private:
+    DISABLE_COPY_ASSIGN(ObTraceLogPrintGuard);
+  private:
+    const int &ret_;
+    const char *const mod_name_;
+  };
+  class ObTraceLogGuard final
+  {
+  public:
+    explicit ObTraceLogGuard()
+    {
+      if (!OB_LOGGER.is_trace_mode()) {
+        OB_LOGGER.set_trace_mode(true);
+      }
+    }
+    ~ObTraceLogGuard()
+    {
+      if (OB_LOGGER.is_trace_mode()) {
+        OB_LOGGER.set_trace_mode(false);
+      }
+    }
+  private:
+    DISABLE_COPY_ASSIGN(ObTraceLogGuard);
+  };
 
 public:
   ObLogger();
@@ -390,13 +434,6 @@ public:
 
   int64_t get_reimbursation_time();
   int64_t get_wait_us(const int32_t level);
-
-  //@brief thread buffer for printing log
-  TraceBuffer *get_trace_buffer();
-
-  //@brief set thread trace mode
-  void set_trace_mode(bool trace_mode);
-  bool is_trace_mode() const { return trace_mode_; }
 
   //print thread trace buffer
   void print_trace_buffer(const char* mod_name,
@@ -627,11 +664,6 @@ public:
   //@brief Get the process-only ObLogger.
   static ObLogger &get_logger();
 
-  //@brief Regist par-module name with par_mod_id.
-  int register_mod(const uint64_t par_mod_id, const char *par_mod_name);
-  //@brief Regist sub-module name with par_mod_id and sub_mod_id.
-  int register_mod(const uint64_t par_mod_id, const uint64_t sub_mod_id, const char *sub_mod_name);
-
   //@brief Set global log-file's level and warning log-file's level.
   //@param[in] level The log-file's level.
   //@param[in] wf_level The warning log-file's level.
@@ -710,6 +742,8 @@ public:
   void issue_dba_error(const int errcode, const char *file, const int line, const char *info_str);
 
   bool is_svr_file_opened();
+
+  void init_allocator();
 
 private:
   //@brief If version <= 0, return true.
@@ -822,6 +856,16 @@ private:
 
   int log_new_file_info(const ObPLogFileStruct &log_file);
   void unlink_if_need(const char *file);
+  //@brief thread buffer for printing log
+  TraceBuffer *&get_trace_buffer();
+  //@brief set thread trace mode
+  void set_trace_mode(bool trace_mode);
+  bool is_trace_mode() const { return trace_mode_; }
+  void init_log_modules();
+  //@brief Regist par-module name with par_mod_id.
+  int register_mod(const uint64_t par_mod_id, const char *par_mod_name);
+  //@brief Regist sub-module name with par_mod_id and sub_mod_id.
+  int register_mod(const uint64_t par_mod_id, const uint64_t sub_mod_id, const char *sub_mod_name);
 private:
   static const char *const errstr_[];
   // default log rate limiter if there's no tl_log_limiger
@@ -885,7 +929,6 @@ private:
   ObLogCompressor* log_compressor_;
   // juse use it for test promise log print
   bool enable_log_limit_;
-  RLOCAL_STATIC(ByteBuf<LOCAL_BUF_SIZE>, local_buf_);
   struct {
     ProbeAction action_;
     char file_[128];
@@ -1242,74 +1285,58 @@ inline void ObLogger::do_log_message(const bool is_async,
   } else {
     ++curr_logging_seq_;
     // format to local buf
-    ObPLogItem *log_item = new (local_buf_) ObPLogItem();
-    log_item->set_buf_size(MAX_LOG_SIZE);
-    log_item->set_log_level(level);
-    log_item->set_timestamp(start_ts);
-    log_item->set_tl_type(tl_type_);
-    log_item->set_force_allow(is_force_allows());
-    log_item->set_fd_type(fd_type);
+    ObPLogItem *log_item = nullptr;
+    if (OB_FAIL(alloc_log_item(level, LOG_ITEM_SIZE + MAX_LOG_SIZE, log_item))) {
+      LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
+    } else {
+      log_item->set_buf_size(MAX_LOG_SIZE);
+      log_item->set_log_level(level);
+      log_item->set_timestamp(start_ts);
+      log_item->set_tl_type(tl_type_);
+      log_item->set_force_allow(is_force_allows());
+      log_item->set_fd_type(fd_type);
 
-    char *buf = log_item->get_buf();
-    int64_t buf_len = log_item->get_buf_size();
-    int64_t pos = log_item->get_data_len();
-    if (with_head) {
-      if (OB_FAIL(log_head(start_ts, mod_name, dba_event, level, file, line, function, errcode,
-                           buf, buf_len, pos))) {
-        LOG_STDERR("log_header error ret = %d\n", ret);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      log_item->set_data_len(pos);
-      log_item->set_header_len(pos);
-      if (OB_FAIL(log_data_func(buf, buf_len, pos))) {
-        LOG_STDERR("log data error ret = %d\n", ret);
-      }
-      check_log_end(*log_item, pos);
-      if (OB_UNLIKELY(OB_SIZE_OVERFLOW == ret)) {
-        log_item->set_size_overflow();
-        ret = OB_SUCCESS;
+      char *buf = log_item->get_buf();
+      int64_t buf_len = log_item->get_buf_size();
+      int64_t pos = log_item->get_data_len();
+      if (with_head) {
+        if (OB_FAIL(log_head(start_ts, mod_name, dba_event, level, file, line, function, errcode,
+                            buf, buf_len, pos))) {
+          LOG_STDERR("log_header error ret = %d\n", ret);
+        }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(backtrace_if_needed(*log_item, force_bt))) {
-          LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
+        log_item->set_data_len(pos);
+        log_item->set_header_len(pos);
+        if (OB_FAIL(log_data_func(buf, buf_len, pos))) {
+          LOG_STDERR("log data error ret = %d\n", ret);
         }
-      }
-    }
-
-    if (OB_SUCC(ret) && !allow) {
-      int64_t pos = log_item->get_header_len();
-      if (OB_FAIL(logdata_print_info(log_item->get_buf(), log_item->get_buf_size(), pos,
-                                     limiter_info))) {
-        // do nothing
-      } else {
         check_log_end(*log_item, pos);
-      }
-    }
-    BASIC_TIME_GUARD_CLICK("FORMAT_END");
-
-
-    if (OB_SUCC(ret)) {
-      limited_left_log_size_ = std::max(0L, log_item->get_data_len() - NORMAL_LOG_SIZE);
-      if (is_async) {
-        // clone by data_size
-        ObPLogItem *new_log_item = nullptr;
-        if (OB_FAIL(alloc_log_item(level, LOG_ITEM_SIZE + log_item->get_data_len(), new_log_item))) {
-          LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
-        } else {
-_Pragma("GCC diagnostic push")
-#ifdef __clang__
-_Pragma("GCC diagnostic ignored \"-Wdynamic-class-memaccess\"")
-#endif
-          MEMCPY((void *)new_log_item, (void *)log_item, LOG_ITEM_SIZE + log_item->get_data_len());
-_Pragma("GCC diagnostic pop")
-            // update buf_size
-          new_log_item->set_buf_size(log_item->get_data_len());
-          log_item = new_log_item;
-          BASIC_TIME_GUARD_CLICK("ALLOC_END");
+        if (OB_UNLIKELY(OB_SIZE_OVERFLOW == ret)) {
+          log_item->set_size_overflow();
+          ret = OB_SUCCESS;
         }
-
         if (OB_SUCC(ret)) {
+          if (OB_FAIL(backtrace_if_needed(*log_item, force_bt))) {
+            LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && !allow) {
+        int64_t pos = log_item->get_header_len();
+        if (OB_FAIL(logdata_print_info(log_item->get_buf(), log_item->get_buf_size(), pos,
+                                      limiter_info))) {
+          // do nothing
+        } else {
+          check_log_end(*log_item, pos);
+        }
+      }
+      BASIC_TIME_GUARD_CLICK("FORMAT_END");
+
+      if (OB_SUCC(ret)) {
+        limited_left_log_size_ = std::max(0L, log_item->get_data_len() - NORMAL_LOG_SIZE);
+        if (is_async) {
           const int32_t tl_type = log_item->get_tl_type();
           if (OB_FAIL(append_log(*log_item))) {
             LOG_STDERR("append_log error ret = %d\n", ret);
@@ -1321,23 +1348,31 @@ _Pragma("GCC diagnostic pop")
             last_logging_seq_ = curr_logging_seq_;
             BASIC_TIME_GUARD_CLICK("APPEND_END");
           }
+        } else {
+          flush_logs_to_file(&log_item, 1);
+          BASIC_TIME_GUARD_CLICK("FLUSH_END");
         }
-      } else {
-        flush_logs_to_file(&log_item, 1);
-        BASIC_TIME_GUARD_CLICK("FLUSH_END");
-      }
+        check_reset_force_allows();
+      } /* not allow */
 
-      // stat
+      // free log_item if necessary
+      bool need_free_item = false;
       if (OB_FAIL(ret)) {
         inc_dropped_log_count(level);
-        if ((char*)log_item != local_buf_) {
+        need_free_item = true;
+      } else { // if OB_SUCCESS == ret
+        if (!is_async) {
+          need_free_item = true;
+        }
+      }
+      if (need_free_item) {
+        if ((char*)log_item != nullptr) {
           free_log_item(log_item);
         }
-        log_item = NULL;
+        log_item = nullptr;
         BASIC_TIME_GUARD_CLICK("FREE_END");
       }
-      check_reset_force_allows();
-    } /* not allow */
+    }
   }
 #ifndef OB_BUILD_PACKAGE
   const int64_t threshold_us = 500 * 1000;

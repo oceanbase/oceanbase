@@ -24,225 +24,73 @@ namespace oceanbase
 {
 namespace common
 {
-#define LOG_MOD_BEGIN(ModName) \
-  struct OB_LOG_##ModName      \
-  {                            \
-    enum                       \
+// ---------------------define parent modules and sub modules---------------------
+#define LOG_PAR_MOD_BEGIN          \
+  struct OB_LOG_ROOT               \
+  {                                \
+    enum                           \
     {
 
-#define LOG_MOD_END(ModName)   \
-    };                         \
+#define DEFINE_LOG_PAR_MOD(ModName)  M_##ModName,
+
+#define LOG_PAR_MOD_END            \
+      M_ITEM_END                   \
+    };                             \
   };
+
+#define LOG_SUB_MOD_BEGIN(ModName) \
+  struct OB_LOG_##ModName          \
+  {                                \
+    enum                           \
+    {
 
 #define DEFINE_LOG_SUB_MOD(ModName)  M_##ModName,
 
-//Currently it is divided by directory. Each module can be adjusted according to the specific situation during the use process
-//After adding or modifying modules in this file, remember to make corresponding modifications in ob_log_module.ipp
-//The number of modules is limited, see OB_LOG_MAX_PAR_MOD_SIZE for details
-//statement of parent modules
-LOG_MOD_BEGIN(ROOT)                      // src directory
-DEFINE_LOG_SUB_MOD(CLIENT)               // client
-DEFINE_LOG_SUB_MOD(CLOG)                 // clog
-DEFINE_LOG_SUB_MOD(COMMON)               // observer
-DEFINE_LOG_SUB_MOD(ELECT)                // election
-DEFINE_LOG_SUB_MOD(OCCAM)                // occam tools
-DEFINE_LOG_SUB_MOD(LIB)                  // lib
-DEFINE_LOG_SUB_MOD(OFS)                  // OFS
-DEFINE_LOG_SUB_MOD(RPC)                  // rpc
-DEFINE_LOG_SUB_MOD(RS)                   // rootserver
-DEFINE_LOG_SUB_MOD(BOOTSTRAP)                   // rootserver
-DEFINE_LOG_SUB_MOD(SERVER)               // rpc, common/server_framework
-DEFINE_LOG_SUB_MOD(SHARE)                // share
-DEFINE_LOG_SUB_MOD(SQL)                  // sql
-DEFINE_LOG_SUB_MOD(PL)                   // pl
-DEFINE_LOG_SUB_MOD(JIT)                  // jit
-DEFINE_LOG_SUB_MOD(STORAGE)              // storage, blocksstable
-DEFINE_LOG_SUB_MOD(TLOG)                 // liboblog
-DEFINE_LOG_SUB_MOD(STORAGETEST)          // storagetest
-DEFINE_LOG_SUB_MOD(LOGTOOL)              // logtool
-DEFINE_LOG_SUB_MOD(WRS)                  // weak read service
-DEFINE_LOG_SUB_MOD(ARCHIVE)              // archive log
-DEFINE_LOG_SUB_MOD(PHYSICAL_RESTORE_ARCHIVE)      // physical restore log
-DEFINE_LOG_SUB_MOD(EASY)                 // libeasy
-DEFINE_LOG_SUB_MOD(DETECT)               // dead lock
-DEFINE_LOG_SUB_MOD(PALF)                 // palf
-DEFINE_LOG_SUB_MOD(STANDBY)              // primary and standby cluster
-DEFINE_LOG_SUB_MOD(COORDINATOR)          // leader coordinator
-DEFINE_LOG_SUB_MOD(FLT)                // trace
-DEFINE_LOG_SUB_MOD(OBTRACE)                // trace
-DEFINE_LOG_SUB_MOD(BALANCE)              // balance module
-DEFINE_LOG_SUB_MOD(MDS)                  // multi data source
-DEFINE_LOG_SUB_MOD(DATA_DICT)            // data_dictionary module
-DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
-DEFINE_LOG_SUB_MOD(WR)                 // workload repository
-DEFINE_LOG_SUB_MOD(LOGMINER)             // logminer
-LOG_MOD_END(ROOT)
+#define LOG_SUB_MOD_END(ModName)   \
+      M_ITEM_END                   \
+    };                             \
+  };
 
-//statement of WRS's sub_modules
-LOG_MOD_BEGIN(WRS)
-DEFINE_LOG_SUB_MOD(CLUSTER)
-DEFINE_LOG_SUB_MOD(SERVER)
-LOG_MOD_END(WRS)
+#include "lib/oblog/ob_log_module.ipp"
 
-//statement of LIB's sub-modules
-LOG_MOD_BEGIN(LIB)                       // lib directory
-DEFINE_LOG_SUB_MOD(ALLOC)                // allocator
-DEFINE_LOG_SUB_MOD(CONT)                 // all container except hash: list, queue, array, hash
-DEFINE_LOG_SUB_MOD(FILE)                 // file
-DEFINE_LOG_SUB_MOD(HASH)                 // hash
-DEFINE_LOG_SUB_MOD(LOCK)                 // lock
-DEFINE_LOG_SUB_MOD(MYSQLC)               // internal mysqlclient
-DEFINE_LOG_SUB_MOD(STRING)               // string
-DEFINE_LOG_SUB_MOD(TIME)                 // time
-DEFINE_LOG_SUB_MOD(UTIL)                 // utility
-DEFINE_LOG_SUB_MOD(CHARSET)              // charset
-DEFINE_LOG_SUB_MOD(WS)                   // word segment
-DEFINE_LOG_SUB_MOD(OCI)                  // oci log
-LOG_MOD_END(LIB)
+#undef LOG_PAR_MOD_BEGIN
+#undef DEFINE_LOG_PAR_MOD
+#undef LOG_PAR_MOD_END
+#undef LOG_SUB_MOD_BEGIN
+#undef DEFINE_LOG_SUB_MOD
+#undef LOG_SUB_MOD_END
 
-//statement of OFS's sub-modules
-LOG_MOD_BEGIN(OFS)                       // OFS directory
-DEFINE_LOG_SUB_MOD(BLOCK)                // block
-DEFINE_LOG_SUB_MOD(BLOCKSERVER)          // blockserver
-DEFINE_LOG_SUB_MOD(CLIENT)               // client
-DEFINE_LOG_SUB_MOD(CLUSTER)              // cluster
-DEFINE_LOG_SUB_MOD(COMMON)               // common
-DEFINE_LOG_SUB_MOD(FILE)                 // file
-DEFINE_LOG_SUB_MOD(MASTER)               // master
-DEFINE_LOG_SUB_MOD(STREAM)               // stream
-DEFINE_LOG_SUB_MOD(RPC)                  // rpc
-DEFINE_LOG_SUB_MOD(UTIL)                 // util
-DEFINE_LOG_SUB_MOD(FS)                   // fs
-DEFINE_LOG_SUB_MOD(REGRESSION)           // regression
-DEFINE_LOG_SUB_MOD(LIBS)                 // libs
-DEFINE_LOG_SUB_MOD(SHARE)                // share
-LOG_MOD_END(OFS)
+// -------------get num of parent modules ans max num of sub modules--------------
+constexpr uint64_t ob_log_max_value(uint64_t n) {
+    return n;
+}
 
-// statements of RPC's sub-modules
-LOG_MOD_BEGIN(RPC)
-DEFINE_LOG_SUB_MOD(FRAME)
-DEFINE_LOG_SUB_MOD(OBRPC)
-DEFINE_LOG_SUB_MOD(OBMYSQL)
-DEFINE_LOG_SUB_MOD(TEST)
-LOG_MOD_END(RPC)
+template<typename... Args>
+constexpr uint64_t ob_log_max_value(uint64_t first, Args... args) {
+  return first > ob_log_max_value(args...) ? first : ob_log_max_value(args...);
+}
 
-//statement of COMMON's sub-modules
-LOG_MOD_BEGIN(COMMON)                    // common directory
-DEFINE_LOG_SUB_MOD(CACHE)                // cache
-DEFINE_LOG_SUB_MOD(EXPR)                 // expression
-DEFINE_LOG_SUB_MOD(LEASE)                // lease
-DEFINE_LOG_SUB_MOD(MYSQLP)               // mysql_proxy
-DEFINE_LOG_SUB_MOD(PRI)                  // privilege
-DEFINE_LOG_SUB_MOD(STAT)                 // stat
-DEFINE_LOG_SUB_MOD(UPSR)                 // ups_reclaim
-LOG_MOD_END(COMMON)
+constexpr uint64_t max_sub_mod_num()
+{
+#define LOG_PAR_MOD_BEGIN
+#define DEFINE_LOG_PAR_MOD(ModName)
+#define LOG_PAR_MOD_END
+#define LOG_SUB_MOD_BEGIN(ModName) static_cast<uint64_t>(OB_LOG_##ModName::M_ITEM_END),
+#define DEFINE_LOG_SUB_MOD(ModName)
+#define LOG_SUB_MOD_END(ModName)
 
-//statement of SHARE's sub-modules
-LOG_MOD_BEGIN(SHARE)                     // share directory
-DEFINE_LOG_SUB_MOD(CONFIG)               // config
-DEFINE_LOG_SUB_MOD(FILE)                 // file
-DEFINE_LOG_SUB_MOD(INNERT)               // inner_table
-DEFINE_LOG_SUB_MOD(INTERFACE)            // interface
-DEFINE_LOG_SUB_MOD(LOG)                  // log
-DEFINE_LOG_SUB_MOD(PT)                   // partition_table
-DEFINE_LOG_SUB_MOD(SCHEMA)               // schema
-DEFINE_LOG_SUB_MOD(TRIGGER)              // trigger
-DEFINE_LOG_SUB_MOD(LOCATION)             // location_cache
-LOG_MOD_END(SHARE)
+  return  ob_log_max_value(
+    #include "lib/oblog/ob_log_module.ipp"
+    0UL
+  );
 
-//statement of storage's sub-modules
-LOG_MOD_BEGIN(STORAGE)                   // storage, blocksstable directory
-DEFINE_LOG_SUB_MOD(REDO)                 // replay
-DEFINE_LOG_SUB_MOD(COMPACTION)
-DEFINE_LOG_SUB_MOD(BSST)                // blocksstable
-DEFINE_LOG_SUB_MOD(MEMT)  // memtable
-DEFINE_LOG_SUB_MOD(TRANS)  // transaction
-DEFINE_LOG_SUB_MOD(RU)  // transaction
-DEFINE_LOG_SUB_MOD(REPLAY)  // replay engine
-DEFINE_LOG_SUB_MOD(IMC)
-DEFINE_LOG_SUB_MOD(DUP_TABLE)
-DEFINE_LOG_SUB_MOD(TABLELOCK)  // tablelock
-DEFINE_LOG_SUB_MOD(BLKMGR)  // block manager
-LOG_MOD_END(STORAGE)
-
-// statement of clog's sub-modules
-LOG_MOD_BEGIN(CLOG)
-DEFINE_LOG_SUB_MOD(EXTLOG)               // external fetch log
-DEFINE_LOG_SUB_MOD(CSR)                  // cursor cache
-DEFINE_LOG_SUB_MOD(ARCHIVE)                  //archive
-LOG_MOD_END(CLOG)
-
-//statement of SQL's sub-modules
-LOG_MOD_BEGIN(SQL)                       // sql directory
-DEFINE_LOG_SUB_MOD(ENG)                  // engine
-DEFINE_LOG_SUB_MOD(EXE)                  // execute
-DEFINE_LOG_SUB_MOD(OPT)                  // optimizer
-DEFINE_LOG_SUB_MOD(JO)                   // join order
-DEFINE_LOG_SUB_MOD(PARSER)               // parser
-DEFINE_LOG_SUB_MOD(PC)                   // plan_cache
-DEFINE_LOG_SUB_MOD(RESV)                 // resolver
-DEFINE_LOG_SUB_MOD(REWRITE)              // rewrite
-DEFINE_LOG_SUB_MOD(SESSION)              // session
-DEFINE_LOG_SUB_MOD(CG)                   // code_generator
-DEFINE_LOG_SUB_MOD(MONITOR)              // monitor
-DEFINE_LOG_SUB_MOD(DTL)                  // data transfer layer
-DEFINE_LOG_SUB_MOD(DAS)                  // data access service
-DEFINE_LOG_SUB_MOD(SPM)                  // sql plan baseline
-DEFINE_LOG_SUB_MOD(QRR)                  // query rewrite rule
-LOG_MOD_END(SQL)
-
-// observer submodules
-LOG_MOD_BEGIN(SERVER)
-DEFINE_LOG_SUB_MOD(OMT)                  // user mode scheduler
-LOG_MOD_END(SERVER)
-
-// RS submodules
-LOG_MOD_BEGIN(RS)
-DEFINE_LOG_SUB_MOD(LB)                  // load balance
-DEFINE_LOG_SUB_MOD(RESTORE)             // restore related
-LOG_MOD_END(RS)
-
-// Balance submodules
-LOG_MOD_BEGIN(BALANCE)
-DEFINE_LOG_SUB_MOD(TRANSFER)            // transfer service
-LOG_MOD_END(BALANCE)
-
-// liboblog submodules
-LOG_MOD_BEGIN(TLOG)
-DEFINE_LOG_SUB_MOD(FETCHER)                 // fetcher
-DEFINE_LOG_SUB_MOD(PARSER)                  // Parser
-DEFINE_LOG_SUB_MOD(SEQUENCER)               // Sequencer
-DEFINE_LOG_SUB_MOD(FORMATTER)               // Formatter
-DEFINE_LOG_SUB_MOD(COMMITTER)               // committer
-DEFINE_LOG_SUB_MOD(TAILF)                   // oblog_tailf
-DEFINE_LOG_SUB_MOD(SCHEMA)                  // schema
-DEFINE_LOG_SUB_MOD(STORAGER)                // storager
-DEFINE_LOG_SUB_MOD(READER)                  // reader
-DEFINE_LOG_SUB_MOD(DISPATCHER)              // redo_dispatcher
-DEFINE_LOG_SUB_MOD(SORTER)                  // br_sorter
-LOG_MOD_END(TLOG)
-
-// easy submodules
-LOG_MOD_BEGIN(EASY)
-DEFINE_LOG_SUB_MOD(IO)                  // EasyIO
-LOG_MOD_END(EASY)
-
-// storagetest submodules
-LOG_MOD_BEGIN(STORAGETEST)
-DEFINE_LOG_SUB_MOD(TEST)                  // Parser
-LOG_MOD_END(STORAGETEST)
-
-// PL submodules
-LOG_MOD_BEGIN(PL)
-DEFINE_LOG_SUB_MOD(RESV)               // resolver
-DEFINE_LOG_SUB_MOD(CG)                 // code generator
-DEFINE_LOG_SUB_MOD(SPI)                // service program interface
-DEFINE_LOG_SUB_MOD(PACK)               // package
-DEFINE_LOG_SUB_MOD(TYPE)               // type
-DEFINE_LOG_SUB_MOD(DEBUG)              // debug
-DEFINE_LOG_SUB_MOD(CACHE)              // cache
-DEFINE_LOG_SUB_MOD(STORAGEROUTINE)     // storage routine
-LOG_MOD_END(PL)
+#undef LOG_PAR_MOD_BEGIN
+#undef DEFINE_LOG_PAR_MOD
+#undef LOG_PAR_MOD_END
+#undef LOG_SUB_MOD_BEGIN
+#undef DEFINE_LOG_SUB_MOD
+#undef LOG_SUB_MOD_END
+}
 
 } //namespace common
 } //namespace oceanbase
@@ -316,9 +164,7 @@ LOG_MOD_END(PL)
 #define _OB_NUM_LEVEL_PRINT(level, errcode, _fmt_, args...)                                               \
    OB_LOGGER.log_message("", OB_LOG_NUM_LEVEL(level), errcode, _fmt_, ##args)
 
-#define IS_OB_LOG_TRACE_MODE()      OB_LOGGER.is_trace_mode()
-#define SET_OB_LOG_TRACE_MODE()     OB_LOGGER.set_trace_mode(true)
-#define CANCLE_OB_LOG_TRACE_MODE()  OB_LOGGER.set_trace_mode(false)
+#define MOD_NAME_FOR_TRACE_LOG(mod_name) "["#mod_name"] "
 #define PRINT_OB_LOG_TRACE_BUF(mod_name, level)                                                            \
   (OB_LOG_NEED_TO_PRINT(level) ? OB_LOGGER.print_trace_buffer("["#mod_name"] ", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(level)) : (void) 0)
 

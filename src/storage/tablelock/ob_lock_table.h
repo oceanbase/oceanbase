@@ -139,6 +139,7 @@ public:
   // and clear empty obj locks to recycle resources.
   // See the ObLockMemtable::check_and_clear_obj_lock for deatails.
   int check_and_clear_obj_lock(const bool force_compact);
+  int add_lock_into_queue(storage::ObStoreCtx &ctx, const ObLockParam &lock_param);
   // for replay
   int replay(const void *buffer,
              const int64_t nbytes,
@@ -148,9 +149,9 @@ public:
   share::SCN get_rec_scn() override { return share::SCN::max_scn(); }
   int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }
   // for role change
-  void switch_to_follower_forcedly() override{};
+  void switch_to_follower_forcedly() override;
   int switch_to_leader() override;
-  int switch_to_follower_gracefully() override { return OB_SUCCESS; }
+  int switch_to_follower_gracefully() override;
   int resume_leader() override { return OB_SUCCESS; }
 
   int enable_check_tablet_status(const bool need_check);
@@ -161,6 +162,7 @@ private:
   int recover_(const blocksstable::ObDatumRow &row);
   int get_table_schema_(const uint64_t tenant_id,
                         share::schema::ObTableSchema &schema);
+  int switch_to_follower_();
 
 private:
   static const int64_t LOCKTABLE_SCHEMA_VERSION = 0;

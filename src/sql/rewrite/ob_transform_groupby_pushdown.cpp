@@ -662,12 +662,13 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
   ObSqlBitSet<> outer_table_set;
   trans_happend = false;
   ObSQLSessionInfo *session_info = NULL;
-  bool enable_group_by_placement_transform = false;
+  ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_) ||
-      OB_ISNULL(session_info = ctx_->session_info_)) {
+      OB_ISNULL(session_info = ctx_->session_info_) ||
+      OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params are invalid", K(ret), K(ctx_), K(stmt));
+    LOG_WARN("params are invalid", K(ret), K(ctx_), K(stmt), K(session_info), K(query_ctx));
   } else if (OB_FAIL(ctx_->stmt_factory_->create_stmt(trans_stmt))) {
     LOG_WARN("failed to create stmt", K(ret));
   } else if (OB_FAIL(trans_stmt->deep_copy(*ctx_->stmt_factory_,
@@ -728,8 +729,6 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
     LOG_TRACE("push down params", K(ret));
     bool hint_force_pushdown = false;
     if (OB_FAIL(ret) || !is_valid) {
-    } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
-      LOG_WARN("failed to check group by placement transform enabled", K(ret));
     } else if (OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt),
                                         params,
                                         hint_force_pushdown,
@@ -737,7 +736,7 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
       LOG_WARN("check hint failed", K(ret));
     } else if (!is_valid) {
       OPT_TRACE("hint disable group by pushdown");
-    } else if (!enable_group_by_placement_transform && !hint_force_pushdown) {
+    } else if (!ctx_->is_groupby_placement_enabled_ && !hint_force_pushdown) {
       OPT_TRACE("system variable disable group by pushdown");
     } else if (OB_FAIL(transform_groupby_push_down(trans_stmt,
                                                    flattern_joined_tables,
@@ -1018,6 +1017,8 @@ int ObTransformGroupByPushdown::transform_groupby_push_down(ObSelectStmt *stmt,
       LOG_WARN("failed to push back flags", K(ret));
     } else if (OB_FAIL(new_table_items.push_back(new_table_item))) {
       LOG_WARN("push back new table item failed", K(ret));
+    } else if (OB_FAIL(push_down_ctx.new_stmt_ids_.push_back(sub_stmt->get_stmt_id()))) {
+      LOG_WARN("failed to push back stmt id", K(ret));
     } else {
       stmt->get_table_items().pop_back();
       //replace join columns, replace group columns
@@ -1588,7 +1589,9 @@ int ObTransformGroupByPushdown::is_expected_plan(ObLogPlan *plan, void *check_ct
     // do nothing
   } else if (OB_FAIL(check_nl_operator(plan->get_plan_root(), push_down_ctx, is_valid))) {
     LOG_WARN("check nl operator failed", K(ret));
-  } 
+  } else if (is_valid && OB_FAIL(check_cut_ratio(plan->get_plan_root(), push_down_ctx, is_valid))) {
+    LOG_WARN("failed to check cut ratio", K(ret));
+  }
   return ret;
 }
 
@@ -1642,6 +1645,120 @@ int ObTransformGroupByPushdown::has_group_by_op(ObLogicalOperator *op, bool &bre
     //do nothing
   } else if (OB_FAIL(SMART_CALL(has_group_by_op(op->get_child(0), bret)))) {
     LOG_WARN("check group by operator failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformGroupByPushdown::check_cut_ratio(ObLogicalOperator *op,
+                                                ObCostBasedPushDownCtx *push_down_ctx,
+                                                bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  uint64_t version = 0;
+  ObSEArray<bool, 2> invalid_stmts;
+  if (OB_ISNULL(op) || OB_ISNULL(op->get_stmt()) || OB_ISNULL(op->get_stmt()->get_query_ctx()) ||
+      OB_ISNULL(push_down_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (FALSE_IT(version = op->get_stmt()->get_query_ctx()->optimizer_features_enable_version_)) {
+  } else if (version < COMPAT_VERSION_4_2_5) {
+    // do nothing
+  } else if (OB_FAIL(invalid_stmts.prepare_allocate(push_down_ctx->new_stmt_ids_.count()))) {
+    LOG_WARN("failed to prepare array", K(ret));
+  } else if (OB_FAIL(check_all_cut_ratio(op, push_down_ctx, false, invalid_stmts))) {
+    LOG_WARN("failed to check all cut ratio", K(ret));
+  } else {
+    // Then invalid_stmts.at(i) is true only if the stmt exists and the cut ratio is invalid.
+    is_valid = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_valid && i < invalid_stmts.count(); i++) {
+      is_valid = !invalid_stmts.at(i);
+    }
+  }
+  return ret;
+}
+
+int ObTransformGroupByPushdown::check_all_cut_ratio(ObLogicalOperator *op,
+                                                    ObCostBasedPushDownCtx *push_down_ctx,
+                                                    bool is_in_cartesian,
+                                                    ObIArray<bool> &invalid_stmts)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = -1;
+  if (OB_ISNULL(op) || OB_ISNULL(op->get_stmt()) || OB_ISNULL(push_down_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("op is null", K(ret));
+  } else if (ObOptimizerUtil::find_item(push_down_ctx->new_stmt_ids_,
+                                        op->get_stmt()->get_stmt_id(), &idx)) {
+    bool is_valid = false;
+    if (is_in_cartesian) {
+      // no nothing
+    } else if (OB_FAIL(check_single_cut_ratio(op, is_valid))) {
+      LOG_WARN("failed to check cut ratio", K(ret));
+    } else if (!is_valid) {
+      invalid_stmts.at(idx) = true;
+    }
+  } else {
+    if (log_op_def::LOG_JOIN == op->get_type()) {
+      ObLogJoin *join = static_cast<ObLogJoin *>(op);
+      if (OB_ISNULL(join)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("static cast failed", K(ret));
+      } else {
+        // pushdown group by into cartesian join is always better
+        is_in_cartesian = join->is_cartesian();
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
+      if (OB_FAIL(SMART_CALL(check_all_cut_ratio(op->get_child(i), push_down_ctx,
+                                                 is_in_cartesian, invalid_stmts)))) {
+        LOG_WARN("failed to check all cut ratio", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformGroupByPushdown::check_single_cut_ratio(ObLogicalOperator *op,
+                                                       bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  double cut_ratio = 1.0;
+  uint64_t nopushdown_cut_ratio = 1;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(compute_group_by_cut_ratio(op, cut_ratio))) {
+    LOG_WARN("failed to compute group by cut ratio", K(ret));
+  } else if (OB_FAIL(ctx_->session_info_->get_sys_variable(
+                share::SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO, nopushdown_cut_ratio))) {
+    LOG_WARN("failed to get session variable", K(ret));
+  } else {
+    ObLogicalOperator *child_op = op->get_child(0);
+    is_valid = cut_ratio > nopushdown_cut_ratio;
+    LOG_TRACE("check trans plan cut ratio", K(is_valid), K(cut_ratio), K(nopushdown_cut_ratio));
+    OPT_TRACE("check trans plan group by cut ratio", cut_ratio);
+  }
+  return ret;
+}
+
+int ObTransformGroupByPushdown::compute_group_by_cut_ratio(ObLogicalOperator *op,
+                                                           double &cut_ratio)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (log_op_def::LOG_SUBPLAN_SCAN == op->get_type() || op->get_num_of_child() != 1) {
+    // do nothing
+  } else if (OB_FAIL(SMART_CALL(compute_group_by_cut_ratio(op->get_child(0), cut_ratio)))) {
+    LOG_WARN("failed to compute group by cut ratio", K(ret));
+  } else if (log_op_def::LOG_GROUP_BY != op->get_type()) {
+  } else if (OB_ISNULL(op->get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected plan", K(ret));
+  } else {
+    ObLogicalOperator *child_op = op->get_child(0);
+    cut_ratio *= child_op->get_card() / op->get_card();
   }
   return ret;
 }

@@ -345,9 +345,7 @@ public:
     int64_t pos = 0;
     while (NULL != (iter = const_cast<GroupMap*>(this)->GroupHash::quick_next(iter))) {
       group = static_cast<ObResourceGroup*>(iter);
-      common::databuff_printf(buf, buf_len, pos,
-       "%s",
-       to_cstring(group));
+      common::databuff_printf(buf, buf_len, pos, group);
     }
     return pos;
   }
@@ -428,6 +426,10 @@ public:
   int64_t cpu_quota_concurrency() const;
   int64_t min_worker_cnt() const;
   int64_t max_worker_cnt() const;
+  int64_t cur_ddl_thread_count() {return ATOMIC_LOAD(&total_ddl_thread_cnt_);}
+  void inc_ddl_thread_count() { ATOMIC_INC(&total_ddl_thread_cnt_); };
+  void dec_ddl_thread_count() { ATOMIC_DEC(&total_ddl_thread_cnt_); };
+  bool check_ddl_thread_is_limit() { return ATOMIC_LOAD(&total_ddl_thread_cnt_) >= static_cast<int64_t>(unit_min_cpu() * cpu_quota_concurrency()); }
   lib::Worker::CompatMode get_compat_mode() const;
   OB_INLINE share::ObTenantSpace &ctx() { return *ctx_; }
   int rdlock(common::ObLDHandle &handle);
@@ -561,6 +563,7 @@ protected:
   // workers can make progress.
   volatile bool shrink_ CACHE_ALIGNED;
   int64_t total_worker_cnt_;
+  int64_t total_ddl_thread_cnt_;
   void *gc_thread_;
   bool has_created_;
   int64_t stopped_;

@@ -93,6 +93,8 @@ enum ObObjType
   ObUserDefinedSQLType = 49, // User defined type in SQL
   ObDecimalIntType     = 50, // placeholder(from master), decimal int type
   ObCollectionSQLType  = 51, // collection(varray and nested table) in SQL
+  ObMySQLDateType      = 52, // date type which is compatible with MySQL.
+  ObMySQLDateTimeType  = 53, // datetime type which is compatible with MySQL.
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -214,6 +216,8 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObOUDTSqlType,             //ObUserDefinedSQLType = 49,
   ObONumberType,             //ObDecimalIntType = 50,
   ObOCollectionSqlType,      //ObCollectionSQLType = 51,
+  ObONotSupport,             //ObMySQLDateType = 52,
+  ObONotSupport,             //ObMySQLDateTimeType = 53,
   ObONotSupport              //ObMaxType,
 };
 
@@ -247,6 +251,8 @@ enum ObObjTypeClass
   ObUserDefinedSQLTC = 24, // user defined type class in SQL
   ObDecimalIntTC     = 25, // decimal int class
   ObCollectionSQLTC = 26, // collection type class in SQL
+  ObMySQLDateTC     = 27, // mysql date type class
+  ObMySQLDateTimeTC = 28, // mysql date time type class
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -309,7 +315,9 @@ enum ObObjTypeClass
     (ObGeometryType, ObGeometryTC),            \
     (ObUserDefinedSQLType, ObUserDefinedSQLTC), \
     (ObDecimalIntType, ObDecimalIntTC), \
-    (ObCollectionSQLType, ObCollectionSQLTC)
+    (ObCollectionSQLType, ObCollectionSQLTC),   \
+    (ObMySQLDateType, ObMySQLDateTC),   \
+    (ObMySQLDateTimeType, ObMySQLDateTimeTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -351,6 +359,8 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObUserDefinedSQLType, // user defined type in sql
   ObDecimalIntType, // decimal int
   ObCollectionSQLType,  // collection type in sql
+  ObMySQLDateType,     // mysql date
+  ObMySQLDateTimeType, // mysql datetime
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype
@@ -1165,7 +1175,8 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
       || ObBitTC == tc || ObEnumSetTC == tc || ObEnumSetInnerTC == tc || ObTextTC == tc
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
       || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc
-      || ObUserDefinedSQLTC == tc || ObCollectionSQLTC == tc;
+      || ObUserDefinedSQLTC == tc || ObCollectionSQLTC == tc || ObMySQLDateTC == tc
+      || ObMySQLDateTimeTC == tc;
 }
 
 //used for arithmetic
@@ -1239,7 +1250,9 @@ inline bool ob_is_float_tc(ObObjType type) { return ObFloatTC == ob_obj_type_cla
 inline bool ob_is_double_tc(ObObjType type) { return ObDoubleTC == ob_obj_type_class(type); }
 inline bool ob_is_number_tc(ObObjType type) { return ObNumberTC == ob_obj_type_class(type); }
 inline bool ob_is_datetime_tc(ObObjType type) { return ObDateTimeTC == ob_obj_type_class(type); }
+inline bool ob_is_mysql_datetime_tc(ObObjType type) { return ObMySQLDateTimeTC == ob_obj_type_class(type); }
 inline bool ob_is_date_tc(ObObjType type) { return ObDateTC == ob_obj_type_class(type); }
+inline bool ob_is_mysql_date_tc(ObObjType type) { return ObMySQLDateTC == ob_obj_type_class(type); }
 inline bool ob_is_otimestampe_tc(ObObjType type) { return ObOTimestampTC == ob_obj_type_class(type); }
 inline bool ob_is_time_tc(ObObjType type) { return ObTimeTC == ob_obj_type_class(type); }
 inline bool ob_is_year_tc(ObObjType type) { return ObYearTC == ob_obj_type_class(type); }
@@ -1319,7 +1332,8 @@ inline bool ob_is_oracle_temporal_type(ObObjType type)
 inline bool ob_is_enumset_numeric_type(ObObjType type) { return (ob_is_numeric_type(type) || ObYearType == type); }
 
 inline bool ob_is_enum_or_set_type(ObObjType type) { return ObEnumType == type || ObSetType == type; }
-inline bool ob_is_temporal_type(ObObjType type) { return type >= ObDateTimeType && type <= ObYearType; }
+inline bool ob_is_temporal_type(ObObjType type)
+{ return (type >= ObDateTimeType && type <= ObYearType) || (type == ObMySQLDateType || type == ObMySQLDateTimeType); }
 inline bool ob_is_string_or_enumset_type(ObObjType type)
 { return (type >= ObVarcharType && type <= ObHexStringType)
       || ObEnumType == type || ObSetType == type
@@ -1393,6 +1407,7 @@ inline bool ob_is_accuracy_length_valid_tc(ObObjType type) { return ob_is_string
 inline bool ob_is_string_or_enumset_tc(ObObjType type) { return ObStringTC == ob_obj_type_class(type) || ob_is_enumset_tc(type); }
 inline bool ob_is_large_text(ObObjType type) { return ObTextType <= type && ObLongTextType >= type; }
 inline bool ob_is_datetime(const ObObjType type) { return ObDateTimeType == type; }
+inline bool ob_is_mysql_datetime(const ObObjType type) { return ObMySQLDateTimeType == type; }
 inline bool ob_is_timestamp_tz(const ObObjType type) { return ObTimestampTZType == type; }
 inline bool ob_is_timestamp_ltz(const ObObjType type) { return ObTimestampLTZType == type; }
 inline bool ob_is_timestamp_nano(const ObObjType type) { return ObTimestampNanoType == type; }
@@ -1429,6 +1444,18 @@ inline bool ob_is_xml_sql_type(const ObObjType type, const uint16_t sub_schema_i
 
 inline bool ob_is_xml_pl_type(const ObObjType type, const uint64_t udt_id) {
   return (ObExtendType == type) && (udt_id == static_cast<uint64_t>(T_OBJ_XML));
+}
+inline bool ob_is_mysql_datetime_or_datetime(const ObObjType type)
+{
+  return ObMySQLDateTimeType == type || ObDateTimeType == type;
+}
+inline bool ob_is_mysql_date_or_date(const ObObjType type)
+{
+  return ObMySQLDateType == type || ObDateType == type;
+}
+inline bool ob_is_mysql_compact_dates_type(const ObObjType type)
+{
+  return ObMySQLDateType == type || ObMySQLDateTimeType == type;
 }
 
 // to_string adapter

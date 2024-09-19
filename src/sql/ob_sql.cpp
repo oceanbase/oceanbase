@@ -2095,6 +2095,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   const bool is_paramlize = false;
   int64_t server_collation = CS_TYPE_INVALID;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (raw_params.empty()) {
     // do nothing
   } else if (raw_params_idx.count() != raw_params.count()) {
@@ -2108,6 +2109,9 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session.get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variable failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < raw_params.count(); ++i) {
     value.reset();
@@ -2129,7 +2133,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       literal_prefix,
                                                       session.get_actual_nls_length_semantics(),
                                                       static_cast<ObCollationType>(server_collation),
-                                                      NULL, session.get_sql_mode(), compat_type))) {
+                                                      NULL, session.get_sql_mode(), compat_type,
+                                                      enable_mysql_compatible_dates))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
       LOG_WARN("failed to add param to param store", K(ret), K(value), K(fixed_param_store));
@@ -2984,10 +2989,11 @@ int ObSql::generate_stmt(ParseResult &parse_result,
   if (OB_SUCC(ret)) {
       // set # of question marks
       if (context.is_prepare_protocol_ && !context.is_prepare_stage_) {
-        resolver_ctx.query_ctx_->question_marks_count_ = plan_ctx->get_param_store().count();
+        resolver_ctx.query_ctx_->set_questionmark_count(plan_ctx->get_param_store().count());
         LOG_DEBUG("question mark size is ", K(plan_ctx->get_param_store()));
       } else {
-        resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t> (parse_result.question_mark_ctx_.count_);
+        resolver_ctx.query_ctx_->set_questionmark_count(
+                                      static_cast<int64_t>(parse_result.question_mark_ctx_.count_));
         LOG_DEBUG("question mark size is ", K(parse_result.question_mark_ctx_.count_));
       }
 
@@ -4364,10 +4370,11 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = pc_ctx.allocator_;
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
-
   ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();
   bool is_stack_overflow = false;
   bool is_show_variables = false;
+  bool is_explain_parameterize = false;
+  stmt::StmtType stmt_type = stmt::T_NONE;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -4423,7 +4430,6 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
       LOG_WARN("parser error number is unexpected, need disconnect", K(ret));
     }
     if (OB_SUCC(ret)) {
-      stmt::StmtType stmt_type = stmt::T_NONE;
       if (OB_ISNULL(parse_result.result_tree_)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid args", K(ret), KP(parse_result.result_tree_));
@@ -4476,6 +4482,17 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
               }
             }
           }
+          if (OB_SUCC(ret) && stmt::T_EXPLAIN == stmt_type) {
+#ifndef OB_BUILD_SPM
+            if (OB_SQL_PC_NOT_EXIST == get_plan_err) {
+#else
+            if (OB_SQL_PC_NOT_EXIST == get_plan_err || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
+#endif
+              is_explain_parameterize = true;
+            } else {
+              is_explain_parameterize = false;
+            }
+          }
         }
       }
     }
@@ -4513,10 +4530,11 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
     //对于create outline限流语句，可能会带有问题。我们需要对?做特殊处理,
     //所以也需要经过transform_systax_tree
     bool flag = false;
-    if ((add_plan_to_pc && !is_show_variables)
-        || ((T_CREATE_OUTLINE == parse_result.result_tree_->children_[0]->type_
-             || T_ALTER_OUTLINE == parse_result.result_tree_->children_[0]->type_)
-            && (INT64_MAX != parse_result.result_tree_->children_[0]->value_))) {
+    if ((add_plan_to_pc && !is_show_variables) ||
+        is_explain_parameterize ||
+        ((T_CREATE_OUTLINE == parse_result.result_tree_->children_[0]->type_ ||
+          T_ALTER_OUTLINE == parse_result.result_tree_->children_[0]->type_) &&
+         (INT64_MAX != parse_result.result_tree_->children_[0]->value_))) {
       flag = true;
       if (T_CREATE_OUTLINE == parse_result.result_tree_->children_[0]->type_) {
         if (1 != parse_result.result_tree_->children_[0]->children_[2]->value_) {
@@ -5141,14 +5159,12 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           // baseline and execute this plan directly.
           need_get_baseline = false;
           spm_ctx.baseline_exists_ = false;
-        } else {
-          // add baseline plan failed, need evict unaccepted baseline in baseline cache.
-          (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
         }
       } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
-        if (nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
-            static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj())->get_fixed()) {
-          // fixed baseline plan, use is directly
+        if ((nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
+             static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj())->get_fixed()) ||
+            SPM_MODE_BASELINE_FIRST == spm_ctx.spm_mode_) {
+          // fixed baseline plan or baseline first mode, use is directly
         } else {
           spm_ctx.spm_force_disable_ = true;
           spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;
@@ -5192,7 +5208,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           if (spm_ctx.force_evo_ && ObSpmCacheCtx::SpmStat::STAT_ADD_EVOLUTION_PLAN == spm_ctx.spm_stat_) {
             // do nothing
           } else if (spm_ctx.check_execute_status_) {
-            (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
+            // session which add plan succeed need check execute status
+            spm_ctx.check_execute_status_ = false;
+            LOG_TRACE("plan not add, disable check execute status");
           }
         } else if (baseline_enable && !baseline_exists) {
           need_get_baseline = true;

@@ -24,12 +24,7 @@ namespace oceanbase
 namespace sql
 {
 class OptSystemStat;
-enum PROJECT_TYPE {
-  PROJECT_INT = 0,
-  PROJECT_NUMBER,
-  PROJECT_CHAR,
-  MAX_PROJECT_TYPE
-};
+
 class ObOptCostModelParameter {
 public:
   explicit ObOptCostModelParameter(
@@ -56,6 +51,8 @@ public:
     const double DEFAULT_NETWORK_TRANS_PER_BYTE_COST,
     const double DEFAULT_PX_RESCAN_PER_ROW_COST,
     const double DEFAULT_PX_BATCH_RESCAN_PER_ROW_COST,
+    const double DEFAULT_DAS_RESCAN_PER_ROW_RPC_COST,
+    const double DEFAULT_DAS_BATCH_RESCAN_PER_ROW_RPC_COST,
     const double DEFAULT_NL_SCAN_COST,
     const double DEFAULT_BATCH_NL_SCAN_COST,
     const double DEFAULT_NL_GET_COST,
@@ -74,7 +71,7 @@ public:
     const double DEFAULT_RANGE_COST,
     const double (&comparison_params)[common::ObMaxTC + 1],
 		const double (&hash_params)[common::ObMaxTC + 1],
-		const double (&project_params)[2][2][MAX_PROJECT_TYPE]
+		const double (&project_params)[2][2][common::ObMaxTC + 1]
     )
     : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
       TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
@@ -99,6 +96,8 @@ public:
       NETWORK_TRANS_PER_BYTE_COST(DEFAULT_NETWORK_TRANS_PER_BYTE_COST),
       PX_RESCAN_PER_ROW_COST(DEFAULT_PX_RESCAN_PER_ROW_COST),
       PX_BATCH_RESCAN_PER_ROW_COST(DEFAULT_PX_BATCH_RESCAN_PER_ROW_COST),
+      DAS_RESCAN_PER_ROW_RPC_COST(DEFAULT_DAS_RESCAN_PER_ROW_RPC_COST),
+      DAS_BATCH_RESCAN_PER_ROW_RPC_COST(DEFAULT_DAS_BATCH_RESCAN_PER_ROW_RPC_COST),
       NL_SCAN_COST(DEFAULT_NL_SCAN_COST),
       BATCH_NL_SCAN_COST(DEFAULT_BATCH_NL_SCAN_COST),
       NL_GET_COST(DEFAULT_NL_GET_COST),
@@ -126,13 +125,10 @@ public:
   double get_micro_block_seq_cost(const OptSystemStat& stat) const;
   double get_micro_block_rnd_cost(const OptSystemStat& stat) const;
   double get_project_column_cost(const OptSystemStat& stat,
-                                 PROJECT_TYPE type,
+                                 int64_t type,
                                  bool is_rnd,
                                  bool use_column_store) const;
   double get_fetch_row_rnd_cost(const OptSystemStat& stat) const;
-  double get_cmp_spatial_cost(const OptSystemStat& stat) const;
-  double get_cmp_udf_cost(const OptSystemStat& stat) const;
-  double get_cmp_lob_cost(const OptSystemStat& stat) const;
   double get_cmp_err_handle_expr_cost(const OptSystemStat& stat) const;
   double get_materialize_per_byte_write_cost(const OptSystemStat& stat) const;
   double get_read_materialized_per_row_cost(const OptSystemStat& stat) const;
@@ -148,6 +144,8 @@ public:
   double get_network_trans_per_byte_cost(const OptSystemStat& stat) const;
   double get_px_rescan_per_row_cost(const OptSystemStat& stat) const;
   double get_px_batch_rescan_per_row_cost(const OptSystemStat& stat) const;
+  double get_das_rescan_per_row_rpc_cost(const OptSystemStat& stat) const;
+  double get_das_batch_rescan_per_row_rpc_cost(const OptSystemStat& stat) const;
   double get_nl_scan_cost(const OptSystemStat& stat) const;
   double get_batch_nl_scan_cost(const OptSystemStat& stat) const;
   double get_nl_get_cost(const OptSystemStat& stat) const;
@@ -209,6 +207,9 @@ protected:
   /*additional px-rescan cost*/
   double PX_RESCAN_PER_ROW_COST;
   double PX_BATCH_RESCAN_PER_ROW_COST;
+  /*additional das-rescan cost*/
+  double DAS_RESCAN_PER_ROW_RPC_COST;
+  double DAS_BATCH_RESCAN_PER_ROW_RPC_COST;
   //条件下压nestloop join右表扫一次的代价
   double NL_SCAN_COST;
   //条件下压batch nestloop join右表扫一次的代价
@@ -252,7 +253,7 @@ protected:
    *              +-column store-+
    *                             +-random access project
    */
-  const double (&project_params_)[2][2][MAX_PROJECT_TYPE];
+  const double (&project_params_)[2][2][common::ObMaxTC + 1];
 };
 
 }

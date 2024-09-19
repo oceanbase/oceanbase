@@ -29,6 +29,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 #include "sql/engine/px/datahub/components/ob_dh_opt_stats_gather.h"
+#include "sql/engine/px/datahub/components/ob_dh_statistics_collector.h"
 
 namespace oceanbase
 {
@@ -204,6 +205,7 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
   int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
   int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObStatisticsCollectorPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
   // End Datahub processing
   ObPxCoordInfo &coord_info_;
   ObIPxCoordEventListener &listener_;
@@ -242,6 +244,7 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
+  int on_piece_msg(ObExecContext &ctx, const ObStatisticsCollectorPieceMsg &pkt);
   void clean_dtl_interm_result(ObExecContext &ctx);
   // end DATAHUB msg processing
   void log_warn_sqc_fail(int ret, const ObPxFinishSqcResultMsg &pkt, ObPxSqcMeta *sqc);

@@ -1005,7 +1005,9 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
     } else if (OB_FAIL(val.get_int(autocommit))) {
       LOG_WARN("fail get commit val", K(val), K(ret));
     } else if (0 != autocommit && 1 != autocommit) {
-      const char *autocommit_str = to_cstring(autocommit);
+      char autocommit_str[32] = {'\0'};
+      int64_t pos = 0;
+      (void)databuff_printf(autocommit_str, sizeof(autocommit_str), pos, "%ld", autocommit);
       ret = OB_ERR_WRONG_VALUE_FOR_VAR;
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, (int)strlen(OB_SV_AUTOCOMMIT), OB_SV_AUTOCOMMIT,
                      (int)strlen(autocommit_str), autocommit_str);
@@ -1365,6 +1367,7 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
   } else if ((SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) ||
              (SYS_VAR_GTID_EXECUTED <= var_id && SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION >= var_id) ||
              (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id) ||
+             (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id) ||
              (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
              (SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE <= var_id && SYS_VAR_RELAY_LOG_SPACE_LIMIT >= var_id )) {
     ret = OB_NOT_SUPPORTED;

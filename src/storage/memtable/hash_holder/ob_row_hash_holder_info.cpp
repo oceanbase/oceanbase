@@ -164,18 +164,19 @@ int64_t RowHolderList::size() const {
 }
 
 int64_t RowHolderList::to_string(char *buf, const int64_t buf_len) const {
+  ObCStringHelper helper;
   int64_t pos = 0;
   common::databuff_printf(buf, buf_len, pos, "this:0x%lx, ", (unsigned long)this);
   if (!list_tail_) {
     common::databuff_printf(buf, buf_len, pos, "hash:%ld, EMPTY", hash_val_);
   } else {
-    common::databuff_printf(buf, buf_len, pos, "hash:%ld, [%lx:%s]", hash_val_, (unsigned long)list_tail_, to_cstring(list_tail_->holder_info_));
+    common::databuff_printf(buf, buf_len, pos, "hash:%ld, [%lx:%s]", hash_val_, (unsigned long)list_tail_, helper.convert(list_tail_->holder_info_));
     const RowHolderNode *node = list_tail_->prev_;
     constexpr int64_t MAX_PRINT_ITEM = 32;
     int64_t iter_item_cnt = 1;// head node has been printed
     while (OB_NOT_NULL(node) && ++iter_item_cnt) {
       if (OB_LIKELY(iter_item_cnt <= MAX_PRINT_ITEM)) {
-        common::databuff_printf(buf, buf_len, pos, "<-[%lx:%s]", (unsigned long)node, to_cstring(node->holder_info_));
+        common::databuff_printf(buf, buf_len, pos, "<-[%lx:%s]", (unsigned long)node, helper.convert(node->holder_info_));
       }
       node = node->prev_;
     }

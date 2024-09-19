@@ -2050,7 +2050,7 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
   ObArray<ObObjAccessIdx> access_idxs;
   const ObUserDefinedType *user_type = NULL;
   ObArray<ObRawExpr*> params;
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
   CK (OB_NOT_NULL(sp_data_type_node));
   CK (OB_NOT_NULL(current_block_));
   CK (T_SP_OBJ_ACCESS_REF == sp_data_type_node->type_);
@@ -2145,7 +2145,6 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
       OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
     }
   }
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -2254,13 +2253,18 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
         TENANT_CONF(session_info.get_effective_tenant_id()));
     bool convert_real_to_decimal =
         (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
-    if (OB_FAIL(ObResolverUtils::resolve_data_type(*sp_data_type_node,
+    bool enable_mysql_compatible_dates = false;
+    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info,
+                              enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_data_type(*sp_data_type_node,
                                       ident_name,
                                       scalar_data_type,
                                       is_oracle_mode(),
                                       true,
                                       session_info.get_session_nls_params(),
                                       session_info.get_effective_tenant_id(),
+                                      enable_mysql_compatible_dates,
                                       convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret));
     } else if (scalar_data_type.get_meta_type().is_string_or_lob_locator_type()
@@ -2429,8 +2433,8 @@ int ObPLResolver::get_view_select_stmt(
   OX (resolver_ctx.expr_factory_ = &expr_factory);
   OX (resolver_ctx.stmt_factory_ = &stmt_factory);
   CK (OB_NOT_NULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx()));
-  OX (resolver_ctx.query_ctx_->question_marks_count_
-        = static_cast<int64_t>(parse_result.question_mark_ctx_.count_));
+  OX (resolver_ctx.query_ctx_->set_questionmark_count(
+                                     static_cast<int64_t>(parse_result.question_mark_ctx_.count_)));
 
   CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));
   CK (T_SELECT == select_stmt_node->type_);
@@ -2520,8 +2524,8 @@ int ObPLResolver::fill_record_type(
     OX (resolver_ctx.sql_proxy_ = &(ctx.sql_proxy_));        \
     CK (OB_NOT_NULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx()));    \
     OX (resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(&ctx.schema_guard_)); \
-    OX (resolver_ctx.query_ctx_->question_marks_count_                           \
-          = static_cast<int64_t>(parse_result.question_mark_ctx_.count_));       \
+    OX (resolver_ctx.query_ctx_->set_questionmark_count( \
+                                   static_cast<int64_t>(parse_result.question_mark_ctx_.count_))); \
     OZ (resolver_ctx.schema_checker_->init(resolver_ctx.query_ctx_->sql_schema_guard_,    \
                                            ctx.session_info_.get_sessid()));              \
     CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));\
@@ -2717,7 +2721,7 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &schema_guard,
                                            ObPLExternTypeInfo *extern_type_info)
 {
   int ret = OB_SUCCESS;
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
   CK (OB_NOT_NULL(extern_type_info));
   CK (access_idents.count() > 0 && access_idents.count() <= 3);
   if (OB_FAIL(ret)) {
@@ -2743,7 +2747,6 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &schema_guard,
     OZ (session_info.get_database_id(extern_type_info->type_owner_));
   }
   OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -3045,7 +3048,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
   int ret = OB_SUCCESS;
 
   ObArray<ObObjAccessIdent> obj_access_idents;
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
   CK (OB_NOT_NULL(sp_data_type_node),
       OB_LIKELY(T_SP_TYPE == sp_data_type_node->type_
                 || T_SP_ROWTYPE == sp_data_type_node->type_),
@@ -3264,7 +3267,6 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                                      T_SP_ROWTYPE == sp_data_type_node->type_));
     OX (func.set_can_cached(false));
   }
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -3479,11 +3481,13 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
           static_cast<int16_t>(default_accuracy.get_precision() + default_accuracy.get_scale()));
         data_type.set_scale(default_accuracy.get_scale());
       } break;
-      case ObDateTimeTC: {
+      case ObDateTimeTC:
+      case ObMySQLDateTimeTC: {
         data_type.set_precision(static_cast<int16_t>(default_accuracy.get_precision()));
         data_type.set_scale(0);
       } break;
-      case ObDateTC: {
+      case ObDateTC:
+      case ObMySQLDateTC: {
         data_type.set_precision(default_accuracy.get_precision());
         data_type.set_scale(default_accuracy.get_scale());
       } break;
@@ -3593,7 +3597,7 @@ int ObPLResolver::resolve_sp_data_type(const ParseNode *sp_data_type_node,
 {
   int ret = OB_SUCCESS;
 
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
 
   bool need_adjust_type = false;
   CK (OB_NOT_NULL(sp_data_type_node));
@@ -3648,8 +3652,6 @@ int ObPLResolver::resolve_sp_data_type(const ParseNode *sp_data_type_node,
       OZ (adjust_routine_param_type(data_type));
     }
   }
-
-  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }
@@ -5078,7 +5080,7 @@ int ObPLResolver::modify_raw_expr_in_forall(ObPLForAllStmt &stmt,
                                             int64_t table_idx)
 {
   int ret = OB_SUCCESS;
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
   hash::ObHashMap<int64_t, int64_t> &tab_to_subtab = stmt.get_tab_to_subtab_map();
   int64_t sub_table_idx = OB_INVALID_INDEX;
   if (OB_FAIL(tab_to_subtab.get_refactored(table_idx, sub_table_idx))) {
@@ -5116,7 +5118,6 @@ int ObPLResolver::modify_raw_expr_in_forall(ObPLForAllStmt &stmt,
       sql_stmt.get_array_binding_params().at(modify_expr_id) = func.get_expr_count() - 1;
     }
   }
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -12164,7 +12165,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
 {
   int ret = OB_SUCCESS;
 
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
 
   OZ (replace_udf_param_expr(q_name, columns, real_exprs));
   if (OB_FAIL(ret)) {
@@ -12273,7 +12274,6 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
                                               transformed));
   }
 
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -13972,7 +13972,7 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
 {
   int ret = OB_SUCCESS;
 
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
 
   ObObjAccessIdx access_idx;
   uint64_t parent_id = OB_INVALID_INDEX;
@@ -14017,8 +14017,6 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
              K(ret), K(cnt), K(access_idxs.at(cnt - 1).access_type_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "access type");
   }
-
-  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }
@@ -14851,7 +14849,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
 {
   int ret = OB_SUCCESS;
 
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
 
   ObObjAccessIdx access_idx;
   uint64_t parent_id = OB_INVALID_INDEX;
@@ -15012,8 +15010,6 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     // not top node and parent not a namespace, it must be composite access. handle it here.
     OZ (resolve_composite_access(access_ident, access_idxs, ns, func), K(access_ident), K(access_idxs));
   }
-
-  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }
@@ -17981,7 +17977,7 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
 {
   int ret = OB_SUCCESS;
 
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
 
   ObIAllocator *alloc = allocator != nullptr ? allocator : &allocator_;
   // 首先尝试下是不是UDT Type
@@ -18023,8 +18019,6 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
       }
     }
   }
-
-  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }

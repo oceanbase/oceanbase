@@ -20,6 +20,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "share/diagnosis/ob_sql_monitor_statname.h"
+#include "sql/engine/basic/ob_statistics_collector_op.h"
 
 namespace oceanbase
 {
@@ -107,7 +108,11 @@ ObHashJoinSpec::ObHashJoinSpec(common::ObIAllocator &alloc, const ObPhyOperatorT
   is_naaj_(false),
   is_sna_(false),
   is_shared_ht_(false),
-  is_ns_equal_cond_(alloc)
+  is_ns_equal_cond_(alloc),
+  adaptive_hj_scan_cols_(alloc),
+  adaptive_nlj_scan_cols_(alloc),
+  is_adaptive_(false),
+  left_join_row_(alloc)
 {
 }
 
@@ -119,7 +124,11 @@ OB_SERIALIZE_MEMBER((ObHashJoinSpec, ObJoinSpec),
                     is_naaj_,
                     is_sna_,
                     is_shared_ht_,
-                    is_ns_equal_cond_);
+                    is_ns_equal_cond_,
+                    adaptive_hj_scan_cols_,
+                    adaptive_nlj_scan_cols_,
+                    is_adaptive_,
+                    left_join_row_);
 
 int ObHashJoinOp::PartHashJoinTable::init(ObIAllocator &alloc)
 {
@@ -256,7 +265,9 @@ ObHashJoinOp::ObHashJoinOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput 
   non_preserved_side_is_not_empty_(false),
   null_random_hash_value_(0),
   skip_left_null_(false),
-  skip_right_null_(false)
+  skip_right_null_(false),
+  statistics_collect_done_(false),
+  statistics_collector_op_(nullptr)
 {
   /*
                         read_left_row -> build_hash_table
@@ -522,6 +533,31 @@ int ObHashJoinOp::inner_open()
                   hj_part_added_rows_, sizeof(hj_part_added_rows_) * batch_size,
                   right_selector_, sizeof(*right_selector_) * batch_size));
   }
+  if (OB_SUCC(ret) && MY_SPEC.is_adaptive_) {
+    ObOperator *target = left_;
+    while (OB_NOT_NULL(target) &&
+      target->get_spec().get_type() != ObPhyOperatorType::PHY_STATISTICS_COLLECTOR) {
+      target = target->get_left_child();
+    }
+    if (OB_ISNULL(target)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("target PHY_STATISTICS_COLLECTOR is null", K(ret));
+    } else {
+      statistics_collector_op_ = static_cast<ObStatisticsCollectorOp *>(target);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    left_join_row_ = &MY_SPEC.left_join_row_;
+    // During the upgrade process, this field may be empty in the lower version.
+    if (OB_UNLIKELY(left_join_row_->empty())) {
+      if (OB_UNLIKELY(MY_SPEC.is_adaptive_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected left_join_row_", K(ret));
+      } else {
+        left_join_row_ = &(left_->get_spec().output_);
+      }
+    }
+  }
   cur_hash_table_ = &hash_table_;
   return ret;
 }
@@ -692,6 +728,7 @@ int ObHashJoinOp::inner_rescan()
     iter_end_ = false;
     read_null_in_naaj_ = false;
     non_preserved_side_is_not_empty_ = false;
+    statistics_collect_done_ = false;
   }
   LOG_TRACE("hash join rescan", K(ret));
   return ret;
@@ -803,113 +840,128 @@ int ObHashJoinOp::next()
 int ObHashJoinOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  bool exit_while = false;
-  need_return_ = false;
-  if (is_vectorized()) {
-    if (OB_UNLIKELY(iter_end_)) {
-      brs_.size_ = 0;
-      brs_.end_ = true;
-      exit_while = true;
+  if (MY_SPEC.is_adaptive_ && !statistics_collect_done_) {
+    if (OB_FAIL(statistics_collector_op_->do_row_statistics_collect())) {
+      LOG_WARN("Fail to do row statistics collect");
+    } else {
+      statistics_collect_done_ = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (get_by_pass()) {
+    ret = left_->get_next_row();
+    if (OB_SUCC(ret) && OB_FAIL(after_by_pass_next_row())) {
+      LOG_WARN("by pass next row failed", K(ret));
     }
   } else {
-    has_fill_left_row_ = false;
-  }
-  clear_evaluated_flag();
-  if (OB_UNLIKELY(iter_end_)) {
-    ret = OB_ITER_END;
-  }
-  while (OB_SUCCESS == ret && !exit_while) {
-    switch (hj_state_) {
-    case ObHashJoinOp::HJState::INIT: {
-      hj_state_ = ObHashJoinOp::HJState::NORMAL;
-      break;
-    }
-    case ObHashJoinOp::HJState::NORMAL: {
-      ret = next();
-      if (OB_ITER_END == ret) {
-        hj_state_ = ObHashJoinOp::HJState::NEXT_BATCH;
-        ret = OB_SUCCESS;
-      } else if (OB_SUCCESS == ret) {
+    bool exit_while = false;
+    need_return_ = false;
+    if (is_vectorized()) {
+      if (OB_UNLIKELY(iter_end_)) {
+        brs_.size_ = 0;
+        brs_.end_ = true;
         exit_while = true;
-      } else {
-        LOG_WARN("fail to get next row", K(ret));
       }
-      break;
+    } else {
+      has_fill_left_row_ = false;
     }
-    case ObHashJoinOp::HJState::NEXT_BATCH: {
-      // It must firstly sync wait, and then remove undumped batch
-      if (is_shared_ && OB_FAIL(sync_wait_fetch_next_batch())) {
-        LOG_WARN("failed to sync wait fetch next batch", K(ret));
-      } else {
-        batch_mgr_->remove_undumped_batch(is_shared_ ? cur_dumped_partition_ : INT64_MAX, batch_round_);
-        if (left_batch_ != NULL) {
-          left_batch_->close();
-          batch_mgr_->free(left_batch_);
-          left_batch_ = NULL;
-        }
-        if (right_batch_ != NULL) {
-          right_batch_->close();
-          batch_mgr_->free(right_batch_);
-          right_batch_ = NULL;
-        }
+    clear_evaluated_flag();
+    if (OB_UNLIKELY(iter_end_)) {
+      ret = OB_ITER_END;
+    }
+    while (OB_SUCCESS == ret && !exit_while) {
+      switch (hj_state_) {
+      case ObHashJoinOp::HJState::INIT: {
+        hj_state_ = ObHashJoinOp::HJState::NORMAL;
+        break;
       }
-      ObHashJoinBatchPair batch_pair;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(part_rescan(false))) {
-        LOG_WARN("fail to reopen hj", K(ret));
-      } else if (read_null_in_naaj_) {
-        // if read null in naaj, return the empty set directly
-        ret = OB_ITER_END;
-      } else if (OB_FAIL(batch_mgr_->next_batch(batch_pair))) {
-      } else if (0 != buf_mgr_->get_total_alloc_size()) {
-        LOG_WARN("expect memory count is ok", K(ret), K(buf_mgr_->get_total_alloc_size()));
-      }
-      dumped_fixed_mem_size_ = get_cur_mem_used();
-      if (OB_ITER_END == ret) {
-        exit_while = true;
-        // free resource like memory
-        iter_end_ = true;
-        part_rescan(true);
-        if (is_vectorized()) {
-          brs_.size_ = 0;
-          brs_.end_ = true;
+      case ObHashJoinOp::HJState::NORMAL: {
+        ret = next();
+        if (OB_ITER_END == ret) {
+          hj_state_ = ObHashJoinOp::HJState::NEXT_BATCH;
           ret = OB_SUCCESS;
-        }
-        LOG_TRACE("debug iter end", K(spec_.id_));
-      } else if (OB_SUCCESS == ret) {
-        ++batch_round_;
-        left_batch_ = batch_pair.left_;
-        right_batch_ = batch_pair.right_;
-
-        part_level_ = batch_pair.left_->get_part_level() + 1;
-        part_shift_ = batch_pair.left_->get_part_shift();
-
-        // asynchronously wait to write while only read the dumped partition
-        if (OB_FAIL(left_batch_->get_chunk_row_store().finish_add_row(true))) {
-          LOG_WARN("finish dump failed", K(ret));
-        } else if (OB_FAIL(right_batch_->get_chunk_row_store().finish_add_row(true))) {
-          LOG_WARN("finish dump failed", K(ret));
-        }
-        batch_pair.left_->open();
-        batch_pair.right_->open();
-
-        if (sizeof(uint64_t) * CHAR_BIT <= part_shift_) {
-          // avoid loop recursively
-          // 至多MAX_PART_LEVEL,最后一层要么nest loop，要么in-memory
-          // hash join dumped too many times, the part level is greater than 32 bit
-          // we report 4013 instead of 4016, and remind user to increase memory
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("too deep part level", K(ret), K(part_level_), K(part_shift_));
+        } else if (OB_SUCCESS == ret) {
+          exit_while = true;
         } else {
-          hj_state_ = ObHashJoinOp::HJState::NORMAL;
+          LOG_WARN("fail to get next row", K(ret));
         }
-        LOG_DEBUG("trace batch", K(batch_pair.left_->get_batchno()),
-          K(batch_pair.right_->get_batchno()), K(part_level_), K(batch_round_));
-      } else {
-        LOG_WARN("fail get next batch", K(ret));
+        break;
       }
-      break;
-    }
+      case ObHashJoinOp::HJState::NEXT_BATCH: {
+        // It must firstly sync wait, and then remove undumped batch
+        if (is_shared_ && OB_FAIL(sync_wait_fetch_next_batch())) {
+          LOG_WARN("failed to sync wait fetch next batch", K(ret));
+        } else {
+          batch_mgr_->remove_undumped_batch(is_shared_ ? cur_dumped_partition_ : INT64_MAX, batch_round_);
+          if (left_batch_ != NULL) {
+            left_batch_->close();
+            batch_mgr_->free(left_batch_);
+            left_batch_ = NULL;
+          }
+          if (right_batch_ != NULL) {
+            right_batch_->close();
+            batch_mgr_->free(right_batch_);
+            right_batch_ = NULL;
+          }
+        }
+        ObHashJoinBatchPair batch_pair;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(part_rescan(false))) {
+          LOG_WARN("fail to reopen hj", K(ret));
+        } else if (read_null_in_naaj_) {
+          // if read null in naaj, return the empty set directly
+          ret = OB_ITER_END;
+        } else if (OB_FAIL(batch_mgr_->next_batch(batch_pair))) {
+        } else if (0 != buf_mgr_->get_total_alloc_size()) {
+          LOG_WARN("expect memory count is ok", K(ret), K(buf_mgr_->get_total_alloc_size()));
+        }
+        dumped_fixed_mem_size_ = get_cur_mem_used();
+        if (OB_ITER_END == ret) {
+          exit_while = true;
+          // free resource like memory
+          iter_end_ = true;
+          part_rescan(true);
+          if (is_vectorized()) {
+            brs_.size_ = 0;
+            brs_.end_ = true;
+            ret = OB_SUCCESS;
+          }
+          LOG_TRACE("debug iter end", K(spec_.id_));
+        } else if (OB_SUCCESS == ret) {
+          ++batch_round_;
+          left_batch_ = batch_pair.left_;
+          right_batch_ = batch_pair.right_;
+
+          part_level_ = batch_pair.left_->get_part_level() + 1;
+          part_shift_ = batch_pair.left_->get_part_shift();
+
+          // asynchronously wait to write while only read the dumped partition
+          if (OB_FAIL(left_batch_->get_chunk_row_store().finish_add_row(true))) {
+            LOG_WARN("finish dump failed", K(ret));
+          } else if (OB_FAIL(right_batch_->get_chunk_row_store().finish_add_row(true))) {
+            LOG_WARN("finish dump failed", K(ret));
+          }
+          batch_pair.left_->open();
+          batch_pair.right_->open();
+
+          if (sizeof(uint64_t) * CHAR_BIT <= part_shift_) {
+            // avoid loop recursively
+            // 至多MAX_PART_LEVEL,最后一层要么nest loop，要么in-memory
+            // hash join dumped too many times, the part level is greater than 32 bit
+            // we report 4013 instead of 4016, and remind user to increase memory
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("too deep part level", K(ret), K(part_level_), K(part_shift_));
+          } else {
+            hj_state_ = ObHashJoinOp::HJState::NORMAL;
+          }
+          LOG_DEBUG("trace batch", K(batch_pair.left_->get_batchno()),
+            K(batch_pair.right_->get_batchno()), K(part_level_), K(batch_round_));
+        } else {
+          LOG_WARN("fail get next batch", K(ret));
+        }
+        break;
+      }
+      }
     }
   }
   clear_evaluated_flag();
@@ -999,7 +1051,7 @@ int ObHashJoinOp::get_next_left_row()
     if (OB_FAIL(try_check_status())) {
       LOG_WARN("failed to check status", K(ret));
     } else if (OB_FAIL(OB_I(t1) left_batch_->get_next_row(
-        left_->get_spec().output_, eval_ctx_, left_read_row_))) {
+        (*left_join_row_), eval_ctx_, left_read_row_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get left row from partition failed", K(ret));
       }
@@ -1055,7 +1107,7 @@ int ObHashJoinOp::get_next_left_row_na()
     if (OB_FAIL(try_check_status())) {
       LOG_WARN("failed to check status", K(ret));
     } else if (OB_FAIL(OB_I(t1) left_batch_->get_next_row(
-        left_->get_spec().output_, eval_ctx_, left_read_row_))) {
+        (*left_join_row_), eval_ctx_, left_read_row_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get left row from partition failed", K(ret));
       }
@@ -1079,7 +1131,7 @@ int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store,
       // the child output expr may be covered from the datum store;
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
-      FOREACH_CNT_X(e, left_->get_spec().output_, OB_SUCC(ret)) {
+      FOREACH_CNT_X(e, (*left_join_row_), OB_SUCC(ret)) {
         (*e)->get_eval_info(eval_ctx_).projected_ = true;
       }
     }
@@ -1089,7 +1141,7 @@ int ObHashJoinOp::get_next_left_row_batch(bool is_from_row_store,
     if (OB_FAIL(try_check_status())) {
       LOG_WARN("failed to check status", K(ret));
     } else if (OB_FAIL(left_batch_->get_next_batch(
-                       left_->get_spec().output_, eval_ctx_, MY_SPEC.max_batch_size_,
+                       (*left_join_row_), eval_ctx_, MY_SPEC.max_batch_size_,
                        read_size, hj_part_stored_rows_))) {
       if (OB_ITER_END == ret) {
         const_cast<ObBatchRows *>(child_brs)->size_ = 0;
@@ -1124,7 +1176,7 @@ int ObHashJoinOp::get_next_left_row_batch_na(bool is_from_row_store, const ObBat
       // the child output expr may be covered from the datum store;
       // for opt, we not set evaluted flag when convert exprs,
       // and depended projected flag is true
-      FOREACH_CNT_X(e, left_->get_spec().output_, OB_SUCC(ret)) {
+      FOREACH_CNT_X(e, (*left_join_row_), OB_SUCC(ret)) {
         (*e)->get_eval_info(eval_ctx_).projected_ = true;
       }
     } else if (FALSE_IT(non_preserved_side_is_not_empty_
@@ -1152,7 +1204,7 @@ int ObHashJoinOp::get_next_left_row_batch_na(bool is_from_row_store, const ObBat
     if (OB_FAIL(try_check_status())) {
       LOG_WARN("failed to check status", K(ret));
     } else if (OB_FAIL(left_batch_->get_next_batch(
-                       left_->get_spec().output_, eval_ctx_, MY_SPEC.max_batch_size_,
+                       (*left_join_row_), eval_ctx_, MY_SPEC.max_batch_size_,
                        read_size, hj_part_stored_rows_))) {
       if (OB_ITER_END == ret) {
         const_cast<ObBatchRows *>(child_brs)->size_ = 0;
@@ -2449,7 +2501,7 @@ int ObHashJoinOp::fill_partition(int64_t &num_left_rows)
       ++num_left_rows;
       const int64_t part_idx = get_part_idx(hash_value);
       if (OB_FAIL(hj_part_array_[part_idx].add_row(
-          left_->get_spec().output_, &eval_ctx_, stored_row))) {
+          (*left_join_row_), &eval_ctx_, stored_row))) {
         LOG_WARN("failed to add row", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -2492,7 +2544,7 @@ int ObHashJoinOp::fill_partition_batch(int64_t &num_left_rows)
         if (part_selector_sizes_[part_idx] <= 0) { continue; }
         num_left_rows += part_selector_sizes_[part_idx];
         if (OB_FAIL(hj_part_array_[part_idx].add_batch(
-                                     left_->get_spec().output_,
+                                     (*left_join_row_),
                                      eval_ctx_,
                                      *child_brs->skip_,
                                      child_brs->size_,
@@ -2525,7 +2577,7 @@ int ObHashJoinOp::fill_partition_batch(int64_t &num_left_rows)
         const int64_t part_idx = get_part_idx(hash_vals_[i]);
         batch_info_guard.set_batch_idx(i);
         if (OB_FAIL(hj_part_array_[part_idx].add_row(
-            left_->get_spec().output_, &eval_ctx_, stored_row))) {
+            (*left_join_row_), &eval_ctx_, stored_row))) {
           LOG_WARN("failed to add row", K(ret));
         }
         if (OB_SUCC(ret)) {
@@ -4653,7 +4705,7 @@ int ObHashJoinOp::get_match_row(bool &is_matched)
       clear_evaluated_flag();
       has_fill_left_row_ = false;
       if (OB_FAIL(convert_exprs(
-          item.store_row_, left_->get_spec().output_, has_fill_left_row_))) {
+          item.store_row_, (*left_join_row_), has_fill_left_row_))) {
         LOG_WARN("failed to fill left row", K(ret));
       } else if (OB_FAIL(only_join_right_row())) {
         LOG_WARN("failed to fill right row", K(ret));
@@ -4809,7 +4861,7 @@ int ObHashJoinOp::read_hashrow_batch()
   const int64_t L1_CACHE_SIZE = 64;
   if (OB_FAIL(ret)) {
   } else if (sizeof(ObHashJoinStoredJoinRow)
-      + left_->get_spec().output_.count() * sizeof(ObDatum) <= L1_CACHE_SIZE) {
+      + (*left_join_row_).count() * sizeof(ObDatum) <= L1_CACHE_SIZE) {
     for (int64_t i = 0; i < right_selector_cnt_; i++) {
       __builtin_prefetch(cur_tuples_[i], 0 /* for read */, 3 /* high temporal locality */);
     }
@@ -4838,7 +4890,7 @@ int ObHashJoinOp::read_hashrow_batch()
       while (!matched && NULL != tuple && OB_SUCC(ret)) {
         ++hash_link_cnt_;
         ++hash_equal_cnt_;
-        OZ (convert_exprs_batch_one(tuple, left_->get_spec().output_));
+        OZ (convert_exprs_batch_one(tuple, (*left_join_row_)));
         matched = true;
         FOREACH_CNT_X(e, MY_SPEC.equal_join_conds_, (matched && (OB_SUCCESS == ret))) {
           // we check children's output_ are consistant with join key in cg,
@@ -4874,7 +4926,7 @@ int ObHashJoinOp::read_hashrow_batch()
         ++hash_link_cnt_;
         ++hash_equal_cnt_;
         clear_datum_eval_flag();
-        if (OB_FAIL(convert_exprs_batch_one(tuple, left_->get_spec().output_))) {
+        if (OB_FAIL(convert_exprs_batch_one(tuple, (*left_join_row_)))) {
           LOG_WARN("failed to convert expr", K(ret));
         } else if (OB_FAIL(calc_equal_conds(matched))) {
           LOG_WARN("calc equal conditions failed", K(ret));
@@ -4943,7 +4995,7 @@ int ObHashJoinOp::read_hashrow_normal()
       ++hash_link_cnt_;
       ++hash_equal_cnt_;
       clear_evaluated_flag();
-      if(OB_FAIL(convert_exprs(tuple, left_->get_spec().output_, has_fill_left_row_))) {
+      if(OB_FAIL(convert_exprs(tuple, (*left_join_row_), has_fill_left_row_))) {
         LOG_WARN("failed to fill left row", K(ret));
       } else if (OB_FAIL(only_join_right_row())) {
         LOG_WARN("failed to fill right row", K(ret));
@@ -4999,14 +5051,14 @@ int ObHashJoinOp::join_rows_with_right_null()
 
 int ObHashJoinOp::join_rows_with_left_null_batch_one(int64_t batch_idx)
 {
-  blank_row_batch_one(left_->get_spec().output_);
+  blank_row_batch_one((*left_join_row_));
   return convert_right_exprs_batch_one(batch_idx);
 }
 
 int ObHashJoinOp::join_rows_with_left_null()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(blank_row(left_->get_spec().output_))) {
+  if (OB_FAIL(blank_row((*left_join_row_)))) {
     LOG_WARN("failed to blank right null", K(ret));
   } else if (OB_FAIL(only_join_right_row())) {
     LOG_WARN("failed to fill right row", K(ret));
@@ -5041,7 +5093,7 @@ int ObHashJoinOp::only_join_left_row()
 {
   int ret = OB_SUCCESS;
   if (left_read_row_ != NULL && !has_fill_left_row_) {
-    if (OB_FAIL(convert_exprs(left_read_row_, left_->get_spec().output_, has_fill_left_row_))) {
+    if (OB_FAIL(convert_exprs(left_read_row_, (*left_join_row_), has_fill_left_row_))) {
       LOG_WARN("failed to convert right exprs", K(ret));
     }
   }
@@ -5271,8 +5323,8 @@ int ObHashJoinOp::outer_join_read_hashrow_going_batch()
 }
 
 void ObHashJoinOp::set_output_eval_info() {
-  for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
-    ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
+  for (int64_t i = 0; i < left_join_row_->count(); i++) {
+    ObEvalInfo &info = left_join_row_->at(i)->get_eval_info(eval_ctx_);
     info.evaluated_ = true;
     info.projected_ = true;
     info.notnull_ = false;
@@ -5568,7 +5620,7 @@ int ObHashJoinOp::left_anti_semi_going()
     ObHashJoinStoredJoinRow *tuple = cur_tuple_;
     if (LEFT_ANTI_JOIN == MY_SPEC.join_type_
         && (NULL != tuple && !tuple->is_match())) {
-      if (OB_FAIL(convert_exprs(tuple, left_->get_spec().output_, has_fill_left_row_))) {
+      if (OB_FAIL(convert_exprs(tuple, (*left_join_row_), has_fill_left_row_))) {
         LOG_WARN("convert tuple failed", K(ret));
       } else {
         tuple->set_is_match(true);
@@ -5576,7 +5628,7 @@ int ObHashJoinOp::left_anti_semi_going()
       }
     } else if (LEFT_SEMI_JOIN == MY_SPEC.join_type_
                && (NULL != tuple && tuple->is_match())) {
-      if (OB_FAIL(convert_exprs(tuple, left_->get_spec().output_, has_fill_left_row_))) {
+      if (OB_FAIL(convert_exprs(tuple, (*left_join_row_), has_fill_left_row_))) {
         LOG_WARN("convert tuple failed", K(ret));
       } else {
         tuple->set_is_match(false);
@@ -5597,7 +5649,7 @@ int ObHashJoinOp::left_anti_naaj_going()
   } else {
     ObHashJoinStoredJoinRow *tuple = cur_tuple_;
     if (NULL != tuple && !tuple->is_match()) {
-      if (OB_FAIL(convert_exprs(tuple, left_->get_spec().output_, has_fill_left_row_))) {
+      if (OB_FAIL(convert_exprs(tuple, (*left_join_row_), has_fill_left_row_))) {
         LOG_WARN("convert tuple failed", K(ret));
       } else if (!non_preserved_side_is_not_empty_) {
         tuple->set_is_match(true);
@@ -5679,7 +5731,7 @@ int ObHashJoinOp::fill_left_join_result_batch()
     ret = OB_SUCCESS;
   }
   if (OB_SUCCESS == ret) {
-    ObChunkDatumStore::Iterator::attach_rows(left_->get_spec().output_, eval_ctx_,
+    ObChunkDatumStore::Iterator::attach_rows((*left_join_row_), eval_ctx_,
                    reinterpret_cast<const ObChunkDatumStore::StoredRow **>(left_result_rows),
                    batch_idx);
     if (need_left_join()) {
@@ -5742,7 +5794,7 @@ int ObHashJoinOp::fill_left_going()
   } else {
     ObHashJoinStoredJoinRow *tuple = cur_tuple_;
     if (NULL != tuple && !tuple->is_match()) {
-      if (OB_FAIL(convert_exprs(tuple, left_->get_spec().output_, has_fill_left_row_))) {
+      if (OB_FAIL(convert_exprs(tuple, (*left_join_row_), has_fill_left_row_))) {
         LOG_WARN("convert tuple failed", K(ret));
       } else if (OB_FAIL(join_rows_with_right_null())) {
         LOG_WARN("left join rows failed", K(ret));
@@ -5764,8 +5816,87 @@ int ObHashJoinOp::fill_left_end()
 
 int ObHashJoinOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
-  max_output_cnt_ = min(max_row_cnt, MY_SPEC.max_batch_size_);
-  return inner_get_next_row();
+  int ret = OB_SUCCESS;
+  if (MY_SPEC.is_adaptive_ && !statistics_collect_done_) {
+    if (OB_FAIL(statistics_collector_op_->do_batch_statistics_collect())) {
+      LOG_WARN("Fail to do bacth statistics collect");
+    } else {
+      statistics_collect_done_ = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (get_by_pass()) {
+      const ObBatchRows *child_brs = nullptr;
+      if (OB_FAIL(left_->get_next_batch(max_row_cnt, child_brs))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("child_op failed to get next batch", K(ret));
+        }
+      } else if (OB_FAIL(brs_.copy(child_brs))) {
+        LOG_WARN("copy child_brs to brs_ failed", K(ret));
+      } else if (OB_FAIL(after_by_pass_next_batch(child_brs))) {
+        LOG_WARN("by pass next batch failed", K(ret));
+      }
+    } else {
+      max_output_cnt_ = min(max_row_cnt, MY_SPEC.max_batch_size_);
+      ret = inner_get_next_row();
+    }
+  }
+  return ret;
+}
+
+// TODO: opt. prepare src and dst when inner_open.
+int ObHashJoinOp::after_by_pass_next_row()
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(MY_SPEC.is_adaptive_)) {
+    clear_evaluated_flag();
+    const ObIArray<ObExpr *> &adaptive_hj_scan_cols = MY_SPEC.adaptive_hj_scan_cols_;
+    const ObIArray<ObExpr *> &adaptive_nlj_scan_cols = MY_SPEC.adaptive_nlj_scan_cols_;
+    for (int64_t i = 0; i < adaptive_hj_scan_cols.count(); i++) {
+      ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx_, *(adaptive_hj_scan_cols.at(i)));
+      ObDatum &src = adaptive_nlj_scan_cols.at(i)->locate_expr_datum(eval_ctx_);
+      ObDatum &dst = adaptive_hj_scan_cols.at(i)->locate_expr_datum(eval_ctx_);
+      dst = src;
+      adaptive_hj_scan_cols.at(i)->set_evaluated_projected(eval_ctx_);
+    }
+    ObDatum *tmp_datum = nullptr;
+    // todo: Only evaluate the expressions in the output that are not in adaptive_hj_scan_cols_.
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); i++) {
+      if (OB_FAIL(get_spec().output_.at(i)->eval(eval_ctx_, tmp_datum))) {
+        LOG_WARN("Fail to eval output expr", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHashJoinOp::after_by_pass_next_batch(const ObBatchRows *&batch_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(MY_SPEC.is_adaptive_)) {
+    clear_evaluated_flag();
+    const ObIArray<ObExpr *> &adaptive_hj_scan_cols = MY_SPEC.adaptive_hj_scan_cols_;
+    const ObIArray<ObExpr *> &adaptive_nlj_scan_cols = MY_SPEC.adaptive_nlj_scan_cols_;
+    for (int64_t i = 0; i < adaptive_hj_scan_cols.count(); i++) {
+      ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx_, *(adaptive_hj_scan_cols.at(i)));
+      ObDatum *src = adaptive_nlj_scan_cols.at(i)->locate_batch_datums(eval_ctx_);
+      ObDatum *dst = adaptive_hj_scan_cols.at(i)->locate_batch_datums(eval_ctx_);
+      if (adaptive_nlj_scan_cols.at(i)->is_batch_result()) {
+        MEMCPY(dst, src, sizeof(ObDatum) * batch_rows->size_);
+      } else {
+        MEMCPY(dst, src, sizeof(ObDatum));
+      }
+      adaptive_hj_scan_cols.at(i)->set_evaluated_projected(eval_ctx_);
+    }
+    // todo: Only evaluate the expressions in the output that are not in adaptive_hj_scan_cols_.
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); i++) {
+      if (OB_FAIL(get_spec().output_.at(i)->eval_batch(eval_ctx_,
+              *(batch_rows->skip_), batch_rows->size_))) {
+        LOG_WARN("Fail to eval output expr", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObHashJoinOp::read_hashrow_batch_for_left_semi_anti()
@@ -5840,7 +5971,7 @@ int ObHashJoinOp::read_hashrow_batch_for_left_semi_anti()
         ++hash_link_cnt_;
         ++hash_equal_cnt_;
         clear_datum_eval_flag();
-        if (OB_FAIL(convert_exprs_batch_one(tuple, left_->get_spec().output_))) {
+        if (OB_FAIL(convert_exprs_batch_one(tuple, (*left_join_row_)))) {
           LOG_WARN("failed to convert expr", K(ret));
         } else if (OB_FAIL(calc_equal_conds(matched))) {
           LOG_WARN("calc equal conditions failed", K(ret));
@@ -5878,7 +6009,7 @@ int ObHashJoinOp::read_hashrow_batch_for_left_semi_anti()
     if (brs_.size_ > 0) {
       brs_.skip_->reset(brs_.size_);
     }
-    ObChunkDatumStore::Iterator::attach_rows(left_->get_spec().output_, eval_ctx_,
+    ObChunkDatumStore::Iterator::attach_rows((*left_join_row_), eval_ctx_,
                   reinterpret_cast<const ObChunkDatumStore::StoredRow **>(left_result_rows),
                   result_idx);
     brs_.size_ = result_idx;

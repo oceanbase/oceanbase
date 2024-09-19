@@ -1192,7 +1192,10 @@ int ObLSBackupMetaDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param
 int ObLSBackupMetaDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(param_.ls_id_)))) {
+  int64_t pos = 0;
+  ret = databuff_printf(buf, buf_len, pos, "ls_id=");
+  OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, param_.ls_id_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(param));
   }
   return ret;
@@ -1308,7 +1311,10 @@ int ObLSBackupPrepareDag::fill_info_param(compaction::ObIBasicInfoParam *&out_pa
 int ObLSBackupPrepareDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(param_.ls_id_)))) {
+  int64_t pos = 0;
+  ret = databuff_printf(buf, buf_len, pos, "ls_id=");
+  OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, param_.ls_id_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(param));
   }
   return ret;
@@ -1445,7 +1451,10 @@ int ObLSBackupFinishDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
 int ObLSBackupFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(param_.ls_id_)))) {
+  int64_t pos = 0;
+  ret = databuff_printf(buf, buf_len, pos, "ls_id=");
+  OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, param_.ls_id_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(param));
   }
   return ret;
@@ -1602,7 +1611,10 @@ int ObLSBackupDataDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param
 int ObLSBackupDataDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(param_.ls_id_)))) {
+  int64_t pos = 0;
+  ret = databuff_printf(buf, buf_len, pos, "ls_id=");
+  OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, param_.ls_id_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(param));
   }
   return ret;
@@ -1671,7 +1683,10 @@ int ObPrefetchBackupInfoDag::create_first_task()
 int ObPrefetchBackupInfoDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(param_.ls_id_)))) {
+  int64_t pos = 0;
+  ret = databuff_printf(buf, buf_len, pos, "ls_id=");
+  OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, param_.ls_id_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(param));
   }
   return ret;
@@ -1765,7 +1780,10 @@ int ObLSBackupIndexRebuildDag::fill_info_param(compaction::ObIBasicInfoParam *&o
 int ObLSBackupIndexRebuildDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(param_.ls_id_)))) {
+  int64_t pos = 0;
+  ret = databuff_printf(buf, buf_len, pos, "ls_id=");
+  OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, param_.ls_id_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(param));
   }
   return ret;
@@ -1916,7 +1934,10 @@ int ObLSBackupComplementLogDag::fill_info_param(compaction::ObIBasicInfoParam *&
 int ObLSBackupComplementLogDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(ls_id_)))) {
+  int64_t pos = 0;
+  ret = databuff_printf(buf, buf_len, pos, "ls_id=");
+  OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ls_id_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(ls_id));
   }
   return ret;

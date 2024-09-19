@@ -94,6 +94,7 @@ ob_set_subtarget(ob_sql engine
   engine/ob_exec_context.cpp
   engine/ob_exec_feedback_info.cpp
   engine/ob_operator.cpp
+  engine/ob_by_pass_operator.cpp
   engine/ob_mock_vec2.cpp
   engine/ob_operator_factory.cpp
   engine/ob_phy_operator_type.cpp
@@ -166,7 +167,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_temp_table_transformation_op.cpp
   engine/basic/ob_topk_op.cpp
   engine/basic/ob_values_op.cpp
-  engine/basic/ob_stat_collector_op.cpp
+  engine/basic/ob_px_object_sample_op.cpp
   engine/basic/ob_values_table_access_op.cpp
   engine/basic/ob_hp_infrastructure_manager.ipp
   engine/basic/chunk_store/ob_compact_store.cpp
@@ -175,6 +176,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_temp_block_store.cpp
   engine/basic/ob_temp_row_store.cpp
   engine/basic/ob_compact_row.cpp
+  engine/basic/ob_statistics_collector_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd
@@ -255,7 +257,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_abs.cpp
   engine/expr/ob_expr_acos.cpp
   engine/expr/ob_expr_add.cpp
-  engine/expr/ob_expr_aes_encrypt.cpp
+  engine/expr/ob_expr_symmetric_encrypt.cpp
   engine/expr/ob_expr_agg_param_list.cpp
   engine/expr/ob_expr_and.cpp
   engine/expr/ob_expr_any_value.cpp
@@ -699,6 +701,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_xml_delete_xml.cpp
   engine/expr/ob_expr_xml_sequence.cpp
   engine/expr/ob_expr_temp_table_ssid.cpp
+  engine/expr/ob_expr_lock_func.cpp
   engine/expr/ob_expr_json_utils.cpp
   engine/expr/ob_expr_gtid.cpp
   engine/expr/ob_expr_decode_trace_id.cpp
@@ -785,6 +788,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/datahub/components/ob_dh_range_dist_wf.cpp
   engine/px/datahub/components/ob_dh_init_channel.cpp
   engine/px/datahub/components/ob_dh_second_stage_reporting_wf.cpp
+  engine/px/datahub/components/ob_dh_statistics_collector.cpp
   engine/px/datahub/components/ob_dh_opt_stats_gather.cpp
   engine/px/p2p_datahub/ob_p2p_dh_mgr.cpp
   engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.cpp
@@ -856,6 +860,8 @@ ob_set_subtarget(ob_sql executor
   executor/ob_task_runner_notifier_service.cpp
   executor/ob_task_spliter.cpp
   executor/ob_task_spliter_factory.cpp
+  executor/ob_memory_tracker.cpp
+  executor/ob_memory_tracker_wrapper.cpp
 )
 
 ob_set_subtarget(ob_sql monitor
@@ -953,10 +959,11 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_table_location.cpp
   optimizer/ob_table_partition_info.cpp
   optimizer/ob_update_log_plan.cpp
-  optimizer/ob_log_stat_collector.cpp
+  optimizer/ob_log_px_object_sample.cpp
   optimizer/ob_log_optimizer_stats_gathering.cpp
   optimizer/ob_dynamic_sampling.cpp
   optimizer/ob_log_values_table_access.cpp
+  optimizer/ob_log_statistics_collector.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache
@@ -1047,6 +1054,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_show_resolver.cpp
   resolver/cmd/ob_variable_set_resolver.cpp
   resolver/cmd/ob_variable_set_stmt.cpp
+  resolver/cmd/ob_module_data_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl
@@ -1144,6 +1152,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_explain_stmt.cpp
   resolver/ddl/ob_flashback_resolver.cpp
   resolver/ddl/ob_lock_table_resolver.cpp
+  resolver/ddl/ob_lock_table_stmt.cpp
   resolver/ddl/ob_lock_tenant_resolver.cpp
   resolver/ddl/ob_lock_tenant_stmt.cpp
   resolver/ddl/ob_modify_tenant_resolver.cpp
@@ -1213,6 +1222,7 @@ ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_raw_expr_util.cpp
   resolver/expr/ob_raw_expr_wrap_enum_set.cpp
   resolver/expr/ob_shared_expr_resolver.cpp
+  resolver/expr/ob_calc_generated_column.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_prepare
@@ -1226,7 +1236,6 @@ ob_set_subtarget(ob_sql resolver_prepare
 
 ob_set_subtarget(ob_sql rewrite
   rewrite/ob_equal_analysis.cpp
-  rewrite/ob_equal_set.ipp
   rewrite/ob_expand_aggregate_utils.cpp
   rewrite/ob_key_part.cpp
   rewrite/ob_predicate_deduce.cpp
@@ -1274,6 +1283,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_conditional_aggr_coalesce.cpp
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp
+  rewrite/ob_transform_late_materialization.cpp
 )
 
 ob_set_subtarget(ob_sql session

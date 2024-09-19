@@ -590,7 +590,7 @@ public:
    */
   bool equals(const ObSelectStmt &stmt);
   int check_and_get_same_aggr_item(ObRawExpr *expr, ObAggFunRawExpr *&same_aggr);
-  ObWinFunRawExpr *get_same_win_func_item(const ObRawExpr *expr);
+  int get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr *&win_expr);
   void set_match_topk(bool is_match) { is_match_topk_ = is_match; }
   bool is_match_topk() const { return is_match_topk_; }
   bool is_set_stmt() const { return NONE != set_op_; }

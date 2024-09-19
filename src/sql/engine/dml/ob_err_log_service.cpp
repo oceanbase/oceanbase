@@ -125,7 +125,7 @@ int ObErrLogService::gen_insert_sql_str(ObIAllocator &alloc,
                                      default_column_value_pos, "%s", ESCAPE_CHARACTER))) {
     LOG_WARN("fail to append column_buf for ESCAPE_CHARACTER", K(ret));
   } else if (OB_FAIL(databuff_printf(default_column_value_buf, DEFAULT_COL_VALUE_LENGTH,
-                                     default_column_value_pos, "%s", to_cstring(msg)))) {
+                                     default_column_value_pos, msg))) {
     LOG_WARN("fail to append values_buf for error_msg", K(ret));
   } else if (OB_FAIL(databuff_printf(default_column_value_buf, DEFAULT_COL_VALUE_LENGTH,
                                      default_column_value_pos, "%s", ESCAPE_CHARACTER))) {
@@ -236,7 +236,7 @@ int ObErrLogService::catch_err_and_gen_sql(ObIAllocator &alloc, const ObSQLSessi
                                                                              true))) {
 
       } else if (OB_FAIL(databuff_printf(column_name_buf, column_name_size,
-                                         column_name_pos, "%s", to_cstring(dst_column_name)))) {
+                                         column_name_pos, dst_column_name))) {
         LOG_WARN("fail to append column_buf for dst_column_name", K(ret), K(col_name));
       } else if (OB_FAIL(databuff_printf(column_name_buf, column_name_size,
                                          column_name_pos, "%s", QUOTATION_MARK))) {

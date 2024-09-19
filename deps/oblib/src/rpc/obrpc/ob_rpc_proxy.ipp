@@ -23,6 +23,7 @@
 #include "lib/trace/ob_trace.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
 #include "rpc/obrpc/ob_irpc_extra_payload.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -163,16 +164,18 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
       }
 
       int64_t pos = 0;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
-        RPC_OBRPC_LOG(WARN, "deserialize result code fail", K(ret));
-      } else if (rcode_.rcode_ != OB_SUCCESS) {
-        ret = rcode_.rcode_;
-        RPC_OBRPC_LOG(WARN, "execute rpc fail", K(ret));
-      } else if (OB_FAIL(common::serialization::decode(buf, len, pos, result))) {
-        RPC_OBRPC_LOG(WARN, "deserialize result fail", K(ret));
-      } else {
-        has_more_ = r.pkt()->is_stream_next();
+      if (OB_SUCC(ret)) {
+        ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_decode);
+        if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
+          RPC_OBRPC_LOG(WARN, "deserialize result code fail", K(ret));
+        } else if (rcode_.rcode_ != OB_SUCCESS) {
+          ret = rcode_.rcode_;
+          RPC_OBRPC_LOG(WARN, "execute rpc fail", K(ret));
+        } else if (OB_FAIL(common::serialization::decode(buf, len, pos, result))) {
+          RPC_OBRPC_LOG(WARN, "deserialize result fail", K(ret));
+        } else {
+          has_more_ = r.pkt()->is_stream_next();
+        }
       }
 
       // free the uncompress buffer
@@ -359,6 +362,7 @@ int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void *pkt)
       }
     }
     if (OB_SUCC(ret)) {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_decode);
       if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
         RPC_OBRPC_LOG(WARN, "decode result code fail", K(*rpkt), K(ret));
       } else if (rcode_.rcode_ != OB_SUCCESS) {
@@ -471,9 +475,12 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
   } else if (NULL == req.pkt() || NULL == req.buf()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     RPC_OBRPC_LOG(WARN, "request packet is NULL", K(req), K(ret));
+  } else if (FALSE_IT(ObActiveSessionGuard::get_stat().exec_phase().in_rpc_encode_ = true)){
   } else if (OB_FAIL(common::serialization::encode(
                      req.buf(), payload, pos, args))) {
+    ObActiveSessionGuard::get_stat().exec_phase().in_rpc_encode_ = false;
     RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload), K(ret));
+  } else if (FALSE_IT(ObActiveSessionGuard::get_stat().exec_phase().in_rpc_encode_ = false)){
   } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
     RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
   } else if (OB_FAIL(init_pkt(req.pkt(), pcode, opts, false))) {
@@ -516,6 +523,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
       int64_t pos = 0;
       if (OB_SUCC(ret)) {
         UNIS_VERSION_GUARD(r.pkt()->get_unis_version());
+        ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_decode);
         if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
           RPC_OBRPC_LOG(WARN, "deserialize result code fail", K(ret));
         } else {
@@ -600,6 +608,7 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
   bool use_context = false;
   bool has_trace_info = false;
   if (OB_SUCC(ret) && need_compressed) {
+    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
     int64_t tmp_pos = 0;
     if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(compressor_type_,
             compressor))) {
@@ -698,6 +707,7 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
     }
 
     if (!need_compressed) {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
       if (OB_FAIL(common::serialization::encode(req.buf(), payload, pos, args))) {
         RPC_OBRPC_LOG(WARN, "serialize argument fail", K(ret));
       } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {

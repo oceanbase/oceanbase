@@ -611,6 +611,7 @@ void ObTenantTTLManager::destroy()
 {
   FLOG_INFO("tenant ttl manager start to destroy", K_(tenant_id));
   TG_DESTROY(tg_id_);
+  tg_id_ = -1;
   FLOG_INFO("tenant ttl manager finish to destroy", K_(tenant_id));
 }
 

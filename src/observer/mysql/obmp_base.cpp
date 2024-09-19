@@ -170,7 +170,6 @@ int ObMPBase::after_process(int error_code)
 
 void ObMPBase::cleanup()
 {
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 void ObMPBase::disconnect()

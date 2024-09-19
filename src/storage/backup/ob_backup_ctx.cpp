@@ -1582,6 +1582,7 @@ int ObLSBackupCtx::get_next_tablet_(common::ObTabletID &tablet_id)
 void ObLSBackupCtx::add_recover_retry_ctx_event_(const ObBackupRetryDesc &retry_desc)
 {
   LOG_INFO("recover last retry ctx", K_(param), K(retry_desc));
+  ObCStringHelper helper;
   SERVER_EVENT_ADD("backup",
       "recover_retry_ctx",
       "tenant_id",
@@ -1596,7 +1597,7 @@ void ObLSBackupCtx::add_recover_retry_ctx_event_(const ObBackupRetryDesc &retry_
       retry_desc.retry_id_,
       "backup_data_type",
       backup_data_type_,
-      to_cstring(backup_retry_ctx_));
+      helper.convert(backup_retry_ctx_));
 }
 
 }  // namespace backup

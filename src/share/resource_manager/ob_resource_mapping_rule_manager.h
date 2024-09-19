@@ -63,11 +63,11 @@ public:
   }
 
   inline int get_group_id_by_function_type(const uint64_t tenant_id,
-                                           const int64_t function_type,
+                                           const ObFunctionType function_type,
                                            uint64_t &group_id)
   {
     int ret = common::OB_SUCCESS;
-    const ObString &func_name = share::get_io_function_name(static_cast<ObFunctionType>(function_type));
+    const ObString &func_name = share::get_io_function_name(function_type);
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
       ret = OB_INVALID_TENANT_ID;
       LOG_WARN("invalid config", K(ret), K(tenant_id));
@@ -126,16 +126,18 @@ public:
     int ret = function_rule_map_.set_refactored(share::ObTenantFunctionKey(tenant_id, func), 0, 1/*overwrite*/);
     return ret;
   }
-
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   int refresh_resource_function_mapping_rule(
       ObResourceManagerProxy &proxy,
       const uint64_t tenant_id,
       const ObString &plan);
+  int clear_resource_function_mapping_rule(const uint64_t tenant_id, const ObResourceMappingRuleSet &rules);
   int refresh_resource_user_mapping_rule(
       ObResourceManagerProxy &proxy,
       const uint64_t tenant_id,
       const ObString &plan);
+  int clear_resource_user_mapping_rule(const uint64_t tenant_id, const ObResourceUserMappingRuleSet &rules);
 private:
   /* variables */
   // 将用户 id 映射到 group id，用于用户登录时快速确定登录用户所属 cgroup

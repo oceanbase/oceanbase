@@ -29,10 +29,11 @@ TEST(TestTruncatedString, common)
   ObTruncatedString printer_more(str, 10);
   ObTruncatedString printer_empty(str, 0);
   ObTruncatedString printer_error(str, -1);
-  ASSERT_EQ(0, strcmp(to_cstring(printer_less), "12345"));
-  ASSERT_EQ(0, strcmp(to_cstring(printer_more), "123456789"));
-  ASSERT_EQ(0, strcmp(to_cstring(printer_empty), ""));
-  ASSERT_EQ(0, strcmp(to_cstring(printer_error), ""));
+  ObCStringHelper helper;
+  ASSERT_EQ(0, strcmp(helper.convert(printer_less), "12345"));
+  ASSERT_EQ(0, strcmp(helper.convert(printer_more), "123456789"));
+  ASSERT_EQ(0, strcmp(helper.convert(printer_empty), ""));
+  ASSERT_EQ(0, strcmp(helper.convert(printer_error), ""));
 }
 
 }//end namespace common

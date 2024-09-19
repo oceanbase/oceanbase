@@ -41,6 +41,7 @@ public:
   ~ObSSTableBasicMeta() = default;
   bool operator==(const ObSSTableBasicMeta &other) const;
   bool operator!=(const ObSSTableBasicMeta &other) const;
+  bool check_basic_meta_equality(const ObSSTableBasicMeta &other) const; // only for small sstable defragmentation
   bool is_valid() const;
   void reset();
 
@@ -294,6 +295,7 @@ private:
 class ObSSTableMetaChecker
 {
 public:
+  // only for small sstable defragmentation
   static int check_sstable_meta_strict_equality(
       const ObSSTableMeta &old_sstable_meta,
       const ObSSTableMeta &new_sstable_meta);

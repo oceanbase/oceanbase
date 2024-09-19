@@ -161,6 +161,7 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   fake_tenant_freezer_.tenant_info_.mem_memstore_limit_ = INT64_MAX;
   // memtable.freezer
   fake_freezer_.freeze_flag_ = 0;// is_freeze() = false;
+  GCTX.sql_proxy_ = &sql_proxy_;
   // txn service
   int ret = OB_SUCCESS;
   OZ(txs_.init(addr,

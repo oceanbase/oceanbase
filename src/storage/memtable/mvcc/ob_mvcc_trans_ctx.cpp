@@ -117,11 +117,6 @@ int ObITransCallback::before_append_cb(const bool is_replay)
   return ret;
 }
 
-void ObITransCallback::after_append_cb(const bool is_replay)
-{
-  (void)after_append(is_replay);
-}
-
 void ObITransCallback::after_append_fail_cb(const bool is_replay)
 {
   if (need_fill_redo_ == !is_replay && need_submit_log_ == !is_replay) {
@@ -585,9 +580,13 @@ int ObTransCallbackMgr::append(ObITransCallback *head,
       }
     }
 
-    // Step1: prepare the callback append(epoch for pdml and statistic)
-    for (ObITransCallback *cb = head; nullptr != cb && tail != cb->get_prev(); cb = cb->get_next()) {
-      after_append(cb, ret);
+    // Step3: revert the side effect if the append failed
+    if (OB_FAIL(ret)) {
+      for (ObITransCallback *cb = head;
+           nullptr != cb && tail != cb->get_prev();
+           cb = cb->get_next()) {
+        after_append(cb, ret);
+      }
     }
   }
 
@@ -1776,11 +1775,6 @@ int ObMvccRowCallback::before_append(const bool is_replay)
   return ret;
 }
 
-void ObMvccRowCallback::after_append(const bool is_replay)
-{
-  // do nothing
-}
-
 int ObMvccRowCallback::log_submitted()
 {
   int ret = OB_SUCCESS;
@@ -2396,13 +2390,16 @@ int ObMvccRowCallback::row_delete()
 int64_t ObMvccRowCallback::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  databuff_printf(buf, buf_len, pos,
-      "[this=%p, ctx=%s, is_link=%d, need_submit_log=%d, need_fill_redo=%d, "
-      "value=%s, tnode=(%s), "
-      "seq_no=%s, memtable=%p, scn=%s]",
-      this, to_cstring(ctx_), is_link_, need_submit_log_, need_fill_redo_,
-      to_cstring(value_), NULL == tnode_ ? "null" : to_cstring(*tnode_),
-      to_cstring(seq_no_), memtable_, to_cstring(scn_));
+  databuff_printf(buf, buf_len, pos, "[this=%p, ctx=", this);
+  databuff_printf(buf, buf_len, pos, ctx_);
+  databuff_printf(buf, buf_len, pos, ", is_link=%d, need_submit_log=%d, need_fill_redo=%d, value=",
+      is_link_, need_submit_log_, need_fill_redo_);
+  databuff_printf(buf, buf_len, pos, value_);
+  databuff_printf(buf, buf_len, pos, ", tnode=(");
+  databuff_printf(buf, buf_len, pos, tnode_);
+  databuff_printf(buf, buf_len, pos, "), seq_no=%ld, memtable=%p, scn=",
+      seq_no_.cast_to_int(), memtable_);
+  databuff_printf(buf, buf_len, pos, scn_);
   return pos;
 }
 

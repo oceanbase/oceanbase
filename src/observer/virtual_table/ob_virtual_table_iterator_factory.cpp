@@ -228,6 +228,7 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit_detail.h"
+#include "observer/virtual_table/ob_all_virtual_res_mgr_sys_stat.h"
 #include "observer/virtual_table/ob_all_virtual_log_transport_dest_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
@@ -2742,6 +2743,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualKvGroupCommitInfo *all_virtual_kv_group_commit_info = NULL;
              if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvGroupCommitInfo, all_virtual_kv_group_commit_info))) {
               vt_iter = static_cast<ObAllVirtualKvGroupCommitInfo *>(all_virtual_kv_group_commit_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_RES_MGR_SYSSTAT_TID:
+          {
+            ObAllVirtualResMgrSysStat *all_virtual_res_mgr_sysstat = nullptr;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualResMgrSysStat,
+                                          all_virtual_res_mgr_sysstat))) {
+              vt_iter = static_cast<ObAllVirtualResMgrSysStat *>(all_virtual_res_mgr_sysstat);
+              all_virtual_res_mgr_sysstat->set_addr(addr_);
             }
             break;
           }

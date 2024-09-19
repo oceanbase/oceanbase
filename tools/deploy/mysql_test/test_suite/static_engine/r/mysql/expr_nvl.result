@@ -105,6 +105,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -146,6 +148,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -187,6 +191,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -228,6 +234,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -269,6 +277,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -310,6 +320,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -351,6 +363,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -392,6 +406,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -433,6 +449,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -474,6 +492,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -515,6 +535,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -556,6 +578,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -597,6 +621,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -638,6 +664,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -679,6 +707,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -720,6 +750,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -761,6 +793,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -802,6 +836,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -843,6 +879,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -884,6 +922,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -925,6 +965,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -966,6 +1008,8 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c1) from t1;
 +---------------+
 | nvl(null, c1) |
@@ -1007,6 +1051,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1048,6 +1094,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1089,6 +1137,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1130,6 +1180,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1171,6 +1223,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1212,6 +1266,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1253,6 +1309,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1294,6 +1352,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1335,6 +1395,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1376,6 +1438,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1417,6 +1481,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1458,6 +1524,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1499,6 +1567,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1540,6 +1610,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1581,6 +1653,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1622,6 +1696,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1663,6 +1739,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1704,6 +1782,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1745,6 +1825,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1786,6 +1868,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1827,6 +1911,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1868,6 +1954,8 @@ Outputs & filters:
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c2) from t1;
 +---------------+
 | nvl(null, c2) |
@@ -1909,6 +1997,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -1950,6 +2040,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -1991,6 +2083,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2032,6 +2126,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2073,6 +2169,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2114,6 +2212,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2155,6 +2255,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2196,6 +2298,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2237,6 +2341,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2278,6 +2384,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2319,6 +2427,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2360,6 +2470,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2401,6 +2513,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2442,6 +2556,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2483,6 +2599,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2524,6 +2642,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2565,6 +2685,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2606,6 +2728,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2647,6 +2771,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2688,6 +2814,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2729,6 +2857,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2770,6 +2900,8 @@ Outputs & filters:
       access([t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(4, 0)) result is NULL
 select nvl(null, c3) from t1;
 +---------------+
 | nvl(null, c3) |
@@ -2811,6 +2943,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -2852,6 +2986,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -2893,6 +3029,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -2934,6 +3072,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -2975,6 +3115,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3016,6 +3158,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3057,6 +3201,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3098,6 +3244,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3139,6 +3287,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3180,6 +3330,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3221,6 +3373,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3262,6 +3416,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3303,6 +3459,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3344,6 +3502,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3385,6 +3545,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3426,6 +3588,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3467,6 +3631,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3508,6 +3674,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3549,6 +3717,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3590,6 +3760,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3631,6 +3803,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3672,6 +3846,8 @@ Outputs & filters:
       access([t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(3, 0)) result is NULL
 select nvl(null, c4) from t1;
 +---------------+
 | nvl(null, c4) |
@@ -3713,6 +3889,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -3754,6 +3932,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -3795,6 +3975,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -3836,6 +4018,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -3877,6 +4061,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -3918,6 +4104,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -3959,6 +4147,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4000,6 +4190,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4041,6 +4233,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4082,6 +4276,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4123,6 +4319,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4164,6 +4362,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4205,6 +4405,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4246,6 +4448,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4287,6 +4491,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4328,6 +4534,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4369,6 +4577,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4410,6 +4620,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4451,6 +4663,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4492,6 +4706,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4533,6 +4749,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4574,6 +4792,8 @@ Outputs & filters:
       access([t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(6, 0)) result is NULL
 select nvl(null, c5) from t1;
 +---------------+
 | nvl(null, c5) |
@@ -4615,6 +4835,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4656,6 +4878,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4697,6 +4921,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4738,6 +4964,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4779,6 +5007,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4820,6 +5050,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4861,6 +5093,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4902,6 +5136,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4943,6 +5179,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -4984,6 +5222,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5025,6 +5265,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5066,6 +5308,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5107,6 +5351,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5148,6 +5394,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5189,6 +5437,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5230,6 +5480,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5271,6 +5523,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5312,6 +5566,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5353,6 +5609,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5394,6 +5652,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5435,6 +5695,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5476,6 +5738,8 @@ Outputs & filters:
       access([t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(5, 0)) result is NULL
 select nvl(null, c6) from t1;
 +---------------+
 | nvl(null, c6) |
@@ -5517,6 +5781,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5558,6 +5824,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5599,6 +5867,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5640,6 +5910,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5681,6 +5953,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5722,6 +5996,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5763,6 +6039,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5804,6 +6082,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5845,6 +6125,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5886,6 +6168,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5927,6 +6211,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -5968,6 +6254,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6009,6 +6297,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6050,6 +6340,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6091,6 +6383,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6132,6 +6426,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6173,6 +6469,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6214,6 +6512,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6255,6 +6555,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6296,6 +6598,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6337,6 +6641,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6378,6 +6684,8 @@ Outputs & filters:
       access([t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(9, 0)) result is NULL
 select nvl(null, c7) from t1;
 +---------------+
 | nvl(null, c7) |
@@ -6419,6 +6727,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6460,6 +6770,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6501,6 +6813,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6542,6 +6856,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6583,6 +6899,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6624,6 +6942,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6665,6 +6985,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6706,6 +7028,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6747,6 +7071,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6788,6 +7114,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6829,6 +7157,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6870,6 +7200,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6911,6 +7243,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6952,6 +7286,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -6993,6 +7329,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7034,6 +7372,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7075,6 +7415,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7116,6 +7458,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7157,6 +7501,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7198,6 +7544,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7239,6 +7587,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7280,6 +7630,8 @@ Outputs & filters:
       access([t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(8, 0)) result is NULL
 select nvl(null, c8) from t1;
 +---------------+
 | nvl(null, c8) |
@@ -7321,6 +7673,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7362,6 +7716,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7403,6 +7759,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7444,6 +7802,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7485,6 +7845,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7526,6 +7888,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7567,6 +7931,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7608,6 +7974,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7649,6 +8017,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7690,6 +8060,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7731,6 +8103,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7772,6 +8146,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7813,6 +8189,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7854,6 +8232,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7895,6 +8275,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7936,6 +8318,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -7977,6 +8361,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -8018,6 +8404,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -8059,6 +8447,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -8100,6 +8490,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -8141,6 +8533,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -8182,6 +8576,8 @@ Outputs & filters:
       access([t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(11, 0)) result is NULL
 select nvl(null, c9) from t1;
 +---------------+
 | nvl(null, c9) |
@@ -8223,6 +8619,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8264,6 +8662,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8305,6 +8705,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8346,6 +8748,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8387,6 +8791,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8428,6 +8834,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8469,6 +8877,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8510,6 +8920,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8551,6 +8963,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8592,6 +9006,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8633,6 +9049,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8674,6 +9092,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8715,6 +9135,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8756,6 +9178,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8797,6 +9221,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8838,6 +9264,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8879,6 +9307,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8920,6 +9350,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -8961,6 +9393,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -9002,6 +9436,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -9043,6 +9479,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -9084,6 +9522,8 @@ Outputs & filters:
       access([t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(10, 0)) result is NULL
 select nvl(null, c10) from t1;
 +----------------+
 | nvl(null, c10) |
@@ -9125,6 +9565,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9166,6 +9608,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9207,6 +9651,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9248,6 +9694,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9289,6 +9737,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9330,6 +9780,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9371,6 +9823,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9412,6 +9866,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9453,6 +9909,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9494,6 +9952,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9535,6 +9995,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9576,6 +10038,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9617,6 +10081,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9658,6 +10124,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9699,6 +10167,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9740,6 +10210,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9781,6 +10253,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9822,6 +10296,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9863,6 +10339,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9904,6 +10382,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9945,6 +10425,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -9986,6 +10468,8 @@ Outputs & filters:
       access([t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT(20, 0)) result is NULL
 select nvl(null, c11) from t1;
 +----------------+
 | nvl(null, c11) |
@@ -10027,6 +10511,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10068,6 +10554,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10109,6 +10597,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10150,6 +10640,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10191,6 +10683,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10232,6 +10726,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10273,6 +10769,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10314,6 +10812,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10355,6 +10855,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10396,6 +10898,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10437,6 +10941,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10478,6 +10984,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10519,6 +11027,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10560,6 +11070,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10601,6 +11113,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10642,6 +11156,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10683,6 +11199,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10724,6 +11242,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10765,6 +11285,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10806,6 +11328,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10847,6 +11371,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10888,6 +11414,8 @@ Outputs & filters:
       access([t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, BIGINT UNSIGNED(20, 0)) result is NULL
 select nvl(null, c12) from t1;
 +----------------+
 | nvl(null, c12) |
@@ -10929,6 +11457,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -10970,6 +11500,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11011,6 +11543,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11052,6 +11586,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11093,6 +11629,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11134,6 +11672,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11175,6 +11715,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11216,6 +11758,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11257,6 +11801,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11298,6 +11844,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11339,6 +11887,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11380,6 +11930,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11421,6 +11973,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11462,6 +12016,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11503,6 +12059,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11544,6 +12102,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11585,6 +12145,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11626,6 +12188,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11667,6 +12231,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11708,6 +12274,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11749,6 +12317,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11790,6 +12360,8 @@ Outputs & filters:
       access([t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c13) from t1;
 +----------------+
 | nvl(null, c13) |
@@ -11831,6 +12403,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -11872,6 +12446,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -11913,6 +12489,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -11954,6 +12532,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -11995,6 +12575,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12036,6 +12618,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12077,6 +12661,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12118,6 +12704,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12159,6 +12747,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12200,6 +12790,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12241,6 +12833,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12282,6 +12876,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12323,6 +12919,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12364,6 +12962,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12405,6 +13005,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12446,6 +13048,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12487,6 +13091,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12528,6 +13134,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12569,6 +13177,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12610,6 +13220,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12651,6 +13263,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12692,6 +13306,8 @@ Outputs & filters:
       access([t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, FLOAT(-1, -1)) result is NULL
 select nvl(null, c14) from t1;
 +----------------+
 | nvl(null, c14) |
@@ -12733,6 +13349,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -12774,6 +13392,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -12815,6 +13435,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -12856,6 +13478,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -12897,6 +13521,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -12938,6 +13564,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -12979,6 +13607,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13020,6 +13650,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13061,6 +13693,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13102,6 +13736,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13143,6 +13779,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13184,6 +13822,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13225,6 +13865,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13266,6 +13908,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13307,6 +13951,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13348,6 +13994,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13389,6 +14037,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13430,6 +14080,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13471,6 +14123,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13512,6 +14166,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13553,6 +14209,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13594,6 +14252,8 @@ Outputs & filters:
       access([t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c15) from t1;
 +----------------+
 | nvl(null, c15) |
@@ -13635,6 +14295,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13676,6 +14338,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13717,6 +14381,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13758,6 +14424,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13799,6 +14467,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13840,6 +14510,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13881,6 +14553,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13922,6 +14596,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -13963,6 +14639,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14004,6 +14682,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14045,6 +14725,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14086,6 +14768,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14127,6 +14811,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14168,6 +14854,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14209,6 +14897,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14250,6 +14940,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14291,6 +14983,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14332,6 +15026,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14373,6 +15069,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14414,6 +15112,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14455,6 +15155,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14496,6 +15198,8 @@ Outputs & filters:
       access([t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DOUBLE(-1, -1)) result is NULL
 select nvl(null, c16) from t1;
 +----------------+
 | nvl(null, c16) |
@@ -14537,6 +15241,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14578,6 +15284,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14619,6 +15327,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14660,6 +15370,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14701,6 +15413,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14742,6 +15456,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14783,6 +15499,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14824,6 +15542,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14865,6 +15585,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14906,6 +15628,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14947,6 +15671,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -14988,6 +15714,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15029,6 +15757,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15070,6 +15800,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15111,6 +15843,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15152,6 +15886,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15193,6 +15929,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15234,6 +15972,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15275,6 +16015,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15316,6 +16058,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15357,6 +16101,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15398,6 +16144,8 @@ Outputs & filters:
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c17) from t1;
 +----------------+
 | nvl(null, c17) |
@@ -15439,6 +16187,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15480,6 +16230,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15521,6 +16273,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15562,6 +16316,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15603,6 +16359,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15644,6 +16402,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15685,6 +16445,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15726,6 +16488,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15767,6 +16531,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15808,6 +16574,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15849,6 +16617,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15890,6 +16660,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15931,6 +16703,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -15972,6 +16746,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16013,6 +16789,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16054,6 +16832,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16095,6 +16875,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16136,6 +16918,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16177,6 +16961,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16218,6 +17004,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16259,6 +17047,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16300,6 +17090,8 @@ Outputs & filters:
       access([t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DECIMAL(10, 0)) result is NULL
 select nvl(null, c18) from t1;
 +----------------+
 | nvl(null, c18) |
@@ -16341,6 +17133,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16382,6 +17176,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16423,6 +17219,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16464,6 +17262,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16505,6 +17305,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16546,6 +17348,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16587,6 +17391,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16628,6 +17434,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16669,6 +17477,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16710,6 +17520,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16751,6 +17563,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16792,6 +17606,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16833,6 +17649,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16874,6 +17692,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16915,6 +17735,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16956,6 +17778,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -16997,6 +17821,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -17038,6 +17864,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -17079,6 +17907,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -17096,7 +17926,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(t1.c19, cast(t1.c20, DATETIME(19, 0)))]), filter(nil), rowset=16
+  0 - output([nvl(t1.c19, cast(t1.c20, MYSQL_DATETIME(19, 0)))]), filter(nil), rowset=16
       access([t1.c19], [t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -17120,6 +17950,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -17161,6 +17993,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -17202,6 +18036,8 @@ Outputs & filters:
       access([t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, MYSQL_DATETIME(19, 0)) result is NULL
 select nvl(null, c19) from t1;
 +---------------------+
 | nvl(null, c19)      |
@@ -17243,6 +18079,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17284,6 +18122,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17325,6 +18165,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17366,6 +18208,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17407,6 +18251,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17448,6 +18294,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17489,6 +18337,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17530,6 +18380,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17571,6 +18423,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17612,6 +18466,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17653,6 +18509,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17694,6 +18552,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17735,6 +18595,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17776,6 +18638,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17817,6 +18681,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17858,6 +18724,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17899,6 +18767,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17940,6 +18810,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -17957,7 +18829,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c20, DATETIME(19, 0)), t1.c19)]), filter(nil), rowset=16
+  0 - output([nvl(cast(t1.c20, MYSQL_DATETIME(19, 0)), t1.c19)]), filter(nil), rowset=16
       access([t1.c20], [t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -17981,6 +18853,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -18022,6 +18896,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -18063,6 +18939,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -18104,6 +18982,8 @@ Outputs & filters:
       access([t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, DATETIME(19, 0)) result is NULL
 select nvl(null, c20) from t1;
 +---------------------+
 | nvl(null, c20)      |
@@ -18145,6 +19025,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18186,6 +19068,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18227,6 +19111,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18268,6 +19154,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18309,6 +19197,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18350,6 +19240,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18391,6 +19283,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18432,6 +19326,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18473,6 +19369,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18514,6 +19412,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18555,6 +19455,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18596,6 +19498,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18637,6 +19541,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18678,6 +19584,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18719,6 +19627,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18760,6 +19670,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18801,6 +19713,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18842,6 +19756,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18883,6 +19799,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18924,6 +19842,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -18965,6 +19885,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -19006,6 +19928,8 @@ Outputs & filters:
       access([t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c21) from t1;
 +----------------+
 | nvl(null, c21) |
@@ -19047,6 +19971,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19088,6 +20014,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19129,6 +20057,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19170,6 +20100,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19211,6 +20143,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19252,6 +20186,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19293,6 +20229,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19334,6 +20272,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19375,6 +20315,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19416,6 +20358,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19457,6 +20401,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19498,6 +20444,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19539,6 +20487,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19580,6 +20530,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19621,6 +20573,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19662,6 +20616,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19703,6 +20659,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19744,6 +20702,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19785,6 +20745,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19826,6 +20788,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19867,6 +20831,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |
@@ -19908,6 +20874,8 @@ Outputs & filters:
       access([t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  Expr Constraints:
+      cast(NULL, VARCHAR(30)) result is NULL
 select nvl(null, c22) from t1;
 +----------------+
 | nvl(null, c22) |

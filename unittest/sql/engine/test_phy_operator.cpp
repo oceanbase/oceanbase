@@ -98,7 +98,8 @@ protected:
       ret = OB_ERR_UNEXPECTED;
       _OB_LOG(WARN, "get physical operator context failed, ret=%d", ret);
     } else {
-      _OB_LOG(DEBUG, "inner_get_next_row, row=%s", to_cstring(*input_row));
+      ObCStringHelper helper;
+      _OB_LOG(DEBUG, "inner_get_next_row, row=%s", helper.convert(*input_row));
       ObNewRow &cur_row = phy_op_ctx->get_cur_row();
       OB_ASSERT(input_row->count_ <= cur_row.count_);
       for (int64_t i = 0; i < input_row->count_; ++i) {
@@ -292,7 +293,8 @@ TEST_F(ObPhyOperatorTest, test_get_row)
     res.set_int(i);
     ASSERT_TRUE(res == row->cells_[i]);
   }
-  printf("row=%s\n", to_cstring(*row));
+  ObCStringHelper helper;
+  printf("row=%s\n", helper.convert(*row));
   ASSERT_EQ(OB_SUCCESS, root.close(ctx));
   root.reset();
   root.reuse();
@@ -334,7 +336,8 @@ TEST_F(ObPhyOperatorTest, test_filter_and_calc_row)
     res.set_int(i);
     ASSERT_TRUE(res == row->cells_[i]);
   }
-  printf("row=%s\n", to_cstring(*row));
+  ObCStringHelper helper;
+  printf("row=%s\n", helper.convert(*row));
   ASSERT_EQ(OB_SUCCESS, root.close(ctx));
   root.reset();
   root.reuse();
@@ -430,7 +433,8 @@ TEST_F(ObPhyOperatorTest, test_filter_and_calc_row_1)
     res.set_int(i);
     ASSERT_TRUE(res == row->cells_[i]);
   }
-  printf("row=%s\n", to_cstring(*row));
+  ObCStringHelper helper;
+  printf("row=%s\n", helper.convert(*row));
   ASSERT_EQ(OB_ITER_END, root.get_next_row(ctx, row));
   ASSERT_EQ(OB_SUCCESS, root.close(ctx));
   ASSERT_FALSE(NULL == root.get_phy_plan());
@@ -559,9 +563,11 @@ TEST_F(ObPhyOperatorTest, test_serialize_and_deserialize)
   table_scan2.set_phy_plan(&physical_plan);
   ASSERT_EQ(OB_SUCCESS, table_scan2.deserialize(buf, data_len, pos));
   ASSERT_EQ(pos, data_len);
-  ASSERT_EQ(0, strcmp(to_cstring(table_scan1), to_cstring(table_scan2)));
+  ObCStringHelper helper;
+  ASSERT_EQ(0, strcmp(helper.convert(table_scan1), helper.convert(table_scan2)));
+  ObCStringHelper helper;
   printf("table_scan serialize: %s\ntable_scan deserialize: %s\n",
-         to_cstring(table_scan1), to_cstring(table_scan2));
+         helper.convert(table_scan1), helper.convert(table_scan2));
          */
 }
 

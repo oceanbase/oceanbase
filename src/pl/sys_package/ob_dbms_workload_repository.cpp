@@ -487,9 +487,6 @@ int ObDbmsWorkloadRepository::generate_ash_report_text(
       } else if (OB_FAIL(print_top_sql_command_type(
                      ash_report_params, num_samples, num_events, buff))) {
         LOG_WARN("failed to print ash top node load", K(ret));
-      } else if (OB_FAIL(print_top_sql_with_top_db_time(
-                     ash_report_params, num_samples, num_events, buff))) {
-        LOG_WARN("failed to print ash top node load", K(ret));
       } else if (OB_FAIL(print_top_sql_with_top_wait_events(
                      ash_report_params, num_samples, num_events, buff))) {
         LOG_WARN("failed to print ash top node load", K(ret));
@@ -1574,6 +1571,12 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
                     "IN_PLSQL_COMPILATION, "
                     "SUM(CASE WHEN BITAND(TIME_MODEL, 4096) = 0 THEN 0 ELSE 1 END) AS "
                     "IN_PLSQL_EXECUTION, "
+                    "SUM(CASE WHEN BITAND(TIME_MODEL, 16384) = 0 THEN 0 ELSE 1 END) AS "
+                    "IN_RPC_ENCODE, "
+                    "SUM(CASE WHEN BITAND(TIME_MODEL, 32768) = 0 THEN 0 ELSE 1 END) AS "
+                    "IN_RPC_DECODE, "
+                    "SUM(CASE WHEN BITAND(TIME_MODEL, 65536) = 0 THEN 0 ELSE 1 END) AS "
+                    "IN_CONNECTION_MGR, "
                   : "CAST(SUM(CASE WHEN (time_model & 1) = 0 THEN 0 ELSE 1 "
                     "END)AS SIGNED INTEGER) IN_PARSE, "
                     "CAST(SUM(CASE WHEN (time_model & 2) = 0 THEN 0 ELSE 1 "
@@ -1601,7 +1604,13 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
                     "CAST(SUM(CASE WHEN (time_model & 2048) = 0 THEN 0 ELSE "
                     "1 END)AS SIGNED INTEGER) IN_PLSQL_COMPILATION, "
                     "CAST(SUM(CASE WHEN (time_model & 4096) = 0 THEN 0 ELSE "
-                    "1 END)AS SIGNED INTEGER) IN_PLSQL_EXECUTION, "))) {
+                    "1 END)AS SIGNED INTEGER) IN_PLSQL_EXECUTION, "
+                    "CAST(SUM(CASE WHEN (time_model & 16384) = 0 THEN 0 ELSE "
+                    "1 END)AS SIGNED INTEGER) IN_RPC_ENCODE, "
+                    "CAST(SUM(CASE WHEN (time_model & 32768) = 0 THEN 0 ELSE "
+                    "1 END)AS SIGNED INTEGER) IN_RPC_DECODE, "
+                    "CAST(SUM(CASE WHEN (time_model & 65536) = 0 THEN 0 ELSE "
+                    "1 END)AS SIGNED INTEGER) IN_CONNECTION_MGR, "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
@@ -1643,6 +1652,9 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
             EXTRACT_ASH_EXEC_PHASE(IN_PLSQL_COMPILATION)
             EXTRACT_ASH_EXEC_PHASE(IN_PLSQL_EXECUTION)
             EXTRACT_ASH_EXEC_PHASE(IN_FILTER_ROWS)
+            EXTRACT_ASH_EXEC_PHASE(IN_RPC_ENCODE)
+            EXTRACT_ASH_EXEC_PHASE(IN_RPC_DECODE)
+            EXTRACT_ASH_EXEC_PHASE(IN_CONNECTION_MGR)
 
             lib::ob_sort(phase_array.begin(), phase_array.end(), phase_cmp_func);
             for (int64_t i = 0; OB_SUCC(ret) && i < phase_array.count(); i++) {
@@ -2716,7 +2728,6 @@ int ObDbmsWorkloadRepository::print_top_sql_with_top_operator(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql_string));
       } else {
-        LOG_INFO("[roland_debug]", K(sql_string));
         while (OB_SUCC(ret)) {
           if (OB_FAIL(result->next())) {
             if (OB_ITER_END == ret) {
@@ -3879,37 +3890,39 @@ int ObDbmsWorkloadRepository::print_top_blocking_session(const AshReportParams &
   } else if (OB_FAIL(insert_section_explaination_line(ash_report_params, buff,
                  "'# Samples Active' shows the number of ASH samples in which the blocking session was found active."))) {
     LOG_WARN("failed to push string into buff", K(ret));
+  } else if (OB_FAIL(print_section_explaination_end(ash_report_params, buff))) {
+    LOG_WARN("failed to push string into buff", K(ret));
   } else {
     ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(GCTX.sql_proxy_)));
     ObCommonSqlProxy *sql_proxy =
         lib::is_oracle_mode() ? &oracle_proxy : static_cast<ObCommonSqlProxy *>(GCTX.sql_proxy_);
     bool with_color = true;
     const uint64_t request_tenant_id = MTL_ID();
-    const int64_t column_size = 5;
-    const int64_t column_widths[column_size] = {20, 64, 13, 11, 20};
-    const char *column_headers[column_size] = {"Session ID", "Event Name", "Event Count", "% Activity", "Avg Active Sessions"};
+    const int64_t column_size = 7;
+    const int64_t column_widths[column_size] = {20, 64, 20, 64, 13, 11, 20};
+    const char *column_headers[column_size] = {"Blocking Session ID", "Event Name", "Holder TX ID", "Holder SQL ID","Event Count", "% Activity", "Avg Active Sessions"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
       ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));
-      } else if (
-          OB_FAIL(sql_string.append_fmt(
-              "SELECT * FROM (SELECT BLOCKING_SESSION_ID, %s, COUNT(*) AS CNT FROM (",
-              lib::is_oracle_mode()
-                  ? "CAST(DECODE(EVENT_NO, 0, 'ON CPU', EVENT) AS VARCHAR2(64)) AS EVENT"
-                  : "CAST(IF (EVENT_NO = 0, 'ON CPU', EVENT) AS CHAR(64)) AS EVENT"))) {
+      } else if (OB_FAIL(sql_string.append("SELECT * FROM ( SELECT "))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (lib::is_oracle_mode() && OB_FAIL(sql_string.append(" (SELECT SQL_ID FROM ( SELECT SQL_ID FROM SYS.GV$OB_SQL_AUDIT WHERE SID = blocking_session_id and tx_id = holder_tx_id and SEQ_NUM <= holder_data_seq order by SEQ_NUM desc ) WHERE ROWNUM <= 1) AS HOLDER_SQL_ID, "))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (!lib::is_oracle_mode() && OB_FAIL(sql_string.append(" (SELECT SQL_ID FROM GV$OB_SQL_AUDIT WHERE SID = blocking_session_id and tx_id = holder_tx_id and SEQ_NUM <= holder_data_seq order by SEQ_NUM desc limit 1) AS HOLDER_SQL_ID, "))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_string.append( " BLOCKING_SESSION_ID, EVENT, HOLDER_TX_ID, CNT FROM ( SELECT blocking_session_id, event, p1 as holder_tx_id, p2 as holder_data_seq, COUNT(*) AS CNT  FROM ( "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
       } else if (OB_FAIL(sql_string.append(
-                     " and session_type='FOREGROUND') top_event GROUP BY blocking_session_id, "
-                     " EVENT_NO having count(*) > 1 ORDER BY cnt DESC)"))) {
+                    " and blocking_session_id != 0 and event_id = 14003) top_event GROUP BY blocking_session_id, event, p1, p2 having count(*) > 1) "))) {
         LOG_WARN("append sql failed", K(ret));
-      } else if (lib::is_oracle_mode() && OB_FAIL(sql_string.append(" WHERE ROWNUM <= 100 "))) {
+      } else if (lib::is_oracle_mode() && OB_FAIL(sql_string.append(" ORDER BY CNT DESC) WHERE ROWNUM <= 100 "))) {
         LOG_WARN("append sql failed", K(ret));
-      } else if (!lib::is_oracle_mode() && OB_FAIL(sql_string.append(" LIMIT 100 "))) {
+      } else if (!lib::is_oracle_mode() && OB_FAIL(sql_string.append(" ORDER BY CNT DESC LIMIT 100) "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res, request_tenant_id, sql_string.ptr()))) {
         LOG_WARN("falied to execute sql", KR(ret), K(request_tenant_id), K(sql_string));
@@ -3929,9 +3942,13 @@ int ObDbmsWorkloadRepository::print_top_blocking_session(const AshReportParams &
             int64_t tmp_real_str_len = 0;
             char event_char[64] = "";
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "EVENT", event_char, 64, tmp_real_str_len);
+            char sql_id[64] = "";
+            EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "HOLDER_SQL_ID", sql_id, 64, tmp_real_str_len);
 
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "BLOCKING_SESSION_ID", blocking_session_id, int64_t);
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "CNT", cnt, int64_t);
+            EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "HOLDER_TX_ID", holder_tx_id, int64_t);
+
 
             char event_radio_char[64] = "";
             calc_ratio(cnt, num_samples, event_radio_char);
@@ -3942,9 +3959,10 @@ int ObDbmsWorkloadRepository::print_top_blocking_session(const AshReportParams &
                 avg_active_sessions_char);
             if (OB_SUCC(ret)) {
               const char *column_content[] = {ASH_FIELD_CHAR(blocking_session_id), event_char,
-                  ASH_FIELD_CHAR(cnt), event_radio_char, avg_active_sessions_char};
-              if (OB_FAIL(print_section_column_row(ash_report_params, buff, column_size,
-                      column_content, column_widths, with_color))) {
+                  ASH_FIELD_CHAR(holder_tx_id), sql_id, ASH_FIELD_CHAR(cnt), event_radio_char,
+                  avg_active_sessions_char};
+              if (OB_FAIL(print_sql_section_column_row(ash_report_params, buff, column_size,
+                      column_content, column_widths, with_color, 3, 3))) {
                 LOG_WARN("failed to format row", K(ret));
               }
               with_color = !with_color;

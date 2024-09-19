@@ -852,18 +852,20 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
           }
         }
       }
+      ObCStringHelper helper;
       LOG_DEBUG("do compact", K(ret), K(current_), K(version_fit), K(final_result), K(finish_scanning_cur_rowkey_),
-                "cur_row", is_row_empty(row_) ? "empty" : to_cstring(row_),
-                "multi_version_row", to_cstring(multi_version_row), K_(macro_id));
+                "cur_row", is_row_empty(row_) ? "empty" : helper.convert(row_),
+                "multi_version_row", helper.convert(multi_version_row), K_(macro_id));
 
       if ((OB_SUCC(ret) && final_result) || OB_ITER_END == ret) {
         ret = OB_SUCCESS;
         if (OB_FAIL(cache_cur_micro_row(found_first_row, final_result))) {
           LOG_WARN("failed to cache cur micro row", K(ret), K_(macro_id));
         }
+        helper.reset();
         LOG_DEBUG("cache cur micro row", K(ret), K(finish_scanning_cur_rowkey_),
-                  "cur_row", is_row_empty(row_) ? "empty" : to_cstring(row_),
-                  "prev_row", is_row_empty(prev_micro_row_) ? "empty" : to_cstring(prev_micro_row_),
+                  "cur_row", is_row_empty(row_) ? "empty" : helper.convert(row_),
+                  "prev_row", is_row_empty(prev_micro_row_) ? "empty" : helper.convert(prev_micro_row_),
                   K_(macro_id));
         break;
       }

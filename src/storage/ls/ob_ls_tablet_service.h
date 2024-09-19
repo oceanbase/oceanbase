@@ -638,7 +638,8 @@ private:
   static int register_ext_info_commit_cb(
       ObDMLRunningCtx &run_ctx,
       ObObj &col_data,
-      ObObj &ext_info_data);
+      ObObj &ext_info_data,
+      const ObExtInfoLogHeader &header);
   static int set_lob_storage_params(
       ObDMLRunningCtx &run_ctx,
       const ObColDesc &column,
@@ -792,14 +793,12 @@ private:
       ObDMLRunningCtx &run_ctx,
       const ObColDesc &column,
       ObObj &obj,
-      const ObObj &sql_obj,
       ObLobCommon *&lob_common,
       ObLobAccessParam &lob_param);
   static int delete_lob_tablet_rows(
       ObDMLRunningCtx &run_ctx,
       ObTabletHandle &data_tablet,
-      ObStoreRow &tbl_row,
-      const ObNewRow &row);
+      ObStoreRow &tbl_row);
   static int prepare_scan_table_param(
       ObTableScanParam &param,
       share::schema::ObMultiVersionSchemaService &schema_service);

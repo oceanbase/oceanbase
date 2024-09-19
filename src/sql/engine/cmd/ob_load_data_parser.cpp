@@ -135,9 +135,13 @@ int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len) 
   int64_t pos = 0;
   int64_t idx = 0;
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(line_term_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"", OPTION_NAMES[idx++]);
+  databuff_printf(buf, buf_len, pos, ObHexStringWrap(line_term_str_));
+  databuff_printf(buf, buf_len, pos, "\"");
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(field_term_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"", OPTION_NAMES[idx++]);
+  databuff_printf(buf, buf_len, pos, ObHexStringWrap(field_term_str_));
+  databuff_printf(buf, buf_len, pos, "\"");
   J_COMMA();
   databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[idx++], field_escaped_char_);
   J_COMMA();
@@ -157,7 +161,9 @@ int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len) 
         if (i != 0) {
           J_COMMA();
         }
-        databuff_printf(buf, buf_len, pos, "\"%s\"", to_cstring(ObHexStringWrap(null_if_.at(i))));
+        databuff_printf(buf, buf_len, pos, "\"");
+        databuff_printf(buf, buf_len, pos, ObHexStringWrap(null_if_.at(i)));
+        databuff_printf(buf, buf_len, pos, "\"");
       }
     J_ARRAY_END();
   J_COMMA();
@@ -263,15 +269,25 @@ int64_t ObOriginFileFormat::to_json_kv_string(char *buf, const int64_t buf_len) 
   int64_t pos = 0;
   int64_t idx = 0;
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", ORIGIN_FORMAT_STRING[idx++], to_cstring(ObHexStringWrap(origin_line_term_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"", ORIGIN_FORMAT_STRING[idx++]);
+  databuff_printf(buf, buf_len, pos, ObHexStringWrap(origin_line_term_str_));
+  databuff_printf(buf, buf_len, pos, "\"");
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", ORIGIN_FORMAT_STRING[idx++], to_cstring(ObHexStringWrap(origin_field_term_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"", ORIGIN_FORMAT_STRING[idx++]);
+  databuff_printf(buf, buf_len, pos, ObHexStringWrap(origin_field_term_str_));
+  databuff_printf(buf, buf_len, pos, "\"");
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", ORIGIN_FORMAT_STRING[idx++], to_cstring(ObHexStringWrap(origin_field_escaped_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"", ORIGIN_FORMAT_STRING[idx++]);
+  databuff_printf(buf, buf_len, pos, ObHexStringWrap(origin_field_escaped_str_));
+  databuff_printf(buf, buf_len, pos, "\"");
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", ORIGIN_FORMAT_STRING[idx++], to_cstring(ObHexStringWrap(origin_field_enclosed_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"", ORIGIN_FORMAT_STRING[idx++]);
+  databuff_printf(buf, buf_len, pos, ObHexStringWrap(origin_field_enclosed_str_));
+  databuff_printf(buf, buf_len, pos, "\"");
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", ORIGIN_FORMAT_STRING[idx++], to_cstring(ObHexStringWrap(origin_null_if_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"", ORIGIN_FORMAT_STRING[idx++]);
+  databuff_printf(buf, buf_len, pos, ObHexStringWrap(origin_null_if_str_));
+  databuff_printf(buf, buf_len, pos, "\"");
   return pos;
 }
 

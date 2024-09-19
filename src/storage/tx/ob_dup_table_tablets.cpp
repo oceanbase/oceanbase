@@ -2092,14 +2092,16 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
       if (OB_SUCC(ret) && !need_confirm_new_queue_.is_empty()) {
         DLIST_FOREACH_X(need_confirm_set, need_confirm_new_queue_, OB_SUCC(ret))
         {
-          if (OB_FAIL(::oceanbase::common::databuff_printf(
-                  tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
-                  "\n%s[%sNew Dup Tablet Set - NeedConfirm] unique_id = %lu, tablet_count = %lu, "
-                  "change_status = %s",
-                  DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-                  need_confirm_set->get_common_header().get_unique_id(), need_confirm_set->size(),
-                  to_cstring(need_confirm_set->get_RO_change_status())))) {
-
+          ret = ::oceanbase::common::databuff_printf(
+              tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+              "\n%s[%sNew Dup Tablet Set - NeedConfirm] unique_id = %lu, tablet_count = %lu, "
+              "change_status = ",
+              DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
+              need_confirm_set->get_common_header().get_unique_id(), need_confirm_set->size());
+          OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+              tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+              need_confirm_set->get_RO_change_status());
+          if (OB_FAIL(ret)) {
             _DUP_TABLE_LOG(WARN,
                            "%sprint need confirm tablet list header failed, ret=%d, ls_id=%lu",
                            DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, ret, ls_id.id());
@@ -2121,15 +2123,16 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
 
     // old tablet print
     if (OB_SUCC(ret) && OB_NOT_NULL(removing_old_set_) && removing_old_set_->size() > 0) {
-
-      if (OB_FAIL(::oceanbase::common::databuff_printf(
-              tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
-              "\n%s[%sOld Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
-              "change_status = %s",
-              DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-              removing_old_set_->get_common_header().get_unique_id(), removing_old_set_->size(),
-              to_cstring(removing_old_set_->get_RO_change_status())))) {
-
+      ret = ::oceanbase::common::databuff_printf(
+          tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+          "\n%s[%sOld Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
+          "change_status = ",
+          DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
+          removing_old_set_->get_common_header().get_unique_id(), removing_old_set_->size());
+      OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+          tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+          removing_old_set_->get_RO_change_status());
+      if (OB_FAIL(ret)) {
         _DUP_TABLE_LOG(WARN, "%sprint need confirm tablet list header failed, ret=%d, ls_id=%lu",
                        DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, ret, ls_id.id());
       } else {
@@ -2150,14 +2153,16 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
     if (OB_SUCC(ret) && !readable_tablets_list_.is_empty()) {
       DLIST_FOREACH(readable_set_ptr, readable_tablets_list_)
       {
-        if (OB_FAIL(::oceanbase::common::databuff_printf(
-                tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
-                "\n%s[%sReadable Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
-                "change_status = %s",
-                DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-                readable_set_ptr->get_common_header().get_unique_id(), readable_set_ptr->size(),
-                to_cstring(readable_set_ptr->get_RO_change_status())))) {
-
+        ret = ::oceanbase::common::databuff_printf(
+            tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+            "\n%s[%sReadable Dup Tablet Set] unique_id = %lu, tablet_count = %lu, "
+            "change_status = ",
+            DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
+            readable_set_ptr->get_common_header().get_unique_id(), readable_set_ptr->size());
+        OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+            tablet_set_diag_info_log_buf_, TABLET_SET_PRINT_BUF_LEN, tablet_set_diag_pos,
+            readable_set_ptr->get_RO_change_status());
+        if (OB_FAIL(ret)) {
           _DUP_TABLE_LOG(WARN, "%sprint readable tablet list header failed, ret=%d, ls_id=%lu",
                          DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, ret, ls_id.id());
         } else {
@@ -2178,17 +2183,18 @@ void ObLSDupTabletsMgr::print_tablet_diag_info_log(bool is_master)
     tablet_set_diag_info_log_buf_[MIN(tablet_set_diag_pos + 1, TABLET_SET_PRINT_BUF_LEN - 1)] =
         '\0';
     tablet_id_diag_info_log_buf_[MIN(tablet_id_diag_pos + 1, TABLET_ID_PRINT_BUF_LEN - 1)] = '\0';
+    ObCStringHelper helper;
     _DUP_TABLE_LOG(
         INFO,
         "[%sDup Tablet Info] tenant: %lu, ls: %lu, is_master: %s, total_tablet_count: %lu, "
         "need_confirm_new_set_count: %u, readable_set_count: %u, tablet_set_print_buf_used: "
         "%lu/%lu, tablet_id_print_buf_used:%lu/%lu, last_readable_log_entry_scn: %s, "
         "last_readable_sync_succ_time_: %s, %s %s",
-        DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, tenant_id, ls_id.id(), to_cstring(is_master),
+        DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, tenant_id, ls_id.id(), helper.convert(is_master),
         total_tablet_cnt, need_confirm_new_queue_.get_size(), readable_tablets_list_.get_size(),
         tablet_set_diag_pos, TABLET_SET_PRINT_BUF_LEN, tablet_id_diag_pos, TABLET_ID_PRINT_BUF_LEN,
-        to_cstring(last_readable_log_entry_scn_.atomic_load()),
-        to_cstring(last_readable_sync_succ_time_), tablet_set_diag_info_log_buf_,
+        helper.convert(last_readable_log_entry_scn_.atomic_load()),
+        helper.convert(last_readable_sync_succ_time_), tablet_set_diag_info_log_buf_,
         tablet_id_diag_info_log_buf_);
   }
 }

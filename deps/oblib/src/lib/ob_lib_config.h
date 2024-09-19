@@ -17,6 +17,13 @@
 
 namespace oceanbase
 {
+
+namespace common
+{
+class ObBackGroundSessionGuard;
+class ObDiagnosticInfoSwitchGuard;
+}
+
 namespace lib
 {
 bool is_diagnose_info_enabled();
@@ -31,12 +38,15 @@ class ObLibConfig
   friend bool is_trace_log_enabled();
   friend void reload_trace_log_config(const bool);
 private:
-  static volatile bool enable_diagnose_info_ CACHE_ALIGNED;
+  static bool enable_diagnose_info_ CACHE_ALIGNED;
   static volatile bool enable_trace_log_ CACHE_ALIGNED;
 };
 
 class ObPerfModeGuard
 {
+  friend class common::ObBackGroundSessionGuard;
+  friend class common::ObDiagnosticInfoSwitchGuard;
+  friend class ObEnableDiagnoseGuard;
   friend bool is_diagnose_info_enabled();
   friend bool is_trace_log_enabled();
 public:
@@ -51,8 +61,29 @@ public:
 private:
   static bool &get_tl_instance()
   {
-    static thread_local bool in_disable_diagnose_guard = false;
+    static thread_local bool in_disable_diagnose_guard = PERF_MODE_VALUE;
+
     return in_disable_diagnose_guard;
+  }
+private:
+  static bool PERF_MODE_VALUE;
+  bool old_value_;
+};
+
+class ObEnableDiagnoseGuard
+{
+  friend class common::ObBackGroundSessionGuard;
+  friend class common::ObDiagnosticInfoSwitchGuard;
+  friend bool is_diagnose_info_enabled();
+  friend bool is_trace_log_enabled();
+public:
+  explicit ObEnableDiagnoseGuard() : old_value_(ObPerfModeGuard::get_tl_instance())
+  {
+    ObPerfModeGuard::get_tl_instance() = ObPerfModeGuard::PERF_MODE_VALUE;
+  }
+  ~ObEnableDiagnoseGuard()
+  {
+    ObPerfModeGuard::get_tl_instance() = old_value_;
   }
 private:
   bool old_value_;

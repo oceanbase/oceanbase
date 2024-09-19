@@ -17,6 +17,8 @@
 #include "lib/ob_name_def.h"
 #include "lib/string/ob_fixed_length_string.h"
 #include "lib/hash_func/murmur_hash.h"
+//#include "lib/thread_local/ob_tsi_factory.h"
+#include "lib/allocator/page_arena.h"
 namespace oceanbase
 {
 namespace common
@@ -110,20 +112,8 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////
-// to_cstring stuff
+// to_string stuff
 ////////////////////////////////////////////////////////////////
-template <typename T, bool NO_DEFAULT = true>
-struct PrintableSizeGetter
-{
-  static const int64_t value = T::MAX_PRINTABLE_SIZE;
-};
-
-template <typename T>
-struct PrintableSizeGetter<T, false>
-{
-  static const int64_t value = 12 * 1024;
-};
-
 template <typename T>
 int64_t to_string(const T &obj, char *buffer, const int64_t buffer_size)
 {
@@ -137,141 +127,216 @@ template <>
 int64_t to_string<double>(const double &obj, char *buffer, const int64_t buffer_size);
 template <>
 int64_t to_string<bool>(const bool &obj, char *buffer, const int64_t buffer_size);
-
-class ToStringAdaptor
-{
-public:
-  virtual ~ToStringAdaptor() {}
-  virtual int64_t to_string(char *buffer, const int64_t length) const = 0;
-};
-
-class CStringBufMgr
-{
-public:
-  static const int BUF_SIZE = 32 * 1024;
-  static const int MIN_SIZE = 12 * 1024;
-  struct BufNode
-  {
-    BufNode() : pre_(NULL), pos_(0) {}
-    ~BufNode() {}
-    char buf_[BUF_SIZE];
-    struct BufNode *pre_;
-    int64_t pos_;
-  };
-  struct BufList
-  {
-    BufList() : head_(nullptr) {}
-    BufNode *head_;
-  };
-  CStringBufMgr() : list_(), level_(-1), pos_(0), curr_(NULL) {}
-  ~CStringBufMgr() {}
-  static CStringBufMgr &get_thread_local_instance()
-  {
-    thread_local CStringBufMgr mgr;
-    return mgr;
-  }
-  void inc_level() { level_++; }
-  void dec_level() { level_--; }
-  void update_position(int64_t pos)
-  {
-    if (0 == level_) {
-      pos_ += pos;
-      if (MIN_SIZE > BUF_SIZE - pos_) {
-        pos_ = 0;
-      }
-    } else if (NULL != curr_) {
-      curr_->pos_ += pos;
-      if (MIN_SIZE > BUF_SIZE - curr_->pos_) {
-        curr_->pos_ = 0;
-      }
-      BufNode *outer_layer = curr_->pre_;
-      curr_->pre_ = list_.head_;
-      list_.head_ = curr_;
-      curr_ = outer_layer;
-    }
-  }
-  int64_t acquire(char *&buffer);
-  void try_clear_list();
-private:
-  char local_buf_[BUF_SIZE];
-  BufList list_;
-  int64_t level_;
-  int64_t pos_;
-  BufNode *curr_;
-};
-
-template <typename T>
-const char *to_cstring(const T &obj, FalseType)
-{
-  char *buffer = NULL;
-  int64_t str_len = 0;
-  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
-  mgr.inc_level();
-  const int64_t buf_len = mgr.acquire(buffer);
-  if (OB_ISNULL(buffer)) {
-    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
-  } else {
-    str_len = to_string(obj, buffer, buf_len -1);
-    if (str_len >= 0 && str_len < buf_len) {
-      buffer[str_len] = '\0';
-    } else {
-      buffer[0] = '\0';
-    }
-    mgr.update_position(str_len + 1);
-  }
-  mgr.try_clear_list();
-  mgr.dec_level();
-  return buffer;
-}
-
-template <typename T>
-const char *to_cstring(const T &obj, TrueType)
-{
-  return obj.to_cstring();
-}
-
-template <typename T>
-const char *to_cstring(const T &obj)
-{
-  return to_cstring(obj, BoolType<HAS_MEMBER(T, to_cstring)>());
-}
-
-template <>
-const char *to_cstring<const char *>(const char *const &str);
-template <>
-const char *to_cstring<int64_t>(const int64_t &v);
-
-template <typename T>
-const char *to_cstring(T *obj)
-{
-  const char *str_ret = NULL;
-  if (NULL == obj) {
-    str_ret = "NULL";
-  } else {
-    str_ret = to_cstring(*obj);
-  }
-  return str_ret;
-}
 ////////////////////////////////////////////////////////////////
 // databuff stuff
 ////////////////////////////////////////////////////////////////
 
-/// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
+/// @return OB_SUCCESS or OB_SIZE_OVERFLOW
 int databuff_printf(char *buf, const int64_t buf_len, const char *fmt,
                     ...) __attribute__((format(printf, 3, 4)));
-/// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
+/// @return OB_SUCCESS or OB_SIZE_OVERFLOW
 int databuff_printf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt,
                     ...) __attribute__((format(printf, 4, 5)));
-/// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
+/// @return OB_SUCCESS or OB_SIZE_OVERFLOW
 int databuff_printf(char *&buf, int64_t &buf_len,
                     int64_t &pos, common::ObIAllocator &alloc,
                     const char *fmt, ...) __attribute__((format(printf, 5, 6)));
+/// @return OB_SUCCESS or OB_SIZE_OVERFLOW
+template <typename T>
+int databuff_printf(char *buf, int64_t buf_len, int64_t &pos, const T &obj)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != buf && pos >= 0 && pos < buf_len) {
+    int64_t str_len = to_string(obj, buf + pos, buf_len - pos);
+    if (str_len >= 0 && str_len < buf_len - pos) {
+      buf[pos + str_len] = '\0';
+      pos += str_len;
+    } else {
+      buf[buf_len -1] = '\0';
+      pos = buf_len - 1;
+      ret = OB_SIZE_OVERFLOW;
+    }
+  } else {
+    ret = OB_SIZE_OVERFLOW;
+  }
+  return ret;
+}
+/// @return OB_SUCCESS or OB_SIZE_OVERFLOW
+template <typename T>
+int databuff_printf(char *buf, int64_t buf_len, int64_t &pos, T *const p_obj)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == p_obj) {
+    ret = databuff_printf(buf, buf_len, pos, "NULL");
+  } else {
+    ret = databuff_printf(buf, buf_len, pos, *p_obj);
+  }
+  return ret;
+}
+
+template <typename T>
+int databuff_print_one_obj(char* buf, const int64_t buf_len, int64_t &pos, const T &obj)
+{
+  return logdata_print_obj(buf, buf_len, pos, obj);
+}
+int databuff_print_one_obj(char* buf, const int64_t buf_len, int64_t &pos, const char *p_obj);
+
+
+template <typename ...Rest>
+int databuff_print_multi_objs_helper(char* buf, const int64_t buf_len, int64_t &pos) {
+  int ret = OB_SUCCESS;
+  if (nullptr != buf && pos >= 0 && pos < buf_len) {
+    buf[pos] = '\0';
+  } else {
+    ret = OB_SIZE_OVERFLOW;
+  }
+  return ret;
+}
+template <typename First, typename ...Rest>
+int databuff_print_multi_objs_helper(
+    char* buf,
+    const int64_t buf_len,
+    int64_t &pos,
+    const First& first,
+    const Rest &...others)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_print_one_obj(buf, buf_len, pos, first))) {
+  } else if (OB_FAIL(databuff_print_multi_objs_helper(buf, buf_len, pos, others...))) {
+  } else {}
+  return ret;
+}
+/*
+databuff_print_multi_objs is an enhanced version of databuff_printf.
+It does not require a formatted string, and supports fundamental types and classes
+that implement the to_string method. Example:
+  ret = databuff_printf(buf, buf_len, pos, "{num_u64=", num_u64, ", addr=[", addr, "]}");
+See test_databuff_printf.cpp for more details.
+Note the following special formatting:
++--------------+------------+
+| type         | format     |
++--------------+------------+
+| double       | %.18le     |
+| float        | %.9e       |
+| bool         | True/False |
+| null pointer | NULL       |
++--------------+------------+
+*/
+template <typename ...Rest>
+int databuff_print_multi_objs(char* buf, const int64_t buf_len, int64_t &pos, const Rest &...others)
+{
+    return databuff_print_multi_objs_helper(buf, buf_len, pos, others...);
+}
+
+/*
+ObCStringHelper: convert the object to cstring with an inner buffer
+If you need a persistent cstring, you cannot use this class.
+*/
+class ObCStringHelper
+{
+  const static int64_t EXPAND_BUF_LEN = 16L << 10;
+  const static int64_t HELPER_MEMORY_LIMIT = 64L << 20;
+public:
+  ObCStringHelper()
+    : allocator_(SET_USE_500("CStringHelper"))
+  {
+#ifdef ENABLE_DEBUG_LOG
+    force_alloc();
+#else
+    if (is_force_alloc()) {
+      force_alloc();
+    }
+#endif
+  }
+  template<typename T>
+  const char *convert(const T &obj)
+  {
+    char *ptr = nullptr;
+    int64_t pos = 0;
+    int ret = databuff_printf(buf_+ pos_, buf_len_ - pos_, pos, obj);
+    // Some to_string implementations are based on databuff_printf, and even if overflowed,
+    // the return value (i.e., pos in this case) will still be equal to
+    // the length of buf - 1 (i.e., buf_len_ - pos_ -1 in this case). To prevent this, we require
+    // that pos must be less than buf_len_ - pos_ -1.
+    if (OB_SUCC(ret) && pos < buf_len_ - pos_ - 1) {
+      ptr = buf_ + pos_;
+      // we need a c-style string, so the '\0' can't be overwritten
+      pos_ += pos + 1;
+    } else if (OB_SIZE_OVERFLOW == ret || (OB_SUCC(ret) && pos >= buf_len_ - pos_ - 1)) {
+      if (allocator_.total() >= HELPER_MEMORY_LIMIT) { // 64MB
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        ptr = nullptr;
+        LIB_LOG(ERROR, "ObCStringHelper memory has reached the upper limit",
+            "hold", allocator_.total(), "limit", HELPER_MEMORY_LIMIT, K(ret));
+      } else {
+        char *old_buf = buf_;
+        int64_t old_buf_len = buf_len_;
+        if (buf_ == reserve_buf_) {
+          buf_len_ = EXPAND_BUF_LEN;
+        } else {
+          buf_len_ = buf_len_ << 1;
+        }
+        if (OB_ISNULL(buf_ = reinterpret_cast<char *>(allocator_.alloc(buf_len_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LIB_LOG(WARN, "failed to allocate memory", "length want to alloc", buf_len_, K(ret));
+          buf_ = old_buf;
+          buf_len_ = old_buf_len;
+          ptr = nullptr;
+        } else {
+          pos_= 0;
+          ptr = const_cast<char *>(convert(obj));
+        }
+      }
+    } else {
+      ptr = nullptr;
+      LIB_LOG(WARN, "failed to convert the obj to cstring", K(ret));
+    }
+    ob_errno_ = ret;
+    return ptr;
+  }
+  template<typename T>
+  int convert(const T &obj, const char *&str)
+  {
+    int ret = OB_SUCCESS;
+    str = convert(obj);
+    ret = get_ob_errno();
+    return ret;
+  }
+  void reset()
+  {
+    allocator_.reset();
+    reserve_buf_[0] = '\0';
+    buf_ = reserve_buf_;
+    buf_len_ = ARRAYSIZEOF(reserve_buf_);
+    pos_ = 0;
+    ob_errno_ = OB_SUCCESS;
+  }
+  int get_ob_errno() const
+  {
+    return ob_errno_;
+  }
+
+private:
+  bool is_force_alloc();
+  void force_alloc();
+
+private:
+  DISABLE_COPY_ASSIGN(ObCStringHelper);
+private:
+  ObArenaAllocator allocator_;
+  char reserve_buf_[1024];
+  char *buf_ = reserve_buf_;
+  int64_t buf_len_ = ARRAYSIZEOF(reserve_buf_);
+  int64_t pos_= 0;
+  int ob_errno_ = OB_SUCCESS;
+};
+
 /// @return OB_SUCCESS or OB_ALLOCATE_MEMORY_FAILED
 int multiple_extend_buf(char *&stmt_buf, int64_t &stmt_buf_len, common::ObIAllocator &alloc);
-/// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
+/// @return OB_SUCCESS or OB_SIZE_OVERFLOW
 int databuff_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt,
                      va_list args);
-/// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
+/// @return OB_SUCCESS or OB_SIZE_OVERFLOW
 int databuff_memcpy(char *buf, const int64_t buf_len, int64_t &pos, const int64_t src_len,
                     const char *src);
 
@@ -793,6 +858,15 @@ int databuff_print_obj_array(char *buf, const int64_t buf_len, int64_t &pos, con
       J_OBJ_END();                                    \
       return pos;                                     \
     }
+#define DEFINE_TO_STRING_WITH_HELPER(body) DECLARE_TO_STRING    \
+  {                                                 \
+    int64_t pos = 0;                                \
+    ObCStringHelper helper;                         \
+    J_OBJ_START();                                  \
+    body;                                           \
+    J_OBJ_END();                                    \
+    return pos;                                     \
+  }
 
 #define BUF_PRINTF(args...) ::oceanbase::common::databuff_printf(buf, buf_len, pos, ##args)
 #define BUF_PRINTO(obj) (void)::oceanbase::common::databuff_print_obj(buf, buf_len, pos, obj)
@@ -817,6 +891,7 @@ int databuff_print_obj_array(char *buf, const int64_t buf_len, int64_t &pos, con
 #define J_KV(args...) ::oceanbase::common::databuff_print_kv(buf, buf_len, pos, ##args)
 
 #define TO_STRING_KV(args...) DEFINE_TO_STRING(J_KV(args))
+#define TO_STRING_KV_WITH_HELPER(args...) DEFINE_TO_STRING_WITH_HELPER(J_KV(args))
 #define VIRTUAL_TO_STRING_KV(args...) DEFINE_VIRTUAL_TO_STRING(J_KV(args))
 #define INHERIT_TO_STRING_KV(parent_name, parent_class, args...) \
     DEFINE_INHERIT_TO_STRING(parent_name, parent_class, J_KV(args))
@@ -857,11 +932,7 @@ int databuff_print_obj_array(char *buf, const int64_t buf_len, int64_t &pos, con
 #define J_KN(key)                 \
   BUF_PRINTF("%s:null", (key))
 
-#define S(X) to_cstring((X))
-
 #define STR_BOOL(b) ((b) ? "true" : "false")
-
-#define STR_PTR(p) ((p) ? to_cstring(*p) : "nil")
 
 #define DECLARE_TO_STRING_AND_YSON                                      \
   int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const;    \

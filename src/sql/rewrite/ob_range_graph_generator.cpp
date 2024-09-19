@@ -298,6 +298,9 @@ int ObRangeGraphGenerator::and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
       bool merged = false;
       if (OB_FAIL(and_two_range_node(last_node, cur_node, column_cnt, merged))) {
         LOG_WARN("failed to and two range node");
+      } else if (merged && last_node->always_false_) {
+        range_node = last_node;
+        break;
       } else if (merged) {
         last_node->max_offset_ = std::max(last_node->max_offset_, cur_node->max_offset_);
       } else {
@@ -505,6 +508,11 @@ int ObRangeGraphGenerator::and_two_range_node(ObRangeNode *&l_node,
         l_node->contain_in_ = cnt_in;
         l_node->in_param_count_ = cnt_in ? std::max(l_node->in_param_count_, r_node->in_param_count_) : 0;
       }
+    }
+  }
+  if (OB_SUCC(ret) && is_merge) {
+    if (OB_FAIL(formalize_one_range_node(*l_node))) {
+      LOG_WARN("failed to formalize one range node", K(ret));
     }
   }
   return ret;
@@ -1678,6 +1686,34 @@ int ObRangeGraphGenerator::check_can_fast_nlj_range_extraction(const ObRangeNode
       } else {
         fast_nlj_range = false;
       }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::formalize_one_range_node(ObRangeNode &range_node)
+{
+  int ret = OB_SUCCESS;
+  if (range_node.always_true_ ||
+      range_node.always_false_ ||
+      range_node.or_next_ != NULL ||
+      range_node.is_geo_node_ ||
+      range_node.is_not_in_node_) {
+    // do nothing
+  } else {
+    const int64_t* start = range_node.start_keys_;
+    const int64_t* end = range_node.end_keys_;
+    bool always_false = false;
+    for (int64_t i = range_node.min_offset_; i < range_node.column_cnt_; ++i) {
+      if (start[i] != end[i]) {
+        break;
+      } else if (i == range_node.column_cnt_ - 1 &&
+                 !(range_node.include_start_ && range_node.include_end_)) {
+        always_false = true;
+      }
+    }
+    if (OB_SUCC(ret) && always_false) {
+      range_node.set_always_false();
     }
   }
   return ret;

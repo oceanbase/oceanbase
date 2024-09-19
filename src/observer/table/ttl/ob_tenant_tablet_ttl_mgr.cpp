@@ -21,6 +21,7 @@
 #include "observer/table/ttl/ob_table_ttl_task.h"
 #include "observer/table/ob_table_service.h"
 #include "share/table/ob_table_config_util.h"
+#include "src/share/table/redis/ob_redis_util.h"
 
 namespace oceanbase
 {
@@ -183,6 +184,7 @@ void ObTabletTTLScheduler::destroy()
   FLOG_INFO("ObTabletTTLScheduler: begin to destroy", KPC_(ls), K_(tenant_id));
   wait();
   TG_DESTROY(tg_id_);
+  tg_id_ = -1;
   is_inited_ = false;
   FLOG_INFO("ObTabletTTLScheduler: finish to destroy", KPC_(ls), K_(tenant_id));
 }
@@ -765,16 +767,33 @@ int ObTabletTTLScheduler::get_ttl_para_from_schema(const schema::ObTableSchema *
                                                    ObTTLTaskParam &param)
 {
   int ret = OB_SUCCESS;
+  ObKVAttr attr;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is null", KR(ret));
   } else if (!table_schema->get_kv_attributes().empty()) {
-    if (OB_FAIL(ObHTableUtils::check_htable_schema(*table_schema))) {
-      LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
-    } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), param.max_version_, param.ttl_))) {
+    if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), attr))) {
       LOG_WARN("fail to parse kv attributes", KR(ret), K(table_schema->get_kv_attributes()));
-    } else if (param.max_version_ != INT32_MIN && param.ttl_ != INT32_MIN) {
-      param.is_htable_ = true;
+    } else if (attr.type_ == ObKVAttr::ObTTLTableType::HBASE) {
+      if (OB_FAIL(ObHTableUtils::check_htable_schema(*table_schema))) {
+        LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
+      }
+    } else if (attr.type_ == ObKVAttr::ObTTLTableType::REDIS) {
+      if (OB_FAIL(ObRedisHelper::check_redis_ttl_schema(*table_schema, attr.redis_model_))) {
+        LOG_WARN("fail to check redis schema", KR(ret), K(table_schema->get_table_name()));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid ObKVAttr type", K(ret), K(attr));
+    }
+
+    if (OB_SUCC(ret)) {
+      param.max_version_ = attr.max_version_;
+      param.ttl_ = attr.ttl_;
+      param.is_htable_ = (attr.type_ == ObKVAttr::ObTTLTableType::HBASE);
+      param.is_redis_table_ = (attr.type_ == ObKVAttr::ObTTLTableType::REDIS);
+      param.is_redis_ttl_ = attr.is_redis_ttl_;
+      param.redis_model_ = attr.redis_model_;
       LOG_DEBUG("success to find a hbase ttl partition", KR(ret), K(param));
     }
   } else if (!table_schema->get_ttl_definition().empty()) {

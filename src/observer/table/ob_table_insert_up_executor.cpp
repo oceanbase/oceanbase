@@ -115,7 +115,7 @@ int ObTableApiInsertUpExecutor::open()
     // init update das_ref
     const ObSQLSessionInfo &session = tb_ctx_.get_session_info();
     ObMemAttr mem_attr;
-    bool use_dist_das = tb_ctx_.has_global_index();
+    bool use_dist_das = tb_ctx_.need_dist_das();
     mem_attr.tenant_id_ = session.get_effective_tenant_id();
     mem_attr.label_ = "TableApiInsUpd";
     upd_rtctx_.das_ref_.set_expr_frame_info(insert_up_spec_.get_expr_frame_info());

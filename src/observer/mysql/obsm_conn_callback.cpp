@@ -22,6 +22,7 @@
 #include "sql/session/ob_sql_session_mgr.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_srv_task.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -223,6 +224,11 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
         LOG_INFO("mark session id unused", K(conn.sessid_));
       }
     }
+  }
+  if (OB_NOT_NULL(conn.di_)) {
+    common::ObLocalDiagnosticInfo::dec_ref(conn.di_);
+    common::ObLocalDiagnosticInfo::return_diagnostic_info(conn.di_);
+    conn.di_ = nullptr;
   }
 
   sm_conn_unlock_tenant(conn);

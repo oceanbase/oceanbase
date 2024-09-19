@@ -29,11 +29,13 @@
     if (OB_SUCCESS != (ret = fill_row(_row, ##args))) { \
       _OB_LOG(WARN, "fail to fill row, ret=%d", ret); \
     } else {\
-    	printf("FAKE row=%s\n", to_cstring(my_row));\
-    	printf("FAKE except_row=%s\n", to_cstring(_row)); \
+      ObCStringHelper helper; \
+	printf("FAKE row=%s\n", helper.convert(my_row));\
+	printf("FAKE except_row=%s\n", helper.convert(_row)); \
       ASSERT_TRUE(_row.count_ == my_row.count_); \
       for (int64_t i = start_idx; i < end_idx; ++i) { \
-        printf("FAKE index=%ld, cell=%s, respect_cell=%s\n", i, to_cstring(my_row.cells_[i]), to_cstring(_row.cells_[i])); \
+        ObCStringHelper tmp_helper; \
+        printf("FAKE index=%ld, cell=%s, respect_cell=%s\n", i, tmp_helper.convert(my_row.cells_[i]), tmp_helper.convert(_row.cells_[i])); \
         ASSERT_TRUE(0 == _row.cells_[i].compare(my_row.cells_[i], collation)); \
       } \
     } \

@@ -17,6 +17,7 @@
 #include "sql/executor/ob_cmd_executor.h"
 #include "lib/ob_name_def.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "observer/omt/ob_tenant.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
 #include "share/schema/ob_schema_utils.h"
 #include "sql/resolver/ddl/ob_create_tenant_stmt.h"
@@ -188,6 +189,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   bool is_ddl_or_dcl_stmt = false;
   int64_t ori_query_timeout;
   int64_t ori_trx_timeout;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  omt::ObTenant *tenant = NULL;
 
   if (ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)
       || ObStmt::is_dcl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()))) {
@@ -235,6 +238,31 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         } else if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->reset())){
           LOG_WARN("schema_guard reset failed", K(ret));
         }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(my_session->get_effective_tenant_id()));
+    if (OB_ISNULL(omt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("omt is null", K(ret));
+    } else if (OB_ISNULL(my_session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null", K(ret));
+    } else if (OB_FAIL(omt->get_tenant(my_session->get_effective_tenant_id(), tenant))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get tenant info failed", K(ret));
+    } else if (OB_ISNULL(tenant)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant is null", K(ret));
+    } else if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
+              && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)) {
+      if (tenant->check_ddl_thread_is_limit()) {
+        ret = OB_ERR_DDL_RESOURCE_NOT_ENOUGH;
+        LOG_WARN("tenant ddl task larger than limit, need retry", KR(ret), K(tenant->cur_ddl_thread_count()));
+      } else {
+        lib::Thread::set_doing_ddl(true);
+        tenant->inc_ddl_thread_count();
       }
     }
   }
@@ -980,6 +1008,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObBackupKeyStmt, ObBackupKeyExecutor);
         break;
       }
+      case stmt::T_BACKUP_CLUSTER_PARAMETERS: {
+        DEFINE_EXECUTE_CMD(ObBackupClusterParamStmt, ObBackupClusterParamExecutor);
+        break;
+      }
       case stmt::T_CREATE_DBLINK: {
         DEFINE_EXECUTE_CMD(ObCreateDbLinkStmt, ObCreateDbLinkExecutor);
         break;
@@ -1080,6 +1112,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObDropEventStmt, ObDropEventExecutor);
         break;
       }
+      case stmt::T_MODULE_DATA: {
+        DEFINE_EXECUTE_CMD(ObModuleDataStmt, ObModuleDataExecutor);
+        break;
+      }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:
       case stmt::T_SWITCH_ROOTSERVER:
@@ -1136,6 +1172,11 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
     if (OB_FAIL(tmp_ret)) {
       ret = tmp_ret;
     }
+  }
+
+  if (OB_NOT_NULL(THIS_THWORKER_SAFE) && THIS_THWORKER_SAFE->is_doing_ddl() && OB_NOT_NULL(tenant)) {
+    lib::Thread::set_doing_ddl(false);
+    tenant->dec_ddl_thread_count();
   }
 
   return ret;

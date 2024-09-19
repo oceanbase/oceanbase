@@ -260,6 +260,25 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
   return ret;
 }
 
+int ob_set_field(const char *value, char *field, const uint32_t field_length)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(value) || OB_ISNULL(field)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", K(ret), KP(value), KP(field));
+  } else {
+    const int64_t value_len = strlen(value);
+    if (value_len >= field_length) {
+      ret = OB_SIZE_OVERFLOW;
+      OB_LOG(WARN, "value is too long", K(ret), KP(value), K(value_len), K(field_length));
+    } else {
+      MEMCPY(field, value, value_len);
+      field[value_len] = '\0';
+    }
+  }
+  return ret;
+}
+
 int ob_apr_abort_fn(int retcode)
 {
   int ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -616,7 +635,7 @@ void ObStorageListFilesCtx::reset()
   ObStorageListCtxBase::reset();
 }
 
-/*--------------------------------ObObjectStorageMallocHookGuard--------------------------------*/
+/*--------------------------------ObObjectStorageGuard--------------------------------*/
 static lib::ObMemAttr get_mem_attr_from_storage_info(const ObObjectStorageInfo *storage_info)
 {
   static lib::ObMemAttr oss_attr;
@@ -646,13 +665,68 @@ static lib::ObMemAttr get_mem_attr_from_storage_info(const ObObjectStorageInfo *
   return ret_attr;
 }
 
-ObObjectStorageMallocHookGuard::ObObjectStorageMallocHookGuard(const ObObjectStorageInfo *storage_info)
-    : lib::ObMallocHookAttrGuard(get_mem_attr_from_storage_info(storage_info))
+// when accessing the object storage, if the error code returned is OB_BACKUP_PERMISSION_DENIED,
+// it may be due to expired temporary ak/sk
+// attempt to refresh the temporary ak/sk, and if the refresh fails,
+// only log the error message to avoid overriding the original error code.
+static void try_refresh_device_credential(
+    const int ob_errcode, const ObObjectStorageInfo *storage_info)
 {
+  int ret = OB_SUCCESS;
+  if (ob_errcode != OB_BACKUP_PERMISSION_DENIED) {
+    // do nothing
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), K(ob_errcode), KPC(storage_info));
+  } else if (storage_info->is_assume_role_mode()
+      && OB_FAIL(ObDeviceCredentialMgr::get_instance().curl_credential(*storage_info,
+                                                                        true/*update_access_time*/))) {
+      OB_LOG(WARN, "failed to refresh credential", K(ret), K(ob_errcode), KPC(storage_info));
+    }
 }
 
-ObObjectStorageMallocHookGuard::~ObObjectStorageMallocHookGuard()
+ObObjectStorageGuard::ObObjectStorageGuard(
+    const char *file, const int64_t line, const char *func,
+    const int &ob_errcode,
+    const ObObjectStorageInfo *storage_info,
+    const ObString &uri,
+    const int64_t &handled_size)
+    : lib::ObMallocHookAttrGuard(get_mem_attr_from_storage_info(storage_info)),
+      file_name_(file), line_(line), func_name_(func),
+      ob_errcode_(ob_errcode),
+      storage_info_(storage_info),
+      start_time_us_(ObTimeUtility::current_time()),
+      uri_(uri),
+      handled_size_(handled_size)
 {
+  if (OB_ISNULL(file_name_)) {
+    file_name_ = "";
+  } else if (OB_NOT_NULL(strrchr(file_name_, '/'))) {
+    file_name_ = strrchr(file_name_, '/') + 1;
+  }
+}
+
+void ObObjectStorageGuard::print_access_storage_log_()
+{
+  const int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us_;
+  // MB/s
+  const double speed = ((double)handled_size_ / 1024 / 1024)
+                     / ((double)cost_time_us / 1000 / 1000);
+  const bool is_slow = cost_time_us >= WARN_THRESHOLD_TIME_US * 1000; // 1s
+  if (cost_time_us > WARN_THRESHOLD_TIME_US
+      || (handled_size_ > 0 && speed <= WARN_THRESHOLD_SPEED_MB_S)) {
+    _STORAGE_LOG_RET(WARN, ob_errcode_,
+        "access object storage cost too much time: %s (%s:%ld), "
+        "uri=%.*s, size=%ld byte, start_time=%ld, cost_ts=%ld us, speed=%.2f MB/s, is_slow=%d",
+        func_name_, file_name_, line_,
+        uri_.length(), uri_.ptr(), handled_size_, start_time_us_, cost_time_us, speed, is_slow);
+  }
+}
+
+ObObjectStorageGuard::~ObObjectStorageGuard()
+{
+  print_access_storage_log_();
+  try_refresh_device_credential(ob_errcode_, storage_info_);
   lib::ObMallocHookAttrGuard::~ObMallocHookAttrGuard();
 }
 

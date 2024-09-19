@@ -1080,17 +1080,17 @@ int ObMySQLPreparedStatement::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFie
   return ret;
 }
 
-int ObMySQLPreparedStatement::init(ObMySQLConnection &conn, const char *sql, int64_t param_count)
+int ObMySQLPreparedStatement::init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count)
 {
   int ret = OB_SUCCESS;
   conn_ = &conn;
-  if (OB_ISNULL(sql)) {
+  if (sql.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sql", KP(sql), K(ret));
+    LOG_WARN("invalid sql", K(sql), K(ret));
   } else if (OB_ISNULL(stmt_ = mysql_stmt_init(conn_->get_handler()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to init stmt", K(ret));
-  } else if (0 != mysql_stmt_prepare(stmt_, sql, STRLEN(sql))) {
+  } else if (0 != mysql_stmt_prepare(stmt_, sql.ptr(), sql.length())) {
     ret = -mysql_errno(conn_->get_handler());
     LOG_WARN("fail to prepare stmt", "info", mysql_error(conn_->get_handler()), K(ret));
   } else if (OB_FAIL(param_.init())) {
@@ -2076,8 +2076,8 @@ int ObMySQLProcStatement::process_proc_output_params(ObIAllocator &allocator,
         if (OB_SUCC(ret)) {
           out_param->assign(*in_param);
           mysql_bind[idx_in_result].buffer_type = out_param->buffer_type_;
-          mysql_bind[idx_in_result].buffer = out_param->buffer_;
-          mysql_bind[idx_in_result].buffer_length = out_param->buffer_len_;
+          mysql_bind[idx_in_result].buffer = NULL;
+          mysql_bind[idx_in_result].buffer_length = 0;
           mysql_bind[idx_in_result].length = &out_param->length_;
           mysql_bind[idx_in_result].error = &mysql_bind[i].error_value;
           mysql_bind[idx_in_result].is_null = &out_param->is_null_;
@@ -2090,8 +2090,11 @@ int ObMySQLProcStatement::process_proc_output_params(ObIAllocator &allocator,
               tmp_buf_len = sizeof(float);
             } else if (MYSQL_TYPE_DOUBLE ==  out_param->buffer_type_) {
               tmp_buf_len = sizeof(double);
-            } else if (MYSQL_TYPE_LONG == out_param->buffer_type_) {
+            } else if (MYSQL_TYPE_LONG == out_param->buffer_type_
+                       || MYSQL_TYPE_LONGLONG == out_param->buffer_type_) {
               tmp_buf_len = sizeof(int64_t);
+            } else if (MYSQL_TYPE_TINY == out_param->buffer_type_) {
+              tmp_buf_len = sizeof(int);
             }
             if (tmp_buf_len > 0) {
               if (OB_ISNULL(tmp_buf = allocator.alloc(tmp_buf_len))) {
@@ -2414,15 +2417,23 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed alloc memory for collection data", K(ret), K(array_size));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < array_size; ++i) {
+        int64_t i = 0;
+        for (; OB_SUCC(ret) && i < array_size; ++i) {
           ObObj *current_obj = new_data + i;
           OX (current_obj->set_meta_type(coll->get_element_desc().get_meta_type()));
           OZ (process_array_element(i, *local_allocator, pl_array->buffer, *current_obj, tz_info));
         }
-        OX (coll->set_data(new_data));
-        OX (coll->set_count(array_size));
-        OX (coll->set_first(1));
-        OX (coll->set_last(array_size));
+        if (OB_SUCC(ret)) {
+          coll->set_data(new_data);
+          coll->set_count(array_size);
+          coll->set_first(1);
+          coll->set_last(array_size);
+        } else if (NULL != new_data) {
+          for (int64_t j = 0; j < i; j++) {
+            pl::ObUserDefinedType::destruct_objparam(*local_allocator, new_data[j]);
+          }
+          local_allocator->free(new_data);
+        }
       }
     }
   } else if (pl::PL_RECORD_TYPE == coll->get_element_desc().get_pl_type()) {
@@ -2453,7 +2464,8 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed alloc memory for collection data", K(ret), K(array_size));
         } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < array_size; i++) {
+          int64_t i = 0;
+          for (; OB_SUCC(ret) && i < array_size; i++) {
             ObObj *current_obj = new_data + i;
             int64_t element_cnt = record_type->get_record_member_count();
             int64_t init_size = pl::ObRecordType::get_init_size(element_cnt);
@@ -2483,11 +2495,18 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
               } // end for
             }
             OX (current_obj->set_extend(reinterpret_cast<int64_t>(ptr), pl::PL_RECORD_TYPE, init_size));
-            OX (coll->set_data(new_data));
-            OX (coll->set_count(array_size));
-            OX (coll->set_first(1));
-            OX (coll->set_last(array_size));
           } // end for array_size
+          if (OB_SUCC(ret)) {
+            coll->set_data(new_data);
+            coll->set_count(array_size);
+            coll->set_first(1);
+            coll->set_last(array_size);
+          } else if (NULL != new_data) {
+            for (int64_t j = 0; j < i; j++) {
+              pl::ObUserDefinedType::destruct_objparam(*local_allocator, new_data[j]);
+            }
+            local_allocator->free(new_data);
+          }
         }
       }
     }
@@ -2740,7 +2759,7 @@ int ObMySQLProcStatement::store_string_obj(ObObj &param,
 }
 
 int ObMySQLProcStatement::init(ObMySQLConnection &conn,
-                               const char *sql,
+                               const ObString &sql,
                                int64_t param_count)
 {
   int ret = OB_SUCCESS;
@@ -2753,9 +2772,10 @@ int ObMySQLProcStatement::init(ObMySQLConnection &conn,
   com_datas_.reset();
   out_param_start_pos_ = 0;
   out_param_cur_pos_ = 0;
-  if (OB_ISNULL(proc_ = sql)) {
+  proc_ = sql;
+  if (OB_ISNULL(proc_.ptr())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sql", KCSTRING(sql), K(ret));
+    LOG_WARN("invalid sql", K(sql), K(ret));
   } else if (OB_ISNULL(conn_) || OB_ISNULL(conn_->get_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("conn_ is NULL", K(ret));
@@ -2765,7 +2785,7 @@ int ObMySQLProcStatement::init(ObMySQLConnection &conn,
   } else if (OB_ISNULL(stmt_ = mysql_stmt_init(conn_->get_handler()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to init stmt", K(ret));
-  } else if (0 != mysql_stmt_prepare_v2(stmt_, sql, STRLEN(sql), &stmt_param_count_)) {
+  } else if (0 != mysql_stmt_prepare_v2(stmt_, sql.ptr(), sql.length(), &stmt_param_count_)) {
     ret = -mysql_errno(conn_->get_handler());
     LOG_WARN("fail to prepare stmt", "info", mysql_error(conn_->get_handler()), K(ret));
   } else if (OB_FAIL(param_.init())) {
@@ -2821,8 +2841,8 @@ int ObMySQLProcStatement::execute_proc()
 #else
   void* execute_extend_arg = NULL;
   MYSQL_RES *res = NULL;
-  uint64_t ps_stmt_checksum = ob_crc64(proc_, STRLEN(proc_));
-  LOG_INFO("execute v2 info", K(ret), K(ps_stmt_checksum), K(STRLEN(proc_)), K(proc_));
+  uint64_t ps_stmt_checksum = ob_crc64(proc_.ptr(), proc_.length());
+  LOG_INFO("execute v2 info", K(ret), K(ps_stmt_checksum), K(proc_.length()), K(proc_));
   if (OB_FAIL(execute_stmt_v2_interface())) {
     LOG_WARN("failed to execute PL", K(ret));
   } else if (OB_ISNULL(res = mysql_stmt_result_metadata(stmt_))) {
@@ -2977,7 +2997,7 @@ void ObMySQLProcStatement::free_resouce()
   param_.close();
   result_.close();
   in_out_map_.reset();
-  proc_ = NULL;
+  proc_.reset();
   out_param_start_pos_ = 0;
   out_param_cur_pos_ = 0;
   com_datas_.reset();
@@ -3005,10 +3025,10 @@ int ObMySQLProcStatement::execute_stmt_v2_interface()
   if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL", K(ret));
-  } else if (OB_ISNULL(proc_)) {
+  } else if (proc_.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proc_ is NULL", K(ret));
-  } else if (0 != mysql_stmt_execute_v2(stmt_, proc_, STRLEN(proc_), 1, 0, execute_extend_arg)) {
+    LOG_WARN("proc_ is emptt", K(ret));
+  } else if (0 != mysql_stmt_execute_v2(stmt_, proc_.ptr(), proc_.length(), 1, 0, execute_extend_arg)) {
     ret = -mysql_stmt_errno(stmt_);
     char errmsg[256] = {0};
     const char *srcmsg = mysql_stmt_error(stmt_);

@@ -2338,7 +2338,7 @@ int ObLogicalOperator::allocate_expr_post(ObAllocExprContext &ctx)
             LOG_TRACE("expr can be produced now", K(*expr), K(get_name()), K(id_));
           } else {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr can not be produced now", K(*expr), K(get_name()), K(id_));
+            LOG_WARN("expr can not be produced now", K(*expr), K(get_name()), K(id_), K(this));
           }
         } else { /*do nothing*/ }
 
@@ -3027,19 +3027,19 @@ int ObLogicalOperator::check_exchange_rescan(bool &need_rescan)
   return ret;
 }
 
-int ObLogicalOperator::check_has_exchange_below(bool &has_exchange) const
+int ObLogicalOperator::check_has_op_below(const log_op_def::ObLogOpType target_type, bool &has) const
 {
   int ret = OB_SUCCESS;
-  has_exchange = false;
-  if (LOG_EXCHANGE == get_type()) {
-    has_exchange = true;
+  has = false;
+  if (target_type == get_type()) {
+    has = true;
   } else {
     ObLogicalOperator *child_op = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && !has_exchange && i < get_num_of_child(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !has && i < get_num_of_child(); ++i) {
       if (OB_ISNULL(child_op = get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get_child(i) returns null", K(i), K(ret));
-      } else if (OB_FAIL(SMART_CALL(child_op->check_has_exchange_below(has_exchange)))) {
+      } else if (OB_FAIL(SMART_CALL(child_op->check_has_op_below(target_type, has)))) {
         LOG_WARN("failed to check if child operator has exchange below", KPC(child_op), K(ret));
       } else { /* Do nothing */ }
     }
@@ -4846,7 +4846,8 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   ObLogJoinFilter *join_filter_create = NULL;
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
   CK(LOG_JOIN == get_type());
-  DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
+  ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
+  DistAlgo join_dist_algo = join_op->get_join_distributed_method();
   for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
     filter_create = NULL;
     bool right_has_exchange = false;
@@ -4854,7 +4855,8 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
     const JoinFilterInfo &info = infos.at(i);
     ObLogTableScan *scan_op = NULL;
     ObLogicalOperator *node = NULL;
-    if (!info.need_partition_join_filter_) {
+    if (!info.need_partition_join_filter_ ||
+        (join_op->is_adaptive() && DIST_PARTITION_WISE == join_op->get_adaptive_dist_method())) {
       continue;
     } else if (OB_ISNULL(info.sharding_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -5217,22 +5219,6 @@ int ObLogicalOperator::find_shuffle_join_filter(bool &find) const
   return ret;
 }
 
-int ObLogicalOperator::has_window_function_below(bool &has_win_func) const
-{
-  int ret = OB_SUCCESS;
-  has_win_func = LOG_WINDOW_FUNCTION == get_type();
-  const ObLogicalOperator *child = NULL;
-  for (int64_t i = 0; !has_win_func && OB_SUCC(ret) && i < get_num_of_child(); i++) {
-    if (OB_ISNULL(child = get_child(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(child));
-    } else if (OB_FAIL(SMART_CALL(child->has_window_function_below(has_win_func)))) {
-      LOG_WARN("failed to check has window function below", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObLogicalOperator::get_pushdown_op(log_op_def::ObLogOpType op_type, const ObLogicalOperator *&op) const
 {
   int ret = OB_SUCCESS;
@@ -5406,14 +5392,11 @@ int ObLogicalOperator::pick_out_startup_filters()
 {
   int ret = OB_SUCCESS;
   ObLogPlan *plan = get_plan();
-  const ParamStore *params = NULL;
   ObOptimizerContext *opt_ctx = NULL;
   ObArray<ObRawExpr *> filter_exprs;
-  if (OB_ISNULL(plan)
-      || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())
-      || OB_ISNULL(params = opt_ctx->get_params())) {
+  if (OB_ISNULL(plan) || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("NULL pointer error", K(plan), K(opt_ctx), K(ret));
+      LOG_WARN("NULL pointer error", KP(plan), KP(opt_ctx), K(ret));
   } else if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
     LOG_WARN("assign filter exprs failed", K(ret));
   } else {
@@ -5508,11 +5491,12 @@ int ObLogicalOperator::check_use_child_ordering(bool &used, int64_t &inherit_chi
         LOG_SUBPLAN_SCAN == get_type() ||
         LOG_SUBPLAN_FILTER == get_type() ||
         LOG_MATERIAL == get_type() ||
+        LOG_STATISTICS_COLLECTOR == get_type() ||
         LOG_JOIN_FILTER == get_type() ||
         LOG_FOR_UPD == get_type() ||
         LOG_COUNT == get_type() ||
         LOG_LIMIT == get_type() ||
-        LOG_STAT_COLLECTOR == get_type() ||
+        LOG_PX_OBJECT_SAMPLE == get_type() ||
         LOG_OPTIMIZER_STATS_GATHERING == get_type() ||
         LOG_SELECT_INTO == get_type()) {
       used = false;

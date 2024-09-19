@@ -72,22 +72,27 @@ int ObExprDateDiff::eval_date_diff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   int ret = OB_SUCCESS;
   ObDatum *left = NULL;
   ObDatum *right = NULL;
-  int64_t date_left = 0;
-  int64_t date_right = 0;
+  int32_t date_left = 0;
+  int32_t date_right = 0;
   if (OB_FAIL(expr.args_[0]->eval(ctx, left))
       || OB_FAIL(expr.args_[1]->eval(ctx, right))) {
     LOG_WARN("fail to eval conv", K(ret), K(expr));
   } else if (left->is_null() || right->is_null()) {
     res_datum.set_null();
-  } else if (FALSE_IT(date_left = left->get_date())) {
-    // do nothing
-  } else if (FALSE_IT(date_right = right->get_date())) {
-    // do nothing
-  } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date_left ||
-                         ObTimeConverter::ZERO_DATE == date_right)) {
-    res_datum.set_null();
   } else {
-    res_datum.set_int(date_left - date_right);
+    if (ob_is_mysql_date_tc(expr.args_[0]->datum_meta_.type_)) {
+      date_left = ObTimeConverter::calc_date(left->get_mysql_date());
+      date_right = ObTimeConverter::calc_date(right->get_mysql_date());
+    } else {
+      date_left = left->get_date();
+      date_right = right->get_date();
+    }
+    if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date_left ||
+                      ObTimeConverter::ZERO_DATE == date_right)) {
+      res_datum.set_null();
+    } else {
+      res_datum.set_int(date_left - date_right);
+    }
   }
 
   return ret;

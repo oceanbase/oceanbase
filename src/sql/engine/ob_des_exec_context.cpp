@@ -56,7 +56,6 @@ void ObDesExecContext::cleanup_session()
       GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
     }
   }
-  ObActiveSessionGuard::setup_default_ash(); // enforce cleanup for future RPC cases
 }
 
 void ObDesExecContext::show_session()

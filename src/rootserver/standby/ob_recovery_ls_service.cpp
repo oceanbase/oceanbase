@@ -282,6 +282,8 @@ int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn,
   }
   if (FAILEDx(palf_handle_guard.seek(start_lsn, iterator))) {
     LOG_WARN("failed to seek iterator", KR(ret), K(sync_scn), K(start_lsn));
+  } else if (OB_FAIL(iterator.set_io_context(palf::LogIOContext(palf::LogIOUser::OTHER)))) {
+    LOG_WARN("failed to set_io_context", KR(ret));
   }
   return ret;
 }

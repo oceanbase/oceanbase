@@ -2698,6 +2698,41 @@ int ObSysVarOnCheckFuncs::check_and_convert_version(sql::ObExecContext &ctx,
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_and_convert_block_encryption_mode(sql::ObExecContext &ctx,
+                                                                  const ObSetVar &set_var,
+                                                                  const ObBasicSysVar &sys_var,
+                                                                  const common::ObObj &in_val,
+                                                                  common::ObObj &out_val)
+{
+  int ret = OB_SUCCESS;
+  if (set_var.is_set_default_ || in_val.is_null()) {
+    /* do nothing */
+  } else if (ObIntType == in_val.get_type()) {
+#ifndef OB_USE_BABASSL
+    int64_t op_mode = in_val.get_int();
+    if (op_mode >= 18) {
+      SMART_VAR(char[OB_MAX_SQL_LENGTH], val_str_buf) {
+        int64_t pos = 0;
+        int log_ret = in_val.print_plain_str_literal(val_str_buf, OB_MAX_SQL_LENGTH, pos);
+        if (OB_SUCCESS != log_ret) {
+          LOG_WARN("fail to print_plain_str_literal", K(log_ret), K(OB_MAX_SQL_LENGTH), K(pos), K(lbt()));
+        } else {
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+                         sys_var.get_name().length(), sys_var.get_name().ptr(),
+                         static_cast<int>(pos), val_str_buf);
+        }
+      }
+      ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+      LOG_WARN("in opensource mode, we can use aes-128-ecb ~ aes-256-ofb only");
+    }
+#endif
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", K(ret), K(in_val));
+  }
+  return ret;
+}
+
 int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
                                                const ObSetVar &set_var,
                                                const ObBasicSysVar &sys_var,

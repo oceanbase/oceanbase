@@ -842,7 +842,7 @@ int ObMultipleMerge::open()
     if (OB_SUCC(ret)) {
       access_ctx_->block_row_store_ = block_row_store_;
       ObMultipleMerge::reuse();
-      if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->open())) {
+      if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->open(access_param_->iter_param_))) {
         LOG_WARN("fail to open block_row_store", K(ret));
       } else if (nullptr != iter_pool_ && 0 != iters_.count()) {
         ret = OB_ERR_UNEXPECTED;

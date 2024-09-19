@@ -46,6 +46,7 @@ namespace storage
 class ObLsmtTransNode;
 class ObFreezer;
 class ObExtInfoCallback;
+class ObExtInfoLogHeader;
 }
 
 using namespace transaction::tablelock;
@@ -186,12 +187,14 @@ public:
       ObMemCtxLockOpLinkNode *lock_op,
       const share::SCN scn);
   int register_ext_info_commit_cb(
+      storage::ObStoreCtx &store_ctx,
       const int64_t timeout,
       const blocksstable::ObDmlFlag dml_flag,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxSEQ &parent_seq_no,
       ObObj &index_data,
-      ObObj &ext_info_data);
+      ObObj &ext_info_data,
+      const transaction::ObTxReadSnapshot &snapshot,
+      const ObExtInfoLogHeader &header,
+      const ObTabletID &tabelt_id);
   virtual void inc_pending_log_size(const int64_t size) = 0;
 public:
   virtual void reset()
@@ -214,19 +217,18 @@ public:
         "alloc_type=%d "
         "ctx_descriptor=%u "
         "min_table_version=%ld "
-        "max_table_version=%ld "
-        "trans_version=%s "
-        "commit_version=%s "
-        "lock_wait_start_ts=%ld "
-        "replay_compact_version=%s}",
+        "max_table_version=%ld trans_version=",
         alloc_type_,
         ctx_descriptor_,
         min_table_version_,
-        max_table_version_,
-        to_cstring(trans_version_),
-        to_cstring(commit_version_),
-        lock_wait_start_ts_,
-        to_cstring(replay_compact_version_));
+        max_table_version_);
+    common::databuff_printf(buf, buf_len, pos, trans_version_);
+    common::databuff_printf(buf, buf_len, pos, " commit_version=");
+    common::databuff_printf(buf, buf_len, pos, commit_version_);
+    common::databuff_printf(buf, buf_len, pos, " lock_wait_start_ts=%ld replay_compact_version=",
+        lock_wait_start_ts_);
+    common::databuff_printf(buf, buf_len, pos, replay_compact_version_);
+    common::databuff_printf(buf, buf_len, pos, "}");
     return pos;
   }
 public:
@@ -265,7 +267,8 @@ public:
       memtable_(NULL),
       write_ret_(NULL),
       try_flush_redo_(true),
-      write_seq_no_()
+      write_seq_no_(),
+      is_lob_ext_info_log_(false)
   {}
   ObMvccWriteGuard(const int &ret, const bool exclusive = false)
     : ObMvccWriteGuard(exclusive)
@@ -276,6 +279,8 @@ public:
   void set_memtable(ObMemtable *memtable) {
     memtable_ = memtable;
   }
+
+  void set_is_lob_ext_info_log(const bool val) { is_lob_ext_info_log_ = val; }
   /*
    * purpose of ensure replica writable
    *
@@ -293,6 +298,7 @@ private:
   const int *write_ret_;  // used to sense write result is ok or fail
   bool try_flush_redo_;
   transaction::ObTxSEQ write_seq_no_;
+  bool is_lob_ext_info_log_;
 };
 }
 }

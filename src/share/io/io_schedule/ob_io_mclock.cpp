@@ -52,11 +52,16 @@ int ObMClock::init(const int64_t min_iops, const int64_t max_iops, const int64_t
     limitation_clock_.iops_ = max_iops;
     limitation_clock_.last_ns_ = 0;
     proportion_clock_.iops_ = weight;
-    proportion_clock_.last_ns_ = proportion_ts * 1000L;
+    if (0 == proportion_ts) {
+      proportion_clock_.last_ns_ = ObTimeUtility::fast_current_time() * 1000L;
+    } else {
+      proportion_clock_.last_ns_ = proportion_ts * 1000L;
+    }
     is_unlimited_ = false;
     is_stopped_ = false;
     is_inited_ = true;
   }
+  LOG_INFO("mclock init", K(ret), K(min_iops), K(max_iops), K(weight), K(proportion_ts), K(*this));
   return ret;
 }
 
@@ -75,6 +80,7 @@ int ObMClock::update(const int64_t min_iops, const int64_t max_iops, const int64
     proportion_clock_.iops_ = weight;
     proportion_clock_.last_ns_ = max(proportion_clock_.last_ns_, proportion_ts * 1000L);
   }
+  LOG_INFO("mclock update", K(ret), K(*this), K(min_iops), K(max_iops), K(weight), K(proportion_ts));
   return ret;
 }
 
@@ -138,7 +144,7 @@ int ObMClock::calc_phy_clock(const int64_t current_ts, const double iops_scale, 
   } else {
     reservation_clock_.atom_update(current_ts, iops_scale, phy_queue->reservation_ts_);
     limitation_clock_.atom_update(current_ts, iops_scale, phy_queue->group_limitation_ts_);
-    proportion_clock_.atom_update(current_ts, iops_scale * weight_scale, phy_queue->proportion_ts_);
+    proportion_clock_.atom_update(current_ts, iops_scale * weight_scale / 100, phy_queue->proportion_ts_);
   }
   return ret;
 }
@@ -175,9 +181,24 @@ int ObMClock::dial_back_proportion_clock(const int64_t delta_us)
   return ret;
 }
 
+int ObMClock::sync_proportion_clock(const int64_t clock_ns)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(clock_ns <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(clock_ns));
+  } else {
+    ATOMIC_STORE(&proportion_clock_.last_ns_, clock_ns);
+  }
+  return ret;
+}
+
 int64_t ObMClock::get_proportion_ts() const
 {
-  return 0 == proportion_clock_.last_ns_ ? INT64_MAX : proportion_clock_.last_ns_;
+  return 0 == proportion_clock_.last_ns_ ? INT64_MAX : (proportion_clock_.last_ns_ / 1000);
 }
 /******************             TenantIOClock              **********************/
 ObTenantIOClock::ObTenantIOClock()
@@ -302,7 +323,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIOReques
         phy_queue->group_limitation_ts_ = current_ts;
         phy_queue->tenant_limitation_ts_ = current_ts;
         phy_queue->proportion_ts_ = current_ts;
-      } else if (OB_FAIL(mclock.calc_phy_clock(current_ts, iops_scale, weight_scale, phy_queue))) {
+      } else if (OB_FAIL(mclock.calc_phy_clock(current_ts - PHY_QUEUE_BURST_USEC, iops_scale, weight_scale, phy_queue))) {
         LOG_WARN("calculate clock of the request failed", K(ret), K(mclock), K(weight_scale));
       } else {
         // ensure not exceed max iops of the tenant
@@ -342,18 +363,37 @@ int ObTenantIOClock::sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks)
 int ObTenantIOClock::sync_tenant_clock(ObTenantIOClock *io_clock)
 {
   int ret = OB_SUCCESS;
-  int64_t min_proportion_ts = INT64_MAX;
+  int64_t max_proportion_ts = 0;
   if (OB_ISNULL(io_clock)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("io clock is null", K(ret));
   } else {
-    min_proportion_ts = min(min_proportion_ts, io_clock->get_min_proportion_ts());
-  }
-  const int64_t delta_tenant_us = min_proportion_ts - ObTimeUtility::fast_current_time();
-  if (OB_SUCC(ret) && INT64_MAX != min_proportion_ts && delta_tenant_us > 0) {
-    if (OB_FAIL(io_clock->adjust_proportion_clock(delta_tenant_us))) {
-      LOG_WARN("dial back proportion clock failed", K(delta_tenant_us));
+    max_proportion_ts = io_clock->get_max_proportion_ts();
+    if (INT64_MAX != max_proportion_ts && max_proportion_ts > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < group_clocks_.count(); ++i) {
+        if (group_clocks_.at(i).is_valid() && !group_clocks_.at(i).is_stop()) {
+          group_clocks_.at(i).sync_proportion_clock(max_proportion_ts);
+        }
+      }
+      if (other_group_clock_.is_valid() && !other_group_clock_.is_stop()) {
+        other_group_clock_.sync_proportion_clock(max_proportion_ts);
+      }
     }
+  }
+  return ret;
+}
+
+int ObTenantIOClock::try_sync_tenant_clock(ObTenantIOClock *io_clock)
+{
+  int ret = OB_SUCCESS;
+  bool need_sync = false;
+  const int64_t cur_ts = ObTimeUtility::fast_current_time();
+  const int64_t old_ts = last_sync_clock_ts_;
+  if (cur_ts - old_ts >= MAX_IDLE_TIME_US) {
+    need_sync = ATOMIC_BCAS(&last_sync_clock_ts_, old_ts, cur_ts);
+  }
+  if (need_sync) {
+    ret = sync_tenant_clock(io_clock);
   }
   return ret;
 }
@@ -451,7 +491,7 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
       LOG_WARN("update other group io clock failed", K(ret), K(index), K(other_group_clock_));
     } else {
       other_group_clock_.start();
-      LOG_INFO("update other group clock success", K(index), K(unit_config), K(cur_config));
+      LOG_INFO("update other group clock success", K(index), K(unit_config), K(cur_config), K(min_proportion_ts));
     }
   } else if (index < group_clocks_.count()) {
     // 2. update exist clocks
@@ -469,13 +509,13 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
                                                       calc_iops(unit_config.max_iops_, cur_config.max_percent_),
                                                       calc_weight(unit_config.weight_, cur_config.weight_percent_),
                                                       min_proportion_ts))) {
-      LOG_WARN("update group io clock failed", K(ret), K(index), K(unit_config), K(cur_config));
+      LOG_WARN("update group io clock failed", K(ret), K(index), K(unit_config), K(cur_config), K(min_proportion_ts));
     } else {
       group_clocks_.at(index).start();
       if (!is_unlimited_config(group_clocks_.at(index), cur_config)) {
         group_clocks_.at(index).set_limited();
       }
-      LOG_INFO("update group clock success", K(index), K(unit_config), K(cur_config));
+      LOG_INFO("update group clock success", K(index), K(unit_config), K(cur_config), K(min_proportion_ts));
     }
   } else {
     // 3. add new clocks
@@ -509,6 +549,20 @@ int64_t ObTenantIOClock::get_min_proportion_ts()
     min_proportion_ts = min(min_proportion_ts, other_group_clock_.get_proportion_ts());
   }
   return min_proportion_ts;
+}
+
+int64_t ObTenantIOClock::get_max_proportion_ts()
+{
+  int64_t max_proportion_ts = 0;
+  for (int64_t i = 0; i < group_clocks_.count(); ++i) {
+    if (group_clocks_.at(i).is_valid()) {
+      max_proportion_ts = max(max_proportion_ts, group_clocks_.at(i).get_proportion_ts());
+    }
+  }
+  if (other_group_clock_.is_valid()) {
+    max_proportion_ts = max(max_proportion_ts, other_group_clock_.get_proportion_ts());
+  }
+  return max_proportion_ts;
 }
 
 ObMClock &ObTenantIOClock::get_mclock(const int64_t queue_index)
@@ -550,7 +604,7 @@ int64_t ObTenantIOClock::calc_iops(const int64_t iops, const int64_t percentage)
 
 int64_t ObTenantIOClock::calc_weight(const int64_t weight, const int64_t percentage)
 {
-  return static_cast<int64_t>(static_cast<double>(weight) * percentage / 100);
+  return static_cast<int64_t>(static_cast<double>(weight) * percentage);
 }
 
 

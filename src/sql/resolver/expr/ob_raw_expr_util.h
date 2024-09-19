@@ -375,7 +375,8 @@ public:
                             bool is_prepare_protocol/*= false*/,
                             TgTimingEvent tg_timing_event = TgTimingEvent::TG_TIMING_EVENT_INVALID,
                             bool use_def_collation = false,
-                            ObCollationType def_collation = CS_TYPE_INVALID);
+                            ObCollationType def_collation = CS_TYPE_INVALID,
+                            bool for_cdc_resolve_generated_col = false);
   static bool is_same_raw_expr(const ObRawExpr *src, const ObRawExpr *dst);
   /// replace all `from' to `to' in the raw_expr
   static int replace_all_ref_column(ObRawExpr *&raw_expr, const common::ObIArray<ObRawExpr *> &exprs, int64_t& offset);
@@ -581,7 +582,6 @@ public:
                              ObRawExpr *&expr,
                              const ObLocalSessionVar *local_vars = NULL,
                              int64_t local_var_id = OB_INVALID_INDEX_INT64);
-  static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
                             const share::schema::ObColumnSchemaV2 *column_schema,
@@ -589,7 +589,9 @@ public:
                             const sql::ObSQLSessionInfo *session_info,
                             const ObLocalSessionVar *local_vars = NULL,
                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
-  static bool need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr);
+  static bool need_column_conv(const ObExprResType &expected_type,
+                               const ObRawExpr &expr,
+                               bool strict_type_check);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
                                     const share::schema::ObColumnSchemaV2 *column_schema,
@@ -646,6 +648,12 @@ public:
   static int build_const_date_expr(ObRawExprFactory &expr_factory,
                                    int64_t int_value,
                                    ObConstRawExpr *&expr);
+  static int build_const_mysql_datetime_expr(ObRawExprFactory &expr_factory,
+                                             int64_t int_value,
+                                              ObConstRawExpr *&expr);
+  static int build_const_mysql_date_expr(ObRawExprFactory &expr_factory,
+                                         int64_t int_value,
+                                         ObConstRawExpr *&expr);
   static int build_const_ym_expr(ObRawExprFactory &expr_factory,
                                  common::ObObjType type,
                                  const ObObj &obj,
@@ -1162,7 +1170,7 @@ public:
                                         ObDMLStmt *stmt
                                         );
 
-  static int extract_params(common::ObIArray<ObRawExpr*> &exprs,
+  static int extract_params(const common::ObIArray<ObRawExpr*> &exprs,
                             common::ObIArray<ObRawExpr*> &params);
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
@@ -1208,6 +1216,16 @@ public:
                                            const ObSQLMode sql_mode,
                                            ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
+  /*
+    in mysql mode: ret left_expr <=> right_expr
+    in oracle mode: ret (left_expr = right_expr) or (left_expr is null and right_expr is null)
+  */
+  static int create_null_safe_equal_expr(ObRawExprFactory &expr_factory,
+                                         const ObSQLSessionInfo *session_info,
+                                         const bool is_mysql_mode,
+                                         ObRawExpr *left_expr,
+                                         ObRawExpr *right_expr,
+                                         ObRawExpr *&expr);
 private:
   static int need_extra_cast_for_enumset(const ObExprResType &src_type,
                                          const ObExprResType &dst_type,
@@ -1215,7 +1233,6 @@ private:
                                          ObExprResType &extra_type,
                                          bool &need_extra_cast);
 
-private :
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,
                               ObRawExpr *src_expr,
                               const ObExprResType &dst_type,

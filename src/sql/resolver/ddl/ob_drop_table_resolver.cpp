@@ -180,7 +180,9 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                                 K(table_name), K(ret));
                 } else if (!is_exists) {
                   ret = OB_TABLE_NOT_EXIST;
-                  LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
+                  ObCStringHelper helper;
+                  LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name),
+                      helper.convert(table_name));
                 } else {
                   uint64_t db_id = OB_INVALID_ID;
                   const share::schema::ObSimpleTableSchemaV2 *table_view_schema = NULL;
@@ -197,8 +199,9 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                               || (T_DROP_VIEW == parse_tree.type_
                                   && !table_view_schema->is_view_table())) {
                     ret = OB_TABLE_NOT_EXIST;
-                    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
-                        to_cstring(table_name));
+                    ObCStringHelper helper;
+                    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name),
+                        helper.convert(table_name));
                   } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
                                 tenant_id,
                                 session_info_->get_priv_user_id(),
@@ -211,8 +214,9 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                                 stmt::T_DROP_TABLE : stmt::T_DROP_VIEW,
                                 session_info_->get_enable_role_array()))) {
                     if (OB_TABLE_NOT_EXIST == ret) {
-                      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
-                          to_cstring(table_name));
+                      ObCStringHelper helper;
+                      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name),
+                          helper.convert(table_name));
                     }
                     SQL_RESV_LOG(WARN, "failed to check ora ddl priv",
                                   K(db_name), K(parse_tree.type_),

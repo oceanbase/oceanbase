@@ -16,7 +16,7 @@ set_target_properties(rocksdb PROPERTIES
 add_library(obcdc_base INTERFACE)
 target_include_directories(obcdc_base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(obcdc_base
-  INTERFACE ob_base
+  INTERFACE -Wl,--whole-archive mock_di -Wl,--no-whole-archive ob_base
   obcdc_msg rocksdb
   ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 

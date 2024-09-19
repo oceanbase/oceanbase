@@ -63,7 +63,7 @@ int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
 }
 int ObSyncRespCallback::wait(const int64_t wait_timeout_us, const int64_t pcode, const int64_t req_sz)
 {
-  ObBaseWaitEventGuard<ObWaitEventIds::SYNC_RPC> wait_guard(wait_timeout_us / 1000, pcode, req_sz);
+  ObWaitEventGuard wait_guard(ObWaitEventIds::SYNC_RPC, wait_timeout_us / 1000, pcode, req_sz);
   const struct timespec ts = {1, 0};
   bool has_terminated = false;
   while(ATOMIC_LOAD(&cond_) == 0) {

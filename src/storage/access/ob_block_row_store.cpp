@@ -229,16 +229,20 @@ int ObBlockRowStore::get_result_bitmap(const common::ObBitmap *&bitmap)
   return ret;
 }
 
-int ObBlockRowStore::open()
+int ObBlockRowStore::open(ObTableIterParam &iter_param)
 {
   int ret = OB_SUCCESS;
+  bool filter_valid = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret));
   } else if (nullptr == pd_filter_info_.filter_) {
     // nothing to do
-  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums())) {
+  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(filter_valid))) {
     LOG_WARN("Failed to init pushdown filter evaluated datums", K(ret));
+  } else if (OB_UNLIKELY(!filter_valid)) {
+    iter_param.disable_pd_filter();
+    pd_filter_info_.is_pd_filter_ = false;
   }
   return ret;
 }

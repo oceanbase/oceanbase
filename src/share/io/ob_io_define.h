@@ -41,7 +41,17 @@ enum class ObIOMode : uint8_t
   MAX_MODE
 };
 
+enum class ObIOGroupMode : uint8_t
+{
+  LOCALREAD = 0,
+  LOCALWRITE = 1,
+  MODECNT
+};
+
+
 const char *get_io_mode_string(const ObIOMode mode);
+const char *get_io_mode_string(const ObIOGroupMode group_mode);
+
 ObIOMode get_io_mode_enum(const char *mode_string);
 
 enum ObIOModule {
@@ -67,7 +77,7 @@ enum ObIOModule {
   HA_MACRO_BLOCK_WRITER_IO,
   TMP_TENANT_MEM_BLOCK_IO,
   SSTABLE_MACRO_BLOCK_WRITE_IO,
-
+  CLOG_IO,
   // end
   SYS_MODULE_END_ID
 };
@@ -84,6 +94,7 @@ public:
   ObIOFlag &operator=(const ObIOFlag &other)
   {
     this->flag_ = other.flag_;
+    this->func_type_ = other.func_type_;
     this->group_id_ = other.group_id_;
     this->sys_module_id_ = other.sys_module_id_;
     return *this;
@@ -98,6 +109,8 @@ public:
   void set_sys_module_id(const uint64_t sys_module_id);
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
+  void set_func_type(const uint8_t func_type);
+  uint8_t get_func_type() const;
   int64_t get_wait_event() const;
   void set_read();
   bool is_read() const;
@@ -113,7 +126,7 @@ public:
   bool is_detect() const;
   bool is_time_detect() const;
   TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)),
-               K(group_id_), K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_), K(is_detect_), K(is_time_detect_));
+               K(group_id_), K(func_type_), K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_), K(is_detect_), K(is_time_detect_));
 private:
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
   static constexpr int64_t IO_WAIT_EVENT_BIT = 32; // for performance monitor
@@ -141,6 +154,7 @@ private:
     };
   };
   uint64_t group_id_;
+  uint8_t func_type_;
   uint64_t sys_module_id_;
 };
 
@@ -263,6 +277,8 @@ public:
   const char *get_data(); //get data buf after io_buf recycle
   const ObIOFlag &get_flag() const;
   ObIOMode get_mode() const;
+  ObIOGroupMode get_group_mode() const;
+  int cal_delay_us(int64_t &prepare_delay, int64_t &schedule_delay, int64_t &submit_delay, int64_t &device_delay, int64_t &total_delay);
   uint64_t get_tenant_id() const;
   void cancel();
   int alloc_io_buf();
@@ -360,7 +376,7 @@ public:
   int get_fs_errno(int &io_errno) const;
   void reset();
   void cancel();
-  TO_STRING_KV("io_request", to_cstring(req_));
+  TO_STRING_KV("io_request", req_);
 private:
   void estimate();
 
@@ -470,6 +486,8 @@ private:
              (left->*list).get_size() != (right->*list).get_size() ? (left->*list).get_size() < (right->*list).get_size() : (int64_t)left > (int64_t)right;
     }
   };
+private:
+  static const int64_t POP_MORE_PHY_QUEUE_USEC = 1000;
 private:
   bool is_inited_;
   HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_, &ObPhyQueue::req_list_> r_cmp_;

@@ -1470,7 +1470,7 @@ Query Plan
 =============================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c1 + 1 * 2], [t1.c2 - 1 * 3]), filter(nil), rowset=16
+  0 - output([t1.c1], [t1.c2], [t1.c1 + 1 * 2], [t1.c2 + -1 * 3]), filter(nil), rowset=16
       conds([t1.c1 < t1.c1 + 1 * 2]), nl_params_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)

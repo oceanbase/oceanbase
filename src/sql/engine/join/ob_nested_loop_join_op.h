@@ -124,6 +124,7 @@ public:
 
   int get_next_batch_from_right(const ObBatchRows *right_brs);
   int get_next_row_from_right();
+  virtual int process_after_set_passed() override;
 private:
   // state operation and transfer function type.
   typedef int (ObNestedLoopJoinOp::*state_operation_func_type)();

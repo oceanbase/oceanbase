@@ -210,8 +210,15 @@ int ObIOAbility::get_iops(const ObIOMode mode, const int64_t size, double &iops)
       iops = found_item.iops_;
     } else {
       const ObIOBenchResult &prev_item = measure_items_[static_cast<int>(mode)].at(found_item_idx - 1);
-      const double avg_bandwidth = (prev_item.iops_ * prev_item.size_ + found_item.iops_ * found_item.size_) / 2.0;
-      iops = avg_bandwidth / (double)size;
+      const int64_t step_iops = found_item.iops_ - prev_item.iops_;
+      const int64_t step_size = found_item.size_ - prev_item.size_;
+      if (0 == step_size) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected io ability", K(ret), K(prev_item), K(found_item));
+      } else {
+        iops = prev_item.iops_ + step_iops * (((size - prev_item.size_) * 1.0) / step_size);
+        LOG_DEBUG("get iops", K(iops), K(prev_item), K(found_item));
+      }
     }
   }
   return ret;
@@ -628,6 +635,7 @@ int ObIOCalibration::update_io_ability(const ObIOAbility &io_ability)
       baseline_iops_ = tmp_baseline_iops;
     }
   }
+  LOG_INFO("update io ability", K(ret), K(io_ability), K(baseline_iops_));
   return ret;
 }
 
@@ -662,6 +670,7 @@ int ObIOCalibration::get_io_ability(ObIOAbility &io_ability)
 int ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, double &iops_scale, bool &is_io_ability_valid)
 {
   int ret = OB_SUCCESS;
+  double iops = 0;
   iops_scale = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -674,7 +683,6 @@ int ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, dou
       ret = OB_ERR_UNEXPECTED;
       is_io_ability_valid = false;
     } else {
-      double iops = 0;
       if (OB_FAIL(io_ability_.get_iops(mode, size, iops))) {
         LOG_WARN("get iops failed", K(ret), K(mode), K(size));
       } else {
@@ -685,6 +693,7 @@ int ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, dou
   if (OB_FAIL(ret)) {
     iops_scale = 1.0 * BASELINE_IO_SIZE / size; // assume fixed bandwidth
   }
+  LOG_DEBUG("get iops scale", K(ret), K(mode), K(size), K(iops), K(baseline_iops_));
   return OB_SUCCESS; // always success
 }
 

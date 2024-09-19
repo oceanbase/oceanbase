@@ -48,11 +48,12 @@
 #include "ob_log_temp_table_transformation.h"
 #include "ob_log_insert_all.h"
 #include "ob_log_err_log.h"
-#include "ob_log_stat_collector.h"
+#include "ob_log_px_object_sample.h"
 #include "ob_del_upd_log_plan.h"
 #include "ob_log_link_dml.h"
 #include "ob_log_optimizer_stats_gathering.h"
 #include "ob_log_values_table_access.h"
+#include "ob_log_statistics_collector.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::log_op_def;
@@ -345,10 +346,10 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     }
     break;
   }
-  case LOG_STAT_COLLECTOR: {
-    ptr = allocator_.alloc(sizeof(ObLogStatCollector));
+  case LOG_PX_OBJECT_SAMPLE: {
+    ptr = allocator_.alloc(sizeof(ObLogPxObjectSample));
     if (NULL != ptr) {
-      ret_op = new (ptr) ObLogStatCollector(plan);
+      ret_op = new (ptr) ObLogPxObjectSample(plan);
     }
     break;
   }
@@ -364,6 +365,13 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     if (NULL != ptr) {
       ret_op = new (ptr) ObLogValuesTableAccess(plan);
     } else { /* do nothing */ }
+    break;
+  }
+  case LOG_STATISTICS_COLLECTOR: {
+    ptr = allocator_.alloc(sizeof(ObLogStatisticsCollector));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogStatisticsCollector(plan);
+    }
     break;
   }
   default: {

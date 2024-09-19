@@ -103,9 +103,10 @@ TEST_F(ObTableInsertTest, test_operator_serialize)
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, create_expr_values(dec_values));
   ASSERT_EQ(OB_SUCCESS, dec_values->deserialize(buf, data_len, pos));
-  _OB_LOG(INFO, "expr_values: %s", to_cstring(*expr_values));
-  _OB_LOG(INFO, "dec_values: %s", to_cstring(*dec_values));
-  ASSERT_EQ(0, strcmp(to_cstring(*expr_values), to_cstring(*dec_values)));
+  ObCStringHelper helper;
+  _OB_LOG(INFO, "expr_values: %s", helper.convert(*expr_values));
+  _OB_LOG(INFO, "dec_values: %s", helper.convert(*dec_values));
+  ASSERT_EQ(0, strcmp(helper.convert(*expr_values), helper.convert(*dec_values)));
 
   int ret = OB_SUCCESS;
   uint64_t app_column_id = 16;
@@ -128,9 +129,9 @@ TEST_F(ObTableInsertTest, test_operator_serialize)
   ASSERT_EQ(OB_SUCCESS, physical_plan_.alloc_operator_by_type(PHY_INSERT, dec_insert));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, dec_insert->deserialize(buf, data_len, pos));
-  _OB_LOG(INFO, "table_insert: %s", to_cstring(*table_insert));
-  _OB_LOG(INFO, "dec_insert: %s", to_cstring(*dec_insert));
-  ASSERT_EQ(0, strcmp(to_cstring(*table_insert), to_cstring(*dec_insert)));
+  _OB_LOG(INFO, "table_insert: %s", helper.convert(*table_insert));
+  _OB_LOG(INFO, "dec_insert: %s", helper.convert(*dec_insert));
+  ASSERT_EQ(0, strcmp(helper.convert(*table_insert), helper.convert(*dec_insert)));
 }
 
 /*

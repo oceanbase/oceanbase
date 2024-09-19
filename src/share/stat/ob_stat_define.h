@@ -491,7 +491,11 @@ struct ObTableStatParam {
     async_gather_sample_size_(DEFAULT_ASYNC_SAMPLE_SIZE),
     async_full_table_size_(DEFAULT_ASYNC_FULL_TABLE_SIZE),
     async_partition_ids_(NULL),
-    hist_sample_info_()
+    hist_sample_info_(),
+    consumer_group_id_(0),
+    min_iops_(-1),
+    max_iops_(-1),
+    weight_iops_(-1)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -577,6 +581,10 @@ struct ObTableStatParam {
   int64_t async_full_table_size_;
   const ObIArray<int64_t> *async_partition_ids_;
   ObAnalyzeSampleInfo hist_sample_info_;
+  uint64_t consumer_group_id_;
+  int64_t min_iops_;
+  int64_t max_iops_;
+  int64_t weight_iops_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -624,7 +632,11 @@ struct ObTableStatParam {
                K(async_gather_sample_size_),
                K(async_full_table_size_),
                KPC(async_partition_ids_),
-               K(hist_sample_info_));
+               K(hist_sample_info_),
+               K(consumer_group_id_),
+               K(min_iops_),
+               K(max_iops_),
+               K(weight_iops_));
 };
 
 struct ObOptStatGatherParam {
@@ -654,7 +666,8 @@ struct ObOptStatGatherParam {
     is_async_gather_(false),
     async_gather_sample_size_(DEFAULT_ASYNC_SAMPLE_SIZE),
     async_full_table_size_(DEFAULT_ASYNC_FULL_TABLE_SIZE),
-    hist_sample_info_()
+    hist_sample_info_(),
+    consumer_group_id_(0)
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -684,6 +697,7 @@ struct ObOptStatGatherParam {
   int64_t async_gather_sample_size_;
   int64_t async_full_table_size_;
   ObAnalyzeSampleInfo hist_sample_info_;
+  int64_t consumer_group_id_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -708,7 +722,8 @@ struct ObOptStatGatherParam {
                K(is_async_gather_),
                K(async_gather_sample_size_),
                K(async_full_table_size_),
-               K(hist_sample_info_));
+               K(hist_sample_info_),
+               K(consumer_group_id_));
 };
 
 struct ObOptStat

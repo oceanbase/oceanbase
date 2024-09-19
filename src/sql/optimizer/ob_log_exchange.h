@@ -102,6 +102,7 @@ public:
   ObRepartitionType get_repartition_type() const {return repartition_type_;}
   int64_t get_repartition_ref_table_id() const {return repartition_ref_table_id_;}
   int64_t get_repartition_table_id() const {return repartition_table_id_;}
+  void set_repartition_table_id(uint64_t table_id) { repartition_table_id_ = table_id; }
   int64_t get_slice_count() const {return slice_count_; }
   bool is_repart_exchange() const { return OB_REPARTITION_NO_REPARTITION != repartition_type_; }
   bool is_pq_hash_dist() const { return ObPQDistributeMethod::HASH == dist_method_; }

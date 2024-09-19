@@ -2708,13 +2708,22 @@ void ObPrintTableStore::table_to_string(
       ? (static_cast<ObSSTable *>(table)->contain_uncommitted_row() ? "true" : "false")
       : "unused";
 
+    ObCStringHelper helper;
+    const char *start_scn_str = helper.convert(table->get_start_scn());
+    const char *end_scn_str = helper.convert(table->get_end_scn());
+    if (nullptr == start_scn_str) {
+      start_scn_str = "NULL";
+    }
+    if (nullptr == end_scn_str) {
+      end_scn_str = "NULL";
+    }
     BUF_PRINTF(" %-10s %-10s %-19lu %-19lu %-10s %-10s %-4ld %-16s ",
       table_arr,
       table_name,
       table->get_upper_trans_version(),
       table->get_max_merged_trans_version(),
-      to_cstring(table->get_start_scn()),
-      to_cstring(table->get_end_scn()),
+      start_scn_str,
+      end_scn_str,
       table->get_ref(),
       uncommit_row);
   }

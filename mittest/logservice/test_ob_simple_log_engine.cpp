@@ -32,6 +32,7 @@
 #include "logservice/palf/log_writer_utils.h"
 #include "logservice/palf_handle_guard.h"
 #undef private
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 
 const std::string TEST_NAME = "log_engine";
 
@@ -76,7 +77,10 @@ public:
     LogPlugins *plugins = log_engine_->plugins_;
     LogEngine log_engine;
     ILogBlockPool *log_block_pool = log_engine_->log_storage_.block_mgr_.log_block_pool_;
-    if (OB_FAIL(log_engine.load(leader_.palf_handle_impl_->palf_id_,
+    LogIOAdapter io_adapter;
+    if (OB_FAIL(io_adapter.init(1002, LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
+      PALF_LOG(WARN, "io_adapter init failed", K(ret));
+    } else if (OB_FAIL(log_engine.load(leader_.palf_handle_impl_->palf_id_,
                                 leader_.palf_handle_impl_->log_dir_,
                                 alloc_mgr,
                                 log_block_pool,
@@ -87,9 +91,10 @@ public:
                                 plugins,
                                 entry_header,
                                 palf_epoch_,
-                                is_integrity,
                                 PALF_BLOCK_SIZE,
-                                PALF_META_BLOCK_SIZE))) {
+                                PALF_META_BLOCK_SIZE,
+                                &io_adapter,
+                                is_integrity))) {
       PALF_LOG(WARN, "load failed", K(ret));
     } else if (log_tail_redo != log_engine.log_storage_.log_tail_
         || log_tail_meta != log_engine.log_meta_storage_.log_tail_
@@ -401,16 +406,19 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   // 测试目录清空后，读数据是否正常报错
   ReadBufGuard buf_guard("dummy", 100);
   int64_t out_read_size;
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
   EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND,
             log_storage->pread(LSN((truncate_prefix_block_id + 1) * PALF_BLOCK_SIZE),
                                100,
                                buf_guard.read_buf_,
-                               out_read_size));
+                               out_read_size,
+                               io_ctx));
   EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND,
             log_storage->pread(LSN((truncate_prefix_block_id - 1) * PALF_BLOCK_SIZE),
                                100,
                                buf_guard.read_buf_,
-                               out_read_size));
+                               out_read_size,
+                               io_ctx));
   // 测试目录清空后，重启是否正常
   EXPECT_EQ(OB_SUCCESS, reload(log_engine_->log_storage_.log_tail_, log_engine_->log_meta_storage_.log_tail_, log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
   {

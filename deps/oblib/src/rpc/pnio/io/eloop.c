@@ -95,8 +95,10 @@ static void sock_destroy(sock_t* s) {
 
 static void eloop_handle_sock_event(sock_t* s) {
   int err = 0;
+  char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
   if (skt(s, ERR) || skt(s, HUP)) {
-    rk_info("sock destroy: sock=%p, connection=%s, s->mask=0x%x", s, T2S(sock_fd, s->fd), s->mask);
+    rk_info("sock destroy: sock=%p, connection=%s, s->mask=0x%x",
+        s, sock_fd_str(s->fd, sock_fd_buf, sizeof(sock_fd_buf)), s->mask);
     sock_destroy(s);
   } else if (0 == (err = s->handle_event(s))) {
     // yield
@@ -108,7 +110,8 @@ static void eloop_handle_sock_event(sock_t* s) {
       dlink_delete(&s->ready_link);
     }
   } else {
-    rk_info("sock destroy: sock=%p, connection=%s, err=%d", s, T2S(sock_fd, s->fd), err);
+    rk_info("sock destroy: sock=%p, connection=%s, err=%d",
+        s, sock_fd_str(s->fd, sock_fd_buf, sizeof(sock_fd_buf)), err);
     sock_destroy(s);
   }
 }

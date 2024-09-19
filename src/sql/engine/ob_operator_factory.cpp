@@ -89,7 +89,8 @@
 #include "sql/optimizer/ob_log_unpivot.h"
 #include "sql/optimizer/ob_log_insert_all.h"
 #include "sql/optimizer/ob_log_err_log.h"
-#include "sql/optimizer/ob_log_stat_collector.h"
+#include "sql/optimizer/ob_log_px_object_sample.h"
+#include "sql/optimizer/ob_log_statistics_collector.h"
 #include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
 #include "sql/engine/aggregate/ob_merge_distinct_op.h"
 #include "sql/engine/aggregate/ob_hash_distinct_op.h"
@@ -159,9 +160,10 @@
 #include "sql/engine/basic/ob_json_table_op.h"
 #include "sql/engine/table/ob_link_scan_op.h"
 #include "sql/engine/dml/ob_table_insert_all_op.h"
-#include "sql/engine/basic/ob_stat_collector_op.h"
+#include "sql/engine/basic/ob_px_object_sample_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
 #include "sql/optimizer/ob_log_values_table_access.h"
+#include "sql/engine/basic/ob_statistics_collector_op.h"
 #include "sql/engine/basic/ob_values_table_access_op.h"
 
 namespace oceanbase
@@ -445,7 +447,7 @@ int ObOperatorFactory::generate_spec(ObStaticEngineCG &cg,
              K(ret), K(type));
   } else if (OB_FAIL(G_ALLOC_FUNCTION_ARRAY[type].gen_spec_func_(
               cg, log_op, spec, in_root_job))) {
-    LOG_WARN("generate operator spec failed", K(type), K(ret));
+    LOG_WARN("generate operator spec failed", K(type), K(ret), K(log_op.get_op_id()));
   }
 
   return ret;

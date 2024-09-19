@@ -286,8 +286,13 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
       OZ (deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, params));
       OX (type.set_length(MAX(type1.get_calc_length(), type2.get_calc_length())));
     } else if (lib::is_oracle_mode() && type.is_ext()) {
-      CK (type1.get_udt_id() == type2.get_udt_id());
-      OX (type.set_udt_id(type1.get_udt_id()));
+      ObExprResType &null_type = type1.is_null() ? type1 : type2;
+      ObExprResType &res_type = !type1.is_null() ? type1 : type2;
+      CK ((type1.get_udt_id() == type2.get_udt_id()) || type1.is_null() || type2.is_null());
+      OX (type.set_udt_id(res_type.get_udt_id()));
+      if (null_type.is_null()) {
+        OX (null_type.set_calc_accuracy(res_type.get_accuracy()));
+      }
     } else if (type.is_temporal_type()) {
       type.set_scale(0);
     } else if (type.is_user_defined_sql_type()) {
@@ -366,13 +371,13 @@ int ObExprNvlUtil::calc_nvl_expr(const ObExpr &expr, ObEvalCtx &ctx,
   // nvl(arg0, arg1)
   ObDatum *arg0 = NULL;
   ObDatum *arg1 = NULL;
-  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
   bool v = false;
 
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1))) {
     LOG_WARN("eval args failed", K(ret));
   } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
-    LOG_WARN("check complex value is null not support");
+    LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
   } else if (!v) {
     res_datum.set_datum(*arg0);
   } else {
@@ -391,7 +396,7 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObDatumVector args0;
   ObDatumVector args1;
-  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
   bool v = false;
   if (OB_FAIL(expr.eval_batch_param_value(ctx, skip, batch_size, args0,
                                           args1))) {
@@ -405,7 +410,7 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
       ObDatum *arg0 = args0.at(i);
       ObDatum *arg1 = args1.at(i);
       if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
-        LOG_WARN("check complex value is null not support");
+        LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
       } else if (!v) {
         results[i].set_datum(*arg0);
       } else {
@@ -425,13 +430,13 @@ int ObExprNvlUtil::calc_nvl_expr2(const ObExpr &expr, ObEvalCtx &ctx,
   ObDatum *arg0 = NULL;
   ObDatum *arg1 = NULL;
   ObDatum *arg2 = NULL;
-  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
   bool v = false;
 
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1, arg2))) {
     LOG_WARN("eval args failed", K(ret));
   } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
-    LOG_WARN("check complex value is null not support");
+    LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
   } else if (!v) {
     res_datum.set_datum(*arg1);
   } else {

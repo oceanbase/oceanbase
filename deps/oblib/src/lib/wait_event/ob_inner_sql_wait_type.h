@@ -74,7 +74,7 @@ namespace oceanbase
 {
 namespace common
 {
-enum ObInnerSqlWaitTypeId
+enum ObInnerSqlWaitTypeId : int64_t
   {
 #define DEF_INNER_SQL_WAIT(def_name, enum_id) def_name = enum_id,
 #include "lib/wait_event/ob_inner_sql_wait_type.h"

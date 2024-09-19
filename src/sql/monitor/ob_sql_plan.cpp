@@ -880,56 +880,61 @@ int ObSqlPlan::get_plan_other_info(PlanText &plan_text,
     LOG_WARN("unexpect null param", K(ret));
   } else {
     ObObjPrintParams print_params(query_ctx->get_timezone_info());
-    BEGIN_BUF_PRINT
     ObPhyPlanType plan_type = plan->get_optimizer_context().get_phy_plan_type();
-    if (OB_FAIL(BUF_PRINTF("  Plan Type:"))) {
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-    } else if (OB_FAIL(BUF_PRINTF("%.*s",
-                                  ob_plan_type_str(plan_type).length(),
-                                  ob_plan_type_str(plan_type).ptr()))) {
-    } else {
-      ret = BUF_PRINTF(NEW_LINE);
-    }
-
-    const ParamStore *params = NULL;
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(params = plan->get_optimizer_context().get_params())) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (params->count() <= 0) {
-      //do nothing
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    } else if (OB_FAIL(BUF_PRINTF("  Parameters:"))) {
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    } else { /* Do nothing */ }
-    for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count() && i < 100; i++) {
-      if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-      } else if (OB_FAIL(BUF_PRINTF(":%ld => ", i))) {
+    ret = OB_E(EventTable::EN_PRINT_CONSTRAINTS_INFO) OB_SUCCESS;
+    bool only_show_constraint = OB_SUCCESS != ret && EXPLAIN_UNINITIALIZED == plan_text.type_;
+    ret = OB_SUCCESS;
+    BEGIN_BUF_PRINT
+    if (OB_SUCC(ret) && !only_show_constraint) {
+      if (OB_FAIL(BUF_PRINTF("  Plan Type:"))) {
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      } else if (OB_FAIL(BUF_PRINTF("%.*s",
+                                    ob_plan_type_str(plan_type).length(),
+                                    ob_plan_type_str(plan_type).ptr()))) {
       } else {
-        int64_t save_pos = pos;
-        if (OB_FAIL(params->at(i).print_sql_literal(buf,
-                                                    buf_len,
-                                                    pos,
-                                                    print_params))) {
-          //ignore size overflow error
-          pos = save_pos;
-        }
-        if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-        } else { /* Do nothing */ }
-      }
-    }
-
-    const ObPlanNotes &notes = plan->get_optimizer_context().get_plan_notes();
-    if (notes.count() <= 0 || OB_FAIL(ret)) {
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
-    } else if (OB_FAIL(BUF_PRINTF("  Note:"))) { /* Do nothing */
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < notes.count(); i++) {
-      if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-      } else {
-        pos += notes.at(i).to_string(buf + pos, buf_len - pos);
         ret = BUF_PRINTF(NEW_LINE);
+      }
+
+      const ParamStore *params = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(params = plan->get_optimizer_context().get_params())) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (params->count() <= 0) {
+        //do nothing
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      } else if (OB_FAIL(BUF_PRINTF("  Parameters:"))) {
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      } else { /* Do nothing */ }
+      for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count() && i < 100; i++) {
+        if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+        } else if (OB_FAIL(BUF_PRINTF(":%ld => ", i))) {
+        } else {
+          int64_t save_pos = pos;
+          if (OB_FAIL(params->at(i).print_sql_literal(buf,
+                                                      buf_len,
+                                                      pos,
+                                                      print_params))) {
+            //ignore size overflow error
+            pos = save_pos;
+          }
+          if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+          } else { /* Do nothing */ }
+        }
+      }
+
+      const ObPlanNotes &notes = plan->get_optimizer_context().get_plan_notes();
+      if (notes.count() <= 0 || OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
+      } else if (OB_FAIL(BUF_PRINTF("  Note:"))) { /* Do nothing */
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < notes.count(); i++) {
+        if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+        } else {
+          pos += notes.at(i).to_string(buf + pos, buf_len - pos);
+          ret = BUF_PRINTF(NEW_LINE);
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1115,6 +1120,19 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
         LOG_WARN("failed to print plan", K(ret));
       } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print plan output", K(ret));
+      }
+    } else if (EXPLAIN_UNINITIALIZED == type) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+        LOG_WARN("failed to print plan", K(ret));
+      } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
+        LOG_WARN("failed to print plan output", K(ret));
+      } else {
+        ret = OB_E(EventTable::EN_PRINT_CONSTRAINTS_INFO) OB_SUCCESS;
+        bool only_show_constraint = OB_SUCCESS != ret;
+        ret = OB_SUCCESS;
+        if (only_show_constraint && OB_FAIL(format_other_info(sql_plan_infos, plan_text))) {
+          LOG_WARN("failed to print other info", K(ret));
+        }
       }
     } else if (EXPLAIN_OUTLINE == type) {
       if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {

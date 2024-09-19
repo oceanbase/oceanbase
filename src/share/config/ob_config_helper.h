@@ -300,6 +300,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSyslogFileUncompressedCountChecker);
 };
 
+// Used to check the format of STS credential
+class ObConfigSTScredentialChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSTScredentialChecker() {}
+  virtual ~ObConfigSTScredentialChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSTScredentialChecker);
+};
+
 class ObConfigUseLargePagesChecker
   : public ObConfigChecker
 {
@@ -932,6 +944,16 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigKvGroupCommitRWModeChecker);
+};
+
+class ObConfigS3URLEncodeTypeChecker : public ObConfigChecker
+{
+public:
+  ObConfigS3URLEncodeTypeChecker() {}
+  virtual ~ObConfigS3URLEncodeTypeChecker() {}
+  virtual bool check(const ObConfigItem &t) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigS3URLEncodeTypeChecker);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey,

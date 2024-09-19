@@ -75,12 +75,13 @@ int ObAdminDRTaskUtil::handle_obadmin_command(const ObAdminCommandArg &command_a
   if (OB_SUCCESS != (tmp_ret = try_construct_result_comment_(ret, ret_comment, result_comment))) {
     LOG_WARN("fail to construct result comment", K(tmp_ret), KR(ret), K(ret_comment));
   }
+  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
   SERVER_EVENT_ADD("ob_admin", command_arg.get_type_str(),
                    "tenant_id", tenant_id,
                    "ls_id", ls_id.id(),
                    "arg", command_arg,
                    "result", result_comment,
-                   "trace_id", ObCurTraceId::get_trace_id_str(),
+                   "trace_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                    "comment", command_arg.get_comment());
 
   int64_t cost = ObTimeUtility::current_time() - check_begin_time;
@@ -254,10 +255,11 @@ int ObAdminDRTaskUtil::execute_task_for_add_command_(
 
   if (OB_SUCC(ret)) {
     // local execute or rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_ADD_LS_REPLICA_STR,
                           "tenant_id", arg.tenant_id_,
                           "ls_id", arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "destination", arg.dst_,
                           "comment", command_arg.get_comment());
   }
@@ -486,10 +488,11 @@ int ObAdminDRTaskUtil::execute_remove_paxos_task_(
   }
   if (OB_SUCC(ret)) {
     // rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_PAXOS_REPLICA_STR,
                           "tenant_id", remove_paxos_arg.tenant_id_,
                           "ls_id", remove_paxos_arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "remove_server", remove_paxos_arg.remove_member_,
                           "comment", command_arg.get_comment());
   }
@@ -517,10 +520,11 @@ int ObAdminDRTaskUtil::execute_remove_nonpaxos_task_(
   }
   if (OB_SUCC(ret)) {
     // rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_NON_PAXOS_REPLICA_STR,
                           "tenant_id", remove_non_paxos_arg.tenant_id_,
                           "ls_id", remove_non_paxos_arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "remove_server", remove_non_paxos_arg.remove_member_,
                           "comment", command_arg.get_comment());
   }

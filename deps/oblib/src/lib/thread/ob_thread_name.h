@@ -17,6 +17,7 @@
 #include <sys/prctl.h>
 
 #include "lib/ob_define.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -25,6 +26,7 @@ namespace lib
 
 inline void set_thread_name_inner(const char* name)
 {
+  ObLocalDiagnosticInfo::set_thread_name(name);
   prctl(PR_SET_NAME, name);
 }
 

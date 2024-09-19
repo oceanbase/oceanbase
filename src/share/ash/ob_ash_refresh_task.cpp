@@ -19,7 +19,7 @@
 #include "share/wr/ob_wr_task.h"
 #include "share/wr/ob_wr_service.h"
 #include "share/location_cache/ob_location_service.h"
-#include <cassert>
+#include "observer/ob_srv_network_frame.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -31,11 +31,11 @@ using namespace oceanbase::common::sqlclient;
 constexpr int64_t ASH_REFESH_TIME = 10 * 1000L * 1000L;  // 10s
 // refersh task update its state and do decision making
 // every ASH_REFRESH_INTERVAL
-constexpr int64_t ASH_REFRESH_INTERVAL = 30 * 1000L * 1000L;  // 30s
+constexpr int64_t ASH_REFRESH_INTERVAL = 120 * 1000L * 1000L;  // 120s
 // we should snapshot ahead if current speed is SPEED_THRESHOLD times larger than expect speed
 constexpr int SPEED_THRESHOLD = 10;
 // ahead snapshot will be triggered only if the time remaining until the next scheduled snapshot is greater than SNAPSHOT_THRESHOLD
-constexpr int SNAPSHOT_THRESHOLD = 60 * 1000L * 1000L;  // 60s
+constexpr int SNAPSHOT_THRESHOLD = 180 * 1000L * 1000L;  // 180s
 
 ObAshRefreshTask &ObAshRefreshTask::get_instance()
 {
@@ -46,13 +46,16 @@ ObAshRefreshTask &ObAshRefreshTask::get_instance()
 int ObAshRefreshTask::start()
 {
   int ret = OB_SUCCESS;
-  static_assert(ASH_REFRESH_INTERVAL < SNAPSHOT_THRESHOLD, "ASH_REFRESH_INTERVAL should be less than SNAPSHOT_THRESHOLD");
+  STATIC_ASSERT(ASH_REFRESH_INTERVAL < SNAPSHOT_THRESHOLD, "ASH_REFRESH_INTERVAL should be less than SNAPSHOT_THRESHOLD");
   if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer,
                                  *this,
                                  ASH_REFRESH_INTERVAL,
                                  true /* repeat */))) {
     LOG_WARN("fail define timer schedule", K(ret));
   } else {
+    if (OB_FAIL(wr_proxy_.init(GCTX.net_frame_->get_req_transport()))) {
+      LOG_WARN("failed to init wr proxy", K(ret));
+    }
     LOG_INFO("AshRefresh init OK");
     last_scheduled_snapshot_time_ = ObTimeUtility::current_time();
     is_inited_ = true;
@@ -62,8 +65,8 @@ int ObAshRefreshTask::start()
 
 void ObAshRefreshTask::runTimerTask()
 {
-  // don't disturb next scheduled and ahead snapshot
-  if (false) {
+  if (0 == prev_write_pos_) {
+  } else if (GCONF._ob_ash_disk_write_enable) {
     int64_t task_timeout_ts = ObTimeUtility::current_time() + ASH_REFRESH_INTERVAL * 1000L * 1000L - ESTIMATE_PS_RESERVE_TIME;
     int ret = OB_SUCCESS;
     common::ObTimeGuard time_guard(__func__, ASH_REFESH_TIME);
@@ -85,8 +88,8 @@ void ObAshRefreshTask::runTimerTask()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
       } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY */ time_to_usec(END_INTERVAL_TIME), snap_flag FROM %s where "
-                                        "snap_id=%d and tenant_id=%ld",
-                    OB_ALL_VIRTUAL_WR_SNAPSHOT_TNAME, -1, OB_SYS_TENANT_ID))) {
+                                        "snap_id=%ld and tenant_id=%ld",
+                    OB_ALL_VIRTUAL_WR_SNAPSHOT_TNAME, LAST_SNAPSHOT_RECORD_SNAP_ID, OB_SYS_TENANT_ID))) {
         LOG_WARN("failed to format sql", KR(ret));
       } else if (OB_FAIL(
                     sql_proxy->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
@@ -150,7 +153,7 @@ void ObAshRefreshTask::runTimerTask()
             if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
               if (check_tenant_can_do_wr_task(tenant_id)) {
                 ObWrCreateSnapshotArg arg(
-                      tenant_id, -1, last_snapshot_end_time, ObTimeUtility::current_time(), task_timeout_ts);
+                      tenant_id, LAST_SNAPSHOT_RECORD_SNAP_ID, last_snapshot_end_time, ObTimeUtility::current_time(), task_timeout_ts);
                 if (OB_FAIL(GCTX.location_service_->get_leader(
                       GCONF.cluster_id, tenant_id, share::SYS_LS, false /*force_renew*/, leader))) {
                   LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id));
@@ -177,13 +180,16 @@ void ObAshRefreshTask::runTimerTask()
         }
       }
     }
-    prev_write_pos_ = ObActiveSessHistList::get_instance().write_pos();
   }
+  prev_write_pos_ = ObActiveSessHistList::get_instance().write_pos();
+  prev_sched_time_ = ObTimeUtility::current_time();
 }
+
+ERRSIM_POINT_DEF(EN_FORCE_ENABLE_SNAPSHOT_AHEAD);
 
 bool ObAshRefreshTask::require_snapshot_ahead()
 {
-  bool ret = false;
+  bool bret = false;
   int64_t write_pos = ObActiveSessHistList::get_instance().write_pos();
   int64_t free_slots_num = ObActiveSessHistList::get_instance().free_slots_num();
   int64_t scheduled_snapshot_interval = GCTX.wr_service_->get_snapshot_interval(false) * 60 * 1000L * 1000L;
@@ -192,13 +198,17 @@ bool ObAshRefreshTask::require_snapshot_ahead()
     // last scheduled snapshot time update may lose or no last scheduled snapshot or this machine's clock is behind
     // cluster pressure may be heavy
     LOG_WARN_RET(OB_INVALID_TIMESTAMP, "unexpected next scheduled snapshot interval");
-    ret = false;
+    bret = false;
   } else {
-    double cur_speed = 1.0 * (write_pos - prev_write_pos_) / (ASH_REFRESH_INTERVAL / 1000 / 1000);
+    double cur_speed = 1.0 * (write_pos - prev_write_pos_) / ((ObTimeUtility::current_time() - prev_sched_time_) / 1000 / 1000);
     double expect_speed = 1.0 * free_slots_num / (next_scheduled_snapshot_interval / 1000 / 1000);
-    ret = (cur_speed >= SPEED_THRESHOLD * expect_speed) && (next_scheduled_snapshot_interval > SNAPSHOT_THRESHOLD);
+    bret = (cur_speed >= SPEED_THRESHOLD * expect_speed) && (next_scheduled_snapshot_interval > SNAPSHOT_THRESHOLD);
   }
-  return ret;
+  if (EN_FORCE_ENABLE_SNAPSHOT_AHEAD) {
+    bret = true;
+    LOG_INFO("force enable snapshot ahead");
+  }
+  return bret;
 }
 
 bool ObAshRefreshTask::check_tenant_can_do_wr_task(uint64_t tenant_id)

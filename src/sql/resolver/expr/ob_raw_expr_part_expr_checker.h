@@ -77,13 +77,13 @@ bool ObRawExprPartExprChecker::is_timestamp_expr(const ObRawExpr &expr)
 bool ObRawExprPartExprChecker::is_date_expr(const ObRawExpr &expr)
 {
   return expr.is_column_ref_expr() &&
-      common::ObDateType == expr.get_result_type().get_type();
+      ob_is_mysql_date_or_date(expr.get_result_type().get_type());
 }
 
 bool ObRawExprPartExprChecker::is_datetime_expr(const ObRawExpr &expr)
 {
   return expr.is_column_ref_expr() &&
-      common::ObDateTimeType == expr.get_result_type().get_type();
+      ob_is_mysql_datetime_or_datetime(expr.get_result_type().get_type());
 }
 
 /**

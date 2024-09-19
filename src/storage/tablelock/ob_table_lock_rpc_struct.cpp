@@ -30,7 +30,10 @@ OB_SERIALIZE_MEMBER(ObLockParam,
                     is_deadlock_avoid_enabled_,
                     is_try_lock_,
                     expired_time_,
-                    schema_version_);
+                    schema_version_,
+                    is_for_replace_,
+                    lock_priority_,
+                    is_two_phase_lock_);
 
 OB_SERIALIZE_MEMBER(ObLockRequest,
                     type_,
@@ -38,17 +41,22 @@ OB_SERIALIZE_MEMBER(ObLockRequest,
                     lock_mode_,
                     op_type_,
                     timeout_us_,
-                    is_from_sql_);
+                    is_from_sql_,
+                    lock_priority_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockObjRequest, ObLockRequest,
                             obj_type_,
                             obj_id_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockObjsRequest, ObLockRequest,
-                            objs_);
+                            objs_,
+                            detect_func_no_,
+                            detect_param_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockTableRequest, ObLockRequest,
-                            table_id_);
+                            table_id_,
+                            detect_func_no_,
+                            detect_param_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockPartitionRequest, ObLockTableRequest,
                             part_object_id_);
@@ -196,6 +204,9 @@ void ObLockParam::reset()
   is_try_lock_ = true;
   expired_time_ = 0;
   schema_version_ = -1;
+  is_for_replace_ = false;
+  lock_priority_ = ObTableLockPriority::NORMAL;
+  is_two_phase_lock_ = false;
 }
 
 int ObLockParam::set(
@@ -233,6 +244,7 @@ bool ObLockParam::is_valid() const
   return (lock_id_.is_valid() &&
           is_lock_mode_valid(lock_mode_) &&
           is_op_type_valid(op_type_) &&
+          !(ObTableLockPriority::NORMAL != lock_priority_ && !is_two_phase_lock_) &&
           (schema_version_ >= 0 ||
            (ObLockOBJType::OBJ_TYPE_COMMON_OBJ == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_TENANT == lock_id_.obj_type_
@@ -242,16 +254,19 @@ bool ObLockParam::is_valid() const
             || ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_DATABASE_NAME == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_OBJECT_NAME == lock_id_.obj_type_
-            || ObLockOBJType::OBJ_TYPE_DBMS_LOCK == lock_id_.obj_type_)));
+            || ObLockOBJType::OBJ_TYPE_DBMS_LOCK == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC == lock_id_.obj_type_)));
 }
 
 void ObLockRequest::reset()
 {
-  owner_id_ = 0;
+  owner_id_.set_default();
   lock_mode_ = NO_LOCK;
   op_type_ = UNKNOWN_TYPE;
-  type_ = ObLockMsgType::UNKNOWN_MSG_TYPE;
   timeout_us_ = 0;
+  is_from_sql_ = false;
+  lock_priority_ = ObTableLockPriority::NORMAL;
 }
 
 bool ObLockRequest::is_valid() const
@@ -308,6 +323,8 @@ void ObLockObjsRequest::reset()
 {
   ObLockRequest::reset();
   objs_.reset();
+  detect_func_no_ = INVALID_DETECT_TYPE;
+  detect_param_.reset();
 }
 
 bool ObLockObjsRequest::is_valid() const
@@ -347,6 +364,8 @@ void ObLockTableRequest::reset()
 {
   ObLockRequest::reset();
   table_id_ = 0;
+  detect_func_no_ = INVALID_DETECT_TYPE;
+  detect_param_.reset();
 }
 
 bool ObLockTableRequest::is_valid() const

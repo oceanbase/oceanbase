@@ -693,6 +693,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
     case ObIntTC:
     case ObDoubleTC:
     case ObDateTimeTC:
+    case ObMySQLDateTimeTC:
     case ObTimeTC:
     case ObBitTC:
     case ObEnumSetTC:
@@ -701,6 +702,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
       break;
     }
     case ObDateTC:
+    case ObMySQLDateTC:
     case ObFloatTC:
     {
       len = 4;
@@ -725,6 +727,10 @@ static int16_t get_type_fixed_length(ObObjType type) {
   }
   return len;
 }
+
+#define SPM_MODE_DISABLE 0
+#define SPM_MODE_ONLINE_EVOLVE 1
+#define SPM_MODE_BASELINE_FIRST 2
 
 }  // namespace sql
 }  // namespace oceanbase

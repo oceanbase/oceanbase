@@ -1090,7 +1090,7 @@ TEST_F(TestKVCache, compute_wash_size_when_min_wash_negative)
   ObTenantResourceMgrHandle resource_handle;
   ASSERT_EQ(OB_SUCCESS, ObResourceMgr::get_instance().get_tenant_resource_mgr(tenant_id_, resource_handle));
   resource_handle.get_memory_mgr()->set_limit(max_memory);
-  resource_handle.get_memory_mgr()->sum_hold_ = memory_usage;
+  resource_handle.get_memory_mgr()->limiter_.hold_ = memory_usage;
 
   // set tenant memory limit
   // ObTenantManager::get_instance().set_tenant_mem_limit(tenant_id_, min_memory, max_memory);

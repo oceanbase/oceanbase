@@ -50,9 +50,10 @@ LOG_OP_DEF(LOG_TEMP_TABLE_ACCESS, "TEMP TABLE ACCESS")
 LOG_OP_DEF(LOG_TEMP_TABLE_TRANSFORMATION, "TEMP TABLE TRANSFORMATION")
 LOG_OP_DEF(LOG_INSERT_ALL, "INSERT ALL")
 LOG_OP_DEF(LOG_ERR_LOG, "ERROR LOGGING")
-LOG_OP_DEF(LOG_STAT_COLLECTOR, "STAT COLLECTOR")
+LOG_OP_DEF(LOG_PX_OBJECT_SAMPLE, "PX OBJECT SAMPLE")
 LOG_OP_DEF(LOG_OPTIMIZER_STATS_GATHERING, "OPTIMIZER STATISTICS GATHERING")
 LOG_OP_DEF(LOG_VALUES_TABLE_ACCESS, "VALUES TABLE ACCESS")
+LOG_OP_DEF(LOG_STATISTICS_COLLECTOR, "STATISTICS COLLECTOR")
 /* end of logical operator type */
 LOG_OP_DEF(LOG_OP_END, "OP_DEF_END")
 #endif /*LOG_OP_DEF*/
@@ -85,7 +86,8 @@ enum JoinAlgo
   INVALID_JOIN_ALGO = 0,
   NESTED_LOOP_JOIN = (1UL),
   MERGE_JOIN = (1UL << 1),
-  HASH_JOIN = (1UL << 2)
+  HASH_JOIN = (1UL << 2),
+  ADAPTIVE_JOIN = (1UL << 3)
 };
 
 enum AggregateAlgo
@@ -129,7 +131,8 @@ enum DistAlgo
   DIST_MAX_JOIN_METHOD = (1UL << 16), // represents max join method
   // only for set operator
   DIST_SET_RANDOM = (1UL << 17),
-  DIST_SET_PARTITION_WISE = (1UL << 18) // non-strict set pw with phy_table_location_info_
+  DIST_SET_PARTITION_WISE = (1UL << 18), // non-strict set pw with phy_table_location_info_
+  DIST_NONE_NONE = (1UL << 19)  //for adaptive join
 };
 
 inline const ObString &ob_dist_algo_str(DistAlgo algo)
@@ -155,7 +158,8 @@ inline const ObString &ob_dist_algo_str(DistAlgo algo)
     "EXTEND PARTITION WISE",
     "UNKNOWN ALGO",
     "SET RANDOM",
-    "SET PARTITION WISE"
+    "SET PARTITION WISE",
+    "NONE NONE"
   };
   int64_t idx = 0;
   int64_t value = algo;
@@ -208,6 +212,8 @@ inline DistAlgo get_dist_algo(int64_t method)
     return DIST_HASH_ALL;
   } else if (method & DIST_SET_RANDOM) {
     return DIST_SET_RANDOM;
+  } else if (method & DIST_NONE_NONE) {
+    return DIST_NONE_NONE;
   } else {
     return DIST_INVALID_METHOD;
   }

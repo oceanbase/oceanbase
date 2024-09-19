@@ -812,8 +812,12 @@ int ObMultiModeDMLResolver::multimode_table_resolve_column_type(const ParseNode 
       omt::ObTenantConfigGuard tcg(TENANT_CONF(session_info->get_effective_tenant_id()));
       bool convert_real_to_decimal = (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
       uint64_t tenant_data_version = 0;
+      bool enable_mysql_compatible_dates = false;
       if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info,
+                            enable_mysql_compatible_dates))) {
+        LOG_WARN("fail to check enable mysql compatible dates", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_data_type(parse_tree,
                                                           col_def->col_base_info_.col_name_,
                                                           data_type,
@@ -821,6 +825,7 @@ int ObMultiModeDMLResolver::multimode_table_resolve_column_type(const ParseNode 
                                                           false,
                                                           session_info->get_session_nls_params(),
                                                           session_info->get_effective_tenant_id(),
+                                                          enable_mysql_compatible_dates,
                                                           convert_real_to_decimal))) {
         LOG_WARN("resolve data type failed", K(ret), K(col_def->col_base_info_.col_name_));
       } else {
@@ -1320,6 +1325,7 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
     ObCollationType collation_connection = CS_TYPE_INVALID;
     ObCharsetType character_set_connection = CHARSET_INVALID;
     ObCompatType compat_type = COMPAT_MYSQL57;
+    bool enable_mysql_compatible_dates = false;
     if (OB_ISNULL(dml_resolver->params_.expr_factory_) || OB_ISNULL(dml_resolver->params_.session_info_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("resolve status is invalid", K_(dml_resolver->params_.expr_factory), K_(dml_resolver->params_.session_info));
@@ -1335,6 +1341,10 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
     } else if (lib::is_oracle_mode() && OB_FAIL(
       session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variables failed", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(
+                          dml_resolver->params_.session_info_,
+                          enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_const(&parse_tree,
                                                     // stmt_type is only used in oracle mode
                                                     lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
@@ -1347,6 +1357,7 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
                                                     &parents_expr_info,
                                                     session_info->get_sql_mode(),
                                                     compat_type,
+                                                    enable_mysql_compatible_dates,
                                                     nullptr != dml_resolver->params_.secondary_namespace_))) {
       LOG_WARN("failed to resolve const", K(ret));
     } else if (val.get_string().length() == 0) {
@@ -2298,7 +2309,7 @@ int ObMultiModeDMLResolver::json_expand_column_in_json_object_star(ParseNode *no
 }
 
 // process json_expr in query sql
-int ObMultiModeDMLResolver::json_pre_process_expr(ParseNode &node, ObDMLResolver* dml_resolver)
+int ObMultiModeDMLResolver::json_pre_process_one_expr(ParseNode &node, ObDMLResolver* dml_resolver)
 {
   INIT_SUCC(ret);
   if (OB_ISNULL(dml_resolver) || OB_ISNULL(dml_resolver->allocator_)) {
@@ -2325,13 +2336,41 @@ int ObMultiModeDMLResolver::json_pre_process_expr(ParseNode &node, ObDMLResolver
     } else if (OB_FAIL(json_pre_process_json_constraint(&node, dml_resolver))) { // check json expr with is json constraint
       LOG_WARN("fail to process json exor with json constraint", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_ && node.type_ != T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT; i++) {
-      if (OB_ISNULL(node.children_[i])) {
-      } else if (OB_FAIL(SMART_CALL(json_pre_process_expr(*node.children_[i], dml_resolver)))) {
-        LOG_WARN("pre process dot notation failed", K(ret), K(i));
+  }
+  return ret;
+}
+
+int ObMultiModeDMLResolver::json_pre_process_expr(ParseNode &node, ObDMLResolver* dml_resolver)
+{
+  int ret = OB_SUCCESS;
+  ObArray<void *> parse_node_list;
+  void *tmp_node = nullptr;
+
+  if (OB_FAIL(parse_node_list.push_back(static_cast<void *>(&node)))) {
+    LOG_WARN("fail to push back parse node", K(ret));
+  } else {
+    while (OB_SUCC(ret) && !parse_node_list.empty()) {
+      if (OB_FAIL(parse_node_list.pop_back(tmp_node))) {
+        LOG_WARN("fail to pop back parse node", K(ret));
+      } else {
+        ParseNode *curr_node = static_cast<ParseNode *>(tmp_node);
+
+        if (OB_FAIL(json_pre_process_one_expr(*curr_node, dml_resolver))) {
+          LOG_WARN("deal dot notation fail", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < curr_node->num_child_; i++) {
+            int64_t index = curr_node->num_child_ - 1 - i;
+            ParseNode *child = curr_node->children_[index];
+            if (OB_ISNULL(child)) {
+            } else if (OB_FAIL(parse_node_list.push_back(child))) {
+              LOG_WARN("parse node list push back failed", K(ret), K(index));
+            }
+          }
+        }
       }
     }
   }
+
   return ret;
 }
 

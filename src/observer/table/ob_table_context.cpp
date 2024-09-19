@@ -387,20 +387,27 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
 int ObTableCtx::init_schema_info_from_cache()
 {
   int ret = OB_SUCCESS;
+  ObKVAttr attr;
   if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is NULL or not inited", KP(schema_cache_guard_));
+  } else if (OB_FAIL(schema_cache_guard_->get_kv_attributes(attr))) {
+    LOG_WARN("fail to get kv attributes", K(ret));
   } else {
     ObTableSchemaFlags flags = schema_cache_guard_->get_schema_flags();
     flags_ = flags;
     has_auto_inc_ = flags.has_auto_inc_;
     is_ttl_table_ = flags.is_ttl_table_;
+    if (OB_FAIL(schema_cache_guard_->get_ttl_definition(ttl_definition_))) {
+      LOG_WARN("fail to get ttl definition", K(ret));
+    }
     has_generated_column_ = flags.has_generated_column_;
     has_lob_column_ = flags.has_lob_column_;
     if (is_dml()) {
       has_global_index_ = flags.has_global_index_;
       has_local_index_ = flags.has_local_index_;
     }
+    is_redis_ttl_table_ = attr.is_redis_ttl_;
   }
   return ret;
 }
@@ -509,7 +516,9 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
       obj.set_collation_type(cs_type);
     }
   } else if (column_type.get_type() != obj.get_type()
-             && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))) {
+             && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))
+             && !(ob_is_mysql_date_tc(column_type.get_type()) && ob_is_date_tc(obj.get_type()))
+             && !(ob_is_mysql_datetime(column_type.get_type()) && ob_is_datetime(obj.get_type()))) {
     // 2. data type mismatch
     ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
     const char *schema_type_str = ob_obj_type_str(column_type.get_type());
@@ -903,6 +912,10 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
   const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || (has_filter && !is_htable());
   operation_type_ = ObTableOperationType::Type::SCAN;
+  if (query.is_aggregate_query() && query.get_aggregations().count() == 1) {
+    // support later
+    // is_count_all_ = query.get_aggregations().at(0).is_agg_all_column();
+  }
   // init is_weak_read_,scan_order_
   is_weak_read_ = is_wead_read;
   scan_order_ = query.get_scan_order();
@@ -958,10 +971,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
       const ObIArray<ObTableColumnInfo *> &col_info_array = schema_cache_guard_->get_column_info_array();
       ObSEArray<ObString, 4> ttl_columns;
       if (is_ttl_table_) {
-        ObString ttl_definition;
-        if (OB_FAIL(schema_cache_guard_->get_ttl_definition(ttl_definition))) {
-          LOG_WARN("fail to get ttl definition", K(ret));
-        } else if (OB_FAIL(ObTTLUtil::get_ttl_columns(ttl_definition, ttl_columns))) {
+        if (OB_FAIL(ObTTLUtil::get_ttl_columns(ttl_definition_, ttl_columns))) {
           LOG_WARN("fail to get ttl columns", K(ret));
         }
       }

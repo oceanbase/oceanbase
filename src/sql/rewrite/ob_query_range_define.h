@@ -61,6 +61,7 @@ public:
   ~ObRangeNode() { reset(); }
   void reset();
   void set_always_true();
+  void set_always_false();
   int deep_copy(const ObRangeNode &other);
   DECLARE_TO_STRING;
 private:
@@ -166,7 +167,8 @@ public:
 
 struct ObQueryRangeCtx
 {
-  ObQueryRangeCtx(ObExecContext *exec_ctx)
+  ObQueryRangeCtx(ObExecContext *exec_ctx,
+                  ObQueryCtx *query_ctx)
     : column_cnt_(0),
       need_final_extract_(false),
       cur_is_precise_(false),
@@ -174,6 +176,7 @@ struct ObQueryRangeCtx
       ignore_calc_failure_(false),
       refresh_max_offset_(false),
       exec_ctx_(exec_ctx),
+      query_ctx_(query_ctx),
       expr_constraints_(nullptr),
       params_(nullptr),
       expr_factory_(nullptr),
@@ -206,6 +209,7 @@ struct ObQueryRangeCtx
   bool ignore_calc_failure_;
   bool refresh_max_offset_;
   ObExecContext *exec_ctx_;
+  ObQueryCtx *query_ctx_;
   ExprConstrantArray *expr_constraints_;
   const common::ParamStore *params_;
   ObRawExprFactory *expr_factory_;
@@ -259,6 +263,7 @@ public:
   void reset();
   virtual inline bool is_new_query_range() const { return true; }
   virtual int deep_copy(const ObPreRangeGraph &other);
+  int replace_exprs(ObRawExprCopier &expr_copier);
 
   int deep_copy_range_graph(ObRangeNode *src_node);
   int inner_deep_copy_range_graph(ObRangeNode *range_node,
@@ -270,6 +275,7 @@ public:
   virtual int preliminary_extract_query_range(const ObIArray<ColumnItem> &range_columns,
                                       const ObIArray<ObRawExpr*> &root_exprs,
                                       ObExecContext *exec_ctx,
+                                      ObQueryCtx *query_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamStore *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,

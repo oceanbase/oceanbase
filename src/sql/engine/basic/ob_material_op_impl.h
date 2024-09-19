@@ -38,7 +38,8 @@ public:
            ObEvalCtx *eval_ctx,
            ObExecContext *exec_ctx,
            ObIOEventObserver *observer,
-           const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE);
+           const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE,
+           const char *mod_name = ObModIds::OB_SQL_SORT_ROW);
   inline void set_input_rows(int64_t input_rows) { input_rows_ = input_rows; }
   inline void set_input_width(int64_t input_width) { input_width_ = input_width; }
   inline void set_operator_type(ObPhyOperatorType op_type) { op_type_ = op_type; }
@@ -71,6 +72,10 @@ public:
   int add_batch(const common::ObIArray<ObExpr *> &exprs,
                 const ObBitVector &skip,
                 const int64_t batch_size);
+  int add_batch(const common::ObIArray<ObExpr *> &exprs,
+                const ObBitVector &skip,
+                const int64_t batch_size,
+                int64_t &stored_rows_count);
   int finish_add_row();
 
   int get_next_row(const common::ObIArray<ObExpr*> &exprs);

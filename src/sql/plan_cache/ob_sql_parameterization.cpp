@@ -477,6 +477,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
   int64_t value_level = NO_VALUES;
   int64_t assign_level = NO_VALUES;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(ctx.top_node_)
       || OB_ISNULL(ctx.allocator_)
       || OB_ISNULL(ctx.sql_info_)
@@ -494,6 +495,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     LOG_WARN("failed to get compat type", K(ret));
   } else if (NULL == ctx.tree_) {
     // do nothing
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     ParseNode *func_name_node = NULL;
     if (T_WHERE_SCOPE == ctx.expr_scope_ && T_FUN_SYS == ctx.tree_->type_) {
@@ -559,7 +563,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               literal_prefix,
                               ctx.default_length_semantics_,
                               static_cast<ObCollationType>(server_collation),
-                              NULL, session_info.get_sql_mode(), compat_type, ctx.is_from_pl_))) {
+                              NULL, session_info.get_sql_mode(), compat_type,
+                              enable_mysql_compatible_dates,
+                              ctx.is_from_pl_))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
             //对于字符串值，其T_VARCHAR型的parse node有一个T_VARCHAR类型的子node，该子node描述字符串的charset等信息。
@@ -2117,6 +2123,39 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         sql_info.ps_need_parameterized_ = false;
       } else if ((0 == func_name.case_compare("json_extract"))) {
         sql_info.ps_need_parameterized_ = false;
+        for (int64_t i = 1; OB_SUCC(ret) && i < tree->num_child_; i++) {
+          if (OB_ISNULL(tree->children_[i])) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_PC_LOG(WARN, "invalid argument", K(ret), K(tree->children_[i]));
+          } else {
+            tree->children_[i]->is_tree_not_param_ = true;
+          }
+        }
+      } else if ((0 == func_name.case_compare("json_member_of"))) {
+        sql_info.ps_need_parameterized_ = false;
+        if (2 == tree->num_child_) {
+          const int64_t ARGS_NUMBER_TWO = 2;
+          bool mark_arr[ARGS_NUMBER_TWO] = {0, 1}; //0表示参数化, 1 表示不参数化
+          if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TWO, sql_info))) {
+            SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+          }
+        }
+      } else if ((0 == func_name.case_compare("json_contains"))) {
+        sql_info.ps_need_parameterized_ = false;
+        for (int64_t i = 0; OB_SUCC(ret) && i < tree->num_child_; i++) {
+          if (OB_ISNULL(tree->children_[i])) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_PC_LOG(WARN, "invalid argument", K(ret), K(tree->children_[i]));
+          } else if (1 != 1) {
+            tree->children_[i]->is_tree_not_param_ = true;
+          }
+        }
+      } else if ((0 == func_name.case_compare("json_overlaps"))) {
+        const int64_t ARGS_NUMBER_TWO = 2;
+        bool mark_arr[ARGS_NUMBER_TWO] = {1, 1};
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
+        }
       } else if ((0 == func_name.case_compare("json_schema_valid"))
                 || (0 == func_name.case_compare("json_schema_validation_report"))) {
         const int64_t ARGS_NUMBER_TWO = 2;

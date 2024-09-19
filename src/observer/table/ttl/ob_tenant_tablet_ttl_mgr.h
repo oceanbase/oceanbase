@@ -93,7 +93,7 @@ public:
     periodic_delay_(TTL_PERIODIC_DELAY),
     periodic_task_(*this),
     ls_(nullptr),
-    tg_id_(0),
+    tg_id_(-1),
     local_schema_version_(OB_INVALID_VERSION),
     has_start_(false),
     is_leader_(true),
@@ -307,9 +307,7 @@ public:
   : hrowkey_queue_()
   {}
   ~ObTabletHRowkeyTTLScheduler()
-  {
-    destroy();
-  }
+  {}
 public:
   int init(storage::ObLS *ls);
   virtual int try_schedule_task(ObTTLTaskCtx* ctx) override;

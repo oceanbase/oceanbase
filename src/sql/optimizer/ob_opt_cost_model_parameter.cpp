@@ -55,14 +55,16 @@ double ObOptCostModelParameter::get_micro_block_rnd_cost(const OptSystemStat& st
 }
 
 double ObOptCostModelParameter::get_project_column_cost(const OptSystemStat& stat,
-                                                        PROJECT_TYPE type,
+                                                        int64_t type,
                                                         bool is_rnd,
                                                         bool use_column_store) const
 {
     if (stat.get_cpu_speed() <= 0) {
         return project_params_[use_column_store][is_rnd][type];
-    } else {
+    } else if (type >=0 && type <= ObMaxTC) {
         return project_params_[use_column_store][is_rnd][type] / stat.get_cpu_speed();
+    } else {
+        return project_params_[use_column_store][is_rnd][0] / stat.get_cpu_speed();
     }
 }
 
@@ -72,33 +74,6 @@ double ObOptCostModelParameter::get_fetch_row_rnd_cost(const OptSystemStat& stat
         return FETCH_ROW_RND_COST;
     } else {
         return FETCH_ROW_RND_COST / stat.get_cpu_speed();
-    }
-}
-
-double ObOptCostModelParameter::get_cmp_spatial_cost(const OptSystemStat& stat) const
-{
-    if (stat.get_cpu_speed() <= 0) {
-        return CMP_SPATIAL_COST;
-    } else {
-        return CMP_SPATIAL_COST / stat.get_cpu_speed();
-    }
-}
-
-double ObOptCostModelParameter::get_cmp_udf_cost(const OptSystemStat& stat) const
-{
-    if (stat.get_cpu_speed() <= 0) {
-        return CMP_UDF_COST;
-    } else {
-        return CMP_UDF_COST / stat.get_cpu_speed();
-    }
-}
-
-double ObOptCostModelParameter::get_cmp_lob_cost(const OptSystemStat& stat) const
-{
-    if (stat.get_cpu_speed() <= 0) {
-        return CMP_LOB_COST;
-    } else {
-        return CMP_LOB_COST / stat.get_cpu_speed();
     }
 }
 
@@ -234,6 +209,24 @@ double ObOptCostModelParameter::get_px_batch_rescan_per_row_cost(const OptSystem
         return PX_BATCH_RESCAN_PER_ROW_COST;
     } else {
         return PX_BATCH_RESCAN_PER_ROW_COST / stat.get_cpu_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_das_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_das_batch_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
     }
 }
 

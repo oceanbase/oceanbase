@@ -524,6 +524,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"mode", MODE},
   {"modify", MODIFY},
   {"modifies", MODIFIES},
+  {"module", MODULE},
   {"month", MONTH},
   {"move", MOVE},
   {"multilinestring", MULTILINESTRING},
@@ -1015,7 +1016,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"TTL", TTL},
   {"kv_attributes", KV_ATTRIBUTES},
   {"_st_asmvt", _ST_ASMVT},
-  {"optimizer_costs", OPTIMIZER_COSTS}
+  {"optimizer_costs", OPTIMIZER_COSTS},
+  {"tenant_sts_credential", TENANT_STS_CREDENTIAL}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

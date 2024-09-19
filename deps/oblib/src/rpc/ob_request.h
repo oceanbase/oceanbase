@@ -33,6 +33,10 @@ namespace obmysql
   int get_fd_from_sess(void *sess);
   void* get_sql_sess_from_sess(void *sess);
 }
+namespace common
+{
+class ObDiagnosticInfo;
+}
 
 namespace rpc
 {
@@ -75,7 +79,7 @@ public:
         request_arrival_time_(0), traverse_index_(0), recv_mts_(), arrival_push_diff_(0),
         push_pop_diff_(0), pop_process_start_diff_(0),
         process_start_end_diff_(0), process_end_response_diff_(0),
-        trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0)
+        trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0), diagnostic_info_ptr_(nullptr)
   {
   }
   virtual ~ObRequest() {}
@@ -139,6 +143,18 @@ public:
 
   ObLockWaitNode &get_lock_wait_node() { return lock_wait_node_; }
   bool is_retry_on_lock() const { return lock_wait_node_.try_lock_times_ > 0;}
+  common::ObDiagnosticInfo *get_diagnostic_info()
+  {
+    return diagnostic_info_ptr_;
+  };
+  void set_diagnostic_info(common::ObDiagnosticInfo *ptr)
+  {
+    diagnostic_info_ptr_ = ptr;
+  };
+  void reset_diagnostic_info()
+  {
+    diagnostic_info_ptr_ = nullptr;
+  };
   VIRTUAL_TO_STRING_KV("packet", pkt_, "type", type_, "group", group_id_, "sql_req_level", sql_req_level_, "connection_phase", connection_phase_, K(recv_timestamp_), K(enqueue_timestamp_), K(request_arrival_time_), K(trace_id_));
 
   ObLockWaitNode lock_wait_node_;
@@ -170,6 +186,7 @@ protected:
   bool discard_flag_;
   bool large_retry_flag_;
   int32_t retry_times_;
+  common::ObDiagnosticInfo *diagnostic_info_ptr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRequest);
 }; // end of class ObRequest

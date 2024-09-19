@@ -1736,6 +1736,8 @@ ObObjType ObExprOperator::enumset_calc_types_[2 /*use_subschema*/][ObMaxTC] =
     ObNullType, /*UDT*/
     ObUInt64Type, /*ObDecimalIntTC*/
     ObNullType, /*COLLECTION*/
+    ObVarcharType, /*ObMySQLDateTC*/
+    ObVarcharType, /*ObMySQLDateTimeTC*/
   },
   {
     ObUInt64Type,/*ObNullTC*/
@@ -1765,6 +1767,8 @@ ObObjType ObExprOperator::enumset_calc_types_[2 /*use_subschema*/][ObMaxTC] =
     ObNullType, /*UDT*/
     ObUInt64Type, /*ObDecimalIntTC*/
     ObNullType, /*COLLECTION*/
+    ObMySQLDateType, /*ObMySQLDateTC*/
+    ObMySQLDateTimeType, /*ObMySQLDateTimeTC*/
   },
 };
 ////////////////////////////////////////////////////////////////
@@ -2132,43 +2136,30 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
 /*
  * Note that, the original motivation of this function is that,
  *
- * Provided that we have a = b and b = c in which a , b and c
- * are of metainfo meta1, meta2, meta3, respectively
+ * Provided that we have a = b and b = c, can we deduce that a = c holds actually?
  *
- * So, can we deduce that a = c holds actually?
+ * The return value of result is true represents equal comparison a = b is transitive, which means
+ * for any a = b and b = c, if both of them are transitive, then we can always deduce a = c
  *
- * this func tells you this via result when and only when the ret is OB_SUCCESS
+ * For example, we have the table definition like this
+ * create table t1(c1 int, c2 tinyint, c3 int unsigned, c4 enum('a', 'b'), c5 enum('c', 'd'))
+ * Then there is no need to add any implicit cast in c1 = c2, c1 = c3, c1 = c4, c1 = c5.
+ * c1 = c2 and c1 = c3 is equal transitive, then we can deduce c2 = c3.
+ * For comparison between enum types, they need cast to varchar implicitly, so we define comparison
+ * between enum and int type class is not transitive.
+ * Then we can not deduce c4 = c5 via c1 = c4 and c1 = c5, because they are not equal transitive.
  */
-
-int ObRelationalExprOperator::is_equivalent(const ObObjMeta &meta1,
-                                            const ObObjMeta &meta2,
-                                            const ObObjMeta &meta3,
-                                            bool &result)
+int ObRelationalExprOperator::is_equal_transitive(const common::ObObjMeta &meta1,
+                                                  const common::ObObjMeta &meta2,
+                                                  bool &result)
 {
   int ret = OB_SUCCESS;
   result = false;
-  ObObjMeta equal_meta12;
-  ObObjMeta equal_meta23;
-  ObObjMeta equal_meta13;
-  if (OB_FAIL(get_equal_meta(equal_meta12, meta1, meta2))) {
+  ObObjMeta equal_meta;
+  if (OB_FAIL(get_equal_meta(equal_meta, meta1, meta2))) {
     LOG_WARN("get equal meta failed", K(ret), K(meta1), K(meta2));
-  } else if (OB_FAIL(get_equal_meta(equal_meta13, meta1, meta3))) {
-    LOG_WARN("get equal meta failed", K(ret), K(meta1), K(meta3));
-  } else if (OB_FAIL(get_equal_meta(equal_meta23, meta2, meta3))) {
-    LOG_WARN("get equal meta failed", K(ret), K(meta2), K(meta3));
-  } else if (OB_UNLIKELY(equal_meta12.get_type() == ObMaxType
-                      || equal_meta13.get_type() == ObMaxType /* no need to check ObNullType here*/
-                      || equal_meta23.get_type() == ObMaxType)) {
-    /*result = false;*/
-  } else if (equal_meta12.get_type() == equal_meta13.get_type()
-          && equal_meta13.get_type() == equal_meta23.get_type()) {
-    if (OB_UNLIKELY(ob_is_string_or_lob_type(equal_meta12.get_type()))) {
-      //all are string type
-      result = equal_meta12.get_collation_type() == equal_meta13.get_collation_type()
-               && equal_meta13.get_collation_type() == equal_meta23.get_collation_type();
-    } else {
-      result = true;
-    }
+  } else {
+    result = equal_meta.get_type() != ObMaxType;
   }
   return ret;
 }
@@ -2185,8 +2176,11 @@ int ObRelationalExprOperator::get_equal_meta(ObObjMeta &meta,
                                                               meta2.get_type()))) {
     LOG_WARN("get equal type failed", K(ret), K(meta1), K(meta2));
   } else if (ob_is_string_or_lob_type(type)) {
-    ObObjMeta coll_types[2] = {meta1, meta2};
-    ret = aggregate_charsets_for_comparison(meta, coll_types, 2, type_ctx);
+    if (meta1.get_collation_type() != meta2.get_collation_type()) {
+      type = ObMaxType;
+    } else {
+      meta.set_collation_type(meta1.get_collation_type());
+    }
   }
   if (OB_SUCC(ret)) {
     meta.set_type(type);
@@ -5925,18 +5919,20 @@ int ObExprTRDateFormat::get_format_id_by_format_string(const ObString &fmt, int6
   return ret;
 }
 
-int ObExprTRDateFormat::trunc_new_obtime(ObTime &ob_time, const ObString &fmt)
+int ObExprTRDateFormat::trunc_new_obtime(ObTime &ob_time, const ObString &fmt,
+                                         bool is_mysql_compat_dates)
 {
   int ret = OB_SUCCESS;
   int64_t fmt_id = SYYYY;
 
   OZ (get_format_id_by_format_string(fmt, fmt_id));
-  OZ (trunc_new_obtime_by_fmt_id(ob_time, fmt_id));
+  OZ (trunc_new_obtime_by_fmt_id(ob_time, fmt_id, is_mysql_compat_dates));
   LOG_DEBUG("check value", K(ob_time), K(fmt_id), K(fmt));
   return ret;
 }
 
-int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_id)
+int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_id,
+                                                   bool is_mysql_compat_dates)
 {
   int ret = OB_SUCCESS;
   switch (fmt_id) {
@@ -5954,6 +5950,8 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
     case Y: {
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_YDAY] - 1);
+      ob_time.parts_[DT_MON] = 1;
+      ob_time.parts_[DT_MDAY] = 1;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -5962,7 +5960,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       int32_t quarter = (ob_time.parts_[DT_MON] + 2) / MONS_PER_QUAR;
       ob_time.parts_[DT_MON] = (quarter - 1) * MONS_PER_QUAR + 1;
       ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      if (!is_mysql_compat_dates) {
+        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      }
       break;
     }
     case MONTH:
@@ -5974,6 +5974,7 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
     case RM: {
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_MDAY] - 1);
+      ob_time.parts_[DT_MDAY] = 1;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -5982,6 +5983,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_YDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case IW: {
@@ -5989,12 +5993,16 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_WDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case W: {
       //xx-01 is the first day
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_MDAY] - 1) % DAYS_PER_WEEK;
+      ob_time.parts_[DT_MDAY] -= offset;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -6015,6 +6023,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_WDAY]) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case HH:
@@ -6039,7 +6050,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       ob_time.parts_[DT_YEAR] = ob_time.parts_[DT_YEAR] / YEARS_PER_CENTURY * YEARS_PER_CENTURY + 1;
       ob_time.parts_[DT_MON] = 1;
       ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      if (!is_mysql_compat_dates) {
+        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      }
       break;
     }
     case IYYY:
@@ -6050,6 +6063,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       //not used heavily. so, do not care too much about performance !
       set_time_part_to_zero(ob_time);
       ObTimeConverter::get_first_day_of_isoyear(ob_time);
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     default: {

@@ -239,7 +239,7 @@ int TestRewrite::parse_resolve_transform(std::ofstream &of_result,
     }
 
     if (OB_SUCC(ret)) {
-      resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+      resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
       ObResolver resolver(resolver_ctx);
 
       ObStmt *stmt_tree = NULL;
@@ -407,7 +407,7 @@ int TestRewrite::parse_resolve(
     }
 
     if (OB_SUCC(ret)) {
-      resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+      resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
       ObResolver resolver(resolver_ctx);
 
       ObStmt *stmt_tree = NULL;

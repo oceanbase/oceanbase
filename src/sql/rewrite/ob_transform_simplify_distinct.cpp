@@ -155,7 +155,8 @@ int ObTransformSimplifyDistinct::remove_distinct_on_unique_exprs(ObSelectStmt *s
                                                          ctx_->schema_checker_,
                                                          select_exprs,
                                                          true /* strict */,
-                                                         is_unique, true))) {
+                                                         is_unique,
+                                                         FLAGS_IGNORE_DISTINCT))) {
     LOG_WARN("failed to check stmt unique", K(ret));
   } else if (is_unique) {
     stmt->assign_all();

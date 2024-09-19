@@ -65,7 +65,9 @@ SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, sql_monitor_statname::CAPACITY, "total i
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, sql_monitor_statname::CAPACITY, "total bytes processed by ssstore", "total bytes processed by ssstore")
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by ssstore", "total rows processed by ssstore")
 SQL_MONITOR_STATNAME_DEF(MEMSTORE_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by memstore", "total rows processed by memstore")
-
+// Statistics Collector
+SQL_MONITOR_STATNAME_DEF(ROW_THRESHOLD, sql_monitor_statname::INT, "Row count threshold for switching join", "Row count threshold for switching join")
+SQL_MONITOR_STATNAME_DEF(JOIN_METHOD, sql_monitor_statname::INT, "The final chosen join method", "The final chosen join method")
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, sql_monitor_statname::INVALID, "monitor end", "monitor stat name end")
 #endif

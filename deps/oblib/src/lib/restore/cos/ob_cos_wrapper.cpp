@@ -87,7 +87,12 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
         break;
       }
       case COS_OBJECT_NOT_EXIST: {
-        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        if (nullptr != cos_ret->error_code
+            && (0 == strcmp("NoSuchBucket", cos_ret->error_code))) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+        } else {
+          ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        }
         break;
       }
       case COS_APPEND_POSITION_ERROR: {
@@ -354,6 +359,7 @@ int ObCosWrapper::create_cos_handle(
     OB_COS_customMem &custom_mem,
     const struct ObCosAccount &account,
     const bool check_md5,
+    const char *cos_sts_token,
     ObCosWrapper::Handle **h)
 {
   int ret = OB_SUCCESS;
@@ -402,6 +408,9 @@ int ObCosWrapper::create_cos_handle(
       cos_str_set(&ctx->options->config->access_key_id, account.access_id_);
       cos_str_set(&ctx->options->config->access_key_secret, account.access_key_);
       cos_str_set(&ctx->options->config->appid, account.appid_);
+      if (nullptr != cos_sts_token) {
+        cos_str_set(&ctx->options->config->sts_token, cos_sts_token);
+      }
       ctx->options->config->is_cname = 0;
       // connection timeout, default 60s
       ctx->options->ctl->options->connect_timeout = 60;

@@ -19,6 +19,8 @@
 #include "lib/atomic/ob_atomic.h"
 #include "sql/ob_sql_context.h"
 #include "lib/allocator/page_arena.h"   // ObArenaAllocator
+#include "lib/time/ob_tsc_timestamp.h"
+#include "observer/ob_server.h"
 
 using namespace oceanbase::common;
 
@@ -101,6 +103,7 @@ int ObSqlStatInfo::init(
     } else {
       plan_id_ = plan->get_plan_id();
       plan_type_ = plan->get_plan_type();
+      first_load_time_ = plan->stat_.gen_time_;
       ObString src_stmt;
       if (plan->need_param()) {
         src_stmt = plan->stat_.stmt_;
@@ -129,6 +132,7 @@ void ObSqlStatInfo::reset()
   sql_type_ = 0;
   parsing_db_name_[0] = '\0';
   parsing_db_name_[OB_MAX_DATABASE_NAME_LENGTH] = '\0';
+  first_load_time_ = 0;
 }
 
 int ObSqlStatInfo::assign(const ObSqlStatInfo& other)
@@ -146,6 +150,7 @@ int ObSqlStatInfo::assign(const ObSqlStatInfo& other)
     MEMCPY(parsing_db_name_, other.get_parsing_db_name(), static_cast<ObString::obstr_size_t>(STRLEN(other.get_parsing_db_name()) + 1));
     sql_cs_type_ = other.get_sql_cs_type();
     sql_type_ = other.get_sql_type();
+    first_load_time_ = other.get_first_load_time();
   }
   return ret;
 }
@@ -154,6 +159,7 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
 {
   is_in_retry_ = false;
   is_route_miss_ = false;
+  is_plan_cache_hit_ = false;
 #define DEF_SQL_STAT_ITEM_INIT(def_name)           \
   def_name##_start_ = 0;                           \
   def_name##_end_ = 0;
@@ -180,8 +186,8 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
 
 #define RECORD_ITEM(se)                                                                            \
   do {                                                                                             \
-    ObDiagnoseSessionInfo *di_info = ObDiagnoseSessionInfo::get_local_diagnose_info();             \
-    elapsed_time_##se##_ = ObTimeUtility::current_time();                                          \
+    ObDiagnosticInfo *di_info = ObDiagnoseSessionInfo::get_local_diagnose_info();                  \
+    elapsed_time_##se##_ = rdtsc() * 1000 / OBSERVER.get_cpu_frequency_khz();                      \
     if (OB_NOT_NULL(di_info)) {                                                                    \
       ObStatEventAddStatArray &arr = di_info->get_add_stat_stats();                                \
       disk_reads_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);                     \
@@ -210,6 +216,7 @@ void ObExecutingSqlStatRecord::reset()
 {
   is_in_retry_ = false;
   is_route_miss_ = false;
+  is_plan_cache_hit_ = false;
 #define DEF_SQL_STAT_ITEM_INIT(def_name)           \
   def_name##_start_ = 0;                             \
   def_name##_end_ = 0;
@@ -238,6 +245,7 @@ int ObExecutingSqlStatRecord::assign(const ObExecutingSqlStatRecord& other)
 {
   is_in_retry_ = other.get_is_in_retry();
   is_route_miss_ = other.is_route_miss();
+  is_plan_cache_hit_ = other.is_plan_cache_hit();
 #define DEF_SQL_STAT_ITEM_COPY(def_name)           \
   def_name##_start_ = other.def_name##_start_;     \
   def_name##_end_ = other.def_name##_end_;
@@ -320,8 +328,8 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
           ObExecutedSqlStatRecord *sql_stat_value = cache_obj->get_record_value();
           if (!is_use_cache) {
             if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
-            LOG_WARN("failed to init sql stat info", K(ret));
-          }
+              LOG_WARN("failed to init sql stat info", K(ret));
+            }
           }
 
           if (OB_SUCC(ret)) {
@@ -431,6 +439,7 @@ int ObExecutedSqlStatRecord::sum_stat_value(ObExecutingSqlStatRecord& executing_
   (void)ATOMIC_AAF(&partition_total_, executing_record.get_partition_delta());
   (void)ATOMIC_AAF(&nested_sql_total_, executing_record.get_nested_sql_delta());
   (void)ATOMIC_AAF(&route_miss_total_, executing_record.is_route_miss()? 1:0);
+  (void)ATOMIC_AAF(&plan_cache_hit_total_, executing_record.is_plan_cache_hit());
   return OB_SUCCESS;
 }
 
@@ -491,6 +500,7 @@ int ObExecutedSqlStatRecord::assign(const ObExecutedSqlStatRecord& other)
     DEF_ASSIGN_FUNC(partition);
     DEF_ASSIGN_FUNC(nested_sql);
     DEF_ASSIGN_FUNC(route_miss);
+    DEF_ASSIGN_FUNC(plan_cache_hit);
 #undef DEF_ASSIGN_FUNC
   }
   return ret;
@@ -524,6 +534,7 @@ int ObExecutedSqlStatRecord::reset()
     DEF_RESET_FUNC(partition);
     DEF_RESET_FUNC(nested_sql);
     DEF_RESET_FUNC(route_miss);
+    DEF_RESET_FUNC(plan_cache_hit);
 #undef DEF_RESET_FUNC
 
   return ret;
@@ -555,6 +566,7 @@ int ObExecutedSqlStatRecord::update_last_snap_record_value()
     DEF_UPDATE_LAST_SNAP_FUNC(partition);
     DEF_UPDATE_LAST_SNAP_FUNC(nested_sql);
     DEF_UPDATE_LAST_SNAP_FUNC(route_miss);
+    DEF_UPDATE_LAST_SNAP_FUNC(plan_cache_hit);
   #undef DEF_UPDATE_LAST_SNAP_FUNC
   return ret;
 }

@@ -87,7 +87,9 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
         LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(database_id), K(table_item));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(table_item.database_name_), to_cstring(table_item.table_name_));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(table_item.database_name_),
+                                           helper.convert(table_item.table_name_));
         LOG_WARN("table not exist!", KR(ret), K(tenant_id), K(database_id), K(table_item));
       } else if (is_inner_table(table_schema->get_table_id())) {
         //the tablegroup of sys table must be oceanbase

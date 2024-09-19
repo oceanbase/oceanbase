@@ -17,6 +17,7 @@ namespace oceanbase
 
 using namespace share::schema;
 using namespace common;
+using namespace transaction::tablelock;
 
 
 namespace sql
@@ -59,6 +60,25 @@ int ObRenameTableStmt::get_rename_table_table_ids(
   return ret;
 }
 
+int ObRenameTableStmt::set_lock_priority(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "tenant config invalid, can not do rename", K(ret), K(tenant_id));
+  } else if (tenant_config->enable_lock_priority) {
+    if (min_cluster_version >= CLUSTER_VERSION_4_2_5_0) {
+      rename_table_arg_.lock_priority_ = ObTableLockPriority::HIGH1;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "the cluster version is not greater than CLUSTER_VERSION_4_2_5_0", K(ret),
+                   K(min_cluster_version));
+    }
+  }
+  return ret;
+}
 
 } //namespace sql
 }

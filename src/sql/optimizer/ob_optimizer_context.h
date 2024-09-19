@@ -212,6 +212,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     batch_size_(0),
     root_stmt_(root_stmt),
     enable_px_batch_rescan_(-1),
+    batch_rescan_flags_(0),
     column_usage_infos_(),
     temp_table_infos_(),
     exchange_allocated_(false),
@@ -241,11 +242,15 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     hash_join_enabled_(true),
     optimizer_sortmerge_join_enabled_(true),
     nested_loop_join_enabled_(true),
+    adaptive_join_enabled_(true),
     storage_estimation_enabled_(false),
     enable_random_plan_(false),
     enable_new_query_range_(false),
     system_stat_(),
     correlation_type_(ObEstCorrelationType::MAX),
+    optimizer_index_cost_adj_(0),
+    is_skip_scan_enabled_(false),
+    enable_better_inlist_costing_(false),
     push_join_pred_into_view_enabled_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
@@ -400,6 +405,21 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     return enable_px_batch_rescan_;
   }
 
+  void init_batch_rescan_flags(const bool enable_batch_nlj,
+                               const bool enable_batch_spf,
+                               const uint64_t opt_version)
+  {
+    enable_nlj_batch_rescan_ = enable_batch_nlj;
+    enable_spf_batch_rescan_ = enable_batch_nlj && enable_batch_spf;
+    // adaptive group-rescan is supported in 4.2.3.0
+    enable_425_batch_rescan_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0
+                               && opt_version >= COMPAT_VERSION_4_2_5;
+  }
+  inline bool enable_nlj_batch_rescan() const { return enable_nlj_batch_rescan_; }
+  inline bool enable_spf_batch_rescan() const { return enable_spf_batch_rescan_; }
+  inline bool enable_425_batch_rescan() const { return enable_425_batch_rescan_; }
+  inline bool enable_experimental_batch_rescan() const { return false; }
+
   int get_px_object_sample_rate()
   {
     if (-1 == px_object_sample_rate_) {
@@ -444,6 +464,11 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   }
   void get_runtime_filter_type() {
     runtime_filter_type_ = session_info_->get_runtime_filter_type();
+    if (OB_ISNULL(query_ctx_)) {
+      // do nothing
+    } else {
+      query_ctx_->get_global_hint().opt_params_.get_opt_param_runtime_filter_type(runtime_filter_type_);
+    }
   }
 
   int64_t get_batch_size() const { return batch_size_; }
@@ -616,13 +641,20 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_merge_join_enabled(bool enabled) { optimizer_sortmerge_join_enabled_ = enabled; }
   inline bool is_nested_join_enabled() const { return nested_loop_join_enabled_; }
   inline void set_nested_join_enabled(bool enabled) { nested_loop_join_enabled_ = enabled; }
+  inline bool is_adaptive_join_enabled() const { return adaptive_join_enabled_; }
+  inline void set_adaptive_join_enabled(bool enabled) { adaptive_join_enabled_ = enabled; }
   inline void set_generate_random_plan(bool v) { enable_random_plan_ = v; }
   inline bool generate_random_plan() const { return enable_random_plan_; }
   inline void set_enable_new_query_range(bool v) { enable_new_query_range_ = v; }
   inline bool enable_new_query_range() const { return enable_new_query_range_; }
   inline OptSystemStat& get_system_stat() { return system_stat_; }
   inline const OptSystemStat& get_system_stat() const { return system_stat_; }
-
+  inline int64_t get_optimizer_index_cost_adj() const { return optimizer_index_cost_adj_; }
+  inline void set_optimizer_index_cost_adj(int64_t v) { optimizer_index_cost_adj_ = v; }
+  inline bool get_is_skip_scan_enabled() const { return is_skip_scan_enabled_; }
+  inline void set_is_skip_scan_enabled(bool v) { is_skip_scan_enabled_ = v; }
+  inline bool get_enable_better_inlist_costing() const { return enable_better_inlist_costing_; }
+  inline void set_enable_better_inlist_costing(bool v) { enable_better_inlist_costing_ = v; }
   inline void set_correlation_type(ObEstCorrelationType type) { correlation_type_ = type; }
   inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
   inline bool is_push_join_pred_into_view_enabled() const { return push_join_pred_into_view_enabled_; }
@@ -663,6 +695,14 @@ private:
   int64_t batch_size_;
   ObDMLStmt *root_stmt_;
   int enable_px_batch_rescan_;
+  union {
+    int64_t batch_rescan_flags_;
+    struct {
+      int64_t enable_nlj_batch_rescan_  : 1;  // enable nestloop inner path batch rescan
+      int64_t enable_spf_batch_rescan_  : 1;  // enable subplan filter batch rescan
+      int64_t enable_425_batch_rescan_  : 1;  // enbale batch rescan behaviors supported in 4.2.5
+    };
+  };
   common::ObSEArray<ColumnUsageArg, 16, common::ModulePageAllocator, true> column_usage_infos_;
   common::ObSEArray<ObSqlTempTableInfo*, 1, common::ModulePageAllocator, true> temp_table_infos_;
   bool exchange_allocated_;
@@ -709,11 +749,15 @@ private:
   bool hash_join_enabled_;
   bool optimizer_sortmerge_join_enabled_;
   bool nested_loop_join_enabled_;
+  bool adaptive_join_enabled_;
   bool storage_estimation_enabled_;
   bool enable_random_plan_;
   bool enable_new_query_range_;
   OptSystemStat system_stat_;
   ObEstCorrelationType correlation_type_;
+  int64_t optimizer_index_cost_adj_;
+  bool is_skip_scan_enabled_;
+  bool enable_better_inlist_costing_;
   bool push_join_pred_into_view_enabled_;
 };
 }

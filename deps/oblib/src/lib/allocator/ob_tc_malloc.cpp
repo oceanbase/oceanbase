@@ -146,6 +146,7 @@ void  __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool
 #ifdef ENABLE_SANITY
   abort_unless(init_sanity());
 #endif
+  OB_LOGGER.init_allocator();
 }
 
 int64_t get_virtual_memory_used(int64_t *resident_size)

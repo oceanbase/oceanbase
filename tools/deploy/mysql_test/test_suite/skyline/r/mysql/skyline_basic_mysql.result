@@ -625,7 +625,7 @@ Outputs & filters:
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,100,MAX,MAX ; 100,MAX,MAX,MAX), 
-      range_cond([t1.b = 100], [t1.c > 100], [t1.c > 0])
+      range_cond([t1.b = 100], [t1.c > 100])
 explain select a, b, c from t1 where b = 100 and a > 0 and a < 100 and c = 200;
 Query Plan
 =========================================================
@@ -688,6 +688,9 @@ Outputs & filters:
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+  Equal Parameter Constraints:
+      :5 = :3
+      :4 = :2
 explain select a, b, c, d from t1 where b = 100 and a > 0 and a < 100 and c = 200 limit 100;
 Query Plan
 =========================================================
@@ -1088,6 +1091,8 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), 
       range_cond([t1.b = 100])
+  Expr Constraints:
+      cast(100, INT(11, 0)) = 100 result is TRUE
 explain select distinct a, b, c from t1 where (b > 100 and b < 200) or (a < 200 and a > 100) order by b desc;
 Query Plan
 ==================================================================
@@ -1591,6 +1596,8 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t5.pk]), range[100 ; 100], 
       range_cond([t5.pk = 100])
+  Expr Constraints:
+      cast(100, INT(11, 0)) = 100 result is TRUE
 explain select v1, pk from t5 where pk = 100 and v1 = 200 order by v1 desc;
 Query Plan
 =========================================
@@ -1605,6 +1612,8 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t5.pk]), range[100 ; 100], 
       range_cond([t5.pk = 100])
+  Expr Constraints:
+      cast(200, INT(11, 0)) = 200 result is TRUE
 explain select a from t6 where b = 1 order by c desc limit 9;
 Query Plan
 ===============================================================
@@ -3757,17 +3766,22 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
       unstable_index_name:[t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1;
@@ -3808,16 +3822,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       unstable_index_name:[t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1;
@@ -3858,16 +3877,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2;
@@ -3912,11 +3936,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2;
@@ -3960,11 +3989,16 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1 order by c2;
@@ -4005,17 +4039,22 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1]
       unstable_index_name:[t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1 order by c3;
@@ -4056,16 +4095,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2 order by c1;
@@ -4110,11 +4154,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i2, t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c2;
@@ -4159,11 +4208,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c3;
@@ -4211,11 +4265,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0;
@@ -4256,15 +4315,19 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where c1 < 0 and c1 > 0;
@@ -4305,15 +4368,19 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1;
@@ -4354,16 +4421,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by pk;
@@ -4404,16 +4476,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c1;
@@ -4457,11 +4534,16 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c2;
@@ -4503,16 +4585,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
   Expr Constraints:
@@ -4555,15 +4642,20 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by pk;
@@ -4604,16 +4696,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by c1;
@@ -4655,15 +4752,20 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
   Expr Constraints:
@@ -4709,16 +4811,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0;
@@ -4759,15 +4866,19 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0;
@@ -4812,11 +4923,14 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1, t12i2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 0
+      :1 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0 and c3 = 1;
@@ -4861,11 +4975,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0 and c3 = 1;
@@ -4910,11 +5029,15 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1, t12i2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 0
+      :1 => 0
+      :2 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 set @@recyclebin = 'off';

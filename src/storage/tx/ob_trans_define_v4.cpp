@@ -580,6 +580,7 @@ void ObTxDesc::reset()
 
   addr_.reset();
   tx_id_.reset();
+  ObActiveSessionGuard::get_stat().tx_id_ = 0;
   xid_.reset();
   xa_tightly_couple_ = true;
   xa_start_addr_.reset();
@@ -634,6 +635,18 @@ void ObTxDesc::reset()
   xa_ctx_ = NULL;
   continuous_lock_conflict_cnt_ = 0;
   modified_tables_.reset();
+}
+
+void ObTxDesc::set_tx_id(const ObTransID &tx_id)
+{
+  tx_id_ = tx_id;
+  ObActiveSessionGuard::get_stat().tx_id_ = tx_id.get_id();
+}
+
+void ObTxDesc::reset_tx_id()
+{
+  tx_id_.reset();
+  ObActiveSessionGuard::get_stat().tx_id_ = 0;
 }
 
 const ObString &ObTxDesc::get_tx_state_str() const {
@@ -693,7 +706,7 @@ void ObTxDesc::dump_and_print_trace()
   }
 }
 
-bool ObTxDesc::in_tx_or_has_extra_state()
+bool ObTxDesc::in_tx_or_has_extra_state() const
 {
   ObSpinLockGuard guard(lock_);
   return in_tx_or_has_extra_state_();

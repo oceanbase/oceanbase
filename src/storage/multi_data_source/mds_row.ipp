@@ -588,9 +588,10 @@ int64_t MdsRow<K, V>::to_string(char *buf, const int64_t buf_len) const
   if (MdsRowBase<K, V>::p_mds_unit_) {
     p_mds_table = MdsRowBase<K, V>::p_mds_unit_->p_mds_table_;
   }
-  databuff_printf(buf, buf_len, pos, "sorted_list={%s}, ", to_cstring(sorted_list_));
-  databuff_printf(buf, buf_len, pos, "mds_table={%s}, ", p_mds_table ? to_cstring(*p_mds_table) : "NULL");
-  databuff_printf(buf, buf_len, pos, "key={%s}", MdsRowBase<K, V>::key_ ? to_cstring(* MdsRowBase<K, V>::key_) : "NULL");
+  databuff_print_multi_objs(buf, buf_len, pos, "sorted_list={", sorted_list_, "}, ");
+  // databuff_print_multi_objs support NULL pointer
+  databuff_print_multi_objs(buf, buf_len, pos, "mds_table={", p_mds_table, "}, ");
+  databuff_print_multi_objs(buf, buf_len, pos, "key={", MdsRowBase<K, V>::key_, "}");
   return pos;
 }
 
@@ -609,7 +610,7 @@ int MdsRow<K, V>::fill_virtual_info(const Key &key,
   constexpr int64_t buffer_size = 512_B;
   char stack_buffer[buffer_size] = { 0 };
   int64_t pos = 0;
-  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(key)))) {
+  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, key))) {
   } else {
     ObString key_str(pos, stack_buffer);
     sorted_list_.for_each_node_from_head_to_tail_until_true([&ret, &key, &idx, &mds_node_info_array, &key_str, unit_id, this](const UserMdsNode<K, V> &node) {

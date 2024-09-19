@@ -206,6 +206,8 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
       } else {
         LOG_WARN("PalfHandle seek fail", KR(ret), K(tenant_id_), K(locate_param));
       }
+    } else if (OB_FAIL(group_iter.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
+      LOG_WARN("iterator set_io_context failed", KR(ret), K_(tenant_id), K(locate_param));
     } else if (OB_FAIL(group_iter.next())) {
       LOG_WARN("PalfGroupBufferIterator next failed, unexpected", KR(ret), K_(tenant_id), K(ls_id));
     } else if (OB_FAIL(group_iter.get_entry(log_group_entry, result_lsn))) {

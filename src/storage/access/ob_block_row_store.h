@@ -65,7 +65,7 @@ public:
   virtual void reset();
   virtual void reuse();
   virtual int init(const ObTableAccessParam &param);
-  int open();
+  int open(ObTableIterParam &iter_param);
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_disabled() const { return disabled_; }
   OB_INLINE void disable() { disabled_ = true; }

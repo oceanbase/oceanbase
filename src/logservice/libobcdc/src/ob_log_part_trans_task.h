@@ -288,6 +288,10 @@ private:
       const bool enable_output_hidden_primary_key,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
       ColValueList &cols);
+  int parse_outrow_lob_column_(
+      const bool is_parse_new_col,
+      const uint64_t column_id,
+      const ObLobCommon &lob_common);
   int parse_rowkey_(
       ColValueList &rowkey_cols,
       const common::ObStoreRowkey &rowkey,
@@ -622,6 +626,7 @@ private:
   // OB_DDL_ADD_SUB_PARTITION
   // OB_DDL_DROP_SUB_PARTITION
   bool is_sub_tls_id_alter_ddl_(const int64_t ddl_operation_type);
+  bool is_table_recover_end_ddl_(const int64_t ddl_operation_type);
   int init_ddl_unique_id_(common::ObString &ddl_unique_id);
 
 private:

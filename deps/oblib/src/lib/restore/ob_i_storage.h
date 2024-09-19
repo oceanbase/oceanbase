@@ -28,6 +28,7 @@ namespace common
 static constexpr int64_t MAX_APPENDABLE_FRAGMENT_SUFFIX_LENGTH = 64;
 static constexpr int64_t MAX_APPENDABLE_FRAGMENT_LENGTH = 128;
 static constexpr char APPENDABLE_OBJECT_ALLOCATOR[] = "AppendableAlloc";
+static constexpr int64_t IO_HANDLED_SIZE_ZERO = 0;
 
 enum StorageOpenMode
 {
@@ -60,6 +61,7 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const char *fragment_name, char *name_buf, const int64_t name_buf_len);
 int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const int64_t start, const int64_t end, char *name_buf, const int64_t name_buf_len);
+int ob_set_field(const char *value, char *field, const uint32_t field_length);
 int ob_apr_abort_fn(int retcode);
 
 struct ObStorageObjectMetaBase
@@ -291,12 +293,41 @@ public:
   virtual bool is_opened() const = 0;
 };
 
-class ObObjectStorageMallocHookGuard : public lib::ObMallocHookAttrGuard
+class ObObjectStorageGuard : public lib::ObMallocHookAttrGuard
 {
 public:
-  ObObjectStorageMallocHookGuard(const ObObjectStorageInfo *storage_info);
-  ~ObObjectStorageMallocHookGuard();
+  ObObjectStorageGuard(
+      const char *file, const int64_t line, const char *func,
+      const int &ob_errcode,
+      const ObObjectStorageInfo *storage_info,
+      const ObString &uri,
+      const int64_t &handled_size);
+  ~ObObjectStorageGuard();
+
+private:
+  void print_access_storage_log_();
+
+private:
+  static constexpr int64_t WARN_THRESHOLD_TIME_US = 1 * 1000; // 1ms
+  static constexpr double WARN_THRESHOLD_SPEED_MB_S = 1.0;    // 1MB/s
+
+  const char *file_name_;
+  const int64_t line_;
+  const char *func_name_;
+  const int &ob_errcode_;
+  const ObObjectStorageInfo *storage_info_;
+  const int64_t start_time_us_;
+  // Note: We don't use a reference here
+  // because if passing a `const char *` to the constructor creates a temporary `ObString` object.
+  // This temporary object is destroyed when the constructor exits, leaving the reference dangling.
+  const ObString uri_;
+  const int64_t &handled_size_;
 };
+
+#define OBJECT_STORAGE_GUARD(storage_info, uri, handled_size) \
+    common::ObObjectStorageGuard object_storage_guard_(       \
+        __FILE__, __LINE__, __FUNCTION__,                     \
+        ret, storage_info, uri, handled_size)
 
 }//common
 }//oceanbase

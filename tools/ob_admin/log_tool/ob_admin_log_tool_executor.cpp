@@ -247,7 +247,9 @@ int ObAdminLogExecutor::dump_single_log_block_(const char *block_path,
   if (OB_FAIL(dump_block.dump())) {
     LOG_WARN("ObAdminDumpBlock dump failed", K(ret), K(block_path));
   } else if (LogFormatFlag::STAT_FORMAT == str_arg.flag_) {
-    fprintf(stdout, "LOG_STAT : %s, total_size:%ld\n", to_cstring(*(str_arg.log_stat_)), str_arg.log_stat_->total_size());
+    ObCStringHelper helper;
+    fprintf(stdout, "LOG_STAT : %s, total_size:%ld\n",
+        helper.convert(*(str_arg.log_stat_)), str_arg.log_stat_->total_size());
   }
   return ret;
 }

@@ -115,6 +115,7 @@ private:
   int write_extern_infos_();
   int write_tenant_backup_set_infos_();
   int write_extern_locality_info_(storage::ObExternTenantLocalityInfoDesc &locality_info);
+  int write_extern_tenant_param_info_();
   int write_backup_set_info_(const share::ObBackupSetTaskAttr &set_task_attr, 
       storage::ObExternBackupSetInfoDesc &backup_set_info);
   int write_extern_diagnose_info_(const storage::ObExternTenantLocalityInfoDesc &locality_info,
@@ -129,6 +130,7 @@ private:
       const share::SCN &scn = share::SCN::min_scn(), const int64_t end_ts = 0);
   int get_next_status_(const share::ObBackupStatus &cur_status, share::ObBackupStatus &next_status);
   int get_backup_end_scn_(share::SCN &end_scn) const;
+  int get_resource_pool_infos_(ObIArray<ObBackupResourcePool> &resource_pool_infos) const;
 private:
   bool is_inited_;
   uint64_t meta_tenant_id_;

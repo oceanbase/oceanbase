@@ -982,7 +982,8 @@ int ObTransformSimplifyGroupby::get_valid_count_aggr(ObSelectStmt *select_stmt,
       if (OB_ISNULL(aggr = aggrs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null", K(ret), K(aggr));
-      } else if (T_FUN_COUNT != aggr->get_expr_type() || 1 != aggr->get_real_param_exprs().count()) {
+      } else if (T_FUN_COUNT != aggr->get_expr_type() ||
+                 1 != aggr->get_real_param_exprs().count()) {
         /* do nothing */
         /* count(distinct 1, null) can not convert, count(1, null) do not convert now */
       } else if (OB_ISNULL(param = aggr->get_param_expr(0))) {

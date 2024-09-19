@@ -98,6 +98,8 @@ const char *ob_sql_type_str(ObObjType type)
       "UDT",
       "DECIMAL_INT",
       "COLLECTION",
+      "MYSQL_DATE",
+      "MYSQL_DATETIME",
       ""
     },
     {
@@ -155,6 +157,8 @@ const char *ob_sql_type_str(ObObjType type)
       "UDT",
       "DECIMAL_INT",
       "COLLECTION",
+      "MYSQL_DATE",
+      "MYSQL_DATETIME",
       ""
     }
   };
@@ -389,6 +393,8 @@ DEF_TYPE_STR_FUNCS_PRECISION(number_float, "float", "");
 DEF_TYPE_TEXT_FUNCS_LENGTH(lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
 DEF_TYPE_TEXT_FUNCS_LENGTH(json, "json", "json");
 DEF_TYPE_TEXT_FUNCS_LENGTH(geometry, (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"), (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"));
+DEF_TYPE_STR_FUNCS(mysql_date, "mysql_date", "");
+DEF_TYPE_STR_FUNCS_SCALE_DEFAULT_ZERO(mysql_datetime, "mysql_datetime", "", "")
 
 ///////////////////////////////////////////////////////////
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(null, "null", "");
@@ -438,6 +444,8 @@ DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(urowid, "urowid", "");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(json, "json", "json");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(geometry, (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"), (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"));
+DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(mysql_date, "mysql_date", "");
+DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_ODATE(mysql_datetime, "mysql_datetime", "");
 
 
 int ob_empty_str(char *buff, int64_t buff_length, ObCollationType coll_type)
@@ -753,6 +761,8 @@ int ob_sql_type_str(char *buff,
     nullptr, // udt
     nullptr, //decimal int
     nullptr, // collection
+    ob_date_str, // mysql date
+    ob_datetime_str, // mysql datetime
     ob_empty_str             // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
@@ -840,6 +850,8 @@ int ob_sql_type_str(char *buff,
     nullptr,//udt
     nullptr,//decimal int
     nullptr,//collection
+    ob_date_str_without_accuracy,//mysql date
+    ob_datetime_str_without_accuracy,//mysql datetime
     ob_empty_str   // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(obSqlTypeStrWithoutAccuracyFunc) == ObMaxType + 1, "Not enough initializer");
@@ -940,6 +952,8 @@ const char *ob_sql_tc_str(ObObjTypeClass tc)
     "UDT",
     "DECIMAL_INT",
     "COLLECTION",
+    "MYSQL_DATE",
+    "MYSQL_DATETIME",
     ""
   };
   static_assert(sizeof(sql_tc_name) / sizeof(const char *) == ObMaxTC + 1, "Not enough initializer");

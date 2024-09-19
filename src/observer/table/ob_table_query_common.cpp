@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_common.h"
 #include "ob_htable_filter_operator.h"
+#include "observer/table/redis/ob_redis_iterator.h"
 
 namespace oceanbase
 {
@@ -67,7 +68,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObTableQueryResultIterator *tmp_result_iter = nullptr;
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
-  ObString kv_attributes;
+  ObKVAttr kv_attributes;
 
   ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx.get_schema_cache_guard();
   if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
@@ -93,15 +94,12 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       } else {
         tmp_result_iter = htable_result_iter;
         ObHColumnDescriptor desc;
-        if (OB_FAIL(desc.from_string(kv_attributes))) {
-          LOG_WARN("fail to parse hcolumn_desc from kv attributes", K(ret), K(kv_attributes));
-        } else {
-          if (desc.get_time_to_live() > 0) {
-            htable_result_iter->set_ttl(desc.get_time_to_live());
-          }
-          if (desc.get_max_version() > 0) {
-            htable_result_iter->set_max_version(desc.get_max_version());
-          }
+        desc.from_kv_attribute(kv_attributes);
+        if (desc.get_time_to_live() > 0) {
+          htable_result_iter->set_ttl(desc.get_time_to_live());
+        }
+        if (desc.get_max_version() > 0) {
+          htable_result_iter->set_max_version(desc.get_max_version());
         }
       }
     } else { // tableapi
@@ -207,6 +205,37 @@ int ObTableQueryUtils::get_full_column_names(ObKvSchemaCacheGuard &schema_cache_
       } else if (OB_FAIL(names.push_back(column_info->column_name_))) {
         LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTableQueryUtils::get_scan_row_interator(const ObTableCtx &tb_ctx,
+                                              ObTableApiScanRowIterator *&scan_iter)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator &allocator = tb_ctx.get_allocator();
+  ObKvSchemaCacheGuard *cache_guard = tb_ctx.get_schema_cache_guard();
+  ObKVAttr kv_attributes;
+  if (OB_ISNULL(cache_guard)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null schema cache guard", K(ret));
+  } else if (OB_FAIL(cache_guard->get_kv_attributes(kv_attributes))) {
+    LOG_WARN("fail to get kv attributes", K(ret), K(*cache_guard));
+  } else if (kv_attributes.is_redis_ttl_) {
+    ObRedisRowIterator *redis_row_iter = nullptr;
+    if (OB_ISNULL(redis_row_iter = OB_NEWx(ObRedisRowIterator, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc ObTableTTLDeleteRowIterator", K(ret));
+    } else if (OB_FAIL(redis_row_iter->init_scan(kv_attributes, tb_ctx.redis_ttl_ctx()))) {
+      LOG_WARN("fail to init redis row iterator", KR(ret));
+    } else {
+      scan_iter = redis_row_iter;
+    }
+  } else {
+    if (OB_ISNULL(scan_iter = OB_NEWx(ObTableApiScanRowIterator, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc ObTableTTLDeleteRowIterator", K(ret));
     }
   }
   return ret;

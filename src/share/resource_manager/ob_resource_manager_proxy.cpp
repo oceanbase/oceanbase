@@ -673,6 +673,10 @@ int ObResourceManagerProxy::check_if_function_exist(const ObString &function_nam
       0 == function_name.compare("HA_LOW") ||
       0 == function_name.compare("DDL_HIGH") ||
       0 == function_name.compare("DDL") ||
+      0 == function_name.compare("OPT_STATS") ||
+      0 == function_name.compare("CLOG_LOW")  ||
+      0 == function_name.compare("CLOG_MID")  ||
+      0 == function_name.compare("CLOG_HIGH") ||
       0 == function_name.compare("OTHER_BACKGROUND")) {
     exist = true;
   } else {

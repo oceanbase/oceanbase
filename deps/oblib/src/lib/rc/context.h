@@ -67,7 +67,6 @@ namespace lib
   CONTEXT_P(condition, lib::ContextSource::CREATE,                                              \
             lib::DynamicInfo(), __VA_ARGS__, &static_info)
 
-
 using std::nullptr_t;
 using lib::ObMemAttr;
 class Flow;
@@ -286,6 +285,7 @@ public:
   __MemoryContext__ *ref_context() const
   { return ref_context_; }
   bool check_magic_code() const { return MAGIC_CODE == magic_code_; }
+  int64_t tree_mem_hold();
   static MemoryContext &root();
 private:
   int64_t magic_code_;
@@ -605,6 +605,20 @@ public:
       abort_unless(context.seq_id_ == ref_context->seq_id_);
       destory_context(ref_context);
     }
+  }
+  int64_t tree_mem_hold()
+  {
+    int64_t total = 0;
+    if (!tree_node_.with_lock_) {
+      TreeNode *child_node = tree_node_.child_;
+      while (child_node != nullptr) {
+        __MemoryContext__ *child = node2context(child_node);
+        total += child->tree_mem_hold();
+        child_node = child_node->next_;
+      }
+      total += hold();
+    }
+    return total;
   }
 public:
   int64_t magic_code_;

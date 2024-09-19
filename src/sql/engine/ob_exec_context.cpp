@@ -26,6 +26,7 @@
 #include "ob_operator.h"
 #include "observer/ob_server.h"
 #include "storage/lob/ob_lob_persistent_reader.h"
+#include "sql/executor/ob_memory_tracker.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -492,6 +493,8 @@ int ObExecContext::check_status()
     LOG_WARN("px execution was interrupted", K(ic), K(ret));
   } else if (lib::Worker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
     ret = OB_KILLED_BY_THROTTLING;
+  } else if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
+    LOG_WARN("Exceeded memory usage limit", K(ret));
   }
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCCESS != (tmp_ret = check_extra_status())) {

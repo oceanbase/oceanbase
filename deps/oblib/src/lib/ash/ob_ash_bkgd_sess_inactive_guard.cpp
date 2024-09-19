@@ -18,8 +18,8 @@
 using namespace oceanbase::common;
 
 ObBKGDSessInActiveGuard::ObBKGDSessInActiveGuard() {
-  ObActiveSessionGuard::set_bkgd_sess_inactive();
+  ObActiveSessionGuard::set_sess_inactive();
 }
 ObBKGDSessInActiveGuard::~ObBKGDSessInActiveGuard() {
-  ObActiveSessionGuard::set_bkgd_sess_active();
+  ObActiveSessionGuard::set_sess_active();
 }

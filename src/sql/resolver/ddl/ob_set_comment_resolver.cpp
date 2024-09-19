@@ -128,8 +128,9 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("get min data_version failed", K(ret), K(session_info_->get_effective_tenant_id()));
         } else if (compat_version < DATA_VERSION_4_2_2_0 && table_schema->is_view_table()) {
           ret = OB_ERR_WRONG_OBJECT;
-          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(database_name), to_cstring(table_name),
-                         "BASE TABLE");
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(database_name),
+                         helper.convert(table_name), "BASE TABLE");
           LOG_WARN("version before 4.2.2 not support comment on view", K(ret));
         } else {
           alter_table_stmt->set_table_id(table_schema->get_table_id());
@@ -190,8 +191,9 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("get min data_version failed", K(ret), K(session_info_->get_effective_tenant_id()));
           } else if (compat_version < DATA_VERSION_4_2_2_0 && table_schema->is_view_table()) {
             ret = OB_ERR_WRONG_OBJECT;
-            LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(database_name), to_cstring(table_name),
-                           "BASE TABLE");
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(database_name),
+                           helper.convert(table_name), "BASE TABLE");
             LOG_WARN("version before 4.2.2 not support comment on column of view", K(ret));
           } else if (OB_FAIL(schema_checker_->check_column_exists(tenant_id,
                                                                   table_schema->get_table_id(),

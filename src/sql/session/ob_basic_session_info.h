@@ -53,6 +53,9 @@ namespace oceanbase
 namespace observer {
 class ObSMConnection;
 }
+namespace common {
+class ObDiagnosticInfo;
+}
 using sql::FLTControlInfo;
 namespace sql
 {
@@ -867,7 +870,6 @@ public:
   int set_session_active(const ObString &label,
                          obmysql::ObMySQLCmd cmd);
   int set_session_active();
-  void setup_ash();
   const common::ObString get_current_query_string() const;
   const common::ObString get_top_query_string() const;
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
@@ -993,6 +995,7 @@ public:
   void set_cur_sql_id(char *sql_id);
   void reset_cur_sql_id() {sql_id_[0] = '\0';}
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
+  virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   void reset_cur_phy_plan_to_null();
 
   void get_flt_span_id(ObString &span_id) const;
@@ -1029,6 +1032,7 @@ public:
   int get_name_case_mode(common::ObNameCaseMode &case_mode) const;
   int get_init_connect(common::ObString &str) const;
   int get_locale_name(common::ObString &str) const;
+  int get_optimizer_cost_based_transformation(int64_t &cbqt_policy) const;
   /// @}
 
   ///@{ user variables related:
@@ -1263,10 +1267,14 @@ public:
   void reset_current_plan_id()
   {
     plan_id_ = 0;
-    ash_stat_.plan_id_ = 0;
+    ObActiveSessionGuard::get_stat().plan_id_ = 0;
   }
   uint64_t get_current_plan_hash() const { return plan_hash_; }
-  void reset_current_plan_hash() { plan_hash_ = 0; }
+  void reset_current_plan_hash()
+  {
+    plan_hash_ = 0;
+    ObActiveSessionGuard::get_stat().plan_hash_ = 0;
+  }
   uint64_t get_last_plan_id() const { return last_plan_id_; }
   void set_last_plan_id(uint64_t plan_id) { last_plan_id_ = plan_id; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
@@ -1277,13 +1285,7 @@ public:
       last_trace_id_ = *trace_id;
     }
   }
-  void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
-  {
-    if (OB_ISNULL(trace_id)) {
-    } else {
-      curr_trace_id_ = *trace_id;
-    }
-  }
+  void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id);
   // forbid use jit
   int get_jit_enabled_mode(ObJITEnableMode &jit_mode) const
   {
@@ -1402,13 +1404,14 @@ public:
   inline void set_client_sessid_support(bool is_client_sessid_support)
               { is_client_sessid_support_ = is_client_sessid_support; }
   inline bool is_client_sessid_support() { return is_client_sessid_support_; }
+  inline void set_feedback_proxy_info_support(const bool is_feedback_proxy_info_support) { is_feedback_proxy_info_support_ = is_feedback_proxy_info_support; }
+  inline bool is_feedback_proxy_info_support() { return is_feedback_proxy_info_support_; }
   int replace_new_session_label(uint64_t policy_id, const share::ObLabelSeSessionLabel &new_session_label);
   int load_default_sys_variable(common::ObIAllocator &allocator, int64_t var_idx);
 
   int set_session_temp_table_used(const bool is_used);
   int get_session_temp_table_used(bool &is_used) const;
   int get_enable_optimizer_null_aware_antijoin(bool &is_enabled) const;
-  common::ObActiveSessionStat &get_ash_stat() { return ash_stat_; }
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
   static int check_optimizer_features_enable_valid(const ObObj &val);
   int get_compatibility_control(share::ObCompatType &compat_type) const;
@@ -2422,7 +2425,6 @@ private:
   // 构造当前 session 的线程 id，用于 all_virtual_processlist 中的 THREAD_ID 字段
   // 通过本 id 可以快速对 worker 做 `pstack THREADID` 操作
   int64_t thread_id_;
-  common::ObActiveSessionStat ash_stat_;
   // indicate whether user password is expired, is set when session is established.
   // will not be changed during whole session lifetime unless user changes password
   // in this session.
@@ -2431,6 +2433,7 @@ private:
   int64_t process_query_time_;
   int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
   bool is_client_sessid_support_; //client session id support flag
+  bool is_feedback_proxy_info_support_; // to confirm whether obproxy supports feedback_proxy_info
   bool use_rich_vector_format_;
   char thread_name_[OB_THREAD_NAME_BUF_LEN];
   bool is_real_inner_session_;

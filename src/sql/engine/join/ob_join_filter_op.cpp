@@ -401,7 +401,7 @@ bool ObJoinFilterOp::is_valid()
 }
 
 ObJoinFilterOp::ObJoinFilterOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
-  : ObOperator(exec_ctx, spec, input),
+  : ObByPassOperator(exec_ctx, spec, input),
     filter_create_msg_(nullptr),
     batch_hash_values_(NULL),
     lucky_devil_champions_()
@@ -451,7 +451,7 @@ int ObJoinFilterOp::inner_rescan()
     LOG_WARN("fail to do create filter rescan", K(ret));
   } else if (MY_SPEC.is_use_mode() && OB_FAIL(do_use_filter_rescan())) {
     LOG_WARN("fail to do use filter rescan", K(ret));
-  } else if (OB_FAIL(ObOperator::inner_rescan())) {
+  } else if (OB_FAIL(ObByPassOperator::inner_rescan())) {
     LOG_WARN("operator rescan failed", K(ret));
   }
   return ret;

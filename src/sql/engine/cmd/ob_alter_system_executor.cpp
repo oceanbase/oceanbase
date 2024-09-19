@@ -17,7 +17,6 @@
 #include "share/ob_force_print_log.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/inner_table/ob_inner_table_schema.h"
-#include "share/backup/ob_backup_struct.h"
 #include "observer/ob_server.h"
 #include "sql/resolver/cmd/ob_bootstrap_stmt.h"
 #include "sql/engine/ob_exec_context.h"
@@ -49,6 +48,9 @@
 #include "share/table/ob_ttl_util.h"
 #include "rootserver/ob_service_name_command.h"
 #include "rootserver/ob_tenant_event_def.h"
+#include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
+#include "share/table/ob_redis_importer.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -1910,7 +1912,8 @@ int ObCancelTaskExecutor::parse_task_id(
 	} else {
 
 	  // double check
-	  n = snprintf(task_id_buf, sizeof(task_id_buf), "%s", to_cstring(task_id));
+    ObCStringHelper helper;
+	  n = snprintf(task_id_buf, sizeof(task_id_buf), "%s", helper.convert(task_id));
 		if (n < 0 || n >= sizeof(task_id_buf)) {
 		  ret = OB_BUF_NOT_ENOUGH;
 		  LOG_WARN("invalid task id", K(ret), K(n), K(task_id), K(task_id_buf));
@@ -2008,7 +2011,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("non-sys tenant change tenant not allowed", KR(ret),
              K(effective_tenant_id), K(login_tenant_id));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation from regular user tenant");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "operation from regular user tenant");
   } else if (session_info->get_in_transaction()) { //case 2
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("change tenant in transaction not allowed", KR(ret), KPC(session_info));
@@ -2437,6 +2440,34 @@ int ObBackupKeyExecutor::execute(ObExecContext &ctx, ObBackupKeyStmt &stmt)
   return ret;
 }
 
+int ObBackupClusterParamExecutor::execute(ObExecContext &ctx, ObBackupClusterParamStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  ObSQLSessionInfo *session_info = ctx.get_my_session();
+  ObCommonRpcProxy *common_proxy = NULL;
+  uint64_t login_tenant_id = OB_INVALID_TENANT_ID;
+  const share::ObBackupPathString &backup_dest = stmt.get_backup_dest();
+
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("task exec ctx is null", KR(ret));
+  } else if (OB_ISNULL(common_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (FALSE_IT(login_tenant_id = session_info->get_login_tenant_id())) {
+  } else if (OB_SYS_TENANT_ID != login_tenant_id) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("non-sys tenant backup cluster parameters not allowed", KR(ret), K(login_tenant_id));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "operation from regular user tenant");
+  } else if (OB_FAIL(backup::ObBackupParamOperator::backup_cluster_parameters(backup_dest))) {
+    LOG_WARN("failed to backup cluster parameters", KR(ret), K(backup_dest));
+  } else {
+    LOG_INFO("backup cluster parameters", KR(ret), K(stmt));
+  }
+  return ret;
+}
+
 int ObBackupBackupsetExecutor::execute(ObExecContext &ctx, ObBackupBackupsetStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -2831,6 +2862,45 @@ int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unknown service operation", KR(ret), K(arg));
   }
+  return ret;
+}
+
+int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
+  ObTimeoutCtx timeout_ctx;
+  const table::ObModuleDataArg &arg = stmt.get_arg();
+  ObMySQLProxy *sql_proxy = nullptr;
+  LOG_INFO("start to handle module_data", K(arg), K(INNER_SQL_TIMEOUT), K(start_time));
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ObModuleDataArg", K(ret), K(arg));
+  } else if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not null", K(ret));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, INNER_SQL_TIMEOUT))) {
+    LOG_WARN("failed to set default timeout ctx", K(ret), K(INNER_SQL_TIMEOUT));
+  } else {
+    switch (arg.module_) {
+      case table::ObModuleDataArg::REDIS: {
+        table::ObRedisImporter importer(arg.target_tenant_id_, *sql_proxy);
+        if (OB_FAIL(importer.exec_op(arg.op_))) {
+          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
+        }
+        break;
+      }
+      // add other module before here
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "module except 'redis'");
+        LOG_WARN("modules except 'redis' are not supported yet", K(ret), K(arg.module_));
+      }
+    }
+  }
+  LOG_INFO("handle module data ended",
+      K(ret), K(arg), "cost_time", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 } // end namespace sql

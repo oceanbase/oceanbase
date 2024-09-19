@@ -29,6 +29,8 @@ public:
   virtual ~ObLockTableExecutor() {}
   int execute(ObExecContext &ctx, ObLockTableStmt &stmt);
 private:
+  int execute_oracle_(ObExecContext &ctx, ObLockTableStmt &stmt);
+  int execute_mysql_(ObExecContext &ctx, ObLockTableStmt &stmt);
   DISALLOW_COPY_AND_ASSIGN(ObLockTableExecutor);
 };
 

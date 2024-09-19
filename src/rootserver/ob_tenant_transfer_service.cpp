@@ -555,18 +555,25 @@ int ObTenantTransferService::construct_ls_member_list_and_learner_list_(
   ls_learner_list.reset();
   ObString ls_member_list_str;
   ObString ls_learner_list_str;
+  ObCStringHelper helper;
+  const char *ls_member_list_ptr = nullptr;
+  const char *ls_learner_list_ptr = nullptr;
   if (OB_FAIL(res.next())) {
     LOG_WARN("next failed", KR(ret));
   } else if (OB_FAIL(res.get_varchar("PAXOS_MEMBER_LIST", ls_member_list_str))) {
     LOG_WARN("fail to get PAXOS_MEMBER_LIST", KR(ret));
   } else if (OB_FAIL(res.get_varchar("LEARNER_LIST", ls_learner_list_str))) {
     LOG_WARN("fail to get LEARNER_LIST", KR(ret));
+  } else if (OB_FAIL(helper.convert(ls_member_list_str, ls_member_list_ptr))) {
+    LOG_WARN("convert ls_member_list", KR(ret), K(ls_member_list_str));
   } else if (OB_FAIL(ObLSReplica::text2member_list(
-      to_cstring(ls_member_list_str),
+      ls_member_list_ptr,
       ls_member_list))) {
     LOG_WARN("text2member_list failed", KR(ret), K(ls_member_list_str));
+  } else if (OB_FAIL(helper.convert(ls_learner_list_str, ls_learner_list_ptr))) {
+    LOG_WARN("convert ls_learner_list failed", KR(ret), K(ls_learner_list_str));
   } else if (OB_FAIL(ObLSReplica::text2learner_list(
-      to_cstring(ls_learner_list_str),
+      ls_learner_list_ptr,
       ls_learner_list))) {
     LOG_WARN("text2learner_list failed", KR(ret), K(ls_learner_list_str));
   }
@@ -588,7 +595,7 @@ int ObTenantTransferService::lock_table_and_part_(
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_TRANSFER_LOCK_TABLE_AND_PART);
   tablet_ids.reset();
-  lock_owner_id = OB_INVALID_INDEX;
+  lock_owner_id.reset();
   ObTransferPartList ordered_part_list;
   ObArenaAllocator allocator;
   const int64_t start_time = ObTimeUtility::current_time();

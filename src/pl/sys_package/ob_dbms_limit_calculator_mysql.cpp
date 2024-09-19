@@ -42,6 +42,7 @@ int ObDBMSLimitCalculator::phy_res_calculate_by_logic_res(
     common::ObObj &result)
 {
   int ret = OB_SUCCESS;
+  ObCStringHelper helper;
   const int64_t MAX_RES_LEN = 512;
   char* ptr = NULL;
   int64_t pos = 0;
@@ -49,6 +50,7 @@ int ObDBMSLimitCalculator::phy_res_calculate_by_logic_res(
   ObUserResourceCalculateArg arg;
   ObMinPhyResourceResult res;
   const int64_t curr_tenant_id = MTL_ID();
+  const char *str = NULL;
   if (!is_sys_tenant(curr_tenant_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("only sys tenant can do this", K(ret), K(curr_tenant_id));
@@ -64,7 +66,9 @@ int ObDBMSLimitCalculator::phy_res_calculate_by_logic_res(
   } else if (OB_ISNULL(ptr = static_cast<char *>(ctx.get_allocator().alloc(MAX_RES_LEN)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(MAX_RES_LEN));
-  } else if (OB_FAIL(parse_dict_like_args_(to_cstring(str_arg), arg))) {
+  } else if (OB_FAIL(helper.convert(str_arg, str))) {
+    LOG_WARN("convert cstring failed", K(ret));
+  } else if (OB_FAIL(parse_dict_like_args_(str, arg))) {
     LOG_WARN("parse argument failed", K(ret));
   } else if (OB_FAIL(MTL(ObResourceLimitCalculator *)->get_tenant_min_phy_resource_value(arg, res))) {
     LOG_WARN("get tenant min physical resource needed failed", K(ret));

@@ -580,11 +580,13 @@ int ObDefaultValueUtils::get_default_type_for_insert(const ColumnItem *column, O
       if (params_->session_info_->get_ddl_info().is_ddl()) {
         op = OB_NOT_STRICT_DEFAULT_OP;
       } else if (is_strict_mode(params_->session_info_->get_sql_mode()) && !del_upd_stmt->is_ignore()) {
-        LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(column->column_name_));
         ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
         LOG_WARN("Column can not be null", K(column->column_name_), K(ret));
       } else {
-        LOG_USER_WARN(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
+        ObCStringHelper helper;
+        LOG_USER_WARN(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(column->column_name_));
         op = OB_NOT_STRICT_DEFAULT_OP;
       }
     }
@@ -645,7 +647,8 @@ int ObDefaultValueUtils::get_default_type_for_default_function(const ColumnItem 
     op = OB_NORMAL_DEFAULT_OP;
   } else if (column->is_not_null_for_write() && column->default_value_.is_null()) {
     ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
-    LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(column->column_name_));
   } else {
     op = OB_NORMAL_DEFAULT_OP;
   }

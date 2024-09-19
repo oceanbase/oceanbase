@@ -14,74 +14,38 @@
 
 #include "lib/stat/ob_session_stat.h"
 #include "lib/ob_lib_config.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
 
 namespace oceanbase
 {
 namespace common
 {
 
-ObSessionDIBuffer::ObSessionDIBuffer()
-  : tenant_cache_(),
-    session_collect_(NULL),
-    sys_tenant_collect_(tenant_cache_.get_sys_tenant_node()),
-    curr_tenant_collect_(sys_tenant_collect_),
-    not_sys_tenant_collect_(sys_tenant_collect_)
-{
-}
-
-ObSessionDIBuffer::~ObSessionDIBuffer()
-{
-}
-
 /**
  *--------------------------------------------------------ObSessionStatEstGuard---------------------------------------------
  */
 ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uint64_t session_id, const bool reset_wait_stat /* = true */)
-  : prev_tenant_id_(OB_SYS_TENANT_ID),
-    prev_session_id_(0),
-    prev_max_wait_(nullptr),
-    prev_total_wait_(nullptr),
-    reset_wait_stat_(reset_wait_stat)
 {
-  if (oceanbase::lib::is_diagnose_info_enabled()) {
-    buffer_ = GET_TSI(ObSessionDIBuffer);
-    if (NULL != buffer_) {
-      prev_tenant_id_ = buffer_->get_tenant_id();
-      if (NULL != (buffer_->get_curr_session())) {
-        prev_session_id_ = buffer_->get_curr_session()->session_id_;
-        prev_max_wait_ = buffer_->get_curr_session()->base_value_.get_max_wait();
-        prev_total_wait_ = buffer_->get_curr_session()->base_value_.get_total_wait();
-      }
-      if (0 < tenant_id && 0 < session_id) {
-        buffer_->switch_both(tenant_id, session_id);
-      }
-    }
-  } else {
-    buffer_ = nullptr;
+  if (ObLocalDiagnosticInfo::get()->get_tenant_id() != tenant_id) {
+    LOG_DEBUG("missing session level diagnostic info", K(tenant_id), K(ObLocalDiagnosticInfo::get()->get_tenant_id()));
+  }
+  if (ObLocalDiagnosticInfo::get()->get_session_id() != session_id) {
+    LOG_DEBUG("missing session level diagnostic info", K(session_id), K(ObLocalDiagnosticInfo::get()->get_session_id()));
   }
 }
 
 ObSessionStatEstGuard::~ObSessionStatEstGuard()
 {
-  if (NULL != buffer_) {
-    buffer_->switch_tenant(prev_tenant_id_);
-    if (0 != prev_session_id_) {
-      buffer_->switch_session(prev_session_id_);
-    } else {
-      buffer_->reset_session(reset_wait_stat_);
-    }
-    if (OB_NOT_NULL(buffer_->get_curr_session())) {
-      if (OB_UNLIKELY(buffer_->get_curr_session()->base_value_.get_max_wait() || buffer_->get_curr_session()->base_value_.get_total_wait())) {
-        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "new session stat is corrupted", "max_wait",
-            buffer_->get_curr_session()->base_value_.get_max_wait(), "total_wait",
-            buffer_->get_curr_session()->base_value_.get_total_wait(), K(buffer_),
-            K(buffer_->get_curr_session()->session_id_));
-      } else {
-        buffer_->get_curr_session()->base_value_.set_max_wait(prev_max_wait_);
-        buffer_->get_curr_session()->base_value_.set_total_wait(prev_total_wait_);
-      }
-    }
+}
+
+ObTenantStatEstGuard::ObTenantStatEstGuard(uint64_t tenant_id)
+{
+  if (ObLocalDiagnosticInfo::get()->get_tenant_id() != tenant_id) {
+    LOG_DEBUG("missing tenant level diagnostic info", K(tenant_id), K(ObLocalDiagnosticInfo::get()->get_tenant_id()));
   }
+}
+ObTenantStatEstGuard::~ObTenantStatEstGuard()
+{
 }
 
 } /* namespace common */

@@ -21,6 +21,7 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_proxy.cpp
   backup/ob_backup_data_ls_task_mgr.cpp
   backup/ob_backup_table_list_mgr.cpp
+  backup/ob_backup_param_operator.cpp
 )
 
 ob_set_subtarget(ob_rootserver common
@@ -127,6 +128,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_table_redefinition_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
   ddl_task/ob_ddl_tablet_scheduler.cpp
+  ddl_task/ob_drop_lob_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl

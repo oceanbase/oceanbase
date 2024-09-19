@@ -5122,18 +5122,18 @@ ObPLASHGuard::ObPLASHGuard(ObPLASHStatus status)
   pl_ash_status_ = status;
   switch (pl_ash_status_) {
     case IS_PLSQL_COMPILATION: {
-      in_plsql_compilation_ = ObActiveSessionGuard::get_stat().in_plsql_compilation_;
-      ObActiveSessionGuard::get_stat().in_plsql_compilation_ = 1;
+      in_plsql_compilation_ = ObActiveSessionGuard::get_stat().exec_phase().in_plsql_compilation_;
+      ObActiveSessionGuard::get_stat().exec_phase().in_plsql_compilation_ = 1;
       break;
     }
     case IS_PLSQL_EXECUTION: {
-      in_plsql_execution_ = ObActiveSessionGuard::get_stat().in_plsql_execution_;
-      ObActiveSessionGuard::get_stat().in_plsql_execution_ = 1;
+      in_plsql_execution_ = ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_;
+      ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = 1;
       break;
     }
     case IS_SQL_EXECUTION: {
-      in_plsql_execution_ = ObActiveSessionGuard::get_stat().in_plsql_execution_;
-      ObActiveSessionGuard::get_stat().in_plsql_execution_ = 0;
+      in_plsql_execution_ = ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_;
+      ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = 0;
       break;
     }
     default: {
@@ -5156,8 +5156,8 @@ ObPLASHGuard::ObPLASHGuard(int64_t package_id, int64_t routine_id)
       set_current_name_(0),
       pl_ash_status_(ObPLASHStatus::INVALID_ASH_STATUS)
 {
-  in_plsql_execution_ = ObActiveSessionGuard::get_stat().in_plsql_execution_;
-  ObActiveSessionGuard::get_stat().in_plsql_execution_ = 1;
+  in_plsql_execution_ = ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_;
+  ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = 1;
   pl_ash_status_ = INVALID_ASH_STATUS;
 
   if (ObActiveSessionGuard::get_stat().plsql_entry_object_id_ == OB_INVALID_ID) {
@@ -5219,23 +5219,23 @@ ObPLASHGuard::~ObPLASHGuard()
     ObActiveSessionGuard::get_stat().plsql_object_id_ = -1;
     ObActiveSessionGuard::get_stat().plsql_subprogram_id_ = -1;
     ObActiveSessionGuard::get_stat().top_level_sql_id_[0] = '\0';
-    ObActiveSessionGuard::get_stat().in_plsql_execution_ = in_plsql_execution_;
+    ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = in_plsql_execution_;
   } else if (INVALID_ASH_STATUS == pl_ash_status_) {
     ObActiveSessionGuard::get_stat().plsql_object_id_ = plsql_current_object_id_;
     ObActiveSessionGuard::get_stat().plsql_subprogram_id_ = plsql_current_subprogram_id_;
-    ObActiveSessionGuard::get_stat().in_plsql_execution_ = in_plsql_execution_;
+    ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = in_plsql_execution_;
   } else {
     switch (pl_ash_status_) {
       case IS_PLSQL_COMPILATION: {
-        ObActiveSessionGuard::get_stat().in_plsql_compilation_ = in_plsql_compilation_;
+        ObActiveSessionGuard::get_stat().exec_phase().in_plsql_compilation_ = in_plsql_compilation_;
         break;
       }
       case IS_PLSQL_EXECUTION: {
-        ObActiveSessionGuard::get_stat().in_plsql_execution_ = in_plsql_execution_;
+        ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = in_plsql_execution_;
         break;
       }
       case IS_SQL_EXECUTION: {
-        ObActiveSessionGuard::get_stat().in_plsql_execution_ = in_plsql_execution_;
+        ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = in_plsql_execution_;
         break;
       }
       default: {

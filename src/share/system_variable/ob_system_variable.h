@@ -958,6 +958,11 @@ public:
                                              const ObBasicSysVar &sys_var,
                                              const common::ObObj &in_val,
                                              common::ObObj &out_val);
+  static int check_and_convert_block_encryption_mode(sql::ObExecContext &ctx,
+                                                     const ObSetVar &set_var,
+                                                     const ObBasicSysVar &sys_var,
+                                                     const common::ObObj &in_val,
+                                                     common::ObObj &out_val);
 private:
   static int check_session_readonly(sql::ObExecContext &ctx,
                                     const ObSetVar &set_var,

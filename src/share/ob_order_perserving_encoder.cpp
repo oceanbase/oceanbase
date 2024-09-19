@@ -46,6 +46,7 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(ObObj &ob
       break;
     }
     case ObDateType:
+    case ObMySQLDateType:
     case ObMediumIntType:
     case ObInt32Type: {
       if (to_len + sizeof(int32_t) > max_buf_len) {
@@ -60,6 +61,7 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(ObObj &ob
     case ObTimeType:
     case ObDateTimeType:
     case ObTimestampType:
+    case ObMySQLDateTimeType:
     case ObIntType: {
       if (to_len + sizeof(int64_t) > max_buf_len) {
         ret = OB_BUF_NOT_ENOUGH;
@@ -225,6 +227,7 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
       break;
     }
     case ObDateType:
+    case ObMySQLDateType:
     case ObMediumIntType:
     case ObInt32Type: {
       if (to_len + sizeof(int32_t) > max_buf_len) {
@@ -238,6 +241,7 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
     case ObIntervalYMType:
     case ObTimeType:
     case ObDateTimeType:
+    case ObMySQLDateTimeType:
     case ObTimestampType:
     case ObIntType: {
       if (to_len + sizeof(int64_t) > max_buf_len) {

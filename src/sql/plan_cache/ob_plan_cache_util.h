@@ -673,6 +673,10 @@ struct ObPlanStat
       is_expired_(false),
       enable_plan_expiration_(false),
       first_exec_row_count_(-1),
+      first_exec_usec_(0),
+      sample_times_(0),
+      sample_exec_row_count_(0),
+      sample_exec_usec_(0),
       sessid_(0),
       plan_tmp_tbl_name_str_len_(0),
       is_use_jit_(false),
@@ -747,6 +751,10 @@ struct ObPlanStat
       is_expired_(false),
       enable_plan_expiration_(rhs.enable_plan_expiration_),
       first_exec_row_count_(rhs.first_exec_row_count_),
+      first_exec_usec_(rhs.first_exec_usec_),
+      sample_times_(rhs.sample_times_),
+      sample_exec_row_count_(rhs.sample_exec_row_count_),
+      sample_exec_usec_(rhs.sample_exec_usec_),
       sessid_(rhs.sessid_),
       plan_tmp_tbl_name_str_len_(rhs.plan_tmp_tbl_name_str_len_),
       is_use_jit_(rhs.is_use_jit_),
@@ -1027,6 +1035,7 @@ public:
     enable_spf_batch_rescan_(false),
     enable_var_assign_use_das_(false),
     enable_parallel_das_dml_(false),
+    enable_adaptive_join_(true),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1071,6 +1080,7 @@ public:
   bool enable_spf_batch_rescan_;
   bool enable_var_assign_use_das_;
   bool enable_parallel_das_dml_;
+  bool enable_adaptive_join_;
 
 private:
   // current cluster config version_

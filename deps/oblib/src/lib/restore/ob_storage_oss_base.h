@@ -101,14 +101,16 @@ public:
   ObOssAccount();
   virtual ~ObOssAccount();
   int parse_oss_arg(const common::ObString &storage_info);
-  static int set_oss_field(const char *info, char *field, const int64_t length);
   void reset_account();
   int set_delete_mode(const char *parameter);
+  TO_STRING_KV(K_(oss_domain), K_(delete_mode), K_(oss_id), KP_(oss_key), K_(is_inited), K_(sts_token));
+
   char oss_domain_[MAX_OSS_ENDPOINT_LENGTH];
   char oss_id_[MAX_OSS_ID_LENGTH];
   char oss_key_[MAX_OSS_KEY_LENGTH];
   int64_t delete_mode_;
   bool is_inited_;
+  ObSTSToken sts_token_;
 };
 
 class ObStorageOssBase
@@ -128,6 +130,8 @@ public:
 
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
   int init_oss_endpoint();
+
+  int check_endpoint_validaty() const;
 
   aos_pool_t *aos_pool_;
   oss_request_options_t *oss_option_;

@@ -30,6 +30,7 @@
 #include "lib/container/ob_iarray.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
+#include "sql/engine/px/datahub/components/ob_dh_statistics_collector.h"
 
 namespace oceanbase
 {
@@ -165,6 +166,7 @@ private:
   ObInitChannelPieceMsgP init_channel_piece_msg_proc_;
   ObReportingWFPieceMsgP reporting_wf_piece_msg_proc_;
   ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
+  ObStatisticsCollectorPieceMsgP statistics_collector_piece_msg_proc_;
   // 存储merge sort的每一路的当前行
   ObArray<ObChunkDatumStore::LastStoredRow*> store_rows_;
   ObChunkDatumStore::LastStoredRow* last_pop_row_;

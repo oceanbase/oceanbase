@@ -377,6 +377,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
   ObString literal_prefix;
   ObCollationType nchar_collation = CS_TYPE_INVALID;
   const ParseNode *row_node = NULL;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected NULL ptr", K(ret));
@@ -387,6 +388,9 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
   } else if (is_oracle_mode && OB_FAIL(session_info->get_sys_variable(
                                        share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variables failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     length_semantics = session_info->get_actual_nls_length_semantics();
     timezone_info = session_info->get_timezone_info();
@@ -409,7 +413,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                  literal_prefix, length_semantics,
                                                  static_cast<ObCollationType>(server_collation),
                                                  &parents_expr_info, session_info->get_sql_mode(),compat_type,
-                                                 is_from_pl))) {
+                                                 enable_mysql_compatible_dates, is_from_pl))) {
         LOG_WARN("failed to resolve const", K(ret));
       } else if (OB_FAIL(table_def.access_objs_.push_back(obj_param))) {
         LOG_WARN("failed to push back", K(ret));

@@ -37,6 +37,7 @@ thread_local int64_t Thread::loop_ts_ = 0;
 thread_local pthread_t Thread::thread_joined_ = 0;
 thread_local int64_t Thread::sleep_us_ = 0;
 thread_local int64_t Thread::blocking_ts_ = 0;
+thread_local bool Thread::is_doing_ddl_ = false;
 thread_local ObAddr Thread::rpc_dest_addr_;
 thread_local obrpc::ObRpcPacketCode Thread::pcode_ = obrpc::ObRpcPacketCode::OB_INVALID_RPC_CODE;
 thread_local uint8_t Thread::wait_event_ = 0;
@@ -76,6 +77,8 @@ int Thread::start()
 {
   int ret = OB_SUCCESS;
   const int64_t count = ATOMIC_FAA(&total_thread_count_, 1);
+  IRunWrapper *run_wrapper = threads_->get_run_wrapper();
+  uint64_t tenant_id = NULL != run_wrapper ? run_wrapper->id() : OB_SERVER_TENANT_ID;
   if (count >= get_max_thread_num() - OB_RESERVED_THREAD_NUM) {
     ATOMIC_FAA(&total_thread_count_, -1);
     ret = OB_SIZE_OVERFLOW;
@@ -84,7 +87,7 @@ int Thread::start()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid stack_size", K(ret), K(stack_size_));
 #ifndef OB_USE_ASAN
-  } else if (OB_ISNULL(stack_addr_ = g_stack_allocer.alloc(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), stack_size_ + SIG_STACK_SIZE))) {
+  } else if (OB_ISNULL(stack_addr_ = g_stack_allocer.alloc(tenant_id, stack_size_ + SIG_STACK_SIZE))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc stack memory failed", K(stack_size_));
 #endif
@@ -168,9 +171,15 @@ void Thread::run()
 {
   IRunWrapper *run_wrapper_ = threads_->get_run_wrapper();
   if (OB_NOT_NULL(run_wrapper_)) {
-    run_wrapper_->pre_run();
+    {
+      ObDisableDiagnoseGuard disable_guard;
+      run_wrapper_->pre_run();
+    }
     threads_->run(idx_);
-    run_wrapper_->end_run();
+    {
+      ObDisableDiagnoseGuard disable_guard;
+      run_wrapper_->end_run();
+    }
   } else {
     threads_->run(idx_);
   }
@@ -266,7 +275,6 @@ void Thread::destroy_stack()
 #else
   pth_ = 0;
 #endif
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 void* Thread::__th_start(void *arg)
@@ -275,12 +283,6 @@ void* Thread::__th_start(void *arg)
   ob_set_thread_tenant_id(th->get_tenant_id());
   current_thread_ = th;
   th->tid_ = gettid();
-  ObActiveSessionGuard::setup_thread_local_ash();
-  ObActiveSessionGuard::get_stat().tenant_id_    = (0 == th->get_tenant_id() ? OB_SERVER_TENANT_ID : th->get_tenant_id());
-  ObActiveSessionGuard::get_stat().user_id_      = 0;
-  ObActiveSessionGuard::get_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
-  ObActiveSessionGuard::get_stat().session_id_   = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
-  ObTenantStatEstGuard stat_est_guard(ObActiveSessionGuard::get_stat().tenant_id_);
 
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);

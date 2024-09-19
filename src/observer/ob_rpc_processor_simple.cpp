@@ -76,6 +76,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "storage/tablelock/ob_table_lock_live_detector.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/ob_rpc_struct.h"
 #include "rootserver/standby/ob_recovery_ls_service.h"
@@ -721,6 +722,18 @@ int ObRpcCheckSchemaVersionElapsedP::process()
     LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
   } else {
     ret = gctx_.ob_service_->check_schema_version_elapsed(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcPrepareTabletSplitTaskRangesP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->prepare_tablet_split_task_ranges(arg_, result_);
   }
   return ret;
 }
@@ -2299,8 +2312,8 @@ int ObCleanSequenceCacheP::process()
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is null", K(ret));
-  } else if (OB_FAIL(sequence_cache.remove(MTL_ID(), sequence_id))) {
-    LOG_WARN("remove sequence item from sequence cache failed", K(ret), K(sequence_id));
+  } else if (OB_FAIL(sequence_cache.remove(MTL_ID(), sequence_id, result_))) {
+    LOG_WARN("remove sequence item from sequence cache failed", K(ret), K(sequence_id), K(result_));
   }
   return ret;
 }
@@ -2814,6 +2827,11 @@ int ObSessInfoDiagnosisP::process()
   return ret;
 }
 
+int ObRpcDetectSessionAliveP::process()
+{
+  return ObTableLockDetectFuncList::detect_session_alive_for_rpc(arg_, result_);
+}
+
 int ObRpcGetServerResourceInfoP::process()
 {
   int ret = OB_SUCCESS;
@@ -2938,6 +2956,40 @@ int ObCancelGatherStatsP::process()
   } else if (OB_FAIL(ObOptStatGatherStatList::instance().cancel_gather_stats(arg_.tenant_id_,
                                                                              arg_.task_id_))) {
     LOG_WARN("failed to cancel gather stats", K(ret));
+  }
+  return ret;
+}
+
+int ObKillQueryClientSessionP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  uint32_t server_sess_id = INVALID_SESSID;
+  if (OB_ISNULL(gctx_.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "session_mgr_ is null", KR(ret));
+  } else if (OB_FAIL(gctx_.session_mgr_->get_client_sess_map().get_refactored(
+          arg_.get_client_sess_id(), server_sess_id))) {
+    if (ret == OB_HASH_NOT_EXIST) {
+      // no need to display info, if current server no this proxy session id.
+      ret = OB_SUCCESS;
+      LOG_DEBUG("current client session id not find", K(ret), K(arg_.get_client_sess_id()));
+    } else {
+      COMMON_LOG(WARN, "get session failed", KR(ret), K(arg_));
+    }
+  } else if (OB_FAIL(gctx_.session_mgr_->get_session(server_sess_id, session))) {
+    LOG_INFO("fail to get session", K(ret), K(server_sess_id));
+    ret = OB_SUCCESS;
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret), K(arg_.get_client_sess_id()));
+  } else {
+    if (OB_FAIL(gctx_.session_mgr_->kill_query(*session))) {
+      LOG_WARN("fail to kill query", K(ret), K(arg_.get_client_sess_id()), K(server_sess_id));
+    }
+  }
+  if (NULL != session) {
+    gctx_.session_mgr_->revert_session(session);
   }
   return ret;
 }

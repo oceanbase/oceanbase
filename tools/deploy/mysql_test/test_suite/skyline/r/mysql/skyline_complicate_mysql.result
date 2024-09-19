@@ -1000,6 +1000,10 @@ Outputs & filters:
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,100,MIN,
       MIN,MIN ; 100,100,100,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 = 100], [skyline_int.v5 = 100])
+  Expr Constraints:
+      cast(100, INT(11, 0)) = 100 result is TRUE
+      cast(100, INT(11, 0)) = 100 result is TRUE
+      cast(100, INT(11, 0)) = 100 result is TRUE
 explain select v3, v4, v5 from skyline_int where v3 in (100, 200, 300) group by v3, v4, v5 order by v3, v4, v5;
 Query Plan
 ===========================================================================
@@ -1075,6 +1079,8 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
       MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+  Expr Constraints:
+      cast(100, INT(11, 0)) = 100 result is TRUE
 explain select distinct v3, v5 from skyline_int where v4 = 100;
 Query Plan
 =========================================================================
@@ -1508,14 +1514,14 @@ Outputs & filters:
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4;
 Query Plan
-=====================================================================================
-|ID|OPERATOR                        |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------------------
-|0 |MERGE GROUP BY                  |                         |1       |23          |
-|1 |└─NESTED-LOOP JOIN              |                         |1       |23          |
-|2 |  ├─TABLE FULL SCAN             |skyline_int(idx_v3_v4_v2)|1       |4           |
-|3 |  └─DISTRIBUTED TABLE RANGE SCAN|other(idx_c2)            |1       |18          |
-=====================================================================================
+=========================================================================
+|ID|OPERATOR            |NAME                     |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY      |                         |1       |23          |
+|1 |└─NESTED-LOOP JOIN  |                         |1       |23          |
+|2 |  ├─TABLE FULL SCAN |skyline_int(idx_v3_v4_v2)|1       |4           |
+|3 |  └─TABLE RANGE SCAN|other(idx_c2)            |1       |18          |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.tenant_id]), filter(nil), rowset=16
@@ -1534,14 +1540,14 @@ Outputs & filters:
       range_cond([:0 = other.c2])
 explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4, v5;
 Query Plan
-========================================================================================
-|ID|OPERATOR                        |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------------------------
-|0 |MERGE GROUP BY                  |                            |1       |23          |
-|1 |└─NESTED-LOOP JOIN              |                            |1       |23          |
-|2 |  ├─TABLE FULL SCAN             |skyline_int(idx_v3_v4_v5_v2)|1       |4           |
-|3 |  └─DISTRIBUTED TABLE RANGE SCAN|other(idx_c2)               |1       |18          |
-========================================================================================
+============================================================================
+|ID|OPERATOR            |NAME                        |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |MERGE GROUP BY      |                            |1       |23          |
+|1 |└─NESTED-LOOP JOIN  |                            |1       |23          |
+|2 |  ├─TABLE FULL SCAN |skyline_int(idx_v3_v4_v5_v2)|1       |4           |
+|3 |  └─TABLE RANGE SCAN|other(idx_c2)               |1       |18          |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.tenant_id]), filter(nil), rowset=16

@@ -124,6 +124,7 @@ public:
   int init(const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent);
   void reset();
   bool is_valid() const;
+  TO_STRING_KV(K_(min_percent), K_(max_percent), K_(weight_percent));
 public:
   uint64_t min_percent_;
   uint64_t max_percent_;

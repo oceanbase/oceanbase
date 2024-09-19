@@ -34,6 +34,8 @@
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/ob_result_set.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_resource_manager_proxy.h"
 
 namespace oceanbase
 {
@@ -112,6 +114,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                                 params.count() > 16 ? &params.at(16) : NULL,
                                                 stat_param))) {
       LOG_WARN("failed to parse stat optitions", K(ret));
+    } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+      LOG_WARN("failed to get stats consumer gourp id");
     } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
       LOG_WARN("failed to add table info", K(ret));
     } else if (stat_param.force_ &&
@@ -240,6 +244,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                                    params.count() > 14 ? &params.at(14) : NULL,
                                                    stat_param))) {
         LOG_WARN("failed to parse stat optitions", K(ret));
+      } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+        LOG_WARN("failed to get stats consumer gourp id");
       } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
         LOG_WARN("failed to add table info", K(ret));
       } else if (stat_param.force_ &&
@@ -1344,8 +1350,9 @@ int ObDbmsStats::export_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", K(ret), K(table_schema), K(stat_table_param.db_name_),
                                        K(stat_table_param.tab_name_));
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                        to_cstring(stat_table_param.tab_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                         helper.convert(stat_table_param.tab_name_));
     } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(stat_param.stat_id_))) {
       LOG_WARN("failed to get stat id", K(ret));
     } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.cascade_))) {
@@ -1426,8 +1433,9 @@ int ObDbmsStats::export_column_stats(sql::ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema),
                                      K(stat_table_param.db_name_), K(stat_table_param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                       to_cstring(stat_table_param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                       helper.convert(stat_table_param.tab_name_));
   } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_varchar((stat_param.stat_id_)))) {
     LOG_WARN("failed to get stat id ", K(ret));
   } else {
@@ -1486,8 +1494,9 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", K(ret), K(table_schema),
                                       K(stat_table_param.db_name_), K(stat_table_param.tab_name_));
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                        to_cstring(stat_table_param.tab_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                         helper.convert(stat_table_param.tab_name_));
     } else if (!params.at(2).is_null() && OB_FAIL(params.at(5).get_varchar((stat_table_param.stat_id_)))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else {
@@ -1576,8 +1585,9 @@ int ObDbmsStats::export_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(stat_table_param.db_name_),
                                      K(stat_table_param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                       to_cstring(stat_table_param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                       helper.convert(stat_table_param.tab_name_));
   } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(index_stat_param.stat_id_))) {
     LOG_WARN("failed to get stat id", K(ret));
   } else {
@@ -1678,8 +1688,9 @@ int ObDbmsStats::import_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", K(ret), K(table_schema), K(stat_table_param.db_name_),
                                       K(stat_table_param.tab_name_));
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                        to_cstring(stat_table_param.tab_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                         helper.convert(stat_table_param.tab_name_));
     } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(stat_param.stat_id_))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.cascade_))) {
@@ -1779,8 +1790,9 @@ int ObDbmsStats::import_column_stats(sql::ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema),
                                      K(stat_table_param.db_name_), K(stat_table_param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                       to_cstring(stat_table_param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                       helper.convert(stat_table_param.tab_name_));
   } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_varchar(stat_param.stat_id_))) {
     LOG_WARN("failed to get stat id ", K(ret));
   } else if (!params.at(7).is_null() && OB_FAIL(params.at(7).get_bool(stat_param.no_invalidate_))) {
@@ -1850,8 +1862,9 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", K(ret), K(table_schema), K(stat_table_param.db_name_),
                                       K(stat_table_param.tab_name_));
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                        to_cstring(stat_table_param.tab_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                         helper.convert(stat_table_param.tab_name_));
     } else if (!params.at(2).is_null() && OB_FAIL(params.at(4).get_varchar(stat_table_param.stat_id_))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else {
@@ -1963,8 +1976,9 @@ int ObDbmsStats::import_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(stat_table_param.db_name_),
                                      K(stat_table_param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
-                                       to_cstring(stat_table_param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(stat_table_param.db_name_),
+                                       helper.convert(stat_table_param.tab_name_));
   } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(index_stat_param.stat_id_))) {
     LOG_WARN("failed to get stat id ", K(ret));
   } else if (!params.at(6).is_null() && OB_FAIL(params.at(6).get_bool(index_stat_param.no_invalidate_))) {
@@ -2481,7 +2495,7 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("Invalid or inconsistent input values", K(ret));
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
-    } else if (!params.at(2).is_datetime()) {
+    } else if (!params.at(2).is_datetime() && !params.at(2).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(2)),
                                        K(get_type_name(params.at(2).get_type())));
@@ -2491,6 +2505,12 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(2).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(2).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
+        LOG_WARN("failed to mdatetime to timestamp", K(ret), K(specify_time));
       }
     }
   }
@@ -2581,7 +2601,8 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       specify_time = params.at(1).get_otimestamp_value().time_us_;
     }
   } else if (lib::is_mysql_mode()) {
-    if (!params.at(1).is_null() && !params.at(1).is_datetime()) {
+    if (!params.at(1).is_null() && !params.at(1).is_datetime()
+          && !params.at(1).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(1)),
                                        K(get_type_name(params.at(1).get_type())));
@@ -2590,6 +2611,12 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(specify_time,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
+        LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(1).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(1).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
       }
     }
@@ -2662,7 +2689,8 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
       specify_time = params.at(0).get_otimestamp_value().time_us_;
     }
   } else if (lib::is_mysql_mode()) {
-    if (!params.at(0).is_null() && !params.at(0).is_datetime()) {
+    if (!params.at(0).is_null() && !params.at(0).is_datetime()
+          && !params.at(0).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(0)),
                                        K(get_type_name(params.at(0).get_type())));
@@ -2671,6 +2699,12 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
       if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(specify_time,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
+        LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(0).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(0).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
       }
     }
@@ -3421,7 +3455,9 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
   } else if (OB_ISNULL(table_schema) || OB_UNLIKELY(table_schema->is_view_table())) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(param.db_name_),
+                                       helper.convert(param.tab_name_));
   } else if (OB_FAIL(get_table_part_infos(table_schema,
                                           *param.allocator_,
                                           param.part_infos_,
@@ -3728,7 +3764,9 @@ int ObDbmsStats::parse_set_table_info(ObExecContext &ctx,
   } else if (OB_ISNULL(table_schema) || OB_UNLIKELY(table_schema->is_view_table())) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(param.db_name_),
+                                       helper.convert(param.tab_name_));
   } else if (OB_FAIL(parse_set_partition_name(ctx, table_schema, part_name, param))) {
     LOG_WARN("failed to parser part info", K(ret));
   } else if (OB_FAIL(init_column_stat_params(*param.allocator_,
@@ -3766,7 +3804,9 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
   } else if (OB_ISNULL(table_schema) || OB_UNLIKELY(table_schema->is_view_table())) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(param.db_name_),
+                                       helper.convert(param.tab_name_));
   } else if (OB_FAIL(colname.get_string(column_name))) {
     LOG_WARN("failed to get column name", K(ret));
   } else if (OB_FAIL(convert_vaild_ident_name(*param.allocator_,
@@ -4064,8 +4104,9 @@ int ObDbmsStats::parse_index_table_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(data_table_param.db_name_),
                                      K(data_table_param.tab_name_));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(data_table_param.db_name_),
-                                       to_cstring(data_table_param.tab_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(data_table_param.db_name_),
+                                       helper.convert(data_table_param.tab_name_));
   } else if (OB_FAIL(idx_name.get_string(index_name))) {
     LOG_WARN("failed to get string", K(ret), K(idx_name));
   } else if (OB_FAIL(convert_vaild_ident_name(*param.allocator_,
@@ -4084,8 +4125,9 @@ int ObDbmsStats::parse_index_table_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("index schema is null", K(ret), K(index_schema), K(data_table_param.db_name_),
                                     K(index_name));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(data_table_param.db_name_),
-                                      to_cstring(index_name));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(data_table_param.db_name_),
+                                       helper.convert(index_name));
   } else if (!index_schema->is_normal_index() && !index_schema->is_unique_index()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support index tpye", K(ret), K(index_schema->get_index_type()));
@@ -5957,6 +5999,8 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
     LOG_WARN("failed to use default gather stat optitions", K(ret));
   } else if (!stat_param.need_gather_stats()) {
     //do nothing
+  } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+    LOG_WARN("failed to get stats consumer gourp id");
   } else if (OB_FAIL(running_monitor.add_table_info(stat_param, stat_table.stale_percent_))) {
     LOG_WARN("failed to add table info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, stat_param, running_monitor))) {
@@ -6321,7 +6365,8 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
     if (!found_it) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("index schema is null", K(ret), K(index_schema), K(index_name));
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(index_name), to_cstring(index_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(index_name), helper.convert(index_name));
     }
   }
   return ret;
@@ -7240,6 +7285,37 @@ int ObDbmsStats::adjust_async_gather_stat_option(ObExecContext &ctx,
     }
   }
   LOG_TRACE("succeed to adjust auto gather stat option", K(async_partition_ids), K(param));
+  return ret;
+}
+
+int ObDbmsStats::get_stats_consumer_group_id(ObTableStatParam &param)
+{
+  int ret = OB_SUCCESS;
+  uint64_t consumer_group_id = 0;
+  if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(param.tenant_id_,
+                                                                             ObFunctionType::PRIO_OPT_STATS,
+                                                                             consumer_group_id))) {
+    LOG_WARN("fail to get group id by function", K(param.tenant_id_));
+  } else if (FALSE_IT(SET_FUNCTION_TYPE(ObFunctionType::PRIO_OPT_STATS))) {
+  } else if (is_user_group(consumer_group_id)) {
+    param.consumer_group_id_ = consumer_group_id;
+    ObRefHolder<ObTenantIOManager> tenant_holder;
+    ObTenantIOConfig::GroupConfig group_config;
+    if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(param.tenant_id_, tenant_holder))) {
+      LOG_WARN("failed to get tenant io manager", K(ret), K(param.tenant_id_));
+    } else if (OB_FAIL(tenant_holder.get_ptr()->get_group_config(consumer_group_id, group_config))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        // tenant_io_manager may experience a delay of 10 seconds
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get group config", K(ret), K(consumer_group_id));
+      }
+    } else {
+      param.min_iops_ = group_config.min_percent_;
+      param.max_iops_ = group_config.max_percent_;
+      param.weight_iops_ = group_config.weight_percent_;
+    }
+  }
   return ret;
 }
 

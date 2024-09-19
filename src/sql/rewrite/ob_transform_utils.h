@@ -883,7 +883,7 @@ public:
                                           const TableItem *table,
                                           ObIArray<ObRawExpr*> &cond_exprs,
                                           UniqueCheckInfo &res_info);
-  
+
   static int try_add_table_fd_for_rowid(const ObSelectStmt *stmt,
                                         ObFdItemFactory &fd_factory,
                                         ObIArray<ObFdItem *> &fd_item_set,
@@ -1685,6 +1685,10 @@ public:
                                           const common::ObIArray<ObRawExpr*> &exprs,
                                           common::ObIArray<int64_t> &true_exprs,
                                           common::ObIArray<int64_t> &false_exprs);
+  static int extract_const_bool_expr_result(ObTransformerCtx *ctx,
+                                            ObRawExpr *expr,
+                                            bool &is_true,
+                                            bool &is_false);
   /* extract exprs in all_exprs whoes indexs are in target_idx to target_exprs */
   static int extract_target_exprs_by_idx(const ObIArray<ObRawExpr*> &all_exprs,
                                          const ObIArray<int64_t> &target_idx,
@@ -1838,9 +1842,9 @@ public:
                                   ObIArray<ObRawExpr *> &common_exprs);
   static int check_is_index_part_key(ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *check_expr, bool &is_valid);
 
-  static int check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid);
+  static int check_inline_temp_table_valid(ObSelectStmt *stmt, bool &is_valid);
 
-  static int expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
+  static int inline_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
 
   static int get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
                                      ObDMLStmt *new_stmt,
@@ -1964,6 +1968,9 @@ public:
                                             const ObIArray<ObRawExpr*> &group_clause_exprs,
                                             bool in_aggr,
                                             bool &has_target);
+  static int is_cost_based_trans_enable(ObTransformerCtx *ctx,
+                                        const ObGlobalHint &global_hint,
+                                        bool &is_enabled);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

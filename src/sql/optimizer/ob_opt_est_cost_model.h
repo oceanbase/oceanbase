@@ -179,8 +179,9 @@ struct ObCostTableScanInfo
      index_meta_info_(ref_table_id, index_id),
      is_virtual_table_(is_virtual_table(ref_table_id)),
      is_unique_(false),
-     is_inner_path_(false),
-     can_use_batch_nlj_(false),
+     is_das_scan_(false),
+     is_rescan_(false),
+     is_batch_rescan_(false),
      ranges_(),
      ss_ranges_(),
      range_columns_(),
@@ -200,7 +201,10 @@ struct ObCostTableScanInfo
      ss_prefix_ndv_(1.0),
      ss_postfix_range_filters_sel_(1.0),
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
-     at_most_one_range_(false)
+     at_most_one_range_(false),
+     rescan_left_server_list_(NULL),
+     rescan_server_list_(NULL),
+     limit_rows_(-1.0)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -211,10 +215,11 @@ struct ObCostTableScanInfo
                K_(table_meta_info), K_(index_meta_info),
                K_(access_column_items),
                K_(is_virtual_table), K_(is_unique),
-               K_(is_inner_path), K_(can_use_batch_nlj), K_(est_method),
+               K_(is_das_scan), K_(is_rescan), K_(is_batch_rescan), K_(est_method),
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
-               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel));
+               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
+               K_(limit_rows));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -223,8 +228,9 @@ struct ObCostTableScanInfo
   ObIndexMetaInfo index_meta_info_; // index related meta info
   bool is_virtual_table_; // is virtual table
   bool is_unique_;  // whether query range is unique
-  bool is_inner_path_;
-  bool can_use_batch_nlj_;
+  bool is_das_scan_;
+  bool is_rescan_;
+  bool is_batch_rescan_;
   ObRangesArray ranges_;  // all the ranges
   ObRangesArray ss_ranges_;  // skip scan ranges
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_; // all the range columns
@@ -254,6 +260,9 @@ struct ObCostTableScanInfo
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
   bool at_most_one_range_;
+  const common::ObIArray<common::ObAddr> *rescan_left_server_list_;
+  const common::ObIArray<common::ObAddr> *rescan_server_list_;
+  double limit_rows_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
@@ -707,6 +716,7 @@ public:
                                    double &cost);
 
   double cost_quals(double rows, const ObIArray<ObRawExpr *> &quals, bool need_scale = true);
+  int cost_one_qual(const ObRawExpr *qual, double &cost);
 
   double cost_hash(double rows, const ObIArray<ObRawExpr *> &hash_exprs);
 
@@ -813,7 +823,14 @@ protected:
                       double &cost);
   int cost_index_back(const ObCostTableScanInfo &est_cost_info,
                       double row_count,
+                      double limit_count,
                       double &cost);
+  int calc_das_rpc_cost(const ObCostTableScanInfo &est_cost_info,
+                        double &das_rpc_cost);
+  int get_rescan_rpc_cnt(const ObIArray<common::ObAddr> *left_server_list,
+                         const ObIArray<common::ObAddr> *right_server_list,
+                         double &remote_rpc_cnt,
+                         double &local_rpc_cnt);
   // estimate the network transform and rpc cost for global index
   int cost_global_index_back_with_rp(double row_count,
                                     const ObCostTableScanInfo &est_cost_info,

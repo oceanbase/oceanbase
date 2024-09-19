@@ -201,10 +201,11 @@ TEST_F(TestMicroBlockDecoder, read)
 
     ASSERT_EQ(cur_row->row_val_.count_, single_row.row_val_.count_);
     for (int64_t j = 0; j < single_row.row_val_.count_; ++j) {
+      ObCStringHelper helper;
       ASSERT_TRUE(cur_row->row_val_.cells_[j] == single_row.row_val_.cells_[j])
         << "\n i: " << i << " j: " << j
-        << "\n writer:  "<< to_cstring(single_row.row_val_.cells_[j])
-        << "\n reader:  " << to_cstring(cur_row->row_val_.cells_[j]);
+        << "\n writer:  "<< helper.convert(single_row.row_val_.cells_[j])
+        << "\n reader:  " << helper.convert(cur_row->row_val_.cells_[j]);
     }
   }
 }

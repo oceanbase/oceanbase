@@ -57,6 +57,8 @@ int ObLogExternalStorageHandler::init()
   } else if (FALSE_IT(share::ObThreadPool::set_run_wrapper(MTL_CTX()))) {
   } else if (OB_FAIL(ObSimpleThreadPool::init(1, CAPACITY_COEFFICIENT * 1, "ObLogEXTTP", MTL_ID()))) {
     CLOG_LOG(WARN, "invalid argument", KPC(this));
+  } else if (OB_FAIL(ObSimpleThreadPool::set_adaptive_thread(0, 1))) {
+    CLOG_LOG(WARN, "set adaptive thread failed", KPC(this));
   } else {
     concurrency_ = 1;
     capacity_ = CAPACITY_COEFFICIENT;

@@ -148,7 +148,8 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, 
       str_arg_.writer_ptr_->dump_key("scn");
       str_arg_.writer_ptr_->dump_int64(scn_val_);
       str_arg_.writer_ptr_->dump_key("TxBlockHeader");
-      str_arg_.writer_ptr_->dump_string(to_cstring(tx_block_header));
+      ObCStringHelper helper;
+      str_arg_.writer_ptr_->dump_string(helper.convert(tx_block_header));
       has_dumped_tx_id = true;
     }
     ObTxLogHeader log_header;
@@ -343,7 +344,9 @@ int ObAdminParserLogEntry::parse_schema_log_()
   } else if (OB_FAIL(storage_schema.deserialize(allocator, buf_, buf_len_, pos_))) {
     LOG_WARN("fail to deserialize table schema", K(ret));
   } else {
-    fprintf(stdout, " ###<StorageSchemaLog>: table_version:%ld, schema: %s\n", table_version, to_cstring(storage_schema));
+    ObCStringHelper helper;
+    fprintf(stdout, " ###<StorageSchemaLog>: table_version:%ld, schema: %s\n",
+            table_version, helper.convert(storage_schema));
   }
 
   return ret;
@@ -356,7 +359,8 @@ int ObAdminParserLogEntry::parse_tablet_seq_sync_log_()
   if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
     LOG_WARN("deserialize sync tablet seq log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
   } else {
-    fprintf(stdout, " ###<SyncTabletSeqLog>:%s\n", to_cstring(log));
+    ObCStringHelper helper;
+    fprintf(stdout, " ###<SyncTabletSeqLog>:%s\n", helper.convert(log));
   }
   return ret;
 }
@@ -375,7 +379,8 @@ int ObAdminParserLogEntry::parse_ddl_log_()
         if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
           LOG_WARN("deserialize ddl redo log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
         } else {
-          fprintf(stdout, " ###<ObDDLRedoLog>: %s\n", to_cstring(log));
+          ObCStringHelper helper;
+          fprintf(stdout, " ###<ObDDLRedoLog>: %s\n", helper.convert(log));
         }
         break;
       }
@@ -384,7 +389,8 @@ int ObAdminParserLogEntry::parse_ddl_log_()
         if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
           LOG_WARN("deserialize ddl commit log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
         } else {
-          fprintf(stdout, " ###<ObDDLCommitLog>: %s\n", to_cstring(log));
+          ObCStringHelper helper;
+          fprintf(stdout, " ###<ObDDLCommitLog>: %s\n", helper.convert(log));
         }
         break;
       }
@@ -394,7 +400,8 @@ int ObAdminParserLogEntry::parse_ddl_log_()
           LOG_WARN("deserialize tablet schema version change log failed", K(ret), KP(buf_),
                    K(buf_len_), K(pos_));
         } else {
-          fprintf(stdout, " ###<TabletSchemaVersionChangeLog>: %s\n", to_cstring(log));
+          ObCStringHelper helper;
+          fprintf(stdout, " ###<TabletSchemaVersionChangeLog>: %s\n", helper.convert(log));
         }
         break;
       }
@@ -403,7 +410,8 @@ int ObAdminParserLogEntry::parse_ddl_log_()
         if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
           LOG_WARN("deserialize ddl start log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
         } else {
-          fprintf(stdout, " ###<ObDDLStartLog>: %s\n", to_cstring(log));
+          ObCStringHelper helper;
+          fprintf(stdout, " ###<ObDDLStartLog>: %s\n", helper.convert(log));
         }
         break;
       }
@@ -423,7 +431,8 @@ int ObAdminParserLogEntry::parse_keep_alive_log_()
   if (OB_FAIL(log_body.deserialize(buf_, buf_len_, pos_))) {
     LOG_WARN("deserialize keepalive log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
   } else {
-    fprintf(stdout, " ###<ObKeepAliveLog>: %s\n", to_cstring(log_body));
+    ObCStringHelper helper;
+    fprintf(stdout, " ###<ObKeepAliveLog>: %s\n", helper.convert(log_body));
   }
   return ret;
 }
@@ -435,7 +444,8 @@ int ObAdminParserLogEntry::parse_timestamp_log_()
   if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
     LOG_WARN("deserialize ObPresistIDLog failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
   } else {
-    fprintf(stdout, " ###PersistID<TIMESTAMP>: %s\n", to_cstring(log));
+    ObCStringHelper helper;
+    fprintf(stdout, " ###PersistID<TIMESTAMP>: %s\n", helper.convert(log));
   }
   return ret;
 }
@@ -447,7 +457,8 @@ int ObAdminParserLogEntry::parse_trans_id_log_()
   if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
     LOG_WARN("deserialize ObPresistIDLog failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
   } else {
-    fprintf(stdout, " ###PersistID<TRANS_ID>: %s\n", to_cstring(log));
+    ObCStringHelper helper;
+    fprintf(stdout, " ###PersistID<TRANS_ID>: %s\n", helper.convert(log));
   }
   return ret;
 }
@@ -459,7 +470,8 @@ int ObAdminParserLogEntry::parse_gc_ls_log_(const logservice::ObLogBaseHeader &h
   if (OB_FAIL(gc_log.deserialize(buf_, buf_len_, pos_))) {
     LOG_WARN("deserialize ObPresistIDLog failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
   } else {
-    fprintf(stdout, " ###ObGCLSLog: %s\n", to_cstring(gc_log));
+    ObCStringHelper helper;
+    fprintf(stdout, " ###ObGCLSLog: %s\n", helper.convert(gc_log));
   }
 
   return ret;
@@ -526,7 +538,8 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
         str_arg_.writer_ptr_ = &normal_writer;
         str_arg_.writer_ptr_->start_object();
         str_arg_.writer_ptr_->dump_key("DictHeader");
-        str_arg_.writer_ptr_->dump_string(to_cstring(header));
+        ObCStringHelper helper;
+        str_arg_.writer_ptr_->dump_string(helper.convert(header));
         switch (header.get_dict_meta_type()) {
           case datadict::ObDictMetaType::TENANT_META: {
             datadict::ObDictTenantMeta tenant_meta(&allocator);
@@ -534,7 +547,8 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
               LOG_ERROR("get next_dict_entry failed", KR(ret), K(header), K(tenant_meta));
             } else {
               str_arg_.writer_ptr_->dump_key("TenantMeta");
-              str_arg_.writer_ptr_->dump_string(to_cstring(tenant_meta));
+              helper.reset();
+              str_arg_.writer_ptr_->dump_string(helper.convert(tenant_meta));
             }
             break;
           }
@@ -544,7 +558,8 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
               LOG_ERROR("get next_dict_entry failed", KR(ret), K(header), K(db_meta));
             } else {
               str_arg_.writer_ptr_->dump_key("DatabaseMeta");
-              str_arg_.writer_ptr_->dump_string(to_cstring(db_meta));
+              helper.reset();
+              str_arg_.writer_ptr_->dump_string(helper.convert(db_meta));
             }
             break;
           }
@@ -554,7 +569,8 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
               LOG_ERROR("get next_dict_entry failed", KR(ret), K(header), K(table_meta));
             } else {
               str_arg_.writer_ptr_->dump_key("TableMeta");
-              str_arg_.writer_ptr_->dump_string(to_cstring(table_meta));
+              helper.reset();
+              str_arg_.writer_ptr_->dump_string(helper.convert(table_meta));
             }
             break;
           }
@@ -596,7 +612,9 @@ int ObAdminParserLogEntry::parse_medium_log_()
   } else if (OB_FAIL(medium_info.deserialize(allocator, buf_, buf_len_, pos_))) {
     LOG_WARN("fail to deserialize medium info", K(ret));
   } else {
-    fprintf(stdout, " ###<MediumCompactionLog>: tablet_id:%ld, medium_info: %s\n", tablet_id.id(), to_cstring(medium_info));
+    ObCStringHelper helper;
+    fprintf(stdout, " ###<MediumCompactionLog>: tablet_id:%ld, medium_info: %s\n",
+            tablet_id.id(), helper.convert(medium_info));
   }
   return ret;
 }

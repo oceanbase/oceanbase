@@ -531,7 +531,6 @@ public:
   transaction::ObPartTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
-  virtual void after_append(const bool is_replay) override;
   virtual int log_submitted() override;
   virtual void after_append_fail(const bool is_replay) override;
 

@@ -89,6 +89,7 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
         case ObIntTC:
         case ObUIntTC:
         case ObDateTimeTC:
+        case ObMySQLDateTimeTC:
         case ObTimeTC:
         case ObExtendTC:
         case ObBitTC:
@@ -96,6 +97,7 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
           is_equal = (obj.v_.int64_ == rhs_obj.v_.int64_);
           break;
         case ObDateTC:
+        case ObMySQLDateTC:
           is_equal = (obj.v_.date_ == rhs_obj.v_.date_);
           break;
         case ObYearTC:
@@ -194,6 +196,7 @@ bool ObRowkey::simple_equal(const ObRowkey &rhs) const
         case ObIntTC:
         case ObUIntTC:
         case ObDateTimeTC:
+        case ObMySQLDateTimeTC:
         case ObTimeTC:
         case ObExtendTC:
         case ObBitTC:
@@ -201,6 +204,7 @@ bool ObRowkey::simple_equal(const ObRowkey &rhs) const
           ret = (obj.v_.int64_ == rhs_obj.v_.int64_);
           break;
         case ObDateTC:
+        case ObMySQLDateTC:
           ret = (obj.v_.date_ == rhs_obj.v_.date_);
           break;
         case ObYearTC:

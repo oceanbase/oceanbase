@@ -19,6 +19,7 @@
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/utility/ob_sort.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/alloc/memory_sanity.h"
 #include "lib/alloc/ob_malloc_callback.h"
@@ -531,8 +532,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     nptr = obj->data_;
   } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
 #ifdef FATAL_ERROR_HANG
-    if (g_alloc_failed_ctx().reach_limit_except_ctx() &&
-        REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
       ObMemoryDump::get_instance().generate_mod_stat_task();
       sleep(1);
     }

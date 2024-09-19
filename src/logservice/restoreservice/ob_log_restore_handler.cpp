@@ -640,6 +640,8 @@ int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &d
       CLOG_LOG(WARN, "log restore not finish", K(ret), K_(id), K(end_scn), K(recovery_end_scn));
     } else if (OB_FAIL(palf_handle_.seek(recovery_end_scn, iter))) {
       CLOG_LOG(WARN, "palf seek failed", K(ret), K_(id));
+    } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::RESTORE)))) {
+      CLOG_LOG(WARN, "set_io_context failed", K(ret), K_(id));
     } else if (OB_FAIL(iter.next())) {
       CLOG_LOG(WARN, "next entry failed", K(ret));
     } else if (OB_FAIL(iter.get_entry(entry, end_lsn))) {
@@ -1006,6 +1008,8 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
     CLOG_LOG(WARN, "locate failed", K(id_), K(replayed_scn));
   } else if (OB_FAIL(guard.seek(replayed_lsn, iter))) {
     CLOG_LOG(WARN, "seek failed", K(id_), K(replayed_lsn));
+  } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::RESTORE)))) {
+    CLOG_LOG(WARN, "set_io_context failed", K_(id));
   } else {
     palf::LogEntry entry;
     palf::LSN lsn;

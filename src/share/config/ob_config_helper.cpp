@@ -869,6 +869,23 @@ bool ObConfigPlanCacheGCChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigSTScredentialChecker::check(const ObConfigItem &t) const
+{
+  int ret = OB_SUCCESS;
+  bool flag = true;
+  const char *tmp_credential = t.str();
+  ObDeviceCredentialKey key;
+  if (OB_ISNULL(tmp_credential) || OB_UNLIKELY(strlen(tmp_credential) <= 0
+      || strlen(tmp_credential) > OB_MAX_STS_CREDENTIAL_LENGTH)) {
+    flag = false;
+    OB_LOG(WARN, "invalid sts credential", KP(tmp_credential));
+  } else if (OB_FAIL(check_sts_credential_format(tmp_credential, key))) {
+    flag = false;
+    OB_LOG(WARN, "fail to check sts credential format", K(ret), K(key), KP(tmp_credential));
+  }
+  return flag;
+}
+
 bool ObConfigUseLargePagesChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
@@ -1130,6 +1147,9 @@ int64_t ObSqlPlanManagementModeChecker::get_spm_mode_by_string(const common::ObS
     spm_mode = 0;
   } else if (0 == string.case_compare("OnlineEvolve")) {
     spm_mode = 1;
+  } else if (0 == string.case_compare("BaselineFirst") &&
+             GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_0) {
+    spm_mode = 2;
   }
   return spm_mode;
 }
@@ -1450,6 +1470,29 @@ bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
   return 0 == v_str.case_compare("all")
     || 0 == v_str.case_compare("read")
     || 0 == v_str.case_compare("write");
+}
+
+bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
+{
+  // When compliantRfc3986Encoding is set to true:
+  // - Adhere to RFC 3986 by supporting the encoding of reserved characters
+  //   such as '-', '_', '.', '$', '@', etc.
+  // - This approach mitigates inconsistencies in server behavior when accessing
+  //   COS using the S3 SDK.
+  // Otherwise, the reserved characters will not be encoded,
+  // following the default behavior of the S3 SDK.
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  if (0 == tmp_str.case_compare("default")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(false);
+  } else if (0 == tmp_str.case_compare("compliantRfc3986Encoding")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(true);
+  } else {
+    bret = false;
+  }
+  return bret;
 }
 
 } // end of namepace common

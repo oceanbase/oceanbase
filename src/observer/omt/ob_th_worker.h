@@ -106,6 +106,7 @@ public:
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
   OB_INLINE int64_t blocking_ts() const { return OB_NOT_NULL(blocking_ts_) ? (*blocking_ts_) : 0; }
+  OB_INLINE bool is_doing_ddl() const { return OB_NOT_NULL(is_doing_ddl_) ? (*is_doing_ddl_) : false; }
 
   static thread_local uint64_t serving_tenant_id_;
 private:
@@ -141,6 +142,7 @@ private:
   int64_t last_wakeup_ts_;
   int64_t* blocking_ts_;
   int64_t idle_us_;
+  bool* is_doing_ddl_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 }; // end of class ObThWorker

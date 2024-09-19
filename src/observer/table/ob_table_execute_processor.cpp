@@ -29,7 +29,6 @@ using namespace oceanbase::share;
 using namespace oceanbase::sql;
 using namespace oceanbase::omt;
 
-void __attribute__((weak)) request_finish_callback();
 int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &entity)
 {
   int ret = OB_SUCCESS;
@@ -221,25 +220,21 @@ int ObTableApiExecuteP::before_process()
     is_group_trigger_ = true;
     audit_ctx_.need_audit_ = false; // no need audit when packet is group commit trigger packet
   } else {
-    if (ObTableGroupUtils::is_group_commit_config_enable(op_type)) {
-      TABLEAPI_GROUP_COMMIT_MGR->get_ops_counter().inc(op_type); // statistics OPS
-      if (!TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()) {
-        is_group_commit_enable = true;
-      }
-    }
-
-    if (is_group_commit_enable && ObTableOperationType::is_group_support_type(op_type)) {
-      group_single_op_ = TABLEAPI_GROUP_COMMIT_MGR->alloc_op();
-      if (OB_ISNULL(group_single_op_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
+    ObITableOp *op = nullptr;
+    if (ObTableGroupUtils::is_group_commit_enable(op_type)) {
+      if (OB_FAIL(TABLEAPI_GROUP_COMMIT_MGR->alloc_op(ObTableGroupType::TYPE_TABLE_GROUP, op))) {
         LOG_WARN("fail to alloc group single op", K(ret));
       } else {
+        group_single_op_ = static_cast<ObTableOp *>(op);
         group_single_op_->op_ = arg_.table_operation_; // shaddow copy
-        group_single_op_->entity_ = request_entity_; // shaddow copy
-        group_single_op_->op_.set_entity(group_single_op_->entity_);
+        group_single_op_->request_entity_ = request_entity_; // shaddow copy, its member memory is from rpc buffer
+        group_single_op_->op_.set_entity(group_single_op_->request_entity_);
         group_single_op_->req_ = req_;
         group_single_op_->timeout_ts_ = get_timeout_ts();
         group_single_op_->timeout_ = get_timeout();
+        group_single_op_->result_.set_errno(OB_SUCCESS);
+        group_single_op_->result_.set_type(arg_.table_operation_.type());
+        group_single_op_->result_.set_entity(&group_single_op_->result_entity_);
         is_group_commit_ = true;
       }
     }
@@ -262,9 +257,8 @@ int ObTableApiExecuteP::process()
 int ObTableApiExecuteP::init_group_ctx(ObTableGroupCtx &ctx, ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
-
-  ctx.is_get_ = (arg_.table_operation_.type() == ObTableOperationType::Type::GET);
-  ctx.ls_id_ = ls_id;
+  ctx.group_type_ = ObTableGroupType::TYPE_TABLE_GROUP;
+  ctx.type_ = arg_.table_operation_.type();
   ctx.entity_type_ = arg_.entity_type_;
   ctx.credential_ = credential_;
   ctx.timeout_ts_ = get_timeout_ts();
@@ -273,13 +267,12 @@ int ObTableApiExecuteP::init_group_ctx(ObTableGroupCtx &ctx, ObLSID ls_id)
   ctx.schema_guard_ = &schema_guard_;
   ctx.simple_schema_ = simple_table_schema_;
   ctx.sess_guard_ = &sess_guard_;
-  ctx.failed_groups_ = &TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups();
-  ctx.group_factory_ = &TABLEAPI_GROUP_COMMIT_MGR->get_group_factory();
-  ctx.op_factory_ = &TABLEAPI_GROUP_COMMIT_MGR->get_op_factory();
   ctx.retry_count_ = retry_count_;
   ctx.user_client_addr_ = user_client_addr_;
   ctx.audit_ctx_.exec_timestamp_ = audit_ctx_.exec_timestamp_;
-
+  ctx.table_id_ = simple_table_schema_->get_table_id();
+  ctx.schema_version_ = simple_table_schema_->get_schema_version();
+  ctx.ls_id_ = ls_id;
   return ret;
 }
 
@@ -311,7 +304,7 @@ int ObTableApiExecuteP::process_group_commit()
   } else if (OB_FAIL(schema_guard.get_schema_version(TABLE_SCHEMA, tenant_id, table_id_, schema_version))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K_(table_id));
   } else {
-    ObTableGroupCommitKey key(ls_id, table_id_, schema_version, op.type());
+    ObTableGroupKey key(ls_id, table_id_, schema_version, op.type());
     ObTableGroupCtx ctx;
     bool is_insup_use_put = false;
     int64_t binlog_row_image_type = ObBinlogRowImage::FULL;
@@ -335,18 +328,12 @@ int ObTableApiExecuteP::process_group_commit()
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ctx.key_->init())) {
-      LOG_WARN("fail to init group commit key", K(ret));
     } else if (OB_FAIL(init_group_ctx(ctx, ls_id))) {
       LOG_WARN("fail to init group ctx", K(ret), K(ctx));
     } else if (OB_FAIL(ObTableGroupService::process(ctx, group_single_op_))) {
       LOG_WARN("fail to process group commit", K(ret)); // can not K(ctx) or KPC_(group_single_op), cause req may have been free
-    }
-
-    if (ctx.add_group_success_) {
-      this->set_req_has_wokenup(); // do not response packet
     } else {
-      LOG_WARN("group commit op is not added success", K(ret), KPC(group_single_op_), K(ctx));
+      this->set_req_has_wokenup(); // do not response packet
     }
   }
 
@@ -493,8 +480,6 @@ int ObTableApiExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
   if (!need_retry_in_queue_ && !had_do_response()) {
-    // clear thread local variables used to wait in queue
-    request_finish_callback();
     if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
       // @note modify the value of timestamp to be positive
       ret = ObTableRpcProcessorUtil::negate_htable_timestamp(result_entity_);

@@ -16,6 +16,7 @@
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
 #include "share/rc/ob_tenant_base.h"
+#include "src/share/table/redis/ob_redis_common.h"
 
 namespace oceanbase
 {
@@ -32,7 +33,10 @@ public:
     tenant_id_(OB_INVALID_ID),
     user_id_(OB_INVALID_ID),
     database_id_(OB_INVALID_ID),
-    table_id_(OB_INVALID_ID)
+    table_id_(OB_INVALID_ID),
+    is_redis_table_(false),
+    is_redis_ttl_(false),
+    redis_model_(ObRedisModel::INVALID)
   {}
 
   bool is_valid() const
@@ -51,11 +55,15 @@ public:
            tenant_id_ == param.tenant_id_ &&
            database_id_ == param.database_id_ &&
            user_id_ == param.user_id_ &&
-           table_id_ == param.table_id_;
+           table_id_ == param.table_id_ &&
+           is_redis_table_ == param.is_redis_table_ &&
+           is_redis_ttl_ == param.is_redis_ttl_ &&
+           redis_model_ == param.redis_model_;
   }
 
   TO_STRING_KV(K_(ttl), K_(max_version), K_(is_htable), K_(tenant_id),
-               K_(user_id), K_(database_id), K_(table_id));
+               K_(user_id), K_(database_id), K_(table_id),
+               K_(is_redis_table), K_(is_redis_ttl), K_(redis_model));
 public:
   int32_t  ttl_;
   int32_t  max_version_;
@@ -64,6 +72,10 @@ public:
   int64_t user_id_;
   int64_t database_id_;
   uint64_t table_id_;
+  // for ob redis
+  bool is_redis_table_;
+  bool is_redis_ttl_;
+  ObRedisModel redis_model_;
 };
 
 

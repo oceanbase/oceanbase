@@ -44,20 +44,28 @@ public:
     orig_ls_id_(share::ObLSID::INVALID_LS_ID), dest_ls_id_(share::ObLSID::INVALID_LS_ID), orig_table_id_(common::OB_INVALID_ID),
     dest_table_id_(common::OB_INVALID_ID), orig_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID),
     row_store_type_(common::ENCODING_ROW_STORE), orig_schema_version_(0), dest_schema_version_(0),
-    snapshot_version_(0), concurrent_cnt_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0),
+    snapshot_version_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0),
+    orig_schema_tablet_size_(0), user_parallelism_(0),
+    concurrent_cnt_(0), ranges_(),
     allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
   ~ObComplementDataParam() { destroy(); }
   int init(const ObDDLBuildSingleReplicaRequestArg &arg);
+  int prepare_task_ranges();
   int split_task_ranges(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t tablet_size, const int64_t hint_parallelism);
+  int split_task_ranges_remote(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t tablet_size, const int64_t hint_parallelism);
 
   bool is_valid() const
   {
     return common::OB_INVALID_TENANT_ID != orig_tenant_id_ && common::OB_INVALID_TENANT_ID != dest_tenant_id_
            && orig_ls_id_.is_valid() && dest_ls_id_.is_valid() && common::OB_INVALID_ID != orig_table_id_
-           && common::OB_INVALID_ID != dest_table_id_ && orig_tablet_id_.is_valid() && dest_tablet_id_.is_valid() && 0 != concurrent_cnt_
+           && common::OB_INVALID_ID != dest_table_id_ && orig_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID && execution_id_ >= 0 && tablet_task_id_ > 0
-           && data_format_version_ > 0;
+           && data_format_version_ > 0 && orig_schema_tablet_size_ > 0 && user_parallelism_ > 0;
+  }
+
+  bool has_generated_task_ranges() const {
+    return concurrent_cnt_ > 0 && !ranges_.empty() && concurrent_cnt_ == ranges_.count();
   }
 
   int get_hidden_table_key(ObITable::TableKey &table_key) const;
@@ -73,23 +81,25 @@ public:
     dest_table_id_ = common::OB_INVALID_ID;
     orig_tablet_id_.reset();
     dest_tablet_id_.reset();
-    ranges_.reset();
     allocator_.reset();
     row_store_type_ = common::ENCODING_ROW_STORE;
     orig_schema_version_ = 0;
     dest_schema_version_ = 0;
     snapshot_version_ = 0;
-    concurrent_cnt_ = 0;
     task_id_ = 0;
     execution_id_ = -1;
     tablet_task_id_ = 0;
     compat_mode_ = lib::Worker::CompatMode::INVALID;
     data_format_version_ = 0;
+    user_parallelism_ = 0;
+    concurrent_cnt_ = 0;
+    ranges_.reset();
   }
   TO_STRING_KV(K_(is_inited), K_(orig_tenant_id), K_(dest_tenant_id), K_(orig_ls_id), K_(dest_ls_id),
       K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version),
-      K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(concurrent_cnt), K_(task_id),
-      K_(execution_id), K_(compat_mode), K_(data_format_version), K_(ranges));
+      K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
+      K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size), K_(user_parallelism),
+      K_(concurrent_cnt), K_(ranges));
 public:
   bool is_inited_;
   uint64_t orig_tenant_id_;
@@ -104,15 +114,19 @@ public:
   int64_t orig_schema_version_;
   int64_t dest_schema_version_;
   int64_t snapshot_version_;
-  int64_t concurrent_cnt_;
   int64_t task_id_;
   int64_t execution_id_;
   int64_t tablet_task_id_;
   lib::Worker::CompatMode compat_mode_;
   int64_t data_format_version_;
-  ObSEArray<common::ObStoreRange, 32> ranges_;
+  int64_t orig_schema_tablet_size_;
+  int64_t user_parallelism_;  /* user input parallelism */
+  /* complememt prepare task will initialize parallel task ranges */
+  int64_t concurrent_cnt_; /* real complement tasks num */
+  ObArray<blocksstable::ObDatumRange> ranges_;
 private:
   common::ObArenaAllocator allocator_;
+  static constexpr int64_t MAX_RPC_STREAM_WAIT_THREAD_COUNT = 100;
 };
 
 void add_ddl_event(const ObComplementDataParam *param, const ObString &stmt);
@@ -122,7 +136,7 @@ struct ObComplementDataContext final
 public:
   ObComplementDataContext():
     is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
-    lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
+    lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK),
     data_sstable_redo_writer_(), index_builder_(nullptr), ddl_kv_mgr_handle_(), row_scanned_(0), row_inserted_(0),
     allocator_("CompleteDataCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
@@ -132,13 +146,12 @@ public:
   int write_start_log(const ObComplementDataParam &param);
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
-  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder), K_(ddl_kv_mgr_handle), K_(row_scanned), K_(row_inserted));
+  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), KP_(index_builder), K_(ddl_kv_mgr_handle), K_(row_scanned), K_(row_inserted));
 public:
   bool is_inited_;
   bool is_major_sstable_exist_;
   int complement_data_ret_;
   ObSpinLock lock_;
-  int64_t concurrent_cnt_;
   ObDDLSSTableRedoWriter data_sstable_redo_writer_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_; // for keeping ddl kv mgr alive
@@ -365,7 +378,8 @@ public:
            const int64_t dest_table_id,
            const int64_t schema_version,
            const int64_t dest_schema_version,
-           const common::ObTabletID &src_tablet_id);
+           const common::ObTabletID &src_tablet_id,
+           const ObDatumRange &datum_range);
   void reset();
   virtual int get_next_row(
       const blocksstable::ObDatumRow *&tmp_row,
@@ -377,6 +391,9 @@ private:
   int prepare_iter(const ObSqlString &sql_string, common::ObCommonSqlProxy *sql_proxy);
   int generate_build_select_sql(ObSqlString &sql_string);
   // to fetch partiton/subpartition name for select sql.
+  int generate_range_condition(const ObDatumRange &datum_range,
+                               bool is_oracle_mode,
+                               ObSqlString &sql);
   int fetch_source_part_info(
       const common::ObTabletID &src_tablet_id,
       const share::schema::ObTableSchema &src_table_schema,
@@ -387,6 +404,14 @@ private:
                                const bool with_comma,
                                const bool is_oracle_mode,
                                ObSqlString &sql_string);
+  int convert_rowkey_to_sql_literal(
+      const ObRowkey &rowkey,
+      const ObIArray<ObScale> &rowkey_col_scales,
+      bool is_oracle_mode,
+      const ObObjPrintParams &obj_print_params,
+      char *buf,
+      int64_t &pos,
+      int64_t buf_len);
 private:
   bool is_inited_;
   int64_t current_;
@@ -401,9 +426,11 @@ private:
   blocksstable::ObDatumRow row_with_reshape_; // for checksum calculate only.
   ObMySQLProxy::MySQLResult res_;
   sqlclient::ObMySQLResult *result_;
+  const blocksstable::ObDatumRange *datum_range_;
   common::ObArenaAllocator allocator_;
   ObArray<ObColDesc> org_col_ids_;
   common::ObArray<ObColumnNameInfo> column_names_;
+  common::ObArray<ObScale> org_rowkey_col_scales_;
   compaction::ObColumnChecksumCalculator checksum_calculator_;
 };
 

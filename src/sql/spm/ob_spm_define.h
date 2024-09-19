@@ -25,6 +25,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObSqlPlanSet;
 
 enum PlanBaselineFlag
 {
@@ -104,7 +105,6 @@ public:
     executions_(0),
     elapsed_time_(UINT64_MAX),
     cpu_time_( UINT64_MAX),
-    need_evict_(false),
     need_sync_(false) {}
 
   virtual ~ObPlanBaselineItem() { destroy(); }
@@ -177,8 +177,6 @@ public:
   inline void set_elapsed_time(int64_t v) { elapsed_time_ = v; }
   inline int64_t get_cpu_time() const { return cpu_time_; }
   inline void set_cpu_time(int64_t v) { cpu_time_ = v; }
-  inline bool get_need_evict() const { return need_evict_; }
-  inline void set_need_evict(bool v) { need_evict_ = v; }
   inline bool get_need_sync() const { return need_sync_; }
   inline void set_need_sync(bool v) { need_sync_ = v; }
   
@@ -206,7 +204,6 @@ public:
   int64_t  cpu_time_;         // The total CPU time consumed during the evolution process
   // common::ObString hints_info_;
   // for lib cache management
-  bool need_evict_;
   bool need_sync_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanBaselineItem);
@@ -237,6 +234,7 @@ public:
   void destroy();
   void set_baseline_key(ObBaselineKey &key) { baseline_key_ = key; }
   ObBaselineKey &get_baseline_key() { return baseline_key_; }
+  bool check_has_accepted_baseline() const;
 
   TO_STRING_KV(K_(is_inited));
 private:
@@ -274,7 +272,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       select_plan_type_(INVALID_TYPE),
       baseline_exec_time_(0),
       force_evo_(false),
-      flags_(0)
+      flags_(0),
+      spm_mode_(SPM_MODE_DISABLE)
   {
     cache_node_empty_ = true;
   }
@@ -354,6 +353,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       uint64_t reserved_:                      55;
     };
   };
+  int64_t spm_mode_;
+  ObSqlPlanSet *evo_plan_set_;
 };
 
 struct EvolutionTaskResult
@@ -364,10 +365,17 @@ public:
     accept_new_plan_(false),
     new_plan_hash_(0),
     new_stat_(),
-    from_mock_task_(false)
+    from_mock_task_(false),
+    status_(0),
+    start_time_(0),
+    end_time_(0),
+    spm_mode_(SPM_MODE_DISABLE)
   {}
   ~EvolutionTaskResult() {}
-int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
+  int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
+  TO_STRING_KV(K_(key), K_(old_plan_hash_array), K_(old_stat_array), K_(new_plan_hash),
+               K_(new_stat), K_(from_mock_task), K_(start_time), K_(end_time),
+               K_(status), K_(spm_mode));
 public:
   ObBaselineKey key_;
   bool accept_new_plan_;
@@ -378,23 +386,10 @@ public:
   uint64_t new_plan_hash_;
   ObEvolutionStat new_stat_;
   bool from_mock_task_;
-};
-
-struct EvoResultUpdateTask
-{
-public:
-  EvoResultUpdateTask()
-  : key_(),
-    plan_hash_(),
-    plan_stat_()
-  {}
-  ~EvoResultUpdateTask() {}
-  int init_task(common::ObIAllocator& allocator, const EvolutionTaskResult& evo_task_result);
-  TO_STRING_KV(K_(key), K_(plan_hash), K_(plan_stat));
-public:
-  ObBaselineKey key_;
-  common::ObSEArray<uint64_t, 4> plan_hash_;
-  common::ObSEArray<ObEvolutionStat, 4> plan_stat_;
+  int64_t status_;
+  int64_t start_time_;
+  int64_t end_time_;
+  int64_t spm_mode_;
 };
 
 } // namespace sql end

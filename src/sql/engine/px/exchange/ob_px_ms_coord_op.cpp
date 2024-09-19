@@ -97,6 +97,7 @@ ObPxMSCoordOp::ObPxMSCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
   init_channel_piece_msg_proc_(exec_ctx, msg_proc_),
   reporting_wf_piece_msg_proc_(exec_ctx, msg_proc_),
   opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_),
+  statistics_collector_piece_msg_proc_(exec_ctx, msg_proc_),
   store_rows_(),
   last_pop_row_(nullptr),
   row_heap_(),
@@ -175,6 +176,7 @@ int ObPxMSCoordOp::setup_loop_proc()
       .register_processor(init_channel_piece_msg_proc_)
       .register_processor(reporting_wf_piece_msg_proc_)
       .register_processor(opt_stats_gather_piece_msg_proc_)
+      .register_processor(statistics_collector_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   msg_loop_.set_tenant_id(ctx_.get_my_session()->get_effective_tenant_id());
   return ret;
@@ -346,7 +348,7 @@ int ObPxMSCoordOp::inner_get_next_row()
       ObDtlChannel *ch = msg_loop_.get_channel(idx + receive_order_.get_data_channel_start_idx());
       if (NULL == ch || NULL == reader) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("reader or channel is NULL");
+        LOG_WARN("reader or channel is NULL", K(ch), K(reader), K(get_spec().get_id()));
       } else if (OB_FAIL(ctx_.fast_check_status())) {
         LOG_WARN("failed to check status", K(ret));
       } else {
@@ -424,6 +426,7 @@ int ObPxMSCoordOp::inner_get_next_row()
         case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
         case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
         case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
+        case ObDtlMsgType::DH_STATISTICS_COLLECTOR_PIECE_MSG:
           // 这几种消息都在 process 回调函数里处理了
           break;
         default:

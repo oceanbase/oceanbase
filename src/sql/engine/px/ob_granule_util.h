@@ -98,6 +98,144 @@ enum ObGranuleType
   OB_PARTITION_GRANULE
 };
 
+//
+// 《PX的GI详细实现》
+enum ObGranuleSplitterType
+{
+  GIT_UNINITIALIZED,
+
+  /**
+    *           [Hash Join]
+    *                |
+    *        ----------------
+    *        |              |
+    *        EX(PKEY)      GI (GIT_AFFINITY)
+    *        |              |
+    *        GI            TSC2
+    *        |
+    *       TSC1
+    */
+  /*
+    * Here is an example of "partition + affinitized" within table B
+    * for each row from C, it can only flow to certain workers dealing
+    * with coresponding partitions of B.
+    *
+    * |   PX COORDINATOR                |          |
+    * |    EXCHANGE OUT DISTR           |:EX20001  |
+    * |      NESTED-LOOP JOIN           |          |
+    * |       EXCHANGE IN DISTR         |          |
+    * |        EXCHANGE OUT DISTR (PKEY)|:EX20000  |
+    * |         PX PARTITION ITERATOR   |          |
+    * |          TABLE SCAN             |C         |
+    * |       PX PARTITION ITERATOR     |          |
+    * |        TABLE SCAN               |B         |
+    */
+  GIT_AFFINITY,
+
+  /**
+    *        [Nested Loop Join]
+    *                |
+    *        ----------------
+    *        |              |
+    *        EX(BC2HOST)    GI (GIT_ACCESS_ALL)
+    *        |              |
+    *        GI            TSC2
+    *        |
+    *       TSC1
+    */
+  /*
+    * Each worker must have full access with table B's data
+    *
+    * |   PX COORDINATOR                     |          |
+    * |    EXCHANGE OUT DISTR                |:EX20001  |
+    * |      NESTED-LOOP JOIN                |          |
+    * |       EXCHANGE IN DISTR              |          |
+    * |        EXCHANGE OUT DISTR (B2HOST)   |:EX20000  |
+    * |         PX PARTITION ITERATOR        |          |
+    * |          TABLE SCAN                  |C         |
+    * |       PX PARTITION ITERATOR          |          |
+    * |        TABLE SCAN                    |B         |
+    */
+  GIT_ACCESS_ALL,
+
+  /**
+    *                GI (GIT_PARTITION_WISE)
+    *                |
+    *            [Hash Join]
+    *                |
+    *        ----------------
+    *        |              |
+    *        TSC1           TSC2
+    */
+  /*
+    * If two tables can do join in full partition wise way, it will
+    * be the most efficient way.
+    *
+    * |      PX PARTITION ITERATOR      |          |
+    * |       HASH JOIN                 |          |
+    * |        TABLE SCAN               |A         |
+    * |        TABLE SCAN               |B         |
+    */
+  GIT_FULL_PARTITION_WISE,
+
+  /* consist of full/partial partition wise affinity
+    *
+    *                      [Hash Join]
+    *                           |
+    *                ---------------------
+    *                |                   |
+    *           [Hash Join]              GI(partial partition wise with affinity)
+    *                |                   |
+    *        ----------------            TSC3
+    *        |              |
+    *        EX(PKEY)      GI(partial partition wise with affinity)
+    *        |              |
+    *        GI            TSC2
+    *        |
+    *       TSC
+    */
+  /*
+    * Here is an example of "pwj_gi + affinitized" within table B and A
+    *
+    * |   PX COORDINATOR                |          |
+    * |    EXCHANGE OUT DISTR           |:EX20001  |
+    * |     NESTED-LOOP JOIN            |          |
+    * |      NESTED-LOOP JOIN           |          |
+    * |       EXCHANGE IN DISTR         |          |
+    * |        EXCHANGE OUT DISTR (PKEY)|:EX20000  |
+    * |         PX PARTITION ITERATOR   |          |
+    * |          TABLE SCAN             |C         |
+    * |       PX PARTITION ITERATOR     |          |
+    * |        TABLE GET                |B         |
+    * |      PX PARTITION ITERATOR      |          |
+    * |       TABLE GET                 |A         |
+
+    *
+    *                      [Hash Join]
+    *                           |
+    *                ---------------------
+    *                |                   |
+    *             EX(PKEY)              GI(full partition wise with affinity)
+    *                |                   |
+    *               TSC             [Hash Join]
+    *                                    |
+    *                             ----------------
+    *                             |              |
+    *                            TSC2           TSC3
+    */
+  GIT_PARTITION_WISE_WITH_AFFINITY,
+  /*
+    * This is the most commonly used GI
+    *
+    * |      PX BLOCK ITERATOR          |          |
+    * |       TABLE SCAN                |A         |
+    * or
+    * |      PX PARTITION ITERATOR      |          |
+    * |       TABLE SCAN                |A         |
+    */
+  GIT_RANDOM,
+};
+
 // the params used to decide the load of every task
 struct ObParallelBlockRangeTaskParams
 {
@@ -293,6 +431,7 @@ public:
   static int compute_total_task_count(const ObParallelBlockRangeTaskParams &params,
                                 int64_t total_size,
                                 int64_t &total_task_count);
+  static ObGranuleSplitterType calc_split_type(uint64_t gi_attr_flag);
 
 private:
   /**

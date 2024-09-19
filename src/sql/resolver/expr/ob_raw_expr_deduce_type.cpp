@@ -3625,8 +3625,10 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
       cast_dst_type.set_scale(SCALE_UNKNOWN_YET);
     }
   } else if (lib::is_mysql_mode()
-             && ObDateTimeTC == child_res_type.get_type_class()
-             && ObDateTimeTC == dst_type.get_calc_meta().get_type_class()) {
+             && (ObDateTimeTC == child_res_type.get_type_class()
+                || ObMySQLDateTimeTC == child_res_type.get_type_class())
+             && (ObDateTimeTC == dst_type.get_calc_meta().get_type_class()
+                || ObMySQLDateTimeTC == dst_type.get_calc_meta().get_type_class())) {
     cast_dst_type.set_accuracy(child_res_type.get_accuracy());
   } else if (lib::is_mysql_mode() && ObDoubleTC == dst_type.get_calc_meta().get_type_class()) {
     if (ob_is_numeric_tc(child_res_type.get_type_class())) {
@@ -3655,6 +3657,10 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
     uint64_t udt_id = (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type())
                       ? dst_type.get_udt_id()
                       : dst_type.get_calc_accuracy().get_accuracy();
+    cast_dst_type.set_udt_id(udt_id);
+  }
+  if (lib::is_oracle_mode() && cast_dst_type.is_ext()) {
+    uint64_t udt_id = dst_type.is_ext() ? dst_type.get_udt_id() : dst_type.get_calc_accuracy().get_accuracy();
     cast_dst_type.set_udt_id(udt_id);
   }
   // 这里仅设置部分情况的accuracy，其他情况的accuracy信息交给cast类型推导设置

@@ -256,7 +256,8 @@ int ObUserProfileResolver::resolve(const ParseNode &parse_tree)
                                                          dtc_params.nls_collation_,
                                                          NULL,
                                                          params_.session_info_->get_sql_mode(),
-                                                         compat_type))) {
+                                                         compat_type,
+                                                         false/*enable_mysql_compatible_dates*/))) {
                 LOG_WARN("fail to resolve const", K(ret));
               } else if (OB_FAIL(fill_arg(param_type->value_, numeric_value, arg))) {
                 LOG_WARN("fail to fill arg", K(ret), K(param_type->value_));

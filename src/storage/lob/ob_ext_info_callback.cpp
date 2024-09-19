@@ -38,9 +38,9 @@ DEFINE_SERIALIZE(ObExtInfoLogHeader)
   int64_t new_pos = pos;
   if (NULL == buf || 0 >= buf_len || 0 > pos) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("serialize failed", K(ret), K(pos), K(buf_len));
+    LOG_WARN("serialize failed", K(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, new_pos, type_))) {
-    LOG_ERROR("serialize failed", K(ret), K(pos), K(buf_len));
+    LOG_WARN("serialize failed", K(ret), K(pos), K(buf_len));
   } else {
     pos = new_pos;
   }
@@ -53,13 +53,27 @@ DEFINE_DESERIALIZE(ObExtInfoLogHeader)
   int64_t new_pos = pos;
   if (NULL == buf || 0 >= data_len || 0 > pos) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("serialize failed", K(ret), K(pos), K(data_len));
+    LOG_WARN("serialize failed", K(ret), K(pos), K(data_len));
   } else if (OB_FAIL(serialization::decode_i8(buf, data_len, new_pos, reinterpret_cast<int8_t*>(&type_)))) {
-    LOG_ERROR("serialize failed", K(ret), K(pos), K(data_len));
+    LOG_WARN("serialize failed", K(ret), K(pos), K(data_len));
   } else {
     pos = new_pos;
   }
   return ret;
+}
+
+void ObExtInfoLogHeader::init(ObObj &obj, const bool is_update) {
+  if (obj.is_lob_storage()) {
+    if (ObJsonType == obj.get_type()) {
+      if (is_update) {
+        type_ = OB_JSON_DIFF_EXT_INFO_LOG;
+      } else {
+        type_ = OB_VALID_OLD_LOB_VALUE_LOG;
+      }
+    } else {
+      type_ = OB_VALID_OLD_LOB_VALUE_LOG;
+    }
+  }
 }
 
 ObJsonDiffLog::~ObJsonDiffLog()
@@ -245,17 +259,23 @@ ObExtInfoCbRegister::~ObExtInfoCbRegister()
 
 int ObExtInfoCbRegister::register_cb(
     memtable::ObIMvccCtx *ctx,
+    storage::ObStoreCtx &store_ctx,
     const int64_t timeout,
     const blocksstable::ObDmlFlag dml_flag,
-    transaction::ObTxDesc *tx_desc,
-    transaction::ObTxSEQ &parent_seq_no,
     ObObj &index_data,
-    ObObj &ext_info_data)
+    ObObj &ext_info_data,
+    const transaction::ObTxReadSnapshot &snapshot,
+    const ObExtInfoLogHeader &header,
+    const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ext_info_data_ = ext_info_data;
   timeout_ = timeout;
+  header_ = header;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
+  transaction::ObTxDesc *tx_desc = store_ctx.mvcc_acc_ctx_.tx_desc_;
+  const transaction::ObTxSEQ &parent_seq_no = store_ctx.mvcc_acc_ctx_.tx_scn_;
+  const share::ObLSID &ls_id = store_ctx.ls_id_;
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]get lob manager instance failed.", K(ret));
@@ -268,9 +288,13 @@ int ObExtInfoCbRegister::register_cb(
   } else if (OB_ISNULL(mvcc_ctx_ = ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data is empty", K(ret), K(ext_info_data));
-  } else if (OB_FAIL(init_header(index_data, ext_info_data))) {
-    LOG_WARN("init_header_ fail", K(ret), K(ext_info_data));
-  } else if (OB_FAIL(build_data_iter(ext_info_data))) {
+  } else if (OB_FAIL(build_data_iter(
+        ext_info_data,
+        tx_desc,
+        parent_seq_no,
+        snapshot,
+        ls_id,
+        tablet_id))) {
     LOG_WARN("build data iter fail", K(ret));
   } else if (FALSE_IT(seq_no_cnt_ = data_size_/OB_EXT_INFO_LOG_BLOCK_MAX_SIZE + 1)) {
   } else if (OB_FAIL(tx_desc->get_and_inc_tx_seq(parent_seq_no.get_branch(),
@@ -278,51 +302,44 @@ int ObExtInfoCbRegister::register_cb(
                                                  seq_no_st_))) {
     LOG_WARN("get and inc tx seq failed", K(ret), K_(seq_no_cnt));
   } else {
+    ObLobExtInfoLogThrottleGuard throttle_guard(timeout, &(lob_mngr->get_ext_info_log_throttle_tool()));
     transaction::ObTxSEQ seq_no_cur = seq_no_st_;
     ObString data;
-    ObSEArray<ObExtInfoCallback*, 1> cb_array;
     int cb_cnt = 0;
     while (OB_SUCC(ret) && OB_SUCC(get_data(data))) {
       storage::ObExtInfoCallback *cb = nullptr;
+      // each append one callback will write auth once
+      memtable::ObMvccWriteGuard guard(false);
       if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc row callback failed", K(ret));
-      } else if (OB_FAIL(cb_array.push_back(cb))) {
-        LOG_WARN("push back cb fail", K(ret), K(cb_array));
+      } else if (OB_FAIL(cb->set(tmp_allocator_, dml_flag, seq_no_cur, data))) {
+        LOG_WARN("set row callback failed", K(ret), K(*cb));
+      } else if (OB_FAIL(guard.write_auth(store_ctx))) {
+        LOG_WARN("write_auth fail", K(ret), K(store_ctx));
+      } else if (OB_FAIL(mvcc_ctx_->append_callback(cb))) {
+        LOG_WARN("register ext info callback failed", K(ret), K(*this),K(*cb));
       } else {
-        cb->set(tmp_allocator_, dml_flag, seq_no_cur, data);
+        guard.set_is_lob_ext_info_log(true);
         seq_no_cur = seq_no_cur + 1;
-        if (OB_FAIL(mvcc_ctx_->append_callback(cb))) {
-          LOG_ERROR("register ext info callback failed", K(ret), K(*this),K(*cb));
-        } else {
-          ++cb_cnt;
-          LOG_DEBUG("register ext info callback success", K(*cb));
-        }
+        ++cb_cnt;
+        LOG_DEBUG("register ext info callback success", K(*cb), K(cb_cnt), K(seq_no_cur));
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(cb)) {
+        // append callback fail, need free to avoid memory leak
         mvcc_ctx_->free_ext_info_callback(cb);
+        LOG_WARN("append fail, free callback", K(ret), K(seq_no_cur), K(cb_cnt));
       }
     }
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
     if (OB_FAIL(ret)) {
-      for(int i = 0; i < cb_cnt; ++i) {
-        cb_array[i]->del();
-        mvcc_ctx_->free_ext_info_callback(cb_array[i]);
-      }
     } else if (OB_FALSE_IT(seq_no_cnt_ = cb_cnt)) {
     } else if (OB_FAIL(set_index_data(index_data))) {
       LOG_WARN("set_index_data fail", K(ret));
     }
   }
-  return ret;
-}
-
-int ObExtInfoCbRegister::init_header(ObObj& index_data, ObObj &ext_info_data)
-{
-  int ret = OB_SUCCESS;
-  header_.type_ = get_type(index_data.get_type());
   return ret;
 }
 
@@ -360,17 +377,25 @@ int ObExtInfoCbRegister::set_outrow_ctx_seq_no(ObObj& index_data)
     ObLobDataOutRowCtx *lob_data_outrow_ctx = reinterpret_cast<ObLobDataOutRowCtx *>(lob_data->buffer_);
     lob_data_outrow_ctx->seq_no_st_ = seq_no_st_.cast_to_int();
     lob_data_outrow_ctx->seq_no_cnt_ = seq_no_cnt_;
+    if (lob_data_outrow_ctx->is_valid_old_value_ext_info_log()) {
+      lob_data_outrow_ctx->del_seq_no_cnt_ = seq_no_cnt_;
+    }
     lob_data_outrow_ctx->modified_len_ = data_size_ + header_.get_serialize_size();
   }
   return ret;
 }
 
-int ObExtInfoCbRegister::build_data_iter(ObObj &ext_info_data)
+int ObExtInfoCbRegister::build_data_iter(
+    ObObj &ext_info_data,
+    transaction::ObTxDesc *tx_desc,
+    const transaction::ObTxSEQ &tx_scn,
+    const transaction::ObTxReadSnapshot &snapshot,
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mgr = MTL(ObLobManager*);
   ObString data = ext_info_data.get_string();
-  ObLobLocatorV2 data_locator;
   char *data_buf = nullptr;
   int64_t data_buf_len = 0;
   if (OB_ISNULL(lob_mgr)) {
@@ -378,16 +403,16 @@ int ObExtInfoCbRegister::build_data_iter(ObObj &ext_info_data)
     TRANS_LOG(ERROR, "lob manager is  null", K(ret));
   } else if (! is_lob_storage(ext_info_data.get_type())) {
     if (OB_FAIL(lob_mgr->query(data, data_iter_))) {
-      LOG_WARN("build data iter fail", K(ret), K(lob_param_));
+      LOG_WARN("build data iter fail", K(ret), K(data));
     } else {
       data_size_ = data.length();
     }
-  } else if (OB_FALSE_IT(data_locator.assign_buffer(data.ptr(), data.length()))) {
-  } else if (! data_locator.is_valid()) {
+  } else if (OB_FALSE_IT(lob_locator_.assign_buffer(data.ptr(), data.length()))) {
+  } else if (! lob_locator_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid lob locator", K(ret), K(data_locator));
-  } else if (OB_FAIL(data_locator.get_lob_data_byte_len(data_size_))) {
-    LOG_WARN("get lob data byte len fail", K(ret), K(data_locator));
+    LOG_WARN("invalid lob locator", K(ret), K(lob_locator_));
+  } else if (OB_FAIL(lob_locator_.get_lob_data_byte_len(data_size_))) {
+    LOG_WARN("get lob data byte len fail", K(ret), K(lob_locator_));
   } else if (OB_ISNULL(lob_param_ = OB_NEWx(ObLobAccessParam, &tmp_allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc lob param fail", K(ret), "size", sizeof(ObLobAccessParam));
@@ -398,10 +423,21 @@ int ObExtInfoCbRegister::build_data_iter(ObObj &ext_info_data)
       0,
       data_size_,
       timeout_,
-      data_locator))) {
-    LOG_WARN("build lob param fail", K(ret), K(data_locator));
-  } else if (OB_FAIL(lob_mgr->query(*lob_param_, data_iter_))) {
-    LOG_WARN("build data iter fail", K(ret), K(lob_param_));
+      lob_locator_))) {
+    LOG_WARN("build lob param fail", K(ret), K(lob_locator_));
+  } else {
+    lob_param_->tx_desc_ = tx_desc;
+    lob_param_->parent_seq_no_ = tx_scn;
+    lob_param_->snapshot_ = snapshot;
+    lob_param_->tx_id_ = tx_desc->get_tx_id();
+    lob_param_->need_read_latest_ = true;
+    lob_param_->no_need_retry_ = true;
+    lob_param_->tablet_id_ = tablet_id;
+    lob_param_->ls_id_ = ls_id;
+
+    if (OB_FAIL(lob_mgr->query(*lob_param_, data_iter_))) {
+      LOG_WARN("build data iter fail", K(ret), K(lob_param_));
+    }
   }
 
   if (OB_FAIL(ret)) {

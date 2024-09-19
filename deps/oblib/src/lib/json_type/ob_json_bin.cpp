@@ -32,6 +32,11 @@ int ObJsonBin::get_obtime(ObTime &t) const
       ret = ObTimeConverter::date_to_ob_time(int_val_, t);
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      t.mode_ |= DT_TYPE_MYSQL_DATE;
+      ret = ObTimeConverter::mdate_to_ob_time(int_val_, t);
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       ret = ObTimeConverter::time_to_ob_time(int_val_, t);
       break;
@@ -42,6 +47,11 @@ int ObJsonBin::get_obtime(ObTime &t) const
     case ObJsonNodeType::J_OTIMESTAMP:
     case ObJsonNodeType::J_OTIMESTAMPTZ: {
       ret = ObTimeConverter::datetime_to_ob_time(int_val_, NULL, t);
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      t.mode_ |= DT_TYPE_MYSQL_DATETIME;
+      ret = ObTimeConverter::mdatetime_to_ob_time(int_val_, t);
       break;
     }
     default: {
@@ -789,6 +799,15 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
       }
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      const ObJsonDatetime *sub_obj = static_cast<const ObJsonDatetime*>(json_tree);
+      ObTime ob_time = sub_obj->value();
+      ObMySQLDate value = ObTimeConverter::ob_time_to_mdate(ob_time);
+      if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(int32_t)))) {
+        LOG_WARN("failed to append date json obj value", K(ret));
+      }
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       const ObJsonDatetime *sub_obj = static_cast<const ObJsonDatetime*>(json_tree);
       ObTime ob_time = sub_obj->value();
@@ -808,6 +827,17 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
       ObTimeConvertCtx crtx(NULL, false);
       int64_t value;
       if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, crtx, value))) {
+        LOG_WARN("failed to convert time to datetime", K(ret));
+      } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(int64_t)))) {
+        LOG_WARN("failed to append datetime json obj value", K(ret));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      const ObJsonDatetime *sub_obj = static_cast<const ObJsonDatetime*>(json_tree);
+      ObTime ob_time = sub_obj->value();
+      ObMySQLDateTime value;
+      if (OB_FAIL(ObTimeConverter::ob_time_to_mdatetime(ob_time, value))) {
         LOG_WARN("failed to convert time to datetime", K(ret));
       } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(int64_t)))) {
         LOG_WARN("failed to append datetime json obj value", K(ret));
@@ -1268,6 +1298,25 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
       }
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      int32_t value = 0;
+      void *buf = allocator_->alloc(sizeof(ObJsonDatetime));
+      if (buf == NULL) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for date json node", K(ret));
+      } else if (OB_FAIL(cursor_->read_i32(pos_, &value))) {
+        LOG_WARN("read_i32 fail", K(ret), K(pos_), K(sizeof(int32_t)));
+      } else {
+        ObTime ob_time;
+        if (OB_FAIL(ObTimeConverter::mdate_to_ob_time(value, ob_time))) {
+          LOG_WARN("fail to convert date to ob time", K(ret));
+        } else {
+          ObJsonDatetime *node = new(buf)ObJsonDatetime(node_type, ob_time);
+          json_tree = static_cast<ObJsonNode*>(node);
+        }
+      }
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       int64_t value = 0;
       void *buf = allocator_->alloc(sizeof(ObJsonDatetime));
@@ -1296,6 +1345,25 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
       } else {
         ObTime ob_time;
         if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, NULL, ob_time))) {
+          LOG_WARN("fail to convert datetime to ob time", K(ret));
+        } else {
+          ObJsonDatetime *node = new(buf)ObJsonDatetime(node_type, ob_time);
+          json_tree = static_cast<ObJsonNode*>(node);
+        }
+      }
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      int64_t value = 0;
+      void *buf = allocator_->alloc(sizeof(ObJsonDatetime));
+      if (buf == NULL) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for datetime json node", K(ret));
+      } else if (OB_FAIL(cursor_->read_i64(pos_, &value))) {
+        LOG_WARN("read_i64 fail", K(ret), K(pos_), K(sizeof(int64_t)));
+      } else {
+        ObTime ob_time;
+        if (OB_FAIL(ObTimeConverter::mdatetime_to_ob_time(value, ob_time))) {
           LOG_WARN("fail to convert datetime to ob time", K(ret));
         } else {
           ObJsonDatetime *node = new(buf)ObJsonDatetime(node_type, ob_time);
@@ -1600,12 +1668,14 @@ int ObJsonBin::get_area_size(uint64_t& size) const
         break;
       }
       case ObJsonNodeType::J_DATE:
+      case ObJsonNodeType::J_MYSQL_DATE:
       case ObJsonNodeType::J_ORACLEDATE: {
         size = sizeof(int32_t);
         break;
       }
       case ObJsonNodeType::J_TIME:
       case ObJsonNodeType::J_DATETIME:
+      case ObJsonNodeType::J_MYSQL_DATETIME:
       case ObJsonNodeType::J_TIMESTAMP:
       case ObJsonNodeType::J_ODATE:
       case ObJsonNodeType::J_OTIMESTAMP:
@@ -2265,12 +2335,13 @@ int ObJsonBin::init_bin_data()
         break;
       }
       case ObJsonNodeType::J_DATE:
+      case ObJsonNodeType::J_MYSQL_DATE:
       case ObJsonNodeType::J_ORACLEDATE: {
         int32_t val = 0;
         if (OB_FAIL(cursor_->read_i32(pos_, &val))) {
           LOG_WARN("read_id32 fail", K(ret), K(pos_));
         } else {
-          meta_.field_type_ = ObDateType;
+          meta_.field_type_ = ObJsonBaseUtil::get_time_type(node_type);
           int_val_ = val;
           meta_.bytes_ = sizeof(int32_t);
         }
@@ -2287,6 +2358,7 @@ int ObJsonBin::init_bin_data()
       }
       case ObJsonNodeType::J_DATETIME:
       case ObJsonNodeType::J_ODATE:
+      case ObJsonNodeType::J_MYSQL_DATETIME:
       case ObJsonNodeType::J_OTIMESTAMP:
       case ObJsonNodeType::J_OTIMESTAMPTZ: {
         if (OB_FAIL(cursor_->read_i64(pos_, &int_val_))) {
@@ -3593,6 +3665,7 @@ int ObJsonBin::rebuild_json_value(ObJsonBuffer &result) const
       break;
     }
     case ObJsonNodeType::J_DATE:
+    case ObJsonNodeType::J_MYSQL_DATE:
     case ObJsonNodeType::J_ORACLEDATE: {
       if (OB_FAIL(cursor_->get(pos_, sizeof(int32_t), data))) {
         LOG_WARN("get data fail", K(ret), K(pos_));
@@ -3603,6 +3676,7 @@ int ObJsonBin::rebuild_json_value(ObJsonBuffer &result) const
     }
     case ObJsonNodeType::J_TIME:
     case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_TIMESTAMP:
     case ObJsonNodeType::J_ODATE:
     case ObJsonNodeType::J_OTIMESTAMP:
@@ -3969,12 +4043,20 @@ ObJBVerType ObJsonVerType::get_json_vertype(ObJsonNodeType in_type)
       ret_type = ObJsonBin::get_date_vertype();
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      ret_type = ObJsonBin::get_mdate_vertype();
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       ret_type = ObJsonBin::get_time_vertype();
       break;
     }
     case ObJsonNodeType::J_DATETIME: {
       ret_type = ObJsonBin::get_datetime_vertype();
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      ret_type = ObJsonBin::get_mdatetime_vertype();
       break;
     }
     case ObJsonNodeType::J_TIMESTAMP: {
@@ -4099,12 +4181,20 @@ ObJsonNodeType ObJsonVerType::get_json_type(ObJBVerType type)
       ret_type = ObJsonNodeType::J_DATE;
       break;
     }
+    case ObJBVerType::J_MYSQL_DATE_V0: {
+      ret_type = ObJsonNodeType::J_MYSQL_DATE;
+      break;
+    }
     case ObJBVerType::J_TIME_V0: {
       ret_type = ObJsonNodeType::J_TIME;
       break;
     }
     case ObJBVerType::J_DATETIME_V0: {
       ret_type = ObJsonNodeType::J_DATETIME;
+      break;
+    }
+    case ObJBVerType::J_MYSQL_DATETIME_V0: {
+      ret_type = ObJsonNodeType::J_MYSQL_DATETIME;
       break;
     }
     case ObJBVerType::J_TIMESTAMP_V0: {
@@ -4236,6 +4326,8 @@ bool ObJsonVerType::is_scalar(ObJBVerType type)
     case ObJsonNodeType::J_BOOLEAN :
     case ObJsonNodeType::J_DATE :
     case ObJsonNodeType::J_DATETIME :
+    case ObJsonNodeType::J_MYSQL_DATE :
+    case ObJsonNodeType::J_MYSQL_DATETIME :
     case ObJsonNodeType::J_TIMESTAMP :
     case ObJsonNodeType::J_OPAQUE :
     case ObJsonNodeType::J_OFLOAT :
@@ -4767,7 +4859,7 @@ int ObJsonBin::get_value(int index, ObJsonBin &value) const
   uint64_t value_offset = 0;
   uint8_t value_type = 0;
   if (OB_FAIL(get_value_entry(index, value_offset, value_type))) {
-    LOG_WARN("get_value_entry fail", K(ret), K(index));;
+    LOG_WARN("get_value_entry fail", K(ret), K(index));
   } else if (OB_JSON_TYPE_IS_INLINE(value_type)) {
       offset += pos_;
   } else if (is_forward_v0(value_type)) {

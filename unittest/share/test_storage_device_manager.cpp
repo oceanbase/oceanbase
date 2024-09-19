@@ -160,6 +160,8 @@ TEST_F(TestDeviceManager, test_device_manager)
   ObIODevice* device_handle[2*max_dev_num];
   char storage_info_buf[OB_MAX_URI_LENGTH];
   ObString storage_info_local(OB_LOCAL_PREFIX);
+  ObString storage_prefix_oss(OB_OSS_PREFIX);
+  char tmp_storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {0};
   manager.destroy();
   
   int32_t device_num = 0;
@@ -185,12 +187,17 @@ TEST_F(TestDeviceManager, test_device_manager)
   device_num = manager.get_device_cnt();
   ASSERT_EQ(1, device_num); //since we do not release automatic
 
-  //MAX_DEVICE_INSTANCE different deivce
+ //MAX_DEVICE_INSTANCE different deivce
   for (int i = 0; i < max_dev_num; i++ ) {
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(storage_info_buf, sizeof(storage_info_buf), 
-                  "%s_%d", OB_LOCAL_PREFIX, i));
-    ObString storage_info(storage_info_buf);
-    ASSERT_EQ(OB_SUCCESS, manager.get_device(storage_info, storage_info, device_handle[i]));
+    ObObjectStorageInfo tmp_storage_info;
+    tmp_storage_info.device_type_ = ObStorageType::OB_STORAGE_OSS;
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(tmp_storage_info.access_id_,
+                                          sizeof(tmp_storage_info.access_id_),
+                                          "%d", i));
+    ASSERT_EQ(OB_SUCCESS, tmp_storage_info.get_storage_info_str(
+        tmp_storage_info_str, OB_MAX_BACKUP_STORAGE_INFO_LENGTH));
+    ASSERT_EQ(OB_SUCCESS, manager.get_device(tmp_storage_info_str,
+        storage_prefix_oss, device_handle[i]));
     //all the device is not same 
     if (NULL != tmp_dev_handle) {
       ASSERT_TRUE(device_handle[i] != tmp_dev_handle);
@@ -200,21 +207,39 @@ TEST_F(TestDeviceManager, test_device_manager)
   device_num = manager.get_device_cnt();
   ASSERT_EQ(max_dev_num, device_num);
    
-  ObString storage_info_tmp("local://_x");
   //exceed MAX_DEVICE_INSTANCE device, should fail
-  ASSERT_EQ(OB_OUT_OF_ELEMENT, manager.get_device(storage_info_tmp, storage_info_tmp, tmp_dev_handle));
+  ObObjectStorageInfo max_storage_info;
+  max_storage_info.device_type_ = ObStorageType::OB_STORAGE_OSS;
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(max_storage_info.access_id_,
+                                        sizeof(max_storage_info.access_id_),
+                                        "%d", max_dev_num));
+  ASSERT_EQ(OB_SUCCESS, max_storage_info.get_storage_info_str(
+      tmp_storage_info_str, OB_MAX_BACKUP_STORAGE_INFO_LENGTH));
+  ASSERT_EQ(OB_OUT_OF_ELEMENT, manager.get_device(tmp_storage_info_str,
+      storage_prefix_oss, tmp_dev_handle));
   //release some and get again, should suc(this device ref should be 0)
   ASSERT_EQ(OB_SUCCESS, manager.release_device(device_handle[0]));
   //get this device again
-  ASSERT_EQ(OB_SUCCESS, manager.get_device("local://_0", "local://_0", device_handle[0]));
+  ObObjectStorageInfo min_storage_info;
+  min_storage_info.device_type_ = ObStorageType::OB_STORAGE_OSS;
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(max_storage_info.access_id_,
+                                        sizeof(max_storage_info.access_id_),
+                                        "%d", 0));
+  ASSERT_EQ(OB_SUCCESS, min_storage_info.get_storage_info_str(
+      tmp_storage_info_str, OB_MAX_BACKUP_STORAGE_INFO_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, manager.get_device(tmp_storage_info_str,
+      storage_prefix_oss, device_handle[0]));
   //copy device handle, test double release scenario
   tmp_dev_handle = device_handle[0];
   ASSERT_EQ(OB_SUCCESS, manager.release_device(device_handle[0]));
   //double release scenario, since the ref is 0, can not release again
   ASSERT_EQ(OB_INVALID_ARGUMENT, manager.release_device(tmp_dev_handle));
   //the device handle has been reset, so will be a null pointer error
-  ASSERT_EQ(OB_INVALID_ARGUMENT, manager.release_device(device_handle[0]));               
-  ASSERT_EQ(OB_SUCCESS, manager.get_device(storage_info_tmp, storage_info_tmp, device_handle[0]));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, manager.release_device(device_handle[0]));
+  ASSERT_EQ(OB_SUCCESS, max_storage_info.get_storage_info_str(
+      tmp_storage_info_str, OB_MAX_BACKUP_STORAGE_INFO_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, manager.get_device(tmp_storage_info_str,
+      storage_prefix_oss, device_handle[0]));
   device_num = manager.get_device_cnt();
   ASSERT_EQ(max_dev_num, device_num);
   manager.destroy();
@@ -223,14 +248,20 @@ TEST_F(TestDeviceManager, test_device_manager)
 
   //get again
   for (int i = 0; i < max_dev_num; i++ ) {
-    ObString storage_info("local://_x");
+    int64_t storage_id = 0;
     if ( i >= max_dev_num/2) {
-      ASSERT_EQ(OB_SUCCESS, databuff_printf(storage_info_buf, sizeof(storage_info_buf), 
-                  "%s_%d", OB_LOCAL_PREFIX, i));
-      storage_info.assign_ptr(storage_info_buf, strlen(storage_info_buf));
+      storage_id = i;
     }
     
-    ASSERT_EQ(OB_SUCCESS, manager.get_device(storage_info, storage_info, device_handle[i]));
+    ObObjectStorageInfo tmp_storage_info;
+    tmp_storage_info.device_type_ = ObStorageType::OB_STORAGE_OSS;
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(tmp_storage_info.access_id_,
+                                          sizeof(tmp_storage_info.access_id_),
+                                          "%ld", storage_id));
+    ASSERT_EQ(OB_SUCCESS, tmp_storage_info.get_storage_info_str(
+        tmp_storage_info_str, OB_MAX_BACKUP_STORAGE_INFO_LENGTH));
+    ASSERT_EQ(OB_SUCCESS, manager.get_device(tmp_storage_info_str,
+      storage_prefix_oss, device_handle[i]));
   }
   device_num = manager.get_device_cnt();
   ASSERT_EQ(max_dev_num/2 + 1, device_num);

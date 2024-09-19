@@ -706,7 +706,7 @@ void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &colu
   }
 }
 
-void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info)
+void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info, const bool is_out_row)
 {
   // Neither the NULL type nor the Ext type update Meta information
   if (! obj.is_null() && ! obj.is_ext()) {
@@ -719,6 +719,11 @@ void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info)
       obj.set_scale(column_schema_info.get_accuracy().get_precision());
     } else {
       obj.set_scale(column_schema_info.get_accuracy().get_scale());
+    }
+
+    // outrow doesn't have lob_header so can't set lob_header
+    if (obj.is_lob_storage() && !is_out_row) {
+      obj.set_has_lob_header();
     }
   }
 }
@@ -1326,38 +1331,6 @@ int64_t ObLogTimeMonitor::mark_and_get_cost(const char *log_msg_suffix, bool nee
 bool is_backup_mode()
 {
   return (TCONF.enable_backup_mode != 0);
-}
-
-char *lbt_oblog()
-{
-  int ret = OB_SUCCESS;
-  //As lbt used when print error log, can not print error log
-  //in this function and functions called.
-  static __thread void *addrs[100];
-  static __thread char buf[LBT_BUFFER_LENGTH];
-  int size = ob_backtrace(addrs, 100);
-  char **res = backtrace_symbols(addrs, 100);
-  int64_t pos = 0;
-
-  for (int idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
-    char *res_idx = res[idx];
-    int tmp_ret = OB_SUCCESS;
-
-    if (OB_NOT_NULL(res_idx)) {
-      if (OB_TMP_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        if (OB_SIZE_OVERFLOW != ret) {
-          LOG_WARN("atabuff_printf fail when lbt, ignore", KR(tmp_ret), K(idx), K(size), K(buf), K(pos),
-              K(LBT_BUFFER_LENGTH));
-        }
-      }
-    }
-  }
-
-  if (OB_NOT_NULL(res)) {
-    free(res);
-  }
-
-  return buf;
 }
 
 int get_br_value(IBinlogRecord *br,

@@ -246,9 +246,13 @@ struct ObCurTraceId
       trace_id->reset();
     }
   }
-  static const char* get_trace_id_str()
+  static const char* get_trace_id_str(char *buf, int64_t buf_len)
   {
-    return to_cstring(*get_trace_id());
+    if (nullptr != buf && buf_len > 0) {
+      int64_t pos = 0;
+      (void)databuff_printf(buf, buf_len, pos, *get_trace_id());
+    }
+    return buf;
   }
   inline static const uint64_t* get()
   {
@@ -327,7 +331,7 @@ private:
 }// namespace oceanbase
 
 extern "C" {
-  const char* trace_id_to_str_c(const uint64_t *uval);
+  const char* trace_id_to_str_c(const uint64_t *uval, char *buf, int64_t buf_len);
 } /* extern "C" */
 
 

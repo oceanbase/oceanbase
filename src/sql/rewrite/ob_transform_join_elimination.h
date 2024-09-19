@@ -262,6 +262,7 @@ private:
   int eliminate_outer_join_in_joined_table(ObDMLStmt *stmt,
                                            TableItem *&table_item,
                                            const bool is_non_sens_dul_vals,
+                                           const bool is_root_table,
                                            ObIArray<uint64_t> &removed_ids,
                                            ObIArray<ObRawExprPointer> &relation_exprs,
                                            bool &trans_happen,

@@ -688,8 +688,8 @@ private:
 private:
   /* these routine should be called by txn-service only to avoid corrupted state */
   void reset();
-  void set_tx_id(const ObTransID &tx_id) { tx_id_ = tx_id; }
-  void reset_tx_id() { tx_id_.reset(); }
+  void set_tx_id(const ObTransID &tx_id);
+  void reset_tx_id();
   // udpate clean part's unknown field
   int update_clean_part(const share::ObLSID &id,
                         const int64_t epoch,
@@ -849,7 +849,7 @@ public:
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
   void dump_and_print_trace();
-  bool in_tx_or_has_extra_state();
+  bool in_tx_or_has_extra_state() const;
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }

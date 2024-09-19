@@ -176,6 +176,11 @@ public:
   int check_schema_version_elapsed(
       const obrpc::ObCheckSchemaVersionElapsedArg &arg,
       obrpc::ObCheckSchemaVersionElapsedResult &result);
+  // ObRpcPrepareTabletSplitTaskRangesP
+  int prepare_tablet_split_task_ranges(
+      const obrpc::ObPrepareSplitRangesArg &arg,
+      obrpc::ObPrepareSplitRangesRes &result);
+
   // ObRpcGetChecksumCalSnapshotP
   int check_modify_time_elapsed(
       const obrpc::ObCheckModifyTimeElapsedArg &arg,

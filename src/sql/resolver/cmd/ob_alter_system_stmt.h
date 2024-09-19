@@ -19,6 +19,7 @@
 #include "share/backup/ob_backup_clean_struct.h"
 #include "rootserver/ob_transfer_partition_command.h"
 #include "share/ob_service_name_proxy.h"
+#include "share/table/ob_redis_importer.h"
 
 namespace oceanbase
 {
@@ -1190,6 +1191,30 @@ private:
   share::ObBackupPathString backup_dest_;
   ObString encrypt_key_;
 };
+
+class ObBackupClusterParamStmt : public ObSystemCmdStmt
+{
+public:
+  ObBackupClusterParamStmt()
+    : ObSystemCmdStmt(stmt::T_BACKUP_CLUSTER_PARAMETERS),
+      backup_dest_() {}
+  virtual ~ObBackupClusterParamStmt() {}
+  const share::ObBackupPathString &get_backup_dest() const { return backup_dest_; }
+  int set_param(const share::ObBackupPathString &backup_dest)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(backup_dest_.assign(backup_dest))) {
+      COMMON_LOG(WARN, "set backup dest failed", K(backup_dest));
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(backup_dest));
+
+private:
+  share::ObBackupPathString backup_dest_;
+};
+
 class ObTableTTLStmt : public ObSystemCmdStmt {
 public:
   ObTableTTLStmt()
@@ -1369,6 +1394,20 @@ public:
   share::ObServiceNameArg &get_arg() { return arg_; }
 private:
   share::ObServiceNameArg arg_;
+};
+
+class ObModuleDataStmt : public ObSystemCmdStmt
+{
+public:
+  ObModuleDataStmt() : ObSystemCmdStmt(stmt::T_MODULE_DATA), arg_() {}
+  virtual ~ObModuleDataStmt() {}
+
+  OB_INLINE table::ObModuleDataArg &get_arg() { return arg_; }
+  OB_INLINE const table::ObModuleDataArg &get_arg() const { return arg_; }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(arg));
+private:
+  table::ObModuleDataArg arg_;
 };
 
 } // end namespace sql

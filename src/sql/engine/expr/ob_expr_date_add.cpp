@@ -66,13 +66,16 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
     if (ObDateTimeType == date.get_type() || ObTimestampType == date.get_type()) {
       type.set_datetime();
       date.set_calc_type(ObDateTimeType);
-    } else if (ObDateType == date.get_type()) {
+    } else if (ObMySQLDateTimeType == date.get_type()) {
+      type.set_mysql_datetime();
+      date.set_calc_type(ObMySQLDateTimeType);
+    } else if (ObDateType == date.get_type() || ObMySQLDateType == date.get_type()) {
       if (DATE_UNIT_YEAR == unit_type || DATE_UNIT_MONTH == unit_type
           || DATE_UNIT_DAY == unit_type || DATE_UNIT_YEAR_MONTH == unit_type
           || DATE_UNIT_WEEK == unit_type || DATE_UNIT_QUARTER == unit_type) {
-        type.set_date();
+        type.set_type(date.get_type());
       } else {
-        type.set_datetime();
+        type.set_type(date.get_type() == ObMySQLDateType ? ObMySQLDateTimeType : ObDateTimeType);
       }
     } else if (ObTimeType == date.get_type()) {
       type.set_time();
@@ -102,9 +105,10 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
             scale = OB_MAX_DATETIME_PRECISION;
           }
         }
-        if (date.is_datetime() || date.is_timestamp() || date.is_time()) {
+        if (date.is_datetime() || date.is_timestamp() || date.is_time()
+              || date.is_mysql_datetime()) {
           scale = std::max(date.get_scale(), scale);
-        } else if (date.is_date()) {
+        } else if (date.is_date() || date.is_mysql_date()) {
           if ((DATE_UNIT_DAY <= unit_type && unit_type <= DATE_UNIT_YEAR)
               || DATE_UNIT_YEAR_MONTH == unit_type) {
             scale = 0;
@@ -164,14 +168,17 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else {
       ObTime ob_time;
       ObDateSqlMode date_sql_mode;
+      ObDateSqlMode mysql_date_sql_mode;
       ObTimeConvertCtx cvrt_ctx(tz_info, false);
       date_sql_mode.init(sql_mode);
+      mysql_date_sql_mode.allow_invalid_dates_ = date_sql_mode.allow_invalid_dates_;
       if (is_json) { // json to string will add quote automatically, here should take off quote
         ObString str = date->get_string();
         if (str.length() >= 3) { // 2 quote and content length >= 1
           date->set_string(str.ptr() + 1, str.length() - 1);
         }
       }
+      bool need_check_date = ob_is_mysql_compact_dates_type(date_type);
       if (OB_FAIL(ob_datum_to_ob_time_with_date(*date, date_type,
                                             tz_info,
                                             ob_time,
@@ -190,6 +197,10 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         } else {
           LOG_WARN("datum to ob time failed", K(ret), K(date->get_string()), K(date_type));
         }
+      } else if (need_check_date
+                 && OB_FAIL(ObTimeConverter::validate_datetime(ob_time, mysql_date_sql_mode))) {
+        ret = OB_SUCCESS;
+        dt_val = ObTimeConverter::ZERO_DATETIME;
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt_val))) {
         LOG_WARN("ob time to datetime failed", K(ret));
       }
@@ -229,6 +240,20 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         }
       } else if (ObDateTimeType == res_type) {
         expr_datum.set_datetime(res_dt_val);
+      } else if (ObMySQLDateType == res_type) {
+        ObMySQLDate mdate = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdate(res_dt_val, NULL, mdate))) {
+          LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
+        } else {
+          expr_datum.set_mysql_date(mdate);
+        }
+      } else if (ObMySQLDateTimeType == res_type) {
+        ObMySQLDateTime mdatetime = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(res_dt_val, mdatetime))) {
+          LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
+        } else {
+          expr_datum.set_mysql_datetime(mdatetime);
+        }
       } else {     //RETURN STRING TYPE
         ObObjType res_date;
         bool dt_flag = false;
@@ -487,10 +512,11 @@ int ObExprLastDay::calc_result_type1(ObExprResType &type,
     if (is_oracle_mode()) {
       type.set_datetime();
     } else {
-      type.set_date();
+      type.set_type(type_ctx.enable_mysql_compatible_dates() ? ObMySQLDateType : ObDateType);
     }
     type.set_scale(OB_MAX_DATE_PRECISION);
-    type1.set_calc_type(ObDateTimeType);
+    type1.set_calc_type(type_ctx.enable_mysql_compatible_dates() ?
+      ObMySQLDateTimeType : ObDateTimeType);
     type1.set_calc_scale(OB_MAX_DATETIME_PRECISION);
   }
   return ret;
@@ -530,16 +556,34 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
     LOG_WARN("get sql mode failed", K(ret));
   } else {
-    const ObObjType res_type = is_oracle_mode() ? ObDateTimeType : ObDateType;
-    int64_t ori_date_utc = param1->get_datetime();
-    int64_t res_date_utc = 0;
+    const ObObjType res_type = expr.datum_meta_.type_;
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(sql_mode);
     date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
     date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(sql_mode);
-    if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc,
-                res_type, date_sql_mode))) {
-      LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
+    if (ObMySQLDateType == res_type) {
+      ObMySQLDate res_date;
+      if (OB_FAIL(ObTimeConverter::calc_last_mdate_of_the_month(param1->get_mysql_datetime(),
+                                                                res_date, date_sql_mode))) {
+        LOG_WARN("fail to calc last mday", K(ret), K(param1->get_mysql_datetime()));
+      } else {
+        expr_datum.set_mysql_date(res_date);
+      }
+    } else {
+      int64_t ori_date_utc = param1->get_datetime();
+      int64_t res_date_utc = 0;
+      if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc,
+                  res_type, date_sql_mode))) {
+        LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
+      } else {
+        if (is_oracle_mode()) {
+          expr_datum.set_datetime(res_date_utc);
+        } else {
+          expr_datum.set_date(static_cast<int32_t>(res_date_utc));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
       if (!is_oracle_mode()) {
         uint64_t cast_mode = 0;
         ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
@@ -551,15 +595,8 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
           ret = OB_SUCCESS;
         }
       }
-    } else {
-      if (is_oracle_mode()) {
-        expr_datum.set_datetime(res_date_utc);
-      } else {
-        expr_datum.set_date(static_cast<int32_t>(res_date_utc));
-      }
     }
   }
-
   return ret;
 }
 

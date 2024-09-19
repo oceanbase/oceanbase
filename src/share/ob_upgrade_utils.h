@@ -267,7 +267,18 @@ private:
   int post_upgrade_for_scheduled_trigger_partition_balance();
   int post_upgrade_for_spm();
 };
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 0)
+
+class ObUpgradeFor4250Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4250Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4250Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int add_spm_stats_scheduler_job();
+};
+
 /* =========== special upgrade processor end   ============= */
 /* =========== upgrade processor end ============= */
 } // end namespace share

@@ -568,13 +568,15 @@ int ObTransformWinMagic::get_view_to_trans(ObDMLStmt *&stmt,
         LOG_WARN("sanity check and init failed", K(ret));
       } else if (OB_FAIL(check_view_valid_to_trans(rewrite_view, map_info, is_valid))) {
         LOG_WARN("check view valid to trans failed", K(ret));
+      } else if (!is_valid) {
+        OPT_TRACE("view is invalid to trans");
       } else if (OB_FAIL(check_stmt_and_view(stmt, rewrite_table, map_info, is_valid, trans_tables))) {
         LOG_WARN("check stmt and view failed", K(ret));
-      } else if (is_valid) {
+      } else if (!is_valid) {
+        OPT_TRACE("can not transform");
+      } else {
         drill_down_idx = i; //rewrite_view idx
         roll_up_idx = -1;
-      } else {
-        OPT_TRACE("can not transform");
       }
     }
   }
@@ -712,11 +714,10 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
   EqualSets dummy_set;
   ObSelectStmt *rewrite_view = NULL;
   int64_t match_count = 0;
-  
+  is_valid = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(rewrite_table) || OB_ISNULL(rewrite_view = rewrite_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", K(ret));
-  } else if (!is_valid) {
   } else if (OB_FAIL(check_hint_valid(*stmt, *rewrite_table, is_valid))) {
     LOG_WARN("check hint valid", K(ret));
   } else if (!is_valid) {
@@ -969,7 +970,7 @@ int ObTransformWinMagic::check_outer_stmt_conditions(ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", K(ret));
   } else if (roll_group_exprs.count() > drill_group_exprs.count() ||
-      map.count() != roll_group_exprs.count()) {
+             roll_group_exprs.count() != map.count()) {
     is_valid = false;
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(ctx_->allocator_, stmt->get_condition_exprs(), equal_sets))) {
     LOG_WARN("compute equal set failed", K(ret));

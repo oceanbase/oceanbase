@@ -54,7 +54,8 @@ public:
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
-           LogHotCache *hot_cache);
+           LogHotCache *hot_cache,
+           LogIOAdapter *io_adapter);
 
   template <class EntryHeaderType>
   int load(const char *log_dir,
@@ -68,6 +69,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
            LogHotCache *hot_cache,
+           LogIOAdapter *io_adapter,
            EntryHeaderType &entry_header,
            LSN &lsn);
 
@@ -88,12 +90,14 @@ public:
   int pread(const LSN &lsn,
             const int64_t in_read_size,
             ReadBuf &read_buf,
-            int64_t &out_read_size) final;
+            int64_t &out_read_size,
+            LogIOContext &io_ctx) final;
 
   int pread_with_block_header(const LSN &read_lsn,
                               const int64_t in_read_size,
                               ReadBuf &read_buf,
-                              int64_t &out_read_size);
+                              int64_t &out_read_size,
+                              LogIOContext &io_ctx);
 
   int truncate(const LSN &lsn);
   int truncate_prefix_blocks(const LSN &lsn);
@@ -142,7 +146,8 @@ private:
                const UpdateManifestCallback &update_manifest_cb,
                ILogBlockPool *log_block_pool,
                LogPlugins *plugins,
-               LogHotCache *hot_cache);
+               LogHotCache *hot_cache,
+               LogIOAdapter *io_adapter);
   // @ret val:
   //   OB_SUCCESS
   //   OB_ERR_OUT_OF_LOWER_BOUND
@@ -185,7 +190,8 @@ private:
                    const int64_t in_read_size,
                    const bool need_read_block_header,
                    ReadBuf &read_buf,
-                   int64_t &out_read_size);
+                   int64_t &out_read_size,
+                   LogIOContext &io_ctx);
   void reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_exist);
   int update_manifest_(const block_id_t expected_next_block_id, const bool in_restart = false);
   int check_read_integrity_(const block_id_t &block_id);
@@ -236,6 +242,7 @@ int LogStorage::load(const char *base_dir,
                      ILogBlockPool *log_block_pool,
                      LogPlugins *plugins,
                      LogHotCache *hot_cache,
+                     LogIOAdapter *io_adapter,
                      EntryHeaderType &entry_header,
                      LSN &lsn)
 {
@@ -256,7 +263,8 @@ int LogStorage::load(const char *base_dir,
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              hot_cache))) {
+                              hot_cache,
+                              io_adapter))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
     // NB: if there is no valid data on disk, no need to load last block
   } else if (OB_FAIL(block_mgr_.get_block_id_range(min_block_id, max_block_id))
@@ -304,6 +312,8 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
     LSN start_lsn(iterate_block_id * logical_block_size_);
     if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, this))) {
       PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K(start_lsn));
+    } else if (OB_FAIL(iterator.set_io_context(palf::LogIOContext(palf::LogIOUser::RESTART)))) {
+      PALF_LOG(WARN, "set_io_context failed", K(ret), K(start_lsn));
     } else {
       iterator.set_need_print_error(need_print_error);
       EntryType curr_entry;

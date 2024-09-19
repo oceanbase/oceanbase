@@ -599,9 +599,10 @@ DEF_COMMAND(TRANS, kill_part_trans_ctx, 1,
 // @params [in]  obj_id, lock object id
 // @params [in]  lock_mode, lock mode (1:EXCLUSIVE, 2:SHARE, 4:ROW_EXCLUSIVE, 6:SHARE_ROW_EXCLUSIVE, 8:ROW_SHARE)
 // @params [in]  owner_id, for OUT_TRANS lock and unlock
+// @params [in]  owner_type, for OUT_TRANS lock and unlock
 // @params [in]  create_tx_id, which transaction create this lock
 // @params [in]  op_type, (1:IN_TRANS_DML_LOCK; 2:OUT_TRANS_LOCK; 3:OUT_TRANS_UNLOCK; 4:IN_TRANS_LOCK_TABLE_LOCK)
-DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id create_tx_id op_type # remove_lock")
+DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id owner_type create_tx_id op_type # remove_lock")
 {
   int ret = OB_SUCCESS;
   string arg_str;
@@ -612,6 +613,7 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   int64_t obj_id = 0;
   int64_t lock_mode = 0;
   int64_t owner_id = 0;
+  int64_t owner_type = 0;
   int64_t create_tx_id = 0;
   int64_t op_type = 0;
   int64_t lock_op_status = 1; // does not used.
@@ -621,20 +623,20 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
 
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
-    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, create_tx_id, op_type");
+    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, owner_type, create_tx_id, op_type");
   } else {
     arg_str = cmd_.substr(action_name_.length() + 1);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (8 != sscanf(arg_str.c_str(),
-                          "%ld %ld %ld %ld %ld %ld %ld %ld",
-                          &tenant_id_to_set, &ls_id_to_set, &obj_type,
-                          &obj_id, &lock_mode, &owner_id, &create_tx_id, &op_type)) {
+  } else if (9 != sscanf(arg_str.c_str(),
+                         "%ld %ld %ld %ld %ld %ld %ld %ld %ld",
+                         &tenant_id_to_set, &ls_id_to_set, &obj_type,
+                         &obj_id, &lock_mode, &owner_id, &owner_type, &create_tx_id, &op_type)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
-               K(tenant_id_to_set), K(ls_id_to_set),
-               K(obj_type), K(obj_id), K(lock_mode), K(owner_id), K(create_tx_id),
+               K(tenant_id_to_set), K(ls_id_to_set), K(obj_type), K(obj_id),
+               K(lock_mode), K(owner_id), K(owner_type), K(create_tx_id),
                K(op_type), K(lock_op_status), K(seq_no), K(create_timestamp),
                K(create_schema_version));
   } else {
@@ -642,13 +644,15 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     ObLockID lock_id;
     ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
     ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
-    ObTableLockOwnerID real_owner_id = static_cast<ObTableLockOwnerID>(owner_id);
+    ObTableLockOwnerID real_owner_id;
     ObTransID real_create_tx_id = create_tx_id;
     ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
     ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);
     ObTableLockOp lock_op;
     lock_id.set(real_obj_type, obj_id);
 
+    real_owner_id.convert_from_value(static_cast<transaction::tablelock::ObLockOwnerType>(owner_type),
+                                     owner_id);
     lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
                 real_lock_op_status, seq_no, create_timestamp, create_schema_version);
     if (OB_ISNULL(client_)
@@ -665,7 +669,7 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
       COMMON_LOG(ERROR, "send req fail", K(ret));
     }
   }
-  COMMON_LOG(INFO, "remove_lock", K(arg));
+  COMMON_LOG(INFO, "remove_lock", K(ret), K(arg));
   return ret;
 }
 
@@ -676,12 +680,13 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
 // @params [in]  obj_id, lock object id
 // @params [in]  lock_mode, lock mode (1:EXCLUSIVE, 2:SHARE, 4:ROW_EXCLUSIVE, 6:SHARE_ROW_EXCLUSIVE, 8:ROW_SHARE)
 // @params [in]  owner_id, for OUT_TRANS lock and unlock
+// @params [in]  owner_type, for OUT_TRANS lock and unlock
 // @params [in]  create_tx_id, which transaction create this lock
 // @params [in]  op_type, (1:IN_TRANS_DML_LOCK; 2:OUT_TRANS_LOCK; 3:OUT_TRANS_UNLOCK; 4:IN_TRANS_LOCK_TABLE_LOCK)
 // @params [in]  op_status, (1:LOCK_OP_DOING; 2:LOCK_OP_COMPLETE;)
 // @params [in]  commit_version, the lock op transaction commit version
 // @params [in]  commit_scn, the lock op transaction commit scn
-DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id create_tx_id op_type new_op_status commit_version commit_scn# update_lock")
+DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id owner_type create_tx_id op_type new_op_status commit_version commit_scn# update_lock")
 {
   int ret = OB_SUCCESS;
   string arg_str;
@@ -692,6 +697,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   int64_t obj_id = 0;
   int64_t lock_mode = 0;
   int64_t owner_id = 0;
+  int64_t owner_type = 0;
   int64_t create_tx_id = 0;
   int64_t op_type = 0;
   int64_t lock_op_status = 1;
@@ -703,28 +709,28 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
 
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
-    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, create_tx_id, op_type, new_op_status, commit_version, commit_scn");
+    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, owner_type, create_tx_id, op_type, new_op_status, commit_version, commit_scn");
   } else {
     arg_str = cmd_.substr(action_name_.length() + 1);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (11 != sscanf(arg_str.c_str(),
-                          "%ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld",
+  } else if (12 != sscanf(arg_str.c_str(),
+                          "%ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld",
                           &tenant_id_to_set, &ls_id_to_set, &obj_type,
-                          &obj_id, &lock_mode, &owner_id, &create_tx_id, &op_type,
+                          &obj_id, &lock_mode, &owner_id, &owner_type, &create_tx_id, &op_type,
                           &lock_op_status, &commit_version, &commit_scn)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
-               K(tenant_id_to_set), K(ls_id_to_set),
-               K(obj_type), K(obj_id), K(lock_mode), K(owner_id), K(create_tx_id),
+               K(tenant_id_to_set), K(ls_id_to_set), K(obj_type), K(obj_id), K(lock_mode),
+               K(owner_id), K(owner_type), K(create_tx_id),
                K(op_type), K(lock_op_status), K(commit_version), K(commit_scn));
   } else {
     share::ObLSID ls_id(ls_id_to_set);
     ObLockID lock_id;
     ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
     ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
-    ObTableLockOwnerID real_owner_id = static_cast<ObTableLockOwnerID>(owner_id);
+    ObTableLockOwnerID real_owner_id;
     ObTransID real_create_tx_id = create_tx_id;
     ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
     ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);
@@ -732,6 +738,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     share::SCN real_commit_version;
     share::SCN real_commit_scn;
 
+    real_owner_id.convert_from_value(static_cast<transaction::tablelock::ObLockOwnerType>(owner_type), owner_id);
     lock_id.set(real_obj_type, obj_id);
     lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
                 real_lock_op_status, seq_no, create_timestamp, create_schema_version);
@@ -755,7 +762,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
       COMMON_LOG(ERROR, "send req fail", K(ret));
     }
   }
-  COMMON_LOG(INFO, "update_lock", K(arg));
+  COMMON_LOG(INFO, "update_lock", K(ret), K(arg));
   return ret;
 }
 

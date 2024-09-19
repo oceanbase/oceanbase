@@ -21,6 +21,9 @@ namespace oceanbase
 namespace share
 {
 
+#define LAST_SNAPSHOT_RECORD_SNAP_ID -1L
+#define LAST_SNAPSHOT_RECORD_CLUSTER_ID -1L
+#define LAST_SNAPSHOT_RECORD_SVR_PORT -1L
 
 enum class ObWrSnapshotStatus : int64_t
 {

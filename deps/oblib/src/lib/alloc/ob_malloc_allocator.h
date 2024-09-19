@@ -122,6 +122,7 @@ public:
   int64_t get_urgent() const;
   void set_reserved(int64_t bytes);
   int64_t get_reserved() const;
+  int set_tenant_max_min(int64_t tenant_id, int64_t max_memory, int64_t min_memory);
   int set_tenant_limit(uint64_t tenant_id, int64_t bytes);
   int64_t get_tenant_limit(uint64_t tenant_id);
   int64_t get_tenant_hold(uint64_t tenant_id);
@@ -138,6 +139,9 @@ public:
   int recycle_tenant_allocator(uint64_t tenant_id);
   int64_t get_max_used_tenant_id() { return max_used_tenant_id_; }
   void make_allocator_create_on_demand() { create_on_demand_ = true; }
+  bool is_tenant_allocator_exist(int64_t tenant_id);
+  void set_tenant_parent_limiter(int64_t tenant_id, ObResourceLimiter& parent);
+  ObResourceLimiter* get_tenant_parent_limiter(int64_t tenant_id);
   static bool is_inited_;
 private:
   using InvokeFunc = std::function<int (ObTenantMemoryMgr*)>;

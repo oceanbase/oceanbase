@@ -1308,7 +1308,7 @@ int ObResolverUtils::match_vacancy_parameters(
   const ObIRoutineInfo &routine_info, ObRoutineMatchInfo &match_info)
 {
   int ret = OB_SUCCESS;
-  SET_LOG_CHECK_MODE();
+  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
   // 处理空缺参数, 如果有默认值填充默认值, 否则报错
   for (int64_t i = 0; OB_SUCC(ret) && i < match_info.match_info_.count(); ++i) {
     ObIRoutineParam *routine_param = NULL;
@@ -1331,7 +1331,6 @@ int ObResolverUtils::match_vacancy_parameters(
       }
     }
   }
-  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -2507,6 +2506,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    ObExprInfo *parents_expr_info,
                                    const ObSQLMode sql_mode,
                                    const ObCompatType compat_type,
+                                   const bool enable_mysql_compatible_dates,
                                    bool is_from_pl)
 {
   UNUSED(stmt_type);
@@ -2909,14 +2909,27 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     }
     case T_DATE: {
       ObString time_str(static_cast<int32_t>(node->str_len_), node->str_value_);
-      int32_t time_val = 0;
       ObDateSqlMode date_sql_mode;
+      ObCStringHelper helper;
       if (FALSE_IT(date_sql_mode.init(sql_mode))) {
-      } else if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
-        ret = OB_ERR_WRONG_VALUE;
-        LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+      } else if (enable_mysql_compatible_dates) {
+        ObMySQLDate mdate;
+        if (OB_FAIL(ObTimeConverter::str_to_mdate(time_str, mdate, date_sql_mode))) {
+          ret = OB_ERR_WRONG_VALUE;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
+        } else {
+          val.set_mysql_date(mdate);
+        }
       } else {
-        val.set_date(time_val);
+        int32_t time_val = 0;
+        if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
+          ret = OB_ERR_WRONG_VALUE;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
+        } else {
+          val.set_date(time_val);
+        }
+      }
+      if (OB_SUCC(ret)) {
         val.set_scale(0);
         val.set_param_meta(val.get_meta());
         literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
@@ -2928,7 +2941,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       int64_t time_val = 0;
       if (OB_FAIL(ObTimeConverter::str_to_time(time_str, time_val, &scale))) {
         ret = OB_ERR_WRONG_VALUE;
-        LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIME", to_cstring(time_str));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIME", helper.convert(time_str));
       } else {
         val.set_time(time_val);
         val.set_scale(scale);
@@ -2960,7 +2974,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       } else if (FALSE_IT(date_sql_mode.allow_invalid_dates_ = false)) {
       } else if (OB_FAIL(ObTimeConverter::str_to_datetime(time_str, cvrt_ctx, time_val, &scale, date_sql_mode))) {
         ret = OB_ERR_WRONG_VALUE;
-        LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATETIME", to_cstring(time_str));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATETIME", helper.convert(time_str));
       } else {
         val.set_datetime(time_val);
         val.set_scale(scale);
@@ -3520,7 +3535,8 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
       ObObjTypeClass type_class = ob_obj_type_class(type);
       if (ObIntTC == type_class || ObUIntTC == type_class ||
         ObDateTimeTC == type_class || ObDateTC == type_class ||
-        ObStringTC == type_class || ObYearTC == type_class || ObTimeTC == type_class) {
+        ObStringTC == type_class || ObYearTC == type_class || ObTimeTC == type_class ||
+        ObMySQLDateTimeTC == type_class || ObMySQLDateTC == type_class) {
         bret = true;
       }
     }
@@ -3697,8 +3713,12 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
       if (OB_SUCC(ret) && !is_allow) {
         if (part_value_expr_type == part_column_expr_type) {
           is_allow = true;
-        } else if (ObDateTimeType == part_column_expr_type
-                  && ( ObDateType == part_value_expr_type
+        } else if (ob_is_mysql_datetime_or_datetime(part_value_expr_type)
+            && ob_is_mysql_datetime_or_datetime(part_column_expr_type)) {
+          // partition type allows conversion between mysqldatetime and datetime
+          is_allow = true;
+        } else if (ob_is_mysql_datetime_or_datetime(part_column_expr_type)
+                  && ( ob_is_mysql_date_or_date(part_value_expr_type)
                     || ObTimeType == part_value_expr_type)) {
           is_allow = true;
         }
@@ -3760,6 +3780,8 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
     }
     case ObDateTimeType:
     case ObDateType:
+    case ObMySQLDateType:
+    case ObMySQLDateTimeType:
     case ObTimeType:
     case ObRawType:
     case ObTimestampLTZType:
@@ -5889,6 +5911,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        const bool is_for_pl_type,
                                        const ObSessionNLSParams &nls_session_param,
                                        uint64_t tenant_id,
+                                       const bool enable_mysql_compatible_dates,
                                        const bool convert_real_type_to_decimal /*false*/)
 {
   int ret = OB_SUCCESS;
@@ -5959,7 +5982,8 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                         OB_MAX_INTEGER_DISPLAY_WIDTH);
         } else if (OB_UNLIKELY(precision < scale)) {
           ret = OB_ERR_M_BIGGER_THAN_D;
-          LOG_USER_ERROR(OB_ERR_M_BIGGER_THAN_D, to_cstring(ident_name));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_M_BIGGER_THAN_D, helper.convert(ident_name));
           LOG_WARN("precision less then scale", K(ret), K(scale), K(precision));
         } else {
           // mysql> create table t1(a decimal(0, 0));
@@ -6044,7 +6068,8 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
           LOG_WARN("scale of number overflow", K(ret), K(scale), K(precision));
         } else if (OB_UNLIKELY(precision < scale)) {
           ret = OB_ERR_M_BIGGER_THAN_D;
-          LOG_USER_ERROR(OB_ERR_M_BIGGER_THAN_D, to_cstring(ident_name));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_M_BIGGER_THAN_D, helper.convert(ident_name));
           LOG_WARN("precision less then scale", K(ret), K(scale), K(precision));
         } else {
           // mysql> create table t1(a decimal(0, 0));
@@ -6098,12 +6123,20 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         // TODO@nijia.nj 这里precision应该算上小数点的一位, ob_schama_macro_define.h中也要做相应修改
         data_type.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + scale));
         data_type.set_scale(scale);
+        // the datetime and timestamp type share the same type class, so we need to distinguish the
+        // datetime and check need convert mysql_datetime type here.
+        if (ObDateTimeType == data_type.get_obj_type() && enable_mysql_compatible_dates) {
+          data_type.set_obj_type(ObMySQLDateTimeType);
+        }
       }
       break;
     case ObDateTC:
       // nothing to do.
       data_type.set_precision(default_accuracy.get_precision());
       data_type.set_scale(default_accuracy.get_scale());
+      if (enable_mysql_compatible_dates) {
+        data_type.set_obj_type(ObMySQLDateType);
+      }
       break;
     case ObTimeTC:
       if (scale > OB_MAX_DATETIME_PRECISION) {
@@ -6762,7 +6795,9 @@ int ObResolverUtils::check_foreign_key_set_null_satisfy(
         LOG_WARN("foreign key column is generated column", K(ret), K(i), K(fk_col_name));
       } else if (!fk_col_schema->is_nullable() && is_mysql_compat_mode) {
         ret = OB_ERR_FK_COLUMN_NOT_NULL;
-        LOG_USER_ERROR(OB_ERR_FK_COLUMN_NOT_NULL, to_cstring(fk_col_name), to_cstring(arg.foreign_key_name_));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_FK_COLUMN_NOT_NULL, helper.convert(fk_col_name),
+            helper.convert(arg.foreign_key_name_));
       } else if (is_mysql_compat_mode) {
         // check if fk column is base column of virtual generated column in MySQL mode
         const uint64_t fk_col_id = fk_col_schema->get_column_id();
@@ -8157,23 +8192,23 @@ int ObResolverUtils::get_select_into_node(const ParseNode &node, ParseNode* &int
   int ret = OB_SUCCESS;
   ParseNode *child_into_node = NULL;
   if (OB_LIKELY(node.type_ == T_SELECT)) {
-    if (NULL != node.children_[PARSE_SELECT_SET] &&
-        NULL != node.children_[PARSE_SELECT_FORMER] &&
-        NULL != node.children_[PARSE_SELECT_LATER]) {
-        if (OB_FAIL(SMART_CALL(get_select_into_node(*node.children_[PARSE_SELECT_FORMER], child_into_node, false))) ||
-            NULL != child_into_node) {
-          ret = OB_SUCCESS == ret ? OB_ERR_SET_USAGE : ret;
-          LOG_WARN("invalid into clause", K(ret));
-        } else {
-          child_into_node = get_select_into_node(*node.children_[PARSE_SELECT_LATER]);
-          if (!top_level && NULL != child_into_node) {
+    if (NULL == node.children_[PARSE_SELECT_SET]) {
+      into_node = get_select_into_node(node);
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < node.children_[PARSE_SELECT_SET]->num_child_; i++) {
+        ParseNode *child_node = node.children_[PARSE_SELECT_SET]->children_[i];
+        if (OB_FAIL(SMART_CALL(get_select_into_node(*child_node, child_into_node, false)))) {
+          LOG_WARN("failed to get select into node", K(ret));
+        } else if (NULL != child_into_node) {
+          if (top_level && i == node.children_[PARSE_SELECT_SET]->num_child_ - 1) {
+            // select into is only allow to in last branch of set
+            into_node = child_into_node;
+          } else {
             ret = OB_ERR_SET_USAGE;
             LOG_WARN("invalid into clause", K(ret));
           }
-          into_node = child_into_node;
-        }
-    } else {
-      into_node = get_select_into_node(node);
+        } else {/* it doesn't have into node */}
+      }
     }
   }
   return ret;
@@ -8406,7 +8441,12 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
     } else {
       MEMSET(buf, 0, sizeof(buf));
       char *real_secure_file = nullptr;
-      if (NULL == (real_secure_file = ::realpath(to_cstring(secure_file_priv), buf))) {
+      ObCStringHelper helper;
+      const char *secure_file_priv_str = helper.convert(secure_file_priv);
+      if (OB_ISNULL(secure_file_priv_str)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("fail to convert secure_file_priv", K(ret), K(secure_file_priv));
+      } else if (NULL == (real_secure_file = ::realpath(secure_file_priv_str, buf))) {
         // pass
       } else {
         ObString secure_file_priv_tmp(real_secure_file);
@@ -9028,17 +9068,21 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
       CK (idx >= 0 && idx < phy_ctx_params.count());
       OX (obj_param.set_is_boolean(phy_ctx_params.at(idx).is_boolean()));
     }
+    bool enable_mysql_compatible_dates = false;
     if (OB_FAIL(ret)) {
     } else if (lib::is_oracle_mode() &&
                OB_FAIL(session.get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variable failed", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session,
+                          enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_const(raw_param, stmt_type, pc_ctx.allocator_,
                        static_cast<ObCollationType>(session.get_local_collation_connection()),
                        session.get_nls_collation_nation(), session.get_timezone_info(),
                        obj_param, is_paramlize, literal_prefix,
                        session.get_actual_nls_length_semantics(),
                        static_cast<ObCollationType>(server_collation), NULL,
-                       session.get_sql_mode(), compat_type))) {
+                       session.get_sql_mode(), compat_type, enable_mysql_compatible_dates))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {

@@ -10,6 +10,7 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_symdifference.cpp
   geo/ob_geo_func_buffer.cpp
   geo/ob_geo_func_touches.cpp
+  stat/ob_diagnostic_info_util.cpp
 )
 
 ob_set_subtarget(oblib_lib charset
@@ -181,6 +182,10 @@ ob_set_subtarget(oblib_lib common_mixed
   stat/ob_session_stat.cpp
   stat/ob_stat_template.cpp
   statistic_event/ob_stat_event.cpp
+  stat/ob_diagnostic_info.cpp
+  stat/ob_diagnostic_info_summary.cpp
+  stat/ob_diagnostic_info_container.cpp
+  stat/ob_diagnostic_info_guard.cpp
   string/ob_hex_utils_base.cpp
   string/ob_occam_regex.cpp
   string/ob_sql_string.cpp
@@ -280,7 +285,7 @@ ob_set_subtarget(oblib_lib thread
   thread/ob_async_task_queue.cpp
   thread/ob_dynamic_thread_pool.cpp
   thread/ob_reentrant_thread.cpp
-  thread/ob_simple_thread_pool.cpp
+  thread/ob_simple_thread_pool.ipp
   thread/ob_map_queue_thread_pool.cpp
   thread/ob_work_queue.cpp
   thread/thread_mgr.cpp
@@ -340,6 +345,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/ob_latch_v2.cpp
   resource/achunk_mgr.cpp
   resource/ob_resource_mgr.cpp
+  resource/ob_resource_limiter.cpp
   allocator/ob_allocator_v2.cpp
   allocator/ob_block_alloc_mgr.cpp
   allocator/ob_concurrent_fifo_allocator.cpp
@@ -389,3 +395,7 @@ target_link_libraries(oblib_lib
   ${DEP_DIR}/lib/libxml2.a
   ${DEP_DIR}/lib/liblzma.a
 )
+
+# ATTENTION: add this cpp file as library only if compiled target doesn't need diagnose. like unittest or cdc.
+add_library(mock_di stat/mock_diagnostic_info.cpp)
+target_include_directories(mock_di PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/deps/oblib/src)

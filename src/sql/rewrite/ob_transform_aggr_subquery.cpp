@@ -180,8 +180,6 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid params", K(ret), K(stmt));
   } else if (stmt->is_hierarchical_query() || stmt->is_set_stmt() || !stmt->is_sel_del_upd()) {
     OPT_TRACE("hierarchical/set/insert/merge query can not transform");
   } else if (OB_FAIL(stmt->is_hierarchical_for_update(is_hsfu))) {

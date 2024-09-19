@@ -304,7 +304,7 @@ private:
 
 void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &column_schema);
 class ColumnSchemaInfo;
-void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info);
+void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info, const bool is_out_row);
 
 inline void set_cdc_thread_name(const char* name, const int64_t thread_idx = -1)
 {
@@ -521,8 +521,6 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
 int get_tenant_compat_mode(const uint64_t tenant_id,
     lib::Worker::CompatMode &compat_mode,
     const int64_t timeout);
-
-char *lbt_oblog();
 
 bool is_backup_mode();
 

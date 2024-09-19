@@ -75,7 +75,9 @@ public:
       const uint64_t table_id,
       const ObTableLockMode lock_mode,
       const int64_t timeout_us,
-      observer::ObInnerSQLConnection *conn);
+      observer::ObInnerSQLConnection *conn,
+      const ObTableLockOwnerID owner_id = ObTableLockOwnerID::default_owner(),
+      const ObTableLockPriority lock_priority = ObTableLockPriority::NORMAL);
   static int lock_table(
       const uint64_t tenant_id,
       const ObLockTableRequest &arg,
@@ -146,6 +148,15 @@ public:
       const uint64_t tenant_id,
       const ObUnLockObjsRequest &arg,
       observer::ObInnerSQLConnection *conn);
+  static int create_inner_conn(sql::ObSQLSessionInfo *session_info,
+                               common::ObMySQLProxy *sql_proxy,
+                               observer::ObInnerSQLConnection *&inner_conn);
+  static int execute_write_sql(observer::ObInnerSQLConnection *conn, const ObSqlString &sql, int64_t &affected_rows);
+  static int execute_read_sql(observer::ObInnerSQLConnection *conn,
+                              const ObSqlString &sql,
+                              ObISQLClient::ReadResult &res);
+  static int build_tx_param(sql::ObSQLSessionInfo *session_info, ObTxParam &tx_param, const bool *readonly = nullptr);
+
 private:
   static int do_obj_lock_(
       const uint64_t tenant_id,
@@ -166,6 +177,13 @@ private:
       const ObLockRequest &arg,
       const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type,
       observer::ObInnerSQLConnection *conn);
+  static int get_org_cluster_id_(sql::ObSQLSessionInfo *session, int64_t &org_cluster_id);
+  static int set_to_mysql_compat_mode_(observer::ObInnerSQLConnection *conn,
+                                       bool &need_reset_sess_mode,
+                                       bool &need_reset_conn_mode);
+  static int reset_compat_mode_(observer::ObInnerSQLConnection *conn,
+                                const bool need_reset_sess_mode,
+                                const bool need_reset_conn_mode);
 };
 
 } // tablelock

@@ -1003,7 +1003,8 @@ int obj_to_string_in_buffer(const T &obj, char *buffer, const int64_t buffer_len
   int ret = OB_SUCCESS;
   old_pos = cur_pos;
   int64_t pos = 0;
-  if (OB_FAIL(databuff_printf(buffer + old_pos, buffer_len - old_pos, pos, "%s", to_cstring(obj)))) {
+  ObCStringHelper helper;
+  if (OB_FAIL(databuff_printf(buffer + old_pos, buffer_len - old_pos, pos, "%s", helper.convert(obj)))) {
     DETECT_LOG(ERROR, "failed to string object");
   } else {
     DETECT_LOG(TRACE, "success to string object", K(ObString(pos, buffer + old_pos)));

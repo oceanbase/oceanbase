@@ -66,6 +66,7 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
   }
   if (enable_sql_stat_ && OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(spi_result_.get_result_set())) {
     record_.sqlstat_record_.record_sqlstat_end_value();
+    record_.sqlstat_record_.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
     record_.sqlstat_record_.move_to_sqlstat_cache(
       session_info_, exec_ctx_.get_sql_ctx()->cur_sql_, spi_result_.get_result_set()->get_physical_plan());
   }

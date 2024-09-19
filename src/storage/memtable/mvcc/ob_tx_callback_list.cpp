@@ -138,10 +138,13 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
         logged_data_size_ += data_size;
         ++synced_;
       }
-      // Once callback is appended into callback lists, we can not handle the
-      // error after it. So it should never report the error later. What's more,
-      // after_append also should never return the error.
-      (void)callback->after_append_cb(for_replay);
+
+      // NB: It is important to note that once the callback is successfully
+      // appended to the callback_list, it may have already been logged and
+      // freed, making subsequent access potentially unsafe. Therefore, the
+      // rule for append_callback is that the access is not allowed after a
+      // successful append, while the access is permitted after a failure
+      // append
     }
   }
 
@@ -225,15 +228,12 @@ int ObTxCallbackList::append_callback(ObITransCallback *head,
           synced_ += length;
         }
 
-        // Step7: after the callback append
-        // Once callback is appended into callback lists, we can not handle the
-        // error after it. So it should never report the error later. What's more,
-        // after_append also should never return the error.
-        for (ObITransCallback *cb = head;
-             tail != cb->get_prev();
-             cb = cb->get_next()) {
-          (void)cb->after_append_cb(for_replay);
-        }
+        // NB: It is important to note that once the callback is successfully
+        // appended to the callback_list, it may have already been logged and
+        // freed, making subsequent access potentially unsafe. Therefore, the
+        // rule for append_callback is that the access is not allowed after a
+        // successful append, while the access is permitted after a failure
+        // append
       }
     }
 

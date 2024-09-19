@@ -51,11 +51,12 @@ protected:
 private:
   int init_redis_ctx();
   void init_tb_ctx_common(table::ObTableCtx &ctx);
+  int check_tenant_version();
 
 private:
   common::ObArenaAllocator allocator_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  table::ObRedisCtx redis_ctx_;
+  table::ObRedisSingleCtx redis_ctx_;
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;
   DISALLOW_COPY_AND_ASSIGN(ObRedisExecuteP);
