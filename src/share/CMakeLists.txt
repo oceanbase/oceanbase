@@ -299,6 +299,7 @@ ob_set_subtarget(ob_share common_mixed
   throttle/ob_throttle_common.cpp
   index_usage/ob_index_usage_info_mgr.cpp
   index_usage/ob_index_usage_report_task.cpp
+  rebuild_tablet/ob_rebuild_tablet_location.cpp
   table/redis/ob_redis_parser.cpp
   table/redis/ob_redis_common.cpp
   table/redis/ob_redis_util.cpp

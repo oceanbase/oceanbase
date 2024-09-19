@@ -216,18 +216,33 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableCopyFinishTask);
 };
 
+
+struct ObTabletCopyFinishTaskParam final
+{
+  ObTabletCopyFinishTaskParam();
+  ~ObTabletCopyFinishTaskParam() = default;
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(KPC_(ls), K_(tablet_id), K_(restore_action),
+      KPC_(src_tablet_meta), KP_(copy_tablet_ctx), K_(is_only_replace_major));
+
+  ObLS *ls_;
+  common::ObTabletID tablet_id_;
+  observer::ObIMetaReport *reporter_;
+  ObTabletRestoreAction::ACTION restore_action_;
+  const ObMigrationTabletParam *src_tablet_meta_;
+  ObICopyTabletCtx *copy_tablet_ctx_;
+  bool is_only_replace_major_;
+};
+
 class ObTabletCopyFinishTask : public share::ObITask
 {
 public:
   ObTabletCopyFinishTask();
   virtual ~ObTabletCopyFinishTask();
   int init(
-      const common::ObTabletID &tablet_id,
-      ObLS *ls,
-      observer::ObIMetaReport *reporter,
-      const ObTabletRestoreAction::ACTION &restore_action,
-      const ObMigrationTabletParam *src_tablet_meta,
-      ObICopyTabletCtx *copy_tablet_ctx);
+      const ObTabletCopyFinishTaskParam &param);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
   int add_sstable(ObTableHandleV2 &table_handle);
@@ -253,17 +268,12 @@ private:
 private:
   bool is_inited_;
   common::SpinRWLock lock_;
-  common::ObTabletID tablet_id_;
-  ObLS *ls_;
-  observer::ObIMetaReport *reporter_;
   ObStorageHADag *ha_dag_;
   common::ObArenaAllocator arena_allocator_;
   ObTablesHandleArray minor_tables_handle_;
   ObTablesHandleArray ddl_tables_handle_;
   ObTablesHandleArray major_tables_handle_;
-  ObTabletRestoreAction::ACTION restore_action_;
-  const ObMigrationTabletParam *src_tablet_meta_;
-  ObICopyTabletCtx *copy_tablet_ctx_;
+  ObTabletCopyFinishTaskParam param_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };
 

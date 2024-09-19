@@ -579,6 +579,8 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_ROOT_KEY, ObGetRootKeyP, handle_get_root_k
 #endif
 
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_USER_PROXY, ObRpcAlterUserProxyP, alter_user_proxy(arg_, result_));
+//rebuild tablet
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ROOT_REBUILD_TABLET, ObRpcRebuildTabletP, root_rebuild_tablet(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

@@ -243,7 +243,7 @@ struct ObStorageHACopySSTableParam final
   int assign(const ObStorageHACopySSTableParam &param);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array),
-      K_(src_info), K_(local_rebuild_seq), K_(need_check_seq),
+      K_(src_info), K_(src_ls_rebuild_seq), K_(need_check_seq),
       KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
   uint64_t tenant_id_;
@@ -252,7 +252,7 @@ struct ObStorageHACopySSTableParam final
   common::ObArray<ObITable::TableKey> copy_table_key_array_;
 
   ObStorageHASrcInfo src_info_;
-  int64_t local_rebuild_seq_;
+  int64_t src_ls_rebuild_seq_;
   bool need_check_seq_;
   bool is_leader_restore_;
 
@@ -303,7 +303,8 @@ public:
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
       const ObStorageSchema &storage_schema,
-      const compaction::ObMediumCompactionInfoList &medium_info_list);
+      const compaction::ObMediumCompactionInfoList &medium_info_list,
+      const bool is_only_replace_major);
   static int build_table_with_minor_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
@@ -332,7 +333,8 @@ private:
       ObLS *ls,
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
-      const int64_t transfer_seq);
+      const int64_t transfer_seq,
+      const bool is_only_replace_major);
   static int inner_update_tablet_table_store_with_minor_(
       ObLS *ls,
       ObTablet *tablet,

@@ -328,6 +328,9 @@ public:
   RPC_S(PR5 get_root_key, obrpc::OB_GET_ROOT_KEY, (obrpc::ObRootKeyArg), obrpc::ObRootKeyResult);
 #endif
   RPC_S(PRD alter_user_proxy, obrpc::OB_ALTER_USER_PROXY, (ObAlterUserProxyArg), obrpc::ObAlterUserProxyRes);
+  //Rebuild Tablet
+  RPC_S(PR5 root_rebuild_tablet, obrpc::OB_ROOT_REBUILD_TABLET, (ObRebuildTabletArg));
+
 public:
   void set_rs_mgr(share::ObRsMgr &rs_mgr)
   {

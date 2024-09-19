@@ -306,6 +306,11 @@ private:
       const ObSSTableArray &old_tables,
       ObSSTableArray &new_tables) const;
   int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
+  int only_replace_major_(
+      common::ObArenaAllocator &allocator,
+      const ObTabletTableStore &old_store,
+      const ObIArray<ObITable *> &tables_array,
+      int64_t &inc_base_snapshot_version);
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;

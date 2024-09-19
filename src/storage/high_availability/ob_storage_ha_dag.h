@@ -62,6 +62,7 @@ public:
     TABLET_GROUP_RESTORE = 4,
     BACKFILL_TX = 5,
     TRANSFER_BACKFILL_TX = 6,
+    REBUILD_TABLET = 7,
     MAX
   };
 
@@ -178,7 +179,6 @@ public:
       const ObMigrationSSTableParam &param,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
-
 private:
   static int check_major_sstable_need_copy_(
       const ObMigrationSSTableParam &param,
@@ -194,7 +194,6 @@ private:
       const ObMigrationSSTableParam &param,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
-
 };
 
 class ObStorageHACancelDagNetUtils

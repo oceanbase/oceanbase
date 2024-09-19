@@ -1218,9 +1218,15 @@ int ObTabletTableStore::build_major_tables(
   ObSEArray<ObITable *, OB_DEFAULT_SE_ARRAY_COUNT> major_tables;
   if (OB_NOT_NULL(new_table) && OB_FAIL(major_tables.push_back(new_table))) {
     LOG_WARN("failed to add table into tables handle", K(ret), K(param));
-  } else if (OB_FAIL(inner_build_major_tables_(allocator, old_store, major_tables,
-      param.multi_version_start_, param.allow_duplicate_sstable_, inc_base_snapshot_version))) {
-    LOG_WARN("failed to inner build major tables", K(ret), K(param), K(major_tables));
+  } else if (param.is_only_replace_major_) {
+    if (OB_FAIL(only_replace_major_(allocator, old_store, major_tables, inc_base_snapshot_version))) {
+      LOG_WARN("failed to do only replace major", K(ret), K(param), K(major_tables));
+    }
+  } else {
+    if (OB_FAIL(inner_build_major_tables_(allocator, old_store, major_tables,
+        param.multi_version_start_, param.allow_duplicate_sstable_, inc_base_snapshot_version))) {
+      LOG_WARN("failed to inner build major tables", K(ret), K(param), K(major_tables));
+    }
   }
   return ret;
 }
@@ -2425,6 +2431,40 @@ int ObTabletTableStore::get_all_minor_sstables(
     LOG_WARN("table store is not inited", K(ret));
   } else if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
     LOG_WARN("failed to get all minor tables", K(ret));
+  }
+  return ret;
+}
+
+int ObTabletTableStore::only_replace_major_(
+    common::ObArenaAllocator &allocator,
+    const ObTabletTableStore &old_store,
+    const ObIArray<ObITable *> &tables_array,
+    int64_t &inc_base_snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  inc_base_snapshot_version = -1;
+  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> major_tables;
+  bool need_add = true;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables_array.count(); ++i) {
+    const ObITable *table = tables_array.at(i);
+    ObITable *old_major_table = nullptr;
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table should not be NULL", K(ret), KP(table));
+    } else if (OB_FAIL(old_store.major_tables_.get_table(table->get_key(), old_major_table))) {
+      LOG_WARN("failed to get table", K(ret), KPC(table), K(old_store));
+    } else if (OB_ISNULL(old_major_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("old major table do not exist, unexpected", K(ret), KP(old_major_table), KPC(table), K(old_store));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(replace_sstables(allocator, tables_array, old_store.major_tables_, major_tables_))) {
+    LOG_WARN("failed to get replaced major tables", K(ret));
+  } else {
+    inc_base_snapshot_version = major_tables_.at(0)->get_snapshot_version();
   }
   return ret;
 }

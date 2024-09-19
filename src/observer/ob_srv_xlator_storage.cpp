@@ -128,5 +128,6 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcNotifyTenantThreadP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
+    RPC_PROCESSOR(ObRebuildTabletP, gctx_);
     RPC_PROCESSOR(ObRpcPrepareTabletSplitTaskRangesP, gctx_);
 }

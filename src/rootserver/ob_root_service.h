@@ -58,6 +58,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "rootserver/ob_rs_master_key_manager.h"
 #endif
+#include "rootserver/ob_root_rebuild_tablet.h"
 
 namespace oceanbase
 {
@@ -842,6 +843,8 @@ public:
 #ifdef OB_BUILD_TDE_SECURITY
   int handle_get_root_key(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
 #endif
+  int root_rebuild_tablet(const obrpc::ObRebuildTabletArg &arg);
+
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   int get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
@@ -1048,6 +1051,9 @@ private:
   ObDRTaskMgr disaster_recovery_task_mgr_;
   // application context
   ObTenantGlobalContextCleanTimerTask global_ctx_task_;
+  //rebuild tablet
+  ObRootRebuildTablet root_rebuild_tablet_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootService);
 };

@@ -790,6 +790,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObUpdateTransferMetaInfoArg);
 };
 
+struct ObRebuildTabletSSTableInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRebuildTabletSSTableInfoArg();
+  ~ObRebuildTabletSSTableInfoArg();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
+      K_(dest_major_sstable_snapshot), K_(version));
+
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  int64_t dest_major_sstable_snapshot_;
+  uint64_t version_;
+};
+
 
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
@@ -804,6 +822,8 @@ public:
   RPC_SS(PR5 fetch_sstable_macro_info, OB_HA_FETCH_SSTABLE_MACRO_INFO, (ObCopySSTableMacroRangeInfoArg), common::ObDataBuffer);
   RPC_SS(PR5 lob_query, OB_LOB_QUERY, (ObLobQueryArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_ls_view, OB_HA_FETCH_LS_VIEW, (ObCopyLSViewArg), common::ObDataBuffer);
+  RPC_SS(PR5 fetch_rebuild_tablet_sstable_info, OB_HA_REBUILD_TABLET_SSTABLE_INFO, (ObRebuildTabletSSTableInfoArg), common::ObDataBuffer);
+  //single
   RPC_S(PR5 fetch_ls_member_list, OB_HA_FETCH_LS_MEMBER_LIST, (ObFetchLSMemberListArg), ObFetchLSMemberListInfo);
   RPC_S(PR5 fetch_ls_meta_info, OB_HA_FETCH_LS_META_INFO, (ObFetchLSMetaInfoArg), ObFetchLSMetaInfoResp);
   RPC_S(PR5 fetch_ls_info, OB_HA_FETCH_LS_INFO, (ObCopyLSInfoArg), ObCopyLSInfo);
@@ -819,6 +839,7 @@ public:
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 wakeup_transfer_service, OB_HA_WAKEUP_TRANSFER_SERVICE, (ObStorageWakeupTransferServiceArg));
   RPC_S(PR5 fetch_ls_member_and_learner_list, OB_HA_FETCH_LS_MEMBER_AND_LEARNER_LIST, (ObFetchLSMemberAndLearnerListArg), ObFetchLSMemberAndLearnerListInfo);
+
 
   // RPC_AP stands for asynchronous RPC.
   RPC_AP(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (obrpc::ObCheckTransferTabletBackfillArg), obrpc::ObCheckTransferTabletBackfillRes);
@@ -1233,6 +1254,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObUpdateTransferMetaInfoDelegate);
 };
 
+class ObRebuildTabletSSTableInfoP :
+    public ObStorageStreamRpcP<OB_HA_REBUILD_TABLET_SSTABLE_INFO>
+{
+public:
+  explicit ObRebuildTabletSSTableInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObRebuildTabletSSTableInfoP() {}
+protected:
+  int process();
+private:
+  int build_sstable_info_(ObLS *ls);
+};
 
 } // obrpc
 

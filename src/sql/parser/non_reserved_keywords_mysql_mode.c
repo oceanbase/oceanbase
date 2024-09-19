@@ -1017,7 +1017,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"kv_attributes", KV_ATTRIBUTES},
   {"_st_asmvt", _ST_ASMVT},
   {"optimizer_costs", OPTIMIZER_COSTS},
-  {"tenant_sts_credential", TENANT_STS_CREDENTIAL}
+  {"tenant_sts_credential", TENANT_STS_CREDENTIAL},
+  {"tablets", TABLETS}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

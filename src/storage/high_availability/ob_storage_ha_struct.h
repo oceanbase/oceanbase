@@ -25,6 +25,7 @@
 #include "share/ls/ob_ls_i_life_manager.h"
 #include "ob_ls_transfer_info.h"
 #include "common/ob_learner_list.h"
+#include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 
 namespace oceanbase
 {
@@ -60,6 +61,7 @@ struct ObMigrationOpType
     CHANGE_LS_OP = 3,
     REMOVE_LS_OP = 4,
     RESTORE_STANDBY_LS_OP = 5,
+    REBUILD_TABLET_OP = 6,
     MAX_LS_OP,
   };
   static const char *get_str(const TYPE &status);
@@ -173,7 +175,8 @@ struct ObMigrationOpArg
       K_(dst),
       K_(data_src),
       K_(paxos_replica_number),
-      K_(prioritize_same_zone_src));
+      K_(prioritize_same_zone_src),
+      K_(tablet_id_array));
   share::ObLSID ls_id_;
   ObMigrationOpType::TYPE type_;
   int64_t cluster_id_;
@@ -183,6 +186,7 @@ struct ObMigrationOpArg
   common::ObReplicaMember data_src_;
   int64_t paxos_replica_number_;
   bool prioritize_same_zone_src_;
+  common::ObArray<ObTabletID> tablet_id_array_;
 };
 
 struct ObTabletsTransferArg
@@ -400,6 +404,7 @@ public:
     NONE = 0,
     CLOG = 1,
     TRANSFER = 2,
+    TABLET = 3,
     MAX
   };
 
@@ -416,10 +421,52 @@ public:
   TYPE get_type() const { return type_; }
   int set_type(int32_t type);
   void reset();
-
+  bool is_rebuild_ls_type() const { return ObLSRebuildType::CLOG == type_ || ObLSRebuildType::TRANSFER == type_; }
+  bool is_rebuild_rebuild_type() const { return ObLSRebuildType::TABLET == type_; }
   TO_STRING_KV(K_(type));
 private:
   TYPE type_;
+};
+
+struct ObRebuildTabletIDArray final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRebuildTabletIDArray();
+  ~ObRebuildTabletIDArray();
+  int assign(const common::ObIArray<common::ObTabletID> &tablet_id_array);
+  int assign(const ObRebuildTabletIDArray&tablet_id_array);
+  int push_back(const common::ObTabletID &tablet_id);
+  int get_tablet_id_array(common::ObIArray<common::ObTabletID> &tablet_id_array);
+
+  inline const common::ObTabletID &at(int64_t idx) const
+  {
+    OB_ASSERT(idx >= 0 && idx < count_);
+    return id_array_[idx];
+  }
+  inline common::ObTabletID &at(int64_t idx)
+  {
+    OB_ASSERT(idx >= 0 && idx < count_);
+    return id_array_[idx];
+  }
+  inline int64_t count() const { return count_; }
+  inline bool empty() const { return 0 == count(); }
+  void reset() { count_ = 0; }
+
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_NAME("id_array");
+    J_COLON();
+    (void)databuff_print_obj_array(buf, buf_len, pos, id_array_, count_);
+    J_OBJ_END();
+    return pos;
+  }
+private:
+  static const int64_t MAX_TABLET_COUNT = 64;
+  int64_t count_;
+  common::ObTabletID id_array_[MAX_TABLET_COUNT];
 };
 
 struct ObLSRebuildInfo final
@@ -432,10 +479,16 @@ public:
   bool is_valid() const;
   bool is_in_rebuild() const;
   bool operator ==(const ObLSRebuildInfo &other) const;
+  int assign(const ObLSRebuildInfo &info);
+  bool is_rebuild_ls() const { return type_.is_rebuild_ls_type(); }
+  bool is_rebuild_tablet() const { return type_.is_rebuild_rebuild_type(); }
 
-  TO_STRING_KV(K_(status), K_(type));
+  TO_STRING_KV(K_(status), K_(type), K_(tablet_id_array), K_(src));
+public:
   ObLSRebuildStatus status_;
   ObLSRebuildType type_;
+  ObRebuildTabletIDArray tablet_id_array_;
+  share::ObRebuildTabletLocation src_;
 };
 
 struct ObTabletBackfillInfo final
@@ -480,6 +533,7 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationFindSrcParam);
 };
+
 struct ObLogicTabletID final
 {
 public:

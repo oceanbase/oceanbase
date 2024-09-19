@@ -1112,6 +1112,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObDropEventStmt, ObDropEventExecutor);
         break;
       }
+      case stmt::T_REBUILD_TABLET: {
+        DEFINE_EXECUTE_CMD(ObRebuildTabletStmt, ObRebuildTabletExecutor);
+        break;
+      }
       case stmt::T_MODULE_DATA: {
         DEFINE_EXECUTE_CMD(ObModuleDataStmt, ObModuleDataExecutor);
         break;

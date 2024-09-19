@@ -1258,6 +1258,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(Mock);
         break;
       }
+      case T_REBUILD_TABLET: {
+        REGISTER_STMT_RESOLVER(RebuildTablet);
+        break;
+      }
       case T_MODULE_DATA: {
         REGISTER_STMT_RESOLVER(ModuleData);
         break;

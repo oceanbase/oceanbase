@@ -80,6 +80,7 @@
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/ob_heartbeat_handler.h"
+#include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 
 namespace oceanbase
 {
@@ -11496,6 +11497,23 @@ public:
 private:
   share::ObServerHealthStatus server_health_status_;
 };
+
+struct ObRebuildTabletArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  int assign(const ObRebuildTabletArg &arg);
+  bool is_valid() const;
+  ObRebuildTabletArg(): tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_(), tablet_id_array_(), dest_(), src_() {}
+  TO_STRING_KV(K_(tenant_id), K_(ls_id) ,K_(tablet_id_array), K_(dest), K_(src));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObSArray<common::ObTabletID> tablet_id_array_;
+  share::ObRebuildTabletLocation dest_;
+  share::ObRebuildTabletLocation src_;
+};
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

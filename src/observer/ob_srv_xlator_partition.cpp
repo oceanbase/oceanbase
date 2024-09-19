@@ -177,6 +177,9 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObAdminUnlockMemberListP, gctx_);
   RPC_PROCESSOR(ObCheckTransferInTabletAbortedP);
   RPC_PROCESSOR(ObUpdateTransferMetaInfoP);
+
+  //rebuild tablet
+  RPC_PROCESSOR(ObRebuildTabletSSTableInfoP, gctx_.bandwidth_throttle_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
