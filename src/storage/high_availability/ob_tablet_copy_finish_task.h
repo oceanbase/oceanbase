@@ -51,7 +51,6 @@ public:
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
   int add_sstable(ObTableHandleV2 &table_handle);
   int add_sstable(ObTableHandleV2 &table_handle, const int64_t last_meta_macro_seq);
-  int add_shared_sstable(const ObITable::TableKey &table_key);
   int get_sstable(
       const ObITable::TableKey &table_key,
       ObTableHandleV2 &table_handle);
@@ -70,13 +69,10 @@ private:
   int get_tables_handle_ptr_(
       const ObITable::TableKey &table_key,
       ObTablesHandleArray *&table_handle_ptr);
-  int check_tablet_valid_();
-  int check_shared_table_type_();
-  int deal_with_shared_majors_();
-  int deal_with_no_shared_majors_();
   int check_major_valid_();
+  int check_tablet_valid_();
+  int deal_with_major_sstables_();
   int check_restore_major_valid_(
-      const common::ObIArray<ObITable::TableKey> &shared_table_key_array,
       const ObTablesHandleArray &major_tables_handle);
   int get_mds_sstable_max_end_scn_(share::SCN &max_escn);
 
@@ -95,7 +91,6 @@ private:
   ObTabletRestoreAction::ACTION restore_action_;
   const ObMigrationTabletParam *src_tablet_meta_;
   ObICopyTabletCtx *copy_tablet_ctx_;
-  common::ObArray<ObITable::TableKey> shared_table_key_array_;
   common::ObArray<std::pair<ObITable::TableKey, int64_t>> last_meta_seq_array_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };

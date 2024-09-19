@@ -5359,6 +5359,7 @@ int ObTablet::build_migration_sstable_param(
     mig_sstable_param.table_key_ = table_key;
     mig_sstable_param.is_small_sstable_ = sstable->is_small_sstable();
     mig_sstable_param.table_key_ = sstable->get_key();
+    mig_sstable_param.is_meta_root_ = sstable_meta.get_macro_info().is_meta_root();
 
     if (sstable->is_co_sstable()) {
       ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(sstable);
@@ -5373,6 +5374,22 @@ int ObTablet::build_migration_sstable_param(
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta.get_col_checksum_cnt(); ++i) {
       if (OB_FAIL(mig_sstable_param.column_checksums_.push_back(sstable_meta.get_col_checksum()[i]))) {
         LOG_WARN("fail to push back column checksum", K(ret), K(i));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (sstable_meta.is_shared_table()) {
+        //data block info & meta block info
+        mig_sstable_param.is_meta_root_ = sstable_meta.get_macro_info().is_meta_root();
+        if (OB_FAIL(build_migration_shared_table_addr_(
+            sstable_meta.get_root_info(), mig_sstable_param.allocator_, mig_sstable_param.root_block_addr_,
+            mig_sstable_param.root_block_buf_))) {
+          LOG_WARN("failed to build migration root info addr", K(ret), K(sstable_meta));
+        } else if (OB_FAIL(build_migration_shared_table_addr_(
+            sstable_meta.get_macro_info().get_macro_meta_info(), mig_sstable_param.allocator_,
+            mig_sstable_param.data_block_macro_meta_addr_, mig_sstable_param.data_block_macro_meta_buf_))) {
+          LOG_WARN("failed to build migration macro info addr", K(ret), K(sstable_meta));
+        }
       }
     }
   }
@@ -8337,6 +8354,45 @@ int ObTablet::check_table_store_flag_match_with_table_store_(const ObTabletTable
   }
   return ret;
 }
+
+int ObTablet::build_migration_shared_table_addr_(
+    const ObRootBlockInfo &block_info,
+    common::ObIAllocator &allocator,
+    storage::ObMetaDiskAddr &addr,
+    char *&buf) const
+{
+  int ret = OB_SUCCESS;
+  buf = nullptr;
+  addr = block_info.get_addr();
+
+  if (!block_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build migration shared table addr get invalid argument", K(ret));
+  } else if (!block_info.get_addr().is_memory()) {
+    buf = nullptr;
+  } else {
+    int64_t buf_offset = 0;
+    int64_t buf_size = 0;
+    const char *orig_block_buf = nullptr;
+
+    if (OB_FAIL(block_info.get_addr().get_mem_addr(buf_offset, buf_size))) {
+      LOG_WARN("failed to get mem addr", K(ret), K(block_info));
+    } else if (buf_size <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("root block buf size is unexpected", K(ret), K(buf_size), K(block_info));
+    } else if (OB_ISNULL(orig_block_buf = block_info.get_orig_block_buf())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("orig block buf should not be NULL", K(ret), K(block_info));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buf", K(ret), K(buf_size));
+    } else {
+      MEMCPY(buf, orig_block_buf, buf_size);
+    }
+  }
+  return ret;
+}
+
 
 } // namespace storage
 } // namespace oceanbase

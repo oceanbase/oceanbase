@@ -157,6 +157,7 @@ int ObRootBlockInfo::init_root_block_info(
     LOG_WARN("fail to get memory address", K(ret), K(addr));
   } else if (ObMicroBlockData::DDL_BLOCK_TREE == block_data.type_) {
     block_data_ = block_data;
+    orig_block_buf_ = block_data_.buf_;
   } else if (size > 0 && OB_ISNULL(orig_buf = static_cast<char *>(allocator.alloc(size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc buf", K(ret), K(size));

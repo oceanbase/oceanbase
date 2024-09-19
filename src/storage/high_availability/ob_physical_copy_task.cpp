@@ -454,6 +454,7 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
   int ret = OB_SUCCESS;
   ObStorageHAMacroBlockWriter *tmp_writer = nullptr;
   const ObMigrationSSTableParam *sstable_param = nullptr;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_ISNULL(reader) || OB_ISNULL(index_block_rebuilder)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("macro block writer get invalid argument", K(ret), KP(reader), KP(index_block_rebuilder));
@@ -462,16 +463,17 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src sstable param is null", K(ret), KP(finish_task_));
   } else {
-
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (sstable_param->is_shared_macro_blocks_sstable()) {
-      tmp_writer = MTL_NEW(ObStorageHASharedMacroBlockWriter, "HAMacroObWriter");
-    } else {
+    if (!is_shared_storage) {
       tmp_writer = MTL_NEW(ObStorageHALocalMacroBlockWriter, "HAMacroObWriter");
-    }
-#else
-    tmp_writer = MTL_NEW(ObStorageHALocalMacroBlockWriter, "HAMacroObWriter");
+    } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (sstable_param->is_shared_macro_blocks_sstable()) {
+        tmp_writer = MTL_NEW(ObStorageHASharedMacroBlockWriter, "HAMacroObWriter");
+      } else {
+        tmp_writer = MTL_NEW(ObStorageHALocalMacroBlockWriter, "HAMacroObWriter");
+      }
 #endif
+    }
 
     if (OB_ISNULL(tmp_writer)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

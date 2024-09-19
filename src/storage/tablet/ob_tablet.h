@@ -861,6 +861,11 @@ private:
 
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int check_table_store_flag_match_with_table_store_(const ObTabletTableStore *table_store);
+  int build_migration_shared_table_addr_(
+      const ObRootBlockInfo &block_info,
+      common::ObIAllocator &allocator,
+      storage::ObMetaDiskAddr &addr,
+      char *&buf) const;
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;

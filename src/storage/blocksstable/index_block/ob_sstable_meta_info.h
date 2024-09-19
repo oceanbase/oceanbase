@@ -70,6 +70,7 @@ public:
   }
   OB_INLINE const storage::ObMetaDiskAddr &get_addr() const { return addr_; }
   OB_INLINE const ObMicroBlockData &get_block_data() const { return block_data_; }
+  OB_INLINE const char *get_orig_block_buf() const { return orig_block_buf_; }
 
   TO_STRING_KV(K_(addr), KP_(orig_block_buf), K_(block_data));
 private:
@@ -211,6 +212,10 @@ public:
       int64_t &data_block_count,
       MacroBlockId *&other_block_ids,
       int64_t &other_block_count);
+  OB_INLINE const ObRootBlockInfo &get_macro_meta_info() const
+  {
+    return macro_meta_info_;
+  }
   DECLARE_TO_STRING;
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;

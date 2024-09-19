@@ -949,6 +949,12 @@ int ObSSTableMeta::deep_copy(
   return ret;
 }
 
+bool ObSSTableMeta::is_shared_table() const
+{
+  return basic_meta_.table_shared_flag_.is_shared_sstable()
+      || basic_meta_.table_backup_flag_.is_shared_sstable();
+}
+
 //================================== ObMigrationSSTableParam ==================================
 ObMigrationSSTableParam::ObMigrationSSTableParam()
   : allocator_("SSTableParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
@@ -1052,12 +1058,15 @@ bool ObMigrationSSTableParam::is_empty_sstable() const
 
 bool ObMigrationSSTableParam::is_shared_sstable() const
 {
-  return basic_meta_.table_shared_flag_.is_shared_sstable();
+  return basic_meta_.table_shared_flag_.is_shared_sstable()
+      || basic_meta_.table_backup_flag_.is_shared_sstable();
 }
 
+//shared sstable contain shared macro blocks
 bool ObMigrationSSTableParam::is_shared_macro_blocks_sstable() const
 {
-  return basic_meta_.table_shared_flag_.is_shared_macro_blocks();
+  return basic_meta_.table_shared_flag_.is_shared_macro_blocks()
+      || basic_meta_.table_backup_flag_.is_shared_sstable();
 }
 
 bool ObMigrationSSTableParam::is_only_shared_macro_blocks_sstable() const

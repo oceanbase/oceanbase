@@ -292,9 +292,9 @@ int ObStorageHAMacroBlockWriter::write_macro_block_(
 int ObStorageHALocalMacroBlockWriter::check_sstable_param_for_init_(const ObMigrationSSTableParam *sstable_param) const
 {
   int ret = OB_SUCCESS;
-  if (sstable_param->is_shared_macro_blocks_sstable()) {
+  if (sstable_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable has shared macro blocks", K(ret), KPC(sstable_param));
+    LOG_WARN("sstable has shared macro blocks and it's not shared backup table", K(ret), KPC(sstable_param));
   }
   return ret;
 }
@@ -340,9 +340,9 @@ int ObStorageHALocalMacroBlockWriter::append_macro_row_(
 int ObStorageHASharedMacroBlockWriter::check_sstable_param_for_init_(const ObMigrationSSTableParam *sstable_param) const
 {
   int ret = OB_SUCCESS;
-  if (!sstable_param->is_shared_macro_blocks_sstable()) {
+  if (!sstable_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable has no shared macro blocks", K(ret), KPC(sstable_param));
+    LOG_WARN("sstable has no shared macro blocks or is shared backup table", K(ret), KPC(sstable_param));
   }
   return ret;
 }

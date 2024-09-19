@@ -142,6 +142,7 @@ public:
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
+  int inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &migration_param);
 public:
   ObITable::TableKey table_key_;
   int16_t sstable_logic_seq_;

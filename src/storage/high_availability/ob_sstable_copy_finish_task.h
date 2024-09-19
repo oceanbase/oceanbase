@@ -168,20 +168,19 @@ private:
 
 
 #ifdef OB_BUILD_SHARED_STORAGE
-// Now, only for major sstable in shared storage.
-class ObCopiedSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
+// Now, only for restore major sstable in shared storage.
+class ObRestoredSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
 public:
-  ObCopiedSharedSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
+  ObRestoredSharedSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
 
   virtual int create_sstable() override;
 
 private:
   virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const override;
 
-  DISALLOW_COPY_AND_ASSIGN(ObCopiedSharedSSTableCreator);
+  DISALLOW_COPY_AND_ASSIGN(ObRestoredSharedSSTableCreator);
 };
-
 
 // Now, only for ddl dump sstable in shared storage.
 class ObCopiedSharedMacroBlocksSSTableCreator final : public ObCopiedSSTableCreatorImpl
@@ -199,6 +198,20 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCopiedSharedMacroBlocksSSTableCreator);
 };
 #endif
+
+// For major sstable in shared storage or sstable in quick restore.
+class ObCopiedSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
+{
+public:
+  ObCopiedSharedSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
+
+  virtual int create_sstable() override;
+
+private:
+  virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const override;
+
+  DISALLOW_COPY_AND_ASSIGN(ObCopiedSharedSSTableCreator);
+};
 
 
 class ObSSTableCopyFinishTask final : public share::ObITask

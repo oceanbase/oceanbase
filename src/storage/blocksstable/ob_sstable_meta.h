@@ -308,6 +308,7 @@ public:
       const int64_t buf_len,
       int64_t &pos,
       ObSSTableMeta *&dest) const;
+  bool is_shared_table() const;
   TO_STRING_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
 private:
   bool check_meta() const;
@@ -387,7 +388,7 @@ public:
   int32_t column_group_cnt_;
   int32_t full_column_cnt_;
   int32_t co_base_type_;
-  // for back up
+  // for shared data
   ObMetaDiskAddr root_block_addr_;
   char *root_block_buf_;
   ObMetaDiskAddr data_block_macro_meta_addr_;
