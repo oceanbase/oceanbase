@@ -396,6 +396,7 @@
 #define N_VECTOR_L1_DISTANCE "l1_distance"
 #define N_VECTOR_L2_DISTANCE "l2_distance"
 #define N_VECTOR_INNER_PRODUCT "inner_product"
+#define N_VECTOR_NEGATIVE_INNER_PRODUCT "negative_inner_product"
 #define N_VECTOR_COS_DISTANCE "cosine_distance"
 #define N_VECTOR_DIMS "vector_dims"
 #define N_VECTOR_NORM "vector_norm"

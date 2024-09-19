@@ -1260,6 +1260,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArrayContains::eval_array_contains_array,                     /* 754 */
   ObExprSplitPart::calc_split_part_expr,                              /* 755 */
   NULL, // ObExprRbSelect::eval_rb_select,                            /* 756 */
+  ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

@@ -932,7 +932,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_PSEUDO_PARTITION_LIST_COL != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())
-            && !(T_FUN_SYS_L2_DISTANCE == raw_expr->get_expr_type())) {
+            && !(raw_expr->is_vector_sort_expr())) {
           if (raw_expr->is_calculated()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is not from the child_op_output but it has been caculated already",

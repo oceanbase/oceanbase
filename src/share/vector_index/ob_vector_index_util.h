@@ -32,6 +32,12 @@ public:
   static int parser_params_from_string(
       const ObString &origin_string,
       ObVectorIndexHNSWParam &param);
+  static int check_distance_algorithm_match(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      const ObString &index_column_name,
+      const ObItemType type,
+      bool &is_match);
   static int insert_index_param_str(
       const ObString &new_add_param,
       ObIAllocator &allocator,
@@ -106,6 +112,9 @@ public:
   static int check_table_exist(
       const ObTableSchema &data_table_schema,
       const ObString &domain_index_name);
+private:
+  static bool is_expr_type_and_distance_algorithm_match(
+      const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm);
 };
 
 // For vector index snapshot write data

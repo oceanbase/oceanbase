@@ -170,7 +170,7 @@ int ObVectorIndexLookupOp::init_sort(const ObDASVecAuxScanCtDef *ir_ctdef,
   } else {
     for (int i = 0; i < sort_ctdef_->sort_exprs_.count() && OB_SUCC(ret) && OB_ISNULL(search_vec_); ++i) {
       ObExpr *expr = sort_ctdef_->sort_exprs_.at(i);
-      if (expr->type_ == T_FUN_SYS_L2_DISTANCE) {
+      if (expr->is_vector_sort_expr()) {
         if (expr->arg_cnt_ != 2) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected arg num", K(ret), K(expr->arg_cnt_));

@@ -249,6 +249,29 @@ int ObExprVectorIPDistance::calc_inner_product(const ObExpr &expr, ObEvalCtx &ct
   return ObExprVectorDistance::calc_distance(expr, ctx, res_datum, ObVecDisType::DOT);
 }
 
+ObExprVectorNegativeIPDistance::ObExprVectorNegativeIPDistance(ObIAllocator &alloc)
+    : ObExprVectorDistance(alloc, T_FUN_SYS_NEGATIVE_INNER_PRODUCT, N_VECTOR_NEGATIVE_INNER_PRODUCT, 2, NOT_ROW_DIMENSION) {}
+
+int ObExprVectorNegativeIPDistance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                    ObExpr &rt_expr) const
+{
+    int ret = OB_SUCCESS;
+    rt_expr.eval_func_ = ObExprVectorNegativeIPDistance::calc_negative_inner_product;
+    return ret;
+}
+
+int ObExprVectorNegativeIPDistance::calc_negative_inner_product(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObExprVectorDistance::calc_distance(expr, ctx, res_datum, ObVecDisType::DOT))) {
+    LOG_WARN("fail to calc distance", K(ret), K(ObVecDisType::DOT));
+  } else if (!res_datum.is_null()) {
+    double value = -1 * res_datum.get_double();
+    res_datum.set_double(value);
+  }
+  return ret;
+}
+
 ObExprVectorDims::ObExprVectorDims(ObIAllocator &alloc)
     : ObExprVector(alloc, T_FUN_SYS_VECTOR_DIMS, N_VECTOR_DIMS, 1, NOT_ROW_DIMENSION) {}
 
