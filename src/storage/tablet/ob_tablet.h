@@ -219,10 +219,12 @@ public:
       const bool clear_wait_check_flag);
 
   // TODO(@gaishun.gs && @fengjingkun.fjk) tmp interface for force_freeze on column store, should removed later.
-  int init_with_new_snapshot_version(
+  int init_with_replace_members(
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
-      const int64_t snapshot_version);
+      const int64_t snapshot_version,
+      const ObTabletDataStatus::STATUS &data_status,
+      bool need_generate_cs_replica_cg_array = false);
   // init for mds table mini merge
   int init_with_mds_sstable(
       common::ObArenaAllocator &allocator,
@@ -468,6 +470,7 @@ public:
 
   // column store replica
   int check_cs_replica_compat_schema(bool &is_cs_replica_compat) const;
+  int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
   int pre_process_cs_replica(ObTabletDirectLoadInsertParam &direct_load_param);
 
   // other

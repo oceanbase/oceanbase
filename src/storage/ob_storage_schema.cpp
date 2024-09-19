@@ -541,9 +541,15 @@ int ObStorageSchema::init(
       if (OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
         STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
       }
-    } else if (NULL != column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, *column_group_schema))) {
-      STORAGE_LOG(WARN, "failed to deep copy column array from column group schema", K(ret), K(old_schema), KPC(column_group_schema));
-    } else if (NULL == column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, old_schema))) {
+    } else if (NULL != column_group_schema) {
+      if (OB_FAIL(deep_copy_column_group_array(allocator, *column_group_schema))) {
+        STORAGE_LOG(WARN, "failed to deep copy column array from column group schema", K(ret), K(old_schema), KPC(column_group_schema));
+      } else if (!old_schema.is_cs_replica_compat() && column_group_schema->is_cs_replica_compat()) {
+        // use row store storage schema from src when ls rebuild, but use column group from old tablet to init cg schemas
+        is_cs_replica_compat_ = true;
+        STORAGE_LOG(INFO, "[CS-Replica] take old schema from param and column group from old tablet in cs replica", K(ret), K(old_schema), KPC(column_group_schema));
+      }
+    } else if (OB_FAIL(deep_copy_column_group_array(allocator, old_schema))) {
       STORAGE_LOG(WARN, "failed to deep copy column array", K(ret), K(old_schema));
     }
 

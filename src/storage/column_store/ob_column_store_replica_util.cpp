@@ -149,6 +149,10 @@ int ObCSReplicaUtil::check_need_wait_major_convert(
       need_wait_major_convert = ObITable::is_row_store_major_sstable(sstable->get_key().table_type_);
     }
   }
+
+  if (ls.is_cs_replica()) {
+    LOG_INFO("[CS-Replica] Finish check need wait major convert", K(ret), K(tablet_id), K(need_process_cs_replica), K(need_wait_major_convert), K(ls), KPC(storage_schema), K(tablet), KPC(table_store), KPC(sstable));
+  }
   ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
   return ret;
 }

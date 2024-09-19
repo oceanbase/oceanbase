@@ -74,7 +74,8 @@ public:
   OB_INLINE int set_convert_progressing(const ObTabletID &tablet_id) { return set_convert_status(tablet_id, ObTabletCOConvertCtx::Status::PROGRESSING); }
   int get_co_dag_net_id(const ObTabletID &tablet_id, share::ObDagId &co_dag_net_id) const;
   int check_and_schedule(ObLS &ls);
-  INHERIT_TO_STRING_KV("ObHATabletGroupCtx", ObHATabletGroupCtx, K_(finish_migration_cnt), K_(finish_check_cnt), K_(retry_exhausted_cnt), "map_size", idx_map_.size(), K_(convert_ctxs));
+  // move tablet_id_array last to prevent log ignore other parameters
+  TO_STRING_KV(K_(finish_migration_cnt), K_(finish_check_cnt), K_(retry_exhausted_cnt), "map_size", idx_map_.size(), K_(convert_ctxs), K_(index), K_(tablet_id_array));
 public:
   static int check_need_convert(const ObTablet &tablet, bool &need_convert);
   static int update_deleted_data_tablet_status(

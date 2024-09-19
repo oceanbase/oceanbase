@@ -1580,6 +1580,7 @@ int ObLSTabletService::update_tablet_snapshot_version(
     const ObTabletMapKey key(ls_id, tablet_id);
     ObMetaDiskAddr disk_addr;
     const ObTabletPersisterParam param(ls_id, ls_->get_ls_epoch(), tablet_id);
+    ObTabletDataStatus::STATUS current_status = ObTabletDataStatus::DATA_STATUS_MAX;
 
     if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -1588,7 +1589,9 @@ int ObLSTabletService::update_tablet_snapshot_version(
         LOG_WARN("failed to acquire tablet", K(ret), K(key));
       }
     } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
-    } else if (OB_FAIL(tmp_tablet->init_with_new_snapshot_version(allocator, *old_tablet, snapshot_version))) {
+    } else if (OB_FAIL(old_tablet->tablet_meta_.ha_status_.get_data_status(current_status))) {
+      LOG_WARN("failed to get data status", K(ret), KPC(old_tablet));
+    } else if (OB_FAIL(tmp_tablet->init_with_replace_members(allocator, *old_tablet, snapshot_version, current_status))) {
       LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
     } else if (FALSE_IT(time_guard.click("InitNew"))) {
     } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tmp_tablet, new_tablet_hdl))) {
@@ -1700,41 +1703,47 @@ int ObLSTabletService::update_tablet_ha_data_status(
     time_guard.click("GetTablet");
     ObMetaDiskAddr disk_addr;
     const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
-    ObTablet *tablet = tablet_handle.get_obj();
+    ObTablet *old_tablet = tablet_handle.get_obj();
+    ObTablet *tmp_tablet = nullptr;
+    common::ObArenaAllocator allocator("UpdateSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
     ObTabletHandle new_tablet_handle;
+    ObTabletHandle tmp_tablet_handle;
     const ObTabletPersisterParam param(ls_->get_ls_id(), ls_->get_ls_epoch(), tablet_id);
+    bool is_row_store_with_co_major = false;
 
-    if (OB_FAIL(tablet->tablet_meta_.ha_status_.get_data_status(current_status))) {
-      LOG_WARN("failed to get data status", K(ret), KPC(tablet));
+    if (OB_FAIL(old_tablet->tablet_meta_.ha_status_.get_data_status(current_status))) {
+      LOG_WARN("failed to get data status", K(ret), KPC(old_tablet));
     } else if (OB_FAIL(ObTabletDataStatus::check_can_change_status(current_status, data_status, can_change))) {
-      LOG_WARN("failed to check can change status", K(ret), K(current_status), K(data_status), KPC(tablet));
+      LOG_WARN("failed to check can change status", K(ret), K(current_status), K(data_status), KPC(old_tablet));
     } else if (!can_change) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("can not change data status", K(ret), K(current_status), K(data_status), KPC(tablet));
+      LOG_WARN("can not change data status", K(ret), K(current_status), K(data_status), KPC(old_tablet));
     } else if (current_status == data_status) {
       LOG_INFO("data status is same, skip update", K(tablet_id), K(current_status), K(data_status));
-    } else if (OB_FAIL(tablet->tablet_meta_.ha_status_.set_data_status(data_status))) {
-      LOG_WARN("failed to set data status", K(ret), KPC(tablet), K(data_status));
-    } else {
-      if (OB_FAIL(tablet->check_valid())) {
-        LOG_WARN("failed to check tablet valid", K(ret), K(data_status), KPC(tablet));
-      } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle))) {
-        LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tablet), K(new_tablet_handle));
-      } else if (FALSE_IT(time_guard.click("Persist"))) {
-      } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
-      } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, tablet_handle, new_tablet_handle, time_guard))) {
-        LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
+    } else if (ObTabletDataStatus::is_complete(data_status) // may reuse exist co major in cs replica when rebuild, but tablet is row store like src
+               && OB_FAIL(old_tablet->check_row_store_with_co_major(is_row_store_with_co_major))) {
+      LOG_WARN("failed to check row store with co major", K(ret), KPC(old_tablet));
+    } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_handle))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_TABLET_NOT_EXIST;
       } else {
-        LOG_INFO("succeeded to update tablet ha data status", K(ret), K(key), K(disk_addr), K(data_status), K(tablet_handle));
+        LOG_WARN("failed to acquire tablet", K(ret), K(key));
       }
-
-      if (OB_FAIL(ret)) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_data_status(current_status))) {
-          LOG_WARN("failed to set data status", K(tmp_ret), K(current_status), KPC(tablet));
-          ob_abort();
-        }
-      }
+    } else if (FALSE_IT(tmp_tablet = tmp_tablet_handle.get_obj())) {
+    // need update tablet to column store with column store storage schema when rebuild reuse old co major in cs replica
+    } else if (OB_FAIL(tmp_tablet->init_with_replace_members(allocator, *old_tablet, old_tablet->tablet_meta_.snapshot_version_, data_status, is_row_store_with_co_major))) {
+      LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
+    } else if (FALSE_IT(time_guard.click("InitNew"))) {
+    } else if (OB_FAIL(tmp_tablet->check_valid())) {
+      LOG_WARN("failed to check tablet valid", K(ret), K(data_status), KPC(tmp_tablet));
+    } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tmp_tablet, new_tablet_handle))) {
+      LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_handle));
+    } else if (FALSE_IT(time_guard.click("Persist"))) {
+    } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
+    } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, tablet_handle, new_tablet_handle, time_guard))) {
+      LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
+    } else {
+      LOG_INFO("succeeded to update tablet ha data status", K(ret), K(key), K(disk_addr), K(data_status), K(tablet_handle), K(tmp_tablet_handle), K(is_row_store_with_co_major), K(time_guard));
     }
   }
   return ret;
