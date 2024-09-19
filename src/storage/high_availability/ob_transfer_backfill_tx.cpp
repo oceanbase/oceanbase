@@ -687,6 +687,7 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
   int tmp_ret = OB_SUCCESS;
   ObStartTransferBackfillTXDag *backfill_tx_dag = nullptr;
   share::ObTenantDagScheduler *scheduler = nullptr;
+  const bool emergency = true;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -702,7 +703,7 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
     LOG_WARN("failed to add transfer backfill tx dag into dag net", K(ret));
   } else if (OB_FAIL(backfill_tx_dag->create_first_task())) {
     LOG_WARN("failed to create transfer backfill tx first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(backfill_tx_dag))) {
+  } else if (OB_FAIL(scheduler->add_dag(backfill_tx_dag, emergency))) {
     LOG_WARN("failed to add backfill dag", K(ret), K(*backfill_tx_dag));
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       LOG_WARN("Fail to add task", K(ret));
@@ -1061,6 +1062,7 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
   ObBackfillTXCtx *backfill_tx_ctx = nullptr;
   storage::ObTabletBackfillInfo tablet_info;
   ObStartTransferBackfillTXDag *backfill_tx_dag = nullptr;
+  const bool emergency = true;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1107,7 +1109,7 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
         LOG_WARN("failed to add child dag", K(ret), K(*ctx_));
       } else if (OB_FAIL(finish_backfill_tx_dag->create_first_task())) {
         LOG_WARN("failed to create first task", K(ret));
-      } else if (OB_FAIL(scheduler->add_dag(tablet_backfill_tx_dag))) {
+      } else if (OB_FAIL(scheduler->add_dag(tablet_backfill_tx_dag, emergency))) {
         LOG_WARN("failed to add tablet backfill tx dag", K(ret), K(*tablet_backfill_tx_dag));
         if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
           LOG_WARN("Fail to add task", K(ret));
@@ -1117,7 +1119,7 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(scheduler->add_dag(finish_backfill_tx_dag))) {
+    } else if (OB_FAIL(scheduler->add_dag(finish_backfill_tx_dag, emergency))) {
       LOG_WARN("failed to add finish backfill tx dag", K(ret), K(*finish_backfill_tx_dag));
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("Fail to add task", K(ret));

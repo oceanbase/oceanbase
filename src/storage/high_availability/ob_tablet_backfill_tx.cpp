@@ -713,6 +713,14 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
           ret = OB_EAGAIN;
           LOG_WARN("memtable start log ts is bigger than log sync scn but not empty, need retry", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
         }
+      } else if (table->get_end_scn() > backfill_tx_ctx_->backfill_scn_) {
+        if (tablet_info_.is_committed_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("memtable end log ts is bigger than log sync", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
+        } else {
+          ret = OB_EAGAIN;
+          LOG_WARN("memtable end log ts is bigger than log sync scn, need retry", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
+        }
       } else {
         memtable_end_scn = memtable->get_end_scn();
       }
