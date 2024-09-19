@@ -73,16 +73,16 @@ int ObAllVirtualSysStat::set_ip(common::ObAddr *addr)
   return ret;
 }
 
-int ObAllVirtualSysStat::update_all_stats(const int64_t tenant_id, ObStatEventSetStatArray &stat_events)
+int ObAllVirtualSysStat::update_all_stats(const int64_t tenant_id, common::ObDiagnoseTenantInfo &diag_info)
 {
   int ret = OB_SUCCESS;
   if (is_virtual_tenant_id(tenant_id)) {
-    if (OB_FAIL(update_all_stats_(tenant_id, stat_events))) {
+    if (OB_FAIL(update_all_stats_(tenant_id, diag_info))) {
       SERVER_LOG(WARN, "Fail to update_all_stats_ for virtual tenant", K(ret), K(tenant_id));
     }
   } else {
     MTL_SWITCH(tenant_id) {
-      if (OB_FAIL(update_all_stats_(tenant_id, stat_events))) {
+      if (OB_FAIL(update_all_stats_(tenant_id, diag_info))) {
         SERVER_LOG(WARN, "Fail to update_all_stats_ for tenant", K(ret), K(tenant_id));
       }
     }
@@ -90,9 +90,10 @@ int ObAllVirtualSysStat::update_all_stats(const int64_t tenant_id, ObStatEventSe
   return ret;
 }
 
-int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventSetStatArray &stat_events)
+int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, common::ObDiagnoseTenantInfo &diag_info)
 {
   int ret = OB_SUCCESS;
+  ObStatEventSetStatArray &stat_events = diag_info.get_set_stat_stats();
   if (OB_FAIL(get_cache_size_(tenant_id, stat_events))) {
     SERVER_LOG(WARN, "Fail to get cache size", K(ret));
   } else {
@@ -263,7 +264,7 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
 
 #ifdef OB_BUILD_SHARED_STORAGE
       int tmp_ret = OB_SUCCESS;
-      if (GCTX.is_shared_storage_mode() && OB_TMP_FAIL(set_ss_stats(tenant_id, stat_events))) {
+      if (GCTX.is_shared_storage_mode() && OB_TMP_FAIL(set_ss_stats(tenant_id, diag_info))) {
         SERVER_LOG(ERROR, "fail to set ss stats", KR(ret), KR(tmp_ret), K(tenant_id));
       }
 #endif
@@ -317,8 +318,7 @@ int ObAllVirtualSysStat::process_curr_tenant(ObNewRow *&row)
         SERVER_LOG(WARN, "get diag info fail", K(ret), K(tenant_id_));
       } else {
         stat_iter_ = 0;
-        ObStatEventSetStatArray &stat_events = diag_info_.get_set_stat_stats();
-        if (OB_FAIL(update_all_stats_(tenant_id_, stat_events))) {
+        if (OB_FAIL(update_all_stats_(tenant_id_, diag_info_))) {
           SERVER_LOG(WARN, "update all stats fail", K(ret), K(tenant_id_));
         }
       }
