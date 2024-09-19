@@ -143,8 +143,19 @@ public:
   int64_t get_executions() const { return stat_.evolution_stat_.executions_; }
   void set_evolution(bool v) { stat_.is_evolution_ = v; }
   bool get_evolution() const { return stat_.is_evolution_; }
-  inline bool check_if_is_expired(const int64_t first_exec_row_count,
-                                  const int64_t current_row_count) const;
+  inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
+                                        const int64_t current_row_count) const;
+  void update_plan_expired_info(const ObAuditRecordData &record,
+                                const bool is_first,
+                                const ObIArray<ObTableRowCount> *table_row_count_list);
+  void fill_row_count_info(const bool is_first,
+                           const int64_t access_table_num,
+                           ObTableRowCount *table_row_count_first_exec,
+                           const ObIArray<ObTableRowCount> &table_row_count_list);
+  bool check_if_is_expired(const int64_t elapsed_time,
+                           const int64_t access_table_num,
+                           const ObTableRowCount *table_row_count_first_exec,
+                           const ObIArray<ObTableRowCount> &table_row_count_list);
 
   bool is_plan_unstable(const int64_t sample_count,
                         const int64_t sample_exec_row_count,

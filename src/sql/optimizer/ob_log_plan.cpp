@@ -10023,23 +10023,12 @@ int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constra
 int ObLogPlan::check_enable_plan_expiration(bool &enable) const
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session = NULL;
-#ifdef OB_BUILD_SPM
-  int64_t spm_mode = 0;
-#endif
   enable = false;
-  if (OB_ISNULL(get_stmt()) ||
-      OB_ISNULL(session = optimizer_context_.get_session_info())) {
+  if (OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
-#ifdef OB_BUILD_SPM
-  } else if (OB_FAIL(session->get_spm_mode(spm_mode))) {
-    LOG_WARN("failed to check is spm enabled", K(ret));
-  } else if (spm_mode > 0) {
-    // do nothing
-#endif
   } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
              optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
     // do nothing
