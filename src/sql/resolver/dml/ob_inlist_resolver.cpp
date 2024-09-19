@@ -388,7 +388,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
   } else if (is_oracle_mode && OB_FAIL(session_info->get_sys_variable(
                                        share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variables failed", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info,
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
                        enable_mysql_compatible_dates))) {
     LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {

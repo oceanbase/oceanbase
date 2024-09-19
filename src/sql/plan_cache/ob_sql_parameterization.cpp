@@ -495,7 +495,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     LOG_WARN("failed to get compat type", K(ret));
   } else if (NULL == ctx.tree_) {
     // do nothing
-  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info,
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false/*is_ddl*/,
                        enable_mysql_compatible_dates))) {
     LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {

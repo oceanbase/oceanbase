@@ -812,12 +812,11 @@ int ObMultiModeDMLResolver::multimode_table_resolve_column_type(const ParseNode 
       omt::ObTenantConfigGuard tcg(TENANT_CONF(session_info->get_effective_tenant_id()));
       bool convert_real_to_decimal = (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
       uint64_t tenant_data_version = 0;
-      bool enable_mysql_compatible_dates = false;
+      bool enable_mysql_compatible_dates = session_info->is_enable_mysql_compatible_dates();
       if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info,
-                            enable_mysql_compatible_dates))) {
-        LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+      } else if (FALSE_IT(enable_mysql_compatible_dates = (enable_mysql_compatible_dates &&
+          (tenant_data_version >= DATA_VERSION_4_2_5_0)))) {
       } else if (OB_FAIL(ObResolverUtils::resolve_data_type(parse_tree,
                                                           col_def->col_base_info_.col_name_,
                                                           data_type,
@@ -1342,7 +1341,7 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
       session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variables failed", K(ret));
     } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(
-                          dml_resolver->params_.session_info_,
+                          dml_resolver->params_.session_info_, false,
                           enable_mysql_compatible_dates))) {
       LOG_WARN("fail to check enable mysql compatible dates", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_const(&parse_tree,

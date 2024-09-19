@@ -384,7 +384,7 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         if (OB_ISNULL(session_info_)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "session_info_ is null", K(ret));
-        } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_,
+        } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_, true,
                       enable_mysql_compatible_dates))) {
           LOG_WARN("fail to check enable mysql compatible dates", K(ret));
         } else if (FALSE_IT(date_sql_mode.init(session_info_->get_sql_mode()))) {
@@ -2966,7 +2966,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
     bool convert_real_to_decimal =
         (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
     bool enable_mysql_compatible_dates = false;
-    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_,
+    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_, true,
                               enable_mysql_compatible_dates))) {
       LOG_WARN("fail to check enable mysql compatible dates", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_data_type(*type_node,

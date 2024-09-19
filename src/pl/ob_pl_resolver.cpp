@@ -2254,7 +2254,7 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
     bool convert_real_to_decimal =
         (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
     bool enable_mysql_compatible_dates = false;
-    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info,
+    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false /*is_ddl*/,
                               enable_mysql_compatible_dates))) {
       LOG_WARN("fail to check enable mysql compatible dates", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_data_type(*sp_data_type_node,

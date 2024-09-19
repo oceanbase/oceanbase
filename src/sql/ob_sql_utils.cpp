@@ -1498,6 +1498,7 @@ bool ObSQLUtils::check_mysql50_prefix(ObString &db_name)
 }
 
 int ObSQLUtils::check_enable_mysql_compatible_dates(const sql::ObSQLSessionInfo *session,
+                                                    const bool is_ddl_scenario,
                                                     bool &enabled)
 {
   int ret = OB_SUCCESS;
@@ -1508,11 +1509,17 @@ int ObSQLUtils::check_enable_mysql_compatible_dates(const sql::ObSQLSessionInfo 
   } else if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session is null", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
-    LOG_WARN("fail to get data version", K(ret));
-  } else {
-    enabled = (const_cast<ObSQLSessionInfo *>(session)->is_enable_mysql_compatible_dates()
-                 && data_version >= CLUSTER_VERSION_4_2_5_0);
+  } else if ((const_cast<sql::ObSQLSessionInfo *>(session))->is_enable_mysql_compatible_dates()) {
+    if (is_ddl_scenario) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
+        SQL_LOG(WARN, "fail to get data version", K(ret));
+      } else {
+        enabled = (data_version >= DATA_VERSION_4_2_5_0);
+      }
+    } else {
+      enabled = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_0);
+    }
   }
   return ret;
 }
@@ -3532,7 +3539,8 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
     }
     CHECK_COMPATIBILITY_MODE(session);
     bool enable_mysql_compatible_dates = false;
-    if (OB_SUCCESS == check_enable_mysql_compatible_dates(session, enable_mysql_compatible_dates)) {
+    if (OB_SUCCESS == check_enable_mysql_compatible_dates(session, false, /*is_ddl*/
+                                                          enable_mysql_compatible_dates)) {
       type_ctx.set_enable_mysql_compatible_dates(enable_mysql_compatible_dates);
     }
   } else {

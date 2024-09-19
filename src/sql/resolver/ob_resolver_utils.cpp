@@ -9033,6 +9033,7 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                                     const ObBitSet<> &must_be_positive_idx,
                                     const ObPCParam *pc_param,
                                     const int64_t param_idx,
+                                    const bool enable_mysql_compatible_dates,
                                     ObObjParam &obj_param,
                                     bool &is_param)
 {
@@ -9068,14 +9069,10 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
       CK (idx >= 0 && idx < phy_ctx_params.count());
       OX (obj_param.set_is_boolean(phy_ctx_params.at(idx).is_boolean()));
     }
-    bool enable_mysql_compatible_dates = false;
     if (OB_FAIL(ret)) {
     } else if (lib::is_oracle_mode() &&
                OB_FAIL(session.get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variable failed", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session,
-                          enable_mysql_compatible_dates))) {
-      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_const(raw_param, stmt_type, pc_ctx.allocator_,
                        static_cast<ObCollationType>(session.get_local_collation_connection()),
                        session.get_nls_collation_nation(), session.get_timezone_info(),

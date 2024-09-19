@@ -697,6 +697,7 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
   ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
   const int64_t raw_param_cnt = raw_params.count();
   ObObjParam value;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session), KP(phy_ctx));
@@ -706,6 +707,9 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "raw_params and param_charset_type count is different", K(ret),
                K(raw_param_cnt), K(param_charset_type.count()), K(pc_ctx.raw_sql_));
+   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session, false,
+                          enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     CHECK_COMPATIBILITY_MODE(session);
     ObCollationType collation_connection = static_cast<ObCollationType>(session->get_local_collation_connection());
@@ -714,7 +718,7 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
       bool is_param = false;
       if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_ctx->get_param_store_for_update(), stmt_type,
                   param_charset_type.at(i), neg_param_index, not_param_index, must_be_positive_idx,
-                  raw_params.at(i), i, value, is_param))) {
+                  raw_params.at(i), i, enable_mysql_compatible_dates, value, is_param))) {
         SQL_PC_LOG(WARN, "failed to resolver param", K(ret), K(i));
       } else if (is_param && OB_FAIL(obj_params->push_back(value))) {
         SQL_PC_LOG(WARN, "fail to push item to array", K(ret));

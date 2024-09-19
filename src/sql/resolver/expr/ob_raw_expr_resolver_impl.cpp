@@ -2948,7 +2948,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(ctx_.session_info_,
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(ctx_.session_info_, false,
                        enable_mysql_compatible_dates))) {
     LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&node,

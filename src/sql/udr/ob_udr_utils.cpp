@@ -193,7 +193,7 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variable failed", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session,
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session, false,
                        enable_mysql_compatible_dates))) {
     LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {

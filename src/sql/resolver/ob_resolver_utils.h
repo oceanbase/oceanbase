@@ -817,6 +817,7 @@ public:
                             const ObBitSet<> &must_be_positive_idx,
                             const ObPCParam *pc_param,
                             const int64_t param_idx,
+                            const bool enable_mysql_compatible_dates,
                             ObObjParam &obj_param,
                             bool &is_param);
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);

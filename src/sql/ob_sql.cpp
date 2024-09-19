@@ -2109,8 +2109,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session.get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variable failed", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session,
-                       enable_mysql_compatible_dates))) {
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session, false /*is_ddl*/,
+      enable_mysql_compatible_dates))) {
     LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < raw_params.count(); ++i) {

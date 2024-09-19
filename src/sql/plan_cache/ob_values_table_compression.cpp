@@ -414,6 +414,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
   int64_t array_param_idx = 0;  // idx in pc_ctx.fp_result_.array_params_
   int64_t not_param_cnt = 0;
   bool is_param = false;
+  bool enable_mysql_compatible_dates = false;
   if (OB_UNLIKELY(!pc_ctx.exec_ctx_.has_dynamic_values_table()) || OB_ISNULL(session) ||
       OB_ISNULL(phy_ctx) || OB_UNLIKELY(param_charset_type.count() != raw_param_cnt) ||
       OB_ISNULL(ab_params)) {
@@ -422,6 +423,9 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
              K(param_charset_type.count()), KP(ab_params));
   } else if (OB_FAIL(ab_params->reserve(raw_param_cnt))) {
     LOG_WARN("failed to reserve param num", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session, false,
+                          enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     ParamStore &phy_param_store = phy_ctx->get_param_store_for_update();
     ObIArray<ObArrayParamGroup> &array_param_groups = phy_ctx->get_array_param_groups();
@@ -438,7 +442,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
         if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt_type,
                     param_charset_type.at(raw_idx), neg_param_index, not_param_index,
                     must_be_positive_idx, pc_ctx.fp_result_.raw_params_.at(raw_idx), raw_idx,
-                    obj_param, is_param))) {
+                    enable_mysql_compatible_dates, obj_param, is_param))) {
           LOG_WARN("failed to resolver param", K(ret), K(raw_idx));
         } else if (!is_param) {
           not_param_cnt++;
@@ -464,7 +468,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
             if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt_type,
                         param_charset_type.at(raw_idx), neg_param_index, not_param_index,
                         must_be_positive_idx, raw_array_param->at(k), raw_idx,
-                        array_param_ptr->data_[k], is_param))) {
+                        enable_mysql_compatible_dates, array_param_ptr->data_[k], is_param))) {
               LOG_WARN("failed to resolver param", K(ret), K(k), K(raw_idx), K(j));
             } else {
               const ObObjParam &param = array_param_ptr->data_[k];
@@ -530,7 +534,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
       if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt_type,
                   param_charset_type.at(raw_idx), neg_param_index, not_param_index,
                   must_be_positive_idx, pc_ctx.fp_result_.raw_params_.at(raw_idx), raw_idx,
-                  obj_param, is_param))) {
+                  enable_mysql_compatible_dates, obj_param, is_param))) {
         LOG_WARN("failed to resolver param", K(ret), K(raw_idx));
       } else if (!is_param) {
         not_param_cnt++;
@@ -555,12 +559,16 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
   int64_t raw_idx = 0;  // idx in pc_ctx.fp_result_.raw_params_
   int64_t array_param_idx = 0;  // idx in pc_ctx.fp_result_.array_params_
   bool is_param = false;
+  bool enable_mysql_compatible_dates = false;
   const ObIArray<ObCharsetType> &param_charset_type = pc_ctx.param_charset_type_;
   if (OB_UNLIKELY(!pc_ctx.exec_ctx_.has_dynamic_values_table()) || OB_ISNULL(session) ||
       OB_ISNULL(phy_ctx) || OB_UNLIKELY(param_charset_type.count() > raw_param_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql should be mutil stmt", K(ret), KP(session), KP(phy_ctx), K(raw_param_cnt),
              K(param_charset_type.count()));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session, false,
+                          enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     ParamStore &phy_param_store = phy_ctx->get_param_store_for_update();
     ObIArray<ObArrayParamGroup> &array_param_groups = phy_ctx->get_array_param_groups();
@@ -609,7 +617,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
           for (int64_t k = 0; OB_SUCC(ret) && k < batch_num; k++) {
             if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt::T_SELECT,
                         param_charset_type.at(raw_idx), bit_set_dummy, bit_set_dummy,
-                        bit_set_dummy, raw_array_param->at(k), raw_idx,
+                        bit_set_dummy, raw_array_param->at(k), raw_idx, enable_mysql_compatible_dates,
                         array_param_ptr->data_[k], is_param))) {
               LOG_WARN("failed to resolver param", K(ret), K(k), K(raw_idx), K(j));
             } else {
