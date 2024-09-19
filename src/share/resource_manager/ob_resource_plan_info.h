@@ -41,10 +41,11 @@ enum ObFunctionType : uint8_t
   PRIO_CLOG_LOW = 10,
   PRIO_CLOG_MID = 11,
   PRIO_CLOG_HIGH = 12,
-  PRIO_IMPORT = 13,
-  PRIO_EXPORT = 14,
+  PRIO_OPT_STATS = 13,
+  PRIO_IMPORT = 14,
+  PRIO_EXPORT = 15,
   /* add new function type here, or you will have compatibility issues. */
-  PRIO_SQL_AUDIT = 15,
+  PRIO_SQL_AUDIT = 16,
 
 
   /* add new function, can learn by "grep -rnI 'CLOG_HIGH' src/" */

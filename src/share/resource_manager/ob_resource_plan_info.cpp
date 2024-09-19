@@ -60,6 +60,9 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_CLOG_HIGH:
       ret_name = ObString("CLOG_HIGH");
       break;
+    case ObFunctionType::PRIO_OPT_STATS:
+      ret_name = ObString("OPT_STATS");
+      break;
     case ObFunctionType::PRIO_IMPORT:
       ret_name = ObString("IMPORT");
       break;
