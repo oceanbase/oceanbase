@@ -78,7 +78,7 @@ private:
   int check_restore_major_valid_(
       const common::ObIArray<ObITable::TableKey> &shared_table_key_array,
       const ObTablesHandleArray &major_tables_handle);
-  int check_log_replay_to_mds_sstable_end_scn_();
+  int get_mds_sstable_max_end_scn_(share::SCN &max_escn);
 
 private:
   bool is_inited_;
