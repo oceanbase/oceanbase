@@ -836,6 +836,8 @@ public:
         || !rollup_result->is_inited()) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "distinct set is NULL", K(ret));
+    } else if (OB_FAIL(ad_result->init_vector_default(ctx, ctx.max_batch_size_))) {
+      SQL_LOG(WARN, "failed to init vector default", K(ret));
     } else if (OB_FAIL(ad_result->brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
     } else {
@@ -883,6 +885,8 @@ public:
     if (OB_ISNULL(ad_result) || !ad_result->is_inited()) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "invalid null extra", K(ret));
+    } else if (OB_FAIL(ad_result->init_vector_default(ctx, ctx.max_batch_size_))) {
+      SQL_LOG(WARN, "failed to init vector default", K(ret));
     } else if (OB_FAIL(ad_result->brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
     } else if (agg_ctx.has_rollup_ && group_id > 0) {
