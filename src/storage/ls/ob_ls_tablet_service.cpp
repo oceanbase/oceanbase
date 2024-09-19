@@ -5504,12 +5504,11 @@ int ObLSTabletService::init_single_row_getter(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(row_getter.init_dml_access_param(relative_table,
-      run_ctx.dml_param_, out_col_ids, skip_read_lob))) {
+  if (OB_FAIL(row_getter.init_dml_access_param(relative_table, out_col_ids, skip_read_lob))) {
     LOG_WARN("init dml access param failed", K(ret));
-  } else if (OB_FAIL(row_getter.prepare_cached_iter_node())) {
+  } else if (OB_FAIL(row_getter.prepare_cached_iter_node(run_ctx.dml_param_))) {
     LOG_WARN("prepare cached iter node failed", K(ret));
-  } else if (OB_FAIL(row_getter.init_dml_access_ctx(run_ctx.store_ctx_, run_ctx.dml_param_, skip_read_lob))) {
+  } else if (OB_FAIL(row_getter.init_dml_access_ctx(run_ctx.store_ctx_, skip_read_lob))) {
     LOG_WARN("init dml access ctx failed", K(ret));
   }
 
