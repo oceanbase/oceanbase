@@ -146,7 +146,7 @@ int ObGITaskSet::assign(const ObGITaskSet &other)
   return ret;
 }
 
-int ObGITaskSet::set_pw_affi_partition_order(bool asc)
+int ObGITaskSet::set_pw_affi_partition_order(bool asc, bool force_reverse)
 {
   int ret = OB_SUCCESS;
   if (gi_task_set_.count() <= 1) {
@@ -162,9 +162,9 @@ int ObGITaskSet::set_pw_affi_partition_order(bool asc)
     // do nothing
   } else {
     // first we do a defensive check. if data already sorted as expected, we just skip reverse
-    // FIXME YISHEN , need check
-    if (!(asc && (gi_task_set_.at(0).tablet_loc_->tablet_id_ > gi_task_set_.at(1).tablet_loc_->tablet_id_))
-      || (!asc && (gi_task_set_.at(0).tablet_loc_->tablet_id_ < gi_task_set_.at(1).tablet_loc_->tablet_id_))) {
+    if (!force_reverse &&
+        ((asc && (gi_task_set_.at(0).tablet_loc_->tablet_id_ <= gi_task_set_.at(1).tablet_loc_->tablet_id_))
+         || (!asc && (gi_task_set_.at(0).tablet_loc_->tablet_id_ > gi_task_set_.at(1).tablet_loc_->tablet_id_)))) {
       // no need to reverse this taskset
     } else {
       common::ObArray<ObGITaskInfo> reverse_task_info;
@@ -181,7 +181,8 @@ int ObGITaskSet::set_pw_affi_partition_order(bool asc)
           LOG_WARN("failed to assign task info", K(ret));
         }
       }
-      LOG_TRACE("reverse this pw affinitize task info", K(ret), K(gi_task_set_));
+      LOG_TRACE("reverse this pw affinitize task info", K(ret), K(force_reverse), K(asc),
+                K(gi_task_set_));
     }
   }
   return ret;
@@ -1502,7 +1503,8 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     } else if (OB_FAIL(split_tasks_affinity(*args.ctx_, total_task_set, args.parallelism_,
         taskset_array))) {
       LOG_WARN("failed to split task affinity", K(ret));
-    } else if (OB_FAIL(adjust_task_order(asc_gi_task_order, taskset_array))) {
+    } else if (OB_FAIL(adjust_task_order(asc_gi_task_order, taskset_array,
+                                         op_id, args.locations_order_))) {
       LOG_WARN("failed to adjust task order", K(ret));
     } else {
       gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
@@ -1513,14 +1515,37 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
   return ret;
 }
 
-int ObPWAffinitizeGranuleSplitter::adjust_task_order(bool asc, ObGITaskArray &taskset_array)
+int ObPWAffinitizeGranuleSplitter::adjust_task_order(bool asc, ObGITaskArray &taskset_array,
+                                          int64_t tsc_op_id,
+                                          const ObIArray<std::pair<int64_t, bool>> &locations_order)
 {
   // In same pw affi task group, worker has there own task order,
   // we must adjust task order to get right join result, just see issue/22963231.
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < taskset_array.count() && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(taskset_array.at(i).set_pw_affi_partition_order(asc))) {
-        LOG_WARN("failed to set partition order", K(ret));
+  LOG_TRACE("adjust task order", K(tsc_op_id), K(asc), K(locations_order), K(taskset_array));
+  bool no_need_reverse = false;
+  bool force_reverse = false;
+  bool found = false;
+  for (int64_t i = 0; i < locations_order.count() && !found; i++) {
+    if (locations_order.at(i).first == tsc_op_id) {
+      found = true;
+      if (locations_order.at(i).second == asc) {
+        no_need_reverse = true;
+      } else {
+        force_reverse = true;
+      }
+    }
+  }
+  if (OB_UNLIKELY(!found && locations_order.count() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location order not found", K(ret), K(tsc_op_id), K(locations_order));
+  } else if (no_need_reverse) {
+    // no need reverse
+  } else {
+    for (int64_t i = 0; i < taskset_array.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(taskset_array.at(i).set_pw_affi_partition_order(asc, force_reverse))) {
+          LOG_WARN("failed to set partition order", K(ret));
+      }
     }
   }
   return ret;
@@ -1550,7 +1575,8 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
     int64_t tablet_size,
-    uint64_t gi_attri_flag)
+    uint64_t gi_attri_flag,
+    const ObIArray<std::pair<int64_t, bool>> &locations_order)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
@@ -1566,18 +1592,21 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
         LOG_WARN("args is unexpected", K(ret));
       } else {
         if (OB_FAIL(init_arg(pump_args_.at(0), ctx, scan_ops, tablet_arrays, partitions_info,
-          external_table_files, modify_op, parallelism, tablet_size, gi_attri_flag))) {
+          external_table_files, modify_op, parallelism, tablet_size, gi_attri_flag,
+          locations_order))) {
           LOG_WARN("fail to init arg", K(ret));
         } else if (OB_FAIL(add_new_gi_task(pump_args_.at(0)))) {
           LOG_WARN("fail to add new gi task", K(ret));
         }
       }
-    } else if (OB_FAIL(init_arg(new_arg, ctx, scan_ops, tablet_arrays, partitions_info,
-          external_table_files, modify_op, parallelism, tablet_size, gi_attri_flag))) {
-      LOG_WARN("fail to init arg", K(ret));
     } else if (OB_FAIL(pump_args_.push_back(new_arg))) {
       LOG_WARN("fail to push back new arg", K(ret));
-    } else if (OB_FAIL(add_new_gi_task(new_arg))) {
+    } else if (OB_FAIL(init_arg(pump_args_.at(pump_args_.count() - 1), ctx, scan_ops,
+          tablet_arrays, partitions_info, external_table_files, modify_op, parallelism,
+          tablet_size, gi_attri_flag, locations_order))) {
+      LOG_WARN("fail to init arg", K(ret));
+
+    } else if (OB_FAIL(add_new_gi_task(pump_args_.at(pump_args_.count() - 1)))) {
       LOG_WARN("fail to add new gi task", K(ret));
     }
   }
@@ -1592,11 +1621,12 @@ int ObGranulePump::init_pump_args(ObExecContext *ctx,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
     int64_t tablet_size,
-    uint64_t gi_attri_flag)
+    uint64_t gi_attri_flag,
+    const ObIArray<std::pair<int64_t, bool>> &locations_order)
 {
   return init_pump_args_inner(ctx, scan_ops, tablet_arrays, partitions_info,
                               external_table_files, modify_op, parallelism,
-                              tablet_size, gi_attri_flag);
+                              tablet_size, gi_attri_flag, locations_order);
 }
 
 int ObGranulePump::init_arg(
@@ -1609,7 +1639,8 @@ int ObGranulePump::init_arg(
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
     int64_t tablet_size,
-    uint64_t gi_attri_flag)
+    uint64_t gi_attri_flag,
+    const ObIArray<std::pair<int64_t, bool>> &locations_order)
 {
   int ret = OB_SUCCESS;
   arg.op_info_.reset();
@@ -1624,7 +1655,7 @@ int ObGranulePump::init_arg(
     OZ(arg.partitions_info_.push_back(partitions_info.at(i)));
   }
   OZ(arg.external_table_files_.assign(external_table_files));
-
+  OZ(arg.locations_order_.assign(locations_order));
   if (OB_SUCC(ret)) {
     arg.ctx_ = ctx;
     arg.op_info_.init_modify_op(modify_op);

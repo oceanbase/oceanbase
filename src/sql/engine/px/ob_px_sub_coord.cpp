@@ -251,12 +251,13 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
           if (OB_FAIL(sqc_ctx.gi_pump_.init_pump_args(&ctx, scan_ops, tablets_array,
               sqc_ctx.partitions_info_, sqc.get_access_external_table_files(),
               dml_op, sqc.get_task_count(),
-              gi_op->get_tablet_size(), gi_op->get_gi_flags()))) {
+              gi_op->get_tablet_size(), gi_op->get_gi_flags(), sqc.get_locations_order()))) {
             LOG_WARN("fail to init pump args", K(ret));
           } else {
             gi_input->set_granule_pump(&sqc_ctx.gi_pump_);
             gi_input->add_table_location_keys(scan_ops);
-            LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_), K(sqc_ctx.gi_pump_.get_task_array_map()));
+            LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_),
+                      K(sqc_ctx.gi_pump_.get_task_array_map()), K(sqc.get_locations_order()));
           }
         }
       }
