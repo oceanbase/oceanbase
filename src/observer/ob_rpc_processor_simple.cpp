@@ -3560,13 +3560,30 @@ int ObGetSSMicroBlockMetaP::process()
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
       ObSSMicroCache *micro_cache = nullptr;
+      ObSSMicroBlockMetaHandle micro_meta_handle;
       if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObSSMicroCache is null", KR(ret), K_(arg_.tenant_id));
-      } else if (OB_FAIL(micro_cache->get_micro_meta_info(arg_.micro_key_, result_.micro_meta_info_))) {
+      } else if (OB_FAIL(micro_cache->get_micro_meta_handle(arg_.micro_key_, micro_meta_handle))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to get micro block meta", KR(ret), K_(arg));
         }
+      } else if (OB_UNLIKELY(!micro_meta_handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("micro_meta handle should be valid", KR(ret), K_(arg));
+      } else {
+        ObSSMicroMetaInfo &micro_meta_info = result_.micro_meta_info_;
+        micro_meta_info.reuse_version_ = micro_meta_handle()->reuse_version();
+        micro_meta_info.data_dest_ = micro_meta_handle()->data_dest();
+        micro_meta_info.access_time_ = micro_meta_handle()->access_time();
+        micro_meta_info.length_ = micro_meta_handle()->length();
+        micro_meta_info.is_in_l1_ = micro_meta_handle()->is_in_l1();
+        micro_meta_info.is_in_ghost_ = micro_meta_handle()->is_in_ghost();
+        micro_meta_info.is_persisted_ = micro_meta_handle()->is_persisted();
+        micro_meta_info.is_reorganizing_ = micro_meta_handle()->is_reorganizing();
+        micro_meta_info.ref_cnt_ = micro_meta_handle()->ref_cnt();
+        micro_meta_info.crc_ = micro_meta_handle()->crc();
+        micro_meta_info.micro_key_ = micro_meta_handle()->get_micro_key();
       }
     }
   }
