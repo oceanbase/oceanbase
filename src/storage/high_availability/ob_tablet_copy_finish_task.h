@@ -74,7 +74,7 @@ private:
   int deal_with_major_sstables_();
   int check_restore_major_valid_(
       const ObTablesHandleArray &major_tables_handle);
-  int get_mds_sstable_max_end_scn_(share::SCN &max_escn);
+  int check_log_replay_to_mds_sstable_end_scn_();
 
 private:
   bool is_inited_;
