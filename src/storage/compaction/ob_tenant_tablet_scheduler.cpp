@@ -2191,6 +2191,7 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
           *ls_handle.get_ls(), tablet_handle, weak_read_ts, *medium_info_list,
           nullptr /*schedule_stat*/,
           is_rebuild_column_group ? ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP : ObAdaptiveMergePolicy::USER_REQUEST);
+      bool tablet_could_schedule_medium = false;
       bool unused_medium_clog_submitted = false;
       const int64_t merge_version = get_frozen_version();
       const int64_t last_major_snapshot_version = tablet_handle.get_obj()->get_last_major_snapshot_version();
@@ -2203,10 +2204,17 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
         ret = OB_MAJOR_FREEZE_NOT_FINISHED;
         LOG_WARN("tablet need check finish, can't schedule another medium", K(ret), K(ls_id), K(tablet_id),
           "wait_check_medium_scn", medium_info_list->get_wait_check_medium_scn());
-      } else if (OB_TMP_FAIL(func.schedule_next_medium_for_leader(0/*major_snapshot*/, false/*is_tombstone*/, unused_medium_clog_submitted))) {
+      } else if (OB_TMP_FAIL(tablet_start_schedule_medium(tablet_id, tablet_could_schedule_medium))) {
+        LOG_WARN("failed to register prohibit medium flag", K(tmp_ret), K(tablet_id));
+      } else if (tablet_could_schedule_medium && OB_TMP_FAIL(func.schedule_next_medium_for_leader(0/*major_snapshot*/, false/*is_tombstone*/, unused_medium_clog_submitted))) {
         if (OB_EAGAIN != tmp_ret) {
           LOG_WARN("failed to schedule medium", K(tmp_ret), K(ls_id), K(tablet_id));
         }
+      }
+      if (tablet_could_schedule_medium
+          && OB_TMP_FAIL(clear_prohibit_medium_flag(tablet_id, ObProhibitScheduleMediumMap::ProhibitFlag::MEDIUM))) {
+        // clear flags set by tablet_start_schedule_medium
+        LOG_WARN("failed to clear prohibit schedule medium flag", K(tmp_ret), K(ret), K(ls_id), K(tablet_id));
       }
     }
   }
