@@ -2338,7 +2338,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                                                             type2.get_type()))) {
     LOG_WARN("fail to get cmp_type",K(ret));
   } else if (OB_UNLIKELY(ObMaxType == cmp_type)) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid cmp type", K(ret), K(type1), K(type2), K(left_is_const), K(right_is_const));
   } else if (ObURowIDType == cmp_type) {
     // 如果比较是urwoid类型，只支持<urwoid, urowid>,<string, urwoid>, <urowid, string>,
