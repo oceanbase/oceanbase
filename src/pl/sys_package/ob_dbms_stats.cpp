@@ -5278,6 +5278,7 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
           } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard,
                                                                    stat_param.tenant_id_,
                                                                    table_schemas.at(i)->get_table_id(),
+                                                                   false,
                                                                    is_valid))) {
             LOG_WARN("failed to check is stat table", K(ret));
           } else if (!is_valid) {
@@ -5412,7 +5413,7 @@ int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(schema_guard));
-  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard, tenant_id, table_id, is_valid))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard, tenant_id, table_id, false, is_valid))) {
     LOG_WARN("failed to check sy table validity", K(ret));
   } else if (!is_valid) {
     // only gather statistics for following tables:

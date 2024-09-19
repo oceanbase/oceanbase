@@ -159,6 +159,7 @@ int ObDbmsStatsUtils::check_table_read_write_valid(const uint64_t tenant_id, boo
 int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &schema_guard,
                                           const uint64_t tenant_id,
                                           const int64_t table_id,
+                                          bool need_index_table,
                                           bool &is_valid)
 {
   bool ret = OB_SUCCESS;
@@ -176,7 +177,7 @@ int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &sc
     //do nothing
   } else {//check user table
     is_valid = table_schema->is_user_table() || table_schema->is_external_table() ||
-               table_schema->is_index_table();
+               (need_index_table && table_schema->is_index_table());
   }
   return ret;
 }

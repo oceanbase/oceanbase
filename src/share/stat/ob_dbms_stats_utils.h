@@ -71,6 +71,7 @@ public:
   static int check_is_stat_table(share::schema::ObSchemaGetterGuard &schema_guard,
                                  const uint64_t tenant_id,
                                  const int64_t table_id,
+                                 bool need_index_table,
                                  bool &is_valid);
 
   static int check_is_sys_table(share::schema::ObSchemaGetterGuard &schema_guard,
