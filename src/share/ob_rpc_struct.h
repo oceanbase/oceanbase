@@ -58,6 +58,7 @@
 #include "share/ob_alive_server_tracer.h"//ServerAddr
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_multi_data_source.h"
@@ -2713,7 +2714,8 @@ public:
         exist_all_column_group_(false),
         index_cgs_(),
         vidx_refresh_info_(),
-        is_rebuild_index_(false)
+        is_rebuild_index_(false),
+        is_index_scope_specified_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2747,6 +2749,7 @@ public:
     index_cgs_.reset();
     vidx_refresh_info_.reset();
     is_rebuild_index_ = false;
+    is_index_scope_specified_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2786,6 +2789,7 @@ public:
       exist_all_column_group_ = other.exist_all_column_group_;
       vidx_refresh_info_ = other.vidx_refresh_info_;
       is_rebuild_index_ = other.is_rebuild_index_;
+      is_index_scope_specified_ = other.is_index_scope_specified_;
     }
     return ret;
   }
@@ -2856,6 +2860,7 @@ public:
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
   bool is_rebuild_index_;
+  bool is_index_scope_specified_;
 };
 
 struct ObCreateAuxIndexArg : public ObDDLArg
@@ -4080,6 +4085,7 @@ public:
   common::ObSArray<int64_t> table_schema_index_;
   lib::Worker::CompatMode compat_mode_;
   bool is_create_bind_hidden_tablets_;
+  ObSArray<int64_t> create_commit_versions_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTabletInfo);
 };
@@ -4142,6 +4148,7 @@ public:
   ObArenaAllocator allocator_;
   common::ObSArray<ObCreateTabletExtraInfo> tablet_extra_infos_;
   share::SCN clog_checkpoint_scn_;
+  storage::ObTabletMdsUserDataType create_type_;
 };
 
 struct ObBatchRemoveTabletArg
@@ -11430,18 +11437,19 @@ struct ObBatchSetTabletAutoincSeqArg final
   OB_UNIS_VERSION(1);
 public:
   ObBatchSetTabletAutoincSeqArg()
-    : tenant_id_(OB_INVALID_ID), ls_id_(), autoinc_params_()
+    : tenant_id_(OB_INVALID_ID), ls_id_(), autoinc_params_(), is_tablet_creating_(false)
   {}
   ~ObBatchSetTabletAutoincSeqArg() {}
 public:
   int assign(const ObBatchSetTabletAutoincSeqArg &other);
   bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && autoinc_params_.count() > 0; }
   int init(const uint64_t tenant_id_, const share::ObLSID &ls_id, const ObIArray<share::ObMigrateTabletAutoincSeqParam> &params);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(autoinc_params));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(autoinc_params), K_(is_tablet_creating));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObSEArray<share::ObMigrateTabletAutoincSeqParam, 1> autoinc_params_;
+  bool is_tablet_creating_;
 };
 
 struct ObBatchSetTabletAutoincSeqRes final

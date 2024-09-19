@@ -3398,7 +3398,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(exist_all_column_group),
        K_(index_cgs),
        K_(vidx_refresh_info),
-       K_(is_rebuild_index));
+       K_(is_rebuild_index),
+       K_(is_index_scope_specified));
   J_OBJ_END();
   return pos;
 }
@@ -9681,7 +9682,8 @@ bool ObCreateTabletInfo::is_valid() const
   bool is_valid = data_tablet_id_.is_valid()
                   && table_schema_index_.count() > 0
                   && table_schema_index_.count() == tablet_ids_.count()
-                  && lib::Worker::CompatMode::INVALID != compat_mode_;
+                  && lib::Worker::CompatMode::INVALID != compat_mode_
+                  && (create_commit_versions_.empty() || create_commit_versions_.count() == tablet_ids_.count());
   for (int64_t i = 0; i < tablet_ids_.count() && is_valid; i++) {
     is_valid = tablet_ids_.at(i).is_valid();
   }
@@ -9695,6 +9697,7 @@ void ObCreateTabletInfo::reset()
   table_schema_index_.reset();
   compat_mode_ = lib::Worker::CompatMode::INVALID;
   is_create_bind_hidden_tablets_ = false;
+  create_commit_versions_.reset();
 }
 
 int ObCreateTabletInfo::assign(const ObCreateTabletInfo &info)
@@ -9707,6 +9710,8 @@ int ObCreateTabletInfo::assign(const ObCreateTabletInfo &info)
     LOG_WARN("failed to assign table ids", KR(ret), K(info));
   } else if (OB_FAIL(table_schema_index_.assign(info.table_schema_index_))) {
     LOG_WARN("failed to assign table schema index", KR(ret), K(info));
+  } else if (OB_FAIL(create_commit_versions_.assign(info.create_commit_versions_))) {
+    LOG_WARN("failed to assign create commit versions", KR(ret), K(info));
   } else {
     data_tablet_id_ = info.data_tablet_id_;
     compat_mode_ = info.compat_mode_;
@@ -9747,11 +9752,11 @@ int ObCreateTabletInfo::init(const ObIArray<common::ObTabletID> &tablet_ids,
 DEF_TO_STRING(ObCreateTabletInfo)
 {
   int64_t pos = 0;
-  J_KV(K_(tablet_ids), K_(data_tablet_id), K_(table_schema_index), K_(compat_mode), K_(is_create_bind_hidden_tablets));
+  J_KV(K_(tablet_ids), K_(data_tablet_id), K_(table_schema_index), K_(compat_mode), K_(is_create_bind_hidden_tablets), K_(create_commit_versions));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_schema_index_, compat_mode_, is_create_bind_hidden_tablets_);
+OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_schema_index_, compat_mode_, is_create_bind_hidden_tablets_, create_commit_versions_);
 
 int ObCreateTabletExtraInfo::init(
     const uint64_t tenant_data_version,
@@ -9832,6 +9837,7 @@ void ObBatchCreateTabletArg::reset()
   allocator_.reset();
   tablet_extra_infos_.reset();
   clog_checkpoint_scn_.reset();
+  create_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
 }
 
 int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
@@ -9879,6 +9885,7 @@ int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
     need_check_tablet_cnt_ = arg.need_check_tablet_cnt_;
     is_old_mds_ = arg.is_old_mds_;
     clog_checkpoint_scn_ = arg.clog_checkpoint_scn_;
+    create_type_ = arg.create_type_;
   }
   return ret;
 }
@@ -10085,7 +10092,7 @@ int ObBatchCreateTabletArg::is_old_mds(const char *buf,
 DEF_TO_STRING(ObBatchCreateTabletArg)
 {
   int64_t pos = 0;
-  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets), K_(tablet_extra_infos), K_(clog_checkpoint_scn));
+  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets), K_(tablet_extra_infos), K_(clog_checkpoint_scn), K_(create_type));
   return pos;
 }
 
@@ -10099,7 +10106,7 @@ OB_DEF_SERIALIZE(ObBatchCreateTabletArg)
   } else {
     OB_UNIS_ENCODE_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
   }
-  LST_DO_CODE(OB_UNIS_ENCODE, clog_checkpoint_scn_);
+  LST_DO_CODE(OB_UNIS_ENCODE, clog_checkpoint_scn_, create_type_);
   return ret;
 }
 
@@ -10109,7 +10116,7 @@ OB_DEF_SERIALIZE_SIZE(ObBatchCreateTabletArg)
   LST_DO_CODE(OB_UNIS_ADD_LEN, id_, major_frozen_scn_, tablets_, table_schemas_, need_check_tablet_cnt_, is_old_mds_);
   len += get_serialize_size_for_create_tablet_schemas();
   OB_UNIS_ADD_LEN_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
-  LST_DO_CODE(OB_UNIS_ADD_LEN, clog_checkpoint_scn_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, clog_checkpoint_scn_, create_type_);
   return len;
 }
 
@@ -10153,7 +10160,7 @@ OB_DEF_DESERIALIZE(ObBatchCreateTabletArg)
       }
     }
   }
-  LST_DO_CODE(OB_UNIS_DECODE, clog_checkpoint_scn_);
+  LST_DO_CODE(OB_UNIS_DECODE, clog_checkpoint_scn_, create_type_);
   return ret;
 }
 
@@ -11349,13 +11356,14 @@ int ObBatchGetTabletAutoincSeqRes::assign(const ObBatchGetTabletAutoincSeqRes &o
   return autoinc_params_.assign(other.autoinc_params_);
 }
 
-OB_SERIALIZE_MEMBER(ObBatchSetTabletAutoincSeqArg, tenant_id_, ls_id_, autoinc_params_);
+OB_SERIALIZE_MEMBER(ObBatchSetTabletAutoincSeqArg, tenant_id_, ls_id_, autoinc_params_, is_tablet_creating_);
 
 int ObBatchSetTabletAutoincSeqArg::assign(const ObBatchSetTabletAutoincSeqArg &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
   ls_id_ = other.ls_id_;
+  is_tablet_creating_ = other.is_tablet_creating_;
   if (OB_FAIL(autoinc_params_.assign(other.autoinc_params_))) {
     LOG_WARN("failed to assign autoinc params", K(ret), K(other));
   }
