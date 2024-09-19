@@ -580,7 +580,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:o:l:qc";
+  const char *opt_str = "h:d:s:o:l:qc:e:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
@@ -589,6 +589,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
       {"quiet", 0, NULL, 'q' },
       {"check_exist", 0, NULL, 'c'},
       {"length", 1, NULL, 'l'},
+      {"s3_url_encode_type", 0, NULL, 'e'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -628,6 +629,12 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
       }
       case 'l': {
         length_ = strtoll(optarg, NULL, 10);
+        break;
+      }
+      case 'e': {
+        if (OB_FAIL(set_s3_url_encode_type(optarg))) {
+          STORAGE_LOG(WARN, "failed to set s3 url encode type", KR(ret));
+        }
         break;
       }
       default: {
@@ -926,6 +933,7 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf(HELP_FMT, "-o,--offset", "data offset");
   printf(HELP_FMT, "-l,--length", "data length");
   printf(HELP_FMT, "-c,--check-exist", "check file is exist or not");
+  printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
   printf("samples:\n");
   printf("  dump meta: \n");
   printf("\tob_admin dump_backup -dfile:///home/admin/backup_info \n");
@@ -937,7 +945,8 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222'\n");
   printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
-         "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
+         "-s'host=xxx.com&access_id=111&access_key=222&region=333'\t"
+         "-e'compliantRfc3986Encoding'");
   return ret;
 }
 
@@ -1662,17 +1671,13 @@ int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
 {
  int ret = OB_SUCCESS;
   ObBackupDest backup_tenant_dest;
-  ObBackupSetFileDesc latest_file_desc;
   storage::ObTenantBackupSetInfosDesc file_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
     STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
   } else if(!file_desc.backup_set_infos_.empty()) {
-    latest_file_desc = file_desc.backup_set_infos_.at(file_desc.backup_set_infos_.count() - 1);
-    if (OB_FAIL(backup_tenant_dest.set(latest_file_desc.backup_path_))) {
-      STORAGE_LOG(WARN, "fail to set backup tenant dest", K(ret), K(latest_file_desc), K(storage_info_));
-    } else if (OB_FAIL(dump_tenant_backup_set_infos_(file_desc.backup_set_infos_))) {
+    if (OB_FAIL(dump_tenant_backup_set_infos_(file_desc.backup_set_infos_))) {
         STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
       }
   }
@@ -2360,6 +2365,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
   storage::ObBackupDataStore store;
   ObTimeZoneInfoWrap time_zone_wrap;
   ObBackupDest backup_set_dest;
+
   if (OB_FAIL(backup_set_dest.set(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to set backup set dest", K(ret), K(backup_path_), K(storage_info_));
   } else if (OB_FAIL(store.init(backup_set_dest))) {
