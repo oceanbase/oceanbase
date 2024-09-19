@@ -2259,10 +2259,16 @@ ObDWARFHelper::~ObDWARFHelper() {
 int ObLLVMHelper::add_compiled_object(size_t length, const char *ptr)
 {
   int ret = OB_SUCCESS;
+
   CK (OB_NOT_NULL(jit_));
   CK (OB_NOT_NULL(ptr));
   CK (OB_LIKELY(length > 0));
-  OZ (jit_->add_compiled_object(length, ptr));
+
+  if (OB_SUCC(ret)) {
+    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+    OZ (jit_->add_compiled_object(length, ptr));
+  }
+
   return ret;
 }
 
