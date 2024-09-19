@@ -9096,7 +9096,7 @@ int ObTableSchema::get_column_group_index(
       LOG_WARN("Unexpected, can not find cg idx", K(ret), K(column_id));
     }
   }
-  LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(cg_idx));
+  LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(param), K(cg_idx), KPC(this));
   return ret;
 }
 
@@ -9104,12 +9104,18 @@ int ObTableSchema::calc_column_group_index_(const uint64_t column_id, int32_t &c
 {
   int ret = OB_SUCCESS;
   cg_idx = -1;
+  int64_t virtual_column_cnt = 0;
+  int64_t nullptr_column_cnt = 0;
   // for cs replica, constructed cg schemas start with rowkey cg so the cg idx of row key cg is ALWAYS 0
   // and cg idx of normal cg is shifted by offset 1.
   for (int64_t i = 0; i < column_cnt_; i++) {
     ObColumnSchemaV2 *column = column_array_[i];
-    if (OB_NOT_NULL(column) && column->get_column_id() == column_id) {
-      cg_idx = i + 1;
+    if (OB_ISNULL(column)) {
+      nullptr_column_cnt++;
+    } else if (column->is_virtual_generated_column()) {
+      virtual_column_cnt++;
+    } else if (column->get_column_id() == column_id) {
+      cg_idx = i + 1 - virtual_column_cnt - nullptr_column_cnt;
       break;
     }
   }
