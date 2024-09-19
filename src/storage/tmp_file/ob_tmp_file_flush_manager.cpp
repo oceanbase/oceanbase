@@ -405,7 +405,9 @@ int ObTmpFileFlushManager::fill_block_buf_(ObTmpFileFlushTask &flush_task)
       advance_flush_level_(ret);
       // go through
     case FlushCtxState::FSM_F5:
-      if (!flush_task.is_full() && FlushCtxState::FSM_FINISHED != flush_ctx_.get_state()
+      if (!flush_task.get_block_handle().is_valid() && OB_FAIL(flush_task.prealloc_block_buf())) {
+        STORAGE_LOG(WARN, "fail to prealloc block buf", KR(ret), K(flush_task));
+      } else if (!flush_task.is_full() && FlushCtxState::FSM_FINISHED != flush_ctx_.get_state()
             && OB_FAIL(inner_fill_block_buf_(flush_task, flush_ctx_.get_state(),
                                              true/*is_meta*/, true/*flush_tail*/))) {
         if (OB_ITER_END != ret) {
@@ -654,7 +656,7 @@ int ObTmpFileFlushManager::drive_flush_task_prepare_(ObTmpFileFlushTask &flush_t
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected state in drive_flush_task_prepare_", K(state));
+      STORAGE_LOG(WARN, "unexpected state in drive_flush_task_prepare_", KR(ret), K(state), K(flush_task));
       break;
   }
   return ret;
@@ -665,24 +667,28 @@ void ObTmpFileFlushManager::try_remove_unused_flush_info_(ObTmpFileFlushTask &fl
   int ret = OB_SUCCESS;
 
   ObArray<ObTmpFileFlushInfo> &flush_infos = flush_task.get_flush_infos();
-  for (int64_t i = 0; OB_SUCC(ret) && i >= 0 && i < flush_infos.count(); ++i) {
-    ObTmpFileFlushInfo &flush_info = flush_infos.at(i);
-    ObSharedNothingTmpFile *file = flush_info.file_handle_.get();
-    if (OB_ISNULL(file)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "file is nullptr", KR(ret), K(flush_info));
-    } else if (file->is_deleting()) {
-      STORAGE_LOG(INFO, "the file is deleting, abort this flush info",
-          KR(ret), K(flush_info), K(flush_task));
-      flush_info.reset();
-      // manually move and reset flush_info to avoid file handle not released
-      int64_t last_idx = flush_infos.count() - 1;
-      for (int64_t j = i; j < last_idx; ++j) {
-        flush_infos.at(j) = flush_infos.at(j + 1);
+  if (!flush_task.get_block_handle().is_valid()) {
+    LOG_DEBUG("flush task copy data is not complete, skip try_remove_unused_flush_info_", K(flush_task));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i >= 0 && i < flush_infos.count(); ++i) {
+      ObTmpFileFlushInfo &flush_info = flush_infos.at(i);
+      ObSharedNothingTmpFile *file = flush_info.file_handle_.get();
+      if (OB_ISNULL(file)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "file is nullptr", KR(ret), K(flush_info));
+      } else if (file->is_deleting()) {
+        STORAGE_LOG(INFO, "the file is deleting, abort this flush info",
+            KR(ret), K(flush_info), K(flush_task));
+        flush_info.reset();
+        // manually move and reset flush_info to avoid file handle not released
+        int64_t last_idx = flush_infos.count() - 1;
+        for (int64_t j = i; j < last_idx; ++j) {
+          flush_infos.at(j) = flush_infos.at(j + 1);
+        }
+        flush_infos.at(last_idx).reset();
+        flush_infos.remove(last_idx);
+        --i;
       }
-      flush_infos.at(last_idx).reset();
-      flush_infos.remove(last_idx);
-      --i;
     }
   }
 }
@@ -717,7 +723,7 @@ int ObTmpFileFlushManager::drive_flush_task_retry_(
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected state in drive_flush_task_retry_", K(state), K(flush_task));
+      STORAGE_LOG(WARN, "unexpected state in drive_flush_task_retry_", KR(ret), K(state), K(flush_task));
       break;
   }
   return ret;
@@ -735,7 +741,7 @@ int ObTmpFileFlushManager::drive_flush_task_wait_(ObTmpFileFlushTask &flush_task
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected state in drive_flush_task_wait_", K(state));
+      STORAGE_LOG(WARN, "unexpected state in drive_flush_task_wait_", KR(ret), K(state), K(flush_task));
       break;
   }
   return ret;
