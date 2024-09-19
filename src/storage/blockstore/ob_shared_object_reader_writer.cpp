@@ -496,8 +496,6 @@ int ObSharedObjectWriteHandle::get_write_ctx(ObSharedObjectsWriteCtx &write_ctx)
         LOG_WARN("Fail to add block id", K(ret), K(i), K(object_handles_.at(i)));
       }
     }
-    // TODO gaishun.gs delete this log, after 9120(bug:58054839)
-    FLOG_INFO("ObjWHandle wait success", K(ret), K(write_ctx.block_ids_));
   }
   return ret;
 }
@@ -529,8 +527,6 @@ int ObSharedObjectBatchHandle::batch_get_write_ctx(ObIArray<ObSharedObjectsWrite
       } else if (OB_FAIL(write_ctxs.push_back(write_ctxs_.at(i)))) {
         LOG_WARN("Fail to add meta disk addr", K(ret), K(write_ctxs_.at(i)));
       }
-      // TODO gaishun.gs delete this log, after 9120(bug:58054839)
-      FLOG_INFO("batch handle wait success", K(ret), K(write_ctxs_.at(i).block_ids_));
     }
   }
   return ret;
@@ -557,9 +553,6 @@ int ObSharedObjectLinkHandle::get_write_ctx(ObSharedObjectsWriteCtx &write_ctx)
     LOG_WARN("Fail to wait io finish", K(ret), KPC(this));
   } else if (OB_FAIL(write_ctx.assign(write_ctx_))) {
     LOG_WARN("Fail to get write ctx", K(ret), KPC(this));
-  } else {
-    // TODO gaishun.gs delete this log, after 9120(bug:58054839)
-    FLOG_INFO("LinkObjHandle wait success", K(ret), K(write_ctx_.block_ids_));
   }
   return ret;
 }
@@ -873,9 +866,6 @@ int ObSharedObjectReaderWriter::async_link_write(
     LOG_WARN("Fail to wait other blocks finish", K(ret), K(shared_obj_handle));
   } else if (GCTX.is_shared_storage_mode() && OB_FAIL(do_switch(write_args.object_opt_))) {
     LOG_WARN("fail to switch object for shared storage", K(ret), K(write_args));
-  } else {
-    // TODO gaishun.gs delete this log, after 9120(bug:58054839)
-    FLOG_INFO("LinkObjHandle wait success", K(ret), K(shared_obj_handle.write_ctx_.block_ids_));
   }
 
   if (FAILEDx(inner_async_write(write_info, write_args, shared_obj_handle, write_ctx))) {
