@@ -209,6 +209,11 @@ int ObDASScanOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
     } else {
       scan_rtdef_->p_pd_expr_op_->get_eval_ctx()
             .set_max_batch_size(scan_ctdef_->pd_expr_spec_.max_batch_size_);
+      bool is_vectorized = scan_rtdef_->p_pd_expr_op_->is_vectorized();
+      if (!scan_rtdef_->p_pd_expr_op_->is_vectorized()) {
+        scan_rtdef_->p_pd_expr_op_->get_eval_ctx().set_batch_size(1);
+        scan_rtdef_->p_pd_expr_op_->get_eval_ctx().set_batch_idx(0);
+      }
     }
     for (int i = 0; OB_SUCC(ret) && i < related_rtdefs_.count(); ++i) {
       if (OB_NOT_NULL(related_rtdefs_.at(i)) &&
@@ -223,6 +228,10 @@ int ObDASScanOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
         } else {
           related_rtdef->p_pd_expr_op_->get_eval_ctx()
               .set_max_batch_size(related_ctdef->pd_expr_spec_.max_batch_size_);
+          if (!related_rtdef->p_pd_expr_op_->is_vectorized()) {
+            related_rtdef->p_pd_expr_op_->get_eval_ctx().set_batch_size(1);
+            related_rtdef->p_pd_expr_op_->get_eval_ctx().set_batch_idx(0);
+          }
         }
       }
     }

@@ -162,6 +162,7 @@ struct ObEvalCtx
 {
   friend struct ObExpr;
   friend class ObOperator;
+  friend class ObDASScanOp;
   friend class ObSubPlanFilterOp; // FIXME qubin.qb: remove this line from friend
   friend class oceanbase::storage::ObVectorStore;
   friend class oceanbase::storage::ObAggregatedStoreVec;
