@@ -75,7 +75,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::init(bool is_left,
   } else if (OB_ISNULL(
                  store_rows_ = static_cast<ObCompactRow **>(allocator_->alloc(
                          sizeof(ObCompactRow *) * max_batch_size_)))) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else if (OB_FAIL(init_col_equal_group_boundary(equal_cond_infos))) {
     LOG_WARN("init_col_equal_group_boundary failed", K(ret));
@@ -148,8 +148,8 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::init_stored_batch_rows()
   int ret = OB_SUCCESS;
   void *mem = allocator_->alloc(ObBitVector::memory_size(max_batch_size_));
   if (OB_ISNULL(mem)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("alloc mem failed", K(ret));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate mem failed", K(ret));
   } else {
     store_brs_.skip_ = to_bit_vector(mem);
   }
@@ -163,7 +163,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::init_col_equal_group_boundary(
   if (equal_cond_infos.count() > 1 &&
         OB_ISNULL(col_equal_group_boundary_ = static_cast<int64_t *>(allocator_->alloc(
                          sizeof(int64_t) * equal_cond_infos.count())))) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
     if (OB_NOT_NULL(col_equal_group_boundary_)) {
@@ -579,8 +579,8 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::init_mocked_null_row()
   void* ptr = nullptr;
   int64_t memory_size = sizeof(ObCompactRow) + ObTinyBitVector::memory_size(all_exprs_->count());
   if (OB_ISNULL(ptr = allocator_->alloc(memory_size))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("alloc memory failed", K(ret), K(memory_size));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(memory_size));
   } else {
     mocked_null_row_ = new(ptr)ObCompactRow();
     mocked_null_row_->nulls()->set_all(all_exprs_->count());
@@ -831,15 +831,15 @@ int ObMergeJoinVecOp::inner_open() {
     } else if (OB_FALSE_IT(tracker_.row_id_array_size_ = MY_SPEC.max_batch_size_)) {
     } else if (OB_ISNULL(tracker_.left_row_id_array_ = static_cast<int64_t *>(allocator_->alloc(
                          sizeof(int64_t) * tracker_.row_id_array_size_)))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else if (OB_ISNULL(tracker_.right_row_id_array_ = static_cast<int64_t *>(allocator_->alloc(
                          sizeof(int64_t) * tracker_.row_id_array_size_)))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else if (OB_ISNULL(tracker_.group_boundary_row_id_array_ = static_cast<int64_t *>(allocator_->alloc(
                          sizeof(int64_t) * (tracker_.row_id_array_size_ + 1))))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     }
     ObJoinType join_type = MY_SPEC.join_type_;
