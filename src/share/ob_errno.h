@@ -478,6 +478,7 @@ constexpr int OB_SERVICE_NOT_FULLY_STARTED = -4781;
 constexpr int OB_NOT_PRIMARY_TENANT = -4782;
 constexpr int OB_SERVICE_STOPPED = -4783;
 constexpr int OB_SERVER_CONNECTION_ERROR = -4784;
+constexpr int OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX = -4785;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2508,6 +2509,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NOT_PRIMARY_TENANT__USER_ERROR_MSG "The tenant is not PRIMARY"
 #define OB_SERVICE_STOPPED__USER_ERROR_MSG "The service has stopped"
 #define OB_SERVER_CONNECTION_ERROR__USER_ERROR_MSG "Server '%s' connection error"
+#define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__USER_ERROR_MSG "Cannot drop index '%.*s': needed in a foreign key constraint"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3781,6 +3783,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NOT_READ_ALL_DATA__USER_ERROR_MSG "Read all data fail"
 #define OB_BUILD_MD5_ERROR__USER_ERROR_MSG "Build MD5 fail"
 #define OB_MD5_NOT_MATCH__USER_ERROR_MSG "OSS file MD5 not match"
+#define OB_BACKUP_FILE_NOT_EXIST__USER_ERROR_MSG "cannot find backup file"
 #define OB_OSS_DATA_VERSION_NOT_MATCHED__USER_ERROR_MSG "Can not get data version from timestamp"
 #define OB_OSS_WRITE_ERROR__USER_ERROR_MSG "Write OSS file error"
 #define OB_RESTORE_IN_PROGRESS__USER_ERROR_MSG "Another restore is in progress"
@@ -5431,6 +5434,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVICE_STOPPED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4783, The service has stopped"
 #define OB_SERVER_CONNECTION_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4784, Server '%s' connection error"
 #define OB_SERVER_CONNECTION_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4784, Server '%s' connection error"
+#define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__ORA_USER_ERROR_MSG "ORA-02266: Cannot drop index '%.*s': needed in a foreign key constraint"
+#define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__OBE_USER_ERROR_MSG "OBE-02266: Cannot drop index '%.*s': needed in a foreign key constraint"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSER_INIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
@@ -7977,6 +7982,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BUILD_MD5_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9009, Build MD5 fail"
 #define OB_MD5_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9010, OSS file MD5 not match"
 #define OB_MD5_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9010, OSS file MD5 not match"
+#define OB_BACKUP_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9011, cannot find backup file"
+#define OB_BACKUP_FILE_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9011, cannot find backup file"
 #define OB_OSS_DATA_VERSION_NOT_MATCHED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9012, Can not get data version from timestamp"
 #define OB_OSS_DATA_VERSION_NOT_MATCHED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9012, Can not get data version from timestamp"
 #define OB_OSS_WRITE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9013, Write OSS file error"
@@ -8954,7 +8961,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2339];
+extern int g_all_ob_errnos[2341];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

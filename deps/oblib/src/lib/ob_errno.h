@@ -388,6 +388,7 @@ constexpr int OB_INIT_MD5_ERROR = -9004;
 constexpr int OB_OUT_OF_ELEMENT = -9005;
 constexpr int OB_UPDATE_MD5_ERROR = -9006;
 constexpr int OB_FILE_LENGTH_INVALID = -9007;
+constexpr int OB_BACKUP_FILE_NOT_EXIST = -9011;
 constexpr int OB_INVALID_BACKUP_DEST = -9026;
 constexpr int OB_COS_ERROR = -9060;
 constexpr int OB_IO_LIMIT = -9061;
