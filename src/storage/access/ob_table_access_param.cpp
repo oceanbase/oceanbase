@@ -196,6 +196,8 @@ DEF_TO_STRING(ObTableIterParam)
        KPC_(read_info),
        KPC_(rowkey_read_info),
        KPC_(out_cols_project),
+       KPC_(agg_cols_project),
+       KPC_(group_by_cols_project),
        KPC_(pushdown_filter),
        KP_(op),
        KP_(sstable_index_filter),

@@ -13568,7 +13568,8 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
     can_push = false;
   } else if (static_cast<const ObSelectStmt*>(stmt)->has_group_by() ||
              stmt->has_for_update() ||
-             !stmt->is_single_table_stmt()) {
+             !stmt->is_single_table_stmt() ||
+             static_cast<const ObSelectStmt*>(stmt)->get_select_item_size() > 1) {
     can_push = false;
   } else if (!enable_groupby_push_down) {
     can_push = false;
