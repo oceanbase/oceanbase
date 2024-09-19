@@ -87,6 +87,7 @@ public:
   int64_t read_base_version_; // use for major merge
   int64_t create_snapshot_version_;
   int64_t start_time_;
+  uint64_t encoding_granularity_;
   share::SCN merge_scn_;
   ObVersionRange version_range_;
   share::ObScnRange scn_range_;

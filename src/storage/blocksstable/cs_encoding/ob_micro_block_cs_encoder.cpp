@@ -377,10 +377,12 @@ int ObMicroBlockCSEncoder::append_row(const ObDatumRow &row)
 
   if (OB_SUCC(ret)) {
     int64_t store_size = 0;
-    if (OB_UNLIKELY(datum_row_offset_arr_.count() >= ObCSEncodingUtil::MAX_MICRO_BLOCK_ROW_CNT)) {
+    uint64_t row_count = (uint64_t)(datum_row_offset_arr_.count());
+    if (OB_UNLIKELY(row_count >= ObCSEncodingUtil::MAX_MICRO_BLOCK_ROW_CNT
+          || row_count > ctx_.encoding_granularity_)) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_INFO("Try to encode more rows than maximum of row cnt in header, force to build a block",
-          K(datum_row_offset_arr_.count()), K(row));
+          K(datum_row_offset_arr_.count()), K(row), K(ctx_.encoding_granularity_));
     } else if (OB_FAIL(process_out_row_columns_(row))) {
       if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
         LOG_WARN("failed to process out row columns", K(ret));

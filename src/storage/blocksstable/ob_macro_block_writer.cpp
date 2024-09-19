@@ -509,9 +509,6 @@ int ObMacroBlockWriter::open(
     STORAGE_LOG(WARN, "invalid macro block writer input argument.", K(ret), K(data_store_desc), K(parallel_idx),
       K(macro_seq_param), K(pre_warm_param), KP(validator));
   } else {
-    // tmp debug log, remove later
-    FLOG_INFO("danling debug: open macro block writer: ", K(data_store_desc), K(parallel_idx), K(macro_seq_param));
-
     ObSSTableIndexBuilder *sstable_index_builder = data_store_desc.sstable_index_builder_;
     object_cleaner_ = &object_cleaner;
     callback_ = callback;
@@ -1915,6 +1912,8 @@ int ObMacroBlockWriter::build_micro_writer(const ObDataStoreDesc *data_store_des
     encoding_ctx.row_store_type_ = data_store_desc->get_row_store_type();
     encoding_ctx.need_calc_column_chksum_ = data_store_desc->is_major_merge_type();
     encoding_ctx.compressor_type_ = data_store_desc->get_compressor_type();
+    encoding_ctx.encoding_granularity_ = data_store_desc->static_desc_->encoding_granularity_ > 0 ?
+                    data_store_desc->static_desc_->encoding_granularity_ : UINT64_MAX;
     if (ObStoreFormat::is_row_store_type_with_pax_encoding(data_store_desc->get_row_store_type())) {
       if (OB_ISNULL(buf = allocator.alloc(sizeof(ObMicroBlockEncoder)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

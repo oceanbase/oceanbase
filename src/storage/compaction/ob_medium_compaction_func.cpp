@@ -991,9 +991,27 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
   }
   if (FAILEDx(init_parallel_range_and_schema_changed_and_co_merge_type(result, medium_info))) {
     LOG_WARN("failed to init parallel range", K(ret), K(medium_info));
+  } else if (OB_FAIL(choose_encoding_limit(medium_info))) {
+    STORAGE_LOG(WARN, "Failed to choose encoding rows limit", K(ret), K(medium_info));
   } else {
     medium_info.last_medium_snapshot_ = result.handle_.get_table(0)->get_snapshot_version();
     LOG_TRACE("success to prepare medium info", K(ret), K(medium_info));
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::choose_encoding_limit(ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  if (medium_info.medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V5) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      medium_info.encoding_granularity_ = tenant_config->ob_encoding_granularity;
+    } else {
+      medium_info.encoding_granularity_ = ObMediumCompactionInfo::DEFAULT_ENCODING_ROWS_LIMIT;
+    }
+  } else {
+    medium_info.encoding_granularity_  = 0; // 0 means there is no limit for encoding
   }
   return ret;
 }

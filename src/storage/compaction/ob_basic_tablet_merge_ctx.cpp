@@ -54,6 +54,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     read_base_version_(0),
     create_snapshot_version_(0),
     start_time_(0),
+    encoding_granularity_(0),
     merge_scn_(),
     version_range_(),
     scn_range_(),
@@ -83,6 +84,7 @@ void ObStaticMergeParam::reset()
   ls_handle_.reset(); // ls_handle could release before tablet_handle
   tx_id_ = 0;
   tablet_schema_guard_.reset();
+  encoding_granularity_ = 0;
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -798,7 +800,9 @@ int ObBasicTabletMergeCtx::init_static_param_and_desc()
                                 static_param_.scn_range_.end_scn_,
                                 static_param_.data_version_,
                                 static_param_.get_exec_mode(),
-                                get_tablet()->get_tablet_meta().micro_index_clustered_))) {
+                                get_tablet()->get_tablet_meta().micro_index_clustered_,
+                                true,
+                                static_param_.encoding_granularity_))) {
     LOG_WARN("failed to init static desc", KR(ret), KPC(this));
   } else {
     LOG_INFO("[SharedStorage] success to set exec mode", KR(ret), "exec_mode", exec_mode_to_str(static_desc_.exec_mode_));
@@ -1164,6 +1168,7 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     if (medium_info->medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4) {
       static_param_.is_schema_changed_ = medium_info->is_schema_changed_;
     }
+    static_param_.encoding_granularity_ = medium_info->encoding_granularity_;
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info->medium_merge_reason_;
     if (!static_param_.is_cs_replica_) {
       static_param_.co_major_merge_type_ = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);

@@ -60,7 +60,8 @@ public:
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
-    const bool need_submit_io = true);
+    const bool need_submit_io = true,
+    const uint64_t encoding_granularity = 0);
   bool is_valid() const;
   void reset();
   int assign(const ObStaticDataStoreDesc &desc);
@@ -83,7 +84,8 @@ public:
       K_(major_working_cluster_version),
       K_(micro_index_clustered),
       K_(progressive_merge_round),
-      K_(need_submit_io));
+      K_(need_submit_io),
+      K_(encoding_granularity));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -116,6 +118,7 @@ public:
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.
   bool need_submit_io_;
+  uint64_t encoding_granularity_;
 };
 
 // ObColDataStoreDesc is same for every parallel task

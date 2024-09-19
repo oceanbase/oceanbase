@@ -242,11 +242,13 @@ public:
 private:
   bool contain_storage_schema() const;
 public:
+  static const int64_t DEFAULT_ENCODING_ROWS_LIMIT = 65536;
   static const int64_t MEDIUM_COMPAT_VERSION = 1;
   static const int64_t MEDIUM_COMPAT_VERSION_V2 = 2; // for add last_medium_snapshot_
   static const int64_t MEDIUM_COMPAT_VERSION_V3 = 3; // for stanby tenant, not throw medium info
   static const int64_t MEDIUM_COMPAT_VERSION_V4 = 4; // after this version, use is_schema_changed on medium info
-  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V4;
+  static const int64_t MEDIUM_COMPAT_VERSION_V5 = 5; // after this version, use encoding row limit
+  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V5;
 private:
   static const int32_t SCS_ONE_BIT = 1;
   static const int32_t SCS_RESERVED_BITS = 27;
@@ -273,6 +275,7 @@ public:
   int64_t last_medium_snapshot_;
   storage::ObStorageSchema storage_schema_;
   ObParallelMergeInfo parallel_merge_info_;
+  uint64_t encoding_granularity_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);
 };

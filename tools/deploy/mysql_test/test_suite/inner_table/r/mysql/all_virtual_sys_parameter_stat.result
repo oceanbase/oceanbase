@@ -182,6 +182,7 @@ obconfig_url
 observer_id
 ob_compaction_schedule_interval
 ob_enable_batched_multi_statement
+ob_encoding_granularity
 ob_event_history_recycle_interval
 ob_proxy_readonly_transaction_routing_policy
 ob_query_switch_leader_retry_timeout
