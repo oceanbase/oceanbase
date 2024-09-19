@@ -2328,7 +2328,7 @@ int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) {
     if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema,
                                               op.get_parallel(),
                                               compr_type))) {
