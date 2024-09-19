@@ -508,6 +508,12 @@ const char *ObSysVarUpdatableViewsWithLimit::UPDATABLE_VIEWS_WITH_LIMIT_NAMES[] 
   "YES",
   0
 };
+const char *ObSysVarObTableAccessPolicy::OB_TABLE_ACCESS_POLICY_NAMES[] = {
+  "ROW_STORE",
+  "COLUMN_STORE",
+  "AUTO",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -935,6 +941,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_sql_audit_percentage",
   "ob_sql_work_area_percentage",
   "ob_statement_trace_id",
+  "ob_table_access_policy",
   "ob_tcp_invited_nodes",
   "ob_temp_tablespace_size_percentage",
   "ob_trace_info",
@@ -1543,6 +1550,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_SQL_AUDIT_PERCENTAGE,
   SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE,
   SYS_VAR_OB_STATEMENT_TRACE_ID,
+  SYS_VAR_OB_TABLE_ACCESS_POLICY,
   SYS_VAR_OB_TCP_INVITED_NODES,
   SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE,
   SYS_VAR_OB_TRACE_INFO,
@@ -2330,7 +2338,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "validate_password_dictionary_file",
   "delayed_insert_limit",
   "ndb_version",
-  "auto_generate_certs"
+  "auto_generate_certs",
+  "ob_table_access_policy"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -3140,6 +3149,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarDelayedInsertLimit)
         + sizeof(ObSysVarNdbVersion)
         + sizeof(ObSysVarAutoGenerateCerts)
+        + sizeof(ObSysVarObTableAccessPolicy)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -8591,6 +8601,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AUTO_GENERATE_CERTS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarAutoGenerateCerts));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObTableAccessPolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObTableAccessPolicy", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_TABLE_ACCESS_POLICY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObTableAccessPolicy));
       }
     }
 
@@ -15255,6 +15274,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAutoGenerateCerts())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarAutoGenerateCerts", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_TABLE_ACCESS_POLICY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObTableAccessPolicy)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObTableAccessPolicy)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObTableAccessPolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObTableAccessPolicy", K(ret));
       }
       break;
     }

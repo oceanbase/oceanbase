@@ -547,6 +547,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to check enable column store replica", K(ret));
   } else if (OB_FAIL(init_correlation_model(stmt, *session_info))) {
     LOG_WARN("failed to init correlation model", K(ret));
+  } else if (OB_FAIL(init_table_access_policy(stmt, *session_info))) {
+    LOG_WARN("failed to init table access policy", K(ret));
   }
   return ret;
 }
@@ -781,6 +783,35 @@ int ObOptimizer::init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo 
       LOG_WARN("unexpected correlation type", K(type));
     } else {
       ctx_.set_correlation_type(static_cast<ObEstCorrelationType>(type));
+    }
+  }
+  return ret;
+}
+
+int ObOptimizer::init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  int64_t policy = 0;
+  bool has_hint = false;
+  if (OB_ISNULL(ctx_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ctx", K(ret));
+  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::OB_TABLE_ACCESS_POLICY, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_opt_param(ObOptParamHint::OB_TABLE_ACCESS_POLICY, policy))) {
+      LOG_WARN("failed to get enum hint param", K(ret));
+    }
+  } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_OB_TABLE_ACCESS_POLICY, policy))) {
+    LOG_WARN("failed to get sys variable", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(policy < 0) ||
+        OB_UNLIKELY(policy >= static_cast<int64_t>(ObTableAccessPolicy::MAX))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table access polisy", K(policy));
+    } else {
+      ctx_.set_table_access_policy(static_cast<ObTableAccessPolicy>(policy));
     }
   }
   return ret;

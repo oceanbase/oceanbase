@@ -11855,5 +11855,23 @@
     "background_cn": "",
     "ref_url": "",
     "placeholder": true
+  },
+  "ob_table_access_policy": {
+    "id": 10742,
+    "name": "ob_table_access_policy",
+    "default_value": "2",
+    "base_value": "2",
+    "data_type": "enum",
+    "info": "Control the optimizer to generate a table access plan that prefers a specific storage format.",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
+    "enum_names": [
+      "ROW_STORE",
+      "COLUMN_STORE",
+      "AUTO"
+    ],
+    "publish_version": "433",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

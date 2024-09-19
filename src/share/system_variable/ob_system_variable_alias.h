@@ -621,6 +621,7 @@ namespace share
   static const char* const OB_SV_DELAYED_INSERT_LIMIT = "delayed_insert_limit";
   static const char* const OB_SV_NDB_VERSION = "ndb_version";
   static const char* const OB_SV_AUTO_GENERATE_CERTS = "auto_generate_certs";
+  static const char* const OB_SV_TABLE_ACCESS_POLICY = "ob_table_access_policy";
 
 }
 }

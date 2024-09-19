@@ -8427,13 +8427,27 @@ static struct VarsInit{
     ObSysVars[604].alias_ = "OB_SV_AUTO_GENERATE_CERTS" ;
     }();
 
+    [&] (){
+      ObSysVars[605].default_value_ = "2" ;
+      ObSysVars[605].info_ = "Control the optimizer to generate a table access plan that prefers a specific storage format." ;
+      ObSysVars[605].name_ = "ob_table_access_policy" ;
+      ObSysVars[605].data_type_ = ObIntType ;
+      ObSysVars[605].enum_names_ = "[u'ROW_STORE', u'COLUMN_STORE', u'AUTO']" ;
+      ObSysVars[605].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[605].id_ = SYS_VAR_OB_TABLE_ACCESS_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TABLE_ACCESS_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TABLE_ACCESS_POLICY] = 605 ;
+      ObSysVars[605].base_value_ = "2" ;
+    ObSysVars[605].alias_ = "OB_SV_TABLE_ACCESS_POLICY" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 605;
+static int64_t var_amount = 606;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

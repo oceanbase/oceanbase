@@ -177,6 +177,7 @@ struct ObOptParamHint
     DEF(BLOOM_FILTER_RATIO,)                        \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,)    \
     DEF(_PUSH_JOIN_PREDICATE,)                      \
+    DEF(OB_TABLE_ACCESS_POLICY,)                    \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

@@ -13281,8 +13281,8 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
   const ObDMLStmt *stmt = NULL;
   bool hint_force_use_column_store = false;
   bool hint_force_no_use_column_store = false;
-  bool has_all_column_group = false;
-  bool has_normal_column_group = false;
+  bool has_row_store = false;
+  bool has_column_store = false;
   bool session_disable_column_store = false;
   bool is_link = false;
   if (OB_ISNULL(stmt = get_stmt()) ||
@@ -13304,43 +13304,41 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
   } else if (OB_ISNULL(schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table schema", K(ret));
-  } else if (OB_FAIL(schema->has_all_column_group(has_all_column_group))) {
+  } else if (OB_FAIL(schema->has_all_column_group(has_row_store))) {
     LOG_WARN("failed to check has row store", K(ret));
-  } else if (OB_FAIL(schema->get_is_column_store(has_normal_column_group))) {
+  } else if (OB_FAIL(schema->get_is_column_store(has_column_store))) {
     LOG_WARN("failed to get is column store", K(ret));
+  } else if (!has_row_store && !has_column_store) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect schema statue", K(ret));
+  } else if (!has_column_store) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (!has_row_store) {
+    use_row_store = false;
+    use_column_store = true;
   } else if (OB_FAIL(get_log_plan_hint().check_use_column_store(table_id,
                                                                 hint_force_use_column_store,
                                                                 hint_force_no_use_column_store))) {
     LOG_WARN("table_item is null", K(ret), K(table_id));
+  } else if (hint_force_use_column_store) {
+    use_row_store = false;
+    use_column_store = true;
+  } else if (hint_force_no_use_column_store) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (session_disable_column_store) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (ObTableAccessPolicy::ROW_STORE == get_optimizer_context().get_table_acces_policy()) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (ObTableAccessPolicy::COLUMN_STORE == get_optimizer_context().get_table_acces_policy()) {
+    use_row_store = false;
+    use_column_store = true;
   } else {
-    if (hint_force_use_column_store) {
-      if (has_normal_column_group) {
-        use_row_store = false;
-        use_column_store = true;
-      } else {
-        use_row_store = true;
-        use_column_store = false;
-      }
-    } else if (hint_force_no_use_column_store) {
-      if (has_all_column_group) {
-        use_row_store = true;
-        use_column_store = false;
-      } else {
-        use_row_store = false;
-        use_column_store = true;
-      }
-    } else if (session_disable_column_store) {
-      if (has_all_column_group) {
-        use_row_store = true;
-        use_column_store = false;
-      } else {
-        use_row_store = false;
-        use_column_store = true;
-      }
-    } else {
-      use_row_store = has_all_column_group;
-      use_column_store = has_normal_column_group;
-    }
+    use_row_store = has_row_store;
+    use_column_store = has_column_store;
   }
   return ret;
 }
