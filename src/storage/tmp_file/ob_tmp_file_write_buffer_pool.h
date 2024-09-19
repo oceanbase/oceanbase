@@ -137,6 +137,8 @@ public:
     }
   };
 public:
+  bool is_block_beginning_; // means buf_ points to the beginning of a memory block,
+                            // allocator only free page entry with this flag set to true.
   char *buf_;
   int64_t fd_;
   int32_t state_;

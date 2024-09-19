@@ -449,7 +449,7 @@ int ObTmpWriteBufferPool::free_page(
     } else {
       LOG_INFO("free meta page", KR(ret), K(page_id), K(fd), K(fat_[page_id]));
     }
-    ATOMIC_SET(&(fat_[page_id].fd_), -1);
+    ATOMIC_SET(&(fat_[page_id].fd_), ObTmpFileGlobal::INVALID_TMP_FILE_FD);
     ATOMIC_SET(&(fat_[page_id].next_page_id_), ObTmpFileGlobal::INVALID_PAGE_ID);
     if (ObPageEntry::State::DIRTY == ATOMIC_LOAD(&fat_[page_id].state_)) {
       ATOMIC_DEC(&dirty_page_num_);
@@ -512,6 +512,8 @@ int ObTmpWriteBufferPool::expand_()
     common::TCRWLock::WLockGuard guard(lock_);
     current_capacity = ATOMIC_LOAD(&capacity_);
     if (current_capacity < expect_capacity) {
+      int64_t old_fat_size = fat_.count();
+      int64_t cur_expand_capacity = 0;
       char * new_expand_buf = nullptr;
       // allocate a chunk of WBP_BLOCK_SIZE each time
       if (OB_ISNULL(new_expand_buf = static_cast<char *>(allocator_.alloc(WBP_BLOCK_SIZE)))) {
@@ -520,17 +522,34 @@ int ObTmpWriteBufferPool::expand_()
       } else {
         uint32_t new_page_id = fat_.count();
         for (uint32_t count = 0; OB_SUCC(ret) && count < BLOCK_PAGE_NUMS; ++new_page_id, ++count) {
-          if (OB_FAIL(fat_.push_back(ObPageEntry(-1,
-                                                ObTmpFileGlobal::INVALID_PAGE_ID,
-                                                new_expand_buf + count * ObTmpFileGlobal::PAGE_SIZE)))) {
+          if (OB_FAIL(fat_.push_back(ObPageEntry(ObTmpFileGlobal::INVALID_TMP_FILE_FD,
+                                                 ObTmpFileGlobal::INVALID_PAGE_ID,
+                                                 new_expand_buf + count * ObTmpFileGlobal::PAGE_SIZE)))) {
             LOG_WARN("wbp fail to push back page into fat", KR(ret), K(count), K(new_page_id));
           } else {
-            fat_[new_page_id].next_page_id_ = ATOMIC_LOAD(&first_free_page_id_);
-            ATOMIC_SET(&first_free_page_id_, new_page_id);
-            ATOMIC_FAA(&capacity_, ObTmpFileGlobal::PAGE_SIZE);
+            if (count > 0) {
+              fat_[new_page_id].next_page_id_ = new_page_id - 1;
+            } else {
+              fat_[new_page_id].next_page_id_ = first_free_page_id_;
+              fat_[new_page_id].is_block_beginning_ = true;
+            }
+            cur_expand_capacity += ObTmpFileGlobal::PAGE_SIZE;
           }
         }
         current_capacity += WBP_BLOCK_SIZE;
+      }
+
+      if (OB_SUCC(ret)) {
+        int64_t new_free_page_id = fat_.count() - 1;
+        ATOMIC_SET(&first_free_page_id_, new_free_page_id); // first_free_page_id_ points to the last page of this new block
+        ATOMIC_FAA(&capacity_, cur_expand_capacity);
+      } else {
+        while (fat_.count() > old_fat_size) {
+          fat_.pop_back();
+        }
+        if (OB_NOT_NULL(new_expand_buf)) {
+          allocator_.free(new_expand_buf);
+        }
       }
     } else {
       // maybe another thread has finish allocation, do nothing.
@@ -552,6 +571,9 @@ int ObTmpWriteBufferPool::reduce_()
     if (OB_ISNULL(buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("wbp get unexpected page buffer", KR(ret), K(i), KP(buf));
+    } else if (!fat_[i].is_block_beginning_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("wbp try to free a ptr which is not the address of a block", KR(ret), K(i), KP(buf), K(fat_[i]));
     } else {
       allocator_.free(buf);
     }
@@ -571,7 +593,7 @@ int64_t ObTmpWriteBufferPool::get_memory_limit()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (!tenant_config.is_valid()) {
       static const int64_t DEFAULT_MEMORY_LIMIT = 64 * 2 * 1024 * 1024; // 128MB
-      memory_limit = wbp_memory_limit_ == 0 ? DEFAULT_MEMORY_LIMIT : wbp_memory_limit_;
+      memory_limit = wbp_memory_limit_ <= 0 ? DEFAULT_MEMORY_LIMIT : wbp_memory_limit_;
       LOG_INFO("failed to get tenant config", K(MTL_ID()), K(memory_limit), K(wbp_memory_limit_));
     } else if (0 == tenant_config->_temporary_file_io_area_size) {
       memory_limit = 0;

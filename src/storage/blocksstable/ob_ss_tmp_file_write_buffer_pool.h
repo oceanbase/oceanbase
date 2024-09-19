@@ -38,6 +38,8 @@ public:
   TO_STRING_KV(K_(fd), K_(next_page_id), KP_(buf));
 
 public:
+  bool is_block_beginning_; // means buf_ points to the beginning of a memory block,
+                            // allocator only free page entry with this flag set to true.
   int64_t fd_;
   uint32_t next_page_id_;
   char *buf_;
