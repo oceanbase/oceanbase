@@ -47,7 +47,7 @@ void print_access_storage_log(
       if (NULL != is_slow) {
         *is_slow = true;
       }
-      _STORAGE_LOG_RET(WARN, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
+      _STORAGE_LOG_RET(INFO, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
         msg, uri.length(), uri.ptr(), size, cost_ts, speed);
     }
   }
