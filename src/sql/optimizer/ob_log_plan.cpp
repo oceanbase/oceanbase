@@ -11693,9 +11693,9 @@ int ObLogPlan::get_cached_hash_sharding_info(const ObIArray<ObRawExpr*> &hash_ex
     if (OB_ISNULL(temp_sharding = hash_dist_info_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (ObOptimizerUtil::same_exprs(hash_exprs,
-                                           temp_sharding->get_partition_keys(),
-                                           equal_sets)) {
+    } else if (ObOptimizerUtil::is_exprs_equivalent(hash_exprs,
+                                                    temp_sharding->get_partition_keys(),
+                                                    equal_sets)) {
       cached_sharding = temp_sharding;
     } else { /*do nothing*/ }
   }
