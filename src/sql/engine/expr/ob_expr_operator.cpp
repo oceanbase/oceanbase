@@ -2311,7 +2311,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if ((type1.is_roaringbitmap() || type2.is_roaringbitmap())
              && !(type_ == T_FUN_SYS_NULLIF)) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("Incorrect cmp type with roaringbitmap arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()
              && (type1.is_json() || type2.is_json())
@@ -2338,7 +2338,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                                                             type2.get_type()))) {
     LOG_WARN("fail to get cmp_type",K(ret));
   } else if (OB_UNLIKELY(ObMaxType == cmp_type)) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid cmp type", K(ret), K(type1), K(type2), K(left_is_const), K(right_is_const));
   } else if (ObURowIDType == cmp_type) {
     // 如果比较是urwoid类型，只支持<urwoid, urowid>,<string, urwoid>, <urowid, string>,

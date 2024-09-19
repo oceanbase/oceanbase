@@ -356,15 +356,22 @@ int ObRoaringBin::calc_and(ObRoaringBin *rb, ObStringBuffer &res_buf, uint64_t &
     // append high32 and serialized roaring_bitmap to res_buf
     if (OB_SUCC(ret) && res_card > 0) {
       uint64_t serial_size = 0;
+      uint64_t real_serial_size = 0;
       ROARING_TRY_CATCH(serial_size = static_cast<uint64_t>(roaring::api::roaring_bitmap_portable_size_in_bytes(res_bitmap)));
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res_buf.reserve(sizeof(uint32_t) + serial_size))) {
-          LOG_WARN("failed to reserve buffer", K(ret), K(serial_size));
+        LOG_WARN("failed to reserve buffer", K(ret), K(serial_size));
       } else if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&high32), sizeof(uint32_t)))) {
         LOG_WARN("fail to append high32", K(ret), K(high32));
-      } else if (serial_size != roaring::api::roaring_bitmap_portable_serialize(res_bitmap, res_buf.ptr() + res_buf.length())) {
-        ret = OB_SERIALIZE_ERROR;
-        LOG_WARN("serialize size not match", K(ret), K(serial_size));
+      } else {
+        ROARING_TRY_CATCH(real_serial_size = roaring::api::roaring_bitmap_portable_serialize(res_bitmap, res_buf.ptr() + res_buf.length()));
+        if (OB_FAIL(ret)) {
+        } else if (serial_size != real_serial_size) {
+          ret = OB_SERIALIZE_ERROR;
+          LOG_WARN("serialize size not match", K(ret), K(serial_size));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res_buf.set_length(res_buf.length() + serial_size))) {
         LOG_WARN("failed to set buffer length", K(ret));
       }
@@ -473,15 +480,22 @@ int ObRoaringBin::calc_andnot(ObRoaringBin *rb, ObStringBuffer &res_buf, uint64_
     // append high32 and serialized roaring_bitmap to res_buf
     if (OB_SUCC(ret) && res_card > 0) {
       uint64_t serial_size = 0;
+      uint64_t real_serial_size = 0;
       ROARING_TRY_CATCH(serial_size = static_cast<uint64_t>(roaring::api::roaring_bitmap_portable_size_in_bytes(res_bitmap)));
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res_buf.reserve(sizeof(uint32_t) + serial_size))) {
-          LOG_WARN("failed to reserve buffer", K(ret), K(serial_size));
+        LOG_WARN("failed to reserve buffer", K(ret), K(serial_size));
       } else if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&high32), sizeof(uint32_t)))) {
         LOG_WARN("fail to append high32", K(ret), K(high32));
-      } else if (serial_size != roaring::api::roaring_bitmap_portable_serialize(res_bitmap, res_buf.ptr() + res_buf.length())) {
-        ret = OB_SERIALIZE_ERROR;
-        LOG_WARN("serialize size not match", K(ret), K(serial_size));
+      } else {
+        ROARING_TRY_CATCH(real_serial_size = roaring::api::roaring_bitmap_portable_serialize(res_bitmap, res_buf.ptr() + res_buf.length()));
+        if (OB_FAIL(ret)) {
+        } else if (serial_size != real_serial_size) {
+          ret = OB_SERIALIZE_ERROR;
+          LOG_WARN("serialize size not match", K(ret), K(serial_size));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res_buf.set_length(res_buf.length() + serial_size))) {
         LOG_WARN("failed to set buffer length", K(ret));
       }

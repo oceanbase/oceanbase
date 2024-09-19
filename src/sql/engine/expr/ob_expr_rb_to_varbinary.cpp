@@ -91,7 +91,8 @@ int ObExprRbToVarbinary::eval_rb_to_varbinary(const ObExpr &expr,
     } else if (format_datum->is_null()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported expected format", K(ret), K(expected_format));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expected format expect 'roaring' is");    } else if (OB_FALSE_IT(expected_format = format_datum->get_string())) {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expected format expect 'roaring' is");
+    } else if (OB_FALSE_IT(expected_format = format_datum->get_string())) {
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
                            tmp_allocator,
                            *format_datum,
@@ -99,7 +100,7 @@ int ObExprRbToVarbinary::eval_rb_to_varbinary(const ObExpr &expr,
                            format_arg->obj_meta_.has_lob_header(),
                            expected_format))) {
       LOG_WARN("fail to get real string data", K(ret), K(expected_format));
-    } else if (expected_format.case_compare("roaring") != 0) {
+    } else if (expected_format.trim().case_compare("roaring") != 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported expected format", K(ret), K(expected_format));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "expected format except 'roaring' is");

@@ -551,15 +551,22 @@ int ObRoaringBitmap::serialize(ObStringBuffer &res_buf)
       case ObRbType::BITMAP: {
         bin_type = ObRbBinType::BITMAP_64;
         uint64_t serial_size = 0;
+        uint64_t real_serial_size = 0;
         ROARING_TRY_CATCH(serial_size = static_cast<uint64_t>(roaring::api::roaring64_bitmap_portable_size_in_bytes(bitmap_)));
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(res_buf.reserve(RB_BIN_TYPE_SIZE + serial_size))) {
             LOG_WARN("failed to reserve buffer", K(ret), K(serial_size));
         } else if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&bin_type), RB_BIN_TYPE_SIZE))) {
           LOG_WARN("failed to append bin_type", K(ret));
-        } else if (serial_size != roaring::api::roaring64_bitmap_portable_serialize(bitmap_, res_buf.ptr() + res_buf.length())) {
-          ret = OB_SERIALIZE_ERROR;
-          LOG_WARN("serialize size not match", K(ret), K(serial_size));
+        } else {
+          ROARING_TRY_CATCH(real_serial_size = roaring::api::roaring64_bitmap_portable_serialize(bitmap_, res_buf.ptr() + res_buf.length()));
+          if (OB_FAIL(ret)) {
+          } else if (serial_size != real_serial_size) {
+            ret = OB_SERIALIZE_ERROR;
+            LOG_WARN("serialize size not match", K(ret), K(serial_size));
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(res_buf.set_length(res_buf.length() + serial_size))) {
           LOG_WARN("failed to set buffer length", K(ret));
         }
@@ -587,12 +594,12 @@ int ObRoaringBitmap::convert_to_bitmap() {
       LOG_WARN("failed to create bitmap", K(ret));
     } else {
       if (is_single_type()) {
-        roaring::api::roaring64_bitmap_add(bitmap_, single_value_);
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(bitmap_, single_value_));
         single_value_ = 0;
       } else if (is_set_type()) {
         hash::ObHashSet<uint64_t>::const_iterator iter;
-        for (iter = set_.begin(); iter != set_.end(); iter++) {
-          roaring::api::roaring64_bitmap_add(bitmap_, iter->first);
+        for (iter = set_.begin(); OB_SUCC(ret) && iter != set_.end(); iter++) {
+          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(bitmap_, iter->first));
         }
         set_.destroy();
       }
