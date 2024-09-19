@@ -514,7 +514,7 @@ int ObPartTransCtx::trans_kill_()
   return ret;
 }
 
-int ObPartTransCtx::trans_clear_()
+int ObPartTransCtx::trans_clear_(const share::SCN log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -532,7 +532,7 @@ int ObPartTransCtx::trans_clear_()
   // already meet the durability requirement and is just used for multi-source
   // data.
   share::SCN rec_log_ts = get_rec_log_ts_() == share::SCN::max_scn() ?
-    ctx_tx_data_.get_end_log_ts() : get_rec_log_ts_();
+    log_ts : get_rec_log_ts_();
 
   if (is_ctx_table_merged_
       && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(rec_log_ts))) {
@@ -6021,7 +6021,7 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else if (is_local_tx_()) {
-      if (OB_FAIL(trans_clear_())) {
+      if (OB_FAIL(trans_clear_(timestamp))) {
         TRANS_LOG(WARN, "transaction clear error or trans_type is sp_trans", KR(ret), "context", *this);
       } else {
         set_exiting_();
@@ -6066,7 +6066,7 @@ int ObPartTransCtx::replay_clear(const ObTxClearLog &clear_log,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(clear_log), K(timestamp), K(offset), K(*this));
     // no need to replay
-    if (OB_FAIL(trans_clear_())) {
+    if (OB_FAIL(trans_clear_(timestamp))) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
     }
   } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
@@ -6074,7 +6074,7 @@ int ObPartTransCtx::replay_clear(const ObTxClearLog &clear_log,
   } else if (OB_FAIL(exec_info_.incremental_participants_.assign(
                  clear_log.get_incremental_participants()))) {
     TRANS_LOG(WARN, "set incremental_participants error", K(ret), K(*this));
-  } else if (OB_FAIL(trans_clear_())) {
+  } else if (OB_FAIL(trans_clear_(timestamp))) {
     TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
   } else {
     if (is_local_tx_()) {
@@ -6207,7 +6207,7 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
       TRANS_LOG(WARN, "transaction replay end error", KR(ret), "context", *this);
     } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_ABORT)) {
       TRANS_LOG(WARN, "errsim error", K(ret));
-    } else if (OB_FAIL(trans_clear_())) {
+    } else if (OB_FAIL(trans_clear_(timestamp))) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
     } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_CLEAR)) {
       TRANS_LOG(WARN, "errsim error", K(ret));
@@ -9173,7 +9173,7 @@ int ObPartTransCtx::do_force_kill_tx_()
     // Force kill cannot guarantee the consistency, so we just set end_log_ts
     // to zero
     end_log_ts_.set_min();
-    (void)trans_clear_();
+    (void)trans_clear_(share::SCN::invalid_scn());
     if (OB_FAIL(unregister_timeout_task_())) {
       TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
     }
@@ -9201,7 +9201,7 @@ int ObPartTransCtx::on_local_commit_tx_()
   } else if (OB_FAIL(tx_end_(true /*commit*/))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
   } else if (FALSE_IT(elr_handler_.reset_elr_state())) {
-  } else if (OB_FAIL(trans_clear_())) {
+  } else if (OB_FAIL(trans_clear_(ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
   } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT, ctx_tx_data_.get_end_log_ts(),
                                          false, exec_info_.multi_data_source_))) {
@@ -9243,7 +9243,7 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   if (OB_FAIL(tx_end_(false /*commit*/))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
-  } else if (OB_FAIL(trans_clear_())) {
+  } else if (OB_FAIL(trans_clear_(ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
   } else if (OB_FAIL(mds_cache_.generate_final_notify_array(exec_info_.multi_data_source_,
                                                              true /*need_merge_cache*/,

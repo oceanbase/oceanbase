@@ -336,7 +336,7 @@ private:
   bool need_record_log_() const;
   void reset_redo_lsns_();
   void set_prev_record_lsn_(const LogOffSet &prev_record_lsn);
-  int trans_clear_();
+  int trans_clear_(const share::SCN log_ts);
   int trans_kill_();
   int tx_end_(const bool commit);
   int trans_replay_commit_(const share::SCN &commit_version,
