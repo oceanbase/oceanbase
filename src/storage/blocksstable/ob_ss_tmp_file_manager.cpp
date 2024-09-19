@@ -724,7 +724,7 @@ int ObSSTenantTmpFileManager::exec_wait_task_once()
     if (OB_FAIL(wait_task_queue_.pop(task_handle))) {
       LOG_WARN("fail to pop wait task queue", K(ret), K(i), K(queue_size));
     } else if (OB_FAIL(task_handle->get()->exec_wait())) {
-      LOG_ERROR("fail to wait task finish", K(ret), KPC(task_handle->get()));
+      LOG_WARN("fail to wait task finish", K(ret), KPC(task_handle->get()));
       // Swallow error code to continue other wait tasks.
       ret = OB_SUCCESS;
     }
