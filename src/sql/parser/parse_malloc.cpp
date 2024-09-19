@@ -120,8 +120,8 @@ char *replace_invalid_character(const struct ObCharsetInfo* src_cs, const struct
                                 const char *str, int64_t *out_len, void *malloc_pool, int *extra_errno)
 {
   char *out_str = NULL;
-  if (OB_ISNULL(str) || OB_ISNULL(extra_errno) || OB_ISNULL(out_len) || OB_ISNULL(src_cs)) {
-  } else if (NULL == oracle_db_cs) {
+  if (OB_ISNULL(str) || OB_ISNULL(extra_errno) || OB_ISNULL(out_len)) {
+  } else if (NULL == src_cs || NULL == oracle_db_cs) {
     out_str = const_cast<char *>(str);
   } else {
     ob_wc_t replace_char = (!!(oracle_db_cs->state & OB_CS_UNICODE)) &&
