@@ -332,7 +332,7 @@ int ObTenantStorageMetaPersister::write_active_tablet_array(ObLS *ls)
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
     ObMetaDiskAddr addr;
-    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
+    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
     ObTabletMapKey tablet_key;
     ObLSActiveTabletArray active_tablet_arr;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(tablet_iter))) {

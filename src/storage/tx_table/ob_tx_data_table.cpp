@@ -678,7 +678,6 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ObLSTabletIterator iterator(ObMDSGetTabletMode::READ_READABLE_COMMITED);
   ObMigrationStatus migration_status;
   share::ObLSRestoreStatus restore_status;
   ObTimeGuard tg("get recycle scn", 10L * 1000L * 1000L /* 10 seconds */);
