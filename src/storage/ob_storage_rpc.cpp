@@ -1369,41 +1369,41 @@ int ObStorageStreamRpcP<RPC_CODE>::is_follower_ls(logservice::ObLogService *log_
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-ObGetMicroBlockCacheSizeArg::ObGetMicroBlockCacheSizeArg()
+ObGetMicroBlockCacheInfoArg::ObGetMicroBlockCacheInfoArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_()
 {
 }
 
-bool ObGetMicroBlockCacheSizeArg::is_valid() const
+bool ObGetMicroBlockCacheInfoArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid();
 }
 
-void ObGetMicroBlockCacheSizeArg::reset()
+void ObGetMicroBlockCacheInfoArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheSizeArg, tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheInfoArg, tenant_id_, ls_id_);
 
-ObGetMicroBlockCacheSizeRes::ObGetMicroBlockCacheSizeRes()
-  : cache_size_(0)
+ObGetMicroBlockCacheInfoRes::ObGetMicroBlockCacheInfoRes()
+  : ls_cache_info_()
 {
 }
 
-bool ObGetMicroBlockCacheSizeRes::is_valid() const
+bool ObGetMicroBlockCacheInfoRes::is_valid() const
 {
-  return cache_size_ >= 0;
+  return ls_cache_info_.is_valid();
 }
 
-void ObGetMicroBlockCacheSizeRes::reset()
+void ObGetMicroBlockCacheInfoRes::reset()
 {
-  cache_size_ = 0;
+  ls_cache_info_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheSizeRes, cache_size_);
+OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheInfoRes, ls_cache_info_);
 
 ObGetMigrationCacheJobInfoArg::ObGetMigrationCacheJobInfoArg()
   : tenant_id_(OB_INVALID_ID),
@@ -3651,65 +3651,70 @@ int ObFetchMicroBlockKeysP::set_header_attr_(
 int ObFetchMicroBlockKeysP::process()
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(arg_.tenant_id_) {
-    ObCopyMicroBlockKeySetProducer producer;
-    ObCopyMicroBlockKeySet key_set;
-    ObCopyMicroBlockKeySetRpcHeader rpc_header;
-    int64_t max_key_set_size = OB_MALLOC_BIG_BLOCK_SIZE; // 2M;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fetching migrate prewarm micro block keys is not supported", KR(ret));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObCopyMicroBlockKeySetProducer producer;
+      ObCopyMicroBlockKeySet key_set;
+      ObCopyMicroBlockKeySetRpcHeader rpc_header;
+      int64_t max_key_set_size = WARMUP_MAX_KEY_SET_SIZE_IN_RPC; // 4M;
 #ifdef ERRSIM
-    max_key_set_size = GCONF.errsim_max_key_set_size; // test multi rpc get key set
+      max_key_set_size = GCONF.errsim_max_key_set_size; // test multi rpc get key set
 #endif
-    const int64_t start_ts = ObTimeUtil::current_time();
-    int64_t end_blk_idx = 0;
-    int64_t key_set_count = 0;
-    int64_t key_count = 0;
-    ObCopyMicroBlockKeySetRpcHeader::ConnectStatus connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::MAX_STATUS;
-    LOG_INFO("start to fetch micro block header", K(arg_));
+      const int64_t start_ts = ObTimeUtil::current_time();
+      int64_t end_blk_idx = 0;
+      int64_t key_set_count = 0;
+      int64_t key_count = 0;
+      ObCopyMicroBlockKeySetRpcHeader::ConnectStatus connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::MAX_STATUS;
+      LOG_INFO("start to fetch micro block header", K(arg_));
 
-    if (!arg_.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get invalid args", K(ret), K_(arg));
-    } else if (OB_FAIL(producer.init(arg_.job_info_, arg_.ls_id_))) {
-      LOG_WARN("failed to init micro block key producer", K(ret), K(arg_));
-    } else {
-      while (OB_SUCC(ret)) {
-        key_set.reset();
-        if (OB_FAIL(producer.get_next_micro_block_key_set(key_set))) {
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-            end_blk_idx = key_set.blk_idx_;
-            connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::ENDCONNECT;
-            break;
+      if (!arg_.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid args", K(ret), K_(arg));
+      } else if (OB_FAIL(producer.init(arg_.job_info_, arg_.ls_id_))) {
+        LOG_WARN("failed to init micro block key producer", K(ret), K(arg_));
+      } else {
+        while (OB_SUCC(ret)) {
+          key_set.reset();
+          if (OB_FAIL(producer.get_next_micro_block_key_set(key_set))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              end_blk_idx = key_set.blk_idx_;
+              connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::ENDCONNECT;
+              break;
+            } else {
+              STORAGE_LOG(WARN, "failed to get next micro block key set", K(ret));
+            }
+          } else if (!key_set.is_valid()) {
+            LOG_INFO("skip this key set", K(arg_), K(key_set));
           } else {
-            STORAGE_LOG(WARN, "failed to get next micro block key set", K(ret));
-          }
-        } else if (!key_set.is_valid()) {
-          LOG_INFO("skip this key set", K(arg_), K(key_set));
-        } else {
-          // dest will judge ObMigrateWarmupKeySet serialize size,
-          if (OB_FAIL(result_.key_set_array_.key_sets_.push_back(key_set))) {
-            STORAGE_LOG(WARN, "fail to fill key set", K(ret), K(key_set));
-          } else if (result_.key_set_array_.get_serialize_size() > max_key_set_size) {
-            result_.key_set_array_.key_sets_.pop_back();
-            connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT;
-            break;
-          } else {
-            key_set_count++;
-            key_count += key_set.micro_block_key_metas_.count();
-            end_blk_idx = key_set.blk_idx_;
+            // dest will judge ObMigrateWarmupKeySet serialize size,
+            if (OB_FAIL(result_.key_set_array_.key_sets_.push_back(key_set))) {
+              STORAGE_LOG(WARN, "fail to fill key set", K(ret), K(key_set));
+            } else if (result_.key_set_array_.get_serialize_size() > max_key_set_size) {
+              result_.key_set_array_.key_sets_.pop_back();
+              connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT;
+              break;
+            } else {
+              key_set_count++;
+              key_count += key_set.micro_block_key_metas_.count();
+              end_blk_idx = key_set.blk_idx_;
+            }
           }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(set_header_attr_(connect_status, end_blk_idx, key_set_count, rpc_header))) {
-        LOG_WARN("failed to set header attr", K(ret), K(rpc_header), K(arg_),
-            K(connect_status), K(end_blk_idx), K(key_set_count));
-      } else {
-        result_.header_ = rpc_header;
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(set_header_attr_(connect_status, end_blk_idx, key_set_count, rpc_header))) {
+          LOG_WARN("failed to set header attr", K(ret), K(rpc_header), K(arg_),
+              K(connect_status), K(end_blk_idx), K(key_set_count));
+        } else {
+          result_.header_ = rpc_header;
+        }
       }
+      LOG_INFO("finish fetch micro block header", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts, K(key_count));
     }
-    LOG_INFO("finish fetch micro block header", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts, K(key_count));
   }
   return ret;
 }
@@ -3723,89 +3728,99 @@ ObFetchMicroBlockP::ObFetchMicroBlockP(
 int ObFetchMicroBlockP::process()
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(arg_.tenant_id_) {
-    blocksstable::ObBufferReader data;
-    char *buf = NULL;
-    last_send_time_ = this->get_receive_timestamp();
-    int64_t key_count = 0;
-    ObSArray<ObSSMicroBlockCacheKeyMeta> key_meta_array;
-    const int64_t start_ts = ObTimeUtil::current_time();
-    const int64_t first_receive_ts = this->get_receive_timestamp();
-    LOG_INFO("start to fetch micro block", K(arg_));
-    if (!arg_.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get invalid args", K(ret), K_(arg));
-    }
-    // The reason that apply 4M buffer：
-    // buffer struct：key_meta_array + data
-    // data less than 2M, it comes from a cache block
-    // key_meta_array also less than 2M
-    // so key_meta_array + data maybe exceeding 2M, but less than 4M
-    else if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE * 2)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE * 2)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "failed set data to result", K(ret));
-    } else if (OB_ISNULL(bandwidth_throttle_)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "bandwidth_throttle must not null", K(ret), KP_(bandwidth_throttle));
-    } else {
-      SMART_VAR(storage::ObCopyMicroBlockDataProducer, producer) {
-        if (OB_FAIL(producer.init(arg_.key_sets_))) {
-          LOG_WARN("failed to init micro block data producer", K(ret), K(arg_));
-        } else {
-          while (OB_SUCC(ret)) {
-            key_meta_array.reset();
-            if (OB_FAIL(producer.get_next_micro_block_data(key_meta_array, data))) {
-              if (OB_ITER_END != ret) {
-                STORAGE_LOG(WARN, "failed to get next micro block set", K(ret));
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fetching migrate prewarm micro block is not supported", KR(ret));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      blocksstable::ObBufferReader data;
+      char *buf = NULL;
+      last_send_time_ = this->get_receive_timestamp();
+      int64_t key_count = 0;
+      ObSArray<ObSSMicroBlockCacheKeyMeta> key_meta_array;
+      const int64_t start_ts = ObTimeUtil::current_time();
+      const int64_t first_receive_ts = this->get_receive_timestamp();
+      LOG_INFO("start to fetch micro block", K(arg_));
+      if (!arg_.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid args", K(ret), K_(arg));
+      }
+      // The reason that apply 6M buffer：
+      // buffer struct：key_meta_array + data
+      // key_meta: key info + other cache info
+      // other cache info: uint32(crc) + bool(in t1/t2), less than key info
+      // data less than 2M, it comes from a cache block
+      // key info array also less than 2M
+      // other cache info array also less than 2M
+      // so key_meta_array + data less than 6M
+      else if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE * 3)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
+      } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE * 3)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed set data to result", K(ret));
+      } else if (OB_ISNULL(bandwidth_throttle_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "bandwidth_throttle must not null", K(ret), KP_(bandwidth_throttle));
+      } else {
+        SMART_VAR(storage::ObCopyMicroBlockDataProducer, producer) {
+          if (OB_FAIL(producer.init(arg_.key_sets_))) {
+            LOG_WARN("failed to init micro block data producer", K(ret), K(arg_));
+          } else {
+            while (OB_SUCC(ret)) {
+              key_meta_array.reset();
+              if (OB_FAIL(producer.get_next_micro_block_data(key_meta_array, data))) {
+                if (OB_ITER_END != ret) {
+                  STORAGE_LOG(WARN, "failed to get next micro block set", K(ret));
+                } else {
+                  ret = OB_SUCCESS;
+                }
+                break;
+              } else if (key_meta_array.empty()) {
+                LOG_INFO("skip this key and size arr", K(arg_));
+              } else if (OB_FAIL(fill_data(key_meta_array))) {
+                STORAGE_LOG(WARN, "failed to fill data length", K(ret), K(data.pos()), K(key_meta_array));
+              } else if (OB_FAIL(fill_buffer(data))) {
+                STORAGE_LOG(WARN, "failed to fill data", K(ret), K(key_meta_array));
               } else {
-                ret = OB_SUCCESS;
+                key_count += key_meta_array.count();
+                STORAGE_LOG(INFO, "succeed to fill micro block set",
+                    "key and size array", key_meta_array, K(data));
               }
-              break;
-            } else if (key_meta_array.empty()) {
-              LOG_INFO("skip this key and size arr", K(arg_));
-            } else if (OB_FAIL(fill_data(key_meta_array))) {
-              STORAGE_LOG(WARN, "failed to fill data length", K(ret), K(data.pos()), K(key_meta_array));
-            } else if (OB_FAIL(fill_buffer(data))) {
-              STORAGE_LOG(WARN, "failed to fill data", K(ret), K(key_meta_array));
-            } else {
-              key_count += key_meta_array.count();
-              STORAGE_LOG(INFO, "succeed to fill micro block set",
-                  "key and size array", key_meta_array, K(data));
             }
           }
         }
       }
-    }
 
-    LOG_INFO("finish fetch micro block set", K(ret),
-        "cost_ts", ObTimeUtil::current_time() - start_ts,
-        "in rpc queue time", start_ts - first_receive_ts, K(key_count));
+      LOG_INFO("finish fetch micro block set", K(ret),
+          "cost_ts", ObTimeUtil::current_time() - start_ts,
+          "in rpc queue time", start_ts - first_receive_ts, K(key_count));
+    }
   }
   return ret;
 }
 
-int ObGetMicroBlockCacheSizeP::process()
+int ObGetMicroBlockCacheInfoP::process()
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(arg_.tenant_id_) {
-    ObSSMicroCache *micro_cache = nullptr;
-    if (!arg_.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get invalid args", K(ret), K_(arg));
-    } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("micro cache should not be nullptr", K(ret));
-    } else {
-      int64_t ls_micro_size = 0;
-      if (OB_FAIL(micro_cache->get_ls_micro_size(arg_.ls_id_, ls_micro_size))) {
-        LOG_WARN("fail to get ls micro_size", KR(ret), K_(arg));
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Getting micro block cache info is not supported", KR(ret));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObSSMicroCache *micro_cache = nullptr;
+      if (!arg_.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid args", K(ret), K_(arg));
+      } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("micro cache should not be nullptr", K(ret));
       } else {
-        result_.cache_size_ = ls_micro_size;
+        if (OB_FAIL(micro_cache->get_ls_cache_info(arg_.ls_id_, result_.ls_cache_info_))) {
+          LOG_WARN("fail to get ls cache info", KR(ret), K_(arg));
+        }
+        LOG_INFO("send cache info", K(ret), K(result_), K(arg_));
       }
-      LOG_INFO("send cache size", K(ret), K(result_.cache_size_), K(arg_));
     }
   }
   return ret;
@@ -3814,26 +3829,31 @@ int ObGetMicroBlockCacheSizeP::process()
 int ObGetMigrationCacheJobInfoP::process()
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(arg_.tenant_id_) {
-    ObSSMicroCache *micro_cache = nullptr;
-    ObArray<ObSSPhyBlockIdxRange> block_ranges;
-    if (!arg_.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get invalid args", K(ret), K_(arg));
-    } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("micro cache should not be nullptr", K(ret));
-    } else if (OB_FAIL(micro_cache->divide_phy_block_range(arg_.ls_id_, arg_.task_count_, block_ranges))) {
-      LOG_WARN("failed to divide phy_block range", K(ret), K(arg_));
-    } else if (block_ranges.empty()) {
-      FLOG_INFO("block_ranges is empty", K_(arg));
-    } else if (OB_FAIL(convert_block_range_to_job_infos_(block_ranges, result_.job_infos_))) {
-      LOG_WARN("failed to convert job infos", K(ret), K(block_ranges), K(arg_));
-    } else if (arg_.task_count_ < result_.job_infos_.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("job info count is unexpected", K(ret), K(arg_), K(result_));
-    } else {
-      LOG_INFO("send job info", K(block_ranges), K(result_.job_infos_));
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Getting migration cache job info is not supported", KR(ret));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObSSMicroCache *micro_cache = nullptr;
+      ObArray<ObSSPhyBlockIdxRange> block_ranges;
+      if (!arg_.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid args", K(ret), K_(arg));
+      } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("micro cache should not be nullptr", K(ret));
+      } else if (OB_FAIL(micro_cache->divide_phy_block_range(arg_.ls_id_, arg_.task_count_, block_ranges))) {
+        LOG_WARN("failed to divide phy_block range", K(ret), K(arg_));
+      } else if (block_ranges.empty()) {
+        FLOG_INFO("block_ranges is empty", K_(arg));
+      } else if (OB_FAIL(convert_block_range_to_job_infos_(block_ranges, result_.job_infos_))) {
+        LOG_WARN("failed to convert job infos", K(ret), K(block_ranges), K(arg_));
+      } else if (arg_.task_count_ < result_.job_infos_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("job info count is unexpected", K(ret), K(arg_), K(result_));
+      } else {
+        LOG_INFO("send job info", K(block_ranges), K(result_.job_infos_));
+      }
     }
   }
   return ret;
@@ -4483,16 +4503,16 @@ int ObStorageRpc::fetch_ls_member_and_learner_list(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObStorageRpc::get_ls_micro_block_cache_size(
+int ObStorageRpc::get_ls_micro_block_cache_info(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const ObStorageHASrcInfo &src_info,
-    int64_t &cache_size)
+    ObSSLSCacheInfo &ls_cache_info)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObGetMicroBlockCacheSizeArg arg;
-  obrpc::ObGetMicroBlockCacheSizeRes res;
-  cache_size = 0;
+  obrpc::ObGetMicroBlockCacheInfoArg arg;
+  obrpc::ObGetMicroBlockCacheInfoRes res;
+  ls_cache_info.reset();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -4500,16 +4520,19 @@ int ObStorageRpc::get_ls_micro_block_cache_size(
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(tenant_id), K(ls_id), K(src_info));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Getting ls micro block cache info is not supported", KR(ret));
   } else {
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
         .by(tenant_id)
         .group_id(share::OBCG_STORAGE)
-        .get_micro_block_cache_size(arg, res))) {
-      LOG_WARN("fail to get micro block cache size", K(ret), K(tenant_id), K(ls_id), K(src_info));
+        .get_micro_block_cache_info(arg, res))) {
+      LOG_WARN("fail to get micro block cache info", K(ret), K(tenant_id), K(ls_id), K(src_info));
     } else {
-      cache_size = res.cache_size_;
+      ls_cache_info = res.ls_cache_info_;
     }
   }
   return ret;
@@ -4532,6 +4555,9 @@ int ObStorageRpc::get_ls_migration_cache_job_info(
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_info.is_valid() || task_count <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(src_info), K(task_count));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Getting ls migration cache job info is not supported", KR(ret));
   } else {
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
@@ -4563,6 +4589,9 @@ int ObStorageRpc::get_micro_block_key_set(
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_info.is_valid() || !job_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(src_info), K(job_info));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Getting micro block key set is not supported", KR(ret));
   } else {
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;

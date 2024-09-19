@@ -33,6 +33,9 @@
 #include "ob_storage_ha_utils.h"
 #include "ob_storage_ha_src_provider.h"
 #include "ob_cs_replica_migration.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
+#endif
 
 namespace oceanbase
 {
@@ -3786,6 +3789,26 @@ int ObDataTabletsMigrationTask::ls_online_()
   }
 #endif
     FLOG_INFO("succeed online ls", K(ret), KPC(ctx_));
+    if (OB_FAIL(ret)) {
+    } else {
+      // for migrate warmup, open rearrange free cache space
+      const bool is_shared_storage = GCTX.is_shared_storage_mode();
+      bool open_migration_warmup = true;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx_->tenant_id_));
+      if (tenant_config.is_valid()) {
+        open_migration_warmup = tenant_config->_enable_ss_migration_prewarm;
+      }
+      if (is_shared_storage && open_migration_warmup) {
+#ifdef OB_BUILD_SHARED_STORAGE
+        ObSSMicroCache *micro_cache = nullptr;
+        if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("micro_cache should not be nullptr", K(ret), KPC(ctx_));
+        } else if (FALSE_IT(micro_cache->begin_free_space_for_prewarm())) {
+        }
+#endif
+      }
+    }
   }
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("storage_ha", "after_ls_online");

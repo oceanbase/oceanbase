@@ -181,7 +181,7 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
 #ifdef OB_BUILD_SHARED_STORAGE
   RPC_PROCESSOR(ObFetchMicroBlockKeysP);
   RPC_PROCESSOR(ObFetchMicroBlockP, gctx_.bandwidth_throttle_);
-  RPC_PROCESSOR(ObGetMicroBlockCacheSizeP);
+  RPC_PROCESSOR(ObGetMicroBlockCacheInfoP);
   RPC_PROCESSOR(ObGetMigrationCacheJobInfoP);
 #endif
 }
