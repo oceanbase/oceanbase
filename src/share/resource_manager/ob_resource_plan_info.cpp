@@ -66,6 +66,9 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_EXPORT:
       ret_name = ObString("EXPORT");
       break;
+    case ObFunctionType::PRIO_SQL_AUDIT:
+      ret_name = ObString("SQL_AUDIT");
+      break;
     default:
       ret_name = ObString("OTHER_GROUPS");
       break;

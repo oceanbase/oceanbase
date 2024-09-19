@@ -44,6 +44,7 @@ enum ObFunctionType : uint8_t
   PRIO_IMPORT = 13,
   PRIO_EXPORT = 14,
   /* add new function type here, or you will have compatibility issues. */
+  PRIO_SQL_AUDIT = 15,
 
 
   /* add new function, can learn by "grep -rnI 'CLOG_HIGH' src/" */
