@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_vector_index_util.h"
+#include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -909,6 +910,59 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
     }
   }
   LOG_DEBUG("generate_index_schema_from_exist_table", K(ret), K(new_index_table_name));
+  return ret;
+}
+
+int ObVectorIndexUtil::add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                            const uint64_t vidx_table_id,
+                                            const common::ObString &exec_env)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObVectorIndexSchedJobUtils::add_vector_index_refresh_job(
+                      sql_client, tenant_id,
+                      vidx_table_id,
+                      exec_env))) {
+    LOG_WARN("fail to add vector index refresh job", KR(ret), K(tenant_id), K(vidx_table_id), K(exec_env));
+  } else if (OB_FAIL(ObVectorIndexSchedJobUtils::add_vector_index_rebuild_job(
+                      sql_client, tenant_id,
+                      vidx_table_id,
+                      exec_env))) {
+    LOG_WARN("fail to add vector index rebuild job", KR(ret), K(tenant_id), K(vidx_table_id), K(exec_env));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::remove_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                               const uint64_t vidx_table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObVectorIndexSchedJobUtils::remove_vector_index_refresh_job(
+                     sql_client, tenant_id, vidx_table_id))) {
+    LOG_WARN("failed to remove vector index refresh job",
+            KR(ret), K(tenant_id), K(vidx_table_id));
+  } else if (OB_FAIL(ObVectorIndexSchedJobUtils::remove_vector_index_rebuild_job(
+                     sql_client, tenant_id, vidx_table_id))) {
+    LOG_WARN("failed to remove vector index rebuild job",
+            KR(ret), K(tenant_id), K(vidx_table_id));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::get_dbms_vector_job_info(common::ObISQLClient &sql_client,
+                                                    const uint64_t tenant_id,
+                                                    const uint64_t vidx_table_id,
+                                                    common::ObIAllocator &allocator,
+                                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                                    dbms_scheduler::ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObVectorIndexSchedJobUtils::get_vector_index_job_info(sql_client, tenant_id,
+                                                                    vidx_table_id,
+                                                                    allocator,
+                                                                    schema_guard,
+                                                                    job_info))) {
+    LOG_WARN("fail to get vector index job info", K(ret), K(tenant_id), K(vidx_table_id));
+  }
   return ret;
 }
 

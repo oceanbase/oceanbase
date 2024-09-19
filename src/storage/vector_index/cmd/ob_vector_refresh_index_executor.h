@@ -45,6 +45,21 @@ public:
   int64_t refresh_threshold_;
 };
 
+struct ObVectorRefreshIndexInnerArg {
+public:
+  static const int64_t DEFAULT_REFRESH_THRESHOLD = 10000;
+  ObVectorRefreshIndexInnerArg() : idx_table_id_(OB_INVALID_ID), refresh_threshold_(DEFAULT_REFRESH_THRESHOLD) {}
+  bool is_valid() const { return idx_table_id_ != OB_INVALID_ID; }
+  TO_STRING_KV(K_(idx_table_id), K_(refresh_type), K_(refresh_threshold));
+
+public:
+  int64_t idx_table_id_;
+  ObString refresh_type_; // COMPLETE / FAST.
+  // If delta_buf_table's row count is greater than refresh_threshold_, refresh
+  // is triggered.
+  int64_t refresh_threshold_;
+};
+
 // ObVectorRebuildIndexArg for DBMS_VECTOR.REBUILD_INDEX
 struct ObVectorRebuildIndexArg {
 public:
@@ -72,6 +87,31 @@ public:
   int64_t idx_parallel_creation_; // DEFAULT: 1
 };
 
+struct ObVectorRebuildIndexInnerArg {
+public:
+  static constexpr double DEFAULT_REBUILD_THRESHOLD = 0.2;
+  ObVectorRebuildIndexInnerArg()
+      : idx_table_id_(OB_INVALID_ID),
+        delta_rate_threshold_(DEFAULT_REBUILD_THRESHOLD),
+        idx_parallel_creation_(1) {}
+  bool is_valid() const { return idx_table_id_ != OB_INVALID_ID; }
+  TO_STRING_KV(K_(idx_table_id),
+               K_(delta_rate_threshold), K_(idx_organization),
+               K_(idx_distance_metrics), K_(idx_parameters),
+               K_(idx_parallel_creation));
+
+public:
+  int64_t idx_table_id_;
+  // If (delta_buf_table's row count + index_id_table's row count) /
+  // data_table's row count is greater than delta_rate_threshold_, rebuild is
+  // triggered.
+  double delta_rate_threshold_;
+  ObString idx_organization_;     // DEFAULT: IN MEMORY NEIGHBOR GRAPH
+  ObString idx_distance_metrics_; // DEFAULT: EUCLIDEAN
+  ObString idx_parameters_; // parameters for different vector-index algorithm
+  int64_t idx_parallel_creation_; // DEFAULT: 1
+};
+
 class ObVectorRefreshIndexExecutor {
 public:
   enum class VectorIndexAuxType : int8_t {
@@ -86,8 +126,12 @@ public:
   DISABLE_COPY_ASSIGN(ObVectorRefreshIndexExecutor);
   int execute_refresh(pl::ObPLExecCtx &ctx,
                       const ObVectorRefreshIndexArg &arg);
+  int execute_refresh_inner(pl::ObPLExecCtx &ctx,
+                      const ObVectorRefreshIndexInnerArg &arg);
   int execute_rebuild(pl::ObPLExecCtx &ctx,
                       const ObVectorRebuildIndexArg &arg);
+  int execute_rebuild_inner(pl::ObPLExecCtx &ctx,
+                      const ObVectorRebuildIndexInnerArg &arg);
 
 private:
   static int check_min_data_version(const uint64_t tenant_id,
@@ -118,14 +162,14 @@ private:
                                      ObString &real_index_name);
   int mock_check_idx_col_name(
       const ObString &idx_col_name,
-      const share::schema::ObTableSchema *&base_table_schema,
-      const share::schema::ObTableSchema *&delta_buf_table_schema,
-      const share::schema::ObTableSchema *&index_id_table_schema);
+      const share::schema::ObTableSchema *base_table_schema,
+      const share::schema::ObTableSchema *delta_buf_table_schema,
+      const share::schema::ObTableSchema *index_id_table_schema);
   int check_idx_col_name(
       const ObString &idx_col_name,
-      const share::schema::ObTableSchema *&base_table_schema,
-      const share::schema::ObTableSchema *&delta_buf_table_schema,
-      const share::schema::ObTableSchema *&index_id_table_schema);
+      const share::schema::ObTableSchema *base_table_schema,
+      const share::schema::ObTableSchema *delta_buf_table_schema,
+      const share::schema::ObTableSchema *index_id_table_schema);
   // Only for mock testing.
   int mock_resolve_and_check_table_valid(
       const ObString &arg_idx_name, const ObString &arg_base_name,
@@ -139,10 +183,23 @@ private:
       const share::schema::ObTableSchema *&base_table_schema,
       const share::schema::ObTableSchema *&delta_buf_table_schema,
       const share::schema::ObTableSchema *&index_id_table_schema);
+  int resolve_table_id_and_check_table_valid(
+      const int64_t idx_table_id,
+      const share::schema::ObTableSchema *&base_table_schema,
+      const share::schema::ObTableSchema *&delta_buf_table_schema,
+      const share::schema::ObTableSchema *&index_id_table_schema,
+      bool& in_recycle_bin);
   int resolve_refresh_arg(const ObVectorRefreshIndexArg &arg);
+  int resolve_refresh_inner_arg(const ObVectorRefreshIndexInnerArg &arg,
+                                bool& in_recycle_bin);
   int resolve_rebuild_arg(const ObVectorRebuildIndexArg &arg);
+  int resolve_rebuild_inner_arg(const ObVectorRebuildIndexInnerArg &arg,
+                                bool& in_recycle_bin);
+
   int do_refresh();
+  int do_refresh_with_retry();
   int do_rebuild();
+  int do_rebuild_with_retry();
 
 private:
   pl::ObPLExecCtx *pl_ctx_;

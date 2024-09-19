@@ -106,6 +106,17 @@ public:
       const obrpc::ObCreateIndexArg &create_index_arg,
       const ObTableSchema &data_table_schema,
       ObTableSchema &new_index_schema);
+  static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                  const uint64_t vidx_table_id,
+                                  const common::ObString &exec_env);
+  static int remove_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                     const uint64_t vidx_table_id);
+  static int get_dbms_vector_job_info(common::ObISQLClient &sql_client,
+                                      const uint64_t tenant_id,
+                                      const uint64_t vidx_table_id,
+                                      common::ObIAllocator &allocator,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
+                                      dbms_scheduler::ObDBMSSchedJobInfo &job_info);
   static bool has_multi_index_on_same_column(
       ObIArray<uint64_t> &vec_index_cols,
       const uint64_t col_id);

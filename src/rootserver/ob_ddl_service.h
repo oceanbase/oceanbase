@@ -1257,6 +1257,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       share::schema::ObTableSchema &schema);
 
   int reset_parallel_cache(const uint64_t tenant_id);
+  static int set_dbms_job_exec_env(const obrpc::ObCreateIndexArg &create_index_arg,
+                                   ObTableSchema& vidx_table_schema);
 private:
   enum PartitionBornMethod : int64_t
   {

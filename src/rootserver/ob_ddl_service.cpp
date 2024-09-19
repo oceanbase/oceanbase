@@ -121,6 +121,7 @@
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "share/schema/ob_mview_info.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
+#include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "rootserver/mview/ob_mview_dependency_service.h"
 #include "src/share/ob_vec_index_builder_util.h"
@@ -23710,6 +23711,7 @@ int ObDDLService::flashback_table_from_recyclebin(const ObFlashBackTableFromRecy
     uint64_t new_db_id = OB_INVALID_ID;
     uint64_t synonym_id = OB_INVALID_ID;
     lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+
     if (OB_FAIL(schema_guard.get_tenant_compat_mode(arg.tenant_id_, compat_mode))) {
       LOG_WARN("fail to get tenant compat mode", K(ret), K(tenant_id), K(compat_mode));
     } else if (!arg.new_db_name_.empty() && !arg.new_table_name_.empty()) {
@@ -38319,6 +38321,21 @@ int ObDDLService::reset_parallel_cache(const uint64_t tenant_id)
   if (OB_TMP_FAIL(non_partitioned_tablet_allocator_.reset_cache(tenant_id))) {
     ret = OB_FAIL(ret) ? ret : tmp_ret;
     LOG_ERROR("reset cache failed", KR(tmp_ret), KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObDDLService::set_dbms_job_exec_env(const obrpc::ObCreateIndexArg &create_index_arg,
+                                        ObTableSchema& vidx_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(!vidx_table_schema.is_vec_delta_buffer_type())) {
+    // do nothing
+  } else if (OB_UNLIKELY(create_index_arg.index_type_ != INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index arg type is not INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL", K(ret), K(create_index_arg.index_type_));
+  } else if (OB_FAIL(vidx_table_schema.set_exec_env(create_index_arg.vidx_refresh_info_.exec_env_))) {
+    LOG_WARN("fail to set exec env", K(ret));
   }
   return ret;
 }
