@@ -493,7 +493,8 @@ int ObCOTabletMergeCtx::create_sstables(const uint32_t start_cg_idx, const uint3
     } else {
       merged_sstable_array_[i] = table_handle.get_table();
       exist_cg_tables_cnt++;
-      LOG_TRACE("success to create sstable", K(ret), K(i), K(table_handle), "merged_cg_tables_count", count);
+      const ObSSTable *new_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+      FLOG_INFO("success to create sstable", KPC(new_sstable), KPC(cg_schema_ptr), "cg_idx", i);
     }
   } // for
   if (OB_FAIL(ret)) {

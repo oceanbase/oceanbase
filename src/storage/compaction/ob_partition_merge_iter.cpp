@@ -335,8 +335,7 @@ int ObPartitionMergeIter::check_merge_range_cross(ObDatumRange &data_range, bool
     }
 
     // safe to modify range of curr_macro_block with overwriting ptr only
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(merge_range_.get_start_key().compare(data_range.get_start_key(),
+    if (FAILEDx(merge_range_.get_start_key().compare(data_range.get_start_key(),
                                                      *datum_utils,
                                                      cmp_ret))) {
       STORAGE_LOG(WARN, "Failed to compare start key", K(ret), K_(merge_range), K(data_range));
@@ -344,10 +343,9 @@ int ObPartitionMergeIter::check_merge_range_cross(ObDatumRange &data_range, bool
       data_range.start_key_ = merge_range_.get_start_key();
       range_cross = true;
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(merge_range_.get_end_key().compare(data_range.get_end_key(),
-                                                          *datum_utils,
-                                                          cmp_ret))) {
+    if (FAILEDx(merge_range_.get_end_key().compare(data_range.get_end_key(),
+                                                   *datum_utils,
+                                                   cmp_ret))) {
       STORAGE_LOG(WARN, "Failed to compare end key", K(ret), K_(merge_range), K(data_range));
     } else if (cmp_ret <= 0) {
       data_range.end_key_ = merge_range_.get_end_key();
@@ -898,7 +896,8 @@ ObPartitionMicroMergeIter::ObPartitionMicroMergeIter(common::ObIAllocator &alloc
     curr_micro_block_(nullptr),
     micro_block_opened_(false),
     macro_reader_(),
-    need_reuse_micro_block_(true)
+    need_reuse_micro_block_(true),
+    need_check_schema_version_(false)
 {
 }
 
@@ -917,6 +916,7 @@ void ObPartitionMicroMergeIter::reset()
   curr_micro_block_ = nullptr;
   micro_block_opened_ = false;
   need_reuse_micro_block_ = true;
+  need_check_schema_version_ = false;
   ObPartitionMacroMergeIter::reset();
 }
 
@@ -963,15 +963,17 @@ int ObPartitionMicroMergeIter::inner_init(const ObMergeParameter &merge_param)
   } else {
     curr_micro_block_ = nullptr;
     micro_block_opened_ = false;
+    need_check_schema_version_ = merge_param.static_param_.data_version_ < DATA_VERSION_4_3_3_0;
   }
-
   return ret;
 }
 
 // check before open each macro block
 void ObPartitionMicroMergeIter::check_need_reuse_micro_block()
 {
-  if (curr_block_desc_.schema_version_ <= 0 || curr_block_desc_.schema_version_ != schema_version_) {
+  if (curr_block_desc_.schema_version_ <= 0) {
+    need_reuse_micro_block_ = false;
+  } else if (curr_block_desc_.schema_version_ != schema_version_ && need_check_schema_version_) {
     need_reuse_micro_block_ = false;
   } else {
     need_reuse_micro_block_ = true;
