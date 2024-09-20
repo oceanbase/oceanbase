@@ -111,8 +111,10 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
                  is_successfully_constructed()) {
       ret = OB_INIT_FAIL;
       DETECT_LOG(WARN, "construct ObLCLNode obj failed", KR(ret));
+      mtl_free(p_detector);
+    } else {
+      ATOMIC_INC(&create_count_);
     }
-    ATOMIC_INC(&create_count_);
   }
 
   return ret;
