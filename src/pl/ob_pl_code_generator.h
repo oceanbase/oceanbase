@@ -255,6 +255,7 @@ public:
                          bool in_warning,
                          bool signal);
   int generate_close_loop_cursor(bool is_from_exception, int64_t dest_level);
+  int generate_destruct_out_params();
   int raise_exception(jit::ObLLVMValue &exception,
                       jit::ObLLVMValue &error_code,
                       jit::ObLLVMValue &sql_staten,

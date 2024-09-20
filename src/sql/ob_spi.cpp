@@ -5497,8 +5497,11 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
         for (int64_t i = 0; OB_SUCC(ret) && i < n; ++i) {
           new (&reinterpret_cast<ObObj*>(data)[i])ObObj(ObNullType);
         }
-
-        SET_COLLECTION_INFO;
+        if (OB_SUCC(ret)) {
+          SET_COLLECTION_INFO;
+        } else {
+          coll.get_allocator()->free(data);
+        }
       }
     }
   }

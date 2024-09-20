@@ -2577,6 +2577,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
           unwind_exception_pointer_type, unwindException));
       OZ (generator_.get_helper().create_block(ObString("normal"), generator_.get_func(), normal));
       OZ (generator_.generate_close_loop_cursor(true, generator_.get_current_exception() != NULL ? generator_.get_current_exception()->level_ : 0));
+      OZ (generator_.generate_destruct_out_params());
       OZ (generator_.raise_exception(unwindException,
                                      error_code, sql_state, normal,
                                      s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
@@ -2645,6 +2646,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       // 暂时先用stmtid， 这个id就是col和line的组合
       OZ (generator_.get_helper().get_int64(s.get_stmt_id(), loc));
       OZ (generator_.generate_close_loop_cursor(true, generator_.get_current_exception() != NULL ? generator_.get_current_exception()->level_ : 0));
+      OZ (generator_.generate_destruct_out_params());
       OZ (generator_.generate_exception(type, ob_err_code, err_code, sql_state, str_len, stmt_id,
                                         normal, loc, s.get_block()->in_notfound(),
                                         s.get_block()->in_warning(), true/*is signal*/));
@@ -7494,6 +7496,21 @@ int ObPLCodeGenerator::generate_close_loop_cursor(bool is_from_exception, int64_
   return ret;
 }
 
+int ObPLCodeGenerator::generate_destruct_out_params()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_out_params().count(); ++i) {
+    ObLLVMValue src_datum;
+    jit::ObLLVMValue ret_err;
+    ObSEArray<jit::ObLLVMValue, 2> args;
+    OZ (extract_obobj_ptr_from_objparam(get_out_params().at(i), src_datum));
+    OZ (args.push_back(get_vars()[CTX_IDX]));
+    OZ (args.push_back(src_datum));
+    OZ (helper_.create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err));
+  }
+  return ret;
+}
+
 int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
                                        ObLLVMValue &error_code,
                                        ObLLVMValue &sql_state,
@@ -7523,15 +7540,6 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
   if (OB_SUCC(ret)) {
     ObLLVMValue ret_value;
     ObLLVMValue exception_result;
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_out_params().count(); ++i) {
-      ObLLVMValue src_datum;
-      jit::ObLLVMValue ret_err;
-      ObSEArray<jit::ObLLVMValue, 2> args;
-      OZ (extract_obobj_ptr_from_objparam(get_out_params().at(i), src_datum));
-      OZ (args.push_back(get_vars()[CTX_IDX]));
-      OZ (args.push_back(src_datum));
-      OZ (helper_.create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err));
-    }
 
     if (OB_ISNULL(get_current_exception())) {
       OZ (helper_.create_call(ObString("raise_exception"),
@@ -7626,7 +7634,7 @@ int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (0 == get_loop_count()) {
+    } else if (0 == get_loop_count() && 0 == get_out_params().count()) {
       // do not need to CG close cursors, cond_br to fail_branch directly
       if (OB_FAIL(helper_.create_cond_br(is_true, success_branch, fail_branch))) {
         LOG_WARN("failed to create_cond_br", K(ret));
@@ -7645,6 +7653,8 @@ int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
         * 因为此时已经在exception过程中，只尝试关闭，不再check_success
         */
         LOG_WARN("failed to generate_close_loop_cursor", K(ret));
+      } else if (OB_FAIL(generate_destruct_out_params())) {
+        LOG_WARN("fail to generate generate_destruct_out_params", K(ret));
       } else if (OB_FAIL(helper_.create_br(fail_branch))) {
         LOG_WARN("failed to create_br", K(ret));
       }
