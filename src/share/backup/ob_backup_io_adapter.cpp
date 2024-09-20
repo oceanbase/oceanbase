@@ -763,24 +763,43 @@ int ObBackupIoAdapter::get_file_size(ObIODevice *device_handle, const ObIOFd &fd
 class ObDelFilesOp : public ObBaseDirEntryOperator
 {
 public:
-  ObDelFilesOp() : is_inited_(false), dir_path_len_(0), storage_info_(nullptr)
+  ObDelFilesOp()
+      : is_inited_(false), dir_path_len_(0), storage_info_(nullptr),
+        allocator_("ObDelFilesOp"), files_to_delete_()
   {
     MEMSET(dir_path_, 0, sizeof(dir_path_));
   }
-  virtual ~ObDelFilesOp() {}
+  virtual ~ObDelFilesOp()
+  {
+    if (OB_UNLIKELY(!files_to_delete_.empty())) {
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED,
+          "There are remaining files to delete, "
+          "it seems the clean_batch_files function may have been overlooked",
+          K(dir_path_), K(files_to_delete_), K(files_to_delete_.count()));
+    }
+    allocator_.reset();
+    files_to_delete_.reset();
+  }
+
   int init(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
   virtual int func(const dirent *entry) override;
+  int clean_batch_files();
 
 protected:
+  static constexpr int64_t BATCH_DELETE_SIZE = 1000;
+
   bool is_inited_;
   char dir_path_[OB_MAX_URI_LENGTH];
   int64_t dir_path_len_;
   const share::ObBackupStorageInfo *storage_info_;
+  ObArenaAllocator allocator_;
+  ObArray<ObString> files_to_delete_;
 };
 
 int ObDelFilesOp::init(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
+  dir_path_len_ = 0;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "ObDelFilesOp has been inited", KR(ret));
@@ -788,15 +807,23 @@ int ObDelFilesOp::init(const common::ObString &uri, const share::ObBackupStorage
       OB_UNLIKELY(uri.empty() || uri.length() >= sizeof(dir_path_) || !storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", KR(ret), K(uri), KPC(storage_info));
-  } else {
-    const char *suffix = is_end_with_slash(uri.ptr()) ? "" : "/";
-    if (OB_FAIL(databuff_printf(dir_path_, sizeof(dir_path_), dir_path_len_,
-                                "%s%s", uri.ptr(), suffix))) {
-      OB_LOG(WARN, "fail to fill dir_path", KR(ret), K(uri), K(suffix));
+  } else if (OB_FAIL(databuff_printf(dir_path_, sizeof(dir_path_), dir_path_len_,
+                                     "%.*s", uri.length(), uri.ptr()))) {
+    OB_LOG(WARN, "fail to fill dir_path", KR(ret), K(uri));
+  } else if (dir_path_[dir_path_len_] != '/') {
+    if (OB_UNLIKELY(dir_path_len_ >= sizeof(dir_path_) - 1)) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "uri too long", KR(ret), K(uri), K(dir_path_len_), K(sizeof(dir_path_)));
     } else {
-      storage_info_ = storage_info;
-      is_inited_ = true;
+      dir_path_[dir_path_len_] = '/';
+      dir_path_len_++;
+      dir_path_[dir_path_len_] = '\0';
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    storage_info_ = storage_info;
+    is_inited_ = true;
   }
   return ret;
 }
@@ -805,6 +832,7 @@ int ObDelFilesOp::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
   int64_t pos = dir_path_len_;
+  char *cur_uri = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "ObDelFilesOp is not inited", KR(ret));
@@ -816,10 +844,55 @@ int ObDelFilesOp::func(const dirent *entry)
     OB_LOG(WARN, "dt type is not a regular file!",
         KR(ret), K(entry->d_type), K(entry->d_name));
   } else if (OB_FAIL(databuff_printf(dir_path_, sizeof(dir_path_), pos, "%s", entry->d_name))) {
-    OB_LOG(WARN, "failed to construct obj name", KR(ret), K(entry->d_name));
-  } else if (OB_FAIL(ObBackupIoAdapter::del_file(dir_path_, storage_info_))) {
-    OB_LOG(WARN, "failed to del file",
-        KR(ret), K(entry->d_name), K_(dir_path), KPC_(storage_info));
+    OB_LOG(WARN, "failed to construct obj name", KR(ret), K(entry->d_name), K(pos));
+  } else if (OB_FAIL(ob_dup_cstring(allocator_, dir_path_, cur_uri))) {
+    OB_LOG(WARN, "fail to copy cur uri", KR(ret), K(dir_path_), K(entry->d_name), K(pos));
+  } else if (OB_FAIL(files_to_delete_.push_back(cur_uri))) {
+    OB_LOG(WARN, "fail to store cur uri", KR(ret),
+        K(dir_path_), K(cur_uri), K(entry->d_name), K(pos));
+  } else if (files_to_delete_.count() >= BATCH_DELETE_SIZE) {
+    if (OB_FAIL(clean_batch_files())) {
+      OB_LOG(WARN, "failed to batch del files",
+          KR(ret), K(entry->d_name), K_(dir_path), KPC_(storage_info),
+          K(files_to_delete_.count()), K(files_to_delete_));
+    }
+  }
+  return ret;
+}
+
+int ObDelFilesOp::clean_batch_files()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t retry_times = 3;
+  ObArray<int64_t> failed_files_idx;
+  if (files_to_delete_.count() > 0) {
+    // Call batch_del_files to delete files.
+    // Only when this interface returns OB_SUCCESS and failed_files_idx is empty
+    // does it indicate that all objects have been successfully deleted.
+    // If deletion fails, retry up to retry_times times.
+    do {
+      failed_files_idx.reset();
+      if (OB_TMP_FAIL(ObBackupIoAdapter::batch_del_files(
+              storage_info_, files_to_delete_, failed_files_idx))
+          || !failed_files_idx.empty()) {
+        OB_LOG(WARN, "ObDelFilesOp fail to batch_del_files",
+            KR(tmp_ret), K(retry_times), KPC_(storage_info), K(files_to_delete_.count()),
+            K(files_to_delete_), K(failed_files_idx.count()));
+      }
+      retry_times--;
+    } while (OB_SUCC(ret) && retry_times > 0
+        && (OB_SUCCESS != tmp_ret || !failed_files_idx.empty()));
+
+    if (OB_SUCCESS == tmp_ret && !failed_files_idx.empty()) {
+      ret = OB_UTL_FILE_DELETE_FAILED;
+    }
+    ret = COVER_SUCC(tmp_ret);
+  }
+
+  if (OB_SUCC(ret)) {
+    files_to_delete_.reset();
+    allocator_.reuse();
   }
   return ret;
 }
@@ -888,6 +961,8 @@ int ObBackupIoAdapter::del_dir(const common::ObString &uri,
       OB_LOG(WARN, "fail to init ObDelFilesOp", KR(ret), K(uri), KPC(storage_info));
     } else if (OB_FAIL(list_files(uri, storage_info, del_files_op))) {
       OB_LOG(WARN, "fail to delete files", KR(ret), K(uri), KPC(storage_info));
+    } else if (OB_FAIL(del_files_op.clean_batch_files())) {
+      OB_LOG(WARN, "fail to delete remained files", KR(ret), K(uri), KPC(storage_info));
     } else if (OB_FAIL(device_handle->rmdir(uri.ptr()))) {
       OB_LOG(WARN, "fail to remove dir!", KR(ret), K(uri), KPC(storage_info));
     }

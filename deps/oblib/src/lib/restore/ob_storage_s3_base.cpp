@@ -1727,16 +1727,16 @@ int ObStorageS3Util::batch_del_files_(
       for (int64_t i = 0; OB_SUCC(ret) && i < deleted_object_list.size(); i++) {
         object_name = deleted_object_list[i].GetKey().c_str();
         object_name_len = deleted_object_list[i].GetKey().size();
-        if (OB_ISNULL(object_name)) {
+        if (OB_ISNULL(object_name) || OB_UNLIKELY(object_name_len <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "returned object name is null",
-              K(ret), K(s3_base.s3_account_), K(i), K(object_name));
+              K(ret), K(s3_base.s3_account_), K(i), K(object_name), K(object_name_len));
         }
         // S3 returns the successfully deleted object in the structure of the basic_string.
         // We use the size of string to construct ObString.
         else if (OB_FAIL(files_to_delete.erase_refactored(ObString(object_name_len, object_name)))) {
-          OB_LOG(WARN, "fail to erase succeed deleted object",
-              K(ret), K(s3_base.s3_account_), K(i), K(object_name));
+          OB_LOG(WARN, "fail to erase succeed deleted object", K(ret),
+              K(s3_base.s3_account_), K(i), K(object_name), K(object_name_len));
         } else {
           OB_LOG(DEBUG, "succeed deleting object", K(object_name));
         }
