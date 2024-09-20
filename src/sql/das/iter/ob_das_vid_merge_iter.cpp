@@ -720,6 +720,8 @@ int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id)
   if (OB_ISNULL(data_table_ctdef_) || OB_ISNULL(data_table_rtdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpeted error, data table ctdef is nullptr", K(ret), KP(data_table_ctdef_), KP(data_table_rtdef_));
+  } else if (data_table_ctdef_->vec_vid_idx_ == -1) {
+    LOG_INFO("get invalid vec vid idx, just do nothing", K(ret), KPC(data_table_ctdef_));
   } else {
     const int64_t vid_id_idx = data_table_ctdef_->vec_vid_idx_;
     ObExpr *vid_id_expr = nullptr;
