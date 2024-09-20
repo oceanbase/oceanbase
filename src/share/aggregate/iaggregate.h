@@ -319,7 +319,8 @@ public:
   int collect_batch_group_results(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                                   const int32_t cur_group_id, const int32_t output_start_idx,
                                   const int32_t expect_batch_size, int32_t &output_size,
-                                  const ObBitVector *skip = nullptr) override
+                                  const ObBitVector *skip = nullptr,
+                                  const bool init_vector = true) override
   {
     int ret = OB_SUCCESS;
     OB_ASSERT(agg_col_id < agg_ctx.aggr_infos_.count());
@@ -332,7 +333,7 @@ public:
       SQL_LOG(DEBUG, "no need to collect", K(ret), K(agg_ctx.agg_rows_.count()), K(cur_group_id));
     } else {
       output_size = 0;
-      if (OB_FAIL(agg_expr.init_vector_for_write(
+      if (init_vector && OB_FAIL(agg_expr.init_vector_for_write(
             agg_ctx.eval_ctx_, agg_expr.get_default_res_format(), expect_batch_size))) {
         SQL_LOG(WARN, "init vector for write failed", K(ret));
       } else {
