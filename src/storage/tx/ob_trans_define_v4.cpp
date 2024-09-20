@@ -618,7 +618,7 @@ void ObTxDesc::dump_and_print_trace()
   }
 }
 
-bool ObTxDesc::in_tx_or_has_extra_state()
+bool ObTxDesc::in_tx_or_has_extra_state() const
 {
   ObSpinLockGuard guard(lock_);
   return in_tx_or_has_extra_state_();
