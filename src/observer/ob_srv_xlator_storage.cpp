@@ -150,6 +150,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObDelSSTabletMetaP, gctx_);
     RPC_PROCESSOR(ObEnableSSMicroCacheP, gctx_);
     RPC_PROCESSOR(ObGetSSMicroCacheInfoP, gctx_);
+    RPC_PROCESSOR(ObRpcClearSSMicroCacheP, gctx_);
 #endif
     RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);
 }

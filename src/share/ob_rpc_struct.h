@@ -10921,6 +10921,22 @@ public:
   ObSSMicroCacheSuperBlock super_block_;
   ObSSARCInfo arc_info_;
 };
+
+struct ObClearSSMicroCacheArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObClearSSMicroCacheArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObClearSSMicroCacheArg() {}
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_);
+  }
+  TO_STRING_KV(K_(tenant_id));
+
+public:
+  uint64_t tenant_id_;
+};
 #endif
 
 struct ObRpcRemoteWriteDDLIncCommitLogArg final

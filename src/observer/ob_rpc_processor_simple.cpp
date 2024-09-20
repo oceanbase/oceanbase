@@ -3703,6 +3703,28 @@ int ObGetSSMicroCacheInfoP::process()
 
   return ret;
 }
+
+int ObRpcClearSSMicroCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      ObSSMicroCache *micro_cache = nullptr;
+      if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("micro_cache is nullptr", KR(ret));
+      } else {
+        micro_cache->clear_micro_cache();
+        LOG_INFO("success clear ss_micro_cache");
+      }
+    }
+  }
+  return ret;
+}
 #endif
 
 int ObNotifySharedStorageInfoP::process()
