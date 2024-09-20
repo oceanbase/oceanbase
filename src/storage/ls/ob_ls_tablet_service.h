@@ -167,6 +167,7 @@ public:
       const lib::Worker::CompatMode &compat_mode,
       const bool need_create_empty_major_sstable,
       const bool micro_index_clustered,
+      const bool has_cs_replica,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
       const share::ObLSID &ls_id,

@@ -89,7 +89,6 @@ using namespace rootserver;
 
 namespace storage
 {
-ERRSIM_POINT_DEF(EN_LS_NOT_SEE_CS_REPLICA);
 
 using namespace checkpoint;
 using namespace mds;
@@ -504,11 +503,22 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
 {
   int ret = OB_SUCCESS;
   has_cs_replica = false;
+  ObRole role = INVALID_ROLE;
   ObMemberList member_list;
   GlobalLearnerList learner_list;
+  int64_t proposal_id = 0;
   int64_t paxos_replica_number = 0;
-  if (OB_FAIL(get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
-    LOG_WARN("fail to get member list and learner list", K(ret), K(ls_meta_.ls_id_));
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
+    LOG_WARN("fail to get role", K(ret), KPC(this));
+  } else if (LEADER != role) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("local ls is not leader", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
+    LOG_WARN("fail to get member list and learner list", K(ret), K_(ls_meta));
   } else {
     for (int64_t i = 0; i < learner_list.get_member_number(); i++) {
       const ObMember &learner = learner_list.get_learner(i);
@@ -518,16 +528,6 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
       }
     }
   }
-
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    if (EN_LS_NOT_SEE_CS_REPLICA) {
-      has_cs_replica = false;
-      LOG_INFO("ERRSIM EN_LS_NOT_SEE_CS_REPLICA", K(ret), K(has_cs_replica));
-    }
-  }
-#endif
-
   return ret;
 }
 

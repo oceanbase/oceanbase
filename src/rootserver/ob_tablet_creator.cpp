@@ -51,6 +51,7 @@ void ObTabletCreatorArg::reset()
   is_create_bind_hidden_tablets_ = false;
   tenant_data_version_ = 0;
   need_create_empty_majors_.reset();
+  has_cs_replica_ = false;
 }
 
 int ObTabletCreatorArg::assign(const ObTabletCreatorArg &arg)
@@ -71,6 +72,7 @@ int ObTabletCreatorArg::assign(const ObTabletCreatorArg &arg)
     compat_mode_ = arg.compat_mode_;
     is_create_bind_hidden_tablets_ = arg.is_create_bind_hidden_tablets_;
     tenant_data_version_ = arg.tenant_data_version_;
+    has_cs_replica_ = arg.has_cs_replica_;
   }
   return ret;
 }
@@ -83,7 +85,8 @@ int ObTabletCreatorArg::init(
     const lib::Worker::CompatMode &mode,
     const bool is_create_bind_hidden_tablets,
     const uint64_t tenant_data_version,
-    const ObIArray<bool> &need_create_empty_majors)
+    const ObIArray<bool> &need_create_empty_majors,
+    const bool has_cs_replica)
 {
   int ret = OB_SUCCESS;
   bool is_valid = ls_key.is_valid() && table_schemas.count() > 0
@@ -110,6 +113,7 @@ int ObTabletCreatorArg::init(
     compat_mode_ = mode;
     is_create_bind_hidden_tablets_ = is_create_bind_hidden_tablets;
     tenant_data_version_ = tenant_data_version;
+    has_cs_replica_ = has_cs_replica;
   }
   return ret;
 }
@@ -118,7 +122,7 @@ DEF_TO_STRING(ObTabletCreatorArg)
 {
   int64_t pos = 0;
   J_KV(K_(compat_mode), K_(tablet_ids), K_(data_tablet_id), K_(ls_key), K_(table_schemas), K_(is_create_bind_hidden_tablets),
-    K_(tenant_data_version), K_(need_create_empty_majors));
+    K_(tenant_data_version), K_(need_create_empty_majors), K_(has_cs_replica));
   return pos;
 }
 
@@ -177,7 +181,8 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
                             tablet_arg.data_tablet_id_,
                             index_array,
                             tablet_arg.compat_mode_,
-                            tablet_arg.is_create_bind_hidden_tablets_))) {
+                            tablet_arg.is_create_bind_hidden_tablets_,
+                            tablet_arg.has_cs_replica_))) {
         LOG_WARN("failed to init create tablet info", KR(ret), K(index_array), K(tablet_arg));
       } else if (OB_FAIL(batch_arg_.tablets_.push_back(info))) {
         LOG_WARN("failed to push back info", KR(ret), K(info));

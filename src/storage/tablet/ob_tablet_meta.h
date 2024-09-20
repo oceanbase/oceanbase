@@ -69,7 +69,8 @@ public:
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
       const int64_t create_schema_version,
-      const bool micro_index_clustered);
+      const bool micro_index_clustered,
+      const bool has_cs_replica);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const int64_t snapshot_version,
@@ -105,6 +106,8 @@ public:
   // mds_checkpoint_scn and ddl_checkpoint_scn.
   // Note, if a new type of checkpoint scn is added, donot forget to modify the returned scn.
   share::SCN get_max_replayed_scn() const;
+  // for column store replica
+  bool is_cs_replica_global_visable_when_ddl() const;
 public:
   static int deserialize_id(
       const char *buf,

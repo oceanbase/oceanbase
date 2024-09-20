@@ -87,7 +87,8 @@ int ObTabletMeta::init(
     const lib::Worker::CompatMode compat_mode,
     const ObTabletTableStoreFlag &table_store_flag,
     const int64_t create_schema_version,
-    const bool micro_index_clustered)
+    const bool micro_index_clustered,
+    const bool has_cs_replica)
 {
   int ret = OB_SUCCESS;
 
@@ -126,7 +127,7 @@ int ObTabletMeta::init(
     ddl_snapshot_version_ = 0;
     max_sync_storage_schema_version_ = create_schema_version;
     ddl_data_format_version_ = 0;
-    ddl_table_type_ = ObITable::DDL_MEM_SSTABLE;
+    ddl_table_type_ = has_cs_replica ? ObITable::DDL_MERGE_CO_SSTABLE : ObITable::DDL_DUMP_SSTABLE;
     mds_checkpoint_scn_ = INIT_CLOG_CHECKPOINT_SCN;
     report_status_.merge_snapshot_version_ = snapshot_version;
     report_status_.cur_report_version_ = snapshot_version;
@@ -1020,6 +1021,11 @@ int ObTabletMeta::update_meta_last_persisted_committed_tablet_status(
     }
   }
   return ret;
+}
+
+bool ObTabletMeta::is_cs_replica_global_visable_when_ddl() const
+{
+  return ObITable::is_column_store_sstable(ddl_table_type_);
 }
 
 ObMigrationTabletParam::ObMigrationTabletParam()

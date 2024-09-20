@@ -184,6 +184,7 @@ public:
       const bool need_create_empty_major_sstable,
       const bool micro_index_clustered,
       const bool need_generate_cs_replica_cg_array,
+      const bool has_cs_replica,
       ObFreezer *freezer);
   // dump/merge build new multi version tablet
   int init_for_merge(
@@ -469,10 +470,21 @@ public:
   int get_migration_sstable_size(int64_t &data_size);
 
   // column store replica
+public:
   int check_cs_replica_compat_schema(bool &is_cs_replica_compat) const;
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
-  int pre_process_cs_replica(ObTabletDirectLoadInsertParam &direct_load_param);
-
+  int pre_process_cs_replica(
+      const ObDirectLoadType direct_load_type,
+      bool &replay_normal_in_cs_replica);
+  int pre_process_cs_replica(
+      const ObDirectLoadType direct_load_type,
+      ObITable::TableKey &table_key);
+private:
+  int inner_pre_process_cs_replica(
+      const ObDirectLoadType direct_load_type,
+      ObITable::TableKey &table_key,
+      bool &replay_normal_in_cs_replica);
+public:
   // other
   const ObMetaDiskAddr &get_tablet_addr() const { return tablet_addr_; }
   const ObTabletMeta &get_tablet_meta() const { return tablet_meta_; }

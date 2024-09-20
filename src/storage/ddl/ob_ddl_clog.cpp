@@ -403,7 +403,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 
 ObDDLStartLog::ObDDLStartLog()
   : table_key_(), data_format_version_(0), execution_id_(-1), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_DDL) /*for compatibility*/,
-    lob_meta_tablet_id_(ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID), with_cs_replica_(false)
+    lob_meta_tablet_id_(ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID)
 {
 }
 
@@ -412,8 +412,7 @@ int ObDDLStartLog::init(
     const uint64_t data_format_version,
     const int64_t execution_id,
     const ObDirectLoadType direct_load_type,
-    const ObTabletID &lob_meta_tablet_id,
-    const bool with_cs_replica)
+    const ObTabletID &lob_meta_tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0 || !is_valid_direct_load(direct_load_type)
@@ -426,12 +425,11 @@ int ObDDLStartLog::init(
     execution_id_ = execution_id;
     direct_load_type_ = direct_load_type;
     lob_meta_tablet_id_ = lob_meta_tablet_id;
-    with_cs_replica_ = with_cs_replica;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_, direct_load_type_, lob_meta_tablet_id_, with_cs_replica_);
+OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_, direct_load_type_, lob_meta_tablet_id_);
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()

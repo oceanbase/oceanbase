@@ -4074,7 +4074,8 @@ public:
            const common::ObTabletID data_tablet_id,
            const common::ObIArray<int64_t> &table_schema_index,
            const lib::Worker::CompatMode &mode,
-           const bool is_create_bind_hidden_tablets);
+           const bool is_create_bind_hidden_tablets,
+           const bool has_cs_replica);
   common::ObTabletID get_data_tablet_id() const { return data_tablet_id_; }
   int64_t get_tablet_count() const { return tablet_ids_.count(); }
   DECLARE_TO_STRING;
@@ -4086,6 +4087,7 @@ public:
   lib::Worker::CompatMode compat_mode_;
   bool is_create_bind_hidden_tablets_;
   ObSArray<int64_t> create_commit_versions_;
+  bool has_cs_replica_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTabletInfo);
 };

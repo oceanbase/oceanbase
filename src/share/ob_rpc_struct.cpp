@@ -9698,6 +9698,7 @@ void ObCreateTabletInfo::reset()
   compat_mode_ = lib::Worker::CompatMode::INVALID;
   is_create_bind_hidden_tablets_ = false;
   create_commit_versions_.reset();
+  has_cs_replica_ = false;
 }
 
 int ObCreateTabletInfo::assign(const ObCreateTabletInfo &info)
@@ -9716,6 +9717,7 @@ int ObCreateTabletInfo::assign(const ObCreateTabletInfo &info)
     data_tablet_id_ = info.data_tablet_id_;
     compat_mode_ = info.compat_mode_;
     is_create_bind_hidden_tablets_ = info.is_create_bind_hidden_tablets_;
+    has_cs_replica_ = info.has_cs_replica_;
   }
   return ret;
 }
@@ -9724,7 +9726,8 @@ int ObCreateTabletInfo::init(const ObIArray<common::ObTabletID> &tablet_ids,
                              common::ObTabletID data_tablet_id,
                              const common::ObIArray<int64_t> &table_schema_index,
                              const lib::Worker::CompatMode &mode,
-                             const bool is_create_bind_hidden_tablets)
+                             const bool is_create_bind_hidden_tablets,
+                             const bool has_cs_replica)
 {
   int ret = OB_SUCCESS;
   bool is_valid = data_tablet_id.is_valid()
@@ -9745,6 +9748,7 @@ int ObCreateTabletInfo::init(const ObIArray<common::ObTabletID> &tablet_ids,
     data_tablet_id_ = data_tablet_id;
     compat_mode_ = mode;
     is_create_bind_hidden_tablets_ = is_create_bind_hidden_tablets;
+    has_cs_replica_ = has_cs_replica;
   }
   return ret;
 }
@@ -9752,11 +9756,11 @@ int ObCreateTabletInfo::init(const ObIArray<common::ObTabletID> &tablet_ids,
 DEF_TO_STRING(ObCreateTabletInfo)
 {
   int64_t pos = 0;
-  J_KV(K_(tablet_ids), K_(data_tablet_id), K_(table_schema_index), K_(compat_mode), K_(is_create_bind_hidden_tablets), K_(create_commit_versions));
+  J_KV(K_(tablet_ids), K_(data_tablet_id), K_(table_schema_index), K_(compat_mode), K_(is_create_bind_hidden_tablets), K_(create_commit_versions), K_(has_cs_replica));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_schema_index_, compat_mode_, is_create_bind_hidden_tablets_, create_commit_versions_);
+OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_schema_index_, compat_mode_, is_create_bind_hidden_tablets_, create_commit_versions_, has_cs_replica_);
 
 int ObCreateTabletExtraInfo::init(
     const uint64_t tenant_data_version,

@@ -2380,6 +2380,7 @@ int ObLSTabletService::create_tablet(
     const lib::Worker::CompatMode &compat_mode,
     const bool need_create_empty_major_sstable,
     const bool micro_index_clustered,
+    const bool has_cs_replica,
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -2407,7 +2408,8 @@ int ObLSTabletService::create_tablet(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("new tablet is null", K(ret), KP(tablet), KP(allocator), K(tablet_handle));
     } else if (OB_FAIL(tablet->init_for_first_time_creation(*allocator, ls_id, tablet_id, data_tablet_id,
-        create_scn, snapshot_version, create_tablet_schema, need_create_empty_major_sstable, micro_index_clustered, need_generate_cs_replica_cg_array, freezer))) {
+        create_scn, snapshot_version, create_tablet_schema, need_create_empty_major_sstable, micro_index_clustered,
+        need_generate_cs_replica_cg_array, has_cs_replica, freezer))) {
       LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
           K(create_scn), K(snapshot_version), K(create_tablet_schema));
     } else if (OB_FAIL(tablet->get_updating_tablet_pointer_param(param))) {
@@ -2464,7 +2466,8 @@ int ObLSTabletService::create_inner_tablet(
     LOG_ERROR("new tablet is null", K(ret), KPC(tmp_tablet), K(tmp_tablet_hdl));
   } else if (FALSE_IT(time_guard.click("CreateTablet"))) {
   } else if (OB_FAIL(tmp_tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, data_tablet_id,
-      create_scn, snapshot_version, create_tablet_schema, true/*need_create_empty_major_sstable*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, freezer))) {
+      create_scn, snapshot_version, create_tablet_schema, true/*need_create_empty_major_sstable*/,
+      false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(create_scn), K(snapshot_version), K(create_tablet_schema));
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
