@@ -942,7 +942,7 @@ int ObLogPartTransParser::parse_ext_info_log_mutator_row_(
         "row_seq_no", row->seq_no_);
   } else if (part_trans_task.is_ddl_trans()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("part tans task is ddl not expected", KR(ret), K(part_trans_task));
+    LOG_ERROR("part tans task is ddl not expected", KR(ret), K(part_trans_task));
   }
 
   if (OB_SUCC(ret)) {
@@ -989,17 +989,19 @@ int ObLogPartTransParser::handle_mutator_ext_info_log_(
     const uint64_t tenant_id = tenant->get_tenant_id();
     const transaction::ObTransID &trans_id = part_trans_task.get_trans_id();
     const uint64_t table_id = 0;
-    ObLobId lob_id; // empty
+    ObLobId lob_id;
     transaction::ObTxSEQ row_seq_no = row->seq_no_;
     ObString ext_info_log;
     ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;
-    LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, row_seq_no);
-    if (OB_FAIL(row->parse_ext_info_log(ext_info_log))) {
-      LOG_WARN("parse_ext_info_log fail", KR(ret));
-    } else if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "ext_info_log", ext_info_log.ptr(), ext_info_log.length()))) {
-      LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));
+    if (OB_FAIL(row->parse_ext_info_log(lob_id, ext_info_log))) {
+      LOG_ERROR("parse_ext_info_log fail", KR(ret));
     } else {
-      LOG_DEBUG("put ext info log success", K(lob_aux_meta_key), "log_length", ext_info_log.length());
+      LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, row_seq_no);
+      if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "ext_info_log", ext_info_log.ptr(), ext_info_log.length()))) {
+        LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));
+      } else {
+        LOG_DEBUG("put ext info log success", K(lob_aux_meta_key), "log_length", ext_info_log.length());
+      }
     }
   } else {
     LOG_INFO("ext info log is ignored", K(tablet_id),

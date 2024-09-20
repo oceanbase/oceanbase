@@ -915,7 +915,7 @@ int ObLobDiffUpdateHandler::execute(ObLobLocatorV2& delta_locator, ObLobDiffHead
     int64_t seq_cnt = iter.get_modified_chunk_cnt();
     param_.used_seq_cnt_ = 0;
     param_.total_seq_cnt_ = seq_cnt;
-    param_.op_type_ = ObLobDataOutRowCtx::OpType::DIFF;
+    param_.op_type_ = ObLobDataOutRowCtx::OpType::DIFF_V2;
     if (OB_FAIL(param_.tx_desc_->get_and_inc_tx_seq(param_.parent_seq_no_.get_branch(),
                                                     seq_cnt,
                                                     param_.seq_no_st_))) {

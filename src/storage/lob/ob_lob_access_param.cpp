@@ -355,41 +355,11 @@ int ObLobAccessParam::update_out_row_ctx(const ObLobMetaInfo *old_info, const Ob
   if (OB_ISNULL(out_row_ctx = get_data_outrow_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob data outrow ctx is null", K(ret), KPC(this));
-  } else if (ObLobDataOutRowCtx::OpType::DIFF == out_row_ctx->op_) {
-    // when op is DIFF, that is json parital update
-    // out_row_ctx will be used to record json diff ext log
-    // no need check_sum and modified_len of updated lob data
-    // and seq_no_cnt is not needed actually, this is just for debug
-    out_row_ctx->seq_no_cnt_ = this->used_seq_cnt_;
-    LOG_DEBUG("update outrow ctx success", K_(op_type), KPC_(lob_data), KPC(out_row_ctx), KPC(old_info), K(new_info));
   } else {
     // update seq no
     // it sholud be update when each lob meta table row is modified (insert/delete/update)
     out_row_ctx->seq_no_cnt_ = this->used_seq_cnt_;
-
-    // currently checksum and modified_len is not used by obcdc expect DIFF situation
-    // update checksum
-    ObBatchChecksum bc;
-    if (old_info != nullptr) {
-      bc.fill(&out_row_ctx->check_sum_, sizeof(out_row_ctx->check_sum_));
-      bc.fill(&old_info->lob_id_, sizeof(old_info->lob_id_));
-      bc.fill(old_info->seq_id_.ptr(), old_info->seq_id_.length());
-      bc.fill(old_info->lob_data_.ptr(), old_info->lob_data_.length());
-      out_row_ctx->check_sum_ = bc.calc();
-      bc.reset();
-    }
-    bc.fill(&out_row_ctx->check_sum_, sizeof(out_row_ctx->check_sum_));
-    bc.fill(&new_info.lob_id_, sizeof(new_info.lob_id_));
-    bc.fill(new_info.seq_id_.ptr(), new_info.seq_id_.length());
-    bc.fill(new_info.lob_data_.ptr(), new_info.lob_data_.length());
-    out_row_ctx->check_sum_ = bc.calc();
-
-    // update modified_len
-    int64_t old_meta_len = (old_info == nullptr) ? 0 : old_info->byte_len_;
-    int64_t new_meta_len = (new_info.byte_len_);
-    out_row_ctx->modified_len_ += std::abs(new_meta_len - old_meta_len);
-
-    LOG_DEBUG("update outrow ctx success", K_(op_type), KPC_(lob_data), KPC(out_row_ctx), K(new_meta_len), K(old_meta_len), KPC(old_info), K(new_info));
+    LOG_DEBUG("update outrow ctx success", K_(op_type), KPC_(lob_data), KPC(out_row_ctx), KPC(old_info), K(new_info));
   }
   return ret;
 }

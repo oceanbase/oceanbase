@@ -264,7 +264,7 @@ public:
 
   ObLobDataOutRowCtxList &get_new_lob_ctx_cols() { return new_lob_ctx_cols_; }
 
-  int parse_ext_info_log(ObString &ext_info_log);
+  int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log);
 
 public:
   TO_STRING_KV(

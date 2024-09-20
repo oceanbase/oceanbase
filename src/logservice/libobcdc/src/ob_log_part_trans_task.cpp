@@ -1050,7 +1050,7 @@ int MutatorRow::get_cols(
   return ret;
 }
 
-int MutatorRow::parse_ext_info_log(ObString &ext_info_log)
+int MutatorRow::parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObRowReader row_reader;
@@ -1071,12 +1071,28 @@ int MutatorRow::parse_ext_info_log(ObString &ext_info_log)
     LOG_ERROR("column value list is not reseted", KR(ret), K(new_cols_));
   } else if (OB_FAIL(row_reader.read_row(new_row_.data_, new_row_.size_, nullptr, datum_row))) {
     LOG_ERROR("Failed to read datum row", K(ret));
-  } else if (datum_row.get_column_count() != storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_COUNT) {
+  } else if (datum_row.get_column_count() < storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_MIN_COUNT) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("ext info mutator column count invalid", KR(ret), "column_count", datum_row.get_column_count());
   } else {
     ext_info_log = datum_row.storage_datums_[storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX].get_string();
-    cols_parsed_ = true;
+
+    // lod id field add in new version, may be not exist in old version
+    // so here need to check column count
+    if (datum_row.get_column_count() >= storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_COUNT) {
+      blocksstable::ObStorageDatum &datum = datum_row.storage_datums_[storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_LOB_ID_IDX];
+      ObString lob_id_data = datum.get_string();
+      if (lob_id_data.length() != sizeof(ObLobId)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid lob id data", KR(ret), K(datum));
+      } else {
+        lob_id = *reinterpret_cast<ObLobId*>(lob_id_data.ptr());
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      cols_parsed_ = true;
+    }
   }
   return ret;
 }

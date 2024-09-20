@@ -79,16 +79,19 @@ private:
 class ObExtInfoCallback : public memtable::ObITransCallback
 {
 public:
-  static const int32_t OB_EXT_INFO_MUTATOR_ROW_COUNT = 2;
+  static const int32_t OB_EXT_INFO_MUTATOR_ROW_MIN_COUNT = 2;
+  static const int32_t OB_EXT_INFO_MUTATOR_ROW_COUNT = 3;
   static const int32_t OB_EXT_INFO_MUTATOR_ROW_KEY_IDX = 0;
   static const int32_t OB_EXT_INFO_MUTATOR_ROW_KEY_CNT = 1;
   static const int32_t OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX = 1;
+  static const int32_t OB_EXT_INFO_MUTATOR_ROW_LOB_ID_IDX = 2;
 
 public:
   ObExtInfoCallback() :
       ObITransCallback(),
       allocator_(nullptr),
       seq_no_cur_(),
+      lob_id_(),
       dml_flag_(blocksstable::ObDmlFlag::DF_MAX),
       key_obj_(),
       key_(),
@@ -111,14 +114,16 @@ public:
       ObIAllocator &allocator,
       const blocksstable::ObDmlFlag dml_flag,
       const transaction::ObTxSEQ &seq_no_cur,
+      const ObLobId &lob_id,
       ObString &data);
 
 public:
-  TO_STRING_KV(K(seq_no_cur_), K(dml_flag_), K(mutator_row_len_), KP(mutator_row_buf_));
+  TO_STRING_KV(K(seq_no_cur_), K(lob_id_), K(dml_flag_), K(mutator_row_len_), KP(mutator_row_buf_));
 
 private:
   ObIAllocator *allocator_;
   transaction::ObTxSEQ seq_no_cur_;
+  ObLobId lob_id_;
   blocksstable::ObDmlFlag dml_flag_;
   ObObj key_obj_;
   memtable::ObMemtableKey key_;
@@ -176,6 +181,8 @@ private:
   int set_outrow_ctx_seq_no(ObObj& index_data);
 
   int get_data(ObString &data);
+
+  int get_lob_id(ObObj &index_data, ObLobId &lob_id);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));

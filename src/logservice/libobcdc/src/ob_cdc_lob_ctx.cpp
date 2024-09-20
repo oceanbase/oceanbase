@@ -121,8 +121,8 @@ int ObLobDataGetCtx::reset(
       type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
       LOG_DEBUG("lob_data_out_row_ctx is diff", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
     } else if (lob_data_out_row_ctx->is_valid_old_value_ext_info_log()) {
-      type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
-      LOG_DEBUG("lob_data_out_row_ctx is valid old value ext info log", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("lob_data_out_row_ctx in new col is valid old value ext info log type", KR(ret), K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
     }
   } else {
     // reset from old
@@ -159,28 +159,32 @@ int ObLobDataGetCtx::get_lob_out_row_ctx(const bool is_new_col, const ObLobDataO
 int ObLobDataGetCtx::get_lob_id(const bool is_new_col, ObLobId &lob_id)
 {
   int ret = OB_SUCCESS;
-  switch (get_type()) {
-    case ObLobDataGetTaskType::FULL_LOB:
-      if(is_new_col) {
-        if (OB_ISNULL(new_lob_data_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get lob id failed, new_lob_data_ is null");
-        } else {
-          lob_id = new_lob_data_->id_;
-        }
-      } else {
-        if (OB_ISNULL(old_lob_data_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get lob id failed, old_lob_data_ is null");
-        } else {
-          lob_id = old_lob_data_->id_;
-        }
+  const ObLobData *lob_data = nullptr;
+  if (OB_ISNULL(lob_data = get_lob_data(is_new_col))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lob_data is nullptr", KR(ret), K(is_new_col), KPC(this));
+  } else {
+    switch (get_type()) {
+      case ObLobDataGetTaskType::FULL_LOB: {
+        lob_id = lob_data->id_;
+        break;
       }
-      break;
-    default:
-      break;
+      case ObLobDataGetTaskType::EXT_INFO_LOG: {
+        const ObLobDataOutRowCtx *lob_data_out_row_ctx = reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data->buffer_);
+        if (OB_ISNULL(lob_data_out_row_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("lob_data_out_row_ctx is nullptr", KR(ret), K(is_new_col), KPC(lob_data), KPC(this));
+        } else if (lob_data_out_row_ctx->is_diff_v1()) {
+          // old diff ext info log no lob id
+        } else {
+          lob_id = lob_data->id_;
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
-
   return ret;
 }
 

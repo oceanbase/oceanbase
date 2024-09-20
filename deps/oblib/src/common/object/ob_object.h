@@ -529,6 +529,7 @@ struct ObLobDataOutRowCtx
     EXT_INFO_LOG,  // occupied, used for new value ext info log
     VALID_OLD_VALUE_EXT_INFO_LOG, // used for old value ext info log
     VALID_OLD_VALUE,  // used for valid old value
+    DIFF_V2, // add lob id in ext info log, so deprecated old, use new diff type
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
@@ -554,7 +555,8 @@ struct ObLobDataOutRowCtx
   bool is_insert() const { return OpType::INSERT == op_; }
   bool is_write() const { return OpType::WRITE == op_; }
   bool is_erase() const { return OpType::ERASE == op_; }
-  bool is_diff() const { return OpType::DIFF == op_; }
+  bool is_diff_v1() const { return OpType::DIFF == op_;}
+  bool is_diff() const { return OpType::DIFF == op_ || OpType::DIFF_V2 == op_; }
   bool is_valid_old_value() const { return OpType::VALID_OLD_VALUE == op_; }
   bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   int64_t get_real_chunk_size() const;
