@@ -734,10 +734,10 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
             LOG_WARN("failed to get real data.", K(ret));
           } else {
             ada_ctx.set_vector(res_count++, vector.ptr(), vector.length());
-            doc_id_scan_param_.key_ranges_.reset();
-            com_aux_vec_scan_param_.key_ranges_.reset();
           }
         }
+        doc_id_scan_param_.key_ranges_.reset();
+        com_aux_vec_scan_param_.key_ranges_.reset();
       }
 
       if (OB_ITER_END == ret) {
