@@ -326,7 +326,8 @@ int ObTableLoadObjCaster::to_type(const ObObjType &expect_type, const share::sch
   if (src.is_null()) {
     dst.set_null();
   } else if (src.get_type_class() == ObStringTC &&
-             (expect_type == ObNumberType || expect_type == ObUNumberType)) {
+             (expect_type == ObNumberType || expect_type == ObUNumberType) &&
+             accuracy.get_scale() >= 0) {
     ObNumberDesc d(0);
     uint32_t *digits = nullptr;
     cast_obj_ctx.number_fast_ctx_.reset();

@@ -17,6 +17,7 @@
 #include "observer/table_load/control/ob_table_load_control_rpc_proxy.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator_trans.h"
+#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_redef_table.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
@@ -1310,10 +1311,20 @@ public:
   int set_objs(const ObTableLoadObjRowArray &obj_rows, const ObIArray<int64_t> &idx_array)
   {
     int ret = OB_SUCCESS;
+    ObTableLoadErrorRowHandler *error_row_handler = ctx_->coordinator_ctx_->error_row_handler_;
     for (int64_t i = 0; OB_SUCC(ret) && (i < obj_rows.count()); ++i) {
       const ObTableLoadObjRow &src_obj_row = obj_rows.at(i);
       ObTableLoadObjRow out_obj_row;
-      if (src_obj_row.project(idx_array, out_obj_row)) {
+      // 对于客户端导入场景, 需要处理多列或者少列
+      if (OB_UNLIKELY(src_obj_row.count_ != ctx_->param_.column_count_)) {
+        ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
+        LOG_WARN("column count doesn't match value count", KR(ret), K(src_obj_row),
+                 K(ctx_->param_.column_count_));
+        ObNewRow new_row(src_obj_row.cells_, src_obj_row.count_);
+        if (OB_FAIL(error_row_handler->handle_error_row(ret, new_row))) {
+          LOG_WARN("fail to handle error row", KR(ret));
+        }
+      } else if (OB_FAIL(src_obj_row.project(idx_array, out_obj_row))) {
         LOG_WARN("failed to projecte out_obj_row", KR(ret), K(src_obj_row.count_));
       } else if (OB_FAIL(obj_rows_.push_back(out_obj_row))) {
         LOG_WARN("failed to add row to obj_rows_", KR(ret), K(out_obj_row));
