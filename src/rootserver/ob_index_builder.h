@@ -58,7 +58,6 @@ public:
   int create_index(const obrpc::ObCreateIndexArg &arg,
                    obrpc::ObAlterTableRes &res);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
-
   // Check and update local index status.
   // if not all index table updated return OB_EAGAIN.
   int do_create_index(
@@ -109,6 +108,7 @@ public:
                                 const uint64_t tenant_data_version,
                                 common::ObIAllocator &allocator,
                                 ObDDLTaskRecord &task_record);
+  int drop_index_on_failed(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
 private:
   int recognize_vec_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
@@ -116,6 +116,7 @@ private:
       int64_t &index_ith,
       int64_t &rowkey_vid_ith,
       int64_t &vid_rowkey_ith,
+      int64_t &domain_index_ith,
       int64_t &index_id_ith,
       int64_t &snapshot_data_ith);
   int recognize_fts_index_schemas(

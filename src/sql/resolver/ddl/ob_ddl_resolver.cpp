@@ -7767,7 +7767,7 @@ int ObDDLResolver::resolve_vec_index_constraint(
     } else if (!is_vector_memory_valid) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support vector index when ob_vector_memory_limit_percentage is 0", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when ob_vector_memory_limit_percentage = 0 or memsotre_limit >= 85, vector index is");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when ob_vector_memory_limit_percentage = 0 or memstore_limit >= 85, vector index is");
     } else {
       index_keyname_ = VEC_KEY;
       ParseNode *option_node = NULL;

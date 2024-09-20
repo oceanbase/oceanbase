@@ -1400,6 +1400,7 @@ public:
     is_inner_ = false;
     is_vec_inner_drop_ = false;
     only_set_status_ = false;
+    index_ids_.reset();
   }
   virtual ~ObDropIndexArg() {}
   void reset()
@@ -1412,6 +1413,7 @@ public:
     is_inner_ = false;
     is_vec_inner_drop_ = false;
     only_set_status_ = false;
+    index_ids_.reset();
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1421,6 +1423,7 @@ public:
   bool is_inner_;
   bool is_vec_inner_drop_;
   bool only_set_status_;
+  common::ObSEArray<int64_t, 5> index_ids_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

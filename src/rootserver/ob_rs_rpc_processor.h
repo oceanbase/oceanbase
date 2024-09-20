@@ -344,6 +344,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, 
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_AUX_INDEX, ObRpcCreateAuxIndexP, create_aux_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_INDEX, ObRpcCreateIndexP, create_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_INDEX, ObRpcDropIndexP, drop_index(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_INDEX_ON_FAILED, ObRpcDropIndexOnFailedP, drop_index_on_failed(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REBUILD_VEC_INDEX, ObRpcRebuildVecIndexP, rebuild_vec_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_MLOG, ObRpcCreateMLogP, create_mlog(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TABLE_LIKE, ObRpcCreateTableLikeP, create_table_like(arg_));

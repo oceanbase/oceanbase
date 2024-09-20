@@ -72,7 +72,6 @@ int ObDropVecIndexTask::init(
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
                || task_id <= 0
                || OB_INVALID_ID == data_table_id
-               || !domain_index.is_valid()
                || schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(data_table_id), K(rowkey_vid),
@@ -99,7 +98,7 @@ int ObDropVecIndexTask::init(
     set_gmt_create(ObTimeUtility::current_time());
     tenant_id_ = tenant_id;
     object_id_ = data_table_id;
-    target_object_id_ = domain_index.table_id_;
+    target_object_id_ = data_table_id;  // not use this id
     schema_version_ = schema_version;
     task_id_ = task_id;
     parent_task_id_ = 0; // no parent task
