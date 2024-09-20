@@ -4043,6 +4043,10 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
                       : dst_type.get_calc_accuracy().get_accuracy();
     cast_dst_type.set_udt_id(udt_id);
   }
+  if (lib::is_oracle_mode() && cast_dst_type.is_ext()) {
+    uint64_t udt_id = dst_type.is_ext() ? dst_type.get_udt_id() : dst_type.get_calc_accuracy().get_accuracy();
+    cast_dst_type.set_udt_id(udt_id);
+  }
   // 这里仅设置部分情况的accuracy，其他情况的accuracy信息交给cast类型推导设置
   if (lib::is_mysql_mode() && cast_dst_type.is_string_type() &&
       cast_dst_type.has_result_flag(ZEROFILL_FLAG)) {
