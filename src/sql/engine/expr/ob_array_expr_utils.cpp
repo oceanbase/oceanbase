@@ -668,7 +668,8 @@ int ObVectorVectorArithFunc::operator()(ObDatum &res, const ObDatum &l, const Ob
   return ret;
 }
 
-int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count, const int64_t row_idx)
+int ObArrayExprUtils::dispatch_array_attrs_inner(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count,
+                                                 const int64_t row_idx, bool is_shallow)
 {
   int ret = OB_SUCCESS;
   ObArrayAttr arr_attrs[attr_count];
@@ -686,7 +687,8 @@ int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObIArrayType *arr_obj
       } else {
         const char *payload = arr_attrs[i - 1].ptr_;
         uint32_t len = arr_attrs[i - 1].length_;
-        vec->set_payload_shallow(row_idx, payload, len);
+        is_shallow ? vec->set_payload_shallow(row_idx, payload, len)
+                     : vec->set_payload(row_idx, payload, len);
       }
     }
   }
@@ -697,7 +699,6 @@ int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObStrin
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  // to fix : outrow lob can't use tmp allocator
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObSubSchemaValue value;
   uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
@@ -705,15 +706,20 @@ int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObStrin
   if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
     LOG_WARN("failed to get subschema ctx", K(ret));
   } else {
+    bool is_shadow = true;
     ObLobCommon *lob_comm = (ObLobCommon*)(array_data.ptr());
-    if (lob_comm->is_valid()
-        && OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+    if (lob_comm->is_valid()) {
+      ObLobLocatorV2 loc(array_data.ptr(), array_data.length(), true);
+      is_shadow = loc.has_inrow_data(); // outrow lob need copy data to attrs_expr
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                             ObLongTextType,
                                                             CS_TYPE_BINARY,
                                                             true,
                                                             array_data))) {
-      LOG_WARN("fail to get real data.", K(ret), K(array_data));
-    } else {
+        LOG_WARN("fail to get real data.", K(ret), K(array_data));
+      }
+    }
+    if (OB_SUCC(ret)) {
       ObIArrayType *arr_obj = NULL;
       coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
       ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
@@ -724,7 +730,7 @@ int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObStrin
         LOG_WARN("construct array obj failed", K(ret), K(subschema_id), K(coll_info));
       } else if (OB_FAIL(arr_obj->init(array_data))) {
         LOG_WARN("init array obj failed", K(ret), K(subschema_id), K(coll_info));
-      } else if (OB_FAIL(dispatch_array_attrs(ctx, arr_obj, expr.attrs_, expr.attrs_cnt_, row_idx))) {
+      } else if (OB_FAIL(dispatch_array_attrs_inner(ctx, arr_obj, expr.attrs_, expr.attrs_cnt_, row_idx, is_shadow))) {
         LOG_WARN("dispatch array attributes failed", K(ret), K(subschema_id), K(coll_info));
       }
     }
@@ -799,35 +805,50 @@ int ObArrayExprUtils::batch_dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, i
 {
   int ret = OB_SUCCESS;
   ObIVector *vec = expr.get_vector(ctx);
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  ObIArrayType *arr_obj = NULL;
-  // to fix : outrow lob can't use tmp allocator
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_FAIL(construct_array_obj(tmp_allocator, ctx, expr.obj_meta_.get_subschema_id(), arr_obj))) {
-    LOG_WARN("fail to construct array obj.", K(ret));
-  } else {
-    for (int64_t row_idx = begin; row_idx < begin + batch_size && OB_SUCC(ret); row_idx++) {
-      int64_t idx = selector != NULL ? selector[row_idx] : row_idx;
-      ObString raw_data = vec->get_string(idx);
-      uint32_t attr_idx = 0;
-      if (vec->is_null(idx)) {
-        for (uint32_t i = 0; i < expr.attrs_cnt_; i++) {
-          ObIVector *attr_vec = expr.attrs_[i]->get_vector(ctx);
-          attr_vec->set_null(row_idx);
-        }
-      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
-                                                            ObLongTextType,
-                                                            CS_TYPE_BINARY,
-                                                            true,
-                                                            raw_data))) {
-        LOG_WARN("fail to get real data.", K(ret), K(raw_data));
-      } else if (OB_FAIL(arr_obj->init(raw_data))) {
-        LOG_WARN("init array obj failed", K(ret));
-      } else if (OB_FAIL(dispatch_array_attrs_rows(ctx, arr_obj, idx, expr.attrs_, expr.attrs_cnt_))) {
-        LOG_WARN("failed to dispatch array attrs rows", K(ret));
+  bool need_dispatch = true;
+  if (is_uniform_format(vec->get_format())) {
+    // bugfix : 2024091900104506769
+    // aggr pushdown will set format to uniform
+    for (uint32_t i = 0; i < expr.attrs_cnt_ && need_dispatch; i++) {
+      const VectorHeader &header = expr.attrs_[i]->get_vector_header(ctx);
+      if (VEC_INVALID == header.format_) {
+        need_dispatch = false;
       }
     }
   }
+  if (need_dispatch) {
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    ObIArrayType *arr_obj = NULL;
+    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    if (OB_FAIL(construct_array_obj(tmp_allocator, ctx, expr.obj_meta_.get_subschema_id(), arr_obj))) {
+      LOG_WARN("fail to construct array obj.", K(ret));
+    } else {
+      for (int64_t row_idx = begin; row_idx < begin + batch_size && OB_SUCC(ret); row_idx++) {
+        int64_t idx = selector != NULL ? selector[row_idx] : row_idx;
+        ObString raw_data = vec->get_string(idx);
+        ObLobLocatorV2 loc(raw_data.ptr(), raw_data.length(), true);
+        bool is_shadow = loc.has_inrow_data(); // outrow lob need copy data to attrs_expr
+        uint32_t attr_idx = 0;
+        if (vec->is_null(idx)) {
+          for (uint32_t i = 0; i < expr.attrs_cnt_; i++) {
+            ObIVector *attr_vec = expr.attrs_[i]->get_vector(ctx);
+            attr_vec->set_null(row_idx);
+          }
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+                                                              ObLongTextType,
+                                                              CS_TYPE_BINARY,
+                                                              true,
+                                                              raw_data))) {
+          LOG_WARN("fail to get real data.", K(ret), K(raw_data));
+        } else if (OB_FAIL(arr_obj->init(raw_data))) {
+          LOG_WARN("init array obj failed", K(ret));
+        } else if (OB_FAIL(dispatch_array_attrs_rows(ctx, arr_obj, idx, expr.attrs_, expr.attrs_cnt_, is_shadow))) {
+          LOG_WARN("failed to dispatch array attrs rows", K(ret));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1000,7 +1021,6 @@ int ObArrayExprUtils::nested_expr_from_rows(const ObExpr &expr, ObEvalCtx &ctx, 
   ObIVector *vec = expr.get_vector(ctx);
   VectorFormat format = vec->get_format();
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  // to fix : outrow lob can't use tmp allocator
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObIArrayType *arr_obj = NULL;
   const uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
@@ -1022,7 +1042,10 @@ int ObArrayExprUtils::nested_expr_from_rows(const ObExpr &expr, ObEvalCtx &ctx, 
       stored_rows[i]->get_cell_payload(row_meta, col_idx, payload, len);
       ObLobCommon *lob_comm = (ObLobCommon*)(payload);
       ObString array_data(len, payload);
+      bool is_shadow = true;
       if (lob_comm->is_valid()) {
+        ObLobLocatorV2 loc(array_data, true);
+        is_shadow = loc.has_inrow_data(); // outrow lob need copy data to attrs_expr
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                               ObLongTextType,
                                                               CS_TYPE_BINARY,
@@ -1034,7 +1057,7 @@ int ObArrayExprUtils::nested_expr_from_rows(const ObExpr &expr, ObEvalCtx &ctx, 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(arr_obj->init(array_data))) {
         LOG_WARN("failed to init array", K(ret));
-      } else if (OB_FAIL(dispatch_array_attrs_rows(ctx, arr_obj, row_idx, expr.attrs_, expr.attrs_cnt_))) {
+      } else if (OB_FAIL(dispatch_array_attrs_rows(ctx, arr_obj, row_idx, expr.attrs_, expr.attrs_cnt_, is_shadow))) {
         LOG_WARN("failed to dispatch array attrs rows", K(ret));
       }
     }

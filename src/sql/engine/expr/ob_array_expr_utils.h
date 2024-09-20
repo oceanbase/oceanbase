@@ -60,7 +60,7 @@ public:
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObObjType &obj_type, uint32_t &depth, bool &is_vec);
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObDataType &elem_type, uint32_t &depth, bool &is_vec);
   static int dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObString &array_data, const int64_t row_idx);
-  static int dispatch_array_attrs(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count, const int64_t row_idx);
+  static int dispatch_array_attrs_inner(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count, const int64_t row_idx, bool is_shallow = true);
   static int batch_dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, int64_t begin, int64_t batch_size, const uint16_t *selector = NULL);
   static int transform_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const int64_t batch_size, const ObBitVector *skip);
   static int construct_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, ObIArrayType *&res, bool read_only = true);

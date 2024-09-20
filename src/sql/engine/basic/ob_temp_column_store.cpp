@@ -70,7 +70,7 @@ int ObTempColumnStore::ColumnBlock::distribute_uniform_nested_batch(ObExpr &expr
 {
   int ret = OB_SUCCESS;
   for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(expr.attrs_[i]->init_vector(ctx, i == 0 ? VEC_FIXED : format, size))) {
+    if (OB_FAIL(expr.attrs_[i]->init_vector_for_write(ctx, i == 0 ? VEC_FIXED : format, size))) {
       SQL_LOG(WARN, "Failed to init vector", K(ret), K(i), K(format), K(size));
     }
   }
