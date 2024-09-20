@@ -159,6 +159,7 @@ bool ObTableScanIterator::can_use_global_iter_pool(const ObQRIterType iter_type)
              main_table_param_.iter_param_.is_use_column_store() ||
              main_table_param_.iter_param_.enable_pd_aggregate() ||
              main_table_param_.iter_param_.enable_pd_group_by() ||
+             main_table_param_.iter_param_.is_column_replica_table_ ||
              main_table_param_.iter_param_.has_lob_column_out_) {
   } else {
     const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
