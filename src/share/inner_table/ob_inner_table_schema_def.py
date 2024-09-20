@@ -10965,7 +10965,8 @@ def_table_schema(
   ('EXTRA', 'varchar:COLUMN_EXTRA_LENGTH', 'false', ''),
   ('PRIVILEGES', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH', 'false', ''),
   ('COLUMN_COMMENT', 'longtext', 'false', ''),
-  ('GENERATION_EXPRESSION', 'longtext', 'false', '')
+  ('GENERATION_EXPRESSION', 'longtext', 'false', ''),
+  ('SRS_ID', 'uint32', 'true')
   ],
 )
 
@@ -17781,7 +17782,8 @@ def_table_schema(
                     EXTRA,
                     PRIVILEGES,
                     COLUMN_COMMENT,
-                    GENERATION_EXPRESSION
+                    GENERATION_EXPRESSION,
+                    SRS_ID
   		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS where 0 = sys_privilege_check('table_acc', effective_tenant_id(), table_schema, table_name)""",
   in_tenant_space = True,
   normal_columns = [ ],
