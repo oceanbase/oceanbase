@@ -1964,9 +1964,9 @@ int ObNullAwareHashSliceIdCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> 
   UNUSED(exprs);
   bool processed = false;
   slice_idx_array.reuse();
-  if (OB_ISNULL(hash_dist_exprs_) || hash_dist_exprs_->count() != 1) {
+  if (OB_ISNULL(hash_dist_exprs_) || OB_UNLIKELY(hash_dist_exprs_->empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null aware hash join can only process 1 join key now", K(ret), K(hash_dist_exprs_));
+    LOG_WARN("null aware hash join shuffle keys should not be empty", K(ret), K(hash_dist_exprs_));
   } else if (OB_FAIL(calc_for_null_aware<USE_VEC>(*hash_dist_exprs_->at(0), task_cnt_, eval_ctx,
                                          slice_idx_array, processed, skip))) {
     LOG_WARN("failed to calc for null aware", K(ret));
@@ -2004,9 +2004,9 @@ int ObNullAwareAffinitizedRepartSliceIdxCalc::get_slice_indexes_inner(
   if (task_count_ <= 0) {
     ret = OB_NOT_INIT;
     LOG_WARN("task_count not inited", K_(task_count), K(ret));
-  } else if (OB_ISNULL(repartition_exprs_) || 1 != repartition_exprs_->count()) {
+  } else if (OB_ISNULL(repartition_exprs_) || OB_UNLIKELY(repartition_exprs_->empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected repartition exprs", KP(repartition_exprs_));
+    LOG_WARN("null aware hash join repartition exprs should not be empty", KP(repartition_exprs_));
   } else if (px_repart_ch_map_.size() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid map size, affinity map should not be empty!", K_(task_count), K(ret));
