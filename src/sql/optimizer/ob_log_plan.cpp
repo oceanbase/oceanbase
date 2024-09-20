@@ -13534,6 +13534,34 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
   return ret;
 }
 
+int ObLogPlan::check_stmt_is_all_distinct_col(const ObSelectStmt *stmt,
+                                              const ObIArray<ObRawExpr*> &distinct_exprs,
+                                              bool &is_all_distinct_col)
+{
+  int ret = OB_SUCCESS;
+  is_all_distinct_col = true;
+  ObSEArray<ObRawExpr *, 4> exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_select_exprs(exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(stmt->get_order_exprs(exprs))) {
+    LOG_WARN("failed to get order exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_all_distinct_col && i < exprs.count(); i++) {
+    if (OB_FAIL(ObTransformUtils::check_group_by_subset(exprs.at(i), distinct_exprs, is_all_distinct_col))) {
+      LOG_WARN("check group by exprs failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_all_distinct_col && i < stmt->get_having_exprs().count(); i++) {
+    if (OB_FAIL(ObTransformUtils::check_group_by_subset(stmt->get_having_exprs().at(i), distinct_exprs, is_all_distinct_col))) {
+      LOG_WARN("check group by exprs failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
                                                bool &can_push)
 {
@@ -13544,6 +13572,7 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
   bool has_virtual_col = false;
   bool dummy = false;
   bool enable_groupby_push_down = false;
+  bool is_all_distinct_col = true;
   can_push = true;
   if (OB_ISNULL(stmt = get_stmt()) ||
       OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
@@ -13577,6 +13606,12 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
     can_push = false;
   } else if (distinct_exprs.count() != 1) {
     can_push = false;
+  } else if (OB_FAIL(check_stmt_is_all_distinct_col(static_cast<const ObSelectStmt*>(stmt),
+                                                    distinct_exprs, is_all_distinct_col))) {
+    LOG_WARN("failed to check stmt is only full distinct", K(ret));
+  } else if (!is_all_distinct_col) {
+    can_push = false;
+    OPT_TRACE("not only full distinct disable storage pushdown");
   } else if (OB_ISNULL(distinct_exprs.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));

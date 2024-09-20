@@ -771,6 +771,10 @@ public:
   int init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
                            GroupingOpHelper &distinct_helper);
 
+  int check_stmt_is_all_distinct_col(const ObSelectStmt *stmt,
+                                     const ObIArray<ObRawExpr*> &distinct_exprs,
+                                     bool &is_all_distinct_col);
+
   int check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
                                       bool &can_push);
 
