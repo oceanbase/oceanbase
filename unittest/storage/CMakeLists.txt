@@ -39,7 +39,7 @@ add_subdirectory(direct_load)
 add_subdirectory(utl_file)
 add_subdirectory(tx_table)
 add_subdirectory(ddl)
-add_subdirectory(share_storage)
+#add_subdirectory(share_storage)
 add_subdirectory(column_store_replica)
 
 storage_unittest(test_io_manager)
@@ -147,5 +147,5 @@ storage_unittest(test_co_sstable_rows_filter column_store/test_co_sstable_rows_f
 storage_unittest(test_compaction_iter compaction/test_compaction_iter.cpp)
 
 if(OB_BUILD_SHARED_STORAGE)
-  storage_unittest(test_obj_mgr compaction/test_obj_mgr.cpp)
+  #storage_unittest(test_obj_mgr compaction/test_obj_mgr.cpp)
 endif()

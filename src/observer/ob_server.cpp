@@ -254,8 +254,9 @@ int ObServer::parse_mode()
 #endif
 #ifdef OB_BUILD_SHARED_STORAGE
     } else if (0 == STRCASECMP(mode_str, SHARED_STORAGE_MODE_STR)) {
-      gctx_.startup_mode_ = SHARED_STORAGE_MODE;
-      LOG_INFO("set shared_storage mode");
+      // shared_storage startup_mode is not supported in 4.3.3, which will be supported in 4.3.4
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("shared_storage mode is not supported in 4.3.3", KR(ret));
 #endif
     } else if (0 == STRCASECMP(mode_str, FLASHBACK_MODE_STR)) {
       gctx_.startup_mode_ = PHY_FLASHBACK_MODE;
