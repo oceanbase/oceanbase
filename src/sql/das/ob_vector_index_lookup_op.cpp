@@ -609,6 +609,8 @@ int ObVectorIndexLookupOp::revert_iter_for_complete_data()
   } else {
     com_aux_vec_scan_param_.key_ranges_.reuse();
     com_aux_vec_scan_param_.ss_key_ranges_.reuse();
+    doc_id_scan_param_.key_ranges_.reuse();
+    doc_id_scan_param_.ss_key_ranges_.reuse();
   }
 
   com_aux_vec_iter_ = NULL;
@@ -654,6 +656,14 @@ int ObVectorIndexLookupOp::vector_do_index_lookup()
     }
   }
   return ret;
+}
+
+void ObVectorIndexLookupOp::reuse_scan_param_complete_data()
+{
+  doc_id_scan_param_.key_ranges_.reuse();
+  doc_id_scan_param_.ss_key_ranges_.reuse();
+  com_aux_vec_scan_param_.key_ranges_.reuse();
+  com_aux_vec_scan_param_.ss_key_ranges_.reuse();
 }
 
 int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
@@ -738,17 +748,11 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
             ada_ctx.set_vector(res_count++, vector.ptr(), vector.length());
           }
         }
-        doc_id_scan_param_.key_ranges_.reset();
-        com_aux_vec_scan_param_.key_ranges_.reset();
+        reuse_scan_param_complete_data();
       }
 
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObLocalIndexLookupOp::reset_lookup_state())) {
-        LOG_WARN("failed to reset look up status.", K(ret));
       }
 
       // release iter for complete data, even OB_FAIL
