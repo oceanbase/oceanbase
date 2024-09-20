@@ -1160,7 +1160,12 @@ int ObTransferHandler::wait_tablet_write_end_(
       LOG_WARN("failed to wait tx_write end", KR(ret), K(task_info));
     } else if (OB_FAIL(ls->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
       LOG_WARN("failed to submit tx log", KR(ret), K(task_info));
-    } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_list, is_sync))) {
+    } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID,
+                                         tablet_list,
+                                         is_sync,
+                                         0, /*timeout, 0 as default(SYNC_FREEZE_DEFAULT_RETRY_TIME)*/
+                                         false, /*need_rewrite_meta*/
+                                         ObFreezeSourceFlag::TRANSFER_NO_KILL_TX))) {
       LOG_WARN("batch tablet freeze failed", KR(ret), KPC(ls), K(task_info));
     } else if (OB_FAIL(ls->check_tablet_no_active_memtable(tablet_list, has_active_memtable))) {
       LOG_WARN("check tablet has active memtable failed", KR(ret), KPC(ls), K(task_info));

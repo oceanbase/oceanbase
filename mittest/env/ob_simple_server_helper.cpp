@@ -302,7 +302,10 @@ int SimpleServerHelper::wait_checkpoint_newest(uint64_t tenant_id, ObLSID ls_id)
     } else {
       SCN checkpoint_scn;
       while (OB_SUCC(ret)) {
-        if (OB_FAIL(ls_handle.get_ls()->advance_checkpoint_by_flush(SCN::max_scn()))) {
+        if (OB_FAIL(ls_handle.get_ls()->advance_checkpoint_by_flush(SCN::max_scn(),
+                                                                    INT64_MAX,
+                                                                    false,
+                                                                    ObFreezeSourceFlag::TEST_MODE))) {
         } else if (FALSE_IT(checkpoint_scn = ls_handle.get_ls()->get_ls_meta().get_clog_checkpoint_scn())) {
         } else if (checkpoint_scn < end_scn) {
           LOG_INFO("wait ls checkpoint advance", K(tenant_id), K(ls_id), K(checkpoint_scn), K(end_scn));
@@ -327,7 +330,11 @@ int SimpleServerHelper::freeze(uint64_t tenant_id, ObLSID ls_id, ObTabletID tabl
     const bool is_sync = true;
     const bool abs_timeout_ts = ObClockGenerator::getClock() + 60LL * 1000LL * 1000LL;
     if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    } else if (OB_FAIL(ls_handle.get_ls()->tablet_freeze(tablet_id, is_sync, abs_timeout_ts, need_rewrite_meta))) {
+    } else if (OB_FAIL(ls_handle.get_ls()->tablet_freeze(tablet_id,
+                                                         is_sync,
+                                                         abs_timeout_ts,
+                                                         need_rewrite_meta,
+                                                         ObFreezeSourceFlag::TEST_MODE))) {
     }
   }
   return ret;

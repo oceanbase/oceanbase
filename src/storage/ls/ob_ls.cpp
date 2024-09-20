@@ -2008,11 +2008,17 @@ int ObLS::replay_get_tablet(
   return ret;
 }
 
-int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t input_abs_timeout_ts)
+int ObLS::logstream_freeze(const int64_t trace_id,
+                           const bool is_sync,
+                           const int64_t input_abs_timeout_ts,
+                           const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
 
-  if (is_sync) {
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (is_sync) {
     const int64_t abs_timeout_ts = (0 == input_abs_timeout_ts)
                                        ? ObClockGenerator::getClock() + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME
                                        : input_abs_timeout_ts;
@@ -2029,7 +2035,8 @@ int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int
   return ret;
 }
 
-int ObLS::logstream_freeze_task(const int64_t trace_id, const int64_t abs_timeout_ts)
+int ObLS::logstream_freeze_task(const int64_t trace_id,
+                                const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObClockGenerator::getClock();
@@ -2073,17 +2080,27 @@ int ObLS::logstream_freeze_task(const int64_t trace_id, const int64_t abs_timeou
 int ObLS::tablet_freeze(const ObTabletID &tablet_id,
                         const bool is_sync,
                         const int64_t input_abs_timeout_ts,
-                        const bool need_rewrite_meta)
+                        const bool need_rewrite_meta,
+                        const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
-  if (tablet_id.is_ls_inner_tablet()) {
+
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (tablet_id.is_ls_inner_tablet()) {
     ret = ls_freezer_.ls_inner_tablet_freeze(tablet_id);
   } else {
     ObSEArray<ObTabletID, 1> tablet_ids;
     if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
       STORAGE_LOG(WARN, "push back tablet id failed", KR(ret), K(tablet_id));
     } else {
-      ret = tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_ids, is_sync, input_abs_timeout_ts, need_rewrite_meta);
+      ret = tablet_freeze(checkpoint::INVALID_TRACE_ID,
+                          tablet_ids,
+                          is_sync,
+                          input_abs_timeout_ts,
+                          need_rewrite_meta,
+                          source);
     }
   }
   return ret;
@@ -2093,13 +2110,18 @@ int ObLS::tablet_freeze(const int64_t trace_id,
                         const ObIArray<ObTabletID> &tablet_ids,
                         const bool is_sync,
                         const int64_t input_abs_timeout_ts,
-                        const bool need_rewrite_meta)
+                        const bool need_rewrite_meta,
+                        const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
   STORAGE_LOG(
       DEBUG, "start tablet freeze", K(tablet_ids), K(is_sync), KTIME(input_abs_timeout_ts), K(need_rewrite_meta));
   int64_t freeze_epoch = ATOMIC_LOAD(&switch_epoch_);
-  if (need_rewrite_meta && (!is_sync)) {
+
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (need_rewrite_meta && (!is_sync)) {
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(ERROR,
                 "tablet freeze for rewrite meta must be sync freeze ",
@@ -2216,7 +2238,10 @@ void ObLS::record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_
   (void)ls_freezer_.record_async_freeze_tablet(tablet_info);
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tenant_freeze)
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn,
+                                      const int64_t abs_timeout_ts,
+                                      const bool is_tenant_freeze,
+                                      const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -2230,7 +2255,9 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
       ObDataCheckpoint::set_tenant_freeze();
       LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
     }
+    ObDataCheckpoint::set_freeze_source(source);
     ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+    ObDataCheckpoint::reset_freeze_source();
     ObDataCheckpoint::reset_tenant_freeze();
   }
   return ret;
@@ -2239,9 +2266,9 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
 int ObLS::flush_to_recycle_clog()
 {
   int ret = OB_SUCCESS;
-
   int64_t read_lock = LSLOCKALL;
   int64_t write_lock = 0;
+
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2249,11 +2276,11 @@ int ObLS::flush_to_recycle_clog()
   } else if (OB_UNLIKELY(is_offline())) {
     ret = OB_MINOR_FREEZE_NOT_ALLOW;
     LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
+  } else if (FALSE_IT(ObDataCheckpoint::set_freeze_source(ObFreezeSourceFlag::CLOG_CHECKPOINT))) {
   } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush(SCN::invalid_scn() /*recycle_scn*/))) {
     STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", KR(ret), K(get_ls_id()));
-  } else {
-    // do nothing
   }
+  ObDataCheckpoint::reset_freeze_source();
   return ret;
 }
 

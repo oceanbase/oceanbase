@@ -216,9 +216,17 @@ int ObDDLIncCommitClogCb::on_success()
     LOG_ERROR("ls should not be null", K(ret), K(log_basic_.get_tablet_id()));
   } else {
     const bool is_sync = false;
-    (void)ls->tablet_freeze(log_basic_.get_tablet_id(), is_sync);
+    (void)ls->tablet_freeze(log_basic_.get_tablet_id(),
+                            is_sync,
+                            0, /*timeout, useless for async one*/
+                            false, /*need_rewrite_meta*/
+                            ObFreezeSourceFlag::DIRECT_INC_START);
     if (log_basic_.get_lob_meta_tablet_id().is_valid()) {
-      (void)ls->tablet_freeze(log_basic_.get_lob_meta_tablet_id(), is_sync);
+      (void)ls->tablet_freeze(log_basic_.get_lob_meta_tablet_id(),
+                              is_sync,
+                              0, /*timeout, useless for async one*/
+                              false, /*need_rewrite_meta*/
+                              ObFreezeSourceFlag::DIRECT_INC_START);
     }
     FLOG_INFO("write ddl inc commit log success", K(ls_id_), K(scn_), K(log_basic_));
   }

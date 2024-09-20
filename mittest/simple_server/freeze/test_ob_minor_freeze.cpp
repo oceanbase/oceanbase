@@ -334,7 +334,10 @@ void ObMinorFreezeTest::logstream_freeze()
     for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
       int ret = OB_EAGAIN;
       while (OB_EAGAIN == ret) {
-        ret = ls_handles_.at(j).get_ls()->logstream_freeze(checkpoint::INVALID_TRACE_ID, true/*is_sync*/, 0);
+        ret = ls_handles_.at(j).get_ls()->logstream_freeze(checkpoint::INVALID_TRACE_ID,
+                                                           true/*is_sync*/,
+                                                           0,
+                                                           ObFreezeSourceFlag::TEST_MODE);
 
         if (OB_EAGAIN == ret) {
           ob_usleep(rand() % SLEEP_TIME);
@@ -359,7 +362,12 @@ void ObMinorFreezeTest::tablet_freeze()
     for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
       int ret = OB_EAGAIN;
       while (OB_EAGAIN == ret) {
-        ret = ls_handles_.at(j).get_ls()->tablet_freeze(tablet_ids_.at(j), false, (i % 2 == 0) ? true : false, 0);
+        bool need_rewrite_tablet_meta = (i % 2 == 0) ? true : false;
+        ret = ls_handles_.at(j).get_ls()->tablet_freeze(tablet_ids_.at(j),
+                                                        need_rewrite_tablet_meta,
+                                                        0,
+                                                        need_rewrite_tablet_meta,
+                                                        ObFreezeSourceFlag::TEST_MODE);
         if (OB_EAGAIN == ret) {
           ob_usleep(rand() % SLEEP_TIME);
         }
@@ -380,8 +388,14 @@ void ObMinorFreezeTest::batch_tablet_freeze()
 
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
+    bool need_rewrite_tablet_meta = (i % 2 == 0) ? true : false;
     ASSERT_EQ(OB_SUCCESS,
-              ls_handles_.at(0).get_ls()->tablet_freeze(-1, tablet_ids_, false, (i % 2 == 0) ? true : false, 0));
+              ls_handles_.at(0).get_ls()->tablet_freeze(-1,
+                                                        tablet_ids_,
+                                                        need_rewrite_tablet_meta,
+                                                        0,
+                                                        need_rewrite_tablet_meta,
+                                                        ObFreezeSourceFlag::TEST_MODE));
     i = i + 1;
   }
 }

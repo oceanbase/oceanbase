@@ -130,7 +130,11 @@ void TestFrequentlyFreeze::async_tablet_freeze(const int64_t idx)
     const bool is_sync = false;
     ObTabletID tablet_to_freeze(int_tablet_id_to_freeze);
     STORAGE_LOG(INFO, "start tablet freeze", K(tablet_to_freeze), K(is_sync), K(idx));
-    ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(tablet_to_freeze, is_sync));
+    ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(tablet_to_freeze,
+                                            is_sync,
+                                            0,
+                                            false,
+                                            ObFreezeSourceFlag::TEST_MODE));
     usleep(100 * 1000);
     STORAGE_LOG(INFO, "finish tablet freeze", K(tablet_to_freeze), K(is_sync), K(idx));
 
@@ -152,7 +156,11 @@ void TestFrequentlyFreeze::sync_tablet_freeze(const int64_t idx)
     const bool is_sync = true;
     const int64_t abs_timeout_ts = ObClockGenerator::getClock() + 600LL * 1000LL * 1000LL;
     STORAGE_LOG(INFO, "start tablet freeze", K(tablet_to_freeze), K(is_sync), K(idx));
-    ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(tablet_to_freeze, is_sync, abs_timeout_ts));
+    ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(tablet_to_freeze,
+                                            is_sync,
+                                            abs_timeout_ts,
+                                            false,
+                                            ObFreezeSourceFlag::TEST_MODE));
     ::sleep(2);
     tablet_to_freeze = ObTabletID(tablet_to_freeze.id() + TABLET_FREEZE_THREAD_COUNT);
     STORAGE_LOG(INFO, "finish tablet freeze", K(tablet_to_freeze), K(is_sync), K(idx));
@@ -171,7 +179,10 @@ void TestFrequentlyFreeze::ls_freeze(const bool is_sync)
   STORAGE_LOG(INFO, "start ls freeze", K(is_sync));
   const int64_t abs_timeout_ts = ObClockGenerator::getClock() + 600LL * 1000LL * 1000LL;
   for (int i = 0; i < 4; i++) {
-    ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(-1, is_sync, abs_timeout_ts));
+    ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(-1,
+                                               is_sync,
+                                               abs_timeout_ts,
+                                               ObFreezeSourceFlag::TEST_MODE));
     sleep(200);
   }
   fprintf(stdout, "ls freeze finish. is_sync = %d\n", is_sync);

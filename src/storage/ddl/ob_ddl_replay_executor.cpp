@@ -952,7 +952,7 @@ int ObDDLIncStartReplayExecutor::init(
 struct SyncTabletFreezeHelper {
   SyncTabletFreezeHelper(ObLS *ls, const ObTabletID &tablet_id, const ObTabletID &lob_meta_tablet_id)
       : ls_(ls), tablet_id_(tablet_id), lob_meta_tablet_id_(lob_meta_tablet_id) {}
-  int operator()()
+  int operator()(const ObFreezeSourceFlag source)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(ls_) || !tablet_id_.is_valid()) {
@@ -962,11 +962,19 @@ struct SyncTabletFreezeHelper {
       const bool is_sync = true;
       // try freeze for ten seconds
       int64_t abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
-      int tmp_ret = ls_->tablet_freeze(tablet_id_, is_sync, abs_timeout_ts);
+      int tmp_ret = ls_->tablet_freeze(tablet_id_,
+                                       is_sync,
+                                       abs_timeout_ts,
+                                       false, /*need_rewrite_meta*/
+                                       source);
       int tmp_ret_lob = OB_SUCCESS;
       if (lob_meta_tablet_id_.is_valid()) {
         abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
-        tmp_ret_lob = ls_->tablet_freeze(lob_meta_tablet_id_, is_sync, abs_timeout_ts);
+        tmp_ret_lob = ls_->tablet_freeze(lob_meta_tablet_id_,
+                                         is_sync,
+                                         abs_timeout_ts,
+                                         false, /*need_rewrite_meta*/
+                                         source);
       }
       if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
         ret = OB_EAGAIN;
@@ -1001,7 +1009,7 @@ int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   } else {
     SyncTabletFreezeHelper sync_tablet_freeze(
         ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    if (OB_FAIL(sync_tablet_freeze())) {
+    if (OB_FAIL(sync_tablet_freeze(ObFreezeSourceFlag::DIRECT_INC_START))) {
       LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
     } else {
       FLOG_INFO("replay ddl inc start log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
@@ -1061,7 +1069,7 @@ int ObDDLIncCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   } else {
     SyncTabletFreezeHelper sync_tablet_freeze(
         ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    if (OB_FAIL(sync_tablet_freeze())) {
+    if (OB_FAIL(sync_tablet_freeze(ObFreezeSourceFlag::DIRECT_INC_END))) {
       LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
     } else {
       FLOG_INFO("replay ddl inc commit log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));

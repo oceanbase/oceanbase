@@ -1155,7 +1155,11 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
           } else if (!table->is_frozen_memtable()) {
             is_memtable_ready = false;
             const bool is_sync = false;
-            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_, is_sync))) {
+            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_,
+                                          is_sync,
+                                          0, /*timeout, useless for async one*/
+                                          false, /*need_rewrite_meta*/
+                                          ObFreezeSourceFlag::TRANSFER_BACKFILL))) {
               if (OB_EAGAIN == ret) {
                 ret = OB_SUCCESS;
               } else {

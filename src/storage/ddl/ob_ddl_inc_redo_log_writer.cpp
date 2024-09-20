@@ -408,9 +408,18 @@ int ObDDLIncRedoLogWriter::local_write_inc_start_log(
   } else if (OB_ISNULL(ls) || !tablet_id_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(ls), K(tablet_id_));
-  } else if (OB_FAIL(ls->tablet_freeze(tablet_id_, is_sync, abs_timeout_ts))) {
+  } else if (OB_FAIL(ls->tablet_freeze(tablet_id_,
+                                       is_sync,
+                                       abs_timeout_ts,
+                                       false, /*need_rewrite_meta*/
+                                       ObFreezeSourceFlag::DIRECT_INC_START))) {
     LOG_WARN("sync tablet freeze failed", K(ret), K(tablet_id_));
-  } else if (lob_meta_tablet_id.is_valid() && OB_FAIL(ls->tablet_freeze(lob_meta_tablet_id, is_sync, abs_timeout_ts))) {
+  } else if (lob_meta_tablet_id.is_valid() &&
+             OB_FAIL(ls->tablet_freeze(lob_meta_tablet_id,
+                                       is_sync,
+                                       abs_timeout_ts,
+                                       false, /*need_rewrite_meta*/
+                                       ObFreezeSourceFlag::DIRECT_INC_START))) {
     LOG_WARN("sync tablet freeze failed", K(ret), K(lob_meta_tablet_id));
   } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncStartClogCb, ObMemAttr(MTL_ID(), "DDL_IRLW")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
