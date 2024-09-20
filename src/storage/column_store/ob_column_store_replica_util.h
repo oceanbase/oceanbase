@@ -64,6 +64,9 @@ public:
       const ObIArray<share::ObLSID> &ls_id_array,
       int64_t tenant_id,
       hash::ObHashSet<share::ObLSID> &contain_cs_replica_ls_id_set);
+  static int check_need_process_cs_replica_for_offline_ddl(
+      const ObTableSchema &orig_table_schema,
+      bool &need_process);
 public:
   static const int64_t DEFAULT_CHECK_LS_REPLICA_LOCATION_TIMEOUT = 10 * 1000 * 1000L; // 10s
 };
