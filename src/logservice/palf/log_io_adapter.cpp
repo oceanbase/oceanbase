@@ -51,7 +51,6 @@ int LogIODeviceWrapper::init(const char *clog_dir,
       PALF_LOG(WARN, "unexpected situations!", K(ret));
     } else if (OB_FAIL(log_local_device_->init(iod_opts))) {
       PALF_LOG(WARN, "fail to init io device", K(ret));
-      // TODO by nianguan: syncIOChannel count need to discuss
     } else if (OB_FAIL(io_manager->add_device_channel(log_local_device_, disk_io_thread_count, disk_io_thread_count, max_io_depth))) {
       PALF_LOG(WARN, "failed to add device channel", K(ret));
     } else {
@@ -130,7 +129,7 @@ int LogIOAdapter::open(const char *block_path,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument!", K(ret), KP(block_path), K(flags), K(mode));
   } else if (OB_FAIL(log_local_device_->open(block_path, flags, mode, io_fd))) {
-    PALF_LOG(ERROR, "failed to open file", K(ret), K(block_path), K(flags), K(mode));
+    PALF_LOG(WARN, "failed to open file", K(ret), K(block_path), K(flags), K(mode));
   } else {
     io_fd.device_handle_ = log_local_device_;
     PALF_LOG(TRACE, "open file sucessfully", K(block_path), K(flags), K(mode), K(io_fd));
@@ -152,7 +151,7 @@ int LogIOAdapter::close(ObIOFd &io_fd)
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, " the block has been closed", K(ret), K(io_fd));
   } else if (OB_FAIL(log_local_device_->close(io_fd))) {
-    PALF_LOG(ERROR, "close block failed", K(ret), K(io_fd));
+    PALF_LOG(WARN, "close block failed", K(ret), K(io_fd));
   } else {
     PALF_LOG(TRACE, "close block successfully", K(io_fd));
     io_fd.reset();
