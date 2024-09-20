@@ -8718,8 +8718,10 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
 
     if (input_transfer_epoch != output_transfer_epoch) {
       need_downstream = true;
-      TRANS_LOG(INFO, "transfer between rollback to happened", K(ret),
-                K(input_transfer_epoch), K(output_transfer_epoch), KPC(this));
+      if (-1 != input_transfer_epoch) {
+        TRANS_LOG(INFO, "transfer between rollback to happened", K(ret),
+                  K(input_transfer_epoch), K(output_transfer_epoch), KPC(this));
+      }
     } else {
       need_downstream = false;
       TRANS_LOG(INFO, "no transfer between rollback to happened", K(ret),
