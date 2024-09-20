@@ -6762,6 +6762,9 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
       ret = OB_NOT_SUPPORTED;
       SQL_RESV_LOG(WARN, "data_version not support for altering column group", K(ret), K(compat_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3, alter column group");
+    } else if (!is_column_group_supported()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("column group is not enabled", KR(ret));
     } else if (!need_column_group(*table_schema_)) {
       ret = OB_NOT_SUPPORTED;
       SQL_RESV_LOG(WARN, "table don't support alter column group", K(ret));

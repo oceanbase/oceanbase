@@ -13287,5 +13287,19 @@ int ObDDLResolver::check_skip_index(share::schema::ObTableSchema &table_schema)
   return ret;
 }
 
+bool ObDDLResolver::is_column_group_supported() const
+{
+  bool is_supported = true;
+  if (GCTX.is_shared_storage_mode()) {
+    // Note: shared-storage mode does not support column group in default. if want to test
+    // column group under shared-storage mode, then need to set tracepoint.
+    int tmp_ret = OB_E(EventTable::EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP) OB_SUCCESS;
+    is_supported = (tmp_ret != OB_SUCCESS);
+  } else {
+    // do nothing. column group is supported under shared-nothing mode
+  }
+  return is_supported;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
