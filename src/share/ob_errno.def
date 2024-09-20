@@ -2666,6 +2666,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_TRANSIENT_ERROR, -9795, -1, "HY000", "SMTP t
 DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_PERMANENT_ERROR, -9796, -1, "HY000", "SMTP permanent error:", "SMTP permanent error: %.*s", 29279, "SMTP permanent error:", "SMTP permanent error: %.*s");
 DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_UNSUPPORTED_SCHEME, -9797, -1, "HY000", "Authentication scheme '' not supported", "Authentication scheme '%.*s' not supported", 24249, "Authentication scheme '' not supported", "Authentication scheme '%.*s' not supported");
 DEFINE_ORACLE_ERROR(OB_UTL_SMTP_NO_SUPPORTED_SCHEME, -9798, -1, "HY000", "No supported authentication scheme found", 24250, "No supported authentication scheme found");
+DEFINE_ERROR(OB_DTL_WAIT_EAGAIN, -9799, -1, "HY000", "Px wait for dtl message again");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
