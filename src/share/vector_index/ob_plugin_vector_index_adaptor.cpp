@@ -987,7 +987,7 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
       ret = OB_SUCCESS;
     }
 
-#ifdef ENABLE_DEBUG_LOG
+#ifndef NDEBUG
     output_bitmap(ctx->bitmaps_->insert_bitmap_);
     output_bitmap(ctx->bitmaps_->delete_bitmap_);
 #endif
@@ -2089,21 +2089,14 @@ void ObPluginVectorIndexAdaptor::output_bitmap(roaring::api::roaring64_bitmap_t 
 {
   ObArenaAllocator tmp_allocator;
   INIT_SUCC(ret);
-  roaring::api::roaring64_iterator_t *bitmap_iter = roaring64_iterator_create(bitmap);
   uint64_t bitmap_cnt = roaring64_bitmap_get_cardinality(bitmap);
   if (bitmap_cnt > 0) {
     uint64_t *vids = static_cast<uint64_t *>(tmp_allocator.alloc(sizeof(uint64_t) * bitmap_cnt));
-    int index = 0;
-    bool is_continue = bitmap_cnt != 0;
-    while (is_continue) {
-      vids[index++] = roaring64_iterator_value(bitmap_iter);
-      is_continue = roaring64_iterator_advance(bitmap_iter);
+    if (OB_NOT_NULL(vids)) {
+      roaring64_bitmap_to_uint64_array(bitmap, vids);
+      LOG_INFO("BITMAP_INFO:", K(ret), K(bitmap_cnt), KP(vids), K(vids[0]), K(vids[bitmap_cnt - 1]));
     }
-    LOG_INFO("BITMAP_INFO:", K(ret), K(index), KP(vids), K(vids[0]), K(vids[index - 1]));
-    int a = 0;
   }
-
-  roaring64_iterator_free(bitmap_iter);
   tmp_allocator.reset();
 }
 
