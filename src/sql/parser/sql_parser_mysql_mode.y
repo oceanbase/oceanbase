@@ -8848,7 +8848,7 @@ AS view_select_stmt opt_check_option
   dup_expr_string($10, result, @10.first_column, @10.last_column);
   $$->reserved_ = 2; /* create materialized view */
 }
-| create_with_opt_hint MATERIALIZED VIEW view_name opt_mv_column_list opt_table_option_list opt_partition_option create_mview_opts with_column_group
+| create_with_opt_hint MATERIALIZED VIEW view_name opt_mv_column_list opt_table_option_list opt_partition_option with_column_group create_mview_opts
 AS view_select_stmt opt_check_option
 {
   ParseNode *table_options = NULL;
@@ -8863,11 +8863,11 @@ AS view_select_stmt opt_check_option
                            NULL,
 						               $12,   /* with option */
                            NULL,   /* force view opt */
-                           $8,  /* mview options */
+                           $9,  /* mview options */
                            $7, /* partition option */
                            table_options, /* table options */
                            $1, /* hint */
-                           $9 /* column group */
+                           $8 /* column group */
 						   );
   dup_expr_string($11, result, @11.first_column, @11.last_column);
   $$->reserved_ = 2; /* create materialized view */
