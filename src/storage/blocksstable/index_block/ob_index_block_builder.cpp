@@ -4157,7 +4157,7 @@ int ObIndexBlockRebuilder::close() {
     LOG_WARN("fail to close clustered index block writer", K(ret));
   }
 
-  STORAGE_LOG(INFO, "close index block rebuilder",
+  STORAGE_LOG(DEBUG, "close index block rebuilder",
               K(ret), KPC_(index_tree_root_ctx), KPC_(index_tree_dumper), KPC_(meta_tree_dumper));
 
   return ret;
