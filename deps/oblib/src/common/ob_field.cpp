@@ -31,10 +31,13 @@ int ObParamedSelectItemCtx::deep_copy(const ObParamedSelectItemCtx &other, ObIAl
     LOG_WARN("invalid null allocator", K(ret));
   } else if (OB_FAIL(ob_write_string(*allocator, other.paramed_cname_, paramed_cname_))) {
     LOG_WARN("failed to write stirng", K(ret));
+  } else if (OB_FAIL(param_str_offsets_.assign(other.param_str_offsets_))) {
+    LOG_WARN("failed to deep copy param string offsets", K(ret));
+  } else if (OB_FAIL(param_idxs_.assign(other.param_idxs_))) {
+    LOG_WARN("failed to deep copy param idxs", K(ret));
+  } else if (OB_FAIL(neg_param_idxs_.assign(other.neg_param_idxs_))) {
+    LOG_WARN("failed to deep copy neg param idxs", K(ret));
   } else {
-    param_str_offsets_ = other.param_str_offsets_;
-    param_idxs_ = other.param_idxs_;
-    neg_param_idxs_ = other.neg_param_idxs_;
     esc_str_flag_ = other.esc_str_flag_;
     need_check_dup_name_ = other.need_check_dup_name_;
     is_column_field_ = other.is_column_field_;
