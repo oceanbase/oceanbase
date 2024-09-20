@@ -152,11 +152,15 @@ int ObVectorQueryAdaptorResultContext::init_bitmaps()
     if (OB_SUCC(ret) && OB_ISNULL(bitmaps_->insert_bitmap_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create insert bitmap", K(ret));
+    } else if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+      bitmaps_->insert_bitmap_ = nullptr;
     }
     ROARING_TRY_CATCH(bitmaps_->delete_bitmap_ = roaring::api::roaring64_bitmap_create());
     if (OB_SUCC(ret) && OB_ISNULL(bitmaps_->delete_bitmap_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create delete bitmap", K(ret));
+    } else if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+      bitmaps_->delete_bitmap_ = nullptr;
     }
   }
 
