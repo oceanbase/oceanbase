@@ -508,6 +508,7 @@ private:
       const int64_t consumer_group_id,
       const share::schema::ObTableSchema *vid_rowkey_schema_,
       const share::schema::ObTableSchema *rowkey_vid_schema_,
+      const share::schema::ObTableSchema *domain_index_schema,
       const share::schema::ObTableSchema *delta_buffer_schema_,
       const share::schema::ObTableSchema *index_snapshot_data_schema_,
       const uint64_t tenant_data_version,

@@ -3486,7 +3486,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(is_hidden),
        K_(is_inner),
        K_(is_vec_inner_drop),
-       K_(only_set_status));
+       K_(only_set_status),
+       K_(index_ids));
   J_OBJ_END();
   return pos;
 }
@@ -3502,7 +3503,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     is_hidden_,
                     is_inner_,
                     is_vec_inner_drop_,
-                    only_set_status_);
+                    only_set_status_,
+                    index_ids_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 

@@ -6471,6 +6471,7 @@ int ObDDLService::create_aux_index_task_(
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
         create_ddl_task(param, trans, task_record))) {
       if (OB_ENTRY_EXIST == ret) {
+        trans.reset_last_error();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("submit create index ddl task failed", K(ret));
@@ -6578,6 +6579,11 @@ int ObDDLService::create_aux_index(
         } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
         }
       }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
+          arg.task_id_, *idx_schema, result.aux_table_id_, ObDDLUpateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
+        LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(idx_schema));
+      }
     } else { // 3. index scheme not exist, generate schema && create ddl task
       ObTableSchema index_schema;
       if (OB_FAIL(generate_aux_index_schema_(tenant_id,
@@ -6592,6 +6598,9 @@ int ObDDLService::create_aux_index(
         LOG_WARN("failed to generate aux index schema", K(ret), K(create_index_arg));
       } else if (FALSE_IT(result.schema_generated_ = true)) {
       } else if (FALSE_IT(result.aux_table_id_ = index_schema.get_table_id())) {
+      } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
+          arg.task_id_, index_schema, result.aux_table_id_, ObDDLUpateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
+        LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(index_schema));
       } else if (OB_FAIL(create_aux_index_task_(data_schema,
                                                 &index_schema,
                                                 create_index_arg,
@@ -6615,9 +6624,12 @@ int ObDDLService::create_aux_index(
       if (OB_FAIL(publish_schema(tenant_id))) {
         LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
       } else if (OB_INVALID_ID == result.ddl_task_id_) { // no need to schedule
-      } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
+      } else {
+        DEBUG_SYNC(CREATE_AUX_INDEX_TABLE);
+        if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
                          schedule_ddl_task(task_record))) {
-        LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+          LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+        }
       }
     }
   }
