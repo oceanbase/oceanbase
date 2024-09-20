@@ -393,7 +393,11 @@ int ObCgroupCtrl::get_group_path(
         }
       }
 
-      snprintf(group_name_path, path_bufsize, "%s", group_name);
+      if (OB_SUCCESS == tmp_ret && is_resource_manager_group(group_id)) {
+        snprintf(group_name_path, path_bufsize, "OBRM_%s", group_name); // resource manager
+      } else {
+        snprintf(group_name_path, path_bufsize, "%s", group_name);
+      }
     }
   }
   if (OB_SUCC(ret)) {
