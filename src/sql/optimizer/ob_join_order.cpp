@@ -7129,7 +7129,7 @@ int JoinPath::re_estimate_cost(EstimateCostInfo &info, double &card, double &cos
     card = get_path_output_rows();
     op_cost = op_cost_;
     cost = get_cost();
-  } else if (OB_FAIL(do_re_estimate_cost(info, card, op_cost, cost))) {
+  } else if (OB_FAIL(SMART_CALL(do_re_estimate_cost(info, card, op_cost, cost)))) {
     LOG_WARN("failed to do re estimate cost", K(ret));
   } else if (info.override_) {
     parallel_ = join_parallel;
