@@ -922,14 +922,12 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
       } else {
         selectivities.at(idx) = std::min(tmp_selectivity, selectivities.at(idx));
       }
-      LOG_PRINT_EXPR(WARN, "wym debug est sel", eigen_expr, K(tmp_selectivity), KPC(estimator));
     }
   }
   if (OB_SUCC(ret)) {
     selectivity = ctx.get_correlation_model().combine_filters_selectivity(selectivities);
   }
   LOG_DEBUG("calculate predicates selectivity", K(selectivity), K(selectivities), K(eigen_exprs), K(sel_estimators));
-  LOG_WARN("wym debug calculate predicates selectivity", K(selectivity), K(selectivities), K(eigen_exprs), K(sel_estimators));
   return ret;
 }
 
