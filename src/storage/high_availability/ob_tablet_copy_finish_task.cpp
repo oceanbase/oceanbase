@@ -47,7 +47,8 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     restore_action_(ObTabletRestoreAction::MAX),
     src_tablet_meta_(nullptr),
     copy_tablet_ctx_(nullptr),
-    last_meta_seq_array_()
+    last_meta_seq_array_(),
+    is_leader_restore_(false)
 {
 }
 
@@ -61,7 +62,8 @@ int ObTabletCopyFinishTask::init(
     observer::ObIMetaReport *reporter,
     const ObTabletRestoreAction::ACTION &restore_action,
     const ObMigrationTabletParam *src_tablet_meta,
-    ObICopyTabletCtx *copy_tablet_ctx)
+    ObICopyTabletCtx *copy_tablet_ctx,
+    const bool is_leader_restore)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -86,6 +88,7 @@ int ObTabletCopyFinishTask::init(
     restore_action_ = restore_action;
     src_tablet_meta_ = src_tablet_meta;
     copy_tablet_ctx_ = copy_tablet_ctx;
+    is_leader_restore_ = is_leader_restore;
     is_inited_ = true;
   }
   return ret;
@@ -444,7 +447,7 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
     batch_extra_param.need_replace_remote_sstable_ = need_replace_remote_sstable;
     ARRAY_FOREACH_X(last_meta_seq_array_, i, cnt, OB_SUCC(ret)) {
       extra_param.reset();
-      extra_param.is_leader_restore_ = true;
+      extra_param.is_leader_restore_ = is_leader_restore_;
       extra_param.table_key_ = last_meta_seq_array_.at(i).first;
       extra_param.start_meta_macro_seq_ = last_meta_seq_array_.at(i).second;
       if (OB_FAIL(batch_extra_param.add_extra_param(extra_param))) {

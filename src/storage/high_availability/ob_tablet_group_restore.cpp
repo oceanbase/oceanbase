@@ -2537,7 +2537,7 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
       tablet_restore_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter,
-      tablet_restore_ctx_->action_, src_tablet_meta, tablet_restore_ctx_))) {
+      tablet_restore_ctx_->action_, src_tablet_meta, tablet_restore_ctx_, tablet_restore_ctx_->is_leader_))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_),
         KPC(tablet_restore_ctx_));
   }

@@ -46,7 +46,8 @@ public:
       observer::ObIMetaReport *reporter,
       const ObTabletRestoreAction::ACTION &restore_action,
       const ObMigrationTabletParam *src_tablet_meta,
-      ObICopyTabletCtx *copy_tablet_ctx);
+      ObICopyTabletCtx *copy_tablet_ctx,
+      const bool is_leader_restore);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
   int add_sstable(ObTableHandleV2 &table_handle);
@@ -92,6 +93,7 @@ private:
   const ObMigrationTabletParam *src_tablet_meta_;
   ObICopyTabletCtx *copy_tablet_ctx_;
   common::ObArray<std::pair<ObITable::TableKey, int64_t>> last_meta_seq_array_;
+  bool is_leader_restore_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };
 

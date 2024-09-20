@@ -3009,6 +3009,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   observer::ObIMetaReport *reporter = GCTX.ob_service_;
   const ObTabletRestoreAction::ACTION restore_action = ObTabletRestoreAction::RESTORE_NONE;
   const ObMigrationTabletParam *src_tablet_meta = nullptr;
+  const bool is_leader_restore = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3023,7 +3024,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   } else if (OB_FAIL(check_transfer_seq_equal_(src_tablet_meta))) {
     LOG_WARN("failed to check transfer seq equal", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task->init(
-      copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta, copy_tablet_ctx_))) {
+      copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta, copy_tablet_ctx_, is_leader_restore))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else {
     LOG_INFO("generate tablet copy finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
