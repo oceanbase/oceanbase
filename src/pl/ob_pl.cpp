@@ -2638,7 +2638,10 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         ObErrorInfo error_info;
         const uint64_t tenant_id = routine->get_tenant_id();
         OZ (ctx.get_sql_ctx()->schema_guard_->get_routine_info(tenant_id, routine_id, routine_info));
-        CK (OB_NOT_NULL(routine_info));
+        if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
+          ret = OB_ERR_SP_DOES_NOT_EXIST;
+          LOG_WARN("routine info is not exist!", K(ret), K(routine_id));
+        }
         OZ (error_info.delete_error(routine_info));
         if (need_update_schema) {
           OZ (ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(),
@@ -4165,7 +4168,10 @@ int ObPL::check_exec_priv(
         need_priv.priv_set_ = OB_PRIV_EXECUTE;
         const ObRoutineInfo *routine_info = NULL;
         OZ (guard->get_routine_info(tenant_id, routine->get_routine_id(), routine_info));
-        CK (OB_NOT_NULL(routine_info));
+        if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
+          ret = OB_ERR_SP_DOES_NOT_EXIST;
+          LOG_WARN("routine info is not exist!", K(ret), K(routine->get_routine_id()));
+        }
         OX (need_priv.obj_type_ = routine_info->is_procedure() ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION);
         OZ (guard->check_routine_priv(session_priv, need_priv));
       }
