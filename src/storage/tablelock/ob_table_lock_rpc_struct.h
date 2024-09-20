@@ -265,7 +265,7 @@ struct ObLockPartitionRequest : public ObLockTableRequest
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObLockPartitionRequest() : ObLockTableRequest(), part_object_id_(0)
+  ObLockPartitionRequest() : ObLockTableRequest(), part_object_id_(0), is_sub_part_(false)
   { type_ = ObLockMsgType::LOCK_PARTITION_REQ; }
   virtual ~ObLockPartitionRequest() { reset(); }
   virtual void reset();
@@ -273,6 +273,7 @@ public:
   INHERIT_TO_STRING_KV("ObLockTableRequest", ObLockTableRequest, K_(part_object_id));
 public:
   uint64_t part_object_id_;
+  bool is_sub_part_;
 };
 
 struct ObUnLockPartitionRequest : public ObLockPartitionRequest

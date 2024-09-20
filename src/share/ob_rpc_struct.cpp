@@ -3427,7 +3427,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     exist_all_column_group_,
                     index_cgs_,
                     vidx_refresh_info_,
-                    is_rebuild_index_
+                    is_rebuild_index_,
+                    is_index_scope_specified_
                     );
 
 int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)

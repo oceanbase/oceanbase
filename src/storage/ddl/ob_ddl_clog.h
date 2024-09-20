@@ -34,6 +34,9 @@ enum class ObDDLClogType : int64_t
   DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG = 0x10,
   DDL_START_LOG = 0x20,
   DDL_COMMIT_LOG = 0x40,// rename from DDL_PREPARE_LOG
+  DDL_TABLET_SPLIT_START_LOG = 0x41,
+  DDL_TABLET_SPLIT_FINISH_LOG = 0x42,
+  DDL_TABLET_FREEZE_LOG = 0x43,
   DDL_FINISH_LOG = 0x80,// finish log, smilarity role in shared storage mode
 };
 
