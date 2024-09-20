@@ -36,13 +36,7 @@ void ObPluginVectorIndexMgr::destroy()
     release_all_adapters();
     partial_index_adpt_map_.destroy();
     complete_index_adpt_map_.destroy();
-
-    // elements memory in adpt map will be released by allocator in service, refine later;
-    // elements memory in mem_sync_map should be released here
-    first_mem_sync_map_.destroy();
-    first_task_allocator_.reset();
-    second_mem_sync_map_.destroy();
-    second_task_allocator_.reset();
+    mem_sync_info_.destroy();
   }
 }
 
@@ -79,10 +73,8 @@ int ObPluginVectorIndexMgr::init(uint64_t tenant_id,
     LOG_WARN("fail to create full index adapter map", K(ls_id), KR(ret));
   } else if (OB_FAIL(partial_index_adpt_map_.create(hash_capacity, "VecIdxAdptMap", "VecIdxAdptMap", tenant_id))) {
     LOG_WARN("fail to create partial index adapter map", K(ls_id), KR(ret));
-  } else if (OB_FAIL(first_mem_sync_map_.create(hash_capacity, "VecIdxTaskMap", "VecIdxTaskMap", tenant_id))) {
+  } else if (OB_FAIL(mem_sync_info_.init(hash_capacity, tenant_id, ls_id))) {
     LOG_WARN("fail to create first mem sync set", K(ls_id), KR(ret));
-  } else if (OB_FAIL(second_mem_sync_map_.create(hash_capacity, "VecIdxTaskMap", "VecIdxTaskMap", tenant_id))) {
-    LOG_WARN("fail to create second mem sync set", K(ls_id), KR(ret));
   } else {
     ls_tablet_task_ctx_.task_id_ = 0;
     ls_tablet_task_ctx_.non_memdata_task_cycle_ = 0;
@@ -395,39 +387,8 @@ int ObPluginVectorIndexMgr::get_and_merge_adapter(ObVectorIndexAcquireCtx &ctx,
 int ObPluginVectorIndexMgr::check_need_mem_data_sync_task(bool &need_sync)
 {
   need_sync = false;
-  if (get_processing_map().size() > 0) {
-    if (ls_tablet_task_ctx_.all_finished_) { // is false
-      get_processing_map().reuse();
-      get_processing_allocator().reset();
-      // release task ctx
-      ls_tablet_task_ctx_.all_finished_ = false;
-      LOG_INFO("release processing set to waiting set",
-        K(ls_id_),
-        K(processing_first_mem_sync_),
-        K(get_processing_map().size()),
-        K(get_waiting_map().size()),
-        K(ls_tablet_task_ctx_));
-    } else {
-      need_sync = true; // continue sync current processing set
-      LOG_INFO("continue processing set to waiting set",
-        K(ls_id_),
-        K(processing_first_mem_sync_),
-        K(get_processing_map().size()),
-        K(get_waiting_map().size()),
-        K(ls_tablet_task_ctx_));
-    }
-  }
-  if (!need_sync && get_waiting_map().size() > 0) {
-    // procession_set is empty, wating list not empty
-    need_sync = true;
-    switch_processing_map();
-    LOG_INFO("switch processing set to waiting set",
-    K(ls_id_),
-    K(processing_first_mem_sync_),
-    K(get_processing_map().size()),
-    K(get_waiting_map().size()),
-    K(ls_tablet_task_ctx_));
-  }
+  mem_sync_info_.check_and_switch_if_needed(need_sync, ls_tablet_task_ctx_.all_finished_);
+  LOG_INFO("memdata sync check", K(ls_id_), K(need_sync), K(ls_tablet_task_ctx_));
   // both map empty, do nothing
   return OB_SUCCESS;
 }
@@ -833,7 +794,7 @@ void ObPluginVectorIndexService::wait()
   }
 }
 
-// debug functions
+// for debug
 void ObPluginVectorIndexMgr::dump_all_inst()
 {
   int ret = OB_SUCCESS;

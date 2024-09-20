@@ -318,7 +318,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
           ada_ctx.set_vectors(output_obj);
         } else {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("not get anydata", K(ret));
+          LOG_WARN("not get anydata", K(ret), KPC(obj_ptr));
         }
       }
     }
