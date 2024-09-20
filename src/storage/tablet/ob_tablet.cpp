@@ -7992,7 +7992,7 @@ int ObTablet::get_sstable_column_checksum(
     ObArenaAllocator allocator;
     if (OB_FAIL(load_storage_schema(allocator, storage_schema))) {
       LOG_WARN("fail to load storage schema", K(ret));
-    } else if (OB_FAIL(static_cast<const ObCOSSTableV2 *>(&sstable)->fill_column_ckm_array(*storage_schema, column_checksums, storage_schema->is_cs_replica_compat()))) {
+    } else if (OB_FAIL(static_cast<const ObCOSSTableV2 *>(&sstable)->fill_column_ckm_array(*storage_schema, column_checksums))) {
       LOG_WARN("fail to fill_column_ckm_array", K(ret), K(sstable));
     }
     ObTabletObjLoadHelper::free(allocator, storage_schema);

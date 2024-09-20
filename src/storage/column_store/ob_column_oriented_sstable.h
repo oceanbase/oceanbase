@@ -226,8 +226,7 @@ public:
       ObStoreRowIterator *&row_iter) override;
   int fill_column_ckm_array(
       const ObStorageSchema &storage_schema,
-      ObIArray<int64_t> &column_checksums,
-      bool need_process_cs_replica) const;
+      ObIArray<int64_t> &column_checksums) const;
   INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta),
       K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:

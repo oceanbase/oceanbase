@@ -3522,9 +3522,10 @@ void ObTabletFinishMigrationTask::schedule_convert_co_merge(
     // Specific dag net id for co merge dag net to convert row store tablet into columnar store one.
     // Use ObDataTabletsCheckCOConvertDag to check the convert result and re-schedule dag net if it failed, with the same dag net id.
     ObDagId co_dag_net_id;
+    int schedule_ret = OB_SUCCESS;
     if (OB_FAIL(group_convert_ctx->get_co_dag_net_id(tablet_id, co_dag_net_id))) {
       LOG_WARN("failed to get convert ctx", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, 0 /*retry_times*/, co_dag_net_id))) {
+    } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, 0 /*retry_times*/, co_dag_net_id, schedule_ret))) {
       LOG_WARN("failed to schedule convert co merge for cs replica", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(group_convert_ctx->set_convert_progressing(tablet_id))) {
       LOG_WARN("failed to set convert progressing", K(ret), K(tablet_id));
