@@ -3858,7 +3858,8 @@ int ObDMLResolver::check_is_table_supported_for_mview(const ObItemType table_nod
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(T_RELATION_FACTOR != table_node_type
                   && T_SELECT != table_node_type
-                  && T_JOINED_TABLE != table_node_type)) {
+                  && T_JOINED_TABLE != table_node_type
+                  && T_JSON_TABLE_EXPRESSION != table_node_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported table type in materialized view", K(ret), K(get_type_name(table_node_type)));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-user table in materialized view is");
