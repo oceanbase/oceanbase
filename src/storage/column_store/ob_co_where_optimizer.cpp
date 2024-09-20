@@ -180,26 +180,30 @@ bool ObCOWhereOptimizer::can_choose_best_filter(
     sql::ObPushdownFilterExecutor &parent_filter)
 {
   bool ret = true;
-  sql::ObPushdownFilterExecutor **children = parent_filter.get_childs();
-  const uint32_t child_cnt = parent_filter.get_child_count();
-  const uint32_t best_cg_idx = best_filter.get_cg_idxs().at(0);
-  ObFilterCondition *second_best_filter_condition = best_filter_condition + 1;
-
-  if (best_filter_condition->execution_cost_ < second_best_filter_condition->execution_cost_
-      || best_filter_condition->columns_size_ * 2 < second_best_filter_condition->columns_size_
-      || best_filter_condition->columns_cnt_ * 2 < second_best_filter_condition->columns_cnt_) {
-    for (uint32_t i = 1; i < child_cnt; ++i) {
-      sql::ObPushdownFilterExecutor *filter = children[best_filter_condition[i].idx_];
-      const common::ObIArray<uint32_t> &cg_idxes = filter->get_cg_idxs();
-      if (is_contain(cg_idxes, best_cg_idx)) {
-        ret = false;
-        break;
-      }
-    }
+  if (OB_UNLIKELY(!best_filter.is_cg_param_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected filter cg param", K(ret), K(best_filter));
   } else {
-    ret = false;
-  }
+    sql::ObPushdownFilterExecutor **children = parent_filter.get_childs();
+    const uint32_t child_cnt = parent_filter.get_child_count();
+    const uint32_t best_cg_idx = best_filter.get_cg_idxs().at(0);
+    ObFilterCondition *second_best_filter_condition = best_filter_condition + 1;
 
+    if (best_filter_condition->execution_cost_ < second_best_filter_condition->execution_cost_
+        || best_filter_condition->columns_size_ * 2 < second_best_filter_condition->columns_size_
+        || best_filter_condition->columns_cnt_ * 2 < second_best_filter_condition->columns_cnt_) {
+      for (uint32_t i = 1; i < child_cnt; ++i) {
+        sql::ObPushdownFilterExecutor *filter = children[best_filter_condition[i].idx_];
+        const common::ObIArray<uint32_t> &cg_idxes = filter->get_cg_idxs();
+        if (is_contain(cg_idxes, best_cg_idx)) {
+          ret = false;
+          break;
+        }
+      }
+    } else {
+      ret = false;
+    }
+  }
   return ret;
 }
 
