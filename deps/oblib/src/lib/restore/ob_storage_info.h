@@ -150,6 +150,22 @@ struct ObObjectStorageCredential
   int64_t born_time_us_;
 };
 
+class ObClusterVersionBaseMgr
+{
+public:
+  ObClusterVersionBaseMgr() {}
+  virtual ~ObClusterVersionBaseMgr() {}
+  virtual int is_supported_assume_version() const
+  {
+    return OB_SUCCESS;
+  };
+  static ObClusterVersionBaseMgr &get_instance()
+  {
+    static ObClusterVersionBaseMgr mgr;
+    return mgr;
+  }
+};
+
 class ObObjectStorageInfo
 {
   OB_UNIS_VERSION(1);
@@ -180,6 +196,7 @@ public:
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
       K_(checksum_type), KP_(role_arn), KP_(external_id));
   bool is_assume_role_mode() const;
+  static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
 
 protected:
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const;
@@ -212,6 +229,7 @@ public:
   char role_arn_[OB_MAX_ROLE_ARN_LENGTH];
   char external_id_[OB_MAX_EXTERNAL_ID_LENGTH];
   bool is_assume_role_mode_;
+  static ObClusterVersionBaseMgr *cluster_version_mgr_;
 };
 
 class ObTenantStsCredentialBaseMgr

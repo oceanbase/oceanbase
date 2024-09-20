@@ -86,6 +86,16 @@ int ObTenantStsCredentialMgr::check_sts_credential(omt::ObTenantConfigGuard &ten
   return ret;
 }
 
+int ObClusterVersionMgr::is_supported_assume_version() const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_0) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "cluster version is too low for assume role", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+  }
+  return ret;
+}
+
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(ObLatchIds::LOCAL_DEVICE_LOCK), is_init_(false)
 {
@@ -117,6 +127,9 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
+        &ObClusterVersionMgr::get_instance()))) {
+      OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
     } else if (OB_FAIL(ObDeviceCredentialKey::register_sts_credential_mgr(
         &ObTenantStsCredentialMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register sts crendential", K(ret));

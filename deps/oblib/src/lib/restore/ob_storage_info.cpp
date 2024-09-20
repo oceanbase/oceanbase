@@ -177,6 +177,20 @@ bool ObObjectStorageInfo::is_assume_role_mode() const
   return is_assume_role_mode_;
 }
 
+ObClusterVersionBaseMgr *ObObjectStorageInfo::cluster_version_mgr_ = nullptr;
+int ObObjectStorageInfo::register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cluster_version_mgr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cluster_version_mgr is null", K(ret));
+  } else {
+    cluster_version_mgr_ = cluster_version_mgr;
+    LOG_INFO("register_cluster_version_mgr", K(ret), KP_(cluster_version_mgr));
+  }
+  return ret;
+}
+
 const char *ObObjectStorageInfo::get_type_str() const
 {
   return get_storage_type_str(device_type_);
@@ -235,7 +249,7 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
 int ObObjectStorageInfo::validate_arguments() const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid())) {
+  if (OB_UNLIKELY(!ObObjectStorageInfo::is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(device_type_));
   } else if (OB_STORAGE_FILE != device_type_) {
@@ -365,12 +379,20 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
 
     // If access by assume role, try to get temporary ak/sk into cache to speed up access
     if (OB_SUCC(ret)) {
-      if (strlen(role_arn_) > strlen(ROLE_ARN) ) {
-        is_assume_role_mode_ = true;
-        ObObjectStorageCredential credential;
-        if (OB_FAIL(ObDeviceCredentialMgr::get_instance().get_credential(
-                      *this, credential))) {
-          LOG_WARN("failed to get credential by role arn first", K(ret), KPC(this), KP(storage_info), K(credential));
+      if (strlen(role_arn_) > strlen(ROLE_ARN)) {
+        if (OB_ISNULL(cluster_version_mgr_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_version_mgr_));
+        } else if (OB_FAIL(cluster_version_mgr_->is_supported_assume_version())) {
+          LOG_WARN("assume role is not supported in when the mininum version is below 4.2.5",
+              K(ret), KPC(this));
+        } else {
+          is_assume_role_mode_ = true;
+          ObObjectStorageCredential credential;
+          if (OB_FAIL(ObDeviceCredentialMgr::get_instance().get_credential(*this, credential))) {
+            LOG_WARN("failed to get credential by role arn first", K(ret), KPC(this),
+                KP(storage_info), K(credential));
+          }
         }
       }
     }
@@ -1344,6 +1366,7 @@ int ObDeviceCredentialMgr::parse_device_credential_(
     ObString err_code;
     ObString success_val;
     const json::Value *response_val = nullptr;
+    ObString request_id;
     DLIST_FOREACH_X(it, root->get_object(), OB_SUCC(ret)) {
       if (it->name_.case_compare("Code") == 0) {
         code = (it->value_->get_number());
@@ -1353,13 +1376,15 @@ int ObDeviceCredentialMgr::parse_device_credential_(
         success_val = it->value_->get_string();
       } else if (it->name_.case_compare("Data") == 0) {
         response_val = it->value_;
+      } else if (it->name_.case_compare("RequestId") == 0) {
+        request_id = (it->value_->get_string());
       }
     }
 
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(code != 200 || !success_val.case_compare("true"))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected response", K(ret), K(code), K(err_code), K(success_val));
+      LOG_WARN("unexpected response", K(ret), K(code), K(err_code), K(success_val), K(request_id));
     } else if (OB_UNLIKELY(json::JT_OBJECT != response_val->get_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid response value", K(ret), K(response_val->get_type()));

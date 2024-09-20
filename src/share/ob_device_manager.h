@@ -39,6 +39,19 @@ public:
   const static int64_t LOG_INTERVAL_US = 5 * 1000 * 1000; // 5s
 };
 
+class ObClusterVersionMgr: public ObClusterVersionBaseMgr
+{
+public:
+  ObClusterVersionMgr() {}
+  virtual ~ObClusterVersionMgr() {}
+  virtual int is_supported_assume_version() const override;
+  static ObClusterVersionMgr &get_instance()
+  {
+    static ObClusterVersionMgr mgr;
+    return mgr;
+  }
+};
+
 class ObDeviceManager
 {
 public:
