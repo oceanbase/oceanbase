@@ -487,6 +487,7 @@ int ObCOTabletMergeCtx::create_sstables(const uint32_t start_cg_idx, const uint3
 #ifdef ERRSIM
     } else if ((i > start_cg_idx + 2) && OB_FAIL(ret = OB_E(EventTable::EN_COMPACTION_CO_PUSH_TABLES_FAILED) OB_SUCCESS)) {
       LOG_INFO("ERRSIM EN_COMPACTION_CO_PUSH_TABLES_FAILED", K(ret));
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "co_push_table_failed", "ret_code", ret);
 #endif
     } else if (OB_FAIL(push_table_handle(table_handle, count))) {
       LOG_WARN("failed to add table into tables handle array", K(ret), K(table_handle));

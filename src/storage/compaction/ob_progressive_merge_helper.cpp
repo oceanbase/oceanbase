@@ -14,6 +14,8 @@
 #include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
+#include "observer/ob_server_event_history_table_operator.h"
+
 namespace oceanbase
 {
 using namespace blocksstable;
@@ -98,6 +100,14 @@ int64_t ObProgressiveMergeMgr::get_result_progressive_merge_step(
     if (0 == column_group_idx) { // only print once
       FLOG_INFO("finish cur progressive_merge_round", K(tablet_id), K(result_step), K_(progressive_merge_round),
         K_(progressive_merge_step), K_(progressive_merge_num));
+
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "progressive_merge_finish",
+                          "tablet_id", tablet_id,
+                          "progressive_merge_round", progressive_merge_round_,
+                          "progressive_merge_step", progressive_merge_step_,
+                          "progressive_merge_num", progressive_merge_num_);
+#endif
     }
     result_step = progressive_merge_num_;
   }

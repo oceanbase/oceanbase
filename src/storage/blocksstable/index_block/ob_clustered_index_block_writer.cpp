@@ -539,7 +539,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
     const ObITableReadInfo *index_read_info;
     if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
       LOG_WARN("fail to get index read info for cg sstable", K(ret), K(clustered_index_store_desc_));
-    } else if (index_read_info->get_datum_utils().is_valid()) {
+    } else if (OB_UNLIKELY(!index_read_info->get_datum_utils().is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected invalid datum utails for cg sstable", K(ret), KPC(index_read_info));
     } else {
@@ -548,13 +548,12 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
   } else {
     datum_utils = &(clustered_index_store_desc_.get_datum_utils());
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(index_block_row_scanner.init(
-          *datum_utils,
-          temp_allocator,
-          mock_query_flag,
-          0 /* nested offset */,
-          clustered_index_store_desc_.is_cg()))) {
+
+  if (FAILEDx(index_block_row_scanner.init(*datum_utils,
+                                           temp_allocator,
+                                           mock_query_flag,
+                                           0 /* nested offset */,
+                                           clustered_index_store_desc_.is_cg()))) {
     LOG_WARN("fail to init index block row scanner", K(ret),
              K(clustered_index_store_desc_.get_datum_utils()),
              K(clustered_index_store_desc_.is_cg()));
