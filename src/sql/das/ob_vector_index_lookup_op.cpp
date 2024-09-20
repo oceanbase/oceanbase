@@ -586,9 +586,6 @@ int ObVectorIndexLookupOp::get_aux_table_rowkeys(const int64_t lookup_row_cnt)
     }
   }
   if (OB_FAIL(ret) && ret != OB_ITER_END) {
-  } else if (OB_UNLIKELY(lookup_row_cnt != rowkey_cnt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected aux lookup row count not match", K(ret), K(rowkey_cnt), K(lookup_row_cnt));
   } else if (rowkey_cnt > 0) {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*doc_id_lookup_rtdef_->eval_ctx_);
     batch_info_guard.set_batch_size(rowkey_cnt);
