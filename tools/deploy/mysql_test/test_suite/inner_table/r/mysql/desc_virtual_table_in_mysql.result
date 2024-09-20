@@ -2928,7 +2928,7 @@ create_timestamp	bigint(20)	NO		NULL
 create_schema_version	bigint(20)	NO		NULL	
 extra_info	varchar(256)	NO		NULL	
 time_after_create	bigint(20)	NO		NULL	
-obj_type	varchar(16)	NO		NULL	
+obj_type	varchar(32)	NO		NULL	
 obj_id	bigint(20)	NO		NULL	
 owner_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_obj_lock;
