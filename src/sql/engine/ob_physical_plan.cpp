@@ -1319,7 +1319,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
                                   stat_.stmt_))) {
         SQL_PC_LOG(WARN, "fail to set truncate string", K(ret));
       }
-      stat_.ps_stmt_id_ = pc_ctx.fp_result_.pc_key_.key_id_;
+      stat_.ps_stmt_id_ = pc_ctx.sql_ctx_.statement_id_;
     } else {
       ObTruncatedString trunc_stmt(pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_, sql_length);
       if (OB_FAIL(ob_write_string(get_allocator(),
