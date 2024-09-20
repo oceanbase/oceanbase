@@ -384,6 +384,8 @@ int ObSelectLogPlan::candi_allocate_three_stage_group_by(const ObIArray<ObRawExp
                                                   false))) {
           LOG_WARN("failed to create merge group by plan", K(ret));
         }
+      } else if (!groupby_helper.allow_dist_hash()) {
+        OPT_TRACE("ignore hash dist group by hint");
       } else {
         if (NULL == groupby_helper.aggr_code_expr_ &&
                   OB_FAIL(prepare_three_stage_info(group_by_exprs, rollup_exprs, groupby_helper))) {
@@ -585,7 +587,7 @@ int ObSelectLogPlan::should_create_rollup_pushdown_plan(ObLogicalOperator *top,
              && OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                         is_partition_wise))) {
     LOG_WARN("failed to check is partition wise", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() || is_partition_wise || !groupby_helper.allow_dist_hash()) {
     // do nothing
   } else if (NULL == groupby_helper.rollup_id_expr_ &&
              OB_FAIL(ObRawExprUtils::build_pseudo_rollup_id(get_optimizer_context().get_expr_factory(),
@@ -765,6 +767,9 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
     } else {
       static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(is_basic, is_partition_wise, true, false);
     }
+  } else if (!groupby_helper.allow_dist_hash()) {
+    top = NULL;
+    OPT_TRACE("ignore hash dist hash group by hint");
   } else {
     // allocate push down group by
     if (groupby_helper.can_basic_pushdown_) {
@@ -1115,6 +1120,9 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
     } else {
       static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(is_basic, is_partition_wise, false, false, use_part_sort);
     }
+  } else if (!groupby_helper.allow_dist_hash()) {
+    top = NULL;
+    OPT_TRACE("ignore hash dist merge group by hint");
   } else if (use_part_sort &&
             OB_FAIL(create_hash_sortkey(part_cnt, sort_keys, hash_sortkey))) {
     LOG_WARN("failed to create hash sort key", K(ret), K(part_cnt), K(sort_keys));
@@ -1618,6 +1626,9 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
                                          is_partition_wise))) {
       LOG_WARN("failed to allocate distinct as top", K(ret));
     }
+  } else if (!distinct_helper.allow_dist_hash()) {
+    top = NULL;
+    OPT_TRACE("ignore hash dist distinct by hint");
   } else if (distinct_helper.can_basic_pushdown_ && //allocate push down distinct if necessary
              OB_FAIL(allocate_distinct_as_top(top,
                                               AggregateAlgo::HASH_AGGREGATE,
@@ -1713,6 +1724,9 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
                                                 is_partition_wise))) {
       LOG_WARN("failed to allocate distinct as top", K(ret));
     }
+  } else if (!distinct_helper.allow_dist_hash()) {
+    top = NULL;
+    OPT_TRACE("ignore hash dist distinct by hint");
   } else {
     // allocate push down distinct if necessary
     if (distinct_helper.can_basic_pushdown_) {
