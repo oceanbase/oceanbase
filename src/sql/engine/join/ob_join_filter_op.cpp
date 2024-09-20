@@ -1436,18 +1436,19 @@ int ObJoinFilterOp::init_material_group_exec_info()
   if (OB_SUCC(ret)) {
     ObOperator *cur_op = this;
     ObJoinFilterOp *join_filter_op = nullptr;
-    if (OB_FAIL(group_controller_->join_filter_ops_.prepare_allocate(join_filter_count))) {
-      LOG_WARN("failed to prepare_allocate op_mat_exec_info_");
+    if (OB_FAIL(group_controller_->join_filter_ops_.init(join_filter_count))) {
+      LOG_WARN("failed to init join_filter_ops_");
     }
     for (int64_t i = 0; i < join_filter_count && OB_SUCC(ret); ++i) {
       if (cur_op->get_spec().get_type() != PHY_JOIN_FILTER) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("must be join filter bellow");
+      } else if (FALSE_IT(join_filter_op = static_cast<ObJoinFilterOp *>(cur_op))) {
+      } else if (OB_FAIL(group_controller_->join_filter_ops_.push_back(join_filter_op))) {
+        LOG_WARN("failed to push back join_filter_op");
       } else {
-        join_filter_op = static_cast<ObJoinFilterOp *>(cur_op);
         const ObJoinFilterSpec &spec = get_my_spec(*join_filter_op);
         uint16_t hash_id = spec.jf_material_control_info_.hash_id_;
-        group_controller_->join_filter_ops_.at(i) = join_filter_op;
         group_controller_->group_join_filter_hash_values_[i] = join_filter_op->get_join_filter_hash_values();
         group_controller_->hash_id_map_[i] = hash_id;
         cur_op = cur_op->get_child();
