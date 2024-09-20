@@ -29,6 +29,9 @@ std::streamsize ObOStreamBuf::xsputn(const char* s, std::streamsize count)
 {
   std::streamsize written_size = 0;
   std::streamsize left_size = 0;
+  if (OB_ISNULL(s)) {
+    last_error_code_ = OB_INVALID_ARGUMENT;
+  }
   while (is_valid() && is_success() && written_size < count) {
     left_size = epptr() - pptr();
     std::streamsize sub_size = std::min(count - written_size, left_size);
@@ -122,7 +125,9 @@ std::streamsize ObIStreamBuf::xsgetn(char* s, std::streamsize n)
 {
   std::streamsize get_size = 0;
   std::streamsize data_size = 0;
-  if (is_success() && !is_valid()) {
+  if (OB_ISNULL(s)) {
+    last_error_code_ = OB_INVALID_ARGUMENT;
+  } else if (is_success() && !is_valid()) {
     last_error_code_ = do_callback();
   }
   while (is_valid() && is_success() && get_size < n) {
