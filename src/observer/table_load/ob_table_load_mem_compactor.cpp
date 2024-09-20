@@ -311,7 +311,7 @@ int ObTableLoadMemCompactor::inner_init()
   if (OB_SUCC(ret)) {
     if (OB_FAIL(mem_ctx_.init())) {
       LOG_WARN("fail to init compactor ctx", KR(ret));
-    } else if (OB_FAIL(parallel_merge_ctx_.init(store_ctx_))) {
+    } else if (OB_FAIL(parallel_merge_ctx_.init(store_ctx_, mem_ctx_.table_data_desc_))) {
       LOG_WARN("fail to init parallel merge ctx", KR(ret));
     }
   }

@@ -221,7 +221,7 @@ public:
     OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, table_compactor_time_us);
     int ret = OB_SUCCESS;
     const int64_t merge_count_per_round =
-      parallel_merge_ctx_->store_ctx_->table_data_desc_.merge_count_per_round_;
+      parallel_merge_ctx_->table_data_desc_.merge_count_per_round_;
     if (OB_UNLIKELY(tablet_ctx_->merge_sstable_count_ > 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected tablet ctx", KPC(tablet_ctx_));
@@ -247,7 +247,7 @@ public:
       if (OB_SUCC(ret)) {
         ObDirectLoadMultipleSSTableRangeSplitter range_splitter;
         if (OB_FAIL(range_splitter.init(sstable_array,
-                                        parallel_merge_ctx_->store_ctx_->table_data_desc_,
+                                        parallel_merge_ctx_->table_data_desc_,
                                         &ctx_->schema_.datum_utils_))) {
           LOG_WARN("fail to init range splitter", KR(ret));
         } else if (OB_FAIL(range_splitter.split_range(tablet_ctx_->ranges_,
@@ -370,7 +370,7 @@ public:
   {
     int ret = OB_SUCCESS;
     ObDirectLoadMultipleSSTableScanMergeParam scan_merge_param;
-    scan_merge_param.table_data_desc_ = parallel_merge_ctx_->store_ctx_->table_data_desc_;
+    scan_merge_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
     scan_merge_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
     scan_merge_param.dml_row_handler_ = parallel_merge_ctx_->store_ctx_->error_row_handler_;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ctx_->merge_sstable_count_; ++i) {
@@ -390,13 +390,13 @@ public:
   int init_sstable_builder()
   {
     int ret = OB_SUCCESS;
-    extra_buf_size_ = parallel_merge_ctx_->store_ctx_->table_data_desc_.extra_buf_size_;
+    extra_buf_size_ = parallel_merge_ctx_->table_data_desc_.extra_buf_size_;
     if (OB_ISNULL(extra_buf_ = static_cast<char *>(allocator_.alloc(extra_buf_size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", KR(ret));
     } else {
       ObDirectLoadMultipleSSTableBuildParam build_param;
-      build_param.table_data_desc_ = parallel_merge_ctx_->store_ctx_->table_data_desc_;
+      build_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
       build_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
       build_param.file_mgr_ = parallel_merge_ctx_->store_ctx_->tmp_file_mgr_;
       build_param.extra_buf_ = extra_buf_;
@@ -454,7 +454,7 @@ public:
   {
     int ret = OB_SUCCESS;
     ObDirectLoadMultipleSSTableCompactParam compact_param;
-    compact_param.table_data_desc_ = parallel_merge_ctx_->store_ctx_->table_data_desc_;
+    compact_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
     compact_param.datum_utils_ = &ctx_->schema_.datum_utils_;
     if (OB_FAIL(compactor_.init(compact_param))) {
       LOG_WARN("fail to init sstable compactor", KR(ret));
@@ -570,20 +570,22 @@ ObTableLoadParallelMergeCtx::~ObTableLoadParallelMergeCtx()
   heavy_task_list_.reset();
 }
 
-int ObTableLoadParallelMergeCtx::init(ObTableLoadStoreCtx *store_ctx)
+int ObTableLoadParallelMergeCtx::init(ObTableLoadStoreCtx *store_ctx,
+                                      const ObDirectLoadTableDataDesc &table_data_desc)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadParallelMergeCtx init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(nullptr == store_ctx)) {
+  } else if (OB_UNLIKELY(nullptr == store_ctx || !table_data_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(store_ctx));
+    LOG_WARN("invalid args", KR(ret), KP(store_ctx), K(table_data_desc));
   } else {
     if (OB_FAIL(tablet_ctx_map_.create(1024, "TLD_CptCtxMap", "TLD_CptCtxMap", MTL_ID()))) {
       LOG_WARN("fail to create ctx map", KR(ret));
     } else {
       store_ctx_ = store_ctx;
+      table_data_desc_ = table_data_desc;
       thread_count_ = store_ctx_->task_scheduler_->get_thread_count();
       is_inited_ = true;
     }
@@ -700,7 +702,7 @@ int ObTableLoadParallelMergeCtx::start(ObTableLoadParallelMergeCb *cb)
     for (TabletCtxIterator iter = tablet_ctx_map_.begin();
          OB_SUCC(ret) && iter != tablet_ctx_map_.end(); ++iter) {
       ObTableLoadParallelMergeTabletCtx *tablet_ctx = iter->second;
-      if (tablet_ctx->sstables_.size() > store_ctx_->table_data_desc_.merge_count_per_round_) {
+      if (tablet_ctx->sstables_.size() > table_data_desc_.merge_count_per_round_) {
         // need merge
         if (OB_FAIL(construct_split_range_task(tablet_ctx))) {
           LOG_WARN("fail to construct split range task", KR(ret));
@@ -899,7 +901,7 @@ int ObTableLoadParallelMergeCtx::handle_tablet_compact_sstable_finish(
   if (OB_UNLIKELY(nullptr == tablet_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(tablet_ctx));
-  } else if (tablet_ctx->sstables_.size() > store_ctx_->table_data_desc_.merge_count_per_round_) {
+  } else if (tablet_ctx->sstables_.size() > table_data_desc_.merge_count_per_round_) {
     // still need merge
     ATOMIC_AAF(&store_ctx_->ctx_->job_stat_->store_.compact_stage_consume_tmp_files_, tablet_ctx->merge_sstable_count_ - 1);
     if (OB_FAIL(construct_split_range_task(tablet_ctx))) {

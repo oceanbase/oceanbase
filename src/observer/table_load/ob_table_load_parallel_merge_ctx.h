@@ -81,7 +81,7 @@ public:
   typedef TabletCtxMap::const_iterator TabletCtxIterator;
   ObTableLoadParallelMergeCtx();
   ~ObTableLoadParallelMergeCtx();
-  int init(ObTableLoadStoreCtx *store_ctx);
+  int init(ObTableLoadStoreCtx *store_ctx, const ObDirectLoadTableDataDesc &table_data_desc);
   int add_tablet_sstable(storage::ObDirectLoadMultipleSSTable *sstable);
   int start(ObTableLoadParallelMergeCb *cb);
   void stop();
@@ -104,6 +104,7 @@ private:
   int64_t get_idle_thread_count() const;
 private:
   ObTableLoadStoreCtx *store_ctx_;
+  ObDirectLoadTableDataDesc table_data_desc_;
   int64_t thread_count_;
   ObTableLoadParallelMergeCb *cb_;
   common::ObArenaAllocator allocator_;

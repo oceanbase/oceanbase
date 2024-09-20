@@ -77,7 +77,8 @@ int ObTableLoadParallelMergeTableCompactor::inner_init()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
-  if (OB_FAIL(parallel_merge_ctx_.init(compact_ctx_->store_ctx_))) {
+  if (OB_FAIL(parallel_merge_ctx_.init(compact_ctx_->store_ctx_,
+                                       compact_ctx_->store_ctx_->table_data_desc_))) {
     LOG_WARN("fail to init parallel merge ctx", KR(ret));
   } else if (OB_FAIL(parallel_merge_cb_.init(this))) {
     LOG_WARN("fail to init parallel merge cb", KR(ret));
