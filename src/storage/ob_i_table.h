@@ -109,6 +109,7 @@ public:
     DDL_MEM_MINI_SSTABLE = 25,
     MDS_MINI_SSTABLE = 26,
     MDS_MINOR_SSTABLE = 27,
+    MICRO_MINI_SSTABLE = 28,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE
