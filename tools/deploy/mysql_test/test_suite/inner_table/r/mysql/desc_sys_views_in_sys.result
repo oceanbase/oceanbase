@@ -9364,6 +9364,67 @@ LIMIT_VALUE	bigint(20)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RESOURCE_LIMIT_DETAIL limit 1);
 cnt
 1
+desc information_schema.INNODB_LOCK_WAITS;
+Field	Type	Null	Key	Default	Extra
+REQUESTING_TRX_ID	varchar(1)	NO			
+REQUESTED_LOCK_ID	varchar(1)	NO			
+BLOCKING_TRX_ID	varchar(1)	NO			
+BLOCKING_LOCK_ID	varchar(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_LOCK_WAITS limit 1);
+cnt
+1
+desc information_schema.INNODB_LOCKS;
+Field	Type	Null	Key	Default	Extra
+LOCK_ID	varchar(1)	NO			
+LOCK_TRX_ID	varchar(1)	NO			
+LOCK_MODE	varchar(1)	NO			
+LOCK_TYPE	varchar(1)	NO			
+LOCK_TABLE	varchar(1)	NO			
+LOCK_INDEX	varchar(1)	NO			
+LOCK_SPACE	bigint(1)	NO			
+LOCK_PAGE	bigint(1)	NO			
+LOCK_REC	bigint(1)	NO			
+LOCK_DATA	varchar(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_LOCKS limit 1);
+cnt
+1
+desc information_schema.INNODB_TRX;
+Field	Type	Null	Key	Default	Extra
+TRX_ID	varchar(1)	NO			
+TRX_STATE	varchar(1)	NO			
+TRX_STARTED	datetime	NO			
+TRX_REQUESTED_LOCK_ID	varchar(1)	NO			
+TRX_WAIT_STARTED	datetime	NO			
+TRX_WEIGHT	bigint(1)	NO			
+TRX_MYSQL_THREAD_ID	bigint(1)	NO			
+TRX_QUERY	varchar(1)	NO			
+TRX_OPERATION_STATE	varchar(1)	NO			
+TRX_TABLE_IN_USE	bigint(1)	NO			
+TRX_TABLES_LOCKED	bigint(1)	NO			
+TRX_LOCK_STRUCTS	bigint(1)	NO			
+TRX_LOCK_MEMORY_BYTES	bigint(1)	NO			
+TRX_ROWS_LOCKED	bigint(1)	NO			
+TRX_ROWS_MODIFIED	bigint(1)	NO			
+TRX_CONCURRENCY_TICKETS	bigint(1)	NO			
+TRX_ISOLATION_LEVEL	varchar(1)	NO			
+TRX_UNIQUE_CHECKS	bigint(1)	NO			
+TRX_FOREIGN_KEY_CHECKS	bigint(1)	NO			
+TRX_LAST_FOREIGN_KEY_ERROR	varchar(1)	NO			
+TRX_ADAPTIVE_HASH_LATCHED	bigint(1)	NO			
+TRX_ADAPTIVE_HASH_TIMEOUT	bigint(1)	NO			
+TRX_IS_READ_ONLY	bigint(1)	NO			
+TRX_AUTOCOMMIT_NON_LOCKING	bigint(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_TRX limit 1);
+cnt
+1
+desc information_schema.NDB_TRANSID_MYSQL_CONNECTION_MAP;
+Field	Type	Null	Key	Default	Extra
+MYSQL_CONNECTION_ID	bigint(1)	NO			
+NODE_ID	bigint(1)	NO			
+NDB_TRANSID	bigint(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.NDB_TRANSID_MYSQL_CONNECTION_MAP limit 1);
+cnt
+1
 desc oceanbase.V$OB_GROUP_IO_STAT;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO			

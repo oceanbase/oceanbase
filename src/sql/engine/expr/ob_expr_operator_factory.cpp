@@ -440,6 +440,7 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_gtid.h"
 #include "sql/engine/expr/ob_expr_array.h"
 #include "sql/engine/expr/ob_expr_vec_vid.h"
 #include "sql/engine/expr/ob_expr_vec_type.h"
@@ -1146,6 +1147,10 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbToString);
     REG_OP(ObExprRbFromString);
     REG_OP(ObExprGetPath);
+    REG_OP(ObExprGTIDSubset);
+    REG_OP(ObExprGTIDSubtract);
+    REG_OP(ObExprWaitForExecutedGTIDSet);
+    REG_OP(ObExprWaitUntilSQLThreadAfterGTIDs);
     REG_OP(ObExprArrayContains);
     REG_OP(ObExprDecodeTraceId);
     REG_OP(ObExprAuditLogSetFilter);

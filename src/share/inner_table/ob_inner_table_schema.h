@@ -1829,6 +1829,10 @@ public:
   static int v_ob_tenant_resource_limit_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tenant_resource_limit_detail_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tenant_resource_limit_detail_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_lock_waits_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_locks_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_trx_schema(share::schema::ObTableSchema &table_schema);
+  static int ndb_transid_mysql_connection_map_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_group_io_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_group_io_stat_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_storage_io_usage_schema(share::schema::ObTableSchema &table_schema);
@@ -4785,6 +4789,10 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_tenant_resource_limit_schema,
   ObInnerTableSchema::gv_ob_tenant_resource_limit_detail_schema,
   ObInnerTableSchema::v_ob_tenant_resource_limit_detail_schema,
+  ObInnerTableSchema::innodb_lock_waits_schema,
+  ObInnerTableSchema::innodb_locks_schema,
+  ObInnerTableSchema::innodb_trx_schema,
+  ObInnerTableSchema::ndb_transid_mysql_connection_map_schema,
   ObInnerTableSchema::v_ob_group_io_stat_schema,
   ObInnerTableSchema::gv_ob_group_io_stat_schema,
   ObInnerTableSchema::dba_ob_storage_io_usage_schema,
@@ -6566,6 +6574,10 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_TID,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_TID,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_TID,
+  OB_INNODB_LOCK_WAITS_TID,
+  OB_INNODB_LOCKS_TID,
+  OB_INNODB_TRX_TID,
+  OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TID,
   OB_V_OB_GROUP_IO_STAT_TID,
   OB_GV_OB_GROUP_IO_STAT_TID,
   OB_DBA_OB_STORAGE_IO_USAGE_TID,
@@ -9287,6 +9299,10 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_TNAME,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_TNAME,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_TNAME,
+  OB_INNODB_LOCK_WAITS_TNAME,
+  OB_INNODB_LOCKS_TNAME,
+  OB_INNODB_TRX_TNAME,
+  OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TNAME,
   OB_V_OB_GROUP_IO_STAT_TNAME,
   OB_GV_OB_GROUP_IO_STAT_TNAME,
   OB_DBA_OB_STORAGE_IO_USAGE_TNAME,
@@ -13578,10 +13594,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 304;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 851;
-const int64_t OB_SYS_VIEW_COUNT = 959;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2119;
+const int64_t OB_SYS_VIEW_COUNT = 963;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2123;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2122;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2126;
 
 } // end namespace share
 } // end namespace oceanbase

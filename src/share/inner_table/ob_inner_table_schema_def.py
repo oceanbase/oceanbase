@@ -36073,10 +36073,102 @@ AND
 """.replace("\n", " ")
 )
 
-# 21554: INNODB_LOCK_WAITS
-# 21555: INNODB_LOCKS
-# 21556: INNODB_TRX
-# 21557: ndb_transid_mysql_connection_map
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_LOCK_WAITS',
+  table_id        = '21554',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as REQUESTING_TRX_ID,
+           '0' as REQUESTED_LOCK_ID,
+           '0' as BLOCKING_TRX_ID,
+           '0' as BLOCKING_LOCK_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_LOCKS',
+  table_id        = '21555',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as LOCK_ID,
+           '0' as LOCK_TRX_ID,
+           '0' as LOCK_MODE,
+           '0' as LOCK_TYPE,
+           '0' as LOCK_TABLE,
+           '0' as LOCK_INDEX,
+           0 as LOCK_SPACE,
+           0 as LOCK_PAGE,
+           0 as LOCK_REC,
+           '0' as LOCK_DATA
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_TRX',
+  table_id        = '21556',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as TRX_ID,
+           '0' as TRX_STATE,
+           now() as TRX_STARTED,
+           '0' as TRX_REQUESTED_LOCK_ID,
+           now() as TRX_WAIT_STARTED,
+           0 as TRX_WEIGHT,
+           0 as TRX_MYSQL_THREAD_ID,
+           '0' as TRX_QUERY,
+           '0' as TRX_OPERATION_STATE,
+           0 as TRX_TABLE_IN_USE,
+           0 as TRX_TABLES_LOCKED,
+           0 as TRX_LOCK_STRUCTS,
+           0 as TRX_LOCK_MEMORY_BYTES,
+           0 as TRX_ROWS_LOCKED,
+           0 as TRX_ROWS_MODIFIED,
+           0 as TRX_CONCURRENCY_TICKETS,
+           '0' as TRX_ISOLATION_LEVEL,
+           0 as TRX_UNIQUE_CHECKS,
+           0 as TRX_FOREIGN_KEY_CHECKS,
+           '0' as TRX_LAST_FOREIGN_KEY_ERROR,
+           0 as TRX_ADAPTIVE_HASH_LATCHED,
+           0 as TRX_ADAPTIVE_HASH_TIMEOUT,
+           0 as TRX_IS_READ_ONLY,
+           0 as TRX_AUTOCOMMIT_NON_LOCKING
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'NDB_TRANSID_MYSQL_CONNECTION_MAP',
+  table_id        = '21557',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT 0 as MYSQL_CONNECTION_ID,
+           0 as NODE_ID,
+           0 as NDB_TRANSID
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'wyh329796',
@@ -36238,26 +36330,6 @@ def_table_schema(
   )
 """.replace("\n", " ")
 )
-
-# 21562: TABLESPACES
-# 21563: INNODB_BUFFER_PAGE
-# 21564: INNODB_BUFFER_PAGE_LRU
-# 21565: INNODB_BUFFER_POOL_STATS
-# 21566: INNODB_CMP
-# 21567: INNODB_CMP_PER_INDEX
-# 21568: INNODB_CMP_PER_INDEX_RESET
-# 21569: INNODB_CMP_RESET
-# 21570: INNODB_CMPMEM
-# 21571: INNODB_CMPMEM_RESET
-# 21572: INNODB_SYS_DATAFILES
-# 21573: INNODB_SYS_INDEXES
-# 21574: INNODB_SYS_TABLES
-# 21575: INNODB_SYS_TABLESPACES
-# 21576: INNODB_SYS_TABLESTATS
-# 21577: INNODB_SYS_VIRTUAL
-# 21578: INNODB_TEMP_TABLE_INFO
-# 21579: INNODB_METRICS
-# 21580: EVENTS
 
 def_table_schema(
   owner = 'chaser.ch',

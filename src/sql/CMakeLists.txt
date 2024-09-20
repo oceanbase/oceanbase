@@ -773,6 +773,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_vec_key.cpp
   engine/expr/ob_expr_vec_data.cpp
   engine/expr/ob_expr_topn_filter.cpp
+  engine/expr/ob_expr_gtid.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
   engine/expr/ob_expr_rb_build_empty.cpp
   engine/expr/ob_expr_rb_is_empty.cpp

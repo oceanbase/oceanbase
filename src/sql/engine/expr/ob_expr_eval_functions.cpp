@@ -386,6 +386,7 @@
 #include "ob_expr_func_ceil.h"
 #include "ob_expr_topn_filter.h"
 #include "ob_expr_sdo_relate.h"
+#include "ob_expr_gtid.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_password.h"
 #include "ob_expr_decode_trace_id.h"
@@ -1189,10 +1190,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIsUsedLock::is_used_lock,                                     /* 683 */
   ObExprReleaseLock::release_lock,                                    /* 684 */
   ObExprReleaseAllLocks::release_all_locks,                           /* 685 */
-  NULL, // ObExprGTIDSubset::eval_subset,                             /* 686 */
-  NULL, // ObExprGTIDSubtract::eval_subtract,                         /* 687 */
-  NULL, // ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set, /* 688 */
-  NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
+  ObExprGTIDSubset::eval_subset,                                      /* 686 */
+  ObExprGTIDSubtract::eval_subtract,                                  /* 687 */
+  ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set,      /* 688 */
+  ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids, /* 689 */
   ObExprLastRefreshScn::eval_last_refresh_scn,                        /* 690 */
   ObExprDocLength::generate_doc_length,                               /* 691 */
   ObExprTopNFilter::eval_topn_filter,                                 /* 692 */
