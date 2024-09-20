@@ -260,6 +260,49 @@ int ObCSReplicaUtil::get_cs_replica_ls_set(
   return ret;
 }
 
+int ObCSReplicaUtil::check_need_process_cs_replica_for_offline_ddl(
+    const ObTableSchema &orig_table_schema,
+    bool &need_process)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = OB_INVALID_VERSION;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  bool is_column_group_store = false;
+  need_process = false;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_3_3_0) {
+    // not support column store replica
+  } else if (!is_user_tenant(tenant_id) || !orig_table_schema.is_user_table()) {
+  } else if (OB_FAIL(orig_table_schema.get_is_column_store(is_column_group_store))) {
+    LOG_WARN("fail to check schema is column group store", K(ret));
+  } else if (is_column_group_store) {
+    // originally column store
+  } else {
+    ObSEArray<ObLSInfo, 8> ls_infos;
+    ls_infos.set_attr(ObMemAttr(tenant_id, "DDLLSInfos"));
+    if (OB_ISNULL(GCTX.lst_operator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lst_operator is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GCTX.lst_operator_->get_by_tenant(tenant_id, false/*inner_table_only*/, ls_infos))) {
+      LOG_WARN("fail to get ls infos", KR(ret), K(tenant_id));
+    } else {
+      // 3. update ls_infos cached in memory
+      for (int64_t i = 0; OB_SUCC(ret) && i < ls_infos.count(); ++i) {
+        const ObLSInfo &ls_info = ls_infos.at(i);
+        bool is_global_visible = false;
+        if (OB_FAIL(check_cs_replica_global_visible(ls_info, is_global_visible))) {
+          LOG_WARN("failed to check need process cs replica", K(ret), K(ls_info));
+        } else if (is_global_visible) {
+          need_process = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 /*---------------------------------- ObCSReplicaStorageSchemaGuard -------------------------------- */
 
 ObCSReplicaStorageSchemaGuard::ObCSReplicaStorageSchemaGuard()

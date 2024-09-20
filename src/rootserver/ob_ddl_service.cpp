@@ -127,6 +127,7 @@
 #include "src/share/ob_vec_index_builder_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
 {
@@ -4253,6 +4254,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           || ObDDLType::DDL_COLUMN_REDEFINITION == ddl_type) {
     bool is_exist_stored_gen_col = false; // whether the target table contain stored generated column.
     bool is_column_group_store = false;
+    bool need_process_cs_replica = false;
     if (OB_FAIL(ObCODDLUtil::need_column_group_store(orig_table_schema, is_column_group_store))) {
       LOG_WARN("fail to check schema is column group store", K(ret));
     } else if (is_column_group_store) {
@@ -4263,6 +4265,10 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
       LOG_WARN("fail to check exist stored generated column", K(ret));
     } else if (is_exist_stored_gen_col) {
       // column redefinition cannot handle stored gen column, use table redefinition instead
+      ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    } else if (OB_FAIL(ObCSReplicaUtil::check_need_process_cs_replica_for_offline_ddl(orig_table_schema, need_process_cs_replica))) {
+      LOG_WARN("fail to check need process cs replica", K(ret));
+    } else if (need_process_cs_replica) {
       ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
     } else {/* do nothing. */}
   }
