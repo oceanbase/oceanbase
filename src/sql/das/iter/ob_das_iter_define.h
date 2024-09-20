@@ -33,6 +33,7 @@ enum ObDASIterType : uint32_t
   DAS_ITER_TEXT_RETRIEVAL_MERGE,
   DAS_ITER_VEC_VID_MERGE,
   DAS_ITER_INDEX_MERGE,
+  DAS_ITER_DOC_ID_MERGE,
   // append DASIterType before me
   DAS_ITER_MAX
 };
