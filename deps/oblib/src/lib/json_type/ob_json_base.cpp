@@ -4044,7 +4044,7 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
           hash_value.calc_string(key);
           if (OB_FAIL(get_object_value(i, jb_ptr))) {
             LOG_WARN("failed to get sub obj.", K(ret), K(i), K(key));
-          } else if (jb_ptr->calc_json_hash_value(hash_value.get_hash_value(), hash_func, obj_res)) {
+          } else if (OB_FAIL(jb_ptr->calc_json_hash_value(hash_value.get_hash_value(), hash_func, obj_res))) {
             LOG_WARN("fail to calc json hash value", K(ret), K(i), K(count), K(j_type));
           } else {
             hash_value.calc_uint64(obj_res);
