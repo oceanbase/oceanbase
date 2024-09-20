@@ -2283,6 +2283,8 @@ int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &ta
           data_format_version_, get_micro_index_clustered(),
           is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn()))) {
     LOG_WARN("fail to init data desc", K(ret));
+  } else if (FALSE_IT(index_block_desc.get_static_desc().schema_version_ = sqc_build_ctx_.build_param_.runtime_only_param_.schema_version_)) {
+    /* set as a fixed schema version */
   } else {
     if (GCTX.is_shared_storage_mode() && !is_incremental_direct_load(direct_load_type_)) {
       index_block_desc.get_static_desc().exec_mode_ = compaction::EXEC_MODE_OUTPUT;
@@ -2306,6 +2308,7 @@ int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &ta
             is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn()))) {
       LOG_WARN("fail to init data block desc", K(ret));
     } else {
+      sqc_build_ctx_.data_block_desc_.get_static_desc().schema_version_ = sqc_build_ctx_.build_param_.runtime_only_param_.schema_version_;
       sqc_build_ctx_.data_block_desc_.get_desc().sstable_index_builder_ = sqc_build_ctx_.index_builder_; // for build the tail index block in macro block
       if (GCTX.is_shared_storage_mode() && !is_incremental_direct_load(direct_load_type_)) {
         sqc_build_ctx_.data_block_desc_.get_static_desc().exec_mode_ = compaction::EXEC_MODE_OUTPUT;
