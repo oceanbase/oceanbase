@@ -1344,9 +1344,10 @@ int ObJoinFilterOp::init_material_parameters()
                            OB_NEWx(ObJoinFilterPartitionSplitter, &ctx_.get_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObJoinFilterPartitionSplitter");
-  } else if (partition_splitter_->init(tenant_id, mem_context_, eval_ctx_, &sql_mem_processor_,
-                                       MY_SPEC.full_hash_join_keys_, MY_SPEC.output_,
-                                       extra_hash_count, max_batch_size, compress_type)) {
+  } else if (OB_FAIL(partition_splitter_->init(tenant_id, mem_context_, eval_ctx_,
+                                               &sql_mem_processor_, MY_SPEC.full_hash_join_keys_,
+                                               MY_SPEC.output_, extra_hash_count, max_batch_size,
+                                               compress_type))) {
     LOG_WARN("failed to init partition splitter");
   } else if (OB_FAIL(partition_splitter_->prepare_join_partitions(
                  &io_event_observer_, worker_row_count, worker_memory_size))) {
