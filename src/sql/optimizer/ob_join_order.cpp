@@ -10821,6 +10821,20 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
   return ret;
 }
 
+DistAlgo ObJoinOrder::get_aj_hj_dist_algo(const Path &nlj_path,
+                                          const Path &hj_right_path)
+{
+  DistAlgo aj_hj_dist_algo = DIST_NONE_NONE;
+  if (nlj_path.is_match_all() && hj_right_path.is_match_all()) {
+    aj_hj_dist_algo = DIST_BASIC_METHOD;
+  } else if (nlj_path.is_match_all()) {
+    aj_hj_dist_algo = DIST_ALL_NONE;
+  } else if (hj_right_path.is_match_all()) {
+    aj_hj_dist_algo = DIST_NONE_ALL;
+  }
+  return aj_hj_dist_algo;
+}
+
 int ObJoinOrder::create_and_add_aj_path(const Path *left_path,
                                         const Path *hj_right_path,
                                         const Path *nlj_right_path,
@@ -10859,7 +10873,7 @@ int ObJoinOrder::create_and_add_aj_path(const Path *left_path,
   } else if (OB_FAIL(create_hash_join_path(nlj_path,
                                            hj_right_path,
                                            join_type,
-                                           DIST_NONE_NONE,
+                                           get_aj_hj_dist_algo(*nlj_path, *hj_right_path),
                                            is_slave_mapping,
                                            equal_join_conditions,
                                            other_join_conditions,

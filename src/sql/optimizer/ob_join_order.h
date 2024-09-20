@@ -2123,6 +2123,8 @@ struct NullAwareAntiJoinInfo {
                                  const double equal_cond_sel,
                                  const double other_cond_sel,
                                  const NullAwareAntiJoinInfo &naaj_info);
+    DistAlgo get_aj_hj_dist_algo(const Path &nlj_path,
+                                 const Path &hj_right_path);
     int create_and_add_aj_path(const Path *left_path,
                               const Path *hj_right_path,
                               const Path *nlj_right_path,
