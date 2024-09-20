@@ -92,7 +92,7 @@ struct ObS3Account
   void reset();
   bool is_valid() const { return is_valid_; }
   int64_t hash() const;
-  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id), KP_(secret_key), K_(sts_token));
+  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id), KP_(secret_key), K_(sts_token), K_(addressing_model));
 
   int parse_from(const char *storage_info_str, const int64_t size);
 
@@ -103,6 +103,7 @@ struct ObS3Account
   char access_id_[MAX_S3_ACCESS_ID_LENGTH];     // ak
   char secret_key_[MAX_S3_SECRET_KEY_LENGTH];   // sk
   ObSTSToken sts_token_;
+  ObStorageAddressingModel addressing_model_;
 };
 
 class ObS3MemoryManager : public Aws::Utils::Memory::MemorySystemInterface
