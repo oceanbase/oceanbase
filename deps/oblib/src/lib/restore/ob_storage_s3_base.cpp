@@ -176,6 +176,19 @@ ObS3Client::~ObS3Client()
   destroy();
 }
 
+// Disable the internal retry mechanism within the S3 SDK
+class ObStorageS3DisabledRetryStrategy : public Aws::Client::DefaultRetryStrategy
+{
+public:
+  ObStorageS3DisabledRetryStrategy() : DefaultRetryStrategy() {}
+  virtual ~ObStorageS3DisabledRetryStrategy() {}
+
+  virtual bool ShouldRetry(const AWSError<CoreErrors>& error, long attemptedRetries) const override
+  {
+    return false;
+  }
+};
+
 int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
                                               S3ClientConfiguration &config)
 {
@@ -197,8 +210,8 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
     config.executor = nullptr;
 
     // Default maxRetries is 10
-    std::shared_ptr<Aws::Client::DefaultRetryStrategy> retryStrategy =
-        Aws::MakeShared<Aws::Client::DefaultRetryStrategy>(S3_SDK, 1/*maxRetries*/);
+    std::shared_ptr<ObStorageS3DisabledRetryStrategy> retryStrategy =
+        Aws::MakeShared<ObStorageS3DisabledRetryStrategy>(S3_SDK);
     config.retryStrategy = retryStrategy;
   }
   return ret;
@@ -310,27 +323,34 @@ void ObS3Client::release()
   last_modified_ts_ = ObTimeUtility::current_time();
 }
 
-template<typename RequestType, typename OutcomeType>
-int ObS3Client::do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
-                                 const RequestType &request, OutcomeType &outcome)
+int ObS3Client::check_status()
 {
   int ret = OB_SUCCESS;
-  {
-    SpinRLockGuard guard(lock_);
-    if (!is_inited_) {
-      ret = OB_NOT_INIT;
-      OB_LOG(WARN, "ObS3Client not init", K(ret));
-    } else if (stopped_) {
-      ret = OB_IN_STOP_STATE;
-      OB_LOG(WARN, "ObS3Client has been stopped", K(ret));
-    } else if (OB_ISNULL(client_)) {
-      ret = OB_S3_ERROR;
-      OB_LOG(WARN, "client is NULL in ObS3Client", K(ret), KP(client_));
-    }
+  SpinRLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "ObS3Client not init", K(ret));
+  } else if (stopped_) {
+    ret = OB_IN_STOP_STATE;
+    OB_LOG(WARN, "ObS3Client has been stopped", K(ret));
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_S3_ERROR;
+    OB_LOG(WARN, "client is NULL in ObS3Client", K(ret), KP(client_));
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    outcome = (client_->*s3_op_func)(request);
+template<typename RequestType, typename OutcomeType>
+int ObS3Client::do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
+                                 const RequestType &request, OutcomeType &outcome,
+                                 const int64_t retry_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_status())) {
+    OB_LOG(WARN, "ObS3Client is not in running state", K(ret));
+  } else {
+    ObStorageS3RetryStrategy<OutcomeType> strategy(retry_timeout_us);
+    outcome = execute_until_timeout(strategy, std::mem_fn(s3_op_func), client_, request);
     last_modified_ts_ = ObTimeUtility::current_time();
   }
   return ret;
@@ -429,7 +449,9 @@ int ObS3Client::complete_multipart_upload(const Model::CompleteMultipartUploadRe
 {
   S3OperationFunc<Model::CompleteMultipartUploadRequest, Model::CompleteMultipartUploadOutcome>
       s3_op_func = &S3Client::CompleteMultipartUpload;
-  return do_s3_operation_(s3_op_func, request, outcome);
+  // disable the retry mechanism
+  const int64_t DO_NOT_RETRY = 0;
+  return do_s3_operation_(s3_op_func, request, outcome, DO_NOT_RETRY/*retry_timeout_us*/);
 }
 
 int ObS3Client::abort_multipart_upload(const Model::AbortMultipartUploadRequest &request,
@@ -793,6 +815,10 @@ static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
   const int code = static_cast<int>(outcome.GetError().GetResponseCode());
   const char *exception = outcome.GetError().GetExceptionName().c_str();
   const char *err_msg = outcome.GetError().GetMessage().c_str();
+  if (OB_OBJECT_NOT_EXIST != ob_errcode) {
+    // force printing log
+    allow_next_syslog();
+  }
   if (OB_CHECKSUM_ERROR == ob_errcode) {
     OB_LOG_RET(ERROR, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
   } else {
@@ -1681,6 +1707,7 @@ int ObStorageS3Util::batch_del_files_(
   int ret = OB_SUCCESS;
   ObStorageS3Base s3_base;
   const int64_t n_files_to_delete = files_to_delete.size();
+  ObArenaAllocator allocator(OB_STORAGE_S3_ALLOCATOR);
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
@@ -1694,12 +1721,18 @@ int ObStorageS3Util::batch_del_files_(
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "batch tagging is not supported", K(ret), K(uri), K(s3_base.s3_account_));
   } else {
+    char *tmp_key = nullptr;
     Aws::S3::Model::Delete delete_info;
     delete_info.SetQuiet(false); // return all object's status
     hash::ObHashMap<ObString, int64_t>::const_iterator iter = files_to_delete.begin();
     while (OB_SUCC(ret) && iter != files_to_delete.end()) {
-      delete_info.AddObjects(Aws::S3::Model::ObjectIdentifier().WithKey(iter->first.ptr()));
-      iter++;
+      if (OB_FAIL(ob_dup_cstring(allocator, iter->first, tmp_key))) {
+        OB_LOG(WARN, "fail to copy c string", K(ret), K(uri),
+            K(iter->first), KPC_(storage_info), K(s3_base.bucket_), K(s3_base.object_));
+      } else {
+        delete_info.AddObjects(Aws::S3::Model::ObjectIdentifier().WithKey(tmp_key));
+        iter++;
+      }
     }
 
     Aws::S3::Model::DeleteObjectsRequest request;

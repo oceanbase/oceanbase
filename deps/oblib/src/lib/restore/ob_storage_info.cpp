@@ -225,7 +225,10 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       if (NULL == token) {
         break;
       } else if (0 == strncmp(REGION, token, strlen(REGION))) {
-        if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+        if (OB_UNLIKELY(OB_STORAGE_S3 != device_type_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("only s3 protocol can set s3_region", K(ret), K(token), K(device_type_));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set region", K(ret), K(token));
         }
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
@@ -270,9 +273,12 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
             LOG_INFO("parse bandwidth value", K(buf), K(value));
           }
         }
-      } else if (OB_STORAGE_FILE != device_type_ && 0 == strncmp(APPID, token, strlen(APPID))) {
+      } else if (0 == strncmp(APPID, token, strlen(APPID))) {
         has_needed_extension = (OB_STORAGE_COS == device_type_);
-        if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+        if (OB_UNLIKELY(OB_STORAGE_COS != device_type_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("only cos protocol can appid", K(ret), K(token), K(device_type_));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set appid", K(ret), K(token));
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {

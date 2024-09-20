@@ -25,6 +25,64 @@ namespace oceanbase
 namespace common
 {
 extern const char *OB_STORAGE_ACCESS_TYPES_STR[];
+static constexpr char OB_STORAGE_IO_ADAPTER[] = "io_adapter";
+
+static int release_device(ObIODevice *&dev_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dev_handle)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "device handle is null, invalid parameter!", K(ret));
+  } else if (OB_FAIL(ObDeviceManager::get_instance().release_device(dev_handle))) {
+    OB_LOG(WARN, "fail to release device", K(ret), KP(dev_handle));
+  } else {
+    dev_handle = nullptr;
+  }
+  return ret;
+}
+
+// This class provides a straightforward wrapper for initializing and releasing a device.
+// It ensures that the URI is properly copied and
+// guarantees that the URI passed to the device handle is null-terminated ('\0').
+struct DeviceGuard
+{
+  DeviceGuard() : allocator_(OB_STORAGE_IO_ADAPTER), device_handle_(nullptr), uri_cstr_(nullptr) {}
+  ~DeviceGuard()
+  {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(device_handle_) && OB_FAIL(release_device(device_handle_))) {
+      OB_LOG(WARN, "fail to release device", KR(ret), KP(device_handle_), K(uri_cstr_));
+    }
+    allocator_.reset();
+    uri_cstr_ = nullptr;
+    device_handle_ = nullptr;
+  }
+
+  int init(
+      const ObString &uri,
+      const share::ObBackupStorageInfo *storage_info,
+      const ObStorageIdMod &storage_id_mod)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(uri.empty()) || OB_NOT_NULL(uri.find('\0'))) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "uri is invalid, maybe contains '\0'",
+          KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
+    } else if (OB_FAIL(ob_dup_cstring(allocator_, uri, uri_cstr_))) {
+      OB_LOG(WARN, "fail to copy url", KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
+    } else if (OB_FAIL(ObBackupIoAdapter::get_and_init_device(
+        device_handle_, storage_info, uri_cstr_, storage_id_mod))) {
+      OB_LOG(WARN, "fail to get device!", KR(ret), K(uri), KPC(storage_info), K(storage_id_mod));
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(KP(device_handle_), K(uri_cstr_));
+
+  ObArenaAllocator allocator_;
+  ObIODevice *device_handle_;
+  char *uri_cstr_;
+};
 
 int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd &fd, 
               const share::ObBackupStorageInfo *storage_info, const common::ObString &uri,
@@ -38,7 +96,7 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
   
   if (access_type >= OB_STORAGE_ACCESS_MAX_TYPE) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid access type!", K(access_type));
+    OB_LOG(WARN, "invalid access type!", KR(ret), K(access_type));
   } else {
     iod_opts.opts_[0].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
     if (access_type == OB_STORAGE_ACCESS_RANDOMWRITER) 
@@ -47,25 +105,17 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
       iod_opts.opt_cnt_++;
     }
 
-    if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, storage_id_mod))) {
-      OB_LOG(WARN, "fail to get and init device!", K(ret), KP(storage_info), K(device_handle));
-    } else if (OB_FAIL(device_handle->open(uri.ptr(), -1, 0, fd, &iod_opts))) {
-      OB_LOG(WARN, "fail to open with access type!", K(ret), K(uri), K(access_type));
+    ObArenaAllocator allocator(OB_STORAGE_IO_ADAPTER);
+    char *uri_cstr = nullptr;
+    if (OB_FAIL(ob_dup_cstring(allocator, uri, uri_cstr))) {
+      OB_LOG(WARN, "fail to copy url", KR(ret), K(uri), KPC(storage_info), K(access_type));
+    } else if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri_cstr, storage_id_mod))) {
+      OB_LOG(WARN, "fail to get and init device!",
+          KR(ret), K(uri), KPC(storage_info), K(access_type), K(device_handle));
+    } else if (OB_FAIL(device_handle->open(uri_cstr, -1, 0, fd, &iod_opts))) {
+      OB_LOG(WARN, "fail to open with access type!",
+          KR(ret), K(uri), KPC(storage_info), K(access_type));
     }
-  }
-  return ret;
-}
-
-static int release_device(ObIODevice *&dev_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(dev_handle)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "device handle is null, invalid parameter!", K(ret));
-  } else if (OB_FAIL(ObDeviceManager::get_instance().release_device(dev_handle))) {
-    OB_LOG(WARN, "fail to release device", K(ret), KP(dev_handle));
-  } else {
-    dev_handle = nullptr;
   }
   return ret;
 }
@@ -95,12 +145,13 @@ int ObBackupIoAdapter::close_device_and_fd(ObIODevice*& device_handle, ObIOFd &f
   return ret;
 }
 
-int ObBackupIoAdapter::get_and_init_device(ObIODevice*& dev_handle, 
+int ObBackupIoAdapter::get_and_init_device(ObIODevice *&dev_handle,
                                            const share::ObBackupStorageInfo *storage_info, 
                                            const common::ObString &storage_type_prefix,
                                            const common::ObStorageIdMod &storage_id_mod)
 {
   int ret = OB_SUCCESS;
+  dev_handle = nullptr;
   char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   ObIODOpts opts;
   ObIODOpt opt; //only one para
@@ -108,20 +159,31 @@ int ObBackupIoAdapter::get_and_init_device(ObIODevice*& dev_handle,
   opts.opt_cnt_ = 1;
   opt.key_ = "storage_info";
   common::ObObjectStorageInfo storage_info_base;
-  if (NULL == storage_info) {
+
+  if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "storage info is null", K(ret)); 
+    OB_LOG(WARN, "storage info is invalid",
+        KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
   } else if (OB_FAIL(storage_info_base.assign(*storage_info))) {
-    OB_LOG(WARN, "fail to assign storage info base!", K(ret), KP(storage_info));
-  } else if (OB_FAIL(storage_info_base.get_storage_info_str(storage_info_str, sizeof(storage_info_str)))) {
+    OB_LOG(WARN, "fail to assign storage info base!",
+        KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
+  } else if (OB_FAIL(storage_info_base.get_storage_info_str(storage_info_str,
+                                                            sizeof(storage_info_str)))) {
     // no need encrypt
-    OB_LOG(WARN, "fail to get storage info str!", K(ret), KP(storage_info));
+    OB_LOG(WARN, "fail to get storage info str!",
+        KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
   } else if (FALSE_IT(opt.value_.value_str = storage_info_str)) {
   } else if (OB_FAIL(ObDeviceManager::get_instance().get_device(storage_type_prefix, *storage_info,
                                                                 storage_id_mod, dev_handle))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), KP(storage_info), K(storage_type_prefix));
+    OB_LOG(WARN, "fail to get device!",
+        KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
+  } else if (OB_ISNULL(dev_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "returned device is null",
+        KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
   } else if (OB_FAIL(dev_handle->start(opts))) {
-    OB_LOG(WARN, "fail to start device!", K(ret), KP(storage_info), K(storage_type_prefix));
+    OB_LOG(WARN, "fail to start device!",
+        KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
   } 
   return ret;
 }
@@ -129,60 +191,58 @@ int ObBackupIoAdapter::get_and_init_device(ObIODevice*& dev_handle,
 int ObBackupIoAdapter::is_exist(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->exist(uri.ptr(), exist))) {
-    OB_LOG(WARN, "fail to check exist!", K(ret), K(uri), KP(storage_info));
+  exist = false;
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->exist(device_guard.uri_cstr_, exist))) {
+    OB_LOG(WARN, "fail to check exist!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
 int ObBackupIoAdapter::adaptively_is_exist(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->adaptive_exist(uri.ptr(), exist))) {
-    OB_LOG(WARN, "fail to check exist!", K(ret), K(uri), KP(storage_info));
+  exist = false;
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->adaptive_exist(device_guard.uri_cstr_, exist))) {
+    OB_LOG(WARN, "fail to check adaptive exist!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
 int ObBackupIoAdapter::get_file_length(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
   ObIODFileStat statbuf;
   file_length = -1;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->stat(uri.ptr(), statbuf))) {
-    OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->stat(device_guard.uri_cstr_, statbuf))) {
+    OB_LOG(WARN, "fail to get file length!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   } else {
     file_length = statbuf.size_;
   }
-  release_device(device_handle);
   return ret;
 }
 
 int ObBackupIoAdapter::adaptively_get_file_length(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
   ObIODFileStat statbuf;
   file_length = -1;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->adaptive_stat(uri.ptr(), statbuf))) {
-    OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->adaptive_stat(device_guard.uri_cstr_, statbuf))) {
+    OB_LOG(WARN, "fail to get adaptive file length!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   } else {
     file_length = statbuf.size_;
   }
-  release_device(device_handle);
   return ret;
 }
 
@@ -190,13 +250,12 @@ int ObBackupIoAdapter::adaptively_get_file_length(const common::ObString &uri, c
 int ObBackupIoAdapter::del_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->unlink(uri.ptr()))) {
-    OB_LOG(WARN, "fail to del file!", K(ret), K(uri), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->unlink(device_guard.uri_cstr_))) {
+    OB_LOG(WARN, "fail to del file!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
@@ -209,12 +268,12 @@ int ObBackupIoAdapter::batch_del_files(
   ObIODevice *device_handle = nullptr;
   if (OB_UNLIKELY(files_to_delete.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "files_to_delete is empty", K(ret), K(files_to_delete.count()), KPC(storage_info));
+    OB_LOG(WARN, "files_to_delete is empty", KR(ret), K(files_to_delete.count()), KPC(storage_info));
   } else if (OB_FAIL(get_and_init_device(device_handle, storage_info, files_to_delete.at(0),
                                          ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), KPC(storage_info));
+    OB_LOG(WARN, "fail to get device!", KR(ret), KPC(storage_info));
   } else if (OB_FAIL(device_handle->batch_del_files(files_to_delete, failed_files_idx))) {
-    OB_LOG(WARN, "fail to del file!", K(ret), KPC(storage_info));
+    OB_LOG(WARN, "fail to batch del files!", KR(ret), KPC(storage_info));
   }
   release_device(device_handle);
   return ret;
@@ -223,39 +282,36 @@ int ObBackupIoAdapter::batch_del_files(
 int ObBackupIoAdapter::adaptively_del_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->adaptive_unlink(uri.ptr()))) {
-    OB_LOG(WARN, "fail to del file!", K(ret), K(uri), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->adaptive_unlink(device_guard.uri_cstr_))) {
+    OB_LOG(WARN, "fail to del adaptive file!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
 int ObBackupIoAdapter::del_unmerged_parts(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->del_unmerged_parts(uri.ptr()))) {
-    OB_LOG(WARN, "fail to del file!", K(ret), K(uri), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->del_unmerged_parts(device_guard.uri_cstr_))) {
+    OB_LOG(WARN, "fail to del_unmerged_parts!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
 int ObBackupIoAdapter::mkdir(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->mkdir(uri.ptr(), 0))) {
-    OB_LOG(WARN, "fail to mkdir!", K(ret), K(uri), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->mkdir(device_guard.uri_cstr_, 0))) {
+    OB_LOG(WARN, "fail to mkdir!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
@@ -577,13 +633,12 @@ int ObBackupIoAdapter::list_files(const common::ObString &dir_path, const share:
         common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, dir_path, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret));
-  } else if (OB_FAIL(device_handle->scan_dir(dir_path.ptr(), op))) {
-    OB_LOG(WARN, "fail to scan dir!", K(ret), K(dir_path), KP(storage_info));
-  } 
-  release_device(device_handle);
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(dir_path, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(dir_path), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->scan_dir(device_guard.uri_cstr_, op))) {
+    OB_LOG(WARN, "fail to list files!", KR(ret), K(dir_path), KPC(storage_info), K(device_guard));
+  }
   return ret;
 }
 
@@ -591,13 +646,13 @@ int ObBackupIoAdapter::adaptively_list_files(const common::ObString &dir_path, c
         common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, dir_path, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret));
-  } else if (OB_FAIL(device_handle->adaptive_scan_dir(dir_path.ptr(), op))) {
-    OB_LOG(WARN, "fail to scan dir!", K(ret), K(dir_path), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(dir_path, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(dir_path), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->adaptive_scan_dir(device_guard.uri_cstr_, op))) {
+    OB_LOG(WARN, "fail to adaptively_list_files!",
+        KR(ret), K(dir_path), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
@@ -615,13 +670,12 @@ int ObBackupIoAdapter::list_directories(const common::ObString &uri, const share
 int ObBackupIoAdapter::is_tagging(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &is_tagging)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->is_tagging(uri.ptr(), is_tagging))) {
-    OB_LOG(WARN, "fail to check tagging!", K(ret), K(uri), KP(storage_info));
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->is_tagging(device_guard.uri_cstr_, is_tagging))) {
+    OB_LOG(WARN, "fail to check is tagging!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
   }
-  release_device(device_handle);
   return ret;
 }
 
@@ -1152,37 +1206,38 @@ int ObCheckDirEmptOp::func(const dirent *entry)
   return OB_ERR_EXIST_OBJECT;
 }
   // TODO(wenjinyu.wjy) need to be refactored 4.3
+  // can be optimized, object storage no need do extra list_dir
 int ObBackupIoAdapter::is_empty_directory(const common::ObString &uri, 
                                         const share::ObBackupStorageInfo *storage_info, 
                                         bool &is_empty_directory)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
   ObCheckDirEmptOp ept_dir_op;
   is_empty_directory = true;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri, ObStorageIdMod::get_default_id_mod()))) {
-    OB_LOG(WARN, "fail to del dir!", K(ret), K(uri));
-  } else if (OB_FAIL(device_handle->scan_dir(uri.ptr(), ept_dir_op))) {
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->scan_dir(device_guard.uri_cstr_, ept_dir_op))) {
     int64_t file_cnt = ept_dir_op.get_file_cnt();
     if (OB_ERR_EXIST_OBJECT == ret && 1 == file_cnt) {
       is_empty_directory = false;
       ret = OB_SUCCESS;
     } else {
-      OB_LOG(WARN, "fail to scan dir!", K(ret), K(uri));
+      OB_LOG(WARN, "fail to scan dir!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
     }
   }
   ept_dir_op.set_dir_flag();
   if (OB_FAIL(ret)) {
-  } else if (is_empty_directory && OB_FAIL(device_handle->scan_dir(uri.ptr(), ept_dir_op))) {
+  } else if (is_empty_directory
+      && OB_FAIL(device_guard.device_handle_->scan_dir(device_guard.uri_cstr_, ept_dir_op))) {
     int64_t file_cnt = ept_dir_op.get_file_cnt();
     if (OB_ERR_EXIST_OBJECT == ret && 1 == file_cnt) {
       is_empty_directory = false;
       ret = OB_SUCCESS;
     } else {
-      OB_LOG(WARN, "fail to scan dir!", K(ret), K(uri));
+      OB_LOG(WARN, "fail to scan dir!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
     }
   }
-  release_device(device_handle);
   return ret;
 }
 

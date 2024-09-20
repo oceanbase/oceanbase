@@ -52,6 +52,7 @@
 #include <aws/core/client/DefaultRetryStrategy.h>
 #include <aws/s3/model/DeleteObjectsRequest.h>
 #pragma pop_macro("private")
+#include "cos/ob_singleton.h"
 
 namespace oceanbase
 {
@@ -199,6 +200,7 @@ public:
   ObS3Client();
   virtual ~ObS3Client();
   int init(const ObS3Account &account);
+  int check_status();
   void destroy();
   bool is_stopped() const;
   bool try_stop(const int64_t timeout = STOP_S3_TIMEOUT_US);
@@ -247,7 +249,8 @@ private:
 
   template<typename RequestType, typename OutcomeType>
   int do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
-                       const RequestType &request, OutcomeType &outcome);
+                       const RequestType &request, OutcomeType &outcome,
+                       const int64_t retry_timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US);
 
 private:
   SpinRWLock lock_;
@@ -281,6 +284,52 @@ private:
   ObS3MemoryManager s3_mem_manger_;
   Aws::SDKOptions aws_options_;
   hash::ObHashMap<int64_t, ObS3Client *> s3_client_map_;
+};
+
+template <typename OutcomeType>
+class ObStorageS3RetryStrategy : public ObStorageIORetryStrategy<OutcomeType>
+{
+public:
+  using typename ObStorageIORetryStrategy<OutcomeType>::RetType;
+  using ObStorageIORetryStrategy<OutcomeType>::start_time_us_;
+  using ObStorageIORetryStrategy<OutcomeType>::timeout_us_;
+
+  ObStorageS3RetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US)
+      : ObStorageIORetryStrategy<OutcomeType>(timeout_us)
+  {}
+  virtual ~ObStorageS3RetryStrategy() {}
+
+  virtual void log_error(
+      const RetType &outcome, const int64_t attempted_retries) const override
+  {
+    const char *request_id = outcome.GetResult().GetRequestId().c_str();
+    if (outcome.GetResult().GetRequestId().empty()) {
+      const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
+      Aws::Http::HeaderValueCollection::const_iterator it = headers.find("x-amz-request-id");
+      if (it != headers.end()) {
+        request_id = it->second.c_str();
+      }
+    }
+    const int code = static_cast<int>(outcome.GetError().GetResponseCode());
+    const char *exception = outcome.GetError().GetExceptionName().c_str();
+    const char *err_msg = outcome.GetError().GetMessage().c_str();
+    OB_LOG_RET(WARN, OB_SUCCESS, "S3 log error",
+        K(start_time_us_), K(timeout_us_), K(attempted_retries),
+        K(request_id), K(code), K(exception), K(err_msg));
+  }
+
+protected:
+  virtual bool should_retry_impl_(
+      const RetType &outcome, const int64_t attempted_retries) const override
+  {
+    bool bret = false;
+    if (outcome.IsSuccess()) {
+      bret = false;
+    } else if (outcome.GetError().ShouldRetry()) {
+      bret = true;
+    }
+    return bret;
+  }
 };
 
 struct S3ObjectMeta : public ObStorageObjectMetaBase
