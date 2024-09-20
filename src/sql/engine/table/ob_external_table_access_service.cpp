@@ -442,6 +442,7 @@ int ObExternalStreamFileReader::read(char *buf, int64_t buf_len, int64_t &read_s
     LOG_DEBUG("read file", K(is_file_end_), K(file_offset_), K(file_size_), K(read_size));
   } else {
     ret = read_decompress(buf, buf_len, read_size);
+    is_file_end_ = (file_offset_ >= file_size_) && (consumed_data_size_ >= compress_data_size_);
   }
   return ret;
 }
