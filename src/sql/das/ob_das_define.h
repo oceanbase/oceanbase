@@ -85,6 +85,7 @@ enum ObDASOpType
   DAS_OP_SORT,
   DAS_OP_VEC_SCAN,
   DAS_OP_VID_MERGE,
+  DAS_OP_INDEX_MERGE,
   //append OpType before me
   DAS_OP_MAX
 };
