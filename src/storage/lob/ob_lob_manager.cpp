@@ -2014,10 +2014,10 @@ int ObLobManager::append_outrow(
   ObLobQueryIter *iter = nullptr;
   SMART_VAR(ObLobAccessParam, read_param) {
     read_param.tenant_id_ = param.src_tenant_id_;
-    if (OB_ISNULL(param.allocator_)) {
+    if (OB_ISNULL(param.get_tmp_allocator())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("param allocator is null", K(ret), K(param));
-    } else if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
+    } else if (OB_FAIL(build_lob_param(read_param, *param.get_tmp_allocator(), param.coll_type_,
                 0, UINT64_MAX, param.timeout_, lob))) {
       LOG_WARN("fail to build read param", K(ret), K(lob));
     } else if (OB_FAIL(query(read_param, iter))) {
