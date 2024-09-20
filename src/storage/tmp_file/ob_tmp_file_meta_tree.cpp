@@ -2065,8 +2065,7 @@ int ObSharedNothingTmpFileMetaTree::clear(
 
   if (OB_UNLIKELY(last_truncate_offset < released_offset_
                   || last_truncate_offset > total_file_size
-                  || is_writing_
-                  || 0 < stat_info_.meta_page_flushing_cnt_)) {
+                  || is_writing_)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "invalid argument", KR(ret), K(last_truncate_offset), K(total_file_size), KPC(this));
   } else {
