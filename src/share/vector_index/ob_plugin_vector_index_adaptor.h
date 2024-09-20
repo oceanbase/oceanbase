@@ -222,12 +222,13 @@ struct ObVectorIndexMemData
       bitmap_rwlock_(),
       scn_(),
       ref_cnt_(0),
+      curr_vid_max_(0),
       index_(nullptr),
       bitmap_(nullptr),
       mem_ctx_(nullptr) {}
 
 public:
-  TO_STRING_KV(K(rb_flag_), K_(is_init), K_(scn), K_(ref_cnt), KP_(index), KPC_(bitmap), KP_(mem_ctx));
+  TO_STRING_KV(K(rb_flag_), K_(is_init), K_(scn), K_(ref_cnt), K_(curr_vid_max), KP_(index), KPC_(bitmap), KP_(mem_ctx));
   void free_resource(ObIAllocator *allocator_);
   bool is_inited() const { return is_init_; }
   void set_inited() { is_init_ = true; }
@@ -250,6 +251,7 @@ public:
   TCRWLock bitmap_rwlock_;
   SCN scn_;
   uint64_t ref_cnt_;
+  int64_t curr_vid_max_;
   void *index_;
   ObVectorIndexRoaringBitMap *bitmap_;
   ObVsagMemContext *mem_ctx_;
@@ -499,6 +501,7 @@ private:
                                      SCN query_scn);
 
   void output_bitmap(roaring::api::roaring64_bitmap_t *bitmap);
+  int print_bitmap(roaring::api::roaring64_bitmap_t *bitmap);
 
   int merge_mem_data_(ObVectorIndexRecordType type,
                       ObPluginVectorIndexAdaptor *partial_idx_adpt,

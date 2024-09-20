@@ -178,9 +178,11 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
   } else if (index >= get_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid index.", K(ret), K(index), K(get_count()));
+  } else if (size == 0) {
+    // do nothing
   } else if (size / sizeof(float) != get_dim()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid vector str.", K(ret), K(ptr), K(get_dim()));
+    LOG_WARN("get invalid vector str.", K(ret), K(size), K(ptr), K(get_dim()));
   } else if (OB_ISNULL(copy_str = static_cast<char *>(tmp_allocator_->alloc(sizeof(char*) * size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator.", K(ret));
@@ -770,6 +772,7 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
     uint64_t *del_vids = nullptr;
     uint64_t *null_vids = nullptr;
     float *vectors = nullptr;
+    int64_t max_vid = 0;
 
     if (OB_ISNULL(incr_vids = static_cast<int64_t *>(tmp_allocator.alloc(sizeof(int64_t) * row_count)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -795,9 +798,7 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
       ObDatum &vector_datum = rows[i].storage_datums_[vector_idx];
 
       if (FALSE_IT(vid = vid_datum.get_int())) {
-        // LOG_WARN("failed to get uint64.", K(ret), K(vid_datum), K(i));
       } else if (FALSE_IT(op_str = op_datum.get_string())) {
-        // LOG_WARN("failed to get op str.", K(ret), K(op_datum), K(i));
       } else if (op_str.ptr()[0] == sql::ObVecIndexDMLIterator::VEC_DELTA_DELETE[0]) {
         // D type, only record vid
         del_vids[del_vid_count++] = vid;
@@ -816,6 +817,7 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
           vectors[incr_vid_count * dim + j] = vector[j];
         }
         incr_vids[incr_vid_count++] = vid;
+        max_vid = max_vid > vid ? max_vid : vid;
       }
     }
 
@@ -829,6 +831,8 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
                                               incr_vid_count))) {
         ret = OB_ERR_VSAG_RETURN_ERROR;
         LOG_WARN("failed to add index.", K(ret), K(dim), K(row_count));
+      } else {
+        incr_data_->curr_vid_max_ = incr_data_->curr_vid_max_ > max_vid ? incr_data_->curr_vid_max_ : max_vid;
       }
     }
     if (OB_SUCC(ret)) {
@@ -973,6 +977,7 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
         ret = OB_ERR_VSAG_RETURN_ERROR;
         LOG_WARN("failed to add index.", K(ret), K(ctx->get_dim()), K(count));
       }
+      LOG_TRACE("write into delta mem.", K(ret), K(ctx->get_dim()), K(count));
     }
   }
 
@@ -1123,6 +1128,7 @@ int ObPluginVectorIndexAdaptor::write_into_index_mem(int64_t dim, SCN read_scn,
 #endif
 
     vbitmap_data_->scn_ = read_scn;
+    LOG_TRACE("write into index mem.", K(ret), K(i_vids.count()), K(d_vids.count()), K(read_scn));
   }
 
   return ret;
@@ -1371,9 +1377,17 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
     roaring::api::roaring64_bitmap_t *insert_map = ctx->bitmaps_->insert_bitmap_;
     uint64_t insert_min = roaring64_bitmap_minimum(insert_map);
     uint64_t insert_max = roaring64_bitmap_maximum(insert_map);
-    ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, insert_max);
+    int curr_vid_max = insert_max;
+
+    if (is_mem_data_init_atomic(VIRT_INC)) {
+      int64_t mem_max_vid = ATOMIC_LOAD(&incr_data_->curr_vid_max_);
+      curr_vid_max = insert_max > mem_max_vid ? insert_max : mem_max_vid;
+    }
+
+    ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, curr_vid_max);
     dbitmap = ctx->bitmaps_->delete_bitmap_;
     roaring64_bitmap_or_inplace(ibitmap, dbitmap);
+    LOG_DEBUG("vbitmap is not inited.", K(ret), K(insert_min), K(insert_max), K(curr_vid_max));
   } else {
     roaring::api::roaring64_bitmap_t *insert_map = ctx->bitmaps_->insert_bitmap_;
     dbitmap = ctx->bitmaps_->delete_bitmap_;
@@ -1391,9 +1405,16 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
 
     uint64_t insert_min = roaring64_bitmap_minimum(insert_map);
     uint64_t insert_max = roaring64_bitmap_maximum(insert_map);
-    ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, insert_max);
+    int curr_vid_max = insert_max;
 
+    if (is_mem_data_init_atomic(VIRT_INC)) {
+      int64_t mem_max_vid = ATOMIC_LOAD(&incr_data_->curr_vid_max_);
+      curr_vid_max = insert_max > mem_max_vid ? insert_max : mem_max_vid;
+    }
+
+    ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, curr_vid_max);
     roaring64_bitmap_or_inplace(ibitmap, dbitmap);
+    LOG_DEBUG("vbitmap is inited.", K(ret), K(insert_min), K(insert_max), K(curr_vid_max));
 
 #ifndef NDEBUG
     output_bitmap(ibitmap);
@@ -1401,6 +1422,31 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
 #endif
   }
 
+  return ret;
+}
+
+// for debug version
+int ObPluginVectorIndexAdaptor::print_bitmap(roaring::api::roaring64_bitmap_t *bitmap)
+{
+  INIT_SUCC(ret);
+  if (OB_NOT_NULL(bitmap)) {
+    ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+    uint64_t bitmap_cnt = roaring64_bitmap_get_cardinality(bitmap);
+    uint64_t *nums = nullptr;
+    if (OB_ISNULL(nums = static_cast<uint64_t *>(tmp_allocator.alloc(sizeof(uint64_t) * bitmap_cnt)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc.", K(ret));
+    } else {
+      ObStringBuffer buffer(&tmp_allocator);
+      roaring64_bitmap_to_uint64_array(bitmap, nums);
+      for (int64_t i = 0; i < bitmap_cnt; i++) {
+        char buf[15];
+        sprintf(buf, "%llu ", static_cast<unsigned long long>(nums[i]));
+        buffer.append(buf);
+      }
+      LOG_INFO("PRINT_BITMAP_DEBUG", K(buffer), KP(buffer.ptr()), K(buffer.string()));
+    }
+  }
   return ret;
 }
 
@@ -1426,6 +1472,20 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   } else if (OB_FAIL(merge_and_generate_bitmap(ctx, ibitmap, dbitmap))) {
     LOG_WARN("failed to merge and generate bitmap.", K(ret));
   }
+
+// for dubug
+#ifndef NDEBUG
+  if (OB_FAIL(ret)) {
+  } else if (is_mem_data_init_atomic(VIRT_INC) && OB_FAIL(print_bitmap(ctx->bitmaps_->insert_bitmap_))) {
+    LOG_WARN("failed to print bitmap.", K(ret));
+  } else if (is_mem_data_init_atomic(VIRT_INC)&& OB_FAIL(print_bitmap(ctx->bitmaps_->delete_bitmap_))) {
+    LOG_WARN("failed to print bitmap.", K(ret));
+  } else if (is_mem_data_init_atomic(VIRT_BITMAP) && OB_FAIL(print_bitmap(vbitmap_data_->bitmap_->insert_bitmap_))) {
+    LOG_WARN("failed to print bitmap.", K(ret));
+  } else if (is_mem_data_init_atomic(VIRT_BITMAP)&& OB_FAIL(print_bitmap(vbitmap_data_->bitmap_->delete_bitmap_))) {
+    LOG_WARN("failed to print bitmap.", K(ret));
+  }
+#endif
 
   if (OB_SUCC(ret)) {
     TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
@@ -1466,6 +1526,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     const ObVsagQueryResult snap_data = {snap_res_cnt, snap_vids, snap_distances};
     uint64_t tmp_result_cnt = delta_res_cnt + snap_res_cnt;
     uint64_t max_res_cnt = tmp_result_cnt < query_cond->query_limit_ ? tmp_result_cnt : query_cond->query_limit_;
+    LOG_DEBUG("query result info", K(delta_res_cnt), K(snap_res_cnt));
 
     if (max_res_cnt == 0) {
       // when max_res_cnt == 0, it means (snap_res_cnt == 0 && delta_res_cnt == 0), there is no data in table, do not need alloc memory for res_vid_array
@@ -1483,6 +1544,8 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(vids_iter->init(actual_res_cnt, merge_vids, ctx->allocator_))) {
       LOG_WARN("iter init failed.", K(ret), K(actual_res_cnt), K(merge_vids), K(ctx->allocator_));
+    } else if (actual_res_cnt == 0) {
+      LOG_INFO("query vector result 0", K(actual_res_cnt), K(delta_res_cnt), K(snap_res_cnt));
     }
   }
   // free in the end
