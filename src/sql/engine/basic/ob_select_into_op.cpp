@@ -1729,7 +1729,8 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
                                                                 &ctx_))) {
             LOG_WARN("failed to read string", K(ret));
           } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, json_str, in_type,
-                                                              in_type, j_base, parse_flag))) {
+                                                              in_type, j_base, parse_flag,
+                                                              ObJsonExprHelper::get_json_max_depth_config()))) {
             COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
           } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
             COMMON_LOG(WARN, "fail to convert json to string", K(ret));
@@ -2001,7 +2002,8 @@ int ObSelectIntoOp::set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRec
                                                                 &ctx_))) {
             LOG_WARN("failed to read string", K(ret));
           } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, json_str, in_type,
-                                                              in_type, j_base, parse_flag))) {
+                                                              in_type, j_base, parse_flag,
+                                                              ObJsonExprHelper::get_json_max_depth_config()))) {
             COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
           } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
             COMMON_LOG(WARN, "fail to convert json to string", K(ret));

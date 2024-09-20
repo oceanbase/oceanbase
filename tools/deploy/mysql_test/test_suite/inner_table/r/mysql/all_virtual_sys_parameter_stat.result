@@ -131,6 +131,7 @@ ignore_replay_checksum_error
 index_block_cache_priority
 internal_sql_execute_timeout
 job_queue_processes
+json_document_max_depth
 kv_ttl_duty_duration
 kv_ttl_history_recycle_interval
 large_query_threshold

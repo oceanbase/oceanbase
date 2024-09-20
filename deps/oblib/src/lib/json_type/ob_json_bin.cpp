@@ -1458,7 +1458,7 @@ int ObJsonBin::deserialize_json_object_v0(ObJsonObject *object)
       LOG_WARN("ob_write_string fail", K(ret), K(i), K(ori_key));
     } else if (OB_FAIL(get_value(i, child_bin))) {
       LOG_WARN("get child value fail", K(ret));
-    } else if (OB_FAIL(SMART_CALL(child_bin.deserialize_json_value(node)))) {
+    } else if (OB_FAIL(child_bin.deserialize_json_value(node))) {
       LOG_WARN("deserialize child node fail", K(ret), K(i), K(child_bin));
     } else if (OB_FAIL(object->add(key, node, false, true, false, is_schema_))) {
       LOG_WARN("add node to obj fail", K(ret), K(i));
