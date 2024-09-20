@@ -307,10 +307,12 @@ struct ObPCParamEqualInfo
   ObPCParamEqualInfo():use_abs_cmp_(false) {}
   inline bool operator==(const ObPCParamEqualInfo &other) const
   {
-    bool cmp_ret = first_param_idx_ == other.first_param_idx_ &&
-                   second_param_idx_ == other.second_param_idx_ &&
-                   use_abs_cmp_ == other.use_abs_cmp_;
-
+    bool cmp_ret = (first_param_idx_ == other.first_param_idx_ &&
+                    second_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_) ||
+                   (second_param_idx_ == other.first_param_idx_ &&
+                    first_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_);
     return cmp_ret;
   }
 };

@@ -10681,6 +10681,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(adjust_final_plan_info(root))) {
     LOG_WARN("failed to adjust parent-child relationship", K(ret));
+  } else if (OB_FAIL(remove_duplicate_constraints())) {
+    LOG_WARN("failed to remove duplicate constraints", K(ret));
   } else if ((((min_cluster_version >= CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
               || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0)) && is_oracle_mode()) &&
                OB_FAIL(set_identify_seq_expr_for_recursive_union_all(root))) {
@@ -14351,6 +14353,51 @@ int ObLogPlan::init_lateral_table_depend_info(const ObIArray<TableItem*> &table_
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
+  }
+  return ret;
+}
+
+int ObLogPlan::remove_duplicate_constraints()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && OB_NOT_NULL(get_optimizer_context().get_query_ctx())) {
+    ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
+    for (int64_t i = query_ctx->all_equal_param_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_equal_param_constraints_.at(i) == query_ctx->all_equal_param_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_equal_param_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
+    for (int64_t i = query_ctx->all_plan_const_param_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_plan_const_param_constraints_.at(i) == query_ctx->all_plan_const_param_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_plan_const_param_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
+    for (int64_t i = query_ctx->all_expr_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_expr_constraints_.at(i) == query_ctx->all_expr_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_expr_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
   }
   return ret;
 }
