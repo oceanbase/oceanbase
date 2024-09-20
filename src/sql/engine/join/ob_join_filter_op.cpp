@@ -1538,6 +1538,7 @@ int ObJoinFilterOp::send_datahub_count_row_msg(int64_t &total_row_count,
     piece_msg.thread_id_ = GETTID();
     piece_msg.source_dfo_id_ = handler->get_sqc_proxy().get_dfo_id();
     piece_msg.target_dfo_id_ = handler->get_sqc_proxy().get_dfo_id();
+    piece_msg.piece_count_ = 1;
     piece_msg.total_rows_ = partition_splitter_->get_total_row_count();
     piece_msg.sqc_id_ = handler->get_sqc_proxy().get_sqc_id();
     piece_msg.each_sqc_has_full_data_ = MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_;

@@ -40,7 +40,7 @@ public:
         child_dfo_(nullptr)
     {}
   virtual ~ObDatahubPieceMsg() = default;
-  VIRTUAL_TO_STRING_KV(K_(op_id), K_(source_dfo_id), K_(thread_id), K_(target_dfo_id));
+  VIRTUAL_TO_STRING_KV(K_(op_id), K_(source_dfo_id), K_(thread_id), K_(target_dfo_id), K_(piece_count));
   uint64_t op_id_;   // 在 piece 消息处理中，用于寻址 QC 端 ctx
   /*
               piece     whole
