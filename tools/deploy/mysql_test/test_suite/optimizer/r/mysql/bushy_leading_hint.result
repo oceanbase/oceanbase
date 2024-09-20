@@ -965,9 +965,9 @@ Query Plan
 |13|│   └─TABLE FULL SCAN              |t2          |11      |5           |
 |14|└─UNION ALL                        |            |2       |5           |
 |15|  ├─SCALAR GROUP BY                |            |1       |2           |
-|16|  │ └─TEMP TABLE ACCESS            |VIEW1(TEMP1)|35      |1           |
+|16|  │ └─TEMP TABLE ACCESS            |VIEW1(TEMP1)|34      |1           |
 |17|  └─SCALAR GROUP BY                |            |1       |3           |
-|18|    └─TEMP TABLE ACCESS            |VIEW2(TEMP1)|35      |1           |
+|18|    └─TEMP TABLE ACCESS            |VIEW2(TEMP1)|34      |1           |
 ===========================================================================
 Outputs & filters:
 -------------------------------------

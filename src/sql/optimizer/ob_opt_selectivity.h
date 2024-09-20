@@ -628,9 +628,10 @@ public:
   static int calculate_selectivity(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
                                    ObIArray<ObSelEstimator *> &sel_estimators,
-                                   double &selectivity);
+                                   double &selectivity,
+                                   common::ObIArray<ObExprSelPair> &all_predicate_sel,
+                                   bool record_range_sel = false);
 
-  // @brief 计算一组条件的选择率，条件之间是and关系，基于独立性假设
   static int calculate_selectivity(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
                                    const common::ObIArray<ObRawExpr*> &quals,

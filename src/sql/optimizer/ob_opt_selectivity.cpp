@@ -828,7 +828,7 @@ int ObOptSelectivity::calculate_conditional_selectivity(const OptTableMetas &tab
   double new_sel = 1.0;
   if (OB_FAIL(append(total_filters, append_filters))) {
     LOG_WARN("failed to append filters", K(ret));
-  } else if (total_sel > OB_DOUBLE_EPSINON && !ctx.get_correlation_model().is_independent()) {
+  } else if (total_sel > OB_DOUBLE_EPSINON) {
     if (OB_FAIL(calculate_selectivity(table_metas,
                                       ctx,
                                       total_filters,
@@ -836,6 +836,7 @@ int ObOptSelectivity::calculate_conditional_selectivity(const OptTableMetas &tab
                                       all_predicate_sel))) {
       LOG_WARN("failed to calculate selectivity", K(total_filters), K(ret));
     } else {
+      new_sel = std::min(new_sel, total_sel);
       conditional_sel = new_sel / total_sel;
       total_sel = new_sel;
     }
@@ -854,28 +855,57 @@ int ObOptSelectivity::calculate_conditional_selectivity(const OptTableMetas &tab
 int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
                                             const OptSelectivityCtx &ctx,
                                             ObIArray<ObSelEstimator *> &sel_estimators,
-                                            double &selectivity)
+                                            double &selectivity,
+                                            common::ObIArray<ObExprSelPair> &all_predicate_sel,
+                                            bool record_range_sel)
 {
   int ret = OB_SUCCESS;
   selectivity = 1.0;
   ObSEArray<double, 4> selectivities;
-  ObSEArray<ObExprSelPair, 1> dummy;
+  ObSEArray<const ObRawExpr *, 4> eigen_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < sel_estimators.count(); ++i) {
     ObSelEstimator *estimator = sel_estimators.at(i);
     double tmp_selectivity = 0.0;
     if (OB_ISNULL(sel_estimators.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("estimator is null", K(ret), K(sel_estimators));
-    } else if (OB_FAIL(estimator->get_sel(table_metas, ctx, tmp_selectivity, dummy))) {
+    } else if (OB_FAIL(estimator->get_sel(table_metas, ctx, tmp_selectivity, all_predicate_sel))) {
       LOG_WARN("failed to get sel", K(ret), KPC(estimator));
-    } else if (OB_FAIL(selectivities.push_back(revise_between_0_1(tmp_selectivity)))) {
-      LOG_WARN("failed to push back", K(ret));
+    } else {
+      tmp_selectivity = revise_between_0_1(tmp_selectivity);
+    }
+    if (OB_SUCC(ret) && record_range_sel &&
+        ObSelEstType::COLUMN_RANGE == estimator->get_type()) {
+      ObRangeSelEstimator *range_estimator = static_cast<ObRangeSelEstimator *>(estimator);
+      if (OB_FAIL(add_var_to_array_no_dup(all_predicate_sel,
+                                          ObExprSelPair(range_estimator->get_column_expr(), tmp_selectivity, true)))) {
+        LOG_WARN("failed to add selectivity to plan", K(ret), KPC(range_estimator), K(tmp_selectivity));
+      }
+    }
+
+    // Use the minimum selectivity from estimators with the same eigen expression
+    if (OB_SUCC(ret)) {
+      int64_t idx = -1;
+      const ObRawExpr *eigen_expr = estimator->get_eigen_expr();
+      if (NULL == eigen_expr || !ObOptimizerUtil::find_equal_expr(eigen_exprs, eigen_expr, idx)) {
+        if (OB_FAIL(eigen_exprs.push_back(eigen_expr)) ||
+            OB_FAIL(selectivities.push_back(tmp_selectivity))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      } else if (OB_UNLIKELY(idx < 0 || idx >= selectivities.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected idx", K(idx), K(selectivities), K(eigen_exprs));
+      } else {
+        selectivities.at(idx) = std::min(tmp_selectivity, selectivities.at(idx));
+      }
+      LOG_PRINT_EXPR(WARN, "wym debug est sel", eigen_expr, K(tmp_selectivity), KPC(estimator));
     }
   }
   if (OB_SUCC(ret)) {
     selectivity = ctx.get_correlation_model().combine_filters_selectivity(selectivities);
   }
-  LOG_DEBUG("calculate predicates selectivity", K(selectivity), K(selectivities), K(sel_estimators));
+  LOG_DEBUG("calculate predicates selectivity", K(selectivity), K(selectivities), K(eigen_exprs), K(sel_estimators));
+  LOG_WARN("wym debug calculate predicates selectivity", K(selectivity), K(selectivities), K(eigen_exprs), K(sel_estimators));
   return ret;
 }
 
@@ -918,31 +948,8 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
       LOG_PRINT_EXPR(TRACE, "calculate one qual selectivity", *qual, K(single_sel));
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(selectivities.prepare_allocate(sel_estimators.count()))) {
-    LOG_WARN("failed to prepare allocate", K(ret), K(selectivities), K(sel_estimators));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < sel_estimators.count(); ++i) {
-    ObSelEstimator *estimator = sel_estimators.at(i);
-    double tmp_selectivity = 0.0;
-    if (OB_ISNULL(sel_estimators.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("estimator is null", K(ret), K(sel_estimators));
-    } else if (OB_FAIL(estimator->get_sel(table_metas, ctx, tmp_selectivity, all_predicate_sel))) {
-      LOG_WARN("failed to get sel", K(ret), KPC(estimator));
-    } else {
-      selectivities.at(i) = revise_between_0_1(tmp_selectivity);
-      if (ObSelEstType::COLUMN_RANGE == estimator->get_type()) {
-        ObRangeSelEstimator *range_estimator = static_cast<ObRangeSelEstimator *>(estimator);
-        if (OB_FAIL(add_var_to_array_no_dup(all_predicate_sel,
-                                            ObExprSelPair(range_estimator->get_column_expr(), tmp_selectivity, true)))) {
-          LOG_WARN("failed to add selectivity to plan", K(ret), KPC(range_estimator), K(tmp_selectivity));
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    selectivity = ctx.get_correlation_model().combine_filters_selectivity(selectivities);
-    LOG_DEBUG("calculate predicates selectivity", K(selectivity), K(selectivities), K(sel_estimators));
+  if (FAILEDx(calculate_selectivity(table_metas, ctx, sel_estimators, selectivity, all_predicate_sel, true))) {
+    LOG_WARN("failed to calculate estimator selectivity", K(ret), K(selectivities), K(sel_estimators));
   }
   return ret;
 }
@@ -3861,7 +3868,7 @@ int ObOptSelectivity::classify_quals(const OptTableMetas &table_metas,
     obj_max.set_max_value();
     if (OB_FAIL(factory.create_estimators(ctx, sel_info.quals_, estimators))) {
       LOG_WARN("failed to create estimators", K(ret));
-    } else if (OB_FAIL(calculate_selectivity(table_metas, ctx, estimators, sel_info.selectivity_))) {
+    } else if (OB_FAIL(calculate_selectivity(table_metas, ctx, estimators, sel_info.selectivity_, all_predicate_sel))) {
       LOG_WARN("failed to calc sel", K(ret));
     }
     for (int64_t j = 0; OB_SUCC(ret) && NULL == range_estimator && j < estimators.count(); j ++) {
