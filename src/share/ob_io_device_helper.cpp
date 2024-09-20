@@ -733,9 +733,9 @@ int ObIODeviceLocalFileOp::convert_sys_errno(const int error_no)
       break;
   }
   if (use_warn_log) {
-    SHARE_LOG(WARN, "convert sys errno", K(ret), K(error_no), KERRMSG);
+    SHARE_LOG(WARN, "convert sys errno", K(ret), K(error_no), KERRNOMSG(error_no));
   } else {
-    SHARE_LOG(INFO, "convert sys errno", K(ret), K(error_no), KERRMSG);
+    SHARE_LOG(INFO, "convert sys errno", K(ret), K(error_no), KERRNOMSG(error_no));
   }
   return ret;
 }

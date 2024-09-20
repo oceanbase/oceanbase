@@ -52,6 +52,7 @@ public:
   int is_connective(const uint64_t op_id, const uint64_t sub_op_id, bool &is_connective) const;
   // check if config_map_ is empty in current used_for_type
   bool config_map_is_empty(const ObStorageUsedType::TYPE used_for) const;
+  int set_storage_dest(const ObStorageUsedType::TYPE used_for, const ObBackupDest &storage_dest);
 
 private:
   enum class DeviceConfigModifyType
@@ -63,6 +64,9 @@ private:
   int save_configs_();
   int modify_device_config_(const ObDeviceConfig &config, DeviceConfigModifyType type);
   int parse_is_connective_(char *state_info, bool &is_connective) const;
+  // check if shared storage info used for LOG and DATA dump to manifest
+  int check_if_dump_manifest_(bool &is_dump_manifest);
+  int get_device_config_from_storage_dest_(const ObStorageUsedType::TYPE &used_for, ObDeviceConfig &config) const;
 
 private:
   typedef common::hash::ObHashMap<ObDeviceConfigKey, ObDeviceConfig*> ConfigMap;
@@ -71,6 +75,8 @@ private:
   ObDeviceManifest::HeadSection head_;
   ObDeviceManifest device_manifest_;
   common::SpinRWLock manifest_rw_lock_;
+  ObBackupDest data_storage_dest_; // when prepare_bootstrap, RS will send ak/sk to observer store in storage_dest_, temporary use
+  ObBackupDest clog_storage_dest_; // when execute_bootstrap, shared storage info will dump to manifest, storage_dest_ need reset, do not use
 };
 
 }  // namespace share

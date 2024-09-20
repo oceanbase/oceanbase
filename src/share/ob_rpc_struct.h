@@ -12715,6 +12715,7 @@ public:
   int init(const ObAdminStorageArg &shared_storage_infos);
   int init(const ObIArray<ObAdminStorageArg> &shared_storage_infos);
   int assign(const ObNotifySharedStorageInfoArg &other);
+  const common::ObSArray<ObAdminStorageArg> &get_shared_storage_infos() const { return shared_storage_infos_; }
   TO_STRING_KV(K_(shared_storage_infos));
 private:
   // each server may have multiple shared_storage dest, because data and clog

@@ -94,6 +94,7 @@
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
 #endif
+#include "share/object_storage/ob_device_config_mgr.h"
 
 namespace oceanbase
 {
@@ -3706,10 +3707,27 @@ int ObGetSSMicroCacheInfoP::process()
 
 int ObNotifySharedStorageInfoP::process()
 {
-  // TODO(@xiaotiao.xt): implement processor here.
   int ret = OB_SUCCESS;
-  // the log printed below is for test only. DO remove it after the real implementation is done.
-  FLOG_INFO("shared_storage_info received", K_(arg));
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < arg_.get_shared_storage_infos().count(); i++) {
+    const ObAdminStorageArg &shared_storage_info = arg_.get_shared_storage_infos().at(i);
+    ObBackupDest storage_dest;
+    char storage_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = {0};
+    if (!shared_storage_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(shared_storage_info));
+    } else if (OB_FAIL(databuff_printf(storage_dest_str, OB_MAX_BACKUP_DEST_LENGTH, "%s&%s",
+                                      shared_storage_info.path_.ptr(), shared_storage_info.access_info_.ptr()))) {
+      LOG_WARN("fail to set storage_dest_str", KR(ret), K(shared_storage_info));
+    } else if (OB_FAIL(storage_dest.set(storage_dest_str))) {
+      LOG_WARN("fail to set storage dest", KR(ret), K(shared_storage_info), K(storage_dest_str));
+    } else if (OB_FAIL(ObDeviceConfigMgr::get_instance().set_storage_dest(shared_storage_info.use_for_, storage_dest))) {
+      LOG_WARN("fail to set storage dest", KR(ret), K(shared_storage_info), K(storage_dest));
+    }
+  }
   result_.set_ret(ret);
   return ret;
 }
