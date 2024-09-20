@@ -1543,6 +1543,10 @@ inline bool ob_is_character_type(ObObjType type, ObCollationType cs_type)
   return ob_is_nstring(type) || ob_is_varchar_or_char(type, cs_type);
 }
 inline bool ob_is_string_type(ObObjType type) { return ob_is_string_tc(type) || ob_is_text_tc(type); }
+inline bool ob_is_support_cmp_mem_str_type(ObObjType type, ObCollationType cs_type)
+{
+  return (ob_is_string_tc(type) || type == ObTinyTextType) && cs_type == CS_TYPE_UTF8MB4_BIN;
+}
 inline bool ob_is_json(const ObObjType type) { return ObJsonType == type; }
 inline bool ob_is_blob_locator(const ObObjType type, const ObCollationType cs_type) { return ObLobType == type && CS_TYPE_BINARY == cs_type; }
 inline bool ob_is_clob_locator(const ObObjType type, const ObCollationType cs_type) { return ObLobType == type && CS_TYPE_BINARY != cs_type; }
