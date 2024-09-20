@@ -5366,6 +5366,7 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
                scan_op->get_index_back() ||
                scan_op->is_text_retrieval_scan() ||
                scan_op->is_sample_scan() ||
+               (scan_op->is_index_scan() && !groupby_columns.empty()) ||
                (is_descending_direction(scan_op->get_scan_direction()) && !groupby_columns.empty())) {
       //aggr func cannot be pushed down to the storage layer in these scenarios:
       //1. TSC has index lookup
@@ -5373,6 +5374,7 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
       //3. TSC contains filters that cannot be pushed down to the storage
       //4. TSC is point get
       //5. TSC is text retrieval scan
+      //6. TSC is index table scan with group by
     } else if (OB_FAIL(scan_op->get_pushdown_aggr_exprs().assign(aggr_items))) {
       LOG_WARN("failed to assign group exprs", K(ret));
     } else if (OB_FAIL(scan_op->get_pushdown_groupby_columns().assign(groupby_columns))) {
