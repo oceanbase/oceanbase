@@ -1027,8 +1027,7 @@ int ObSelectIntoOp::print_str_or_json_with_escape(const ObObj &obj, ObIOBufferWr
   ObCharsetType dst_type = ObCharset::charset_type_by_coll(MY_SPEC.cs_type_);
   escape_printer_.do_encode_ = !(src_type == CHARSET_BINARY || src_type == dst_type
                                  || src_type == CHARSET_INVALID);
-  escape_printer_.need_enclose_ = has_enclose_ && !obj.is_null()
-                                  && (!MY_SPEC.is_optional_ || obj.is_string_type());
+  escape_printer_.need_enclose_ = has_enclose_ && !obj.is_null();
   escape_printer_.do_escape_ = true;
   escape_printer_.print_hex_ = obj.get_collation_type() == CS_TYPE_BINARY
                                && print_params_.binary_string_print_hex_;
@@ -1352,7 +1351,9 @@ int ObSelectIntoOp::print_field(const ObObj &obj, ObIOBufferWriter &data_writer)
   int ret = OB_SUCCESS;
   char char_n = 'N';
   const bool need_enclose = has_enclose_ && !obj.is_null()
-                            && (!MY_SPEC.is_optional_ || obj.is_string_type());
+                            && (!MY_SPEC.is_optional_ || obj.is_string_type()
+                                || obj.is_json() || obj.is_geometry() || obj.is_date()
+                                || obj.is_time() || obj.is_timestamp() || obj.is_datetime());
   if (need_enclose) {
     OZ(write_single_char_to_file(&char_enclose_, data_writer));
   }
@@ -1401,7 +1402,8 @@ int ObSelectIntoOp::into_outfile(ObIOBufferWriter *data_writer)
                                      select_exprs.at(i)->obj_meta_,
                                      select_exprs.at(i)->obj_datum_map_))) {
       LOG_WARN("failed to get obj from datum", K(ret));
-    } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())) {
+    } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())
+               || obj.is_null()) {
       OZ(print_field(obj, *data_writer));
     } else { // text tc
       OZ(print_lob_field(obj, *select_exprs.at(i), *datum, *data_writer));
@@ -2158,7 +2160,8 @@ int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs, ObIOBufferWriter 
                                          select_exprs.at(j)->obj_meta_,
                                          select_exprs.at(j)->obj_datum_map_))) {
           LOG_WARN("failed to get obj from datum", K(ret));
-        } else if (!ob_is_text_tc(select_exprs.at(j)->obj_meta_.get_type())) {
+        } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())
+                   || obj.is_null()) {
           OZ(print_field(obj, *data_writer));
         } else { // text tc
           OZ(print_lob_field(obj, *select_exprs.at(j), *datum, *data_writer));
