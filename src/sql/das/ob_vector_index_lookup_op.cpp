@@ -576,14 +576,18 @@ int ObVectorIndexLookupOp::get_aux_table_rowkeys(const int64_t lookup_row_cnt)
   } else if (OB_FAIL(do_aux_table_lookup())) {
     LOG_WARN("failed to do aux table lookup", K(ret));
   } else if (OB_FAIL(rowkey_iter_->get_next_rows(rowkey_cnt, lookup_row_cnt))) {
-    LOG_WARN("failed to get rowkey by vid", K(ret), K(doc_id_scan_param_.key_ranges_));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to get next row", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) && ret != OB_ITER_END) {
   } else if (OB_UNLIKELY(lookup_row_cnt != rowkey_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected aux lookup row count not match", K(ret), K(rowkey_cnt), K(lookup_row_cnt));
-  } else {
+  } else if (rowkey_cnt > 0) {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*doc_id_lookup_rtdef_->eval_ctx_);
-    batch_info_guard.set_batch_size(lookup_row_cnt);
-    for (int64_t i = 0; OB_SUCC(ret) && i < lookup_row_cnt; ++i) {
+    batch_info_guard.set_batch_size(rowkey_cnt);
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
       batch_info_guard.set_batch_idx(i);
       if (OB_FAIL(set_main_table_lookup_key())) {
         LOG_WARN("failed to set main table lookup key", K(ret));
