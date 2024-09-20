@@ -2310,6 +2310,8 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
         max(SKEW_TEST_STEP_SIZE * total_load_rows_, MIN_CHECK_POPULAR_VALID_ROWS), agged_row_cnt_,
         agged_group_cnt_, batch_old_rows_, batch_new_rows_, &popular_map_))) {
       LOG_WARN("fail to by_pass_process_value_batch", K(ret));
+    } else if (OB_FAIL(aggr_processor_.eval_aggr_param_batch(brs_))) {
+      LOG_WARN("fail to eval aggr param batch", K(ret), K(brs_));
     }
     //batch calc aggr for each group
     int32_t start_agg_id = -1;
