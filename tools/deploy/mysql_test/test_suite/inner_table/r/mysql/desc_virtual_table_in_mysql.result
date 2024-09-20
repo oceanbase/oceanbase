@@ -5170,6 +5170,25 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_ss_local_cache_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_kv_group_commit_status;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+group_type	varchar(32)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+table_id	bigint(20)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
+queue_size	bigint(20)	NO		NULL	
+batch_size	bigint(20)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+update_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_kv_group_commit_status;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_kv_group_commit_status runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_vector_index_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -5194,6 +5213,24 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_vector_index_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_kv_client_info;
+Field	Type	Null	Key	Default	Extra
+client_id	bigint(20) unsigned	NO		NULL	
+client_ip	varchar(46)	NO		NULL	
+client_port	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+user_name	varchar(64)	NO		NULL	
+first_login_ts	timestamp(6)	NO		NULL	
+last_login_ts	timestamp(6)	NO		NULL	
+client_info	varchar(2048)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_kv_client_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_kv_client_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_function_io_stat;

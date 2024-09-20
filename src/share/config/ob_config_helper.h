@@ -910,6 +910,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };
 
+class ObConfigKvGroupCommitRWModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigKvGroupCommitRWModeChecker() {}
+  virtual ~ObConfigKvGroupCommitRWModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigKvGroupCommitRWModeChecker);
+};
 
 class ObConfigRegexpEngineChecker
   : public ObConfigChecker

@@ -3485,6 +3485,7 @@ int ObLSTabletService::put_rows(
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_update_rows_begin);
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   int64_t afct_num = 0;
   ObTimeGuard timeguard(__func__, 3_s);
@@ -3504,48 +3505,60 @@ int ObLSTabletService::put_rows(
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ObDmlFlag::DF_UPDATE);
-    ObDatumRow *row = nullptr;
+    ObDatumRow *rows = nullptr;
+    int64_t row_count = 0;
+    const ObRelativeTable &data_table = run_ctx.relative_table_;
 
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
-      tablet_handle.reset();
-    }
+      ObTabletHandle tmp_handle;
+      SMART_VAR(ObRowsInfo, rows_info) {
+      const ObRelativeTable &data_table = run_ctx.relative_table_;
+      const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
+        while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
+          ObStoreRow reserved_row;
+          // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+          // outside the while loop.
+          if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+            tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+            rows_info.reset();
+            if (OB_FAIL(rows_info.init(col_descs, data_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
+              LOG_WARN("Failed to init rows info", K(ret), K(data_table));
+            }
+          }
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (row_count <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("row_count should be greater than 0", K(ret));
+          } else {
+            for (int64_t i = 0; i < row_count; i++) {
+              rows[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+            }
+          }
 
-    int64_t cur_time = 0;
-    ObTabletHandle tmp_handle;
-    while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
-      // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
-      dml_param.lob_allocator_.reuse();
-      // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
-      // outside the while loop.
-      if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-        tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
-      }
-      cur_time = ObClockGenerator::getClock();
-      row->row_flag_ = ObDmlFlag::DF_UPDATE;
-      if (cur_time > dml_param.timeout_) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("query timeout", K(ret), K(cur_time), K(dml_param));
-      } else if (OB_FAIL(insert_row_to_tablet(false/*check_exist*/,
-                                              tmp_handle,
-                                              run_ctx,
-                                              *row))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-          LOG_WARN("failed to write row", K(ret));
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(put_rows_to_tablet(tablet_handle, run_ctx, rows, row_count,
+              rows_info, afct_num))) {
+            LOG_WARN("put to each tablets fail", K(ret));
+          }
         }
+      } else {
+        LOG_WARN("Failed to allocate ObRowsInfo", K(ret));
       }
-      ++afct_num;
     }
 
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
-    if (OB_SUCC(ret)) {
-      affected_rows = afct_num;
-      EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
-    }
   }
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("succeeded to put rows", K(ret));
+    affected_rows = afct_num;
+    EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
+  }
+  NG_TRACE(S_update_row_end);
 
   return ret;
 }
@@ -4398,6 +4411,73 @@ int ObLSTabletService::insert_tablet_rows(
       LOG_WARN("Failed to get pk name", K(ret), K(tmp_ret));
     }
     LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, rowkey_buffer, index_name.length(), index_name.ptr());
+  }
+  return ret;
+}
+
+int ObLSTabletService::put_rows_to_tablet(
+    ObTabletHandle &tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    ObDatumRow *rows,
+    const int64_t row_count,
+    ObRowsInfo &rows_info,
+    int64_t &afct_num)
+{
+  int ret = OB_SUCCESS;
+  ObStoreCtx &ctx = run_ctx.store_ctx_;
+  const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
+  ObRelativeTable &data_table = run_ctx.relative_table_;
+  for (int64_t i = 0; i < run_ctx.col_descs_->count() && OB_SUCC(ret); ++i) {
+    const ObColDesc &column = run_ctx.col_descs_->at(i);
+    if (column.col_type_.is_lob_storage()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Lob column uses put_rows interface");
+      LOG_WARN("put_rows not support lob", K(ret), K(column));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (ObClockGenerator::getClock() > dml_param.timeout_) {
+    ret = OB_TIMEOUT;
+    int64_t cur_time = ObClockGenerator::getClock();
+    LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
+  } else if (OB_FAIL(rows_info.check_duplicate(rows, row_count, data_table, false))) {
+    LOG_WARN("fail to check duplicate", K(ret));
+  } else if (OB_FAIL(put_tablet_rows(row_count, tablet_handle, run_ctx, rows, rows_info))) {
+    LOG_WARN("failed to put rows to data tablet", K(ret));
+  } else {
+    afct_num = afct_num + row_count;
+  }
+  return ret;
+}
+
+int ObLSTabletService::put_tablet_rows(
+    const int64_t row_count,
+    ObTabletHandle &tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    ObDatumRow *rows,
+    ObRowsInfo &rows_info)
+{
+  int ret = OB_SUCCESS;
+  ObRelativeTable &table = run_ctx.relative_table_;
+  // 1. Defensive checking of new rows.
+  if (GCONF.enable_defensive_check()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+      ObDatumRow &datum_row = rows[i];
+      if (OB_FAIL(check_new_row_legitimacy(run_ctx, datum_row))) {
+        LOG_WARN("Failed to check new row legitimacy", K(ret), K(datum_row));
+      }
+    }
+  }
+
+  // 2. Insert rows with write conflict checking.
+  // Check write conflict in memtable + sstable.
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_handle.get_obj()->insert_rows(table, run_ctx.store_ctx_, rows, rows_info,
+        false /* check_exists */, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("Failed to insert rows to tablet", K(ret), K(rows_info));
+      }
+    }
   }
   return ret;
 }

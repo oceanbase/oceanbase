@@ -35,6 +35,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "lib/stat/ob_session_stat.h"
 #include "ob_table_mode_control.h"
+#include "ob_table_client_info_mgr.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -89,8 +90,11 @@ int ObTableLoginP::process()
       LOG_WARN("failed to generate credential", K(ret), K(login));
     } else {
       MTL_SWITCH(credential_.tenant_id_) {
+        const ObAddr &cli_addr = ObCurTraceId::get_addr();
         if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->update_sess(credential_))) {
           LOG_WARN("failed to update session pool", K(ret), K_(credential));
+        } else if (!login.client_info_.empty() && OB_FAIL(TABLEAPI_CLI_INFO_MGR->record(login, cli_addr))) {
+          LOG_WARN("failed to record login client info", K(ret), K(login));
         }
       }
       result_.reserved1_ = 0;
@@ -223,13 +227,13 @@ int ObTableLoginP::generate_credential(uint64_t tenant_id,
   credential_.user_id_ = user_id;
   credential_.database_id_ = database;
   if (ttl_us > 0) {
-    credential_.expire_ts_ = ObTimeUtility::current_time() + ttl_us;
+    credential_.expire_ts_ = ObTimeUtility::fast_current_time() + ttl_us;
   } else {
     credential_.expire_ts_ = 0;
   }
   credential_.hash(credential_.hash_val_, user_token);
   int64_t pos = 0;
-  if (OB_FAIL(serialization::encode(credential_buf_, CREDENTIAL_BUF_SIZE, pos, credential_))) {
+  if (OB_FAIL(serialization::encode(credential_buf_, ObTableApiCredential::CREDENTIAL_BUF_SIZE, pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
   } else {
     credential_str.assign_ptr(credential_buf_, static_cast<int32_t>(pos));
@@ -243,27 +247,112 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      table_service_(gctx_.table_service_),
      access_service_(MTL(ObAccessService *)),
      location_service_(gctx.location_service_),
+     sess_guard_(),
+     schema_guard_(),
+     simple_table_schema_(nullptr),
+     req_timeinfo_guard_(),
+     schema_cache_guard_(),
      stat_event_type_(-1),
-     audit_row_count_(0),
-     need_audit_(false),
-     request_string_(NULL),
-     request_string_len_(0),
+     stat_row_count_(0),
      need_retry_in_queue_(false),
+     is_tablegroup_req_(false),
      retry_count_(0),
-     trans_desc_(NULL),
-     is_async_response_(false),
      user_client_addr_(),
-     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_)
+     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_),
+     audit_ctx_(retry_count_, user_client_addr_)
 {
-  need_audit_ = GCONF.enable_sql_audit;
-  trans_state_ptr_ = &trans_state_;
 }
 
 void ObTableApiProcessorBase::reset_ctx()
 {
-  trans_state_ptr_->reset();
-  trans_desc_ = NULL;
-  is_async_response_ = false;
+  trans_param_.reset();
+  schema_guard_.reset();
+  schema_cache_guard_.reset();
+  simple_table_schema_ = nullptr;
+}
+
+/// Get all table schemas based on the tablegroup name
+/// Since we only have one table in tablegroup, we could considered tableID as the target table now
+int ObTableApiProcessorBase::init_tablegroup_schema(const ObString &arg_tablegroup_name)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablegroup_id = OB_INVALID_ID;
+  ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> table_schemas;
+  if (OB_FAIL(schema_guard_.get_tablegroup_id(credential_.tenant_id_, arg_tablegroup_name, tablegroup_id))) {
+    LOG_WARN("fail to get tablegroup id", K(ret), K(credential_.tenant_id_),
+              K(credential_.database_id_), K(arg_tablegroup_name));
+  } else if (OB_FAIL(schema_guard_.get_table_schemas_in_tablegroup(credential_.tenant_id_, tablegroup_id, table_schemas))) {
+    LOG_WARN("fail to get table schema from table group", K(ret), K(credential_.tenant_id_),
+              K(credential_.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
+  } else {
+    if (table_schemas.count() != 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "each Table has not one Family currently");
+      LOG_WARN("number of table in table gourp must be equal to one now", K(arg_tablegroup_name), K(table_schemas.count()), K(ret));
+    } else {
+      simple_table_schema_ = table_schemas.at(0);
+    }
+  }
+  return ret;
+}
+
+int ObTableApiProcessorBase::init_schema_info(const ObString &arg_table_name)
+{
+  int ret = OB_SUCCESS;
+  if (schema_cache_guard_.is_inited()) {
+    // skip and do nothing
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard_))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
+  } else if (is_tablegroup_req_ && OB_FAIL(init_tablegroup_schema(arg_table_name))) {
+    LOG_WARN("fail to get table schema from table group name", K(ret), K(credential_.tenant_id_),
+              K(credential_.database_id_), K(arg_table_name));
+  } else if (!is_tablegroup_req_
+             && OB_FAIL(schema_guard_.get_simple_table_schema(credential_.tenant_id_,
+                                                              credential_.database_id_,
+                                                              arg_table_name,
+                                                              false, /* is_index */
+                                                              simple_table_schema_))) {
+    LOG_WARN("fail to get table schema", K(ret), K(credential_.tenant_id_),
+              K(credential_.database_id_), K(arg_table_name));
+  } else if (OB_ISNULL(simple_table_schema_) || simple_table_schema_->get_table_id() == OB_INVALID_ID) {
+    ret = OB_ERR_UNKNOWN_TABLE;
+    ObString db("");
+    LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, arg_table_name.length(), arg_table_name.ptr(), db.length(), db.ptr());
+    LOG_WARN("table not exist", K(ret), K(credential_.tenant_id_), K(credential_.database_id_), K(arg_table_name));
+  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
+                                              simple_table_schema_->get_table_id(),
+                                              simple_table_schema_->get_schema_version(),
+                                              schema_guard_))) {
+    LOG_WARN("fail to init schema cache guard", K(ret));
+  }
+  return ret;
+}
+
+int ObTableApiProcessorBase::init_schema_info(uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (schema_cache_guard_.is_inited()) {
+    // skip and do nothing
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard_))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
+  } else if (OB_FAIL(schema_guard_.get_simple_table_schema(credential_.tenant_id_, table_id, simple_table_schema_))) {
+    LOG_WARN("fail to get table schema", K(ret), K(credential_.tenant_id_), K(table_id));
+  } else if (OB_ISNULL(simple_table_schema_)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(credential_), K(table_id));
+  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
+                                              simple_table_schema_->get_table_id(),
+                                              simple_table_schema_->get_schema_version(),
+                                              schema_guard_))) {
+    LOG_WARN("fail to init schema cache guard", K(ret));
+  }
+  return ret;
 }
 
 int ObTableApiProcessorBase::get_ls_id(const ObTabletID &tablet_id, ObLSID &ls_id)
@@ -374,7 +463,7 @@ int ObTableApiProcessorBase::get_table_id(
     const int64_t database_id = credential_.database_id_;
     if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("failed to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_id, table_name,
+  } else if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_id, table_name,
         is_index, share::schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, real_table_id))) {
       LOG_WARN("failed to get table id", K(ret), K(tenant_id), K(database_id), K(table_name));
     } else if (OB_INVALID_ID == real_table_id) {
@@ -399,269 +488,61 @@ int ObTableApiProcessorBase::get_tablet_by_rowkey(uint64_t table_id, const ObIAr
       LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
       LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
     } else if (!table_schema->is_partitioned_table()) {
       tablet_ids.push_back(table_schema->get_tablet_id());
-    } else if (OB_FAIL(location_calc.calculate_partition_ids_by_rowkey(
-                           session(), schema_guard, table_id, rowkeys, tablet_ids, part_ids))) {
-      LOG_WARN("failed to calc partition id", K(ret));
-    } else {}
-  }
-  return ret;
-}
-
-int ObTableApiProcessorBase::init_read_trans(const ObTableConsistencyLevel consistency_level,
-                                             const ObLSID &ls_id,
-                                             int64_t timeout_ts)
-{
-  int ret = OB_SUCCESS;
-  bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
-  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-
-  if (OB_FAIL(txs->acquire_tx(trans_desc_, session().get_sessid()))) {
-    LOG_WARN("failed to acquire tx desc", K(ret));
-  } else if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, tx_snapshot_, strong_read, ls_id, timeout_ts))) {
-    LOG_WARN("setup txn snapshot fail", K(ret), KPC_(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
-    txs->release_tx(*trans_desc_);
-    trans_desc_ = NULL;
-  }
-
-  return ret;
-}
-
-void ObTableApiProcessorBase::release_read_trans()
-{
-  if (OB_NOT_NULL(trans_desc_)) {
-    transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-    txs->release_tx(*trans_desc_);
-    trans_desc_ = NULL;
-  }
-}
-
-int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_desc,
-                                                transaction::ObTxReadSnapshot &tx_snapshot,
-                                                const bool strong_read,
-                                                const share::ObLSID &ls_id,
-                                                const int64_t timeout_ts)
-{
-  int ret = OB_SUCCESS;
-  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-  if (strong_read) {
-    if (ls_id.is_valid()) {
-      if (OB_FAIL(txs->get_ls_read_snapshot(trans_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout_ts, tx_snapshot))) {
-        LOG_WARN("fail to get LS read snapshot", K(ret));
-      }
-    } else if (OB_FAIL(txs->get_read_snapshot(trans_desc, transaction::ObTxIsolationLevel::RC, timeout_ts, tx_snapshot))) {
-      LOG_WARN("fail to get global read snapshot", K(ret));
-    }
-  } else {
-    SCN weak_read_snapshot;
-    if (OB_FAIL(txs->get_weak_read_snapshot_version(
-              -1, // system variable : max read stale time for user
-              false,
-              weak_read_snapshot))) {
-      LOG_WARN("fail to get weak read snapshot", K(ret));
     } else {
-      tx_snapshot.init_weak_read(weak_read_snapshot);
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     }
   }
   return ret;
 }
 
-int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
+int ObTableApiProcessorBase::start_trans(bool is_readonly,
                                          const ObTableConsistencyLevel consistency_level,
-                                         uint64_t table_id, const ObLSID &ls_id, int64_t timeout_ts)
-{
-  UNUSED(stmt_type);
-  return start_trans_(is_readonly, trans_desc_, tx_snapshot_, consistency_level,
-                      trans_state_ptr_, table_id, ls_id, timeout_ts);
-}
-
-int ObTableApiProcessorBase::start_trans_(bool is_readonly,
-                                          transaction::ObTxDesc *&trans_desc,
-                                          transaction::ObTxReadSnapshot &tx_snapshot,
-                                          const ObTableConsistencyLevel consistency_level,
-                                          sql::TransState *trans_state_ptr,
-                                          uint64_t table_id, const ObLSID &ls_id, int64_t timeout_ts)
+                                         const ObLSID &ls_id,
+                                         int64_t timeout_ts,
+                                         bool need_global_snapshot)
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(T_start_trans_begin);
-
-  bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
-  if ((!is_readonly) && (ObTableConsistencyLevel::EVENTUAL == consistency_level)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "consistency level");
-    LOG_WARN("some options not supported yet", K(ret), K(is_readonly), K(consistency_level));
-  }
-  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-
-  // 1. start transaction
-  if (OB_SUCC(ret)) {
-    transaction::ObTxParam tx_param;
-    transaction::ObTxAccessMode access_mode = (is_readonly) ?
-      transaction::ObTxAccessMode::RD_ONLY
-      : transaction::ObTxAccessMode::RW;
-    tx_param.access_mode_ = access_mode;
-    tx_param.isolation_ = transaction::ObTxIsolationLevel::RC;
-    tx_param.cluster_id_ = ObServerConfig::get_instance().cluster_id;
-    tx_param.timeout_us_ = std::max(0l, timeout_ts - ObClockGenerator::getClock());
-    if (true == trans_state_ptr->is_start_trans_executed()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("start_trans is executed", K(ret));
-    } else {
-      if (OB_FAIL(txs->acquire_tx(trans_desc, session().get_sessid()))) {
-        LOG_WARN("failed to acquire tx desc", K(ret));
-      } else if (OB_FAIL(txs->start_tx(*trans_desc, tx_param))) {
-        LOG_WARN("failed to start trans", K(ret), KPC(trans_desc));
-        txs->release_tx(*trans_desc);
-        trans_desc = NULL;
-      }
-      trans_state_ptr->set_start_trans_executed(OB_SUCC(ret));
-    }
-  }
-  NG_TRACE(T_start_trans_end);
-  // 2. acquire snapshot
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(setup_tx_snapshot_(*trans_desc, tx_snapshot, strong_read, ls_id, timeout_ts))) {
-      LOG_WARN("setup txn snapshot fail", K(ret), KPC(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
-    }
+  if (OB_FAIL(trans_param_.init(is_readonly,
+                                consistency_level,
+                                ls_id,
+                                timeout_ts,
+                                need_global_snapshot))) {
+    LOG_WARN("fail to init trans param", K(ret));
+  } else if (OB_FAIL(ObTableTransUtils::start_trans(trans_param_))) {
+    LOG_WARN("fail to start trans", K(ret), K_(trans_param));
   }
   return ret;
 }
 
-// NOTE: the lock handle pointer can be converted to bool parameter use_sync,
-//       be careful whenever you want to pass the lock handle
-int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts,
-                                       bool use_sync /*=false*/, ObHTableLockHandle *lock_handle /*nullptr*/)
+int ObTableApiProcessorBase::end_trans(bool is_rollback,
+                                       rpc::ObRequest *req,
+                                       ObTableCreateCbFunctor *functor,
+                                       bool use_sync /* =false */)
 {
   int ret = OB_SUCCESS;
-  int end_ret = OB_SUCCESS;
-  transaction::ObTxExecResult trans_result;
-  if (OB_NOT_NULL(req)) {
-    req->set_trace_point(rpc::ObRequest::OB_EASY_REQUEST_TABLE_API_END_TRANS);
+  trans_param_.is_rollback_ = is_rollback;
+  trans_param_.req_ = req;
+  trans_param_.use_sync_ = use_sync;
+  trans_param_.create_cb_functor_ = functor;
+  if (OB_FAIL(ObTableTransUtils::end_trans(trans_param_))) {
+    LOG_WARN("fail to end trans", K(ret), K_(trans_param));
   }
-  if (trans_state_ptr_->is_start_trans_executed() && trans_state_ptr_->is_start_trans_success()) {
-    if (OB_FAIL(MTL(transaction::ObTransService*)
-                ->collect_tx_exec_result(*trans_desc_, trans_result))) {
-      LOG_WARN("fail to get trans_result", KR(ret), KPC_(trans_desc));
-    }
-  }
-  NG_TRACE(T_end_trans_begin);
-  if (trans_state_ptr_->is_start_trans_executed() && trans_state_ptr_->is_start_trans_success()) {
-    if (trans_desc_->is_rdonly() || use_sync) {
-      ret = sync_end_trans(is_rollback, timeout_ts, lock_handle);
-    } else {
-      if (is_rollback) {
-        ret = sync_end_trans(true, timeout_ts, lock_handle);
-      } else {
-        ret = async_commit_trans(req, timeout_ts, lock_handle);
-      }
-    }
-    trans_state_ptr_->clear_start_trans_executed();
-  } else if (OB_NOT_NULL(lock_handle)) {
-    HTABLE_LOCK_MGR->release_handle(*lock_handle); // also release lock when start trans failed
-  }
-  trans_state_ptr_->reset();
-  NG_TRACE(T_end_trans_end);
-  return ret;
-}
-
-int ObTableApiProcessorBase::sync_end_trans(bool is_rollback, int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
-{
-  return sync_end_trans_(is_rollback, trans_desc_, timeout_ts, lock_handle, &ObTableUtils::get_kv_normal_trace_info());
-}
-
-int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTxDesc *&trans_desc,
-                                             int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/,
-                                             const ObString *trace_info /*nullptr*/)
-{
-  int ret = OB_SUCCESS;
-
-  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-  const int64_t stmt_timeout_ts = timeout_ts;
-  if (is_rollback) {
-    if (OB_FAIL(txs->rollback_tx(*trans_desc))) {
-      LOG_WARN("fail rollback trans when session terminate", K(ret), KPC(trans_desc));
-    }
-  } else {
-    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
-    if (OB_FAIL(txs->commit_tx(*trans_desc, stmt_timeout_ts, trace_info))) {
-      LOG_WARN("fail commit trans when session terminate",
-                K(ret), KPC(trans_desc), K(stmt_timeout_ts));
-    }
-  }
-
-  int tmp_ret = ret;
-  if (OB_FAIL(txs->release_tx(*trans_desc))) {
-    //overwrite ret
-    LOG_ERROR("release tx failed", K(ret), KPC(trans_desc));
-  }
-  if (lock_handle != nullptr) {
-    HTABLE_LOCK_MGR->release_handle(*lock_handle);
-  }
-  ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
-  trans_desc = NULL;
-  LOG_DEBUG("ObTableApiProcessorBase::sync_end_trans", K(ret), K(is_rollback), K(stmt_timeout_ts));
-
-  return ret;
-}
-
-int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts,
-                                                ObHTableLockHandle *lock_handle /*nullptr*/)
-{
-  int ret = OB_SUCCESS;
-  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-  const bool is_rollback = false;
-  ObTableAPITransCb* cb = new_callback(req);
-  if (NULL == cb) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc callback", K(ret));
-  } else {
-    ObTableAPITransCb& callback = *cb;
-    if (OB_NOT_NULL(req)) {
-      req->set_trace_point(rpc::ObRequest::OB_EASY_REQUEST_TABLE_API_ACOM_TRANS);
-    }
-    callback.set_is_need_rollback(is_rollback);
-    callback.set_end_trans_type(sql::ObExclusiveEndTransCallback::END_TRANS_TYPE_IMPLICIT);
-    callback.set_lock_handle(lock_handle);
-    callback.handout();
-    callback.set_tx_desc(trans_desc_);
-    const int64_t stmt_timeout_ts = timeout_ts;
-    // callback won't been called if any error occurred
-    if (OB_FAIL(txs->submit_commit_tx(*trans_desc_, stmt_timeout_ts, callback, &ObTableUtils::get_kv_normal_trace_info()))) {
-      LOG_WARN("fail end trans when session terminate", K(ret), KPC_(trans_desc), K(stmt_timeout_ts), KP(&callback));
-      callback.callback(ret);
-    }
-    // ignore the return code of end_trans
-    is_async_response_ = true; // don't send response in this worker thread
+  if (trans_param_.did_async_commit_) {
     // @note the req_ may be freed, req_processor can not be read any more.
     // The req_has_wokenup_ MUST set to be true, otherwise req_processor will invoke req_->set_process_start_end_diff, cause memory core
     // @see ObReqProcessor::run() req_->set_process_start_end_diff(ObTimeUtility::current_time());
     this->set_req_has_wokenup();
-    // @note after this code, the callback object can NOT be read any more!!!
-    callback.destroy_cb_if_no_ref();
-    trans_desc_ = NULL;
-    LOG_DEBUG("ObTableApiProcessorBase::async_commit_trans", K(ret), K(stmt_timeout_ts));
   }
   return ret;
-}
-
-bool ObTableApiProcessorBase::need_audit() const
-{
-  return need_audit_;
-}
-
-void ObTableApiProcessorBase::start_audit(const rpc::ObRequest *req)
-{
-
-  if (OB_LIKELY(NULL != req)) {
-    audit_record_.user_client_addr_ = ObCurTraceId::get_addr();
-    audit_record_.client_addr_ = RPC_REQ_OP.get_peer(req);
-
-    audit_record_.trace_id_ = req->get_trace_id();
-
-    save_request_string();
-    generate_sql_id();
-  }
 }
 
 static int set_audit_name(const char *info_name, char *&audit_name, int64_t &audit_name_length, ObIAllocator &allocator)
@@ -686,114 +567,20 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
   return ret;
 }
 
-void ObTableApiProcessorBase::end_audit()
-{
-  int ret = OB_SUCCESS;
-
-  // credential info
-  audit_record_.tenant_id_ = credential_.tenant_id_;
-  audit_record_.effective_tenant_id_ = credential_.tenant_id_;
-  audit_record_.user_id_ = credential_.user_id_;
-  audit_record_.db_id_ = credential_.database_id_;
-
-  // tenant name/user name/database name
-  audit_record_.tenant_name_ = const_cast<char *>(sess_guard_.get_tenant_name().ptr());
-  audit_record_.tenant_name_len_ = sess_guard_.get_tenant_name().length();
-  audit_record_.user_name_ = const_cast<char *>(sess_guard_.get_user_name().ptr());
-  audit_record_.user_name_len_ = sess_guard_.get_user_name().length();
-  audit_record_.db_name_ = const_cast<char *>(sess_guard_.get_database_name().ptr());
-  audit_record_.db_name_len_ = sess_guard_.get_database_name().length();
-
-  // append request string to query_sql
-  if (NULL != request_string_ && request_string_len_ > 0) {
-    static const char request_print_prefix[] = ", \nrequest: ";
-    const int64_t buf_size = audit_record_.sql_len_ + sizeof(request_print_prefix) + request_string_len_;
-    char *buf = reinterpret_cast<char *>(audit_allocator_.alloc(buf_size));
-    if (NULL == buf) {
-      SERVER_LOG(WARN, "fail to alloc audit memory", K(buf_size), K(audit_record_.sql_), K(request_string_));
-    } else {
-      memset(buf, 0, buf_size);
-      if (OB_NOT_NULL(audit_record_.sql_)) {
-        strcat(buf, audit_record_.sql_);
-      }
-      strcat(buf, request_print_prefix);
-      strcat(buf, request_string_);
-      audit_record_.sql_ = buf;
-      audit_record_.sql_len_ = buf_size;
-      audit_record_.sql_cs_type_ = ObCharset::get_system_collation();
-    }
-  }
-
-  // request info
-  audit_record_.is_executor_rpc_ = false; // FIXME(wenqu): set false for print sql_id
-  audit_record_.is_hit_plan_cache_ = false;
-  audit_record_.is_inner_sql_ = false;
-  audit_record_.is_multi_stmt_ = false;
-  audit_record_.partition_cnt_ = 1; // always 1 for now;
-  audit_record_.plan_id_ = 0;
-  audit_record_.plan_type_ = OB_PHY_PLAN_UNINITIALIZED;
-
-  // in-process info
-  audit_record_.execution_id_ = 0; // not used for table api
-  audit_record_.request_id_ = 0; // not used for table api
-  audit_record_.seq_ = 0; // not used
-  audit_record_.session_id_ = 0; // not used  for table api
-
-  // tx info
-  audit_record_.trans_id_ = tx_snapshot_.core_.tx_id_.get_id();
-  audit_record_.snapshot_.version_ = tx_snapshot_.core_.version_;
-  audit_record_.snapshot_.tx_id_ = tx_snapshot_.core_.tx_id_.get_id();
-  audit_record_.snapshot_.scn_ = tx_snapshot_.core_.scn_.cast_to_int();
-  audit_record_.snapshot_.source_ = tx_snapshot_.get_source_name();
-
-  const int64_t elapsed_time = common::ObTimeUtility::current_time() - audit_record_.exec_timestamp_.receive_ts_;
-  if (elapsed_time > GCONF.trace_log_slow_query_watermark) {
-    FORCE_PRINT_TRACE(THE_TRACE, "[table api][slow query]");
-  }
-
-  ret = OB_SUCCESS;
-  MTL_SWITCH(credential_.tenant_id_) {
-    obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
-    const int64_t record_limit = ObSQLUtils::get_query_record_size_limit(credential_.tenant_id_);
-    if (nullptr == req_manager) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get request manager for current tenant", K(ret));
-    } else if (OB_FAIL(req_manager->record_request(audit_record_, true, record_limit))) {
-      if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
-        LOG_DEBUG("cannot allocate mem for record", K(ret));
-        ret = OB_SUCCESS;
-      } else {
-        if (REACH_TIME_INTERVAL(100 * 1000)) { // in case logging is too frequent
-          LOG_WARN("failed to record request info in request manager", K(ret));
-        }
-      }
-    }
-  }
-
-}
-
 int ObTableApiProcessorBase::process_with_retry(const ObString &credential, const int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
-  audit_record_.exec_timestamp_.process_executor_ts_ = ObTimeUtility::current_time();
-  ObWaitEventStat total_wait_desc;
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.process_executor_ts_ = ObTimeUtility::fast_current_time();
+  }
   if (OB_ISNULL(gctx_.ob_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else if (OB_FAIL(check_arg())) {
     LOG_WARN("check arg failed", K(ret));
-  } else if (OB_UNLIKELY(!is_kv_feature_enable())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("obkv feature is not enable", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBKV feature");
   } else if (OB_FAIL(check_user_access(credential))) {
     LOG_WARN("check user access failed", K(ret));
   } else {
-    ObMaxWaitGuard max_wait_guard(&audit_record_.exec_record_.max_wait_event_);
-    ObTotalWaitGuard total_wait_guard(&total_wait_desc);
-    ObTenantStatEstGuard stat_guard(credential_.tenant_id_);
-    ObProcessMallocCallback pmcb(0, audit_record_.request_memory_used_);
-    ObMallocCallbackGuard malloc_guard_(pmcb);
     need_retry_in_queue_ = false;
     bool did_local_retry = false;
     do {
@@ -803,7 +590,7 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
       // OB_SCHEMA_EAGAIN:
       if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret || OB_SCHEMA_EAGAIN == ret)
           && retry_policy_.allow_retry()) {
-        int64_t now = ObTimeUtility::current_time();
+        int64_t now = ObTimeUtility::fast_current_time();
         if (now > timeout_ts) {
           LOG_WARN("process timeout", K(ret), K(now), K(timeout_ts));
           did_local_retry = false;
@@ -837,48 +624,6 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
         }
       }
     } while (did_local_retry);
-    // record events
-    if (need_audit()) {
-      audit_on_finish();
-    }
-  }
-  if (lib::is_diagnose_info_enabled()) {
-    audit_record_.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-    audit_record_.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-  }
-  audit_record_.status_ = ret;
-  return ret;
-}
-
-// check whether the index type of given table is supported by table api or not.
-// global index is not supported by table api. specially, global index in non-partitioned
-// table was optimized to local index, which we can support.
-int ObTableApiProcessorBase::check_table_index_supported(uint64_t table_id, bool &is_supported)
-{
-  int ret = OB_SUCCESS;
-  bool exists = false;
-  is_supported = true;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObSimpleTableSchemaV2 *table_schema = NULL;
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table id", K(ret));
-  } else if (OB_ISNULL(gctx_.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service", K(ret));
-  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
-  } else if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("get null table schema", K(ret), K(table_id));
-  } else if (table_schema->is_partitioned_table()) {
-    if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
-      LOG_WARN("fail to check global index", K(ret), K(table_id));
-    } else {
-      is_supported = !exists;
-    }
   }
   return ret;
 }
@@ -890,30 +635,33 @@ template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<O
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_QUERY_AND_MUTATE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_EXECUTE_QUERY_ASYNC> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_DIRECT_LOAD> >;
+template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_LS_EXECUTE> >;
+template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_REDIS_EXECUTE> >;
+
 
 template<class T>
 int ObTableRpcProcessor<T>::deserialize()
 {
-  audit_record_.exec_timestamp_.run_ts_ = ObTimeUtility::current_time();
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.run_ts_ = ObTimeUtility::fast_current_time(); // The start timestamp of a single sql run
+  }
   return RpcProcessor::deserialize();
 }
 
 template<class T>
 int ObTableRpcProcessor<T>::before_process()
 {
-  if (lib::is_diagnose_info_enabled()) {
-    audit_record_.exec_record_.record_start();
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.before_process_ts_ = ObTimeUtility::fast_current_time(); // The start timestamp of a single sql before_process
+    if (OB_LIKELY(NULL != RpcProcessor::req_)) {
+      audit_ctx_.exec_timestamp_.rpc_send_ts_ = RpcProcessor::req_->get_send_timestamp(); // The timestamp of the rpc sent by the client
+      audit_ctx_.exec_timestamp_.receive_ts_ = RpcProcessor::req_->get_receive_timestamp(); // The timestamp of the request received by the server
+      audit_ctx_.exec_timestamp_.enter_queue_ts_ = RpcProcessor::req_->get_enqueue_timestamp(); // The timestamp of the request to enter the tenant queue
+      IGNORE_RETURN audit_ctx_.generate_request_string(RpcProcessor::arg_);
+    }
   }
-  audit_record_.exec_timestamp_.before_process_ts_ = ObTimeUtility::current_time();
-  if (OB_LIKELY(NULL != RpcProcessor::req_)) {
-    audit_record_.exec_timestamp_.rpc_send_ts_ = RpcProcessor::req_->get_send_timestamp();
-    audit_record_.exec_timestamp_.receive_ts_ = RpcProcessor::req_->get_receive_timestamp();
-    audit_record_.exec_timestamp_.enter_queue_ts_ = RpcProcessor::req_->get_enqueue_timestamp();
-  }
+
   user_client_addr_ = RPC_REQ_OP.get_peer(RpcProcessor::req_);
-  if (need_audit()) {
-    start_audit(RpcProcessor::req_);
-  }
   return RpcProcessor::before_process();
 }
 
@@ -921,13 +669,17 @@ template<class T>
 int ObTableRpcProcessor<T>::process()
 {
   int ret = OB_SUCCESS;
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.single_process_ts_ = ObTimeUtility::fast_current_time(); // The start timestamp of a single sql do_process
+  }
   if (OB_FAIL(process_with_retry(RpcProcessor::arg_.credential_, get_timeout_ts()))) {
-    if (OB_NOT_NULL(request_string_)) { // request_string_ has been generated if enable sql_audit
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), K(request_string_));
-    } else if (is_async_response_) { // req_ may be freed
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_));
+    if (OB_NOT_NULL(audit_ctx_.req_buf_)) { // req_buf_ has been generated if enable sql_audit
+      ObString request(audit_ctx_.req_buf_len_, audit_ctx_.req_buf_);
+      LOG_WARN("fail to process table_api request", K(ret), K_(stat_event_type), K(request), K(audit_ctx_.exec_timestamp_));
+    } else if (had_do_response()) { // req_ may be freed
+      LOG_INFO("request had processed failed", K(ret), K_(stat_event_type), K(audit_ctx_.exec_timestamp_));
     } else {
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), "request", RpcProcessor::arg_);
+      LOG_INFO("request had processed failed", K(ret), K_(stat_event_type), "request", RpcProcessor::arg_, K(audit_ctx_.exec_timestamp_));
     }
     // whether the client should refresh location cache and retry
     if (ObTableRpcProcessorUtil::is_require_rerouting_err(ret)) {
@@ -941,15 +693,8 @@ int ObTableRpcProcessor<T>::process()
 template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
-  const int64_t curr_time = ObTimeUtility::current_time();
-  audit_record_.exec_timestamp_.executor_end_ts_ = curr_time;
-  // timestamp of start get plan, no need for table_api, set euqal to process_executor_ts_
-  audit_record_.exec_timestamp_.single_process_ts_ = audit_record_.exec_timestamp_.process_executor_ts_;
-  if (need_audit()) {
-    const int64_t elapsed_us = curr_time - RpcProcessor::get_receive_timestamp();
-    ObTableRpcProcessorUtil::record_stat(audit_record_, stat_event_type_, elapsed_us, audit_row_count_);
-    // todo: distinguish hbase rows and ob rows.
-  }
+  const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
+  ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_);
   return RpcProcessor::before_response(error_code);
 }
 
@@ -958,7 +703,7 @@ int ObTableRpcProcessor<T>::response(int error_code)
 {
   int ret = OB_SUCCESS;
   // if it is waiting for retry in queue, the response can NOT be sent.
-  if (!need_retry_in_queue_ && !is_async_response()) {
+  if (!need_retry_in_queue_ && !had_do_response()) {
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(this->req_->get_packet());
     if (ObTableRpcProcessorUtil::need_do_move_response(error_code, *rpc_pkt)) {
       // response rerouting packet
@@ -983,19 +728,6 @@ int ObTableRpcProcessor<T>::after_process(int error_code)
 {
   int ret = OB_SUCCESS;
   NG_TRACE(process_end); // print trace log if necessary
-  // some statistics must be recorded for plan stat, even though sql audit disabled
-  audit_record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
-  audit_record_.exec_timestamp_.net_t_ = 0;
-  audit_record_.exec_timestamp_.net_wait_t_ =
-      audit_record_.exec_timestamp_.enter_queue_ts_ - audit_record_.exec_timestamp_.receive_ts_;
-  audit_record_.exec_timestamp_.update_stage_time();
-  if (lib::is_diagnose_info_enabled()) {
-    audit_record_.exec_record_.record_end();
-    audit_record_.update_event_stage_state();
-  }
-  if (need_audit()) {
-    end_audit();
-  }
   if (OB_FAIL(ObTableConnectionMgr::get_instance().update_table_connection(user_client_addr_,
                 credential_.tenant_id_, credential_.database_id_, credential_.user_id_))) {
        LOG_WARN("fail to update conn active time", K(ret), K_(user_client_addr), K_(credential_.tenant_id),
@@ -1010,34 +742,44 @@ void ObTableRpcProcessor<T>::set_req_has_wokenup()
   RpcProcessor::req_ = NULL;
 }
 
-
-template<class T>
-void ObTableRpcProcessor<T>::save_request_string()
+// only use for batch_execute and htable_mutate_row, to check if need to get the global snapshot
+int ObTableApiProcessorBase::check_table_has_global_index(bool &exists)
 {
   int ret = OB_SUCCESS;
-  const char *arg_str = to_cstring(RpcProcessor::arg_);
-  if (OB_NOT_NULL(arg_str)) {
-    const int64_t buf_size = strlen(arg_str) + 1;
-    char *buf = reinterpret_cast<char *>(audit_allocator_.alloc(buf_size));
-    if (NULL == buf) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SERVER_LOG(WARN, "fail to alloc audit memory", K(ret), K(buf_size), K(arg_str));
-    } else {
-      memset(buf, 0, buf_size);
-      strcpy(buf, arg_str);
-      request_string_ = buf;
-      request_string_len_ = buf_size;
-    }
+  exists = false;
+  if (!schema_cache_guard_.is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is not inited", K(ret), K_(schema_cache_guard));
+  } else if (OB_FAIL(schema_cache_guard_.has_global_index(exists))) {
+    LOG_WARN("fail to check global index", K(ret));
   }
+  return ret;
 }
 
-template<class T>
-void ObTableRpcProcessor<T>::generate_sql_id()
+int ObTableApiProcessorBase::get_tablet_id(const ObTabletID &arg_tablet_id, uint64_t table_id, ObTabletID &tablet_id)
 {
-  uint64_t checksum = get_request_checksum();
-  checksum = ob_crc64(checksum, &credential_.tenant_id_, sizeof(credential_.tenant_id_));
-  checksum = ob_crc64(checksum, &credential_.user_id_, sizeof(credential_.user_id_));
-  checksum = ob_crc64(checksum, &credential_.database_id_, sizeof(credential_.database_id_));
-  snprintf(audit_record_.sql_id_, (int32_t)sizeof(audit_record_.sql_id_),
-     "TABLEAPI0x%04Xvv%016lX", RpcProcessor::PCODE, checksum);
+  int ret = OB_SUCCESS;
+  tablet_id = arg_tablet_id;
+  if (!tablet_id.is_valid()) {
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const uint64_t tenant_id = MTL_ID();
+    if (OB_ISNULL(simple_table_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is NULL", K(ret), K(table_id));
+    } else if (table_id != simple_table_schema_->get_table_id()) {
+      // table id not equal should retry in table group route
+      // table id not equal, ODP will retry
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table id not match", K(ret), K(table_id), K(simple_table_schema_->get_table_id()));
+    } else if (!simple_table_schema_->is_partitioned_table()) {
+      tablet_id = simple_table_schema_->get_tablet_id();
+    } else {
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret), K(table_id));
+    }
+  }
+  return ret;
 }

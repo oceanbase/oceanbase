@@ -183,6 +183,10 @@
 #include "sql/audit/ob_audit_logger.h"
 #include "sql/audit/ob_audit_log_mgr.h"
 #endif
+#include "observer/table/group/ob_table_tenant_group.h"
+#include "observer/table/ob_table_client_info_mgr.h"
+#include "observer/table/ob_table_query_async_processor.h"
+#include "observer/table/ob_htable_rowkey_mgr.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -204,6 +208,7 @@ using namespace oceanbase::observer;
 using namespace oceanbase::rootserver;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::tmp_file;
+using namespace oceanbase::table;
 
 #define OB_TENANT_LOCK_BUCKET_NUM 10000L
 
@@ -628,6 +633,10 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObAuditLogger::mtl_init, ObAuditLogger::mtl_start, ObAuditLogger::mtl_stop, ObAuditLogger::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObAuditLogUpdater::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 #endif
+    MTL_BIND2(mtl_new_default, table::ObTableGroupCommitMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, table::ObHTableRowkeyMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, table::ObTableClientInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, observer::ObTableQueryASyncMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObPluginVectorIndexService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
   }
 
@@ -1514,6 +1523,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_audit_log_config())) {
         LOG_WARN("failed to update tenant audit log config", K(tmp_ret), K(tenant_id));
       }
+      if (tenant_config->kv_group_commit_batch_size > 1 && OB_TMP_FAIL(start_kv_group_commit_timer())) {
+        LOG_WARN("failed to start kv group commit timer", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1659,6 +1671,16 @@ int ObMultiTenant::update_tenant_audit_log_config()
     audit_logger->reload_config();
   }
 #endif
+  return ret;
+}
+
+int ObMultiTenant::start_kv_group_commit_timer()
+{
+  int ret = OB_SUCCESS;
+  ObTableGroupCommitMgr *mgr = MTL(ObTableGroupCommitMgr*);
+  if (OB_FAIL(mgr->start_timer())) {
+    LOG_WARN("fail to start kv group commit timer", K(ret));
+  }
   return ret;
 }
 

@@ -1154,7 +1154,9 @@
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
 # 12492: __all_virtual_ss_local_cache_info
+# 12493: __all_virtual_kv_group_commit_status
 # 12496: __all_virtual_vector_index_info
+# 12500: __all_virtual_kv_client_info
 # 12504: __all_virtual_function_io_stat
 # 12505: __all_virtual_temp_file
 # 15009: ALL_VIRTUAL_SQL_AUDIT
@@ -2255,9 +2257,13 @@
 # 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
 # 21599: GV$OB_SS_LOCAL_CACHE
 # 21600: V$OB_SS_LOCAL_CACHE
+# 21601: GV$OB_KV_GROUP_COMMIT_STATUS
+# 21602: V$OB_KV_GROUP_COMMIT_STATUS
 # 21603: INNODB_SYS_FIELDS
 # 21604: INNODB_SYS_FOREIGN
 # 21605: INNODB_SYS_FOREIGN_COLS
+# 21607: GV$OB_KV_CLIENT_INFO
+# 21608: V$OB_KV_CLIENT_INFO
 # 21620: GV$OB_FUNCTION_IO_STAT
 # 21621: V$OB_FUNCTION_IO_STAT
 # 21622: DBA_OB_TEMP_FILES

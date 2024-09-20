@@ -138,6 +138,9 @@ namespace table
   class ObTTLService;
   class ObHTableLockMgr;
   class ObTableApiSessPoolMgr;
+  class ObTableGroupCommitMgr;
+  class ObHTableRowkeyMgr;
+  class ObTableClientInfoMgr;
 }
 namespace logservice
 {
@@ -207,6 +210,7 @@ namespace observer
   class ObTableLoadResourceService;
   class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
+  class ObTableQueryASyncMgr;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -421,7 +425,11 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       common::ObRbMemMgr*,                           \
       storage::ObTenantRestoreInfoMgr*,              \
       sql::ObAuditLogger*,                           \
-      sql::ObAuditLogUpdater*                        \
+      sql::ObAuditLogUpdater*,                       \
+      table::ObTableGroupCommitMgr*,                 \
+      observer::ObTableQueryASyncMgr*,               \
+      table::ObTableClientInfoMgr*,                  \
+      table::ObHTableRowkeyMgr*                      \
   )
 
 

@@ -7396,10 +7396,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
 }
-| TTL '(' ttl_definition ')'
+| TTL opt_equal_mark '(' ttl_definition ')'
 {
-  merge_nodes($$, result, T_TTL_DEFINITION, $3);
-  dup_expr_string($$, result, @3.first_column, @3.last_column);
+  (void)($2) ; /* make bison mute */
+  merge_nodes($$, result, T_TTL_DEFINITION, $4);
+  dup_expr_string($$, result, @4.first_column, @4.last_column);
 }
 | KV_ATTRIBUTES opt_equal_mark STRING_VALUE
 {

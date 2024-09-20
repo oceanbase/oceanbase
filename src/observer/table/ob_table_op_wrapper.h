@@ -17,6 +17,7 @@
 #include "ob_table_delete_executor.h"
 #include "ob_table_cache.h"
 #include "ob_table_cg_service.h"
+#include "ob_table_audit.h"
 
 namespace oceanbase
 {
@@ -26,13 +27,12 @@ namespace table
 class ObTableOpWrapper
 {
 public:
-  // dml操作模板函数
   template<int TYPE>
   static int process_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
   {
     int ret = OB_SUCCESS;
     ObTableApiSpec *spec = nullptr;
-    observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+    observer::ObReqTimeGuard req_timeinfo_guard; // if refer to cache must use ObReqTimeGuard
     ObTableApiCacheGuard cache_guard;
     if (OB_FAIL(get_or_create_spec<TYPE>(tb_ctx, cache_guard, spec))) {
       SERVER_LOG(WARN, "fail to get or create spec", K(ret), K(TYPE));
@@ -44,7 +44,7 @@ public:
 
     return ret;
   }
-  // 生成/匹配计划
+
   template<int TYPE>
   static int get_or_create_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec)
   {
@@ -63,32 +63,33 @@ public:
     }
     return ret;
   }
-  // 根据执行计划驱动executor执行
   static int process_op_with_spec(ObTableCtx &tb_ctx, ObTableApiSpec *spec, ObTableOperationResult &op_result);
-  // get特有的逻辑，单独处理
   static int process_get(ObTableCtx &tb_ctx, ObNewRow *&row);
   static int process_get_with_spec(ObTableCtx &tb_ctx, ObTableApiSpec *spec, ObNewRow *&row);
   static int get_insert_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
   static int get_insert_up_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
   static int process_insert_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
   static int process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
+  static int process_put_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+  {
+    return process_op<TABLE_API_EXEC_INSERT>(tb_ctx, op_result);
+  }
+  static int process_incr_or_append_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
 private:
   static int process_affected_entity(ObTableCtx &tb_ctx,
                                      const ObTableApiSpec &spec,
-                                     ObTableApiExecutor &executor,
                                      ObTableOperationResult &op_result);
 };
 
 class ObTableApiUtil
 {
 public:
-  // schema序的ObNewRow组装成ObTableEntity
   static int construct_entity_from_row(ObIAllocator &allocator,
                                        ObNewRow *row,
-                                       const ObTableSchema *table_schema,
+                                       ObKvSchemaCacheGuard &schema_cache_guard,
                                        const ObIArray<ObString> &cnames,
                                        ObITableEntity *entity);
-  static int expand_all_columns(const ObTableSchema *table_schema,
+  static int expand_all_columns(const ObIArray<ObTableColumnInfo *>& col_info_array,
                                 ObIArray<ObString> &cnames);
   static void replace_ret_code(int &ret)
   {
@@ -108,10 +109,12 @@ public:
 class ObHTableDeleteExecutor
 {
 public:
-  ObHTableDeleteExecutor(ObTableCtx& tb_ctx, ObTableApiDeleteExecutor *executor)
+  ObHTableDeleteExecutor(ObTableCtx& tb_ctx, ObTableApiDeleteExecutor *executor, ObTableAuditCtx &audit_ctx)
       : tb_ctx_(tb_ctx),
         executor_(executor),
-        affected_rows_(0) {}
+        affected_rows_(0),
+        audit_ctx_(audit_ctx)
+  {}
   virtual ~ObHTableDeleteExecutor() {}
 
 public:
@@ -133,6 +136,7 @@ private:
   int64_t affected_rows_;
   ObObj pk_objs_start_[3];
   ObObj pk_objs_end_[3];
+  ObTableAuditCtx &audit_ctx_;
 };
 
 } // end namespace table

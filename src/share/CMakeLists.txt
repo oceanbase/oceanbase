@@ -305,6 +305,7 @@ ob_set_subtarget(ob_share common_mixed
   index_usage/ob_index_usage_info_mgr.cpp
   index_usage/ob_index_usage_report_task.cpp
   table/ob_table_util.cpp
+  table/ob_table_object.cpp
   scheduler/ob_tenant_dag_scheduler.cpp
   scheduler/ob_sys_task_stat.cpp
   scheduler/ob_dag_warning_history_mgr.cpp
@@ -326,6 +327,8 @@ ob_set_subtarget(ob_share common_mixed
   throttle/ob_throttle_common.cpp
   restore/ob_restore_data_mode.cpp
   rebuild_tablet/ob_rebuild_tablet_location.cpp
+  table/ob_redis_parser.cpp
+  table/ob_redis_common.cpp
 )
 
 ob_set_subtarget(ob_share tablet

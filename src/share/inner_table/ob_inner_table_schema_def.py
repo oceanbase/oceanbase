@@ -14963,8 +14963,31 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12493: __all_virtual_kv_group_commit_status
-
+def_table_schema(
+  owner      = 'wuguangxin.wgx',
+  table_name = '__all_virtual_kv_group_commit_status',
+  table_id = '12493',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('group_type', 'varchar:32'),
+    ('ls_id', 'int'),
+    ('table_id', 'int'),
+    ('schema_version', 'int'),
+    ('queue_size', 'int'),
+    ('batch_size', 'int'),
+    ('create_time', 'timestamp'),
+    ('update_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12494: __all_virtual_session_sys_variable
 # 12495: __all_virtual_spm_evo_result
 def_table_schema(
@@ -15006,7 +15029,30 @@ def_table_schema(
 # 12497: __all_virtual_pkg_type
 # 12498: __all_virtual_pkg_type_attr
 # 12499: __all_virtual_pkg_coll_type
-# 12500: __all_virtual_kv_client_info
+
+def_table_schema(
+  owner      = 'wuguangxin.wgx',
+  table_name = '__all_virtual_kv_client_info',
+  table_id = '12500',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [
+    ('client_id', 'uint'),
+    ('client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('client_port', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('user_name', 'varchar:OB_MAX_USER_NAME_LENGTH'),
+    ('first_login_ts', 'timestamp'),
+    ('last_login_ts', 'timestamp'),
+    ('client_info', 'varchar:2048')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12501: __all_virtual_wr_sql_plan
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
@@ -37213,8 +37259,54 @@ def_table_schema(
 # 21598: V$OB_LOG_TRANSPORT_DEST_STAT
 # 21599: GV$OB_SS_LOCAL_CACHE
 # 21600: V$OB_SS_LOCAL_CACHE
-# 21601: GV$OB_KV_GROUP_COMMIT_STATUS
-# 21602: V$OB_KV_GROUP_COMMIT_STATUS
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'GV$OB_KV_GROUP_COMMIT_STATUS',
+  table_id        = '21601',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    table_id AS TABLE_ID,
+    ls_id AS LS_ID,
+    schema_version AS SCHEMA_VERSION,
+    group_type AS GROUP_TYPE,
+    queue_size AS QUEUE_SIZE,
+    batch_size AS BATCH_SIZE,
+    create_time AS CREATE_TIME,
+    update_time AS UPDATE_TIME
+    FROM oceanbase.__all_virtual_kv_group_commit_status
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'V$OB_KV_GROUP_COMMIT_STATUS',
+  table_id        = '21602',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, TABLE_ID, LS_ID, SCHEMA_VERSION,
+    GROUP_TYPE, QUEUE_SIZE, BATCH_SIZE, CREATE_TIME, UPDATE_TIME
+  FROM
+     oceanbase.GV$OB_KV_GROUP_COMMIT_STATUS
+  WHERE
+    SVR_IP=HOST_IP()
+  AND
+    SVR_PORT=RPC_PORT()
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'zhenjiang.xzj',
@@ -37289,8 +37381,61 @@ def_table_schema(
 )
 
 # 21606: GV$OB_VARIABLES_BY_SESSION
-# 21607: GV$OB_KV_CLIENT_INFO
-# 21608: V$OB_KV_CLIENT_INFO
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'GV$OB_KV_CLIENT_INFO',
+  table_id        = '21607',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+    oceanbase.__all_virtual_kv_client_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'V$OB_KV_CLIENT_INFO',
+  table_id        = '21608',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+     oceanbase.GV$OB_KV_CLIENT_INFO
+  WHERE
+    SVR_IP=HOST_IP()
+  AND
+    SVR_PORT=RPC_PORT()
+  """.replace("\n", " ")
+)
 # 21609: V$OB_VARIABLES_BY_SESSION
 # 21610: GV$OB_RES_MGR_SYSSTAT
 # 21611: V$OB_RES_MGR_SYSSTAT

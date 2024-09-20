@@ -1411,6 +1411,14 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
   return bret;
 }
 
+bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("all")
+    || 0 == v_str.case_compare("read")
+    || 0 == v_str.case_compare("write");
+}
+
 bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
 {
   bool valid = false;

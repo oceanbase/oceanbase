@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 OceanBase
+ * Copyright (c) 2024 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -14,7 +14,6 @@
 #include "ob_table_mode_control.h"
 
 using namespace oceanbase::common;
-using namespace oceanbase::table;
 
 int ObTableModeCtrl::check_mode(ObKvModeType tenant_mode, ObTableEntityType entity_type)
 {
@@ -42,10 +41,11 @@ int ObTableModeCtrl::check_mode(ObKvModeType tenant_mode, ObTableEntityType enti
       break;
     }
     case ObKvModeType::REDIS: {
-      // OBKV-Redis model is not supported in 433
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "As the ob_kv_mode variable has been set to 'REDIS', your current interfaces");
-      LOG_WARN("redis is not supported now", K(ret), K(entity_type), K(tenant_mode));
+      if (entity_type != ObTableEntityType::ET_REDIS && entity_type != ObTableEntityType::ET_DYNAMIC) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "As the ob_kv_mode variable has been set to 'REDIS', your current interfaces");
+        LOG_WARN("mode not matched", K(ret), K(entity_type), K(tenant_mode));
+      }
       break;
     }
     case ObKvModeType::NONE: {

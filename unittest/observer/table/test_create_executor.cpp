@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 OceanBase
+ * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -135,16 +135,22 @@ public:
   ObArenaAllocator allocator_;
   MockSchemaService schema_service_;
   ObSchemaGetterGuard schema_guard_;
+  ObReqTimeGuard req_timeinfo_guard_;
+  ObKvSchemaCacheGuard schema_cache_guard_;
+  ObTableApiSessGuard sess_guard_;
   ObTableSchema table_schema_;
   ObColumnSchemaV2 columns_[3];
+  ObDASTableLocMeta loc_meta_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestCreateExecutor);
 };
 
 TestCreateExecutor::TestCreateExecutor()
-  : allocator_()
+  : allocator_(),
+    loc_meta_(allocator_)
 {
+  loc_meta_.route_policy_ = ObRoutePolicyType::POLICY_TYPE_MAX;
 }
 
 void TestCreateExecutor::SetUp()
@@ -158,8 +164,18 @@ void TestCreateExecutor::SetUp()
   ObTenantBase tbase(1);
   static ObDataAccessService instance;
   tbase.inner_set(&instance);
+  // init plan cache
+  static ObPlanCache plan_cache;
+  plan_cache.init(OB_PLAN_CACHE_BUCKET_NUMBER, 1);
+  plan_cache.set_mem_limit_pct(20);
+  plan_cache.set_mem_high_pct(90);
+  plan_cache.set_mem_low_pct(50);
+  // register cache obj
+  ObLibCacheRegister::register_cache_objs();
+  tbase.inner_set(&plan_cache);
   ASSERT_EQ(OB_SUCCESS, tbase.init());
   ObTenantEnv::set_tenant(&tbase);
+  ASSERT_EQ(OB_SUCCESS, schema_cache_guard_.init(1, table_schema_.get_table_id(), table_schema_.get_schema_version(), schema_guard_));
 }
 
 void TestCreateExecutor::TearDown()
@@ -167,23 +183,31 @@ void TestCreateExecutor::TearDown()
   MTL_CTX()=nullptr;
 }
 
+
 ObTableApiSessNodeVal g_sess_node_val(NULL, 500);
 void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchema *table_schema)
 {
+  fake_ctx.schema_guard_ = &schema_guard_;
   fake_ctx.table_schema_ = table_schema;
+  fake_ctx.schema_cache_guard_ = &schema_cache_guard_;
   fake_ctx.tenant_id_ = table_schema->get_tenant_id();
   fake_ctx.database_id_ = table_schema->get_database_id();
   fake_ctx.table_name_ = table_schema->get_table_name();
   fake_ctx.ref_table_id_ = table_schema->get_table_id();
   fake_ctx.index_table_id_ = fake_ctx.ref_table_id_;
   fake_ctx.index_tablet_id_ = table_schema->get_table_id();
-  fake_ctx.sess_guard_.sess_node_val_ = &g_sess_node_val;
+  fake_ctx.sess_guard_ = &sess_guard_;
+  fake_ctx.sess_guard_->sess_node_val_ = &g_sess_node_val;
   g_sess_node_val.is_inited_ = true;
   g_sess_node_val.sess_info_.test_init(0, 0, 0, NULL);
   g_sess_node_val.sess_info_.load_all_sys_vars(schema_guard_);
   fake_ctx.init_physical_plan_ctx(0, 1);
-  fake_ctx.loc_meta_.route_policy_ = ObRoutePolicyType::READONLY_ZONE_FIRST;
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.construct_column_items());
+  ObTableIndexInfo index_info;
+  index_info.index_schema_ = table_schema;
+  index_info.data_table_id_ = fake_ctx.ref_table_id_;
+  index_info.index_table_id_ = index_info.data_table_id_;
+  index_info.loc_meta_ = &loc_meta_;
+  fake_ctx.table_index_info_.push_back(index_info);
 }
 
 TEST_F(TestCreateExecutor, scan)
@@ -194,10 +218,12 @@ TEST_F(TestCreateExecutor, scan)
   // init ctx
   fake_ctx_init_common(fake_ctx, &table_schema_);
   fake_ctx.set_entity(&entity);
+  fake_ctx.operation_type_ = ObTableOperationType::Type::GET;
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_get());
   for (int i = 0; i < 3; i++) {
     ASSERT_EQ(columns_[i].get_column_id(), fake_ctx.select_col_ids_.at(i));
   }
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_items_for_cg());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(3, fake_ctx.get_all_exprs().get_expr_array().count());
@@ -226,9 +252,9 @@ TEST_F(TestCreateExecutor, insert)
   ObTableCtx fake_ctx(allocator_);
   ObExprFrameInfo fake_expr_info(allocator_);
   // init ctx
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert());
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_items_for_cg());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(3, fake_ctx.get_all_exprs().get_expr_array().count());
@@ -257,10 +283,10 @@ TEST_F(TestCreateExecutor, delete)
   ObTableCtx fake_ctx(allocator_);
   ObExprFrameInfo fake_expr_info(allocator_);
   // init ctx
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_delete());
   ASSERT_EQ(3, fake_ctx.select_col_ids_.count());
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_items_for_cg());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(3, fake_ctx.get_all_exprs().get_expr_array().count());
@@ -307,10 +333,9 @@ TEST_F(TestCreateExecutor, update)
   entity.set_property(ObString::make_string("C2"), obj);
   // init ctx
   fake_ctx.set_entity(&entity);
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_update());
-
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_items_for_cg());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(4, fake_ctx.get_all_exprs().get_expr_array().count());
@@ -355,9 +380,9 @@ TEST_F(TestCreateExecutor, insertup)
   entity.set_property(ObString::make_string("C2"), obj);
   // init ctx
   fake_ctx.set_entity(&entity);
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert_up(false));
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_items_for_cg());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(4, fake_ctx.get_all_exprs().get_expr_array().count());
@@ -385,9 +410,9 @@ TEST_F(TestCreateExecutor, replace)
   ObTableCtx fake_ctx(allocator_);
   ObExprFrameInfo fake_expr_info(allocator_);
   // init ctx
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_replace());
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_items_for_cg());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(3, fake_ctx.get_all_exprs().get_expr_array().count());
@@ -424,9 +449,9 @@ TEST_F(TestCreateExecutor, refresh_exprs_frame)
   obj.set_int(1235);
   entity.set_property(ObString::make_string("C2"), obj);
   // init ctx
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert());
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_items_for_cg());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::alloc_exprs_memory(fake_ctx, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
@@ -452,35 +477,13 @@ TEST_F(TestCreateExecutor, refresh_exprs_frame)
   ASSERT_EQ(101, objs[2].get_int());
 }
 
-// table context
-TEST_F(TestCreateExecutor, cons_column_type)
-{
-  ObColumnSchemaV2 col_schema;
-  // prepare data
-  col_schema.set_data_type(ObVarcharType);
-  col_schema.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  ObAccuracy acc(1);
-  col_schema.set_accuracy(acc);
-  uint32_t res_flag = ObRawExprUtils::calc_column_result_flag(col_schema);
-
-  ObTableColumnInfo column_info;
-  ObTableCtx fake_ctx(allocator_);
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
-  fake_ctx_init_common(fake_ctx, &table_schema_);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_info(col_schema, column_info));
-  ASSERT_EQ(ObVarcharType, column_info.type_.get_type());
-  ASSERT_EQ(res_flag, column_info.type_.get_result_flag());
-  ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, column_info.type_.get_collation_type());
-  ASSERT_EQ(CS_LEVEL_IMPLICIT, column_info.type_.get_collation_level());
-  ASSERT_EQ(1, column_info.type_.get_accuracy().get_length());
-}
-
 TEST_F(TestCreateExecutor, generate_key_range)
 {
   ObTableCtx fake_ctx(allocator_);
   fake_ctx_init_common(fake_ctx, &table_schema_);
   // prepare data
   ObArray<ObNewRange> scan_ranges;
+  ObArray<ObString> scan_ranges_columns;
   ObObj pk_objs_start[1];
   pk_objs_start[0].set_int(0);
   ObObj pk_objs_end[1];
@@ -491,7 +494,8 @@ TEST_F(TestCreateExecutor, generate_key_range)
   range.border_flag_.set_inclusive_start();
   range.border_flag_.set_inclusive_end();
   scan_ranges.push_back(range);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.generate_key_range(scan_ranges));
+  scan_ranges_columns.push_back("C1");
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.generate_key_range(scan_ranges_columns, scan_ranges));
   // primary key range
   ASSERT_EQ(1, fake_ctx.get_key_ranges().count());
 }

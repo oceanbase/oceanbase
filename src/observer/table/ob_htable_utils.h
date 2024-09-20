@@ -61,6 +61,8 @@ public:
   virtual ~ObHTableCellEntity();
 
   void set_ob_row(common::ObNewRow *ob_row) { ob_row_ = ob_row; }
+  int deep_copy_ob_row(const common::ObNewRow *ob_row, common::ObArenaAllocator &allocator);
+  virtual void reset(common::ObArenaAllocator &allocator);
   const common::ObNewRow* get_ob_row() const { return ob_row_; }
 
   virtual common::ObString get_rowkey() const override;
@@ -308,11 +310,16 @@ public:
   static int int64_to_java_bytes(int64_t val, char bytes[8]);
   // lock all rows of mutations in the given lock mode with the given lock handle,
   // for put, delete, mutations in check_and_xxx
-  static int lock_htable_rows(uint64_t table_id, const ObTableBatchOperation &mutations, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
+  static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   // lock the check row in the given lock mode with the given lock hanle,
   // for increment, append, and check operation in check_and_xxx
   static int lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
+  static int lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static int check_htable_schema(const share::schema::ObTableSchema &table_schema);
+  static OB_INLINE bool is_tablegroup_req(const ObString &table_name, ObTableEntityType entity_type)
+  {
+    return entity_type == ObTableEntityType::ET_HKV && table_name.find('$') == nullptr;
+  }
 private:
   ObHTableUtils() = delete;
   ~ObHTableUtils() = delete;

@@ -253,10 +253,13 @@ DEF_BOOL(enable_sql_operator_dump, OB_CLUSTER_PARAMETER, "True", "specifies whet
 DEF_CAP(_chunk_row_store_mem_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]",
         "the maximum size of memory used by ChunkRowStore, 0 means follow operator's setting. Range: [0, +∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(tableapi_transport_compress_func, OB_CLUSTER_PARAMETER, "none",
+DEF_STR_WITH_CHECKER(kv_transport_compress_func, OB_TENANT_PARAMETER, "none",
                      common::ObConfigCompressFuncChecker,
                      "compressor used for tableAPI query result. Values: none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0 zstd 1.3.8",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(kv_transport_compress_threshold, OB_TENANT_PARAMETER, "10K","[0B,]",
+        "Together with the configuration item kv_transport_compress_func, it is used to specify the minimum threshold size of the OBKV query result set that needs to be compressed. Range: [0, +∞)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_sort_area_size, OB_TENANT_PARAMETER, "32M", "[2M,]",
         "size of maximum memory that could be used by SORT. Range: [2M,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2171,6 +2174,17 @@ DEF_BOOL(_enable_unit_gc_wait, OB_CLUSTER_PARAMETER, "True",
          "Used to control enable or disable the unit smooth gc feature, enabled by default.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// obkv group commit
+DEF_INT(kv_group_commit_batch_size, OB_TENANT_PARAMETER, "1", "(0,)",
+        "Used to specify the batch size of each group commit batch in OBKV."
+        " Values: 1 means sinlge operaion in each batch, equally to disable group commit."
+        " When batch size is greater than 1, it means group commit is enable and used as its batch size. ",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(kv_group_commit_rw_mode, OB_TENANT_PARAMETER, "ALL",
+        common::ObConfigKvGroupCommitRWModeChecker,
+        "Used to specify the read/write operation types when group commit is enable. "
+        "Values: 'ALL' means enable all operations, 'READ' mean only enable read operation in group commit, 'WRITE'  means only write operations in group commit.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "[0,100)",
         "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)",
