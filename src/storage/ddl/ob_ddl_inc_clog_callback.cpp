@@ -55,8 +55,8 @@ int ObDDLIncStartClogCb::on_success()
   scn_ = __get_scn();
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
-  try_release();
   FLOG_INFO("write ddl inc start log success", K(ls_id_), K(scn_), K(log_basic_));
+  try_release();
   return OB_SUCCESS;
 }
 
