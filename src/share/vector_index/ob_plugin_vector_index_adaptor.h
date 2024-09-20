@@ -174,9 +174,10 @@ struct ObVectorParamData
 class ObVectorQueryAdaptorResultContext {
 public:
   friend class ObPluginVectorIndexAdaptor;
-  ObVectorQueryAdaptorResultContext(ObIAllocator *allocator, ObIAllocator *tmp_allocator)
+  ObVectorQueryAdaptorResultContext(uint64_t tenant_id, ObIAllocator *allocator, ObIAllocator *tmp_allocator)
     : status_(PVQ_START),
       flag_(PVQP_MAX),
+      tenant_id_(tenant_id),
       bitmaps_(nullptr),
       vec_data_(),
       allocator_(allocator),
@@ -198,6 +199,7 @@ public:
 private:
   PluginVectorQueryResStatus status_;
   ObVectorQueryProcessFlag flag_;
+  uint64_t tenant_id_;
   ObVectorIndexRoaringBitMap *bitmaps_;
   ObVectorParamData vec_data_;
   ObIAllocator *allocator_;
