@@ -23,6 +23,7 @@
 #include "sql/das/ob_das_dml_vec_iter.h"
 #include "lib/vector/ob_vector_util.h"
 #include "lib/random/ob_random.h"
+#include "lib/roaringbitmap/ob_roaringbitmap.h"
 
 namespace oceanbase
 {
@@ -142,12 +143,17 @@ int ObVectorQueryAdaptorResultContext::init_bitmaps()
                         (tmp_allocator_->alloc(sizeof(ObVectorIndexRoaringBitMap))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create vbitmap msg", K(ret));
-  } else if (OB_ISNULL(bitmaps_->insert_bitmap_ = roaring::api::roaring64_bitmap_create())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create insert bitmap", K(ret));
-  } else if (OB_ISNULL(bitmaps_->delete_bitmap_ = roaring::api::roaring64_bitmap_create())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to create delete bitmap", K(ret));
+  } else {
+    ROARING_TRY_CATCH(bitmaps_->insert_bitmap_ = roaring::api::roaring64_bitmap_create());
+    if (OB_SUCC(ret) && OB_ISNULL(bitmaps_->insert_bitmap_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create insert bitmap", K(ret));
+    }
+    ROARING_TRY_CATCH(bitmaps_->delete_bitmap_ = roaring::api::roaring64_bitmap_create());
+    if (OB_SUCC(ret) && OB_ISNULL(bitmaps_->delete_bitmap_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create delete bitmap", K(ret));
+    }
   }
 
   return ret;
@@ -607,12 +613,16 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type)
                   (get_allocator()->alloc(sizeof(ObVectorIndexRoaringBitMap))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create delta_bitmap", K(ret));
-      } else if (OB_ISNULL(incr_data_->bitmap_->insert_bitmap_ = roaring::api::roaring64_bitmap_create())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to create delta insert bitmap", K(ret));
       } else {
-        incr_data_->bitmap_->delete_bitmap_ = nullptr;
-        incr_data_->set_inited(); // should release memory if fail
+        ROARING_TRY_CATCH(incr_data_->bitmap_->insert_bitmap_ = roaring::api::roaring64_bitmap_create());
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(incr_data_->bitmap_->insert_bitmap_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to create delta insert bitmap", K(ret));
+        } else {
+          incr_data_->bitmap_->delete_bitmap_ = nullptr;
+          incr_data_->set_inited(); // should release memory if fail
+        }
         LOG_INFO("create incr index success.", K(ret), KP(incr_data_->index_), K(lbt())); // remove later
       }
       if (OB_FAIL(ret)) {
@@ -629,14 +639,22 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type)
                                           (get_allocator()->alloc(sizeof(ObVectorIndexRoaringBitMap))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create snapshot_bitmap", K(ret));
-      } else if (OB_ISNULL(vbitmap_data_->bitmap_->insert_bitmap_ = roaring::api::roaring64_bitmap_create())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to create snapshot insert bitmap", K(ret));
-      } else if (OB_ISNULL(vbitmap_data_->bitmap_->delete_bitmap_ = roaring::api::roaring64_bitmap_create())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to create snapshot delete bitmap", K(ret));
       } else {
-        vbitmap_data_->set_inited();
+        ROARING_TRY_CATCH(vbitmap_data_->bitmap_->insert_bitmap_ = roaring::api::roaring64_bitmap_create());
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(vbitmap_data_->bitmap_->insert_bitmap_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to create snapshot insert bitmap", K(ret));
+        }
+        ROARING_TRY_CATCH(vbitmap_data_->bitmap_->delete_bitmap_ = roaring::api::roaring64_bitmap_create());
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(vbitmap_data_->bitmap_->delete_bitmap_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to create snapshot delete bitmap", K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          vbitmap_data_->set_inited();
+        }
       }
       if (OB_FAIL(ret)) {
         free_memdata_resource(type, vbitmap_data_, get_allocator());
@@ -837,9 +855,11 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
     }
     if (OB_SUCC(ret)) {
       TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
-      roaring::api::roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, incr_vid_count, reinterpret_cast<uint64_t *>(incr_vids));
-      roaring::api::roaring64_bitmap_remove_many(incr_data_->bitmap_->insert_bitmap_, del_vid_count, del_vids);
-      roaring::api::roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, null_vid_count, null_vids);
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, incr_vid_count, reinterpret_cast<uint64_t *>(incr_vids)));
+      for (int64_t i = 0; OB_SUCC(ret) && i < del_vid_count; i++) {
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(incr_data_->bitmap_->insert_bitmap_, del_vids[i]));
+      }
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, null_vid_count, null_vids));
     }
   }
 
@@ -921,11 +941,11 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
         LOG_WARN("get invalid op length.", K(ret), K(op));
       } else {
         if (op.ptr()[0] == sql::ObVecIndexDMLIterator::VEC_DELTA_INSERT[0]) {
-          roaring::api::roaring64_bitmap_add(ctx->bitmaps_->insert_bitmap_, vid);
+          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->insert_bitmap_, vid));
 
         } else if (op.ptr()[0] == sql::ObVecIndexDMLIterator::VEC_DELTA_DELETE[0]) {
-          roaring::api::roaring64_bitmap_remove(ctx->bitmaps_->insert_bitmap_, vid);
-          roaring::api::roaring64_bitmap_add(ctx->bitmaps_->delete_bitmap_, vid);
+          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ctx->bitmaps_->insert_bitmap_, vid));
+          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->delete_bitmap_, vid));
 
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -966,7 +986,7 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
     if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_)) {
       if (OB_SUCC(ret)) {
         TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
-        roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, count, vids);
+        ROARING_TRY_CATCH(roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, count, vids));
       }
 
       if (OB_SUCC(ret) && OB_FAIL(obvectorutil::add_index(incr_data_->index_,
@@ -1118,9 +1138,11 @@ int ObPluginVectorIndexAdaptor::write_into_index_mem(int64_t dim, SCN read_scn,
     TCWLockGuard wr_vbit_bitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
     roaring::api::roaring64_bitmap_t *ibitmap = vbitmap_data_->bitmap_->insert_bitmap_;
     roaring::api::roaring64_bitmap_t *dbitmap = vbitmap_data_->bitmap_->delete_bitmap_;
-    roaring::api::roaring64_bitmap_add_many(ibitmap, i_vids.count(), i_vids.get_data());
-    roaring::api::roaring64_bitmap_add_many(dbitmap, d_vids.count(), d_vids.get_data());
-    roaring::api::roaring64_bitmap_remove_many(ibitmap, d_vids.count(), d_vids.get_data());
+    ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(ibitmap, i_vids.count(), i_vids.get_data()));
+    ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(dbitmap, d_vids.count(), d_vids.get_data()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ibitmap, d_vids.at(i)));
+    }
 
 #ifndef NDEBUG
     output_bitmap(ibitmap);
@@ -1274,55 +1296,67 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
     roaring::api::roaring64_bitmap_t *andnot_bitmap = nullptr;
     if (OB_SUCC(ret)) {
       TCRLockGuard rd_bitmap_lock_guard(incr_data_->bitmap_rwlock_);
-      andnot_bitmap = roaring64_bitmap_andnot(gene_bitmap, delta_bitmap);
-    }
-    uint64_t bitmap_cnt = roaring64_bitmap_get_cardinality(andnot_bitmap) + i_vids.count();
-    roaring::api::roaring64_iterator_t *bitmap_iter = roaring64_iterator_create(andnot_bitmap);
-    // uint64_t use roaring64_bitmap_to_uint64_array(andnot_bitmap, bitmap_out);
-    bool is_continue = true;
-    int index = 0;
-    int64_t dim = 0;
-    ObObj *vids = nullptr;
-    if (OB_FAIL(get_dim(dim))) {
-      LOG_WARN("failed to get dim.", K(ret));
-    } else if (OB_ISNULL(vids = static_cast<ObObj *>(ctx->tmp_allocator_->alloc(sizeof(ObObj) * bitmap_cnt)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
-    } else if (OB_ISNULL(ctx->vec_data_.vectors_ = static_cast<ObObj *>(ctx->tmp_allocator_->alloc(sizeof(ObObj) * bitmap_cnt)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
-    }
-
-    while (OB_SUCC(ret) && is_continue) {
-      vids[index].reset();
-      vids[index++].set_int(roaring64_iterator_value(bitmap_iter));
-      is_continue = roaring64_iterator_advance(bitmap_iter);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (index + i_vids.count() != bitmap_cnt) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid vid iter count.", K(ret), K(index), K(roaring64_bitmap_get_cardinality(andnot_bitmap)));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count() && i + index < bitmap_cnt; i++) {
-        vids[i + index].reset();
-        vids[i + index].set_int(i_vids.at(i));
-      }
-
-      ctx->vec_data_.dim_ = dim;
-      ctx->vec_data_.count_ = bitmap_cnt;
-      ctx->vec_data_.vids_ = vids;
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < bitmap_cnt; i++) {
-        ctx->vec_data_.vectors_[i].reset();
+      ROARING_TRY_CATCH(andnot_bitmap = roaring64_bitmap_andnot(gene_bitmap, delta_bitmap));
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(andnot_bitmap)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to create andnot bitmap", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      uint64_t bitmap_cnt = roaring64_bitmap_get_cardinality(andnot_bitmap) + i_vids.count();
+      // uint64_t use roaring64_bitmap_to_uint64_array(andnot_bitmap, bitmap_out);
+      bool is_continue = true;
+      int index = 0;
+      int64_t dim = 0;
+      ObObj *vids = nullptr;
+      roaring::api::roaring64_iterator_t *bitmap_iter = nullptr;
+      ROARING_TRY_CATCH(bitmap_iter = roaring64_iterator_create(andnot_bitmap));
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(bitmap_iter)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to create bitmap iter", K(ret));
+      } else if (OB_FAIL(get_dim(dim))) {
+        LOG_WARN("failed to get dim.", K(ret));
+      } else if (OB_ISNULL(vids = static_cast<ObObj *>(ctx->tmp_allocator_->alloc(sizeof(ObObj) * bitmap_cnt)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
+      } else if (OB_ISNULL(ctx->vec_data_.vectors_ = static_cast<ObObj *>(ctx->tmp_allocator_->alloc(sizeof(ObObj) * bitmap_cnt)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
+      }
 
-    if (OB_NOT_NULL(bitmap_iter)) {
-      roaring64_iterator_free(bitmap_iter);
-      bitmap_iter = nullptr;
+      while (OB_SUCC(ret) && is_continue) {
+        vids[index].reset();
+        vids[index++].set_int(roaring64_iterator_value(bitmap_iter));
+        is_continue = roaring64_iterator_advance(bitmap_iter);
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (index + i_vids.count() != bitmap_cnt) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid vid iter count.", K(ret), K(index), K(roaring64_bitmap_get_cardinality(andnot_bitmap)));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count() && i + index < bitmap_cnt; i++) {
+          vids[i + index].reset();
+          vids[i + index].set_int(i_vids.at(i));
+        }
+
+        ctx->vec_data_.dim_ = dim;
+        ctx->vec_data_.count_ = bitmap_cnt;
+        ctx->vec_data_.vids_ = vids;
+
+        for (int64_t i = 0; OB_SUCC(ret) && i < bitmap_cnt; i++) {
+          ctx->vec_data_.vectors_[i].reset();
+        }
+      }
+
+      if (OB_NOT_NULL(bitmap_iter)) {
+        roaring64_iterator_free(bitmap_iter);
+        bitmap_iter = nullptr;
+      }
+
     }
-
     if (OB_NOT_NULL(andnot_bitmap)) {
       roaring64_bitmap_free(andnot_bitmap);
       andnot_bitmap = nullptr;
@@ -1384,9 +1418,11 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
       curr_vid_max = insert_max > mem_max_vid ? insert_max : mem_max_vid;
     }
 
-    ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, curr_vid_max);
-    dbitmap = ctx->bitmaps_->delete_bitmap_;
-    roaring64_bitmap_or_inplace(ibitmap, dbitmap);
+    ROARING_TRY_CATCH(ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, curr_vid_max));
+    if (OB_SUCC(ret)) {
+      dbitmap = ctx->bitmaps_->delete_bitmap_;
+      ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(ibitmap, dbitmap));
+    }
     LOG_DEBUG("vbitmap is not inited.", K(ret), K(insert_min), K(insert_max), K(curr_vid_max));
   } else {
     roaring::api::roaring64_bitmap_t *insert_map = ctx->bitmaps_->insert_bitmap_;
@@ -1399,8 +1435,8 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
 #endif
     if (OB_SUCC(ret)) {
       TCRLockGuard rd_bitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
-      roaring64_bitmap_or_inplace(insert_map, vbitmap_data_->bitmap_->insert_bitmap_);
-      roaring64_bitmap_or_inplace(dbitmap, vbitmap_data_->bitmap_->delete_bitmap_);
+      ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(insert_map, vbitmap_data_->bitmap_->insert_bitmap_));
+      ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(dbitmap, vbitmap_data_->bitmap_->delete_bitmap_));
     }
 
     uint64_t insert_min = roaring64_bitmap_minimum(insert_map);
@@ -1412,8 +1448,8 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
       curr_vid_max = insert_max > mem_max_vid ? insert_max : mem_max_vid;
     }
 
-    ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, curr_vid_max);
-    roaring64_bitmap_or_inplace(ibitmap, dbitmap);
+    ROARING_TRY_CATCH(ibitmap = roaring64_bitmap_flip_closed(insert_map, insert_min, curr_vid_max));
+    ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(ibitmap, dbitmap));
     LOG_DEBUG("vbitmap is inited.", K(ret), K(insert_min), K(insert_max), K(curr_vid_max));
 
 #ifndef NDEBUG
@@ -1666,10 +1702,13 @@ int ObPluginVectorIndexAdaptor::cast_roaringbitmap_to_stdmap(const roaring::api:
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf.", K(ret));
   } else {
-    roaring::api::roaring64_iterator_t *roaring_iter = roaring64_iterator_create(bitmap);
-    uint64_t ele_cnt = roaring64_iterator_read(roaring_iter, buf, bitmap_cnt);
-    for (int i = 0; i < ele_cnt; i++) {
-      mymap[buf[i]] = false;
+    roaring::api::roaring64_iterator_t *roaring_iter = nullptr;
+    ROARING_TRY_CATCH(roaring_iter = roaring64_iterator_create(bitmap));
+    if (OB_SUCC(ret)) {
+      uint64_t ele_cnt = roaring64_iterator_read(roaring_iter, buf, bitmap_cnt);
+      for (int i = 0; i < ele_cnt; i++) {
+        mymap[buf[i]] = false;
+      }
     }
   }
   return ret;

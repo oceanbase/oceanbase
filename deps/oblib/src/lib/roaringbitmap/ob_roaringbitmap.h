@@ -32,7 +32,9 @@ namespace common {
 
 #define ROARING_TRY_CATCH(statement)                               \
     try {                                                          \
-      statement;                                                   \
+      if (OB_SUCC(ret)) {                                          \
+        statement;                                                 \
+      }                                                            \
     } catch (const std::bad_alloc &e) {                            \
       ret = OB_ALLOCATE_MEMORY_FAILED;                             \
       LOG_WARN("fail to alloc memory in croaring", K(ret));        \
