@@ -205,12 +205,17 @@ public:
   // @brief get restore error for report
   int get_restore_error(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
   // @brief Before the standby tenant switchover to primary, check if all primary logs are restored in the standby
-  // 1. for standby based on archive, check the max archived log is restored in the standby
+  // 1. for standby based on archive, check the max archived log is restored in the standby,
+  //    no need to get max archive_scn here, just get next log in archive after end_lsn,
+  //    if there is no next log after end_lsn, the max archived log should be restored in the standby.
   // 2. for standby based on net service, check the max log in primary is restored in the standby
   // When need to add other error codes, you need to add error code to need_fail_when_switch_to_primary()
   // that requires switch tenant to primary fail immediately
   // @param[out] end_scn, the end_scn of palf
-  // @param[out] archive_scn, the max scn in archive logs
+  // @param[out] archive_scn, if restore from archive ,archive scn is the **next** scn in archive logs
+  // after end_lsn in palf, if restore from service, archive scn is the **max** scn of the service;
+  // the difference is due to the costly archive store implemention, which would list all files in a piece
+  // when get_max_archive_log, to avoid the list operation, the semantics of archive_scn is changed here;
   // @ret_code OB_NOT_MASTER   the restore_handler is not master
   //           OB_EAGAIN       the restore source not valid
   //           OB_SOURCE_TENANT_STATE_NOT_MATCH     original tenant state not match to switchover
@@ -253,8 +258,12 @@ private:
   int check_member_list_change_(common::ObMemberList &member_list, bool &member_list_change);
   int check_restore_to_newest_from_service_(const share::ObRestoreSourceServiceAttr &attr,
       const share::SCN &end_scn, share::SCN &archive_scn);
-  int check_restore_to_newest_from_archive_(ObLogArchivePieceContext &piece_context,
-      const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
+  int check_restore_to_newest_from_archive_(ObRemoteLocationParent &location_parent,
+      const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_next_scn);
+
+  int get_next_log_after_end_lsn_(ObRemoteLocationParent &location_parent,
+      const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_next_scn);
+
   int check_restore_to_newest_from_rawpath_(ObLogRawPathPieceContext &rawpath_ctx,
       const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
   bool restore_to_end_unlock_() const;
