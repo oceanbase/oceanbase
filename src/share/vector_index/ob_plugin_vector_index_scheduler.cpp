@@ -956,11 +956,11 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_memdata_sync_task(ObPlug
     mgr->get_ls_task_ctx().non_memdata_task_cycle_++;
     if (mgr->get_ls_task_ctx().non_memdata_task_cycle_
         > ObPluginVectorIndexLSTaskCtx::NON_MEMDATA_TASK_CYCLE_MAX) {
-      // too long to receive any sync task log, sync once forcely
-      // save all tablet id to current refresh task recorder
       mgr->get_ls_task_ctx().non_memdata_task_cycle_ = 0;
-      mgr->get_ls_task_ctx().need_memdata_sync_ = true;
-      force_mem_data_sync = true;
+      // disable force sync currently
+      // mgr->get_ls_task_ctx().need_memdata_sync_ = true;
+      // force_mem_data_sync = true;
+      FLOG_INFO("not receive any sync task log", K(tenant_id_), K(ls_->get_ls_id()));
     }
   }
 
@@ -1183,30 +1183,33 @@ int ObPluginVectorIndexLoadScheduler::handle_replay_result(ObVectorIndexSyncLog 
       char *task_ctx_buf =
         static_cast<char *>(mgr->get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
       ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
-
+      ObPluginVectorIndexTaskCtx* tmp_task_ctx = nullptr;
       if (OB_ISNULL(task_ctx_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memdata sync task ctx", KR(ret));
       } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, table_id))) {
-      } else if (OB_FAIL(waiting_task_map.set_refactored(tablet_id, task_ctx))) {
-        if (ret != OB_HASH_EXIST) {
-          LOG_WARN("failed to set vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+      } else if (OB_FAIL(waiting_task_map.get_refactored(tablet_id, tmp_task_ctx))) {
+        if (ret == OB_HASH_NOT_EXIST) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(waiting_task_map.set_refactored(tablet_id, task_ctx))) {
+            LOG_WARN("failed to set vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+          } else {
+            LOG_INFO("success get replay vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+          }
         }
-      } else {
-        LOG_INFO("success get replay vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+      } else { // // task already set, not scheduled
+        LOG_INFO("duplicate vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
-        if (ret == OB_HASH_EXIST) {
-          ret = OB_SUCCESS;
-          LOG_INFO("duplicate vector index memdata sync task ctx", K(ret), K(tablet_id), KPC(task_ctx));
-        }
         task_ctx->~ObPluginVectorIndexTaskCtx();
-        mgr->get_waiting_allocator().free(task_ctx); // not really free
+        mgr->get_waiting_allocator().free(task_ctx); // arena allocator not really free
         task_ctx = nullptr;
       }
     }
   }
-
+  if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+    ret = OB_SUCCESS;
+  }
   return ret;
 }
 
@@ -1431,10 +1434,9 @@ int ObVectorIndexTask::process()
     bool need_stop = false;
 
     while(!need_stop && OB_SUCC(ret)) {
-      // need set context? should set attr in constructor
       lib::ContextParam param;
       // use dag mtl id for param refer to TTLtask
-      param.set_mem_attr(MTL_ID(), "VecIdxTaskCtx", ObCtxIds::DEFAULT_CTX_ID)
+      param.set_mem_attr(MTL_ID(), "VecIdxTaskCP", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
       CREATE_WITH_TEMP_CONTEXT(param) {
         if (OB_FAIL(process_one())) {

@@ -280,6 +280,8 @@ int ObPluginVectorIndexMgr::get_or_create_partial_adapter_(ObTabletID tablet_id,
     } else { // not exist create new
       if (OB_FAIL(create_partial_adapter(tablet_id, ObTabletID(), type, allocator, OB_INVALID_ID, vec_index_param, dim))) {
         LOG_WARN("failed to create tmp vector index instance with ls", K(tablet_id), K(type), KR(ret));
+      }
+      if (OB_FAIL(ret) && (OB_HASH_EXIST != ret)) {
       } else if (OB_FAIL(get_adapter_inst_guard(tablet_id, adapter_guard))) {
         LOG_WARN("failed to get tmp vector index instance with ls", K(tablet_id), K(type), KR(ret));
       } else {
@@ -465,6 +467,8 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
       ret = OB_SUCCESS;
       if (OB_FAIL(create_partial_adapter(ls_id, tablet_id, ObTabletID(), type, OB_INVALID_ID, vec_index_param, dim))) {
         LOG_WARN("failed to create tmp vector index instance", K(ls_id), K(tablet_id), K(type), KR(ret));
+      }
+      if (OB_FAIL(ret) && (OB_HASH_EXIST != ret)) {
       } else if (OB_FAIL(get_adapter_inst_guard(ls_id, tablet_id, adapter_guard))) {
         LOG_WARN("failed to get tmp vector index instance", K(ls_id), K(tablet_id), K(type), KR(ret));
       } else {
@@ -480,6 +484,8 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
     } else { // not exist create new
       if (OB_FAIL(ls_index_mgr->create_partial_adapter(tablet_id, ObTabletID(), type, allocator_, OB_INVALID_ID, vec_index_param, dim))) {
         LOG_WARN("failed to create tmp vector index instance with ls", K(ls_id), K(tablet_id), K(type), KR(ret));
+      }
+      if (OB_FAIL(ret) && (OB_HASH_EXIST != ret)) {
       } else if (OB_FAIL(ls_index_mgr->get_adapter_inst_guard(tablet_id, adapter_guard))) {
         LOG_WARN("failed to get tmp vector index instance with ls", K(ls_id), K(tablet_id), K(type), KR(ret));
       } else {
@@ -658,7 +664,9 @@ int ObPluginVectorIndexService::acquire_vector_index_mgr(ObLSID ls_id, ObPluginV
         if (OB_FAIL(new_ls_index_mgr->init(tenant_id_, ls_id, memory_context_, &all_vsag_use_mem_))) {
           LOG_WARN("failed to init ls vector index mgr", K(ls_id), KR(ret));
         } else if (OB_FAIL(get_ls_index_mgr_map().set_refactored(ls_id, new_ls_index_mgr))) {
-          LOG_WARN("set vector index mgr map faild", K(ls_id), KR(ret));
+          if (ret != OB_HASH_EXIST) {
+            LOG_WARN("set vector index mgr map faild", K(ls_id), KR(ret));
+          }
         }
         if (OB_FAIL(ret)) {
           new_ls_index_mgr->~ObPluginVectorIndexMgr();
@@ -666,7 +674,7 @@ int ObPluginVectorIndexService::acquire_vector_index_mgr(ObLSID ls_id, ObPluginV
           new_ls_index_mgr = nullptr;
           mgr_buff = nullptr;
         }
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret) && (OB_HASH_EXIST != ret)) {
         } else if (OB_FAIL(get_ls_index_mgr_map().get_refactored(ls_id, mgr))) {
           LOG_WARN("failed to get vector index mgr for ls", K(ls_id), KR(ret));
         }

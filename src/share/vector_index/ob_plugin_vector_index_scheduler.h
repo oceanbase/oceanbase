@@ -178,8 +178,8 @@ struct ObPluginVectorIndexTaskCtx
       in_queue_(false),
       task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE)
   {}
-  TO_STRING_KV(K_(index_tablet_id), K_(index_table_id), K_(task_start_time), K_(last_modify_time),
-               K_(failure_times), K_(in_queue), K_(task_status));
+  TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time),
+               K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
   ObTabletID index_tablet_id_;
   uint64_t index_table_id_;
   int64_t task_start_time_;
