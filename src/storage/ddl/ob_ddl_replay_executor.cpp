@@ -1041,10 +1041,15 @@ int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     }
   } else if (!need_replay) {
     // do nothing
+    FLOG_INFO("no need to replay ddl inc start log", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
   } else {
     SyncTabletFreezeHelper sync_tablet_freeze(
         ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    return sync_tablet_freeze();
+    if (OB_FAIL(sync_tablet_freeze())) {
+      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    } else {
+      FLOG_INFO("replay ddl inc start log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    }
   }
 
   return ret;
@@ -1096,10 +1101,15 @@ int ObDDLIncCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     }
   } else if (!need_replay) {
     // do nothing
+    FLOG_INFO("no need to replay ddl inc commit log", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
   } else {
     SyncTabletFreezeHelper sync_tablet_freeze(
         ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    return sync_tablet_freeze();
+    if (OB_FAIL(sync_tablet_freeze())) {
+      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    } else {
+      FLOG_INFO("replay ddl inc commit log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    }
   }
   return ret;
 }

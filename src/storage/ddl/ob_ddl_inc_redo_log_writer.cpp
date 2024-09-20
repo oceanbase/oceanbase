@@ -146,8 +146,6 @@ int ObDDLIncRedoLogWriter::write_inc_start_log(
     LOG_WARN("fail to init DDLIncStartLog", K(ret), K(log_basic));
   } else if (OB_FAIL(local_write_inc_start_log(log, tx_desc, start_scn))) {
     LOG_WARN("local write inc start log fail", K(ret));
-  } else {
-    LOG_INFO("local write inc start log success", K(tablet_id_), K(lob_meta_tablet_id));
   }
 
   return ret;
@@ -206,15 +204,11 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
       } else {
         LOG_WARN("local write inc commit log fail", K(ret), K(tablet_id_));
       }
-    } else {
-      LOG_INFO("local write inc commit log success", K(tablet_id_), K(lob_meta_tablet_id));
     }
   }
   if (OB_SUCC(ret) && remote_write_) {
     if (OB_FAIL(retry_remote_write_inc_commit_log(lob_meta_tablet_id, tx_desc))) {
       LOG_WARN("remote write inc commit log fail", K(ret), K(tablet_id_));
-    } else {
-      LOG_INFO("remote write inc commit log success", K(tablet_id_), K(lob_meta_tablet_id), K(leader_addr_));
     }
   }
 
@@ -421,7 +415,7 @@ int ObDDLIncRedoLogWriter::local_write_inc_start_log(
   } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncStartClogCb, ObMemAttr(MTL_ID(), "DDL_IRLW")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(cb->init(log.get_log_basic()))) {
+  } else if (OB_FAIL(cb->init(ls_id_, log.get_log_basic()))) {
     LOG_WARN("failed to init cb", K(ret));
   } else if (OB_ISNULL(trans_ctx = ctx_guard.get_store_ctx().mvcc_acc_ctx_.tx_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
