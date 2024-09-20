@@ -1786,25 +1786,23 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     LOG_WARN("fail to push back index_snapshot_data_table_id_", K(ret));
   } else if (drop_index_arg.index_ids_.count() <= 0) {
     LOG_INFO("no table need to be drop, skip", K(ret)); // no table exist, skip drop
-  } else if (schema_guard.get_table_schema(tenant_id_, drop_index_arg.index_ids_.at(0), index_table_schema)) {
-    LOG_WARN("fail to get table schema", K(ret), K(drop_index_arg.index_ids_.at(0)));
-  } else if (OB_ISNULL(index_table_schema)) {
+  } else if (schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema)) {
+    LOG_WARN("fail to get table schema", K(ret), K(object_id_));
+  } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index schema is null", K(ret), KP(index_table_schema));
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_table_schema->get_database_id(), database_schema))) {
-    LOG_WARN("get database schema failed", KR(ret), K(index_table_schema->get_database_id()));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_table_schema->get_data_table_id(), data_table_schema))) {
-    LOG_WARN("get data table schema failed", KR(ret), K(index_table_schema->get_data_table_id()));
-  } else if (OB_UNLIKELY(nullptr == database_schema || nullptr == data_table_schema)) {
+    LOG_WARN("data_table_schema is null", K(ret), KP(data_table_schema));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("get database schema failed", KR(ret), K(data_table_schema->get_database_id()));
+  } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null schema", KR(ret), KP(database_schema), KP(data_table_schema));
+    LOG_WARN("database_schema is null", KR(ret), KP(database_schema));
   } else {
     int64_t ddl_rpc_timeout = 0;
     drop_index_arg.is_inner_          = true;
     drop_index_arg.tenant_id_         = tenant_id_;
     drop_index_arg.exec_tenant_id_    = tenant_id_;
     drop_index_arg.index_table_id_    = index_table_id;
-    drop_index_arg.index_name_        = index_table_schema->get_table_name();  // not in used
+    drop_index_arg.index_name_        = data_table_schema->get_table_name();  // not in used
     drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
     drop_index_arg.is_add_to_scheduler_ = true;
     drop_index_arg.task_id_           = task_id_; // parent task
@@ -1812,7 +1810,7 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     drop_index_arg.table_name_        = data_table_schema->get_table_name();
     drop_index_arg.database_name_     = database_schema->get_database_name_str();
     drop_index_arg.is_vec_inner_drop_ = true;  // if want to drop only one index, is_vec_inner_drop_ should be false, else should be true.
-    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
       LOG_WARN("ddl sim failure", KR(ret), K(tenant_id_), K(task_id_));
