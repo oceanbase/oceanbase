@@ -920,12 +920,10 @@ int ObCOSSTableV2::multi_get(
 
 int ObCOSSTableV2::fill_column_ckm_array(
   const ObStorageSchema &storage_schema,
-  ObIArray<int64_t> &column_checksums,
-  bool need_process_cs_replica) const
+  ObIArray<int64_t> &column_checksums) const
 {
   int ret = OB_SUCCESS;
-  // for cgs emtpy co table, only report rowkey cg/all cgs column checksum. but need report all columns for cs replica
-  if (is_cgs_empty_co_table() && !need_process_cs_replica) {
+  if (is_all_cg_base()) {
     ret = ObSSTable::fill_column_ckm_array(column_checksums);
   } else {
     const common::ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();
@@ -938,7 +936,8 @@ int ObCOSSTableV2::fill_column_ckm_array(
     }
 
     common::ObArray<ObSSTableWrapper> cg_tables;
-    if (FAILEDx(get_all_tables(cg_tables))) {
+    if (is_empty()) {
+    } else if (FAILEDx(get_all_tables(cg_tables))) {
       LOG_WARN("fail to get_all_tables", K(ret));
     } else {
       ObSSTableMetaHandle cg_table_meta_hdl;

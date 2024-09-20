@@ -250,7 +250,8 @@ public:
       const ObLSID &ls_id,
       const ObTablet &tablet,
       const int64_t retry_times,
-      const ObDagId& curr_dag_net_id);
+      const ObDagId& curr_dag_net_id,
+      int &schedule_ret);
   static int schedule_tablet_ddl_major_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);

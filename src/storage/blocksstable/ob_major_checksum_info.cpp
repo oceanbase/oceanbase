@@ -150,7 +150,7 @@ int ObMajorChecksumInfo::init_from_sstable(
     tmp_col_ckm_array.set_attr(ObMemAttr(MTL_ID(), "MajorCkmInfo"));
     if (sstable.is_co_sstable()) {
       const ObCOSSTableV2 &co_sstable = static_cast<const ObCOSSTableV2 &>(sstable);
-      if (OB_FAIL(co_sstable.fill_column_ckm_array(storage_schema, tmp_col_ckm_array, false /*need_process_cs_replica*/))) {
+      if (OB_FAIL(co_sstable.fill_column_ckm_array(storage_schema, tmp_col_ckm_array))) {
         LOG_WARN("fail to fill column checksum array", K(ret), KPC(this), K(sstable));
       }
     } else if (OB_FAIL(sstable.fill_column_ckm_array(tmp_col_ckm_array))) {

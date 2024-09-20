@@ -43,17 +43,21 @@ public:
   OB_INLINE bool is_progressing() const { return Status::PROGRESSING == status_; }
   OB_INLINE bool is_finished() const { return Status::FINISHED == status_; }
   OB_INLINE bool is_retry_exhausted() const { return retry_cnt_ >= MAX_RETRY_CNT; }
+  OB_INLINE bool is_eagain_exhausted() const { return eagain_cnt_ >= MAX_EAGAIN_CNT; }
   void set_progressing();
   OB_INLINE void set_finished() { status_ = Status::FINISHED; }
   OB_INLINE void set_retry_exhausted() { status_ = Status::RETRY_EXHAUSTED; }
   OB_INLINE void inc_retry_cnt() { retry_cnt_++; }
+  OB_INLINE void inc_eagain_cnt() { eagain_cnt_++; }
 public:
   const static int64_t MAX_RETRY_CNT = 3;
+  const static int64_t MAX_EAGAIN_CNT = 9; // allow at most 9 * OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD (20min) = 3h
 public:
   ObTabletID tablet_id_;
   share::ObDagId co_dag_net_id_;
   Status status_;
   int64_t retry_cnt_;
+  int64_t eagain_cnt_;
   bool is_inited_;
 };
 
@@ -107,13 +111,15 @@ public:
     READY_TO_CHECK    = 1,
     ALL_DETERMINISTIC = 2,
     WAIT_TIME_EXCEED  = 3,
-    MAX_NOT_SCHEDULE  = 4,
+    CONVERT_DISABLED  = 4,
+    MAX_NOT_SCHEDULE,
   };
 public:
   ObDataTabletsCheckCOConvertDag();
   virtual ~ObDataTabletsCheckCOConvertDag();
   virtual bool check_can_schedule() override;
   virtual int create_first_task() override;
+  virtual int report_result() override;
   int init(
       ObIHADagNetCtx *ha_dag_net_ctx,
       ObLS *ls);
@@ -129,7 +135,7 @@ public:
 #ifdef ERRSIM
   const static int64_t OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD = 30 * 1000 * 1000; /*30s*/
 #else
-  const static int64_t OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD = 10 * 60 * 1000 * 1000; /*10min*/
+  const static int64_t OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD = 20 * 60 * 1000 * 1000; /*20min*/
 #endif
 private:
   ObLS *ls_;

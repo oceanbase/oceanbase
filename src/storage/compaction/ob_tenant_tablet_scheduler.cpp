@@ -971,9 +971,10 @@ int ObTenantTabletScheduler::check_ready_for_major_merge(
         LOG_WARN("failed to get migration status", K(tmp_ret), KPC(ls));
       } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status) {
         ObDagId co_dag_net_id;
+        int schedule_ret = OB_SUCCESS;
         co_dag_net_id.init(GCTX.self_addr());
-        if (OB_TMP_FAIL(schedule_convert_co_merge_dag_net(ls_id, tablet, 0 /*retry_times*/, co_dag_net_id))) {
-          LOG_WARN("failed to schedule convert co merge for cs replica", K(tmp_ret), K(ls_id), K(tablet));
+        if (OB_TMP_FAIL(schedule_convert_co_merge_dag_net(ls_id, tablet, 0 /*retry_times*/, co_dag_net_id, schedule_ret))) {
+          LOG_WARN("failed to schedule convert co merge for cs replica", K(tmp_ret), K(ls_id), K(tablet), K(schedule_ret));
         }
       }
     }
@@ -1032,15 +1033,19 @@ int ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(
       const ObLSID &ls_id,
       const ObTablet &tablet,
       const int64_t retry_times,
-      const ObDagId& curr_dag_net_id)
+      const ObDagId& curr_dag_net_id,
+      int &schedule_ret)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  schedule_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(
                   ls_id, tablet, compaction::ObMergeType::CONVERT_CO_MAJOR_MERGE, tablet.get_last_major_snapshot_version(), EXEC_MODE_LOCAL, &curr_dag_net_id))) {
     if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
       ret = tmp_ret;
       LOG_WARN("failed to schedule co merge dag net for cs replica", K(ret), K(ls_id), "tablet_id", tablet.get_tablet_id());
+    } else {
+      schedule_ret = tmp_ret;
     }
   } else {
     LOG_INFO("[CS-Replica] schedule COMergeDagNet to convert row store to column store", K(retry_times), K(ls_id), "tablet_id", tablet.get_tablet_id(), K(curr_dag_net_id));
