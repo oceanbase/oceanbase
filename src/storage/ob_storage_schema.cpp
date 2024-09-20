@@ -1108,28 +1108,30 @@ int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocato
     const ObStorageColumnSchema &column = column_array_.at(i);
     uint16_t column_idx = UINT16_MAX;
     if (OB_UNLIKELY(!column.is_column_stored_in_sstable())) {
-    } else if (column.is_rowkey_column()) {
-      const uint32_t column_id = i + OB_APP_MIN_COLUMN_ID;
-      for (int16_t j = 0; j < rowkey_array_.count(); j++) {
-        if (rowkey_array_.at(j).column_idx_ == column_id) {
-          column_idx = j;
-          break;
-        }
-      }
-      if (OB_UNLIKELY(column_idx == UINT16_MAX)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "failed to find column idx in rowkey array", K(ret), K_(rowkey_array), K(column_id));
-      }
     } else {
-      column_idx = normal_column_start_idx++;
-    }
+      if (column.is_rowkey_column()) {
+        const uint32_t column_id = i + OB_APP_MIN_COLUMN_ID;
+        for (int16_t j = 0; j < rowkey_array_.count(); j++) {
+          if (rowkey_array_.at(j).column_idx_ == column_id) {
+            column_idx = j;
+            break;
+          }
+        }
+        if (OB_UNLIKELY(column_idx == UINT16_MAX)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "failed to find column idx in rowkey array", K(ret), K_(rowkey_array), K(column_id));
+        }
+      } else {
+        column_idx = normal_column_start_idx++;
+      }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(generate_single_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE, column_idx, allocator))) {
-      STORAGE_LOG(WARN, "failed to generate_single_column_group_schema", K(ret), K(i));
-    } else if (OB_FAIL(cg_schemas.push_back(column_group))) {
-      STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
-      column_group.destroy(allocator);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(generate_single_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE, column_idx, allocator))) {
+        STORAGE_LOG(WARN, "failed to generate_single_column_group_schema", K(ret), K(i));
+      } else if (OB_FAIL(cg_schemas.push_back(column_group))) {
+        STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
+        column_group.destroy(allocator);
+      }
     }
   }
 
