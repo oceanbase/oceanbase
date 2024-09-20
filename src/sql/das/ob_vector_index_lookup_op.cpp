@@ -77,6 +77,9 @@ int ObVectorIndexLookupOp::init(const ObDASBaseCtDef *table_lookup_ctdef,
                                             snapshot,
                                             scan_param))) {
       LOG_WARN("failed to init domain index lookup op", K(ret));
+    } else if (OB_ISNULL(doc_id_lookup_rtdef_) || OB_ISNULL(lookup_rtdef_)) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("lookup rtdef is nullptr", KP(doc_id_lookup_rtdef_), KP(lookup_rtdef_));
     } else {
       need_scan_aux_ = true;
       doc_id_lookup_ctdef_ = aux_lookup_ctdef->get_lookup_scan_ctdef();
@@ -92,6 +95,8 @@ int ObVectorIndexLookupOp::init(const ObDASBaseCtDef *table_lookup_ctdef,
       com_aux_vec_ctdef_ = vir_scan_ctdef->get_com_aux_tbl_ctdef();
       com_aux_vec_rtdef_ = vir_scan_rtdef->get_com_aux_tbl_rtdef();
       set_dim(vir_scan_ctdef->dim_);
+      doc_id_lookup_rtdef_->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
+      lookup_rtdef_->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
       if (DAS_OP_SORT == aux_lookup_ctdef->get_doc_id_scan_ctdef()->op_type_) {
         sort_ctdef_ = static_cast<const ObDASSortCtDef *>(aux_lookup_ctdef->get_doc_id_scan_ctdef());
         sort_rtdef_ = static_cast<ObDASSortRtDef *>(aux_lookup_rtdef->get_doc_id_scan_rtdef());
@@ -747,8 +752,13 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObLocalIndexLookupOp::reset_lookup_state())) {
         LOG_WARN("failed to reset look up status.", K(ret));
-      } else if (OB_FAIL(ObVectorIndexLookupOp::revert_iter_for_complete_data())) {
-        LOG_WARN("failed to revert vid rowkey iter.", K(ret));
+      }
+
+      // release iter for complete data, even OB_FAIL
+      int tmp_ret = revert_iter_for_complete_data();
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_WARN("failed to revert complete data iter.", K(ret));
+        ret = ret == OB_SUCCESS ? tmp_ret : ret;
       }
       break;
     }
@@ -1218,6 +1228,8 @@ int ObVectorIndexLookupOp::revert_iter()
     LOG_WARN("revert scan iterator failed", K(ret));
   } else if (OB_FAIL(tsc_service.revert_scan_iter(aux_lookup_iter_))) {
     LOG_WARN("revert index table scan iterator (opened by dasop) failed", K(ret));
+  } else if (OB_FAIL(revert_iter_for_complete_data())) {
+    LOG_WARN("failed to revert iter for complete data.", K(ret));
   } else {
     delta_buf_iter_ = nullptr;
     index_id_iter_ = nullptr;

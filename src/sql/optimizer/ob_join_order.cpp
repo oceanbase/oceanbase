@@ -896,7 +896,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(const OpParallelRul
     if (OpParallelRule::OP_TABLE_DOP == op_parallel_rule) {
       final_parallel = index_schema->get_dop();
     }
-    if (index_schema->is_spatial_index() && index_schema->get_partition_num() <  final_parallel) {
+    if ((index_schema->is_spatial_index() || index_schema->is_vec_index()) && index_schema->get_partition_num() <  final_parallel) {
       final_parallel = index_schema->get_partition_num();
     }
     if (final_parallel < ObGlobalHint::DEFAULT_PARALLEL) {
