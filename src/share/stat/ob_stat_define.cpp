@@ -33,7 +33,7 @@ void ObAnalyzeSampleInfo::set_rows(double row_num)
   sample_value_ = row_num;
 }
 
-bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
+bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type, bool is_online_stat)
 {
   bool ret = false;
   // currently, we only support the following type to collect histogram
@@ -53,9 +53,9 @@ bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
       type_class == ColumnTypeClass::ObBitTC ||
       type_class == ColumnTypeClass::ObEnumSetTC ||
       type_class == ColumnTypeClass::ObIntervalTC ||
-      (lib::is_mysql_mode() && type_class == ColumnTypeClass::ObTextTC) ||
       type_class == ColumnTypeClass::ObMySQLDateTC ||
-      type_class == ColumnTypeClass::ObMySQLDateTimeTC) {
+      type_class == ColumnTypeClass::ObMySQLDateTimeTC ||
+      (!is_online_stat && lib::is_mysql_mode() && type_class == ColumnTypeClass::ObTextTC)) {
     ret = true;
   }
   return ret;
@@ -277,6 +277,9 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   hist_sample_info_.sample_type_ = other.hist_sample_info_.sample_type_;
   hist_sample_info_.sample_value_ = other.hist_sample_info_.sample_value_;
   consumer_group_id_ = other.consumer_group_id_;
+  data_table_id_ = other.data_table_id_;
+  is_global_index_ = other.is_global_index_;
+  part_level_ = other.part_level_;
   if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {

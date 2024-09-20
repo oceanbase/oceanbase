@@ -303,7 +303,7 @@ int ObDirectLoadInsertTableContext::collect_obj(const ObDatumRow &datum_row)
           const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
           const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i + 1).get_cmp_func();
           ObOptOSGColumnStat *col_stat = sql_stat->get_col_stat_array().at(i);
-          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
           if (col_stat != nullptr && is_valid) {
             if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
               LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
@@ -316,7 +316,7 @@ int ObDirectLoadInsertTableContext::collect_obj(const ObDatumRow &datum_row)
           const ObColDesc &col_desc = param_.col_descs_->at(i);
           const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
           ObOptOSGColumnStat *col_stat = sql_stat->get_col_stat_array().at(i);
-          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
           if (col_stat != nullptr && is_valid) {
             if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
               LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
@@ -328,7 +328,7 @@ int ObDirectLoadInsertTableContext::collect_obj(const ObDatumRow &datum_row)
           const ObColDesc &col_desc = param_.col_descs_->at(i);
           const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
           ObOptOSGColumnStat *col_stat = sql_stat->get_col_stat_array().at(i);
-          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
           if (col_stat != nullptr && is_valid) {
             if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
               LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));

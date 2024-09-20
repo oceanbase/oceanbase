@@ -91,7 +91,15 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
     const ObColumnStatParam *col_param = &column_params.at(i);
     if (OB_FAIL(add_stat_item(ObStatAvgLen(col_param, src_col_stats.at(i))))) {
       LOG_WARN("failed to add statistic item", K(ret));
-    } else {/*do nothing*/}
+    } else if (!col_param->need_basic_stat()) {
+      // do nothing
+    } else if (OB_FAIL(add_stat_item(ObStatMaxValue(col_param, src_col_stats.at(i)))) ||
+               OB_FAIL(add_stat_item(ObStatMinValue(col_param, src_col_stats.at(i)))) ||
+               OB_FAIL(add_stat_item(ObStatNumNull(col_param, src_tab_stat, src_col_stats.at(i)))) ||
+               OB_FAIL(add_stat_item(ObStatNumDistinct(col_param, src_col_stats.at(i), param.need_approx_ndv_))) ||
+               OB_FAIL(add_stat_item(ObStatLlcBitmap(col_param, src_col_stats.at(i))))) {
+      LOG_WARN("failed to add statistic item", K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(add_stat_item(ObStatAvgRowLen(src_tab_stat, src_col_stats)))) {

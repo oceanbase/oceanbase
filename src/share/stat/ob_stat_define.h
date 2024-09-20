@@ -123,7 +123,8 @@ enum ColumnAttrFlag
   IS_INDEX_COL      = 1,
   IS_HIDDEN_COL     = 1 << 1,
   IS_UNIQUE_COL     = 1 << 2,
-  IS_NOT_NULL_COL   = 1 << 3
+  IS_NOT_NULL_COL   = 1 << 3,
+  IS_TEXT_COL       = 1 << 4
 };
 
 enum ColumnGatherFlag
@@ -403,10 +404,13 @@ struct ObColumnStatParam {
   inline void set_is_hidden_column() { column_attribute_ |= ColumnAttrFlag::IS_HIDDEN_COL; }
   inline void set_is_unique_column() { column_attribute_ |= ColumnAttrFlag::IS_UNIQUE_COL; }
   inline void set_is_not_null_column() { column_attribute_ |= ColumnAttrFlag::IS_NOT_NULL_COL; }
+  inline void set_is_text_column() { column_attribute_ |= ColumnAttrFlag::IS_TEXT_COL; }
   inline bool is_index_column() const { return column_attribute_ & ColumnAttrFlag::IS_INDEX_COL; }
   inline bool is_hidden_column() const { return column_attribute_ & ColumnAttrFlag::IS_HIDDEN_COL; }
   inline bool is_unique_column() const { return column_attribute_ & ColumnAttrFlag::IS_UNIQUE_COL; }
   inline bool is_not_null_column() const { return column_attribute_ & ColumnAttrFlag::IS_NOT_NULL_COL; }
+  inline bool is_text_column() const { return column_attribute_ & ColumnAttrFlag::IS_TEXT_COL; }
+  inline void unset_text_column() { column_attribute_ &= ~ColumnAttrFlag::IS_TEXT_COL; }
   inline void set_valid_opt_col() { gather_flag_ |= ColumnGatherFlag::VALID_OPT_COL; }
   inline void set_need_basic_stat() { gather_flag_ |= ColumnGatherFlag::NEED_BASIC_STAT; }
   inline void set_need_avg_len() { gather_flag_ |= ColumnGatherFlag::NEED_AVG_LEN; }
@@ -414,6 +418,7 @@ struct ObColumnStatParam {
   inline bool need_basic_stat() const { return gather_flag_ & ColumnGatherFlag::NEED_BASIC_STAT; }
   inline bool need_avg_len() const { return gather_flag_ & ColumnGatherFlag::NEED_AVG_LEN; }
   inline bool need_col_stat() const { return gather_flag_ != ColumnGatherFlag::NO_NEED_STAT; }
+  inline void unset_need_basic_stat() { gather_flag_ &= ~ColumnGatherFlag::NEED_BASIC_STAT; }
 
   ObString column_name_;
   uint64_t column_id_;
@@ -425,7 +430,7 @@ struct ObColumnStatParam {
   int64_t column_usage_flag_;
   int64_t gather_flag_;
 
-  static bool is_valid_opt_col_type(const ObObjType type);
+  static bool is_valid_opt_col_type(const ObObjType type, bool is_online_stat = false);
   static bool is_valid_avglen_type(const ObObjType type);
   static const int64_t DEFAULT_HISTOGRAM_BUCKET_NUM;
 
@@ -437,6 +442,33 @@ struct ObColumnStatParam {
                K_(column_attribute),
                K_(column_usage_flag),
                K_(gather_flag));
+};
+
+struct PrefixColumnPair {
+  PrefixColumnPair() : PrefixColumnPair(OB_INVALID_ID,
+                                        OB_INVALID_ID,
+                                        0) {}
+  PrefixColumnPair(uint64_t p, uint64_t r, int64_t l)
+    : prefix_column_id_(p), related_column_id_(r), prefix_length_(l) {}
+
+  PrefixColumnPair(const PrefixColumnPair &other) {
+    *this = other;
+  }
+
+  void operator = (const PrefixColumnPair &other) {
+    prefix_column_id_ = other.prefix_column_id_;
+    related_column_id_ = other.related_column_id_;
+    prefix_length_ = other.prefix_length_;
+    related_column_meta_ = other.related_column_meta_;
+  }
+
+  TO_STRING_KV(K(prefix_column_id_),
+               K(related_column_id_),
+               K(prefix_length_));
+  uint64_t prefix_column_id_;
+  uint64_t related_column_id_;
+  int64_t prefix_length_;
+  ObObjMeta related_column_meta_;
 };
 
 struct ObTableStatParam {
@@ -585,6 +617,7 @@ struct ObTableStatParam {
   int64_t min_iops_;
   int64_t max_iops_;
   int64_t weight_iops_;
+  ObSEArray<PrefixColumnPair, 4> prefix_column_pairs_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -636,7 +669,8 @@ struct ObTableStatParam {
                K(consumer_group_id_),
                K(min_iops_),
                K(max_iops_),
-               K(weight_iops_));
+               K(weight_iops_),
+               K(prefix_column_pairs_));
 };
 
 struct ObOptStatGatherParam {
@@ -667,7 +701,10 @@ struct ObOptStatGatherParam {
     async_gather_sample_size_(DEFAULT_ASYNC_SAMPLE_SIZE),
     async_full_table_size_(DEFAULT_ASYNC_FULL_TABLE_SIZE),
     hist_sample_info_(),
-    consumer_group_id_(0)
+    consumer_group_id_(0),
+    data_table_id_(OB_INVALID_ID),
+    is_global_index_(false),
+    part_level_(share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO)
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -698,6 +735,9 @@ struct ObOptStatGatherParam {
   int64_t async_full_table_size_;
   ObAnalyzeSampleInfo hist_sample_info_;
   int64_t consumer_group_id_;
+  uint64_t data_table_id_;
+  bool is_global_index_;
+  share::schema::ObPartitionLevel part_level_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -723,7 +763,9 @@ struct ObOptStatGatherParam {
                K(async_gather_sample_size_),
                K(async_full_table_size_),
                K(hist_sample_info_),
-               K(consumer_group_id_));
+               K(consumer_group_id_),
+               K(data_table_id_),
+               K(is_global_index_));
 };
 
 struct ObOptStat

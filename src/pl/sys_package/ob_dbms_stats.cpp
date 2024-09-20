@@ -36,6 +36,7 @@
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 
 namespace oceanbase
 {
@@ -330,6 +331,7 @@ int ObDbmsStats::gather_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   empty_method_opt.set_null();
   ObObjParam empty_cascade;
   empty_cascade.set_null();
+  ObSEArray<uint64_t, 1> dummy_column_ids;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
@@ -372,6 +374,8 @@ int ObDbmsStats::gather_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   } else if (!ind_stat_param.force_ &&
              OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, ind_stat_param))) {
     LOG_WARN("failed check stat locked", K(ret));
+  } else if (OB_FAIL(adjust_index_column_params(ctx, ind_stat_param, dummy_column_ids))) {
+    LOG_WARN("failed adjust index column params", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::gather_index_stats(ctx, ind_stat_param))) {
     LOG_WARN("failed to gather table stats", K(ret));
   } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), ind_stat_param))) {
@@ -389,6 +393,10 @@ int ObDbmsStats::gather_table_index_stats(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   int64_t start_time = ObTimeUtility::current_time();
+  ObSEArray<uint64_t, 4> no_deduce_column_ids;
+  if (OB_FAIL(get_no_deduce_basic_stats_column_ids(data_param, no_deduce_column_ids))) {
+    LOG_WARN("failed to get no deduce basic stats column ids", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < no_gather_index_ids.count(); ++i) {
     StatTable stat_table;
     stat_table.database_id_ = data_param.db_id_;
@@ -417,6 +425,7 @@ int ObDbmsStats::gather_table_index_stats(ObExecContext &ctx,
       index_param.part_stat_param_.assign_without_part_type(data_param.part_stat_param_);
       index_param.subpart_stat_param_.assign_without_part_type(data_param.subpart_stat_param_);
       index_param.data_table_name_ = data_param.tab_name_;
+      index_param.data_table_id_ = data_param.table_id_;
       if (index_param.force_ &&
           OB_FAIL(ObDbmsStatsLockUnlock::fill_stat_locked(ctx, index_param))) {
         LOG_WARN("failed fill stat locked", K(ret));
@@ -428,6 +437,8 @@ int ObDbmsStats::gather_table_index_stats(ObExecContext &ctx,
                                                                    data_param.duration_time_,
                                                                    index_param.duration_time_))) {
         LOG_WARN("failed to get valid duration time", K(ret));
+      } else if (OB_FAIL(adjust_index_column_params(ctx, index_param, no_deduce_column_ids))) {
+        LOG_WARN("failed to adjust index column params", K(ret));
       } else if (OB_FAIL(ObDbmsStatsExecutor::gather_index_stats(ctx, index_param))) {
         LOG_WARN("failed to gather table stats", K(ret));
       } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), index_param))) {
@@ -1466,9 +1477,9 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
 {
   int ret = OB_SUCCESS;
   UNUSED(result);
-  SMART_VAR(ObTableStatParam, global_param) {
+  SMART_VARS_2((ObTableStatParam, global_param),
+               (ObTableStatParam, stat_table_param)) {
     global_param.allocator_ = &ctx.get_allocator();
-    ObTableStatParam stat_table_param;
     stat_table_param.allocator_ = &ctx.get_allocator();
     const share::schema::ObTableSchema *table_schema = NULL;
     ObSEArray<uint64_t, 4> table_ids;
@@ -1835,9 +1846,9 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
 {
   int ret = OB_SUCCESS;
   UNUSED(result);
-  SMART_VAR(ObTableStatParam, global_param) {
+  SMART_VARS_2((ObTableStatParam, global_param),
+               (ObTableStatParam, stat_table_param)) {
     global_param.allocator_ = &ctx.get_allocator();
-    ObTableStatParam stat_table_param;
     stat_table_param.allocator_ = &ctx.get_allocator();
     const share::schema::ObTableSchema *table_schema = NULL;
     ObSEArray<uint64_t, 4> table_ids;
@@ -3487,6 +3498,8 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
                                         *table_schema,
                                         param.column_params_))) {
       LOG_WARN("failed to init column stat params", K(ret));
+    } else if (OB_FAIL(adjust_text_column_basic_stats(ctx, *table_schema, param))) {
+      LOG_WARN("failed to adjust text column basic stats", K(ret));
     }
   }
   return ret;
@@ -3519,6 +3532,8 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
                                              *table_schema,
                                              param.column_params_))) {
     LOG_WARN("failed to init column stat params", K(ret));
+  } else if (OB_FAIL(adjust_text_column_basic_stats(ctx, *table_schema, param))) {
+    LOG_WARN("failed to adjust text column basic stats", K(ret));
   } else {
     param.table_id_ = table_schema->get_table_id();
     param.ref_table_type_ = table_schema->get_table_type();
@@ -3674,6 +3689,10 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       if (!col->is_nullable()) {
         col_param.set_is_not_null_column();
       }
+      if (lib::is_mysql_mode() &&
+          col->get_meta_type().get_type_class() == ColumnTypeClass::ObTextTC) {
+        col_param.set_is_text_column();
+      }
       if (OB_SUCC(ret) && OB_FAIL(column_params.push_back(col_param))) {
         LOG_WARN("failed to push back column param", K(ret));
       }
@@ -3737,7 +3756,7 @@ int ObDbmsStats::set_default_column_params(ObIArray<ObColumnStatParam> &column_p
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
     ObColumnStatParam &param = column_params.at(i);
-    if (param.is_valid_opt_col()) {
+    if (param.is_valid_opt_col() && !param.is_text_column()) {
       param.set_need_basic_stat();
       param.set_size_auto();
       param.column_usage_flag_ = 0;
@@ -4749,7 +4768,7 @@ int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
       ObColumnStatParam &col_param = column_params.at(i);
       if (!is_match_column_option(col_param, for_all_conf)) {
         // do nothing
-      } else if (!col_param.is_valid_opt_col()) {
+      } else if (!col_param.is_valid_opt_col() || col_param.is_text_column()) {
         // do nothing
       } else if (OB_FAIL(compute_bucket_num(column_params.at(i), size_conf))) {
         LOG_WARN("failed to compute histogram size", K(ret));
@@ -5613,6 +5632,7 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
           } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard,
                                                                    stat_param.tenant_id_,
                                                                    table_schemas.at(i)->get_table_id(),
+                                                                   false,
                                                                    is_valid))) {
             LOG_WARN("failed to check is stat table", K(ret));
           } else if (!is_valid) {
@@ -5770,7 +5790,7 @@ int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(schema_guard));
-  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard, tenant_id, table_id, is_valid))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard, tenant_id, table_id, false, is_valid))) {
     LOG_WARN("failed to check sy table validity", K(ret));
   } else if (!is_valid) {
     // only gather statistics for following tables:
@@ -7125,6 +7145,47 @@ int ObDbmsStats::async_gather_table_stats(sql::ObExecContext &ctx,
   }
   return ret;
 }
+int ObDbmsStats::adjust_index_column_params(ObExecContext &ctx,
+                                            ObTableStatParam &index_param,
+                                            ObIArray<uint64_t> &filter_column_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> function_column_ids;
+  for (int64_t i = 0; i < index_param.column_params_.count(); ++i) {
+    if (index_param.column_params_.at(i).is_hidden_column()) {
+      index_param.column_params_.at(i).set_need_basic_stat();
+      if (OB_FAIL(function_column_ids.push_back(index_param.column_params_.at(i).column_id_))) {
+        LOG_WARN("failed to push back column id", K(ret));
+      }
+    } else {
+      index_param.column_params_.at(i).unset_need_basic_stat();
+    }
+  }
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && !function_column_ids.empty()) {
+    if (OB_FAIL(ObDbmsStatsUtils::get_prefix_index_text_pairs(ctx.get_virtual_table_ctx().schema_guard_,
+                                                              index_param.tenant_id_,
+                                                              index_param.data_table_id_,
+                                                              function_column_ids,
+                                                              filter_column_ids,
+                                                              index_param.prefix_column_pairs_))) {
+      LOG_WARN("failed to get prefix index text pairs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStats::get_no_deduce_basic_stats_column_ids(const ObTableStatParam &param, ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < param.column_params_.count(); ++i) {
+    if (param.column_params_.at(i).need_basic_stat()) {
+      if (OB_FAIL(column_ids.push_back(param.column_params_.at(i).column_id_))) {
+        LOG_WARN("failed to push back column ids", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDbmsStats::do_async_gather_table_stats(sql::ObExecContext &ctx,
                                              const uint64_t tenant_id,
@@ -7141,7 +7202,7 @@ int ObDbmsStats::do_async_gather_table_stats(sql::ObExecContext &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(schema_guard));
   } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard, tenant_id,
-                                                           async_table.table_id_, is_valid))) {
+                                                           async_table.table_id_, false, is_valid))) {
     LOG_WARN("failed to check sy table validity", K(ret));
   } else if (!is_valid) {
     // only gather statistics for following tables:
@@ -7285,6 +7346,49 @@ int ObDbmsStats::adjust_async_gather_stat_option(ObExecContext &ctx,
     }
   }
   LOG_TRACE("succeed to adjust auto gather stat option", K(async_partition_ids), K(param));
+  return ret;
+}
+int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
+                                                const share::schema::ObTableSchema &schema,
+                                                ObTableStatParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<PrefixColumnPair, 4> pairs;
+  ObSEArray<int64_t, 4> text_column_ids;
+  ObSEArray<ObColumnStatParam*, 4> auto_columns;
+  for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
+    if (param.column_params_.at(i).is_text_column()) {
+      if (OB_FAIL(auto_columns.push_back(&param.column_params_.at(i)))) {
+        LOG_WARN("failed to push back auto text columns", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !auto_columns.empty()) {
+    if (OB_FAIL(ObDbmsStatsUtils::get_all_prefix_index_text_pairs(schema,
+                                                                  pairs))) {
+      LOG_WARN("failed to get all prefix index text pairs", K(ret));
+    } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, true, false))) {
+      LOG_WARN("failed to do flush database monitoring info", K(ret));
+    } else if (OB_FAIL(ObOptStatMonitorManager::get_column_usage_from_table(
+                       ctx, auto_columns, param.tenant_id_, param.table_id_))) {
+      LOG_WARN("failed to get column usage from table", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < pairs.count(); ++i) {
+        if (OB_FAIL(text_column_ids.push_back(pairs.at(i).related_column_id_))) {
+          LOG_WARN("failed to push back index", K(ret));
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) &&  i < auto_columns.count(); ++i) {
+      ObColumnStatParam *col_stat = auto_columns.at(i);
+      if (ObOptimizerUtil::find_item(text_column_ids,
+                                     col_stat->column_id_)) {
+        // do nothing
+      } else if (col_stat->column_usage_flag_ > 0) {
+        col_stat->unset_text_column();
+      }
+    }
+  }
   return ret;
 }
 
