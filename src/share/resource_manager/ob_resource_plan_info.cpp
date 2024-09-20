@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-
 #include "ob_resource_plan_info.h"
 
 using namespace oceanbase::common;
