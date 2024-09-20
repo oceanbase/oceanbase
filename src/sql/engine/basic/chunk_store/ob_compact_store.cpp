@@ -382,6 +382,7 @@ int ObCompactStore::init(const int64_t mem_limit,
 {
   int ret = OB_SUCCESS;
   inited_ = true;
+  ObTempBlockStore::set_inner_allocator_attr(ObMemAttr(tenant_id, "CompactStore"));
   OZ(row_meta_.init(col_array, row_extra_size));
   OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type, enable_trunc));
   OZ(block_reader_.init(this));
