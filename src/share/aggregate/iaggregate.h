@@ -277,22 +277,22 @@ public:
       VecValueTypeClass vec_tc = param_expr->get_vec_value_tc();
       switch(fmt) {
       case common::VEC_UNIFORM: {
-        ret = inner_add_for_multi_groups<ObUniformFormat<false>>(
+        ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, false>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_UNIFORM_CONST: {
-        ret = inner_add_for_multi_groups<ObUniformFormat<true>>(
+        ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, true>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_DISCRETE: {
-        ret = inner_add_for_multi_groups<ObDiscreteFormat>(
+        ret = inner_add_for_multi_groups<discrete_fmt<Derived::IN_TC>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_CONTINUOUS: {
-        ret = inner_add_for_multi_groups<ObContinuousFormat>(
+        ret = inner_add_for_multi_groups<continuous_fmt<Derived::IN_TC>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
@@ -459,6 +459,13 @@ protected:
       }
     }
     return ret;
+  }
+  template <>
+  int inner_add_for_multi_groups<ObVectorBase>(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
+                                               RowSelector &row_sel, const int64_t batch_size,
+                                               const int32_t agg_col_id, ObIVector *ivec)
+  {
+    return OB_NOT_IMPLEMENT;
   }
   template <typename ColumnFmt>
   int add_batch_rows(RuntimeContext &agg_ctx, const sql::ObBitVector &skip,

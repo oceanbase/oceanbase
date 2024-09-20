@@ -368,7 +368,5 @@ using fixed_cmp_initer = FixedExprCmpFuncIniter<
   && is_fixed_length_vec(static_cast<VecValueTypeClass>(X))
   && is_fixed_length_vec(static_cast<VecValueTypeClass>(Y))>;
 
-static int g_init_fixed_eval_vector_cmp_funcs = Ob2DArrayConstIniter<MAX_VEC_TC, MAX_VEC_TC, fixed_cmp_initer>::init();
-
 } // end common
 } // end oceanbase

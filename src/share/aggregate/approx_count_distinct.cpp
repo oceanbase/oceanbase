@@ -41,7 +41,6 @@ int init_approx_count_distinct_aggregate(RuntimeContext &agg_ctx, const int64_t 
   } break
 
 #define INIT_APP_CNT_DISTINCT_CASE(vec_tc) INIT_CASE(T_FUN_APPROX_COUNT_DISTINCT, vec_tc)
-#define INIT_APP_CNT_DIST_SYN_CASE(vec_tc) INIT_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, vec_tc)
 #define INIT_APP_CNT_DIST_MERGE_CASE(vec_tc) INIT_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE, vec_tc)
 
   int ret = OB_SUCCESS;
@@ -62,24 +61,21 @@ int init_approx_count_distinct_aggregate(RuntimeContext &agg_ctx, const int64_t 
     ObDatumMeta &param_meta = aggr_info.param_exprs_.at(0)->datum_meta_;
     VecValueTypeClass in_tc =
       get_vec_value_tc(param_meta.type_, param_meta.scale_, param_meta.precision_);
-    switch (in_tc) {
-      LST_DO_CODE(INIT_APP_CNT_DIST_MERGE_CASE, AGG_VEC_TC_LIST);
-    default: {
+    if (in_tc != VEC_TC_STRING) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "invalid param format", K(ret), K(in_tc));
-    }
-    }
-  } else if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == aggr_info.get_expr_type()) {
-    VecValueTypeClass vec_tc =
-      get_vec_value_tc(aggr_info.get_first_child_type(), aggr_info.get_first_child_datum_scale(),
-                       aggr_info.get_first_child_datum_precision());
-    switch (vec_tc) {
-      LST_DO_CODE(INIT_APP_CNT_DIST_SYN_CASE, AGG_VEC_TC_LIST);
+      LOG_WARN("invalid input type", K(in_tc), K(param_meta));
+    } else {
+      switch (in_tc) {
+        LST_DO_CODE(INIT_APP_CNT_DIST_MERGE_CASE, VEC_TC_STRING);
       default: {
         ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "invalid param format", K(ret), K(vec_tc));
+        SQL_LOG(WARN, "invalid param format", K(ret), K(in_tc));
+      }
       }
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid function type", K(ret), K(aggr_info.get_expr_type()), K(aggr_info));
   }
   return ret;
 }
