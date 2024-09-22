@@ -21,6 +21,8 @@
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/ob_des_exec_context.h"
 
 namespace oceanbase
 {
@@ -36,6 +38,7 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
     store_ctx_(nullptr),
     job_stat_(nullptr),
     session_info_(nullptr),
+    exec_ctx_(nullptr),
     allocator_("TLD_TableCtx"),
     ref_count_(0),
     is_assigned_resource_(false),
@@ -53,8 +56,29 @@ ObTableLoadTableCtx::~ObTableLoadTableCtx()
   destroy();
 }
 
+int ObTableLoadTableCtx::new_exec_ctx(const ObString &exec_ctx_serialized_str)
+{
+  int ret = OB_SUCCESS;
+  if (!exec_ctx_serialized_str.empty()) {
+    ObString tmp_str;
+    exec_ctx_ = OB_NEWx(ObDesExecContext, &allocator_, allocator_, GCTX.session_mgr_);
+    int64_t pos = 0;
+
+    if (exec_ctx_ == nullptr) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to deserialize exe ctx", KR(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, exec_ctx_serialized_str, tmp_str))) {
+      LOG_WARN("fail to copy string", KR(ret));
+    } else if (OB_FAIL(exec_ctx_->deserialize(tmp_str.ptr(), tmp_str.length(), pos))) {
+      LOG_WARN("fail to deserialize exec ctx", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param,
-                                                            sql::ObSQLSessionInfo *session_info)
+                                                            sql::ObSQLSessionInfo *session_info,
+                                                            const common::ObString &exec_ctx_serialized_str)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -79,10 +103,18 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
       LOG_WARN("fail to create session info", KR(ret));
     } else if (OB_FAIL(ObTableLoadUtils::deep_copy(*session_info, *session_info_, allocator_))) {
       LOG_WARN("fail to deep copy", KR(ret));
+    } else if (OB_FAIL(new_exec_ctx(exec_ctx_serialized_str))) {
+      LOG_WARN("fail to new exec ctx", KR(ret));
     } else {
       is_inited_ = true;
     }
   }
+  if (OB_SUCC(ret)) {
+    if (exec_ctx_ != nullptr && session_info_ != nullptr) {
+      ObSQLSessionInfo::ExecCtxSessionRegister(*session_info_, *exec_ctx_);
+    }
+  }
+
   return ret;
 }
 
@@ -248,6 +280,11 @@ void ObTableLoadTableCtx::destroy()
     store_ctx_->~ObTableLoadStoreCtx();
     allocator_.free(store_ctx_);
     store_ctx_ = nullptr;
+  }
+  if (nullptr != exec_ctx_) {
+    exec_ctx_->~ObDesExecContext();
+    allocator_.free(exec_ctx_);
+    exec_ctx_ = nullptr;
   }
   if (nullptr != session_info_) {
     observer::ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
