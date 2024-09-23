@@ -1692,10 +1692,10 @@ ObCollationType ObCharset::collation_type(const ObString &cs_name)
   int ret = OB_SUCCESS;
   static char utf8mb4_colname[50];
   ObString act_name(50, 0, utf8mb4_colname);
-  if (cs_name.prefix_match("utf8_")) {
+  if (cs_name.prefix_match_ci("utf8_")) {
     act_name.write("utf8mb4_", 8);
     act_name.write(cs_name.ptr() + 5, cs_name.length() - 5);
-  } else if (cs_name.prefix_match("utf8mb3_")) {
+  } else if (cs_name.prefix_match_ci("utf8mb3_")) {
     act_name.write("utf8mb4_", 8);
     act_name.write(cs_name.ptr() + 8, cs_name.length() - 8);
   } else {
