@@ -990,6 +990,7 @@ public:
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, common::ObString &val) const;
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, int64_t &val) const;
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, uint64_t &val) const;
+  int get_sys_variable(const share::ObSysVarClassType sys_var_id, bool &val) const;
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, share::ObBasicSysVar *&val) const;
   /// @note get system variables by id is prefered
   int get_sys_variable_by_name(const common::ObString &var, common::ObObj &val) const;

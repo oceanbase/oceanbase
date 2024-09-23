@@ -8428,17 +8428,43 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[605].default_value_ = "2" ;
-      ObSysVars[605].info_ = "Control the optimizer to generate a table access plan that prefers a specific storage format." ;
-      ObSysVars[605].name_ = "ob_table_access_policy" ;
+      ObSysVars[605].default_value_ = "10" ;
+      ObSysVars[605].info_ = "Indicate the limit on the number of ranges when optimizer use storage cardinality estimation" ;
+      ObSysVars[605].name_ = "range_index_dive_limit" ;
       ObSysVars[605].data_type_ = ObIntType ;
-      ObSysVars[605].enum_names_ = "[u'ROW_STORE', u'COLUMN_STORE', u'AUTO']" ;
-      ObSysVars[605].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[605].id_ = SYS_VAR_OB_TABLE_ACCESS_POLICY ;
+      ObSysVars[605].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[605].id_ = SYS_VAR_RANGE_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RANGE_INDEX_DIVE_LIMIT] = 605 ;
+      ObSysVars[605].base_value_ = "10" ;
+    ObSysVars[605].alias_ = "OB_SV_RANGE_INDEX_DIVE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[606].default_value_ = "10" ;
+      ObSysVars[606].info_ = "Indicate the limit on the number of partitions when optimizer use storage cardinality estimation" ;
+      ObSysVars[606].name_ = "partition_index_dive_limit" ;
+      ObSysVars[606].data_type_ = ObIntType ;
+      ObSysVars[606].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[606].id_ = SYS_VAR_PARTITION_INDEX_DIVE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARTITION_INDEX_DIVE_LIMIT] = 606 ;
+      ObSysVars[606].base_value_ = "10" ;
+    ObSysVars[606].alias_ = "OB_SV_PARTITION_INDEX_DIVE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[607].default_value_ = "2" ;
+      ObSysVars[607].info_ = "Control the optimizer to generate a table access plan that prefers a specific storage format." ;
+      ObSysVars[607].name_ = "ob_table_access_policy" ;
+      ObSysVars[607].data_type_ = ObIntType ;
+      ObSysVars[607].enum_names_ = "[u'ROW_STORE', u'COLUMN_STORE', u'AUTO']" ;
+      ObSysVars[607].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[607].id_ = SYS_VAR_OB_TABLE_ACCESS_POLICY ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TABLE_ACCESS_POLICY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TABLE_ACCESS_POLICY] = 605 ;
-      ObSysVars[605].base_value_ = "2" ;
-    ObSysVars[605].alias_ = "OB_SV_TABLE_ACCESS_POLICY" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TABLE_ACCESS_POLICY] = 607 ;
+      ObSysVars[607].base_value_ = "2" ;
+    ObSysVars[607].alias_ = "OB_SV_TABLE_ACCESS_POLICY" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -8447,7 +8473,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 606;
+static int64_t var_amount = 608;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
