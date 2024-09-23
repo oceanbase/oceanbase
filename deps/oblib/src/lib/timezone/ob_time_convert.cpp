@@ -341,9 +341,6 @@ int ObTimeConverter::int_to_mdatetime(int64_t int_part, int64_t dec_part,
   dec_part = (dec_part + 500) / 1000;
   if (0 == int_part) {
     value = MYSQL_ZERO_DATETIME;
-    if (0 != dec_part) {
-      ret = OB_INVALID_DATE_VALUE;
-    }
   } else {
     ObTime ob_time(DT_TYPE_MYSQL_DATETIME);
     if (OB_FAIL(int_to_ob_time_with_date(int_part, ob_time, date_sql_mode))) {
