@@ -1402,8 +1402,7 @@ int ObSelectIntoOp::into_outfile(ObIOBufferWriter *data_writer)
                                      select_exprs.at(i)->obj_meta_,
                                      select_exprs.at(i)->obj_datum_map_))) {
       LOG_WARN("failed to get obj from datum", K(ret));
-    } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())
-               || obj.is_null()) {
+    } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type()) || obj.is_null()) {
       OZ(print_field(obj, *data_writer));
     } else { // text tc
       OZ(print_lob_field(obj, *select_exprs.at(i), *datum, *data_writer));
@@ -1520,21 +1519,21 @@ int ObSelectIntoOp::into_odps_batch(const ObBatchRows &brs)
         if (brs.skip_->contain(i)) {
           // do nothing
         } else {
-          for (int64_t j = 0; OB_SUCC(ret) && j < select_exprs.count(); ++j) {
-            if (OB_ISNULL(datum = datum_vectors.at(j).at(i))) {
+          for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < select_exprs.count(); ++col_idx) {
+            if (OB_ISNULL(datum = datum_vectors.at(col_idx).at(i))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("datum is unexpected null", K(ret));
             } else if (lib::is_mysql_mode()
                        && OB_FAIL(set_odps_column_value_mysql(*table_record, *datum,
-                                                              select_exprs.at(j)->datum_meta_,
-                                                              select_exprs.at(j)->obj_meta_,
-                                                              j))) {
+                                                              select_exprs.at(col_idx)->datum_meta_,
+                                                              select_exprs.at(col_idx)->obj_meta_,
+                                                              col_idx))) {
               LOG_WARN("failed to set odps column value", K(ret));
             } else if (lib::is_oracle_mode()
                        && OB_FAIL(set_odps_column_value_oracle(*table_record, *datum,
-                                                               select_exprs.at(j)->datum_meta_,
-                                                               select_exprs.at(j)->obj_meta_,
-                                                               j))) {
+                                                               select_exprs.at(col_idx)->datum_meta_,
+                                                               select_exprs.at(col_idx)->obj_meta_,
+                                                               col_idx))) {
               LOG_WARN("failed to set odps column value", K(ret));
             }
           }
@@ -2152,22 +2151,21 @@ int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs, ObIOBufferWriter 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < select_exprs.count(); ++j) {
-        if (OB_ISNULL(datum = datum_vectors.at(j).at(i))) {
+      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < select_exprs.count(); ++col_idx) {
+        if (OB_ISNULL(datum = datum_vectors.at(col_idx).at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("datum is unexpected null", K(ret));
         } else if (OB_FAIL(datum->to_obj(obj,
-                                         select_exprs.at(j)->obj_meta_,
-                                         select_exprs.at(j)->obj_datum_map_))) {
+                                         select_exprs.at(col_idx)->obj_meta_,
+                                         select_exprs.at(col_idx)->obj_datum_map_))) {
           LOG_WARN("failed to get obj from datum", K(ret));
-        } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())
-                   || obj.is_null()) {
+        } else if (!ob_is_text_tc(select_exprs.at(col_idx)->obj_meta_.get_type()) || obj.is_null()) {
           OZ(print_field(obj, *data_writer));
         } else { // text tc
-          OZ(print_lob_field(obj, *select_exprs.at(j), *datum, *data_writer));
+          OZ(print_lob_field(obj, *select_exprs.at(col_idx), *datum, *data_writer));
         }
         // print field terminator
-        if (OB_SUCC(ret) && j != select_exprs.count() - 1) {
+        if (OB_SUCC(ret) && col_idx != select_exprs.count() - 1) {
           OZ(write_obj_to_file(MY_SPEC.field_str_, *data_writer));
         }
       }
