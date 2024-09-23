@@ -434,7 +434,8 @@ int ZRangeByScore::init(const common::ObIArray<common::ObString> &args, ObString
           RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::INTEGER_ERR);
           LOG_WARN("fail to get int from str", K(ret), K(limit_str));
         } else if (zrange_ctx_.limit_ < 0) {
-          // limit_ < 0 means not limit
+          // NOTE: It must be INT32_MAX, it can't be -1, because if it is -1, the offset parameter will not take
+          // effect.
           zrange_ctx_.limit_ = INT32_MAX;
         }
       }

@@ -84,6 +84,7 @@ public:
   static const char *NO_SUCH_KEY_ERR;
   static const char *OFFSET_OUT_RANGE_ERR;
   static const char *MSG_SIZE_OVERFLOW_ERR;
+  static const char *INF_ERR;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisErr);

@@ -554,19 +554,24 @@ public:
   OB_INLINE bool get_insertup_do_insert() { return is_insertup_do_insert_; }
   OB_INLINE bool get_is_insertup_do_put() { return is_insertup_do_put_; }
   OB_INLINE bool get_is_insertup_do_update() { return !is_insertup_do_put_ && !is_insertup_do_insert_; }
-
+  OB_INLINE const ObNewRow *get_insertup_old_row() {return insertup_old_row_;}
   void set_entity(ObITableEntity &entity) { entity_ = &entity; }
   void set_entity(ObITableEntity *entity) { entity_ = entity; }
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
   void set_insertup_do_insert(bool do_insert) { is_insertup_do_insert_ = do_insert;}
   void set_insertup_do_put(bool do_put) { is_insertup_do_put_ = do_put;}
+  void set_insertup_old_row(const ObNewRow *insertup_old_row)
+  {
+    insertup_old_row_ = insertup_old_row;
+  }
 
   int deep_copy(common::ObIAllocator &allocator, ObITableEntityFactory &entity_factory, const ObTableOperationResult &other);
   DECLARE_TO_STRING;
 private:
   ObTableOperationType::Type operation_type_;
   ObITableEntity *entity_;
+  const ObNewRow *insertup_old_row_;
   int64_t affected_rows_;
   // for client compatibility, not serialize flags_ currently
   union {

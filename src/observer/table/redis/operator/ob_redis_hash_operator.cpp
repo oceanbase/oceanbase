@@ -529,7 +529,7 @@ int HashCommandOperator::do_hincrby(int64_t db, const ObString &key, const ObStr
         RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::HASH_VALUE_ERR);
         LOG_WARN("value is not an integer or out of range", K(ret), K(value));
       } else if (is_incr_out_of_range(old_val, increment)) {
-        RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::HASH_VALUE_ERR);
+        RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::INCR_OVERFLOW);
         LOG_WARN("increment or decrement would overflow", K(ret), K(old_val), K(increment));
       } else {
         new_val += old_val;

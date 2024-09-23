@@ -62,7 +62,10 @@ int BitCount::init(const common::ObIArray<common::ObString> &args, ObString& fmt
     LOG_WARN("fail to get key", K(ret));
   } else if (idx < args_count) {
     start_ = args.at(idx++);
-    if (idx < args_count) {
+    if (idx == args_count) {
+      RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
+      LOG_WARN("invalid cmd args count", K(ret), K(args));
+    } else if (idx < args_count) {
       end_ = args.at(idx++);
       if (idx != args_count) {
         RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
@@ -176,7 +179,7 @@ int GetRange::apply(ObRedisSingleCtx &redis_ctx)
   return ret;
 }
 
-int IncrByFloat::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
+int IncrByFloat::init(const common::ObIArray<common::ObString> &args, ObString &fmt_err_msg)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_common(args))) {
@@ -184,6 +187,9 @@ int IncrByFloat::init(const common::ObIArray<common::ObString> &args, ObString& 
     LOG_WARN("fail to init IncrByFloat", K(ret));
   } else if (OB_FAIL(args.at(1, incr_))) {
     LOG_WARN("fail to get value", K(ret));
+  } else if (incr_ == ObString("inf") || incr_ == ObString("-inf") || incr_ == ObString("+inf")) {
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::INF_ERR);
+    LOG_WARN("fail to init IncrByFloat", K(ret), K(args));
   } else {
     is_inited_ = true;
   }

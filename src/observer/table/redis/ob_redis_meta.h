@@ -89,7 +89,7 @@ public:
     return insert_ts_;
   }
 
-  virtual OB_INLINE bool get_is_exists() const
+  virtual OB_INLINE bool is_exists() const
   {
     return is_exists_;
   }

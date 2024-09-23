@@ -26,7 +26,7 @@ const char *ObRedisErr::INCR_OVERFLOW = "-ERR increment or decrement would overf
 const char *ObRedisErr::INTEGER_OUT_RANGE_ERR = "-ERR index out of range\r\n";
 const char *ObRedisErr::BIT_INTEGER_ERR = "-ERR bit is not an integer or out of range\r\n";
 const char *ObRedisErr::BIT_OFFSET_INTEGER_ERR = "-ERR bit offset is not an integer or out of range\r\n";
-const char *ObRedisErr::MAXIMUM_ERR = "-ERR string exceeds maximum allowed size\r\n";
+const char *ObRedisErr::MAXIMUM_ERR = "-ERR string exceeds maximum allowed size (1M)\r\n";
 const char *ObRedisErr::WRONG_ARGS_ERR = "-ERR wrong number of arguments for %s\r\n";
 const char *ObRedisErr::EXPIRE_TIME_CMD_ERR = "-ERR invalid expire time in %s\r\n";
 const char *ObRedisErr::INCR_OVERLOAD = "-ERR increment or decrement would overflow\r\n";
@@ -37,6 +37,7 @@ const char *ObRedisErr::INDEX_OVERFLOW_ERR = "-ERR index overflow\r\n";
 const char *ObRedisErr::NO_SUCH_KEY_ERR = "-ERR no such key\r\n";
 const char *ObRedisErr::OFFSET_OUT_RANGE_ERR = "-ERR offset is out of range\r\n";
 const char *ObRedisErr::MSG_SIZE_OVERFLOW_ERR = "-ERR err_msg overflow\r\n";
+const char *ObRedisErr::INF_ERR = "-ERR increment would produce NaN or Infinity\r\n";
 
 void ObRedisErr::response_err_msg(
     int &res_ret,

@@ -144,7 +144,7 @@ public:
   int do_group_complex_type_set();
 
 protected:
-  int build_range(const common::ObRowkey &start_key,\
+  int build_range(const common::ObRowkey &start_key,
                   const common::ObRowkey &end_key,
                   ObNewRange *&range,
                   bool inclusive_start = true,
@@ -212,7 +212,7 @@ protected:
                                     ObRedisMeta *meta_info = nullptr);
   int get_tablet_id_by_rowkey(ObTableCtx &tb_ctx, const ObRowkey &rowkey, ObTabletID &tablet_id);
   int init_tablet_ids_by_ops(const ObIArray<ObITableOp *> &ops, ObArray<ObTabletID> *&tablet_ids);
-
+  int is_row_expire(const ObNewRow *old_row, const ObRedisMeta *meta, bool &is_old_row_expire);
   // for batch
   int reply_batch_res(const ResultFixedArray &batch_res);
   // for group service

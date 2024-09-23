@@ -161,12 +161,8 @@ int ObRedisSetMeta::build_meta_rowkey(int64_t db, const ObString &key, ObRedisCt
 int ObRedisZSetMeta::put_meta_into_entity(ObIAllocator &allocator, ObITableEntity &meta_entity) const
 {
   int ret = OB_SUCCESS;
-  ObObj score;
-  score.set_double(-DBL_MAX);
   if (OB_FAIL(ObRedisMeta::put_meta_into_entity(allocator, meta_entity))) {
     LOG_WARN("fail to put meta into entity", K(ret));
-  } else if (OB_FAIL(meta_entity.set_property(ObRedisUtil::SCORE_PROPERTY_NAME, score))) {
-    LOG_WARN("fail to set score property", K(ret), K(score));
   }
   return ret;
 }

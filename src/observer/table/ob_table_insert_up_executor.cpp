@@ -303,6 +303,7 @@ int ObTableApiInsertUpExecutor::do_insert_up_cache()
     upd_rtdef.found_rows_++;
     const ObChunkDatumStore::StoredRow *upd_new_row = insert_row_;
     const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
+    old_row_ = upd_old_row;
     if (OB_ISNULL(upd_old_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("upd_old_row is NULL", K(ret));
@@ -552,6 +553,36 @@ int ObTableApiInsertUpExecutor::close()
   }
 
   return (OB_SUCCESS == ret) ? close_ret : ret;
+}
+
+int ObTableApiInsertUpExecutor::get_old_row(const ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t column_nums = tb_ctx_.get_column_info_array().count();
+  ObNewRow *tmp_row = nullptr;
+  char *row_buf = nullptr;
+  ObObj *cells = nullptr;
+  if (OB_ISNULL(old_row_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old_row_ is null", K(ret));
+  } else if (OB_ISNULL(row_buf = static_cast<char *>(tb_ctx_.get_allocator().alloc(sizeof(ObNewRow))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc ObNewRow buffer", K(ret));
+  } else if (OB_ISNULL(cells = static_cast<ObObj *>(tb_ctx_.get_allocator().alloc(sizeof(ObObj) * column_nums)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc cells buffer", K(ret), K(column_nums));
+  } else {
+    tmp_row = new (row_buf) ObNewRow(cells, column_nums);
+    for (int64_t i = 0; i < column_nums; ++i) {
+      old_row_->cells()[i].to_obj(cells[i], conflict_checker_.checker_ctdef_.table_column_exprs_[i]->obj_meta_);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    row = tmp_row;
+  }
+
+  return ret;
 }
 
 }  // namespace table

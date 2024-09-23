@@ -1244,6 +1244,19 @@ int CommandOperator::get_group_metas(ObIAllocator &allocator,
   return ret;
 }
 
+int CommandOperator::is_row_expire(const ObNewRow *old_row, const ObRedisMeta *meta, bool &is_old_row_expire)
+{
+  int ret = OB_SUCCESS;
+  ObObj inset_ts_obj = old_row->get_cell(ObRedisUtil::COL_IDX_INSERT_TS);
+  int64_t insert_ts = 0;
+  if (OB_FAIL(inset_ts_obj.get_timestamp(insert_ts))) {
+    LOG_WARN("fail to get insert_ts", K(ret), K(inset_ts_obj));
+  } else if (insert_ts < meta->get_insert_ts()) {
+    is_old_row_expire = true;
+  }
+  return ret;
+}
+
 int CommandOperator::do_group_complex_type_set()
 {
   int ret = OB_SUCCESS;
@@ -1277,7 +1290,7 @@ int CommandOperator::do_group_complex_type_set()
       LOG_WARN("invalid null meta", K(ret), K(i));
     } else if (OB_FAIL(op->get_key(key))) {
       LOG_WARN("fail to get key", K(ret));
-    } else if (!meta->get_is_exists()) {
+    } else if (!meta->is_exists()) {
       ObITableEntity *meta_entity = nullptr;
       if (OB_FAIL(meta->build_meta_rowkey(op->db(), key, redis_ctx_, meta_entity))) {
         LOG_WARN("fail to gen entity with rowkey", K(ret), KPC(meta), K(op->db()), K(key));
@@ -1310,15 +1323,30 @@ int CommandOperator::do_group_complex_type_set()
     int64_t insert_num = 0;
     ObTableBatchOperationResult &batch_result = result.get_results().at(i);
     ObRedisMeta *meta = metas.at(i);
-    bool had_meta_insert = !meta->get_is_exists();
-    int64_t j = had_meta_insert ? 1 : 0; // we only record data row insert num
-    for (; j < batch_result.count(); j++) { // loop batch result
-      if (!batch_result.at(j).get_is_insertup_do_update()) {
-        ++insert_num;
+    if (meta->is_exists()) {
+      for (int64_t j = 0; j < batch_result.count(); j++) {  // loop batch result
+        if (!batch_result.at(j).get_is_insertup_do_update()) {
+          ++insert_num;
+        } else {
+          bool is_old_row_expire = false;
+          const ObNewRow *old_row = batch_result.at(j).get_insertup_old_row();
+          if (OB_ISNULL(old_row)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null old row", K(ret), KPC(old_row));
+          } else if (OB_FAIL(is_row_expire(old_row, meta, is_old_row_expire))) {
+            LOG_WARN("fail to check row is expired", K(ret), KPC(old_row));
+          } else if (is_old_row_expire) {
+            ++insert_num;
+          }
+        }
       }
+    } else {
+      insert_num = batch_result.count() - 1;
     }
-    ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
-    if (OB_FAIL(op->response().set_res_int(insert_num))) {
+
+    ObRedisOp *op = reinterpret_cast<ObRedisOp *>(group_ctx.ops().at(i));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(op->response().set_res_int(insert_num))) {
       LOG_WARN("fail to set reponse", K(ret), K(insert_num));
     }
   }

@@ -76,6 +76,14 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
     } else {
       op_result.set_insertup_do_insert(!static_cast<ObTableApiInsertUpExecutor*>(executor)->is_insert_duplicated());
       op_result.set_insertup_do_put(static_cast<ObTableApiInsertUpExecutor*>(executor)->is_use_put());
+      if (tb_ctx.is_redis_ttl_table() && op_result.get_is_insertup_do_update()) {
+        const ObNewRow *old_row = nullptr;
+        if (OB_FAIL(static_cast<ObTableApiInsertUpExecutor*>(executor)->get_old_row(old_row))) {
+          LOG_WARN("fail to get old row", K(ret));
+        } else {
+          op_result.set_insertup_old_row(old_row);
+        }
+      }
     }
   }
   spec->destroy_executor(executor);

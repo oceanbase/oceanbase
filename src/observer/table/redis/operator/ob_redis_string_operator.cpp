@@ -261,7 +261,7 @@ int StringCommandOperator::do_set_bit(int64_t db, const ObString &key, int32_t o
       LOG_WARN("fail to alloc empty value", K(ret));
     } else {
       MEMSET(empty_value, 0, len);
-      MEMCPY(old_value.ptr(), empty_value, old_value.length());
+      MEMCPY(empty_value, old_value.ptr(), old_value.length());
       old_value = ObString(len, empty_value);
     }
   }
