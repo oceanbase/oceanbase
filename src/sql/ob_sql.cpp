@@ -1475,9 +1475,13 @@ int ObSql::handle_pl_prepare(const ObString &sql,
   if (OB_SUCC(ret)) {
     ObIAllocator &allocator = *pl_prepare_result.get_allocator();
     ObParser parser(allocator, sess.get_sql_mode(), sess.get_charsets4parser());
+    bool is_for_trigger = false;
+    if (NULL != pl_prepare_ctx.secondary_ns_) {
+      is_for_trigger = ObTriggerInfo::is_trigger_package_id(pl_prepare_ctx.secondary_ns_->get_package_id());
+    }
     ParseMode parse_mode = pl_prepare_ctx.is_dbms_sql_ ? DBMS_SQL_MODE :
                           pl_prepare_ctx.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
-                          sess.is_for_trigger_package() ? TRIGGER_MODE : STD_MODE;
+                          is_for_trigger ? TRIGGER_MODE : STD_MODE;
 
     context.is_dynamic_sql_ = pl_prepare_ctx.is_dynamic_sql_;
     context.is_dbms_sql_ = pl_prepare_ctx.is_dbms_sql_;

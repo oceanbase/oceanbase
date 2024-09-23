@@ -2294,11 +2294,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(sql), K(ret));
   } else {
-    bool is_dbms_sql = false;
-    if (NULL != session.get_cur_exec_ctx() && NULL != session.get_cur_exec_ctx()->get_sql_ctx()) {
-      is_dbms_sql =session.get_cur_exec_ctx()->get_sql_ctx()->is_dbms_sql_;
-    }
-    PLPrepareCtx pl_prepare_ctx(session, secondary_namespace, false, is_dbms_sql, is_cursor);
+    PLPrepareCtx pl_prepare_ctx(session, secondary_namespace, false, false, is_cursor);
     const int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
 
     SMART_VAR(PLPrepareResult, pl_prepare_result) {
