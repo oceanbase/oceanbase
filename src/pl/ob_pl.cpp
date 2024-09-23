@@ -1600,15 +1600,16 @@ int ObPL::execute(ObExecContext &ctx,
       for (int64_t i = 0; OB_SUCC(ret) && i < routine.get_arg_count(); ++i) {
         if (routine.get_out_args().has_member(i)) {
           if (pl.get_params().at(i).is_pl_extend()) {
-            if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+            if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
+                && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
               OX (params->at(i) = pl.get_params().at(i));
-            } else if (pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
-              params->at(i) = pl.get_params().at(i);
               params->at(i).set_int(0);
               OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
+            } else {
+              OX (params->at(i) = pl.get_params().at(i));
             }
           } else {
             OZ (deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
@@ -1624,15 +1625,16 @@ int ObPL::execute(ObExecContext &ctx,
         CK (params->count() <= pl.get_params().count());
         for (int i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
           if (pl.get_params().at(i).is_pl_extend()) {
-            if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+            if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
+                && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
               OX (params->at(i) = pl.get_params().at(i));
-            } else if (pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
-              params->at(i) = pl.get_params().at(i);
               params->at(i).set_int(0);
               OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                     pl.get_params().at(i),
                                                     ctx.get_my_session());
+            } else {
+              OX (params->at(i) = pl.get_params().at(i));
             }
           } else {
             OZ (deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
