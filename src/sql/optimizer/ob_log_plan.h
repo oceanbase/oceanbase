@@ -319,6 +319,7 @@ public:
   int replace_pwj_constraints(ObIArray<ObPwjConstraint *> &constraints,
                               const int64_t from,
                               const int64_t to) const;
+  int remove_duplicate_constraints();
   int sort_pwj_constraint(ObLocationConstraintContext &location_constraint) const;
   int resolve_dup_tab_constraint(ObLocationConstraintContext &location_constraint) const;
 
