@@ -429,6 +429,7 @@ int ObDbmsStatsExecutor::split_derive_part_stats_by_subpart_stats(ObExecContext 
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("SplitDeriveStat", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
+  ObArenaAllocator tmp_allocator("SplitDeriveStat", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
   if (OB_UNLIKELY(!param.part_stat_param_.can_use_approx_ ||
                   !param.subpart_stat_param_.need_modify_ ||
                    param.part_level_ != share::schema::PARTITION_LEVEL_TWO ||
@@ -473,11 +474,19 @@ int ObDbmsStatsExecutor::split_derive_part_stats_by_subpart_stats(ObExecContext 
           }
         } else {
           int64_t idx_col = 0;
-          ObOptTableStat part_Stat;
-          ObSEArray<ObOptTableStat *, 1> all_tstats;
-          if (OB_FAIL(all_tstats.push_back(&part_Stat))) {
-            LOG_WARN("faile to push back", K(ret));
-          } else {
+          ObSEArray<ObOptTableStat *, 8> all_tstats;
+          for (int64_t i = 0; OB_SUCC(ret) && i < approx_part_infos.count(); ++i) {
+            ObOptTableStat *opt_stat = NULL;
+            void *p = NULL;
+            if (OB_ISNULL(p = tmp_allocator.alloc(sizeof(ObOptTableStat)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate opt table stat", K(ret));
+            } else if (OB_FALSE_IT(opt_stat = new(p) ObOptTableStat())) {
+            } else if (OB_FAIL(all_tstats.push_back(opt_stat))) {
+              LOG_WARN("faile to push back", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
             do {
               ObSEArray<ObColumnStatParam, 4> gather_column_params;
               for (int64_t i = 0; OB_SUCC(ret) && i < gather_helper.maximum_gather_col_cnt_ && idx_col < param.column_params_.count(); ++i) {
@@ -509,6 +518,12 @@ int ObDbmsStatsExecutor::split_derive_part_stats_by_subpart_stats(ObExecContext 
               }
             } while(OB_SUCC(ret) && idx_col < param.column_params_.count());
           }
+          for (int64_t i = 0; i < all_tstats.count(); ++i) {
+            if (NULL != all_tstats.at(i)) {
+              all_tstats.at(i)->~ObOptTableStat();
+            }
+          }
+          tmp_allocator.reuse();
         }
       }
       extra_ratio += split_extra_ratio;
