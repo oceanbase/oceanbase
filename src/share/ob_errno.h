@@ -1830,6 +1830,7 @@ constexpr int OB_ERR_EVENT_DATA_TOO_LONG = -9777;
 constexpr int OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST = -9778;
 constexpr int OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST = -9779;
 constexpr int OB_ERR_EVENT_RECURSION_FORBIDDEN = -9780;
+constexpr int OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR = -9781;
 constexpr int OB_ERR_INVALID_CHARACTER = -9782;
 constexpr int OB_ERR_CURSOR_ATTR_APPLY = -9784;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
@@ -1866,8 +1867,8 @@ constexpr int OB_CANNOT_USER_IF_EXISTS = -11012;
 constexpr int OB_ERR_ILLEGAL_USER_VAR = -11013;
 constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_ERR_PS_NO_RECURSION = -11016;
-constexpr int OB_EXCEED_QUERY_MEM_LIMIT = -11049;
 constexpr int OB_ERR_DDL_RESOURCE_NOT_ENOUGH = -11048;
+constexpr int OB_EXCEED_QUERY_MEM_LIMIT = -11049;
 constexpr int OB_ERR_INCORRECT_STRING_VALUE_FOR_INET = -11062;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
@@ -4081,6 +4082,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST__USER_ERROR_MSG "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation."
 #define OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST__USER_ERROR_MSG "Event execution time is in the past. The event was not changed. Specify a time in the future."
 #define OB_ERR_EVENT_RECURSION_FORBIDDEN__USER_ERROR_MSG "Recursion of EVENT DDL statements is forbidden when body is present"
+#define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__USER_ERROR_MSG "Table has no partition for value"
 #define OB_ERR_INVALID_CHARACTER__USER_ERROR_MSG "invalid character"
 #define OB_ERR_CURSOR_ATTR_APPLY__USER_ERROR_MSG "cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
@@ -4117,8 +4119,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__USER_ERROR_MSG "User variable name %.*s is illegal"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__USER_ERROR_MSG "Can't update table '%s' while '%s' is being created."
 #define OB_ERR_PS_NO_RECURSION__USER_ERROR_MSG "The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner"
-#define OB_EXCEED_QUERY_MEM_LIMIT__USER_ERROR_MSG "Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__USER_ERROR_MSG "The tenant DDL resource is not enough, please retry"
+#define OB_EXCEED_QUERY_MEM_LIMIT__USER_ERROR_MSG "Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_ERR_INCORRECT_STRING_VALUE_FOR_INET__USER_ERROR_MSG "Incorrect string value for function %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
@@ -6332,6 +6334,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9778, Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation."
 #define OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9779, Event execution time is in the past. The event was not changed. Specify a time in the future."
 #define OB_ERR_EVENT_RECURSION_FORBIDDEN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9780, Recursion of EVENT DDL statements is forbidden when body is present"
+#define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__ORA_USER_ERROR_MSG "ORA-14400: inserted partition key does not map to any partition"
 #define OB_ERR_INVALID_CHARACTER__ORA_USER_ERROR_MSG "ORA-00911: invalid character"
 #define OB_ERR_CURSOR_ATTR_APPLY__ORA_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
@@ -6368,8 +6371,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11013, User variable name %.*s is illegal"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11015, Can't update table '%s' while '%s' is being created."
 #define OB_ERR_PS_NO_RECURSION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11016, The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner"
-#define OB_EXCEED_QUERY_MEM_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11049, Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11048, The tenant DDL resource is not enough, please retry"
+#define OB_EXCEED_QUERY_MEM_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11049, Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_ERR_INCORRECT_STRING_VALUE_FOR_INET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11062, Incorrect string value for function %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -6381,7 +6384,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2245];
+extern int g_all_ob_errnos[2248];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

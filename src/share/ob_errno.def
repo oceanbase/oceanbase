@@ -2578,7 +2578,7 @@ DEFINE_ERROR_EXT(OB_ERR_EVENT_DATA_TOO_LONG, -9777, ER_EVENT_DATA_TOO_LONG, "HY0
 DEFINE_ERROR(OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST, -9778, ER_EVENT_CANNOT_CREATE_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation.");
 DEFINE_ERROR(OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST, -9779, ER_EVENT_CANNOT_ALTER_IN_THE_PAST, "HY000", "Event execution time is in the past. The event was not changed. Specify a time in the future.");
 DEFINE_ERROR(OB_ERR_EVENT_RECURSION_FORBIDDEN, -9780, ER_EVENT_RECURSION_FORBIDDEN, "HY000", "Recursion of EVENT DDL statements is forbidden when body is present");
-
+DEFINE_ORACLE_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, -9781, ER_NO_PARTITION_FOR_GIVEN_VALUE, "HY000", "Table has no partition for value", 14400, "inserted partition key does not map to any partition");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CHARACTER, -9782, -1, "HY000", "invalid character", 911, "invalid character");
 DEFINE_PLS_ERROR_EXT(OB_ERR_CURSOR_ATTR_APPLY, -9784, -1, "HY000", "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s", 324, "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s");
 
