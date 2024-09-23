@@ -53,7 +53,9 @@ int ObMySQLRow::serialize(char *buf, const int64_t len, int64_t &pos) const
       //      }
       //    } else
       if (OB_FAIL(encode_cell(cell_idx, buf, len, pos, bitmap))) {
-        LOG_WARN("failed to encode cell", K(ret), K(cell_idx), K(len), K(pos), K(bitmap));
+        if (OB_SIZE_OVERFLOW != ret) {
+          LOG_WARN("failed to encode cell", K(ret), K(cell_idx), K(len), K(pos), K(bitmap));
+        }
       }
     }
   } else {
