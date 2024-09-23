@@ -3573,6 +3573,7 @@ int ObAssocArrayType::deserialize(
   int64_t *sort = NULL;
   int64_t key_sort_cnt = 0;
   CK (OB_NOT_NULL(assoc_table));
+  CK (OB_NOT_NULL(assoc_table->get_allocator()));
   OZ (ObCollectionType::deserialize(resolve_ctx, allocator, src, src_len, src_pos, dst));
   if (OB_FAIL(ret)) {
     //do nothing
@@ -3582,13 +3583,17 @@ int ObAssocArrayType::deserialize(
     OZ (serialization::decode(src, src_len, src_pos, key_sort_cnt));
     if (OB_FAIL(ret)) {
     } else if (0 == key_sort_cnt) {
+      if (OB_NOT_NULL(assoc_table->get_key()) &&
+          OB_NOT_NULL(assoc_table->get_sort())) {
+        assoc_table->get_allocator()->free(assoc_table->get_key());
+        assoc_table->get_allocator()->free(assoc_table->get_sort());
+      }
       assoc_table->set_key(NULL);
       assoc_table->set_sort(NULL);
     } else {
       CK (key_sort_cnt == assoc_table->get_count());
       CK (OB_NOT_NULL(key = reinterpret_cast<char *>(assoc_table->get_key())));
       CK (OB_NOT_NULL(sort = assoc_table->get_sort()));
-      CK (OB_NOT_NULL(assoc_table->get_allocator()));
       for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
         OZ (index_type_.deserialize(
           resolve_ctx, *(assoc_table->get_allocator()), src, src_len, src_pos, key));
@@ -5315,6 +5320,12 @@ int ObPLAssocArray::deserialize(common::ObIAllocator &allocator,
   OZ (serialization::decode(buf, len, pos, key_sort_cnt));
   if (OB_FAIL(ret)) {
   } else if (0 == key_sort_cnt) {
+    if (OB_NOT_NULL(get_key()) &&
+        OB_NOT_NULL(get_sort()) &&
+        OB_NOT_NULL(get_allocator())) {
+      get_allocator()->free(get_key());
+      get_allocator()->free(get_sort());
+    }
     set_key(NULL);
     set_sort(NULL);
   } else {
