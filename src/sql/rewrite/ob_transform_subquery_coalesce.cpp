@@ -279,9 +279,7 @@ int ObTransformSubqueryCoalesce::check_query_ref_validity(ObRawExpr *expr,
     if (OB_ISNULL(sub_stmt = query_ref->get_ref_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ref is null", K(ret));
-    } else if (sub_stmt->is_spj() &&
-               sub_stmt->get_semi_infos().empty() &&
-               sub_stmt->get_subquery_exprs().empty()) {
+    } else if (sub_stmt->is_spj()) {
       is_valid = true;
     }
   }
@@ -382,7 +380,6 @@ int ObTransformSubqueryCoalesce::coalesce_same_exists_exprs(ObDMLStmt *stmt,
   }
   return ret;
 }
-
 int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(ObDMLStmt *stmt,
                                                              const ObItemType type,
                                                              ObIArray<ObRawExpr *> &filters,
@@ -441,7 +438,13 @@ int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(ObDMLStmt *stmt,
                                                                   map_info,
                                                                   relation,
                                                                   true))) {
-          LOG_WARN("failed to check stmt containment", K(ret));
+          LOG_WARN("failed to check stmt containment with same from_item size", K(ret));
+        } else if (QueryRelation::QUERY_UNCOMPARABLE == relation && 
+                    OB_FAIL(ObStmtComparer::check_select_stmt_ndv_containment(first_query_ref->get_ref_stmt(),
+                                                                              second_query_ref->get_ref_stmt(),
+                                                                              map_info,
+                                                                              relation))){
+          LOG_WARN("failed to check stmt containment with differnt from_item size", K(ret));  
         } else if (!map_info.is_select_item_equal_) {
           OPT_TRACE("stmts have different select items, can not coalesce");
         } else if (relation == QUERY_LEFT_SUBSET || relation == QUERY_EQUAL) {

@@ -505,7 +505,166 @@ int ObStmtComparer::is_same_from(const ObDMLStmt *first,
   }
   return ret;
 }
+int ObStmtComparer::check_select_stmt_ndv_containment(const ObDMLStmt *first,
+                                                      const ObDMLStmt *second,
+                                                      ObStmtMapInfo &map_info,
+                                                      QueryRelation &relation)
+{
+  int ret = OB_SUCCESS;
+  int64_t first_count = 0;
+  int64_t second_count = 0;
+  int64_t match_count = 0;
+  const ObSelectStmt *first_sel = NULL;
+  const ObSelectStmt *second_sel = NULL;
+  relation = QueryRelation::QUERY_UNCOMPARABLE;
+  if (OB_ISNULL(first) || OB_ISNULL(second)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(first), K(second), K(ret));
+  } else if (!first->is_select_stmt() || !second->is_select_stmt()) {
+    LOG_TRACE("can not compare dml stmt, not a select item", K(first->is_select_stmt()), K(second->is_select_stmt()));
+  } else if (FALSE_IT(first_sel = static_cast<const ObSelectStmt*>(first))) {
+    /*do nothing*/
+  } else if (FALSE_IT(second_sel = static_cast<const ObSelectStmt*>(second))) {
+    /*do nothing*/
+  } else if (!first_sel->is_spj() || !second_sel->is_spj()) {
+    LOG_TRACE("can not compare dml stmt, not a spj query");
+  } else {
+    // check from items
+    if (OB_FAIL(ObStmtComparer::compute_from_items_map(first_sel,
+                                                       second_sel,
+                                                       true,
+                                                       map_info,
+                                                       relation))) {
+      LOG_WARN("failed to compute from items map", K(ret));
+    } else {
+      // handle unmatched conditions
+      ObSEArray<int64_t, 4> first_unmatched_conds;
+      ObSEArray<int64_t, 4> second_unmatched_conds;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObStmtComparer::compute_unmatched_item(map_info.from_map_,
+                                                first_sel->get_from_item_size(),
+                                                second_sel->get_from_item_size(),
+                                                first_unmatched_conds,
+                                                second_unmatched_conds))) {
+        LOG_WARN("failed to compute unmatched conditions", K(ret));
+      } else if (first_unmatched_conds.count() == 0 && second_unmatched_conds.count() == 0) {
+        relation = QUERY_EQUAL;
+      } else if (second_unmatched_conds.count() == 0) {
+        relation = QUERY_LEFT_SUBSET;
+      } else if (first_unmatched_conds.count() == 0) {
+        relation = QUERY_RIGHT_SUBSET;
+      } else {
+        relation = QUERY_UNCOMPARABLE;
+      }
+      LOG_TRACE("succeed to check from item map", K(relation), K(map_info));
+    }
 
+    //check semi infos
+    if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
+      first_count = first_sel->get_semi_info_size();
+      second_count = second_sel->get_semi_info_size();
+      if (OB_FAIL(ObStmtComparer::compute_semi_infos_map(first_sel,
+                                        second_sel,
+                                        true,
+                                        map_info,
+                                        match_count))) { 
+        LOG_WARN("failed to compute semi info map", K(ret));
+      } else if (match_count == first_count && match_count == second_count) {
+        map_info.is_semi_info_equal_ = true;
+        LOG_TRACE("succeed to check semi info map", K(relation), K(map_info));
+      } else if (match_count == second_count){
+        if(QueryRelation::QUERY_EQUAL == relation ||
+            QueryRelation::QUERY_LEFT_SUBSET == relation) {
+          relation = QueryRelation::QUERY_LEFT_SUBSET;
+        } else {
+          relation = QueryRelation::QUERY_UNCOMPARABLE;
+        }
+        LOG_TRACE("succeed to check semi info map", K(relation), K(map_info));
+      } else if (match_count == first_count) {
+        if (QueryRelation::QUERY_EQUAL == relation ||
+              QueryRelation::QUERY_RIGHT_SUBSET == relation) {
+          relation = QueryRelation::QUERY_RIGHT_SUBSET;
+        } else {
+          relation = QueryRelation::QUERY_UNCOMPARABLE;
+        }
+        LOG_TRACE("succeed to check semi info map", K(relation), K(map_info));
+      } else {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check semi info map", K(relation), K(map_info));
+      }
+    }
+
+    // check condition exprs
+    if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
+      first_count = first_sel->get_condition_size();
+      second_count = second_sel->get_condition_size();
+      QueryRelation condition_relation;
+      if (OB_FAIL(ObStmtComparer::compute_conditions_map(first_sel,
+                                         second_sel,
+                                         first_sel->get_condition_exprs(),
+                                         second_sel->get_condition_exprs(),
+                                         map_info,
+                                         map_info.cond_map_,
+                                         condition_relation,
+                                         true,
+                                         false,
+                                         true))) {
+        LOG_WARN("failed to compute conditions map", K(ret));
+      } else if (QueryRelation::QUERY_EQUAL == condition_relation) {
+        map_info.is_cond_equal_ = true;
+        LOG_TRACE("succeed to check conditions map", K(relation), K(map_info));
+      } else if (QueryRelation::QUERY_LEFT_SUBSET == condition_relation){
+        if(QueryRelation::QUERY_EQUAL == relation ||
+            QueryRelation::QUERY_LEFT_SUBSET == relation) {
+          relation = QueryRelation::QUERY_LEFT_SUBSET;
+        } else {
+          relation = QueryRelation::QUERY_UNCOMPARABLE;
+        }
+        LOG_TRACE("succeed to check conditions map", K(relation), K(map_info));
+      } else if (QueryRelation::QUERY_RIGHT_SUBSET == condition_relation) {
+        if (QueryRelation::QUERY_EQUAL == relation || 
+              QueryRelation::QUERY_RIGHT_SUBSET == relation) {
+          relation = QueryRelation::QUERY_RIGHT_SUBSET;
+        } else {
+          relation = QueryRelation::QUERY_UNCOMPARABLE;
+        }
+        LOG_TRACE("succeed to check conditions map", K(relation), K(map_info));
+      } else {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check conditions map", K(relation), K(map_info));
+      }
+    }
+
+    // compute map for select items output
+    if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
+      ObSEArray<ObRawExpr*, 16> first_exprs;
+      ObSEArray<ObRawExpr*, 16> second_exprs;
+      QueryRelation select_relation;
+      if (OB_FAIL(first_sel->get_select_exprs(first_exprs))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      } else if (OB_FAIL(second_sel->get_select_exprs(second_exprs))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      } else if (OB_FAIL(ObStmtComparer::compute_conditions_map(first_sel,
+                                                second_sel,
+                                                first_exprs,
+                                                second_exprs,
+                                                map_info,
+                                                map_info.select_item_map_,
+                                                select_relation,
+                                                true,
+                                                true))) {
+        LOG_WARN("failed to compute output expr map", K(ret));
+      } else if (QueryRelation::QUERY_EQUAL == select_relation) {
+        map_info.is_select_item_equal_ = true;
+        LOG_TRACE("succeed to check select item map", K(relation), K(map_info));
+      } else {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check stmt containment", K(relation), K(map_info));
+      }
+    }
+  }
+  return ret;
+}
 int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
                                            const ObDMLStmt *second,
                                            ObStmtMapInfo &map_info,
