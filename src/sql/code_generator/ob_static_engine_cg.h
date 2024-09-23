@@ -571,8 +571,6 @@ private:
   int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
                            const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
 
-  int check_window_functions_order(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs);
-
   int prepare_runtime_filter_cmp_info(ObLogJoinFilter &join_filter_create, ObJoinFilterSpec &spec);
 
   template<bool USE_RICH_FORMAT>

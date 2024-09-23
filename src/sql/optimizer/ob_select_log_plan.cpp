@@ -5015,7 +5015,6 @@ int ObSelectLogPlan::init_win_func_helper_with_hint(const ObIArray<CandidatePlan
     win_func_helper.force_no_pushdown_ = !option.is_push_down_;
     win_func_helper.force_pushdown_ = option.is_push_down_;
     win_func_helper.wf_aggr_status_expr_ = NULL;
-    bool ordering_changed = false;
     ObSEArray<ObWinFunRawExpr*, 8> current_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < option.win_func_idxs_.count(); ++i) {
       const int64_t idx = option.win_func_idxs_.at(i);
@@ -5027,15 +5026,10 @@ int ObSelectLogPlan::init_win_func_helper_with_hint(const ObIArray<CandidatePlan
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sort_window_functions(win_func_helper.fd_item_set_,
-                                             win_func_helper.equal_sets_,
-                                             win_func_helper.const_exprs_,
-                                             current_exprs,
-                                             win_func_helper.ordered_win_func_exprs_,
-                                             ordering_changed))) {
-      LOG_WARN("adjust window functions failed", K(ret));
-    } else if (ordering_changed || current_exprs.empty()) {
+    } else if (current_exprs.empty()) {
       is_valid = false;
+    } else if (OB_FAIL(win_func_helper.ordered_win_func_exprs_.assign(current_exprs))) {
+      LOG_WARN("failed to assign win func exprs", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::remove_item(remaining_exprs, current_exprs))) {
       LOG_WARN("failed to remove items", K(ret));
     } else if (OB_FAIL(extract_window_function_partition_exprs(win_func_helper))) {
@@ -5061,6 +5055,9 @@ int ObSelectLogPlan::calc_win_func_helper_with_hint(const ObLogicalOperator *op,
                                                     bool &is_valid)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObWinFunRawExpr*, 8> temp_win_func;
+  ObSEArray<std::pair<int64_t, int64_t>, 8> temp_pby_oby_prefixes;
+  bool ordering_changed = false;
   is_valid = true;
   if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
@@ -5073,6 +5070,14 @@ int ObSelectLogPlan::calc_win_func_helper_with_hint(const ObLogicalOperator *op,
                                                   win_func_helper,
                                                   win_func_helper.pby_oby_prefixes_))) {
     LOG_WARN("failed to calc ndvs and pby oby prefix", K(ret));
+  } else if (OB_FAIL(sort_window_functions(win_func_helper.ordered_win_func_exprs_,
+                                           temp_win_func,
+                                           win_func_helper.pby_oby_prefixes_,
+                                           temp_pby_oby_prefixes,
+                                           ordering_changed))) {
+    LOG_WARN("failed to sort window functions", K(ret));
+  } else if (ordering_changed) {
+    is_valid = false;
   } else if (OB_FAIL(calc_partition_count(win_func_helper))) {
     LOG_WARN("failed to get partition count", K(ret));
   } else if (OB_ISNULL(win_func_helper.win_dist_hint_)) {
@@ -5354,6 +5359,7 @@ int ObSelectLogPlan::prepare_next_group_win_funcs(const bool distributed,
   int ret = OB_SUCCESS;
   bool ordering_changed = false;
   ObSEArray<ObWinFunRawExpr*, 8> current_exprs;
+  ObSEArray<std::pair<int64_t, int64_t>, 8> current_pby_oby_prefixes;
   ordered_win_func_exprs.reuse();
   pby_oby_prefixes.reuse();
   split.reuse();
@@ -5369,17 +5375,16 @@ int ObSelectLogPlan::prepare_next_group_win_funcs(const bool distributed,
                                                 remaining_exprs,
                                                 current_exprs))) {
     LOG_WARN("failed to get next window exprs", K(ret));
-  } else if (OB_FAIL(sort_window_functions(win_func_helper.fd_item_set_,
-                                           win_func_helper.equal_sets_,
-                                           win_func_helper.const_exprs_,
-                                           current_exprs,
+  } else if (OB_FAIL(calc_ndvs_and_pby_oby_prefix(current_exprs,
+                                                  win_func_helper,
+                                                  current_pby_oby_prefixes))) {
+    LOG_WARN("failed to calc ndvs and pby oby prefix", K(ret));
+  } else if (OB_FAIL(sort_window_functions(current_exprs,
                                            ordered_win_func_exprs,
+                                           current_pby_oby_prefixes,
+                                           pby_oby_prefixes,
                                            ordering_changed))) {
     LOG_WARN("adjust window functions failed", K(ret));
-  } else if (OB_FAIL(calc_ndvs_and_pby_oby_prefix(ordered_win_func_exprs,
-                                                  win_func_helper,
-                                                  pby_oby_prefixes))) {
-    LOG_WARN("failed to calc ndvs and pby oby prefix", K(ret));
   } else if (OB_FAIL(split_win_funcs_by_dist_method(distributed,
                                                     ordered_win_func_exprs,
                                                     win_func_helper.sort_key_ndvs_,
@@ -6564,48 +6569,23 @@ int ObSelectLogPlan::create_pushdown_hash_dist_win_func(ObLogicalOperator *&top,
  * 一定要按照 w1, w3, w2 的顺序来组织。即排在后面的win_expr的partition表达式是前面对象的子集。
  * 这里窗口函数会按照分组表达式数量进行排序（只统计非常量的分组表达式数量，数量多的排在前）。
  */
-int ObSelectLogPlan::sort_window_functions(const ObFdItemSet &fd_item_set,
-                                          const EqualSets &equal_sets,
-                                          const ObIArray<ObRawExpr *> &const_exprs,
-                                          const ObIArray<ObWinFunRawExpr *> &win_func_exprs,
-                                          ObIArray<ObWinFunRawExpr *> &ordered_win_func_exprs,
-                                          bool &ordering_changed)
+int ObSelectLogPlan::sort_window_functions(const ObIArray<ObWinFunRawExpr *> &win_func_exprs,
+                                           ObIArray<ObWinFunRawExpr *> &ordered_win_func_exprs,
+                                           const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+                                           ObIArray<std::pair<int64_t, int64_t>> &ordered_pby_oby_prefixes,
+                                           bool &ordering_changed)
 {
   int ret = OB_SUCCESS;
   ordering_changed = false;
   ordered_win_func_exprs.reuse();
+  ordered_pby_oby_prefixes.reuse();
   ObSEArray<std::pair<int64_t, int64_t>, 8> expr_entries;
-  bool is_const = false;
-  ObSEArray<ObRawExpr*, 4> simplified_exprs;
-  if (OB_UNLIKELY(win_func_exprs.empty())) {
-     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected params", K(ret), K(win_func_exprs.count()));
+  if (OB_UNLIKELY(win_func_exprs.empty() || win_func_exprs.count() != pby_oby_prefixes.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), K(win_func_exprs.count()), K(pby_oby_prefixes.count()));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < win_func_exprs.count(); ++i) {
-    int64_t non_const_exprs = 0;
-    simplified_exprs.reuse();
-    if (OB_ISNULL(win_func_exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::simplify_exprs(fd_item_set,
-                                                        equal_sets,
-                                                        const_exprs,
-                                                        win_func_exprs.at(i)->get_partition_exprs(),
-                                                        simplified_exprs))) {
-      LOG_WARN("failed to simplify exprs", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < simplified_exprs.count(); ++j) {
-      if (OB_FAIL(ObOptimizerUtil::is_const_expr(simplified_exprs.at(j),
-                                                  equal_sets,
-                                                  const_exprs,
-                                                  get_onetime_query_refs(),
-                                                  is_const))) {
-        LOG_WARN("failed to check is const expr", K(ret));
-      } else if (!is_const) {
-        ++non_const_exprs;
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(expr_entries.push_back(std::pair<int64_t, int64_t>(-non_const_exprs, i)))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < pby_oby_prefixes.count(); ++i) {
+    if (OB_FAIL(expr_entries.push_back(std::pair<int64_t, int64_t>(-pby_oby_prefixes.at(i).first, i)))) {
       LOG_WARN("failed to push back expr entry", K(ret));
     }
   }
@@ -6616,6 +6596,8 @@ int ObSelectLogPlan::sort_window_functions(const ObFdItemSet &fd_item_set,
       ordering_changed |= i != expr_entries.at(i).second;
       if (OB_FAIL(ordered_win_func_exprs.push_back(win_func_exprs.at(expr_entries.at(i).second)))) {
         LOG_WARN("failed to push back window function expr", K(ret));
+      } else if (OB_FAIL(ordered_pby_oby_prefixes.push_back(pby_oby_prefixes.at(expr_entries.at(i).second)))) {
+        LOG_WARN("failed to push back pby_oby_prefixes", K(ret));
       }
     }
   }

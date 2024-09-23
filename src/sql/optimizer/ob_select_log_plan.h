@@ -789,11 +789,10 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
                                        const ObIArray<bool> &pushdown_info);
 
-  int sort_window_functions(const ObFdItemSet &fd_item_set,
-                            const EqualSets &equal_sets,
-                            const ObIArray<ObRawExpr *> &const_exprs,
-                            const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                            ObIArray<ObWinFunRawExpr *> &adjusted_winfunc_exprs,
+  int sort_window_functions(const ObIArray<ObWinFunRawExpr *> &win_func_exprs,
+                            ObIArray<ObWinFunRawExpr *> &ordered_win_func_exprs,
+                            const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+                            ObIArray<std::pair<int64_t, int64_t>> &ordered_pby_oby_prefixes,
                             bool &ordering_changed);
 
   int match_window_function_parallel(const ObIArray<ObWinFunRawExpr *> &win_exprs,
