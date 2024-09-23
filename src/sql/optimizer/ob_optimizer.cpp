@@ -749,7 +749,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
       ctx_.set_hash_join_enabled(hash_join_enabled);
       ctx_.set_merge_join_enabled(optimizer_sortmerge_join_enabled);
       ctx_.set_nested_join_enabled(nested_loop_join_enabled);
-      ctx_.set_adaptive_join_enabled(tenant_config->_adaptive_join_enabled);
+      ctx_.set_adaptive_join_enabled(tenant_config.is_valid() && tenant_config->_adaptive_join_enabled);
     }
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);

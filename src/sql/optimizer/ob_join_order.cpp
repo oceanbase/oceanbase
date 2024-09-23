@@ -12364,7 +12364,9 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
       if (opt_ctx.is_nested_join_enabled()) {
         local_methods_mask |= NESTED_LOOP_JOIN;
       }
-      if (opt_ctx.is_adaptive_join_enabled()) {
+      if (opt_ctx.is_adaptive_join_enabled()
+          && opt_ctx.is_hash_join_enabled()
+          && opt_ctx.is_nested_join_enabled()) {
         local_methods_mask |= ADAPTIVE_JOIN;
       }
       LOG_TRACE("get_valid_path_info_from_hint", K(path_info.local_methods_), K(local_methods_mask));
