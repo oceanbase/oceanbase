@@ -1000,8 +1000,10 @@ void ObBlockManager::mark_and_sweep()
   } else {
     if (OB_FAIL(mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID))) {
       LOG_WARN("fail to init mark info, ", K(ret));
-    } else if (OB_FAIL(macro_id_set.create(MAX(2, block_map_.get_bkt_cnt()), "BlkIdSetBkt", "BlkIdSetNode",
-            OB_SERVER_TENANT_ID))) {
+    } else if (OB_FAIL(macro_id_set.create(MAX(2, MIN(MAX_FREE_BLOCK_COUNT_PER_ROUND, block_map_.get_bkt_cnt())),
+                                           "BlkIdSetBkt",
+                                           "BlkIdSetNode",
+                                           OB_SERVER_TENANT_ID))) {
       LOG_WARN("fail to create macro id set", K(ret));
     } else {
       GetPendingFreeBlockFunctor pending_free_functor(
