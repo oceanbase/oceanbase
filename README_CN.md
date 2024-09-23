@@ -91,7 +91,7 @@ obd demo
     docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # 连接root用户sys租户
     ```
 
-更多信息参考[docker 文档](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce)。
+更多信息参考[docker 文档](https://github.com/oceanbase/docker-images/blob/main/oceanbase-ce/README_CN.md)。
 
 ## ☸️ 使用 Kubernetes
 
