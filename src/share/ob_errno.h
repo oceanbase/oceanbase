@@ -1787,6 +1787,7 @@ constexpr int OB_ERR_FORALL_ON_REMOTE_TABLE = -9752;
 constexpr int OB_ERR_SEQUENCE_NOT_DEFINE = -9753;
 constexpr int OB_ERR_DEBUG_ID_NOT_EXIST = -9754;
 constexpr int OB_ERR_INVALID_CHARACTER = -9782;
+constexpr int OB_ERR_CURSOR_ATTR_APPLY = -9784;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -3953,6 +3954,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SEQUENCE_NOT_DEFINE__USER_ERROR_MSG "sequence is not yet defined in this session"
 #define OB_ERR_DEBUG_ID_NOT_EXIST__USER_ERROR_MSG "debug_session_id = %u does not exist"
 #define OB_ERR_INVALID_CHARACTER__USER_ERROR_MSG "invalid character"
+#define OB_ERR_CURSOR_ATTR_APPLY__USER_ERROR_MSG "cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -6119,6 +6121,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SEQUENCE_NOT_DEFINE__ORA_USER_ERROR_MSG "ORA-08002: sequence is not yet defined in this session"
 #define OB_ERR_DEBUG_ID_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9754, debug_session_id = %u does not exist"
 #define OB_ERR_INVALID_CHARACTER__ORA_USER_ERROR_MSG "ORA-00911: invalid character"
+#define OB_ERR_CURSOR_ATTR_APPLY__ORA_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
@@ -6148,7 +6151,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2162];
+extern int g_all_ob_errnos[2163];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

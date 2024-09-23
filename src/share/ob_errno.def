@@ -2508,6 +2508,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_SEQUENCE_NOT_DEFINE, -9753, -1, "HY000", "sequence is
 DEFINE_ERROR_EXT(OB_ERR_DEBUG_ID_NOT_EXIST, -9754, -1, "HY000", "debug_session_id does not exist", "debug_session_id = %u does not exist");
 
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CHARACTER, -9782, -1, "HY000", "invalid character", 911, "invalid character");
+DEFINE_PLS_ERROR_EXT(OB_ERR_CURSOR_ATTR_APPLY, -9784, -1, "HY000", "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s", 324, "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s");
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)

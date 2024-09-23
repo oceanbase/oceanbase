@@ -660,14 +660,16 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     }
 
     //close all cursor
-    if (OB_SUCC(ret) && pl_cursor_cache_.is_inited()) {
-      if (OB_FAIL(pl_cursor_cache_.close_all(*this))) {
+    if (pl_cursor_cache_.is_inited()) {
+      int temp_ret = pl_cursor_cache_.close_all(*this);
+      if (temp_ret != OB_SUCCESS) {
         LOG_WARN("failed to close all cursor", K(ret));
       }
     }
 
-    if (OB_SUCC(ret) && NULL != piece_cache_) {
-      if (OB_FAIL(piece_cache_->close_all(*this))) {
+    if (NULL != piece_cache_) {
+      int temp_ret = piece_cache_->close_all(*this);
+      if (temp_ret != OB_SUCCESS) {
         LOG_WARN("failed to close all piece", K(ret));
       }
       piece_cache_->~ObPieceCache();
