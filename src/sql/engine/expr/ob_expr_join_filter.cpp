@@ -139,7 +139,7 @@ int ObExprJoinFilter::check_rf_ready(
       while (!join_filter_ctx->is_ready() && OB_SUCC(exec_ctx.fast_check_status())) {
         if (OB_NOT_NULL(rf_msg)) {
 #ifdef ERRSIM
-          int ecode = EventTable::EN_PX_JOIN_FILTER_HOLD_MSG;
+          int ecode =  OB_E(EventTable::EN_PX_JOIN_FILTER_HOLD_MSG) OB_SUCCESS;
           if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
             LOG_WARN("join filter hold msg by design", K(ret));
             ob_usleep(80000000);

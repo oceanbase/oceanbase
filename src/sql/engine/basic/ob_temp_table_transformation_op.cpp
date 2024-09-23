@@ -175,7 +175,7 @@ int ObTempTableTransformationOp::destory_interm_results()
   }
 
 #ifdef ERRSIM
-  int ecode = EventTable::EN_PX_TEMP_TABLE_NOT_DESTROY_REMOTE_INTERM_RESULT;
+  int ecode = OB_E(EventTable::EN_PX_TEMP_TABLE_NOT_DESTROY_REMOTE_INTERM_RESULT) OB_SUCCESS;
   if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
     LOG_WARN("ObTempTableTransformationOp not destory_remote_interm_results by design", K(ret));
     return ret;

@@ -339,7 +339,7 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
     // process for DM, mark sqc finished, then DM will not detect this sqc again.
     if (OB_NOT_NULL(edge->get_detect_cb())) {
 #ifdef ERRSIM
-      int ecode = EventTable::EN_PX_SLOW_PROCESS_SQC_FINISH_MSG;
+      int ecode = OB_E(EventTable::EN_PX_SLOW_PROCESS_SQC_FINISH_MSG) OB_SUCCESS;
       if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
         LOG_WARN("qc slow process sqc finish msg by desgin", K(ret));
         usleep(100 * 1000L);

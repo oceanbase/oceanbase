@@ -107,7 +107,7 @@ int ObInitSqcP::process()
   }
 
 #ifdef ERRSIM
-  int ecode = EventTable::EN_PX_SQC_INIT_PROCESS_FAILED;
+  int ecode = OB_E(EventTable::EN_PX_SQC_INIT_PROCESS_FAILED) OB_SUCCESS;
   if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
     LOG_WARN("match sqc execute errism", K(ecode));
     ret = ecode;
