@@ -183,7 +183,11 @@ private:
                        ObIArray<PushDownParam> &params,
                        bool &hint_force_pushdown,
                        bool &is_valid);
-
+  /* whether sum(c1) splift to sum(count(*) * c1)
+   * YES case: 1 + 1 + 1 + 2 + 2 + 2 = 3 * 1 + 3 * 2
+   * NO case: 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 != 6 * 0.1
+  */
+  bool can_sum_trans_to_sum_count(const ObRawExpr *expr);
 private:
   // help functions
   int64_t get_count_sum_num(const ObIArray<ObRawExpr *> &exprs)

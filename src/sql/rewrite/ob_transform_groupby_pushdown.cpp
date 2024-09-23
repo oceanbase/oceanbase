@@ -220,7 +220,8 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
                 aggr_expr->get_expr_type() != T_FUN_COUNT &&
                 aggr_expr->get_expr_type() != T_FUN_MIN &&
                 aggr_expr->get_expr_type() != T_FUN_MAX) ||
-               aggr_expr->is_param_distinct()) {
+               aggr_expr->is_param_distinct() ||
+               !can_sum_trans_to_sum_count(aggr_expr)) {
       is_valid = false;
       OPT_TRACE("invalid aggregation type for group by placement", aggr_expr);
       LOG_TRACE("invalid aggregation type for group by placement", K(is_valid),
@@ -1678,4 +1679,24 @@ int ObTransformGroupByPushdown::check_hint_valid(ObDMLStmt &stmt,
   }
   LOG_TRACE("succeed to check group by hint valid", K(is_valid), K(trans_tables), K(params), K(hint));
   return ret;
+}
+
+bool ObTransformGroupByPushdown::can_sum_trans_to_sum_count(const ObRawExpr *expr)
+{
+  bool is_able = true;
+  if (OB_ISNULL(expr) ||
+      expr->get_expr_type() != T_FUN_SUM ||
+      OB_UNLIKELY(expr->get_param_count() != 1) ||
+      OB_ISNULL(expr->get_param_expr(0))) {
+    /* do nothing */
+  } else {
+    ObObjType obj_type = expr->get_param_expr(0)->get_result_type().get_type();
+    if (ObFloatType == obj_type || ObUFloatType == obj_type ||
+        ObDoubleType == obj_type || ObUDoubleType == obj_type) {
+      is_able = false;
+      OPT_TRACE("invalid aggregation param type");
+      LOG_TRACE("invalid aggregation param type", K(obj_type));
+    }
+  }
+  return is_able;
 }
