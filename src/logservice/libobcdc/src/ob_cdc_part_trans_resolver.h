@@ -35,6 +35,7 @@ namespace libobcdc
 struct TransStatInfo;
 class IObLogFetcherDispatcher;
 class IObLogClusterIDFilter;
+class IObLogLsnFilter;
 struct PartServeInfo;
 };
 
@@ -221,7 +222,8 @@ public:
       TaskPool &task_pool,
       PartTransTaskMap &task_map,
       IObLogFetcherDispatcher &dispatcher,
-      IObLogClusterIDFilter &cluster_id_filter);
+      IObLogClusterIDFilter &cluster_id_filter,
+      IObLogLsnFilter &lsn_filter);
   virtual ~ObCDCPartTransResolver();
 
 public:
@@ -438,6 +440,7 @@ private:
   logservice::TenantLSID    tls_id_;
   PartTransDispatcher       part_trans_dispatcher_;
   IObLogClusterIDFilter     &cluster_id_filter_;
+  IObLogLsnFilter           &lsn_filter_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCDCPartTransResolver);
 };
