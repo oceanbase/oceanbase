@@ -275,6 +275,12 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
         break;
+      case READ_TX:
+        cur_row_.cells_[i].set_varchar(diagnose_info.read_only_tx_info_);
+        cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "unkown column");

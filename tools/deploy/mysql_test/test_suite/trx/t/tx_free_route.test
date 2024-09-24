@@ -21,18 +21,7 @@ if ($client_session_id_version == '2') {
 --enable_query_log
 --enable_result_log
 
-# change tenant primary zone to RANDOM
-let $saved_primary_zone=`select primary_zone from oceanbase.__all_tenant where tenant_name = 'mysql'`;
---echo change mysql tenant primary_zone to RANDOM
-alter tenant mysql set primary_zone = 'RANDOM';
-
-let $tenant_id=`select tenant_id from oceanbase.__all_tenant where tenant_name = 'mysql'`;
-
-let $tenant_name=mysql;
-
-connect (conn0,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-connect (conn1,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-
+let $compat_mode=mysql;
 --source mysql_test/test_suite/trx/t/tx_free_route.inc
 
 connection conn0;
@@ -413,7 +402,7 @@ if ($session_0 != $session_1) {
 if ($session_0 != $session_2) {
   --echo "unexpected error happen!!!";
 }
-} 
+}
 --disable_query_log
 --disable_result_log
 if ($session_0 == $session_1) {
@@ -793,7 +782,7 @@ delete from t;
 commit;
 set global autocommit=0;
 --echo "CASE 8.1"
-connect (conn8,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn8,$OBMYSQL_MS0, root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 connection conn8;
 select * from t where id = 1;
 set autocommit=1;
@@ -808,7 +797,7 @@ disconnect conn8;
 if ($s1 == $2) { --echo "not free routed: $s1, $s2"
 }
 --echo "CASE 8.2"
-connect (conn82,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn82,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 begin;
 insert into t values(2);
 let $s3=`select connection_id()`;
@@ -824,7 +813,7 @@ connection conn0;
 set global autocommit=1;
 
 --echo "------------- 9 - error-packet caused proxy duplicate sync etc ----------------------"
-connect (conn90,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn90,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 delete from t;
 commit;
 begin;
@@ -857,7 +846,7 @@ if ($s6 != $s1) { --echo "s1 != s6: $s1, $s6"
 }
 disconnect conn90;
 --echo "------------- 10 - readonly tx with serializable snapshot swtich txn----------------------"
-connect (conn100,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn100,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 delete from t;
 commit;
 --disable_abort_on_error
@@ -910,11 +899,15 @@ disconnect conn100;
 --echo "CLEANUP"
 connection conn0;
 drop table t;
+
+disconnect conn0;
+disconnect conn1;
+disconnect conn2;
+
 connection sys;
---echo recovery primary_zone settings for mysql tenant
---disable_query_log
-eval alter tenant mysql set primary_zone = "$saved_primary_zone";
---enable_query_log
+drop tenant tx_free_route_tenant force;
+drop resource pool tx_free_route_pool;
+drop resource unit tx_free_route_unit;
 
 # recover proxy config
 --disable_abort_on_error
@@ -934,7 +927,4 @@ if ($client_session_id_version == 2) {
 --enable_query_log
 --enable_result_log
 
---sleep 5
-
-disconnect conn0;
-disconnect conn1;
+disconnect sys;

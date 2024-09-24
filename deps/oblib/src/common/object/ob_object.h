@@ -557,6 +557,7 @@ struct ObLobDataOutRowCtx
     EXT_INFO_LOG,
     VALID_OLD_VALUE_EXT_INFO_LOG,
     VALID_OLD_VALUE,
+    DIFF_V2, // add lob id in ext info log, so deprecated old, use new diff type
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
@@ -579,7 +580,8 @@ struct ObLobDataOutRowCtx
   uint32_t reserved_;
 
   bool is_empty_sql() const { return OpType::EMPTY_SQL == op_; }
-  bool is_diff() const { return OpType::DIFF == op_; }
+  bool is_diff_v1() const { return OpType::DIFF == op_;}
+  bool is_diff() const { return OpType::DIFF == op_ || OpType::DIFF_V2 == op_; }
   bool is_ext_info_log() const { return OpType::EXT_INFO_LOG == op_; }
   bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   bool is_valid_old_value() const { return OpType::VALID_OLD_VALUE == op_; }

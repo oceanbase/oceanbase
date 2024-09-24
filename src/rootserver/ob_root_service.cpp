@@ -4987,6 +4987,32 @@ int ObRootService::alter_tablegroup(const obrpc::ObAlterTablegroupArg &arg)
   return ret;
 }
 
+int ObRootService::drop_index_on_failed(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else {
+    ObIndexBuilder index_builder(ddl_service_);
+    if (OB_FAIL(index_builder.drop_index_on_failed(arg, res))) {
+      LOG_WARN("index_builder drop_index_on_failed failed", K(ret), K(arg));
+    }
+  }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "drop index on failed",
+                        "tenant_id", res.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", arg.index_table_id_,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish drop index on fail ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
 int ObRootService::drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res)
 {
   int ret = OB_SUCCESS;

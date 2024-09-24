@@ -274,9 +274,9 @@ int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, co
       table_key = log_->get_table_key();
     }
 
-    if (!is_lob_meta_tablet && ls_->is_cs_replica() && OB_FAIL(pre_process_for_cs_replica(direct_load_param, table_key, tablet_handle, tablet_id))) {
+    if (!is_lob_meta_tablet && OB_FAIL(tablet_handle.get_obj()->pre_process_cs_replica(direct_load_param.common_param_.direct_load_type_, table_key))) {
       LOG_WARN("pre process for cs replica failed", K(ret), K(direct_load_param), K(table_key), K(tablet_id));
-    } else if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(tablet_handle, log_->get_execution_id(), direct_load_param))) {
+    } else if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(tablet_handle.get_obj(), log_->get_execution_id(), direct_load_param))) {
       LOG_WARN("create tablet manager failed", K(ret));
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
             ls_->get_ls_id(),
@@ -295,8 +295,7 @@ int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, co
             direct_load_param))) {
       LOG_WARN("update direct load mgr failed", K(ret));
     } else if (OB_FAIL(direct_load_mgr_handle.get_full_obj()->start(*tablet_handle.get_obj(),
-            table_key, scn_, log_->get_data_format_version(), log_->get_execution_id(), SCN::min_scn()/*checkpoint_scn*/,
-            direct_load_param.common_param_.replay_normal_in_cs_replica_))) {
+            table_key, scn_, log_->get_data_format_version(), log_->get_execution_id(), SCN::min_scn()/*checkpoint_scn*/))) {
       LOG_WARN("direct load start failed", K(ret));
       if (OB_TASK_EXPIRED != ret) {
         LOG_WARN("start ddl log failed", K(ret), K_(log), K_(scn));
@@ -308,49 +307,6 @@ int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, co
     }
   }
   FLOG_INFO("finish replay ddl start log", K(ret), K(need_replay), K(tablet_id), KPC_(log), K_(scn), "ddl_event_info", ObDDLEventInfo());
-  return ret;
-}
-
-int ObDDLStartReplayExecutor::pre_process_for_cs_replica(
-    ObTabletDirectLoadInsertParam &direct_load_param,
-    ObITable::TableKey &table_key,
-    ObTabletHandle &tablet_handle,
-    const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (log_->get_with_cs_replica()) {
-    if (log_->get_table_key().is_row_store_major_sstable()) {
-      table_key.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE; // for passing defence
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid table key for replay ddl start in cs replica", K(ret), K_(log));
-    }
-  } else {
-    // ddl is concurrent with adding C replica
-    const ObTablet *tablet = nullptr;
-    ObStorageSchema *schema_on_tablet = nullptr;
-    ObArenaAllocator tmp_arena("RplyStartTmp");
-    if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet handle is invalid", K(ret), K(tablet_handle));
-    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet is null", K(ret), K(tablet_id));
-    } else if (tablet->is_row_store()) {
-      // not be created to column store tablet in cs replica, means this tablet is not user data tablet, ignore
-    } else if (log_->get_table_key().is_column_store_major_sstable()) {
-      // column store tablet originally, ignore
-    } else if (OB_FAIL(tablet->load_storage_schema(tmp_arena, schema_on_tablet))) {
-      LOG_WARN("load storage schema failed", K(ret), KPC(tablet));
-    } else if (schema_on_tablet->is_cs_replica_compat()) {
-      direct_load_param.common_param_.replay_normal_in_cs_replica_ = true;
-      LOG_TRACE("[CS-Replica] process concurrent ddl and ls migration", K(ret), K(tablet_id), KPC(tablet));
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid storage schema status", K(ret), KPC(tablet), KPC(schema_on_tablet));
-    }
-    ObTabletObjLoadHelper::free(tmp_arena, schema_on_tablet);
-  }
   return ret;
 }
 
@@ -996,7 +952,7 @@ int ObDDLIncStartReplayExecutor::init(
 struct SyncTabletFreezeHelper {
   SyncTabletFreezeHelper(ObLS *ls, const ObTabletID &tablet_id, const ObTabletID &lob_meta_tablet_id)
       : ls_(ls), tablet_id_(tablet_id), lob_meta_tablet_id_(lob_meta_tablet_id) {}
-  int operator()()
+  int operator()(const ObFreezeSourceFlag source)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(ls_) || !tablet_id_.is_valid()) {
@@ -1006,11 +962,19 @@ struct SyncTabletFreezeHelper {
       const bool is_sync = true;
       // try freeze for ten seconds
       int64_t abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
-      int tmp_ret = ls_->tablet_freeze(tablet_id_, is_sync, abs_timeout_ts);
+      int tmp_ret = ls_->tablet_freeze(tablet_id_,
+                                       is_sync,
+                                       abs_timeout_ts,
+                                       false, /*need_rewrite_meta*/
+                                       source);
       int tmp_ret_lob = OB_SUCCESS;
       if (lob_meta_tablet_id_.is_valid()) {
         abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
-        tmp_ret_lob = ls_->tablet_freeze(lob_meta_tablet_id_, is_sync, abs_timeout_ts);
+        tmp_ret_lob = ls_->tablet_freeze(lob_meta_tablet_id_,
+                                         is_sync,
+                                         abs_timeout_ts,
+                                         false, /*need_rewrite_meta*/
+                                         source);
       }
       if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
         ret = OB_EAGAIN;
@@ -1041,10 +1005,15 @@ int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     }
   } else if (!need_replay) {
     // do nothing
+    FLOG_INFO("no need to replay ddl inc start log", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
   } else {
     SyncTabletFreezeHelper sync_tablet_freeze(
         ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    return sync_tablet_freeze();
+    if (OB_FAIL(sync_tablet_freeze(ObFreezeSourceFlag::DIRECT_INC_START))) {
+      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    } else {
+      FLOG_INFO("replay ddl inc start log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    }
   }
 
   return ret;
@@ -1096,10 +1065,15 @@ int ObDDLIncCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     }
   } else if (!need_replay) {
     // do nothing
+    FLOG_INFO("no need to replay ddl inc commit log", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
   } else {
     SyncTabletFreezeHelper sync_tablet_freeze(
         ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    return sync_tablet_freeze();
+    if (OB_FAIL(sync_tablet_freeze(ObFreezeSourceFlag::DIRECT_INC_END))) {
+      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    } else {
+      FLOG_INFO("replay ddl inc commit log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    }
   }
   return ret;
 }

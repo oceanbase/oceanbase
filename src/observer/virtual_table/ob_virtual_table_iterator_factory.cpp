@@ -239,6 +239,8 @@
 #include "observer/virtual_table/ob_all_virtual_ss_local_cache_info.h"
 #include "observer/virtual_table/ob_all_virtual_vector_index_info.h"
 #include "observer/virtual_table/ob_all_virtual_tmp_file.h"
+#include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
+#include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 
 namespace oceanbase
 {
@@ -2833,6 +2835,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_FUNCTION_IO_STAT_TID: {
+            ObAllVirtualFunctionIOStat *all_virtual_func_io_stat = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualFunctionIOStat, all_virtual_func_io_stat))) {
+              if (OB_FAIL(all_virtual_func_io_stat->init(addr_))) {
+                SERVER_LOG(WARN, "fail to init ObAllVirtualFunctionIOStatus, ", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_func_io_stat);
+              }
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_TEMP_FILE_TID:
           {
             ObAllVirtualTmpFileInfo *all_tmp_file_info = NULL;
@@ -2842,6 +2855,26 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "fail to init all_tmp_file_info", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_tmp_file_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TID:
+          {
+            ObAllVirtualKvGroupCommitInfo *all_virtual_kv_group_commit_info = NULL;
+             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvGroupCommitInfo, all_virtual_kv_group_commit_info))) {
+              vt_iter = static_cast<ObAllVirtualKvGroupCommitInfo *>(all_virtual_kv_group_commit_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_KV_CLIENT_INFO_TID:
+          {
+            ObAllVirtualKvClientInfo *all_virtual_kv_client_info = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvClientInfo, all_virtual_kv_client_info))) {
+              vt_iter = static_cast<ObAllVirtualKvClientInfo *>(all_virtual_kv_client_info);
+              if (OB_FAIL(all_virtual_kv_client_info->set_svr_addr(addr_)))
+              {
+                LOG_WARN("set server addr failed", K(ret), K(addr_));
+              }
             }
             break;
           }

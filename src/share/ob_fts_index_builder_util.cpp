@@ -195,7 +195,7 @@ int ObFtsIndexBuilderUtil::generate_fts_aux_index_name(
     obrpc::ObCreateIndexArg &arg,
     ObIAllocator *allocator)
 {
-  // TODO: @zhenhan.gzh remove index name postfix, and only take one name in index namespace for fulltext index
+  // TODO: @yunshan.tys remove index name postfix, and only take one name in index namespace for fulltext index
   int ret = OB_SUCCESS;
   char *name_buf = nullptr;
   share::schema::ObIndexType type = arg.index_type_;

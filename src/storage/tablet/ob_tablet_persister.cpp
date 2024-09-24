@@ -625,7 +625,7 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
     LOG_WARN("fail to copy tablet meta", K(ret), K(tablet));
   } else if (FALSE_IT(arg.rowkey_read_info_ptr_ = tablet.rowkey_read_info_)) {
   // } else if (FALSE_IT(arg.extra_medium_info_ = tablet.mds_data_.extra_medium_info_)) {
-  // TODO: @luhaopeng.lhp after mds_mvs joint debugging completed
+  // TODO: @baichangmin.bcm after mds_mvs joint debugging completed
   } else if (OB_FAIL(fetch_table_store_and_write_info(tablet, table_store_wrapper,
       write_infos, total_write_ctxs, total_tablet_meta_size, block_info_set))) {
     LOG_WARN("fail to fetch table store and write info", K(ret));
@@ -1017,7 +1017,7 @@ int ObTabletPersister::convert_arg_to_tablet(const ObTabletTransformArg &arg, Ob
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(tablet.tablet_meta_.assign(arg.tablet_meta_))) {
     LOG_WARN("fail to copy tablet meta", K(ret), K(arg.tablet_meta_));
-  // TODO: @luhaopeng.lhp after mds_mvs joint debugging completed, delete mds_data_.tablet_status_cache_
+  // TODO: @baichangmin.bcm after mds_mvs joint debugging completed, delete mds_data_.tablet_status_cache_
   } else if (OB_FAIL(tablet.assign_memtables(arg.memtables_, arg.memtable_count_))) {
     LOG_WARN("fail to assign memtables", K(ret), KP(arg.memtables_), K(arg.memtable_count_));
   } else {

@@ -56,6 +56,13 @@ enum ObTableLockTaskType
   UNLOCK_DDL_TABLET = 14,
   LOCK_ALONE_TABLET = 15,
   UNLOCK_ALONE_TABLET = 16,
+  ADD_LOCK_INTO_QUEUE = 17,
+  REPLACE_LOCK_TABLE = 18,
+  REPLACE_LOCK_TABLETS = 19,
+  REPLACE_LOCK_PARTITION = 20,
+  REPLACE_LOCK_SUBPARTITION = 21,
+  REPLACE_LOCK_OBJECTS = 22,
+  REPLACE_LOCK_ALONE_TABLET = 23,
   MAX_TASK_TYPE,
 };
 
@@ -258,7 +265,7 @@ struct ObLockPartitionRequest : public ObLockTableRequest
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObLockPartitionRequest() : ObLockTableRequest(), part_object_id_(0)
+  ObLockPartitionRequest() : ObLockTableRequest(), part_object_id_(0), is_sub_part_(false)
   { type_ = ObLockMsgType::LOCK_PARTITION_REQ; }
   virtual ~ObLockPartitionRequest() { reset(); }
   virtual void reset();
@@ -266,6 +273,7 @@ public:
   INHERIT_TO_STRING_KV("ObLockTableRequest", ObLockTableRequest, K_(part_object_id));
 public:
   uint64_t part_object_id_;
+  bool is_sub_part_;
 };
 
 struct ObUnLockPartitionRequest : public ObLockPartitionRequest

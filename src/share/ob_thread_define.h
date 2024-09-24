@@ -197,4 +197,6 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
 
 
 TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)
+TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
+TG_DEF(TmpFileFlush, TFFlush, TIMER, 1024)
 #endif

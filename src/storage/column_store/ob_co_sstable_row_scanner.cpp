@@ -1099,7 +1099,7 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
   } else if (OB_FAIL(group_by_cell_->copy_output_rows(vector_store->get_row_count(), *iter_param_))) {
     LOG_WARN("Failed to copy output rows", K(ret));
   }
-  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), KPC(group_by_cell_));
+  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), KPC(group_by_cell_), K(can_group_by));
   return ret;
 }
 

@@ -376,8 +376,8 @@ int TestDmlCommon::build_table_scan_param(
     ObTableScanParam &scan_param)
 {
   int ret = build_table_scan_param_base_(tenant_id, table_param, false, scan_param);
-  if (OB_SUCC(ret)) {
-    scan_param.snapshot_ = read_snapshot;
+  if (FAILEDx(scan_param.snapshot_.assign(read_snapshot))) {
+    STORAGE_LOG(WARN, "assign snapshot fail", K(ret));
   }
   return ret;
 }
@@ -575,7 +575,7 @@ int TestDmlCommon::build_pure_data_tablet_arg(
     STORAGE_LOG(WARN, "failed to push tablet id into array", K(ret), K(data_tablet_id));
   } else if (OB_FAIL(tablet_schema_index_array.push_back(0))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
-  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
+  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {
@@ -627,7 +627,7 @@ int TestDmlCommon::build_mixed_tablets_arg(
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
   } else if (OB_FAIL(tablet_schema_index_array.push_back(1))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
-  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
+  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {

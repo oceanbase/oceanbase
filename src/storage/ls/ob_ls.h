@@ -67,6 +67,7 @@
 #include "storage/high_availability/ob_ls_transfer_info.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "storage/ls/ob_ls_transfer_status.h"
+#include "storage/ls/ob_freezer_define.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_private_block_gc_task.h"
 #include "storage/shared_storage/prewarm/ob_ls_prewarm_handler.h"
@@ -146,6 +147,7 @@ struct DiagnoseInfo
 #ifdef OB_BUILD_ARBITRATION
   logservice::LogArbSrvDiagnoseInfo arb_srv_diagnose_info_;
 #endif
+  char read_only_tx_info_[1024];
   TO_STRING_KV(K(ls_id_),
                K(log_handler_diagnose_info_),
                K(palf_diagnose_info_),
@@ -158,7 +160,7 @@ struct DiagnoseInfo
 #ifdef OB_BUILD_ARBITRATION
                ,K(arb_srv_diagnose_info_)
 #endif
-               );
+               ,K(read_only_tx_info_));
   void reset() {
     ls_id_ = -1;
     log_handler_diagnose_info_.reset();
@@ -172,6 +174,7 @@ struct DiagnoseInfo
 #ifdef OB_BUILD_ARBITRATION
     arb_srv_diagnose_info_.reset();
 #endif
+    read_only_tx_info_[0] = '\0';
   }
 };
 
@@ -904,16 +907,21 @@ public:
    * @param[in] is_sync if is_sync == true, call logstream_freeze_task directly. Or commit an async task to execute
    * logstream_freeze_task
    * @param[in] abs_timeout_ts only used when is_sync == true, 0 as default, which means retry for
-   * ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   *            ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   * @param[in] source means the input source of the freeze
    */
-  int logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t abs_timeout_ts = 0);
+  int logstream_freeze(const int64_t trace_id,
+                       const bool is_sync,
+                       const int64_t abs_timeout_ts = 0,
+                       const ObFreezeSourceFlag source = ObFreezeSourceFlag::INVALID_SOURCE);
   int logstream_freeze_task(const int64_t trace_id,
                             const int64_t abs_timeout_ts);
 
   int tablet_freeze(const ObTabletID &tablet_id,
                     const bool is_sync,
                     const int64_t input_abs_timeout_ts = 0,
-                    const bool need_rewrite_meta = false);
+                    const bool need_rewrite_meta = false,
+                    const ObFreezeSourceFlag source = ObFreezeSourceFlag::INVALID_SOURCE);
   /**
    * @brief freeze one or multiple tablets. if is_sync is true, retry until timeout. or commit an async task and retry
    * till die
@@ -924,19 +932,22 @@ public:
    * logstream_freeze_task
    * @param[in] need_rewrite_meta
    * @param[in] abs_timeout_ts only used when is_sync == true, 0 as default, which means retry for
-   * ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   *            ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   * @param[in] source means the input source of the freeze
    */
   int tablet_freeze(const int64_t trace_id,
                     const ObIArray<ObTabletID> &tablet_ids,
                     const bool is_sync,
                     const int64_t abs_timeout_ts = 0,
-                    const bool need_rewrite_meta = false);
+                    const bool need_rewrite_meta = false,
+                    const ObFreezeSourceFlag source = ObFreezeSourceFlag::INVALID_SOURCE);
   int tablet_freeze_task(const int64_t trace_id,
                          const ObIArray<ObTabletID> &tablet_ids,
                          const bool need_rewrite_meta,
                          const bool is_sync,
                          const int64_t abs_timeout_ts,
                          const int64_t freeze_epoch);
+
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
   DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_scn, int);
@@ -951,7 +962,8 @@ public:
   // @param [in] abs_timeout_ts, wait until timeout if lock conflict
   int advance_checkpoint_by_flush(share::SCN recycle_scn,
                                   const int64_t abs_timeout_ts = INT64_MAX,
-                                  const bool is_tenant_freeze = false);
+                                  const bool is_tenant_freeze = false,
+                                  const ObFreezeSourceFlag source = ObFreezeSourceFlag::INVALID_SOURCE);
 
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);

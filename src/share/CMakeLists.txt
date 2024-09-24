@@ -14,6 +14,24 @@ ob_set_subtarget(ob_share ALONE
   parameter/ob_parameter_attr.cpp
   schema/ob_schema_service_sql_impl.cpp
   vector/expr_cmp_func.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_1.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_2.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_3.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_4.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_5.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_6.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_7.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_8.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_9.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_10.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_11.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_12.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_13.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_14.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_15.cpp
+
+  aggregate/approx_count_distinct_synopsis.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -287,6 +305,7 @@ ob_set_subtarget(ob_share common_mixed
   index_usage/ob_index_usage_info_mgr.cpp
   index_usage/ob_index_usage_report_task.cpp
   table/ob_table_util.cpp
+  table/ob_table_object.cpp
   scheduler/ob_tenant_dag_scheduler.cpp
   scheduler/ob_sys_task_stat.cpp
   scheduler/ob_dag_warning_history_mgr.cpp
@@ -308,6 +327,8 @@ ob_set_subtarget(ob_share common_mixed
   throttle/ob_throttle_common.cpp
   restore/ob_restore_data_mode.cpp
   rebuild_tablet/ob_rebuild_tablet_location.cpp
+  table/ob_redis_parser.cpp
+  table/ob_redis_common.cpp
 )
 
 ob_set_subtarget(ob_share tablet

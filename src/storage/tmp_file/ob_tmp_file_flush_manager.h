@@ -67,6 +67,7 @@ public:
   ~ObTmpFileFlushManager() {}
   int init();
   void destroy();
+  void set_flush_timer_tg_id(int* flush_timer_tg_id, const int64_t timer_cnt);
   TO_STRING_KV(K(is_inited_), K(flush_ctx_));
 
 public:
@@ -99,7 +100,7 @@ private:
   int advance_status_(ObTmpFileFlushTask &flush_task, const FlushState &state);
   int drive_flush_task_prepare_(ObTmpFileFlushTask &flush_task, const FlushState state, FlushState &next_state);
   int drive_flush_task_retry_(ObTmpFileFlushTask &flush_task, const FlushState state, FlushState &next_state);
-  int drive_flush_task_wait_to_finish_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
+  int drive_flush_task_wait_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
   int handle_alloc_flush_task_(const bool fast_flush_meta, ObTmpFileFlushTask *&flush_task);
   int handle_create_block_index_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
   int handle_fill_block_buf_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
@@ -125,6 +126,8 @@ private:
   ObTmpWriteBufferPool &write_buffer_pool_;
   ObTmpFileEvictionManager &evict_mgr_;
   ObTmpFileFlushPriorityManager &flush_priority_mgr_;
+  int32_t cur_flush_timer_idx_;
+  int flush_timer_tg_id_[ObTmpFileGlobal::FLUSH_TIMER_CNT];
 };
 
 }  // end namespace tmp_file

@@ -151,7 +151,9 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "mds_reader", ObCtxIds::DEFAULT_CTX_ID));
 
-  if (OB_UNLIKELY(!snapshot.is_max())) {
+  if (!mds::get_multi_version_flag<K, V>() &&
+      !std::is_same<V, ObTabletCreateDeleteMdsUserData>::value &&
+      !snapshot.is_max()) {
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG(WARN, "invalid args, snapshot is not max scn", K(ret), K(snapshot));
   } else if (CLICK_FAIL((read_data_from_cache_or_mds_sstable<K, V>(

@@ -33,7 +33,7 @@ class ObTmpFileFlushTG
 {
 public:
   typedef ObTmpFileFlushTask::ObTmpFileFlushTaskState FlushState;
-  static const int64_t MAX_FLUSHING_BLOCK_NUM = 50;
+  static const int64_t MAX_FLUSHING_BLOCK_NUM = 200;
   enum RUNNING_MODE {
     INVALID = 0,
     NORMAL  = 1,
@@ -45,6 +45,9 @@ public:
                    ObIAllocator &allocator,
                    ObTmpFileBlockManager &tmp_file_block_mgr);
   int init();
+  int start();
+  void stop();
+  void wait();
   void destroy();
 
   int try_work();
@@ -65,12 +68,13 @@ private:
   int handle_generated_flush_tasks_(ObSpLinkQueue &flushing_list, int64_t &task_num);
   int wash_(const int64_t expect_flush_size, const RUNNING_MODE mode);
   int check_flush_task_io_finished_();
+  int retry_fast_flush_meta_task_();
   int retry_task_();
   int special_flush_meta_tree_page_();
   void flush_fast_();
   void flush_normal_();
   int get_fast_flush_size_();
-  int get_flushing_block_num_threshold_();
+  int64_t get_flushing_block_num_threshold_();
   int push_wait_list_(ObTmpFileFlushTask *flush_task);
   int pop_wait_list_(ObTmpFileFlushTask *&flush_task);
   int push_retry_list_(ObTmpFileFlushTask *flush_task);
@@ -103,6 +107,8 @@ private:
   int64_t normal_idle_loop_cnt_;
   int64_t fast_loop_cnt_;
   int64_t fast_idle_loop_cnt_;
+
+  int flush_timer_tg_id_[ObTmpFileGlobal::FLUSH_TIMER_CNT];
 };
 
 class ObTmpFileSwapTG : public lib::TGRunnable

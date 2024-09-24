@@ -896,7 +896,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(const OpParallelRul
     if (OpParallelRule::OP_TABLE_DOP == op_parallel_rule) {
       final_parallel = index_schema->get_dop();
     }
-    if (index_schema->is_spatial_index() && index_schema->get_partition_num() <  final_parallel) {
+    if ((index_schema->is_spatial_index() || index_schema->is_vec_index()) && index_schema->get_partition_num() <  final_parallel) {
       final_parallel = index_schema->get_partition_num();
     }
     if (final_parallel < ObGlobalHint::DEFAULT_PARALLEL) {
@@ -3108,14 +3108,65 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                                             log_table_hint->index_list_,
                                                             valid_index_ids))) {
     LOG_WARN("failed to get hint index ids", K(ret));
-  } else if (0 == valid_index_ids.count()) {
-    for (int64_t i = -1; OB_SUCC(ret) && i < index_count; ++i) {
-      const uint64_t tid = (i == -1) ? ref_table_id : tids[i]; //with base table
-      if (OB_FAIL(valid_index_ids.push_back(tid))) {
-        LOG_WARN("failed to push back index id", K(ret));
-      } else { /*do nothing*/ }
+  } else {
+    if (0 == valid_index_ids.count()) {
+      for (int64_t i = -1; OB_SUCC(ret) && i < index_count; ++i) {
+        const uint64_t tid = (i == -1) ? ref_table_id : tids[i]; //with base table
+        if (OB_FAIL(valid_index_ids.push_back(tid))) {
+          LOG_WARN("failed to push back index id", K(ret));
+        } else { /*do nothing*/ }
+      }
     }
-  } else { /*do nothing*/ }
+    //check table access policy
+    const ObTableSchema *schema = NULL;
+    bool is_link = false;
+    bool has_row_store = false;
+    bool has_column_store = false;
+    ObSEArray<uint64_t, 4> new_valid_index_ids;
+    if (ObTableAccessPolicy::ROW_STORE == OPT_CTX.get_table_acces_policy()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
+        if (OB_FAIL(schema_guard->get_table_schema(valid_index_ids.at(i), schema, is_link))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_ISNULL(schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null table schema", K(ret));
+        } else if (OB_FAIL(schema->has_all_column_group(has_row_store))) {
+          LOG_WARN("failed to check has row store", K(ret));
+        } else if (!has_row_store) {
+          //ignore index
+        } else if (OB_FAIL(new_valid_index_ids.push_back(valid_index_ids.at(i)))) {
+          LOG_WARN("failed to push back index id", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (new_valid_index_ids.empty()) {
+        //ignore table access policy
+      } else if (OB_FAIL(valid_index_ids.assign(new_valid_index_ids))) {
+        LOG_WARN("failed to assign index ids", K(ret));
+      }
+    } else if (ObTableAccessPolicy::COLUMN_STORE == OPT_CTX.get_table_acces_policy()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
+        if (OB_FAIL(schema_guard->get_table_schema(valid_index_ids.at(i), schema, is_link))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_ISNULL(schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null table schema", K(ret));
+        } else if (OB_FAIL(schema->get_is_column_store(has_column_store))) {
+          LOG_WARN("failed to get is column store", K(ret));
+        } else if (!has_column_store) {
+          //ignore index
+        } else if (OB_FAIL(new_valid_index_ids.push_back(valid_index_ids.at(i)))) {
+          LOG_WARN("failed to push back index id", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (new_valid_index_ids.empty()) {
+        //ignore table access policy
+      } else if (OB_FAIL(valid_index_ids.assign(new_valid_index_ids))) {
+        LOG_WARN("failed to assign index ids", K(ret));
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     const ObTableSchema *schema = NULL;
     bool is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
@@ -7078,7 +7129,7 @@ int JoinPath::re_estimate_cost(EstimateCostInfo &info, double &card, double &cos
     card = get_path_output_rows();
     op_cost = op_cost_;
     cost = get_cost();
-  } else if (OB_FAIL(do_re_estimate_cost(info, card, op_cost, cost))) {
+  } else if (OB_FAIL(SMART_CALL(do_re_estimate_cost(info, card, op_cost, cost)))) {
     LOG_WARN("failed to do re estimate cost", K(ret));
   } else if (info.override_) {
     parallel_ = join_parallel;

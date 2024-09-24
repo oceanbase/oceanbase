@@ -91,7 +91,7 @@ public:
   enum RetrievalProcType
   {
     DAAT = 0,
-    // TAAT = 1,
+    TAAT = 1,
     // VAAT = 2,
     MAX_PROC_TYPE
   };

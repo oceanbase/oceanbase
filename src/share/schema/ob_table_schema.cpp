@@ -1428,7 +1428,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     micro_index_clustered_(false),
     local_session_vars_(allocator),
-    index_params_()
+    index_params_(),
+    exec_env_()
 {
   reset();
 }
@@ -1675,6 +1676,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.index_params_, index_params_))) {
     LOG_WARN("deep copy vector index param failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.exec_env_, exec_env_))) {
+    LOG_WARN("deep copy vector exec_env failed", K(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -3446,6 +3451,7 @@ void ObTableSchema::reset()
   ttl_definition_.reset();
   kv_attributes_.reset();
   index_params_.reset();
+  exec_env_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   auto_increment_cache_size_ = 0;
@@ -6525,7 +6531,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(mlog_tid),
     K_(auto_increment_cache_size),
     K_(local_session_vars),
-    K_(index_params));
+    K_(index_params),
+    K_(exec_env));
   J_OBJ_END();
 
   return pos;
@@ -9089,7 +9096,7 @@ int ObTableSchema::get_column_group_index(
       LOG_WARN("Unexpected, can not find cg idx", K(ret), K(column_id));
     }
   }
-  LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(cg_idx));
+  LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(param), K(cg_idx), KPC(this));
   return ret;
 }
 
@@ -9097,12 +9104,18 @@ int ObTableSchema::calc_column_group_index_(const uint64_t column_id, int32_t &c
 {
   int ret = OB_SUCCESS;
   cg_idx = -1;
+  int64_t virtual_column_cnt = 0;
+  int64_t nullptr_column_cnt = 0;
   // for cs replica, constructed cg schemas start with rowkey cg so the cg idx of row key cg is ALWAYS 0
   // and cg idx of normal cg is shifted by offset 1.
   for (int64_t i = 0; i < column_cnt_; i++) {
     ObColumnSchemaV2 *column = column_array_[i];
-    if (OB_NOT_NULL(column) && column->get_column_id() == column_id) {
-      cg_idx = i + 1;
+    if (OB_ISNULL(column)) {
+      nullptr_column_cnt++;
+    } else if (column->is_virtual_generated_column()) {
+      virtual_column_cnt++;
+    } else if (column->get_column_id() == column_id) {
+      cg_idx = i + 1 - virtual_column_cnt - nullptr_column_cnt;
       break;
     }
   }
@@ -9455,7 +9468,6 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
   J_OBJ_END();
   return pos;
 }
-
 
 } //enf of namespace schema
 } //end of namespace share

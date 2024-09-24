@@ -143,7 +143,9 @@ public:
   common::ObCSProtocolType get_cs_protocol_type() const
   {
     common::ObCSProtocolType type = common::OB_INVALID_CS_TYPE;
-    if (proxy_cap_flags_.is_ob_protocol_v2_support()) {
+    if (is_in_auth_switch_phase()) {
+      type = common::OB_MYSQL_CS_TYPE;
+    } else if (proxy_cap_flags_.is_ob_protocol_v2_support()) {
       type = common::OB_2_0_CS_TYPE;
     } else if (1 == cap_flags_.cap_flags_.OB_CLIENT_COMPRESS) {
       type = common::OB_MYSQL_COMPRESS_CS_TYPE;
@@ -160,7 +162,7 @@ public:
   inline bool is_in_connected_phase() { return rpc::ConnectionPhaseEnum::CPE_CONNECTED == connection_phase_; }
   inline bool is_in_ssl_connect_phase() { return rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT == connection_phase_; }
   inline bool is_in_authed_phase() { return rpc::ConnectionPhaseEnum::CPE_AUTHED == connection_phase_; }
-  inline bool is_in_auth_switch_phase() { return rpc::ConnectionPhaseEnum::CPE_AUTH_SWITCH == connection_phase_; }
+  inline bool is_in_auth_switch_phase() const { return rpc::ConnectionPhaseEnum::CPE_AUTH_SWITCH == connection_phase_; }
   inline void set_auth_switch_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTH_SWITCH; }
   inline void set_ssl_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT; }
   inline void set_auth_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTHED; }

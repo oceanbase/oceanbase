@@ -47,7 +47,7 @@ void print_access_storage_log(
       if (NULL != is_slow) {
         *is_slow = true;
       }
-      _STORAGE_LOG_RET(WARN, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
+      _STORAGE_LOG_RET(INFO, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
         msg, uri.length(), uri.ptr(), size, cost_ts, speed);
     }
   }
@@ -1402,6 +1402,8 @@ int ObStorageUtil::batch_del_files(
   const int64_t n_files_to_delete = files_to_delete.count();
   int64_t cur_deleted_pos = 0;
   failed_files_idx.reset();
+  const bool use_batch_del_flag =
+      (OB_STORAGE_FILE != device_type_ && OB_STORAGE_OSS != device_type_);
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_init())) {
@@ -1413,7 +1415,7 @@ int ObStorageUtil::batch_del_files(
   } else if (OB_UNLIKELY(0 == n_files_to_delete)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(n_files_to_delete));
-  } else if (OB_STORAGE_FILE != device_type_) {
+  } else if (use_batch_del_flag) {
     hash::ObHashMap<ObString, int64_t> files_to_delete_map;
     const ObString &uri = files_to_delete.at(0);
     const char *prefix = nullptr;
@@ -1476,7 +1478,7 @@ int ObStorageUtil::batch_del_files(
   }
 
   if (OB_NOT_SUPPORTED == ret
-      || (OB_SUCC(ret) && OB_STORAGE_FILE == device_type_)) {
+      || (OB_SUCC(ret) && !use_batch_del_flag)) {
     ret = OB_SUCCESS;
     STORAGE_LOG(WARN, "batch_del interface is not supported, "
         "falling back to a looped single-delete calls instead",
@@ -1486,7 +1488,7 @@ int ObStorageUtil::batch_del_files(
     while (OB_SUCC(ret) && cur_deleted_pos < n_files_to_delete) {
       if (OB_FAIL(del_file(files_to_delete.at(cur_deleted_pos)))) {
         STORAGE_LOG(WARN, "fail to batch del files",
-            K(ret), K(cur_deleted_pos), K(files_to_delete.at(cur_deleted_pos++)));
+            K(ret), K(cur_deleted_pos), K(files_to_delete.at(cur_deleted_pos)));
       } else {
         cur_deleted_pos++;
       }

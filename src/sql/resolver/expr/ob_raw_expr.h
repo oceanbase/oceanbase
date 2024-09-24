@@ -1994,7 +1994,10 @@ public:
     partition_id_calc_type_ = calc_type; }
   bool is_json_expr() const;
   bool is_multiset_expr() const;
-  bool is_vector_sort_expr() const { return get_expr_type() == T_FUN_SYS_L2_DISTANCE; }
+  bool is_vector_sort_expr() const {
+    return get_expr_type() == T_FUN_SYS_L2_DISTANCE ||
+           get_expr_type() == T_FUN_SYS_INNER_PRODUCT ||
+           get_expr_type() == T_FUN_SYS_NEGATIVE_INNER_PRODUCT; }
   PartitionIdCalcType get_partition_id_calc_type() const { return partition_id_calc_type_; }
   void set_may_add_interval_part(MayAddIntervalPart flag) {
     may_add_interval_part_ = flag;

@@ -25,13 +25,13 @@ namespace storage
 class ObDirectLoadInsertTabletContext;
 class ObDirectLoadLobBuilder;
 
-class ObDirectLoadInsertTableRowIterator : public ObIStoreRowIterator
+class ObDirectLoadInsertTableRowIterator : public ObIDirectLoadRowIterator
 {
 public:
   ObDirectLoadInsertTableRowIterator();
   virtual ~ObDirectLoadInsertTableRowIterator();
   int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
-  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row);
+  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row) override;
 protected:
   int inner_init(ObDirectLoadInsertTabletContext *insert_tablet_ctx,
                  table::ObTableLoadSqlStatistics *sql_statistics,

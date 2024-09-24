@@ -29,6 +29,9 @@ std::streamsize ObOStreamBuf::xsputn(const char* s, std::streamsize count)
 {
   std::streamsize written_size = 0;
   std::streamsize left_size = 0;
+  if (OB_ISNULL(s)) {
+    last_error_code_ = OB_INVALID_ARGUMENT;
+  }
   while (is_valid() && is_success() && written_size < count) {
     left_size = epptr() - pptr();
     std::streamsize sub_size = std::min(count - written_size, left_size);
@@ -122,7 +125,9 @@ std::streamsize ObIStreamBuf::xsgetn(char* s, std::streamsize n)
 {
   std::streamsize get_size = 0;
   std::streamsize data_size = 0;
-  if (is_success() && !is_valid()) {
+  if (OB_ISNULL(s)) {
+    last_error_code_ = OB_INVALID_ARGUMENT;
+  } else if (is_success() && !is_valid()) {
     last_error_code_ = do_callback();
   }
   while (is_valid() && is_success() && get_size < n) {
@@ -320,9 +325,14 @@ int ObHNSWSerializeCallback::operator()(const char *data, const int64_t data_siz
   lob_param.sql_mode_ = SMO_DEFAULT;
   lob_param.timeout_ = param.timeout_;
   lob_param.lob_common_ = nullptr;
-  lob_param.snapshot_ = *reinterpret_cast<transaction::ObTxReadSnapshot*>(param.snapshot_);
-  lob_param.tx_desc_ = reinterpret_cast<transaction::ObTxDesc*>(param.tx_desc_);
-  if (OB_ISNULL(lob_mngr)) {
+  ret = lob_param.snapshot_.assign(*reinterpret_cast<transaction::ObTxReadSnapshot*>(param.snapshot_));
+  if (OB_FAIL(ret)) {
+    LOG_WARN("assign snapshot fail", K(ret));
+  } else {
+    lob_param.tx_desc_ = reinterpret_cast<transaction::ObTxDesc*>(param.tx_desc_);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get lob manager nullptr", K(ret));
   } else if (OB_FAIL(lob_mngr->append(lob_param, src_lob))) {

@@ -243,7 +243,7 @@ int ObTabletMiniMergeCtx::try_schedule_adaptive_merge(
 
   if (is_tombstone_scene) {
     if (ObAdaptiveMergePolicy::is_schedule_medium(queuing_cfg.mode_) && !medium_is_cooling_down) {
-      if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_medium_merge(static_param_.ls_handle_, tablet_id, create_dag))) {
+      if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_medium_merge_for_tombstone(*static_param_.ls_handle_.get_ls(), tablet_id, create_dag))) {
         LOG_WARN_RET(tmp_ret, "failed to schedule medium merge for tablet after mini", "param",get_dag_param(), K(tablet_id));
       }
     } else if (ObAdaptiveMergePolicy::is_schedule_meta(queuing_cfg.mode_)) {

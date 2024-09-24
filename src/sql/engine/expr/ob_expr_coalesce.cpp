@@ -102,13 +102,17 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
 
 int calc_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
-  int ret = OB_SUCCESS;
+  int  ret = OB_SUCCESS;
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool v = false;
   res_datum.set_null();
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
     ObDatum *child_res = NULL;
     if (OB_FAIL(expr.args_[i]->eval(ctx, child_res))) {
       LOG_WARN("eval arg failed", K(ret), K(i));
-    } else if (!(child_res->is_null())) {
+    } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(child_res, is_udt_type, v))) {
+      LOG_WARN("failed to check datum null", K(ret), K(child_res), K(is_udt_type));
+    } else if (!v) {
       // TODO: @shaoge coalesce的结果可以不用预分配内存，直接使用某个子节点的结果
       res_datum.set_datum(*child_res);
       break;
@@ -136,7 +140,9 @@ int ObExprCoalesce::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                              const ObBitVector &skip, const int64_t batch_size)
 {
-  int ret = OB_SUCCESS;
+  int  ret = OB_SUCCESS;
+  bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
+  bool v = false;
   LOG_DEBUG("calculate batch coalesce expr", K(batch_size));
 
   ObDatum *results = expr.locate_batch_datums(ctx);
@@ -160,13 +166,15 @@ int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
           my_skip,
           batch_size,
           [&](int64_t idx) __attribute__((always_inline)) {
-            if (!dv.at(idx)->is_null()) {
+            if (OB_FAIL(pl::ObPLDataType::datum_is_null(dv.at(idx), is_udt_type, v))) {
+              LOG_WARN("failed to check datum null", K(ret), K(dv.at(idx)), K(is_udt_type));
+            } else if (!v) {
               results[idx].set_datum(*dv.at(idx));
               eval_flags.set(idx);
               my_skip.set(idx);
               skip_cnt++;
             }
-            return OB_SUCCESS;
+            return ret;
           }
         );
       }

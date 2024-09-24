@@ -426,6 +426,7 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       nested_size_ = res.nested_size_;
       nested_offset_ = res.nested_offset_;
       table_shared_flag_.reset();
+      filled_tx_scn_ = table_key_.get_end_scn();
 
       if (OB_FAIL(inner_init_with_merge_res(res))) {
         LOG_WARN("fail to inner init with merge res", K(ret), K(res));
@@ -554,6 +555,7 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
     nested_size_ = res.nested_size_;
     nested_offset_ = res.nested_offset_;
     table_shared_flag_.set_shared_sstable();
+    filled_tx_scn_ = table_key_.get_end_scn();
     if (OB_FAIL(inner_init_with_merge_res(res))) {
       LOG_WARN("fail to inner init with merge res", K(ret), K(res));
     } else if (table_key.is_co_sstable()) {
@@ -622,6 +624,8 @@ int ObTabletCreateSSTableParam::init_for_ha(
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
   } else if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to fill column checksum", K(ret), K(sstable_param));
+  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, filled_tx_scn_))) {
+    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
   } else {
     root_macro_seq_ = MAX(root_macro_seq_, sstable_param.basic_meta_.root_macro_seq_);
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -666,13 +670,14 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   compressor_type_ = sstable_param.basic_meta_.compressor_type_;
   encrypt_id_ = sstable_param.basic_meta_.encrypt_id_;
   master_key_id_ = sstable_param.basic_meta_.master_key_id_;
-  root_block_addr_.set_none_addr();
-  data_block_macro_meta_addr_.set_none_addr();
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   root_macro_seq_ = sstable_param.basic_meta_.root_macro_seq_;
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
+  is_meta_root_ = sstable_param.is_meta_root_;
+  root_block_addr_.set_none_addr();
+  data_block_macro_meta_addr_.set_none_addr();
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     is_co_table_without_cgs_ = table_key_.is_ddl_sstable() ? false : true;
@@ -681,6 +686,10 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   }
   if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to assign column checksums", K(ret), K(sstable_param));
+  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, filled_tx_scn_))) {
+    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
+  } else if (sstable_param.is_shared_sstable() && OB_FAIL(inner_init_with_shared_sstable(sstable_param))) {
+    LOG_WARN("failed to inner init with shared sstable", K(ret), K(sstable_param));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init for ha sstable get invalid argument", K(ret), K(sstable_param), KPC(this));
@@ -725,7 +734,7 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   compressor_type_ = sstable_param.basic_meta_.compressor_type_;
   encrypt_id_ = sstable_param.basic_meta_.encrypt_id_;
   master_key_id_ = sstable_param.basic_meta_.master_key_id_;
-
+  root_macro_seq_ = sstable_param.basic_meta_.root_macro_seq_;
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
@@ -740,6 +749,8 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to fill column checksum", K(ret), K(sstable_param));
+  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, filled_tx_scn_))) {
+    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init for remote sstable get invalid argument", K(ret), K(sstable_param), KPC(this));
@@ -752,7 +763,7 @@ int ObTabletCreateSSTableParam::init_for_mds(
     const blocksstable::ObSSTableMergeRes &res,
     const ObStorageSchema &mds_schema)
 {
-  // TODO: @luhaopeng.lhp check ctx valid for mds
+  // TODO: @baichangmin.bcm check ctx valid for mds
   // reference to merge info
   int ret = OB_SUCCESS;
   const compaction::ObStaticMergeParam &static_param = ctx.static_param_;
@@ -806,6 +817,46 @@ int ObTabletCreateSSTableParam::init_for_mds(
       LOG_WARN("init for mds sstable get invalid argument", K(ret), K(res), K(ctx), KPC(this));
     }
   }
+  return ret;
+}
+
+int ObTabletCreateSSTableParam::inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &sstable_param)
+{
+  int ret = OB_SUCCESS;
+  if (sstable_param.root_block_addr_.is_valid()) {
+    root_block_addr_ = sstable_param.root_block_addr_;
+    root_block_data_.buf_ = sstable_param.root_block_buf_;
+    root_block_data_.size_ = sstable_param.root_block_addr_.size();
+  }
+
+  if (sstable_param.data_block_macro_meta_addr_.is_valid()) {
+    data_block_macro_meta_addr_ = sstable_param.data_block_macro_meta_addr_;
+    data_block_macro_meta_.buf_ = sstable_param.data_block_macro_meta_buf_;
+    data_block_macro_meta_.size_ = sstable_param.data_block_macro_meta_addr_.size();
+  }
+
+  root_row_store_type_ = sstable_param.basic_meta_.root_row_store_type_;
+  data_index_tree_height_ = sstable_param.basic_meta_.data_index_tree_height_;
+  index_blocks_cnt_ = sstable_param.basic_meta_.index_macro_block_count_;
+  data_blocks_cnt_ = sstable_param.basic_meta_.data_macro_block_count_;
+  micro_block_cnt_ = sstable_param.basic_meta_.data_micro_block_count_;
+  use_old_macro_block_count_ = sstable_param.basic_meta_.use_old_macro_block_count_;
+  row_count_ = sstable_param.basic_meta_.row_count_;
+  data_checksum_ = sstable_param.basic_meta_.data_checksum_;
+  occupy_size_ = sstable_param.basic_meta_.occupy_size_;
+  original_size_ = sstable_param.basic_meta_.original_size_;
+  contain_uncommitted_row_ = sstable_param.basic_meta_.contain_uncommitted_row_;
+  compressor_type_ = sstable_param.basic_meta_.compressor_type_;
+  encrypt_id_ = sstable_param.basic_meta_.encrypt_id_;
+  master_key_id_ = sstable_param.basic_meta_.master_key_id_;
+  is_meta_root_ = sstable_param.is_meta_root_;
+  root_macro_seq_ = sstable_param.basic_meta_.root_macro_seq_;
+  STATIC_ASSERT(ARRAYSIZEOF(encrypt_key_) == share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH,
+  "ObTabletCreateSSTableParam encrypt_key_ array size mismatch OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH");
+  STATIC_ASSERT(ARRAYSIZEOF(sstable_param.basic_meta_.encrypt_key_) == share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH,
+  "ObSSTableMergeRes encrypt_key_ array size mismatch OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH");
+  MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+  table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
   return ret;
 }
 

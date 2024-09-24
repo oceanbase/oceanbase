@@ -49,6 +49,13 @@ enum class ObEstCorrelationType
   MAX
 };
 
+enum class ObTableAccessPolicy {
+  ROW_STORE,
+  COLUMN_STORE,
+  AUTO,
+  MAX
+};
+
 typedef common::ObArray<common::ObString, common::ObIAllocator &> ObPlanNotes;
 //table location local index id related info
 //tablet_loc_id and ref_table_id_ are used to uniquely determine
@@ -251,7 +258,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_spf_batch_rescan_(false),
     correlation_type_(ObEstCorrelationType::MAX),
     use_column_store_replica_(false),
-    push_join_pred_into_view_enabled_(true)
+    push_join_pred_into_view_enabled_(true),
+    table_access_policy_(ObTableAccessPolicy::AUTO)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -647,6 +655,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
   inline bool is_push_join_pred_into_view_enabled() const { return push_join_pred_into_view_enabled_; }
   inline void set_push_join_pred_into_view_enabled(bool enabled) { push_join_pred_into_view_enabled_ = enabled; }
+  inline void set_table_access_policy(ObTableAccessPolicy policy) { table_access_policy_ = policy; }
+  inline ObTableAccessPolicy get_table_acces_policy() const { return table_access_policy_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -741,6 +751,7 @@ private:
   ObEstCorrelationType correlation_type_;
   bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;
+  ObTableAccessPolicy table_access_policy_;
 };
 }
 }

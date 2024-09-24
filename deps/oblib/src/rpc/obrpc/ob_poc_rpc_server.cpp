@@ -282,6 +282,7 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
       RPC_LOG(WARN, "pn_provision for RATELIMIT_PNIO_GROUP error", K(count), K(rl_net_thread_count));
     } else {
       has_start_ = true;
+      RPC_LOG(INFO, "start rpc server success", K(port), K(count));
     }
   }
   return ret;
@@ -304,6 +305,7 @@ int ObPocRpcServer::start_net_client(int net_thread_count)
     } else {
       has_start_ = true;
       start_as_client_ = true;
+      RPC_LOG(INFO, "start rpc net client success", K(net_thread_count));
     }
   }
   return ret;
@@ -329,6 +331,7 @@ void ObPocRpcServer::destroy()
 {
   stop();
   wait();
+  RPC_LOG(INFO, "destory successfully");
 }
 
 int ObPocRpcServer::update_tcp_keepalive_params(int64_t user_timeout) {

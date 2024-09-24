@@ -225,6 +225,7 @@ namespace sql
     int init_system_stat();
     int calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count);
     int init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
+    int init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
 
   private:
     ObOptimizerContext &ctx_;

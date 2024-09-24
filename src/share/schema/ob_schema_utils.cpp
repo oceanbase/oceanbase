@@ -1324,9 +1324,17 @@ int ObSchemaUtils::is_drop_column_only(const AlterTableSchema &alter_table_schem
   }
   return ret;
 }
+
 const char* DDLType[]
 {
   "TRUNCATE_TABLE",
+  "SET_COMMENT",
+  "CREATE_INDEX",
+  "CREATE_VIEW"
+};
+
+const char* NOT_SUPPORT_DDLType[]
+{
   "SET_COMMENT",
   "CREATE_INDEX",
   "CREATE_VIEW"
@@ -1449,14 +1457,25 @@ int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_te
 {
   int ret = OB_SUCCESS;
   int ddl_type_size = ARRAYSIZEOF(DDLType);
-  for (int i = 0; OB_SUCC(ret) && i < (ddl_type_size - 1); ++i) {
-    if (OB_FAIL(config_value.append_fmt("%s:ON, ", DDLType[i]))) {
+  int not_support_ddl_size = ARRAYSIZEOF(NOT_SUPPORT_DDLType);
+  config_value.reset();
+  for (int i = 0; OB_SUCC(ret) && i < ddl_type_size; ++i) {
+    ObString tmp_str = DDLType[i];
+    bool not_support = false;
+    for (int j = 0; OB_SUCC(ret) && j < not_support_ddl_size; ++j) {
+      if (tmp_str.case_compare(NOT_SUPPORT_DDLType[j]) == 0) {
+        not_support = true;
+        break;
+      }
+    }
+    if (not_support) {
+      continue;
+    } else if (OB_FAIL(config_value.append_fmt("%s:ON, ", DDLType[i]))) {
       LOG_WARN("fail to append fmt", KR(ret), K(i));
     }
   }
-  if ((ddl_type_size > 0)
-      && FAILEDx(config_value.append_fmt("%s:ON", DDLType[ddl_type_size - 1]))) {
-    LOG_WARN("fail to append fmt", KR(ret), K(ddl_type_size));
+  if (config_value.is_valid()) {
+    config_value.set_length(config_value.length()-2);
   }
   return ret;
 }

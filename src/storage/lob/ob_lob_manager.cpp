@@ -3778,8 +3778,9 @@ int ObLobQueryIter::open(ObLobAccessParam &param, ObLobCtx& lob_ctx, common::ObA
   if (OB_FAIL(lob_manager->lob_query_with_retry(param, dst_addr, is_remote, meta_iter_,
               ObLobQueryArg::QueryType::READ, remote_query_ctx_))) {
     LOG_WARN("fail to do lob query with retry", K(ret), K(is_remote), K(dst_addr));
+  } else if (OB_FAIL(param_.assign(param))) {
+    LOG_WARN("assign lob access param fail", K(ret), K(param));
   } else if (is_remote) { // init remote scan
-    param_ = param;
     is_reverse_ = param.scan_backward_;
     cs_type_ = param.coll_type_;
     is_inited_ = true;
@@ -3791,7 +3792,6 @@ int ObLobQueryIter::open(ObLobAccessParam &param, ObLobCtx& lob_ctx, common::ObA
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc buffer failed.", K(ret), K(last_data_buf_len_));
     } else {
-      param_ = param;
       lob_ctx_ = lob_ctx;
       is_inited_ = true;
       is_in_row_ = false;

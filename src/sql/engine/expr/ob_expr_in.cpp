@@ -936,8 +936,8 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
       * both dont have tailing space
       * right params count is 2(> 2 will turn to hash calc)
       */
-      bool can_cmp_mem = expr.args_[0]->obj_meta_.is_string_type() 
-                         && CS_TYPE_UTF8MB4_BIN == expr.args_[0]->obj_meta_.get_collation_type();
+      bool can_cmp_mem = ob_is_support_cmp_mem_str_type(expr.args_[0]->obj_meta_.get_type(),
+                                                        expr.args_[0]->obj_meta_.get_collation_type());
       //eval all right params
       for (int64_t j = 0; OB_SUCC(ret) && j < expr.inner_func_cnt_; ++j) {
         if (OB_FAIL(expr.args_[1]->args_[j]->eval(ctx, right_store[j]))) {
@@ -1115,8 +1115,8 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
     * both dont have tailing space
     * right params count is 2(> 2 will turn to hash calc)
     */
-    bool can_cmp_mem = expr.args_[0]->obj_meta_.is_string_type()
-                        && CS_TYPE_UTF8MB4_BIN == expr.args_[0]->obj_meta_.get_collation_type();
+    bool can_cmp_mem = ob_is_support_cmp_mem_str_type(expr.args_[0]->obj_meta_.get_type(),
+                                                      expr.args_[0]->obj_meta_.get_collation_type());
     // eval all right params
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
       // Because we know that in this scenario,
@@ -2083,7 +2083,7 @@ void ObExprInOrNotIn::check_right_can_cmp_mem(const ObDatum &datum,
                                               bool &cnt_null)
 {
   static const char SPACE = ' ';
-  if (!meta.is_string_type() || CS_TYPE_UTF8MB4_BIN != meta.get_collation_type()) {
+  if (!ob_is_support_cmp_mem_str_type(meta.get_type(), meta.get_collation_type())) {
     cnt_null = cnt_null || datum.is_null();
     can_cmp_mem = false;
   } else {

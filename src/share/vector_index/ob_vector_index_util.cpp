@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_vector_index_util.h"
+#include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -121,6 +122,87 @@ int ObVectorIndexUtil::parser_params_from_string(
       param.dim_ = 0; // TODO@xiajin: fill dim
     }
     LOG_DEBUG("parser vector index param", K(ret), K(index_param_str), K(param));
+  }
+  return ret;
+}
+
+bool ObVectorIndexUtil::is_expr_type_and_distance_algorithm_match(
+     const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm)
+{
+  bool is_match = false;
+  switch (expr_type) {
+    case T_FUN_SYS_L2_DISTANCE: {
+      if (ObVectorIndexDistAlgorithm::VIDA_L2 == algorithm) {
+        is_match = true;
+      }
+      break;
+    }
+    case T_FUN_SYS_INNER_PRODUCT:
+    case T_FUN_SYS_NEGATIVE_INNER_PRODUCT: {
+      if (ObVectorIndexDistAlgorithm::VIDA_IP == algorithm) {
+        is_match = true;
+      }
+      break;
+    }
+    default: break;
+  }
+  return is_match;
+}
+
+int ObVectorIndexUtil::check_distance_algorithm_match(
+    ObSchemaGetterGuard &schema_guard,
+    const schema::ObTableSchema &table_schema,
+    const ObString &index_column_name,
+    const ObItemType type,
+    bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  const int64_t data_table_id = table_schema.get_table_id();
+  const int64_t database_id = table_schema.get_database_id();
+  const int64_t tenant_id = table_schema.get_tenant_id();
+  const int64_t vector_index_column_cnt = 1;
+  is_match = false;
+
+  if (index_column_name.empty() ||
+      OB_INVALID_ID == data_table_id || OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == database_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument",
+      K(ret), K(index_column_name), K(data_table_id), K(tenant_id), K(database_id));
+  } else {
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    ObSEArray<ObString, 1> col_names;
+    ObVectorIndexHNSWParam index_param;
+    if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("fail to get simple index infos failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < simple_index_infos.count(); ++i) {
+        const ObTableSchema *index_schema = nullptr;
+        const int64_t table_id = simple_index_infos.at(i).table_id_;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, index_schema))) {
+          LOG_WARN("fail to get index table schema", K(ret), K(tenant_id), K(table_id));
+        } else if (OB_ISNULL(index_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+        } else if (!index_schema->is_vec_index()) {
+          // skip none vector index
+        } else if (index_schema->is_built_in_vec_index()) {
+          // skip built in vector index table
+        } else if (OB_FAIL(get_vector_index_column_name(table_schema, *index_schema, col_names))) {
+          LOG_WARN("fail to get vector index column name", K(ret), K(index_schema));
+        } else if (col_names.count() != vector_index_column_cnt) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected vector index column cnt, should equal to one", K(ret), K(col_names.count()));
+        } else if (ObColumnNameHashWrapper(col_names.at(0)) == ObColumnNameHashWrapper(index_column_name)) {
+          if (OB_FAIL(parser_params_from_string(index_schema->get_index_params(), index_param))) {
+            LOG_WARN("fail to parser params from string", K(ret), K(index_schema->get_index_params()));
+          } else {
+            is_match = is_expr_type_and_distance_algorithm_match(type, index_param.dist_algorithm_);
+            LOG_INFO("has finish finding index according to column_name and check expr match",
+              K(is_match), K(type), K(index_param.dist_algorithm_));
+          }
+        }
+      }
+    }
   }
   return ret;
 }
@@ -825,9 +907,98 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
       new_index_schema.set_table_id(new_index_table_id);
       new_index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
       new_index_schema.set_table_state_flag(data_table_schema.get_table_state_flag());
+      new_index_schema.set_exec_env(create_index_arg.vidx_refresh_info_.exec_env_);
     }
   }
   LOG_DEBUG("generate_index_schema_from_exist_table", K(ret), K(new_index_table_name));
+  return ret;
+}
+
+int ObVectorIndexUtil::add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                            const uint64_t vidx_table_id,
+                                            const common::ObString &exec_env)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObVectorIndexSchedJobUtils::add_vector_index_refresh_job(
+                      sql_client, tenant_id,
+                      vidx_table_id,
+                      exec_env))) {
+    LOG_WARN("fail to add vector index refresh job", KR(ret), K(tenant_id), K(vidx_table_id), K(exec_env));
+  } else if (OB_FAIL(ObVectorIndexSchedJobUtils::add_vector_index_rebuild_job(
+                      sql_client, tenant_id,
+                      vidx_table_id,
+                      exec_env))) {
+    LOG_WARN("fail to add vector index rebuild job", KR(ret), K(tenant_id), K(vidx_table_id), K(exec_env));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::remove_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                               const uint64_t vidx_table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObVectorIndexSchedJobUtils::remove_vector_index_refresh_job(
+                     sql_client, tenant_id, vidx_table_id))) {
+    LOG_WARN("failed to remove vector index refresh job",
+            KR(ret), K(tenant_id), K(vidx_table_id));
+  } else if (OB_FAIL(ObVectorIndexSchedJobUtils::remove_vector_index_rebuild_job(
+                     sql_client, tenant_id, vidx_table_id))) {
+    LOG_WARN("failed to remove vector index rebuild job",
+            KR(ret), K(tenant_id), K(vidx_table_id));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::get_dbms_vector_job_info(common::ObISQLClient &sql_client,
+                                                    const uint64_t tenant_id,
+                                                    const uint64_t vidx_table_id,
+                                                    common::ObIAllocator &allocator,
+                                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                                    dbms_scheduler::ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObVectorIndexSchedJobUtils::get_vector_index_job_info(sql_client, tenant_id,
+                                                                    vidx_table_id,
+                                                                    allocator,
+                                                                    schema_guard,
+                                                                    job_info))) {
+    LOG_WARN("fail to get vector index job info", K(ret), K(tenant_id), K(vidx_table_id));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::check_table_exist(
+    const ObTableSchema &data_table_schema,
+    const ObString &domain_index_name)
+{
+  int ret = OB_SUCCESS;
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+  bool is_exist = false;
+  const int64_t tenant_id = data_table_schema.get_tenant_id();
+  const int64_t database_id = data_table_schema.get_database_id();
+  const int64_t data_table_id = data_table_schema.get_table_id();
+  ObString index_table_name;
+  ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+
+  if (OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == database_id || OB_INVALID_ID == data_table_id ||
+      domain_index_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(database_id), K(data_table_id), K(domain_index_name));
+  } else if (OB_FAIL(ObTableSchema::build_index_table_name(
+               allocator, data_table_id, domain_index_name, index_table_name))) {
+    LOG_WARN("build_index_table_name failed", K(ret), K(data_table_id), K(domain_index_name));
+  } else if (OB_FAIL(schema_service.check_table_exist(tenant_id,
+                                                      database_id,
+                                                      index_table_name,
+                                                      true, /* is_index_table */
+                                                      OB_INVALID_VERSION, /* latest version */
+                                                      is_exist))) {
+    LOG_WARN("failed to check is table exist", K(ret));
+  } else if (is_exist) {
+    ret = OB_ERR_TABLE_EXIST;
+    LOG_WARN("table is exist, cannot create it twice", K(ret),
+      K(tenant_id),  K(database_id), K(domain_index_name));
+  }
   return ret;
 }
 

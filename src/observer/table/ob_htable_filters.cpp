@@ -23,6 +23,55 @@ Filter::Filter()
 Filter::~Filter()
 {}
 
+const char *FilterUtils::get_compare_op_name(const CompareOperator &op)
+{
+  const char *name = "UNKNOWN";
+
+  switch (op) {
+    case CompareOperator::EQUAL: {
+      name = "EQUAL";
+      break;
+    }
+    case CompareOperator::GREATER: {
+      name = "GREATER";
+      break;
+    }
+    case CompareOperator::GREATER_OR_EQUAL: {
+      name = "GREATER_OR_EQUAL";
+      break;
+    }
+    case CompareOperator::LESS: {
+      name = "LESS";
+      break;
+    }
+    case CompareOperator::LESS_OR_EQUAL: {
+      name = "LESS_OR_EQUAL";
+      break;
+    }
+    case CompareOperator::NO_OP: {
+      name = "NO_OP";
+      break;
+    }
+    case CompareOperator::NOT_EQUAL: {
+      name = "NOT_EQUAL";
+      break;
+    }
+    case CompareOperator::IS: {
+      name = "IS";
+      break;
+    }
+    case CompareOperator::IS_NOT: {
+      name = "IS_NOT";
+      break;
+    }
+    default: {
+      name = "UNKNOWN";
+    }
+  }
+
+  return name;
+}
+
 FilterBase::~FilterBase() {}
 ////////////////////////////////////////////////////////////////
 CompareFilter::~CompareFilter()
@@ -215,6 +264,38 @@ bool RowFilter::filter_row()
   return filter_out_row_;
 }
 
+// statement is "RowFilter $compare_op_name"
+int64_t RowFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("RowFilter"); // "RowFilter"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int RowFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "RowFilter %s", FilterUtils::get_compare_op_name(cmp_op_));
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 QualifierFilter::~QualifierFilter()
 {}
@@ -232,6 +313,38 @@ int QualifierFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
   return ret;
 }
 
+// statement is "QualifierFilter $compare_op_name"
+int64_t QualifierFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("QualifierFilter"); // "QualifierFilter"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int QualifierFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "QualifierFilter %s", FilterUtils::get_compare_op_name(cmp_op_));
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 ValueFilter::~ValueFilter() {}
 int ValueFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
@@ -241,6 +354,38 @@ int ValueFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
   if (compare_value(cmp_op_, *comparator_, cell)) {
     ret_code = ReturnCode::SKIP;
   }
+  return ret;
+}
+
+// statement is "ValueFilter $compare_op_name"
+int64_t ValueFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("ValueFilter"); // "ValueFilter"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int ValueFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "ValueFilter %s", FilterUtils::get_compare_op_name(cmp_op_));
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
   return ret;
 }
 
@@ -284,113 +429,103 @@ void FilterListBase::reset()
     filters_.at(i)->reset();
   } // end for
 }
+
+// statement is "$list_filter_name $operator $filter0, $filter1, ..., $filtern"
+// eg: "FilterListAND AND ValueFilter EQUAL, ValueFilter GREATER"
+int64_t FilterListBase::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen(filter_name()); // "$list_filter_name"
+  len += 1; // blank
+  len += strlen(operator_to_string(op_)); // "$operator"
+  len += 1; // blank
+
+  int64_t N = filters_.count();
+  for (int64_t i = 0; i < N - 1; i++) {
+    Filter *filter = filters_.at(i);
+    if (OB_NOT_NULL(filter)) {
+      len += filter->get_format_filter_string_length();
+      len += 2; // ", "
+    }
+  }
+  if (0 < N) {
+    Filter *filter = filters_.at(N - 1);
+    if (OB_NOT_NULL(filter)) {
+      len += filter->get_format_filter_string_length();
+    }
+  }
+
+  return len;
+}
+
+int FilterListBase::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "%s %s ", filter_name(), operator_to_string(op_));
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      int64_t N = filters_.count();
+      for (int64_t i = 0; i < N - 1 && OB_SUCC(ret); i++) {
+        Filter *filter = filters_.at(i);
+        if (OB_NOT_NULL(filter) && OB_FAIL(filter->get_format_filter_string(buf, buf_len, pos))) {
+          LOG_WARN("fail to get format filter string", KR(ret), K(n), K(pos), K(buf_len));
+        } else {
+          J_COMMA();
+        }
+      }
+      if (OB_SUCC(ret) && 0 < N) {
+        Filter *filter = filters_.at(N - 1);
+        if (OB_NOT_NULL(filter) && OB_FAIL(filter->get_format_filter_string(buf, buf_len, pos))) {
+          LOG_WARN("fail to get format filter string", KR(ret), K(n), K(pos), K(buf_len));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 FilterListAND::~FilterListAND()
 {}
 
-// Maximal Step Rule
-Filter::ReturnCode FilterListAND::merge_return_code(ReturnCode rc, ReturnCode local_rc)
-{
-  ReturnCode ret_code = local_rc;
-  if (rc == ReturnCode::SEEK_NEXT_USING_HINT) {
-    ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
-  } else {
-    switch (local_rc) {
-      case ReturnCode::SEEK_NEXT_USING_HINT:
-        ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
-        break;
-      case ReturnCode::INCLUDE:
-        ret_code = rc;
-        break;
-      case ReturnCode::INCLUDE_AND_NEXT_COL:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::INCLUDE_AND_NEXT_COL) {
-          ret_code = ReturnCode::INCLUDE_AND_NEXT_COL;
-        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW) {
-          ret_code = ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW;
-        } else if (rc == ReturnCode::SKIP
-                   || rc == ReturnCode::NEXT_COL) {
-          ret_code = ReturnCode::NEXT_COL;
-        } else if (rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::INCLUDE_AND_NEXT_COL
-            || rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW) {
-          ret_code = ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW;
-        } else if (rc == ReturnCode::SKIP
-                   || rc == ReturnCode::NEXT_COL
-                   || rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::SKIP:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::SKIP) {
-          ret_code = ReturnCode::SKIP;
-        } else if (rc == ReturnCode::INCLUDE_AND_NEXT_COL
-                   || rc == ReturnCode::NEXT_COL) {
-          ret_code = ReturnCode::NEXT_COL;
-        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW
-                   || rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::NEXT_COL:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::INCLUDE_AND_NEXT_COL
-            || rc == ReturnCode::SKIP
-            || rc == ReturnCode::NEXT_COL) {
-          ret_code = ReturnCode::NEXT_COL;
-        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW
-                   || rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::NEXT_ROW:
-        ret_code = ReturnCode::NEXT_ROW;
-        break;
-      default:
-        break;
-    }  // end switch
-  }
-  return ret_code;
-}
-
 int FilterListAND::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
 {
   int ret = OB_SUCCESS;
-  if (filters_.empty()) {
-    ret_code = ReturnCode::INCLUDE;
-  } else {
-    ret_code = ReturnCode::INCLUDE;
-    seek_hint_filters_.reset();
-    const int64_t N = filters_.count();
-    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
-    {
-      Filter *filter = filters_.at(i);
-      if (filter->filter_all_remaining()) {
-        ret_code = ReturnCode::NEXT_ROW;
-        break;
+  ret_code = ReturnCode::INCLUDE;
+  seek_hint_filters_.reset();
+  const int64_t N = filters_.count();
+  bool loop = true;
+  for (int64_t i = 0; OB_SUCCESS == ret && i < N && loop; ++i) {
+    Filter *filter = filters_.at(i);
+    if (filter->filter_all_remaining()) {
+      ret_code = ReturnCode::NEXT_ROW;
+      loop = false;
+    } else {
+      if (OB_FAIL(filter->filter_cell(cell, ret_code))) {
+        LOG_WARN("failed to filter cell", K(ret));
       } else {
-        ReturnCode local_rc;
-        if (OB_FAIL(filter->filter_cell(cell, local_rc))) {
-          LOG_WARN("failed to filter cell", K(ret));
-        } else {
-          ret_code = merge_return_code(ret_code, local_rc);
-          LOG_DEBUG("[yzfdebug] AND filter cell", K(i), K(local_rc), K(ret_code));
-          if (local_rc == ReturnCode::SEEK_NEXT_USING_HINT) {
+        switch (ret_code) {
+          case ReturnCode::INCLUDE_AND_NEXT_COL:
+          case ReturnCode::INCLUDE:
+            continue;
+          case ReturnCode::SEEK_NEXT_USING_HINT:
             if (OB_FAIL(seek_hint_filters_.push_back(filter))) {
               LOG_WARN("failed to push back", K(ret));
             }
-          }
+          default:
+            loop = false;
         }
       }
-    } // end for
-    if (!seek_hint_filters_.empty()) {
-      ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
     }
   }
   return ret;
@@ -714,6 +849,45 @@ int SkipFilter::transform_cell(const ObHTableCell &cell, const ObHTableCell *&ne
 {
   return filter_->transform_cell(cell, new_cell);
 }
+
+// statement is "SkipFilter $filter"
+int64_t SkipFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("SkipFilter"); // "SkipFilter"
+  len += 1; // blank
+  // "$filter"
+  if (OB_NOT_NULL(filter_)) {
+    len += filter_->get_format_filter_string_length();
+  }
+
+  return len;
+}
+
+int SkipFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "SkipFilter ");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      if (OB_NOT_NULL(filter_) && OB_FAIL(filter_->get_format_filter_string(buf, buf_len, pos))) {
+        LOG_WARN("fail to get format filter string", KR(ret), K(n), K(pos), K(buf_len));
+      }
+    }
+  }
+
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 WhileMatchFilter::~WhileMatchFilter() {}
 
@@ -761,6 +935,44 @@ bool WhileMatchFilter::filter_row()
   bool bret = filter_->filter_row();
   filter_all_remaining_ = filter_all_remaining_ || bret;
   return bret;
+}
+
+// statement is "WhileMatchFilter $filter"
+int64_t WhileMatchFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("WhileMatchFilter"); // "WhileMatchFilter"
+  len += 1; // blank
+  // "$filter"
+  if (OB_NOT_NULL(filter_)) {
+    len += filter_->get_format_filter_string_length();
+  }
+
+  return len;
+}
+
+int WhileMatchFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "WhileMatchFilter ");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      if (OB_NOT_NULL(filter_) && OB_FAIL(filter_->get_format_filter_string(buf, buf_len, pos))) {
+        LOG_WARN("fail to get format filter string", KR(ret), K(n), K(pos), K(buf_len));
+      }
+    }
+  }
+
+  return ret;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -822,6 +1034,60 @@ bool SingleColumnValueFilter::filter_row()
   return found_column_ ? (!matched_column_) : (filter_if_missing_);
 }
 
+// statement is "SingleColumnValueFilter $family $qualifier $compare_op_name"
+int64_t SingleColumnValueFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("SingleColumnValueFilter"); // "WhileMatchFilter"
+  len += 1; // blank
+  len += family_.length(); // "$family"
+  len += 1; // blank
+  len += qualifier_.length(); // "$qualifier"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int SingleColumnValueFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "SingleColumnValueFilter ");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      strncat(buf + pos, family_.ptr(), family_.length());
+      pos += family_.length();
+      int64_t n = snprintf(buf + pos, buf_len - pos, " ");
+      if (n < 0 || n > buf_len - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+      } else {
+        pos += n;
+        strncat(buf + pos, qualifier_.ptr(), qualifier_.length());
+        pos += qualifier_.length();
+        int64_t n = snprintf(buf + pos, buf_len - pos, " %s", FilterUtils::get_compare_op_name(cmp_op_));
+        if (n < 0 || n > buf_len - pos) {
+          ret = OB_BUF_NOT_ENOUGH;
+          LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+        } else {
+          pos += n;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 bool PageFilter::filter_row()
 {
@@ -839,6 +1105,78 @@ int PageFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
 bool PageFilter::filter_all_remaining()
 {
   return rows_accepted_ >= page_size_;
+}
+
+// statement is "PageFilter"
+int64_t PageFilter::get_format_filter_string_length() const
+{
+  return strlen("PageFilter");
+}
+
+int PageFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "PageFilter");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int ColumnPaginationFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cell);
+  if (count_ >= offset_ + limit_) {
+    ret_code = ReturnCode::NEXT_ROW;
+  } else{
+    ret_code = count_ < offset_ ? ReturnCode::NEXT_COL : ReturnCode::INCLUDE_AND_NEXT_COL;
+    count_++;
+  }
+  return ret;
+}
+
+void ColumnPaginationFilter::reset()
+{
+  count_ = 0;
+  return;
+}
+
+// statement is "ColumnPaginationFilter"
+int64_t ColumnPaginationFilter::get_format_filter_string_length() const
+{
+  return strlen("ColumnPaginationFilter");
+}
+
+int ColumnPaginationFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "ColumnPaginationFilter");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -868,6 +1206,32 @@ int ColumnCountGetFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_
   } else {
     ret_code = ReturnCode::INCLUDE_AND_NEXT_COL;
   }
+  return ret;
+}
+
+// statement is "ColumnCountGetFilter"
+int64_t ColumnCountGetFilter::get_format_filter_string_length() const
+{
+  return strlen("ColumnCountGetFilter");
+}
+
+int ColumnCountGetFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "ColumnCountGetFilter");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
   return ret;
 }
 ////////////////////////////////////////////////////////////////
@@ -930,4 +1294,58 @@ bool CheckAndMutateFilter::filter_row()
   bool bret = true;
   bret = found_column_ ? (!matched_column_) : true;
   return bret;
+}
+
+// statement is "CheckAndMutateFilter $family $qualifier $compare_op_name"
+int64_t CheckAndMutateFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("CheckAndMutateFilter"); // "WhileMatchFilter"
+  len += 1; // blank
+  len += family_.length(); // "$family"
+  len += 1; // blank
+  len += qualifier_.length(); // "$qualifier"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int CheckAndMutateFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "CheckAndMutateFilter ");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      strncat(buf + pos, family_.ptr(), family_.length());
+      pos += family_.length();
+      int64_t n = snprintf(buf + pos, buf_len - pos, " ");
+      if (n < 0 || n > buf_len - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+      } else {
+        pos += n;
+        strncat(buf + pos, qualifier_.ptr(), qualifier_.length());
+        pos += qualifier_.length();
+        int64_t n = snprintf(buf + pos, buf_len - pos, " %s", FilterUtils::get_compare_op_name(cmp_op_));
+        if (n < 0 || n > buf_len - pos) {
+          ret = OB_BUF_NOT_ENOUGH;
+          LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+        } else {
+          pos += n;
+        }
+      }
+    }
+  }
+
+  return ret;
 }

@@ -140,7 +140,9 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
   }
   if (OB_UNLIKELY(OB_ITER_END != ret)) {
     LOG_WARN("Unexpected, ret should be OB_ITER_END", K(ret));
-    ret = OB_ERR_UNEXPECTED;
+    if (OB_SUCCESS == ret) {
+      ret = OB_ERR_UNEXPECTED;
+    }
   } else {
     count = cur_processed_row_count_;
     cur_processed_row_count_ = 0;

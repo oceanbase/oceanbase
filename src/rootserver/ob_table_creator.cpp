@@ -200,6 +200,7 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
                     const common::ObIArray<bool> &need_create_empty_majors)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t schema_cnt = schemas.count();
   if (OB_UNLIKELY(schema_cnt < 1 || tenant_data_version <= 0
     || schema_cnt != need_create_empty_majors.count())) {
@@ -213,6 +214,7 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
     const share::schema::ObTableSchema &table_schema = *schemas.at(0);
     int64_t all_part_num = table_schema.get_all_part_num();
     common::ObArray<share::ObTabletTablePair> pairs;
+    ObGlobalCSReplicaMgr cs_replica_mgr;
     bool is_oracle_mode = false;
     bool is_create_bind_hidden_tablets = false;
     if (table_schema.is_index_local_storage()
@@ -269,6 +271,11 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
       }
     }
 
+    // try init, but ignore ret. not blocking create tablet if query inner_table failed or other error
+    if (OB_TMP_FAIL(cs_replica_mgr.try_init(tenant_id_, ls_id_array_))) {
+      LOG_WARN("fail to init cs_replica_mgr", KR(tmp_ret));
+    }
+
     if (FAILEDx(data_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("fail to check oracle mode", KR(ret), KPC(data_table_schema));
     } else {
@@ -291,7 +298,8 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
                     OB_INVALID_INDEX,
                     is_create_bind_hidden_tablets,
                     tenant_data_version,
-                    need_create_empty_majors))) {
+                    need_create_empty_majors,
+                    cs_replica_mgr))) {
           LOG_WARN("fail to generate_create_tablet_arg",
                    K(table_schema), K(schemas), KR(ret), K(is_create_bind_hidden_tablets));
         }
@@ -317,7 +325,8 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
                           OB_INVALID_INDEX,
                           is_create_bind_hidden_tablets,
                           tenant_data_version,
-                          need_create_empty_majors))) {
+                          need_create_empty_majors,
+                          cs_replica_mgr))) {
                 LOG_WARN("fail to generate_create_tablet_arg",
                          K(table_schema), K(schemas), KR(ret), K(i), K(is_create_bind_hidden_tablets));
               }
@@ -343,7 +352,8 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
                                 j,
                                 is_create_bind_hidden_tablets,
                                 tenant_data_version,
-                                need_create_empty_majors))) {
+                                need_create_empty_majors,
+                                cs_replica_mgr))) {
                       LOG_WARN("fail to generate_create_tablet_arg",
                                K(table_schema), K(schemas), KR(ret), K(i), K(j), K(is_create_bind_hidden_tablets));
                     }
@@ -384,7 +394,8 @@ int ObTableCreator::generate_create_tablet_arg_(
                     const int64_t subpart_idx,
                     const bool is_create_bind_hidden_tablets,
                     const uint64_t tenant_data_version,
-                    const common::ObIArray<bool> &need_create_empty_majors)
+                    const common::ObIArray<bool> &need_create_empty_majors,
+                    const ObGlobalCSReplicaMgr &cs_replica_mgr)
 {
   int ret = OB_SUCCESS;
   ObTabletID data_tablet_id;
@@ -393,6 +404,7 @@ int ObTableCreator::generate_create_tablet_arg_(
   ObTabletID tablet_id;
   ObBasePartition *data_part = NULL;
   ObBasePartition *part = NULL;
+  bool is_cs_replica_global_visible = false;
   if (PARTITION_LEVEL_ZERO == data_table_schema.get_part_level()) {
     data_tablet_id = data_table_schema.get_tablet_id();
   } else if (OB_FAIL(data_table_schema.get_part_by_idx(part_idx, subpart_idx, data_part))) {
@@ -439,6 +451,8 @@ int ObTableCreator::generate_create_tablet_arg_(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(cs_replica_mgr.check_cs_replica_global_visible(ls_id, is_cs_replica_global_visible))) {
+    LOG_WARN("fail to check need process cs replica", KR(ret), K(ls_id));
   } else if (OB_FAIL(create_tablet_arg.init(
                      tablet_id_array,
                      ls_id,
@@ -447,7 +461,8 @@ int ObTableCreator::generate_create_tablet_arg_(
                      mode,
                      is_create_bind_hidden_tablets,
                      tenant_data_version,
-                     need_create_empty_majors))) {
+                     need_create_empty_majors,
+                     is_cs_replica_global_visible))) {
     LOG_WARN("fail to init create tablet arg", KR(ret), K(schemas), K(is_create_bind_hidden_tablets));
   } else if (OB_FAIL(tablet_creator_.add_create_tablet_arg(create_tablet_arg))) {
     LOG_WARN("fail to add create tablet arg", KR(ret), K(create_tablet_arg));

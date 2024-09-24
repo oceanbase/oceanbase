@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_local_lookup_iter.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
+#include "sql/das/iter/ob_das_vid_merge_iter.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_ir_define.h"
 #include "sql/das/ob_das_vec_define.h"
@@ -138,7 +139,9 @@ int ObDASLocalLookupIter::init_scan_param(ObTableScanParam &param, const ObDASSc
       param.trans_desc_ = trans_desc_;
     }
     if (OB_NOT_NULL(snapshot_)) {
-      param.snapshot_ = *snapshot_;
+      if (OB_FAIL(param.snapshot_.assign(*snapshot_))) {
+        LOG_WARN("assign snapshot fail", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null snapshot", K(ret), KPC(this));
@@ -152,7 +155,7 @@ int ObDASLocalLookupIter::init_scan_param(ObTableScanParam &param, const ObDASSc
       param.op_filters_ = &ctdef->pd_expr_spec_.pushdown_filters_;
     }
     param.pd_storage_filters_ = rtdef->p_pd_expr_op_->pd_storage_filters_;
-    if (OB_FAIL(param.column_ids_.assign(ctdef->access_column_ids_))) {
+    if (FAILEDx(param.column_ids_.assign(ctdef->access_column_ids_))) {
       LOG_WARN("failed to assign column ids", K(ret));
     }
     if (rtdef->sample_info_ != nullptr) {
@@ -173,8 +176,13 @@ void ObDASLocalLookupIter::reset_lookup_state()
 int ObDASLocalLookupIter::add_rowkey()
 {
   int ret = OB_SUCCESS;
-  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN);
-  ObDASScanIter *scan_iter = static_cast<ObDASScanIter *>(data_table_iter_);
+  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
+  ObDASScanIter *scan_iter = nullptr;
+  if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
+    scan_iter = static_cast<ObDASScanIter *>(data_table_iter_);
+  } else {
+    scan_iter = static_cast<ObDASVIdMergeIter *>(data_table_iter_)->get_data_table_iter();
+  }
   storage::ObTableScanParam &scan_param = scan_iter->get_scan_param();
   ObNewRange lookup_range;
   int64 group_id = 0;
@@ -244,7 +252,7 @@ int ObDASLocalLookupIter::add_rowkeys(int64_t count)
 int ObDASLocalLookupIter::do_index_lookup()
 {
   int ret = OB_SUCCESS;
-  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN);
+  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
   if (is_first_lookup_) {
     is_first_lookup_ = false;
     if (OB_FAIL(init_scan_param(lookup_param_, lookup_ctdef_, lookup_rtdef_))) {
@@ -272,8 +280,13 @@ int ObDASLocalLookupIter::do_index_lookup()
 int ObDASLocalLookupIter::check_index_lookup()
 {
   int ret = OB_SUCCESS;
-  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN);
-  ObDASScanIter *scan_iter = static_cast<ObDASScanIter*>(data_table_iter_);
+  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
+  ObDASScanIter *scan_iter = nullptr;
+  if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
+    scan_iter = static_cast<ObDASScanIter*>(data_table_iter_);
+  } else {
+    scan_iter = static_cast<ObDASVIdMergeIter *>(data_table_iter_)->get_data_table_iter();
+  }
   if (GCONF.enable_defensive_check() &&
       lookup_ctdef_->pd_expr_spec_.pushdown_filters_.empty()) {
     if (OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)) {

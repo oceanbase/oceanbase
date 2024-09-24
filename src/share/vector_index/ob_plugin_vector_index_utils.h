@@ -86,7 +86,8 @@ public:
                                               bool &get_data);
   static int get_vec_column_id (ObSEArray<uint64_t, 4> &vector_column_ids,
                                 uint64_t incr_index_table_id,
-                                uint64_t data_table_id);
+                                uint64_t data_table_id,
+                                uint64_t tenant_id);
   static int read_vector_info(ObPluginVectorIndexAdaptor *adapter,
                               ObIAllocator &allocator,
                               ObLSID &ls_id,
@@ -122,12 +123,15 @@ private:
                               ObPluginVectorIndexAdaptor *adapter);
   static int get_non_shared_index_aux_table_colum_count(schema::ObIndexType type, uint32 &col_cnt);
   static int get_non_shared_index_aux_table_rowkey_colum_count(schema::ObIndexType type, uint32 &col_cnt);
-  static int get_special_index_aux_table_column_count(
-    schema::ObIndexType type,
-    uint64_t table_id,
-    uint32 &col_cnt,
-    storage::ObTableScanParam& scan_param);
-  static int get_shared_table_rowkey_colum_count(schema::ObIndexType type, uint64_t table_id, uint32 &col_cnt);
+  static int get_special_index_aux_table_column_count(schema::ObIndexType type,
+                                                      uint64_t tenant_id,
+                                                      uint64_t table_id,
+                                                      uint32 &col_cnt,
+                                                      storage::ObTableScanParam& scan_param);
+  static int get_shared_table_rowkey_colum_count(schema::ObIndexType type,
+                                                 uint64_t tenant_id,
+                                                 uint64_t table_id,
+                                                 uint32 &col_cnt);
   static int try_sync_snapshot_memdata(ObLSID &ls_id,
                                        ObPluginVectorIndexAdaptor *adapter,
                                        SCN &target_scn,

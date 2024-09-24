@@ -228,16 +228,23 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
 ObDASScanCtDef *ObTableScanCtDef::get_lookup_ctdef()
 {
   ObDASScanCtDef *lookup_ctdef = nullptr;
-  if (nullptr == attach_spec_.attach_ctdef_) {
+  const ObDASBaseCtDef *attach_ctdef = attach_spec_.attach_ctdef_;
+  if (nullptr == attach_ctdef) {
     lookup_ctdef = lookup_ctdef_;
-  } else {
-    ObDASTableLookupCtDef *table_lookup_ctdef = nullptr;
-    if (DAS_OP_TABLE_LOOKUP == attach_spec_.attach_ctdef_->op_type_) {
-      OB_ASSERT(2 == attach_spec_.attach_ctdef_->children_cnt_ &&
-                attach_spec_.attach_ctdef_->children_ != nullptr);
-      if (DAS_OP_TABLE_SCAN == attach_spec_.attach_ctdef_->children_[1]->op_type_) {
-        lookup_ctdef = static_cast<ObDASScanCtDef*>(attach_spec_.attach_ctdef_->children_[1]);
-      }
+  } else if (DAS_OP_VID_MERGE == attach_ctdef->op_type_) {
+    OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
+    if (OB_NOT_NULL(lookup_ctdef_)) {
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(attach_ctdef->children_[0]);
+    }
+  } else if (DAS_OP_TABLE_LOOKUP == attach_spec_.attach_ctdef_->op_type_) {
+    OB_ASSERT(2 == attach_spec_.attach_ctdef_->children_cnt_ &&
+              attach_spec_.attach_ctdef_->children_ != nullptr);
+    if (DAS_OP_TABLE_SCAN == attach_spec_.attach_ctdef_->children_[1]->op_type_) {
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(attach_spec_.attach_ctdef_->children_[1]);
+    } else if (DAS_OP_VID_MERGE == attach_ctdef->children_[1]->op_type_) {
+      ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(attach_ctdef->children_[1]);
+      OB_ASSERT(2 == vid_merge_ctdef->children_cnt_ && vid_merge_ctdef->children_ != nullptr);
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(vid_merge_ctdef->children_[0]);
     }
   }
   return lookup_ctdef;
@@ -249,21 +256,28 @@ ObDASScanCtDef *ObTableScanCtDef::get_rowkey_vid_ctdef()
   const ObDASBaseCtDef *attach_ctdef = attach_spec_.attach_ctdef_;
   if (OB_NOT_NULL(attach_ctdef)) {
     /**
-     * The iter tree of das scan with vid:
+     * The iter tree of das scan with vec id:
      *
-     * CASE 1: Partition Scan Tree
+     * CASE 1: Partition Scan Tree                        CASE 2: Index LoopUp Tree
      *
-     *                DOC_ID_MERGE_ITER
-     *                 /              \
-     *               /                  \
-     * DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyVid)
-     *
-     *
-     *
+     *                DOC_ID_MERGE_ITER                              DAS_INDEX_LOOKUP_ITER
+     *                 /              \                               /                \
+     *               /                  \                            /                  \
+     * DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyVid)  DAS_SCAN_ITER(IndexTable) DOC_ID_MERGE_ITER
+     *                                                                                /          \
+     *                                                                              /             \
+     *                                                             DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyVid)
      **/
     if (DAS_OP_VID_MERGE == attach_ctdef->op_type_) {
       OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
       rowkey_vid_ctdef = static_cast<ObDASScanCtDef *>(attach_ctdef->children_[1]);
+    } else if (DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_) {
+      OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
+      if (DAS_OP_VID_MERGE == attach_ctdef->children_[1]->op_type_) {
+        ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(attach_ctdef->children_[1]);
+        OB_ASSERT(2 == vid_merge_ctdef->children_cnt_ && vid_merge_ctdef->children_ != nullptr);
+        rowkey_vid_ctdef = static_cast<ObDASScanCtDef *>(vid_merge_ctdef->children_[1]);
+      }
     }
   }
   return rowkey_vid_ctdef;
@@ -755,7 +769,10 @@ int ObTableScanOp::pushdown_attach_task_to_das(ObDASScanOp &target_op)
 {
   int ret = OB_SUCCESS;
   ObDASAttachRtInfo *attach_rtinfo = tsc_rtdef_.attach_rtinfo_;
-  if (OB_FAIL(target_op.reserve_related_buffer(attach_rtinfo->related_scan_cnt_))) {
+  if (MY_SPEC.is_index_global_ && nullptr != MY_CTDEF.lookup_ctdef_
+      && DAS_OP_VID_MERGE == MY_CTDEF.attach_spec_.attach_ctdef_->op_type_) {
+    // just skip, and doc id merge will be attach into global lookup iter.
+  } else if (OB_FAIL(target_op.reserve_related_buffer(attach_rtinfo->related_scan_cnt_))) {
     LOG_WARN("reserve related buffer failed", K(ret), K(attach_rtinfo->related_scan_cnt_));
   } else if (OB_FAIL(attach_related_taskinfo(target_op, attach_rtinfo->attach_rtdef_))) {
     LOG_WARN("attach related task info failed", K(ret));
@@ -3193,7 +3210,7 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !need_ignore_null) {
       ObDatumRow *row = (*(spat_index_.spat_rows_))[spat_index_.spat_row_index_++];
       ObStorageDatum &cellid = row->storage_datums_[0];
       ObStorageDatum &mbr = row->storage_datums_[1];

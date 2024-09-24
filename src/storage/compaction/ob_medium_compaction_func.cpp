@@ -28,6 +28,7 @@
 #include "storage/column_store/ob_column_store_replica_util.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif
@@ -166,6 +167,10 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
         // do nothing, end loop
       } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
         if (freeze_info.frozen_scn_.get_val_for_tx() <= scheduler_frozen_version) {
+#ifdef ERRSIM
+          SERVER_EVENT_SYNC_ADD("merge_errsim", "schema_recycled", "tablet_id", tablet_id,
+              "merge_version", scheduler_frozen_version, "ret", ret);
+#endif
           FLOG_INFO("table schema may recycled, use newer freeze info instead", K(ret), KPC(last_major), K(freeze_info),
             K(scheduler_frozen_version));
           schedule_snapshot = freeze_info.frozen_scn_.get_val_for_tx();
@@ -986,9 +991,27 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
   }
   if (FAILEDx(init_parallel_range_and_schema_changed_and_co_merge_type(result, medium_info))) {
     LOG_WARN("failed to init parallel range", K(ret), K(medium_info));
+  } else if (OB_FAIL(choose_encoding_limit(medium_info))) {
+    STORAGE_LOG(WARN, "Failed to choose encoding rows limit", K(ret), K(medium_info));
   } else {
     medium_info.last_medium_snapshot_ = result.handle_.get_table(0)->get_snapshot_version();
     LOG_TRACE("success to prepare medium info", K(ret), K(medium_info));
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::choose_encoding_limit(ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  if (medium_info.medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V5) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      medium_info.encoding_granularity_ = tenant_config->ob_encoding_granularity;
+    } else {
+      medium_info.encoding_granularity_ = ObMediumCompactionInfo::DEFAULT_ENCODING_ROWS_LIMIT;
+    }
+  } else {
+    medium_info.encoding_granularity_  = 0; // 0 means there is no limit for encoding
   }
   return ret;
 }
@@ -1267,7 +1290,6 @@ int ObMediumCompactionScheduleFunc::init_tablet_filters(share::ObTabletReplicaFi
 
 int ObMediumCompactionScheduleFunc::check_tablet_checksum(
     const ObReplicaCkmArray &checksum_items,
-    const ObLSColumnReplicaCache &ls_cs_replica_cache,
     const int64_t start_idx,
     const int64_t end_idx,
     const bool is_medium_checker,
@@ -1287,35 +1309,16 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
     ObLSID prev_error_ls_id;
     for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx; ++idx) {
       const ObTabletReplicaChecksumItem &curr_item = checksum_items.at(idx);
-      bool is_cs_replica = false;
-      ObLSReplicaUniItem ls_item(curr_item.ls_id_, curr_item.server_);
-      const ObLSReplica *replica = nullptr;
-      bool can_skip = false;
-
-      if (OB_FAIL(ls_cs_replica_cache.check_can_skip(ls_item, can_skip))) {
-        LOG_WARN("failed to check item can skip", K(ret), K(ls_item), K(ls_cs_replica_cache));
-      } else if (can_skip) {
-        LOG_INFO("curr ls item should skip check", K(ls_item), K(ls_cs_replica_cache));
-        continue;
-      } else if (OB_FAIL(ls_cs_replica_cache.check_is_cs_replica(ls_item, is_cs_replica))) {
-        LOG_WARN("fail to check is column replica", K(ret), K(ls_item), K(ls_cs_replica_cache));
-      } else if (OB_ISNULL(prev_item)) {
+      if (OB_ISNULL(prev_item)) {
       } else if (!curr_item.is_same_tablet(*prev_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not continuous same tablet id", K(ret), K(curr_item), KPC(prev_item));
-      } else if (OB_TMP_FAIL(data_checksum_checker.check_data_checksum(curr_item, is_cs_replica))
+      } else if (OB_TMP_FAIL(data_checksum_checker.check_data_checksum(curr_item))
               || OB_TMP_FAIL(curr_item.verify_column_checksum(*prev_item))) {
         if (OB_CHECKSUM_ERROR == tmp_ret) {
-          ObLSColumnReplicaCache dump_cache;
           int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(dump_cache.init())) {
-            LOG_WARN_RET(tmp_ret, "failed to init dump cache", K(MTL_ID()));
-          } else if (OB_TMP_FAIL(dump_cache.update(curr_item.ls_id_))) {
-            LOG_WARN_RET(tmp_ret, "failed to force refresh ls locality", K(curr_item));
-          }
-
           LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(tmp_ret),
-                        K(curr_item), KPC(prev_item), K(ls_cs_replica_cache), K(is_cs_replica), K(dump_cache), K(data_checksum_checker));
+                        K(curr_item), KPC(prev_item), K(data_checksum_checker));
           check_ret = OB_CHECKSUM_ERROR;
           if (curr_item.ls_id_ != prev_error_ls_id) {
             prev_error_ls_id = curr_item.ls_id_;
@@ -1330,21 +1333,21 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
           ret = tmp_ret;
           LOG_WARN("unexpected error in tablet replica checksum", KR(ret), K(curr_item), KPC(prev_item));
         }
-#ifdef ERRSIM
-        if (is_medium_checker && OB_SUCC(ret)) {
-          ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
-          if (OB_FAIL(ret)) {
-            STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_REPLICA_CHECKSUM_ERROR", K(ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
-            error_tablet_ls.tablet_info_ = ObTabletLSPair(curr_item.tablet_id_, curr_item.ls_id_);
-            error_tablet_ls.compaction_scn_ = curr_item.compaction_scn_.get_val_for_tx();
-            if (OB_TMP_FAIL(error_pairs.push_back(error_tablet_ls))) {
-              LOG_WARN("fail to push back error pair", K(tmp_ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
-            }
-            check_ret = OB_CHECKSUM_ERROR;
-          }
-        }
-#endif
       }
+#ifdef ERRSIM
+      if (is_medium_checker && OB_SUCC(ret)) {
+        ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_REPLICA_CHECKSUM_ERROR", K(ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
+          error_tablet_ls.tablet_info_ = ObTabletLSPair(curr_item.tablet_id_, curr_item.ls_id_);
+          error_tablet_ls.compaction_scn_ = curr_item.compaction_scn_.get_val_for_tx();
+          if (OB_TMP_FAIL(error_pairs.push_back(error_tablet_ls))) {
+            LOG_WARN("fail to push back error pair", K(tmp_ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
+          }
+          check_ret = OB_CHECKSUM_ERROR;
+        }
+      }
+#endif
       prev_item = &curr_item;
     }
   }
@@ -1353,7 +1356,6 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
 
 int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     const ObReplicaCkmArray &checksum_items,
-    const ObLSColumnReplicaCache &ls_cs_replica_cache,
     const bool is_medium_checker)
 {
   int ret = OB_SUCCESS;
@@ -1375,8 +1377,8 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
       while (end_idx < count && tablet_id == checksum_items.at(end_idx).tablet_id_) {
         end_idx++;
       }
-      if (OB_FAIL(check_tablet_checksum(checksum_items, ls_cs_replica_cache, start_idx, end_idx, true /*is_medium_checker*/, error_pairs, check_ret))) {
-        LOG_WARN("failed to check tablet checksum", KR(ret), K(checksum_items), K(ls_cs_replica_cache), K(start_idx), K(end_idx), K(error_pairs));
+      if (OB_FAIL(check_tablet_checksum(checksum_items, start_idx, end_idx, true /*is_medium_checker*/, error_pairs, check_ret))) {
+        LOG_WARN("failed to check tablet checksum", KR(ret), K(checksum_items), K(start_idx), K(end_idx), K(error_pairs));
       } else {
         // update medium compaction info
         if (is_medium_checker && OB_SUCCESS == check_ret) {
@@ -1425,8 +1427,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
     const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
     const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
-    ObCompactionTimeGuard &time_guard,
-    const share::ObLSColumnReplicaCache &ls_cs_replica_cache)
+    ObCompactionTimeGuard &time_guard)
 {
   int ret = OB_SUCCESS;
   if (tablet_ls_infos.empty()) {
@@ -1442,7 +1443,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
           MTL_ID(), finish_tablet_ls_infos, checksum_items))) {
         LOG_WARN("failed to get tablet checksum", K(ret));
       } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_CHECKSUM))) {
-      } else if (OB_FAIL(check_replica_checksum_items(checksum_items, ls_cs_replica_cache, true /*is_medium_checker*/))) {
+      } else if (OB_FAIL(check_replica_checksum_items(checksum_items, true /*is_medium_checker*/))) {
         LOG_WARN("fail to check replica checksum items for medium checker", K(ret));
       } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::CHECK_CHECKSUM))) {
       }

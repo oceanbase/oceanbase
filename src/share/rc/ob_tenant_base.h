@@ -138,6 +138,9 @@ namespace table
   class ObTTLService;
   class ObHTableLockMgr;
   class ObTableApiSessPoolMgr;
+  class ObTableGroupCommitMgr;
+  class ObHTableRowkeyMgr;
+  class ObTableClientInfoMgr;
 }
 namespace logservice
 {
@@ -207,6 +210,7 @@ namespace observer
   class ObTableLoadResourceService;
   class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
+  class ObTableQueryASyncMgr;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -289,6 +293,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      share::ObTenantDagScheduler*,                  \
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
@@ -374,7 +379,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantMediumChecker*,            \
       storage::ObTenantCompactionMemPool*,           \
       TenantCompactionObjMgr                         \
-      share::ObTenantDagScheduler*,                  \
       storage::ObStorageHAService*,                  \
       storage::ObTenantFreezeInfoMgr*,               \
       TenantLSMergeScheduler                         \
@@ -421,7 +425,11 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       common::ObRbMemMgr*,                           \
       storage::ObTenantRestoreInfoMgr*,              \
       sql::ObAuditLogger*,                           \
-      sql::ObAuditLogUpdater*                        \
+      sql::ObAuditLogUpdater*,                       \
+      table::ObTableGroupCommitMgr*,                 \
+      observer::ObTableQueryASyncMgr*,               \
+      table::ObTableClientInfoMgr*,                  \
+      table::ObHTableRowkeyMgr*                      \
   )
 
 

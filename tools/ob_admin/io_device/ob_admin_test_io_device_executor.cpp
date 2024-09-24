@@ -546,10 +546,25 @@ int ObAdminTestIODeviceExecutor::test_archive_log_() {
   const char* meta_dir_name = "archive/rounds/";
   const char* meta_file_name = "round_d1002r1_start.obarc";
   const char* meta_file_content = "test archive round start";
+  const int64_t MAX_OB_ADMIN_TIMEOUT = 600000; // 10min
   char meta_file_path[OB_MAX_URI_LENGTH] = { 0 };
   int64_t real_len = strlen(meta_file_content);
 
-  if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
+  ObRefHolder<ObTenantIOManager> tenant_holder;
+  if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, tenant_holder))) {
+    STORAGE_LOG(WARN, "fail to get tenant io manager", K(ret));
+  } else if (OB_ISNULL(tenant_holder.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tenant holder ptr is null", K(ret));
+  } else {
+    ObTenantIOConfig io_config(tenant_holder.get_ptr()->get_io_config());
+    io_config.object_storage_io_timeout_ms_ = MAX_OB_ADMIN_TIMEOUT;
+    if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_config(io_config))) {
+      STORAGE_LOG(WARN, "update tenant io config failed", K(ret), K(io_config));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "failed to set storage info", K_(backup_path));
   } else if (OB_FAIL(databuff_printf(meta_file_path, OB_MAX_URI_LENGTH, "%s%s%s%s",
               backup_path_, "/", meta_dir_name, meta_file_name))) {

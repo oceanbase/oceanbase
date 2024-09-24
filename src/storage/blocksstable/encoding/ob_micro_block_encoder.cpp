@@ -413,10 +413,11 @@ int ObMicroBlockEncoder::append_row(const ObDatumRow &row)
     int64_t store_size = 0;
     ObConstDatumRow datum_row;
     ObMicroBlockHeader *header = get_header(data_buffer_);
-    if (OB_UNLIKELY(datum_rows_.count() >= MAX_MICRO_BLOCK_ROW_CNT)) {
+    uint64_t row_count = (uint64_t)(datum_rows_.count());
+    if (OB_UNLIKELY(row_count >= MAX_MICRO_BLOCK_ROW_CNT || row_count > ctx_.encoding_granularity_)) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_INFO("Try to encode more rows than maximum of row cnt in header, force to build a block",
-          K(datum_rows_.count()), K(row));
+          K(datum_rows_.count()), K(row), K(ctx_.encoding_granularity_));
     } else if (OB_FAIL(process_out_row_columns(row))) {
       LOG_WARN("failed to process out row columns", K(ret));
     } else if (OB_FAIL(copy_and_append_row(row, store_size))) {

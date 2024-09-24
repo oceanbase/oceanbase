@@ -6078,6 +6078,26 @@ BINARY opt_string_length_i_v2
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
+| NCHAR opt_string_length_i_v2
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
+  $$->param_num_ = $2[1];
+  $$->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &($$->str_len_));
+  $$->sql_str_off_ = @1.first_column;
+}
+| NATIONAL CHARACTER opt_string_length_i_v2
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $3[0];        /* length */
+  $$->param_num_ = $3[1];
+  $$->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &($$->str_len_));
+  $$->sql_str_off_ = @1.first_column;
+}
 ;
 
 opt_integer:
@@ -6812,6 +6832,13 @@ STRING_VALUE
   $$->type_ = T_INT;
   $$->param_num_ = 1;
 }
+| NEG_SIGN INTNUM
+{
+  $$ = $2;
+  $$->value_ = -$$->value_;
+  $$->type_ = T_INT;
+  $$->param_num_ = 1;
+}
 
 charset_name:
 NAME_OB
@@ -7376,10 +7403,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
 }
-| TTL '(' ttl_definition ')'
+| TTL opt_equal_mark '(' ttl_definition ')'
 {
-  merge_nodes($$, result, T_TTL_DEFINITION, $3);
-  dup_expr_string($$, result, @3.first_column, @3.last_column);
+  (void)($2) ; /* make bison mute */
+  merge_nodes($$, result, T_TTL_DEFINITION, $4);
+  dup_expr_string($$, result, @4.first_column, @4.last_column);
 }
 | KV_ATTRIBUTES opt_equal_mark STRING_VALUE
 {
@@ -7667,7 +7695,7 @@ PARTITION BY '(' column_name_list ')'
     malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_COLUMNS_PARTITION, 5, column_names, partition_defs, NULL, NULL, NULL);
     dup_expr_string($$, result, @4.first_column, @4.last_column);
   } else {
-    yyerror(NULL, result, "paritition by column is not allowed");
+    yyerror(&@3, result, "paritition by column is not allowed");
     YYERROR;
   }
 }
@@ -8828,7 +8856,7 @@ AS view_select_stmt opt_check_option
   dup_expr_string($10, result, @10.first_column, @10.last_column);
   $$->reserved_ = 2; /* create materialized view */
 }
-| create_with_opt_hint MATERIALIZED VIEW view_name opt_mv_column_list opt_table_option_list opt_partition_option create_mview_opts with_column_group
+| create_with_opt_hint MATERIALIZED VIEW view_name opt_mv_column_list opt_table_option_list opt_partition_option with_column_group create_mview_opts
 AS view_select_stmt opt_check_option
 {
   ParseNode *table_options = NULL;
@@ -8843,11 +8871,11 @@ AS view_select_stmt opt_check_option
                            NULL,
 						               $12,   /* with option */
                            NULL,   /* force view opt */
-                           $8,  /* mview options */
+                           $9,  /* mview options */
                            $7, /* partition option */
                            table_options, /* table options */
                            $1, /* hint */
-                           $9 /* column group */
+                           $8 /* column group */
 						   );
   dup_expr_string($11, result, @11.first_column, @11.last_column);
   $$->reserved_ = 2; /* create materialized view */

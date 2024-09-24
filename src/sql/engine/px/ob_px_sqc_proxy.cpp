@@ -212,7 +212,7 @@ int ObPxSQCProxy::process_dtl_msg(int64_t timeout_ts)
 
   // 如果 do_process_dtl_msg 没有获取到任何消息，
   // 则返回 EAGAIN，否则返回 SUCC
-  if (OB_EAGAIN == ret) {
+  if (OB_DTL_WAIT_EAGAIN == ret) {
     ret = OB_SUCCESS;
   } else {
     LOG_WARN("leader fail process dtl msg", K(ret));
@@ -226,7 +226,7 @@ int ObPxSQCProxy::do_process_dtl_msg(int64_t timeout_ts)
   UNUSED(timeout_ts);
   while (OB_SUCC(ret)) {
     if (OB_FAIL(sqc_ctx_.msg_loop_.process_any(10))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message for sqc, exit", K(ret), K(timeout_ts));
       } else {
         LOG_WARN("fail proccess dtl msg", K(timeout_ts), K(ret));
@@ -259,7 +259,7 @@ int ObPxSQCProxy::get_transmit_data_ch(
           if (OB_FAIL(sqc_ctx_.transmit_data_ch_provider_.get_data_ch_nonblock(
                       sqc_id, task_id, timeout_ts, task_ch_set, ch_info,
                       sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
-            if (OB_EAGAIN == ret) {
+            if (OB_DTL_WAIT_EAGAIN == ret) {
               // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
               if (!need_process_dtl) {
                 ret = OB_ERR_UNEXPECTED;
@@ -270,12 +270,12 @@ int ObPxSQCProxy::get_transmit_data_ch(
             }
           }
         }
-      } while (OB_EAGAIN == ret);
+      } while (OB_DTL_WAIT_EAGAIN == ret);
     } else {
       // follower
       ret = sqc_ctx_.transmit_data_ch_provider_.get_data_ch(sqc_id, task_id, timeout_ts, task_ch_set, ch_info);
     }
-  } while (OB_EAGAIN == ret);
+  } while (OB_DTL_WAIT_EAGAIN == ret);
   return ret;
 }
 
@@ -305,7 +305,7 @@ int ObPxSQCProxy::get_receive_data_ch(int64_t child_dfo_id,
           if (OB_FAIL(sqc_ctx_.receive_data_ch_provider_.get_data_ch_nonblock(
                       child_dfo_id, sqc_id, task_id, timeout_ts, task_ch_set, ch_info,
                       sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
-            if (OB_EAGAIN == ret) {
+            if (OB_DTL_WAIT_EAGAIN == ret) {
               // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
               if (!need_process_dtl) {
                 ret = OB_ERR_UNEXPECTED;
@@ -318,13 +318,13 @@ int ObPxSQCProxy::get_receive_data_ch(int64_t child_dfo_id,
             LOG_TRACE("SUCC got nonblock receive channel", K(task_ch_set), K(child_dfo_id));
           }
         }
-      } while (OB_EAGAIN == ret);
+      } while (OB_DTL_WAIT_EAGAIN == ret);
     } else {
       // follower
       ret = sqc_ctx_.receive_data_ch_provider_.get_data_ch(
           child_dfo_id, sqc_id, task_id, timeout_ts, task_ch_set, ch_info);
     }
-  } while(OB_EAGAIN == ret);
+  } while(OB_DTL_WAIT_EAGAIN == ret);
   return ret;
 }
 
@@ -345,7 +345,7 @@ int ObPxSQCProxy::get_part_ch_map(ObPxPartChInfo &map, int64_t timeout_ts)
         if (OB_SUCC(ret)) {
           if (OB_FAIL(sqc_ctx_.transmit_data_ch_provider_.get_part_ch_map_nonblock(
                       map, timeout_ts, sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
-            if (OB_EAGAIN == ret) {
+            if (OB_DTL_WAIT_EAGAIN == ret) {
               // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
               if (!need_process_dtl) {
                 ret = OB_ERR_UNEXPECTED;
@@ -356,12 +356,12 @@ int ObPxSQCProxy::get_part_ch_map(ObPxPartChInfo &map, int64_t timeout_ts)
             }
           }
         }
-      } while (OB_EAGAIN == ret);
+      } while (OB_DTL_WAIT_EAGAIN == ret);
     } else {
       // follower
       ret = sqc_ctx_.transmit_data_ch_provider_.get_part_ch_map(map, timeout_ts);
     }
-  } while (OB_EAGAIN == ret);
+  } while (OB_DTL_WAIT_EAGAIN == ret);
   return ret;
 }
 
@@ -422,7 +422,7 @@ int ObPxSQCProxy::check_task_finish_status(int64_t timeout_ts)
 
       if (!all_tasks_finish && !all_ctrl_msg_received) {
         if (OB_FAIL(process_dtl_msg(timeout_ts))) {
-          if (OB_EAGAIN != ret) {
+          if (OB_DTL_WAIT_EAGAIN != ret) {
             LOG_WARN("fail process dtl msg", K(ret));
           }
         }
@@ -608,19 +608,19 @@ int ObPxSQCProxy::get_bloom_filter_ch(
       ret = process_dtl_msg(timeout_ts);
       LOG_DEBUG("process dtl bf msg done", K(ret));
     }
-    if (OB_SUCCESS == ret || OB_EAGAIN == ret) {
+    if (OB_SUCCESS == ret || OB_DTL_WAIT_EAGAIN == ret) {
       ret = sqc_ctx_.bf_ch_provider_.get_data_ch_nonblock(
               ch_set, sqc_count, timeout_ts, is_transmit, sqc_arg_.sqc_.get_qc_addr(),
               get_process_query_time());
     }
-    if (OB_EAGAIN == ret) {
+    if (OB_DTL_WAIT_EAGAIN == ret) {
       if(0 == (++wait_count) % 100) {
         LOG_TRACE("try to get bf data channel repeatly", K(wait_count), K(ret));
       }
       // wait 1000us
       ob_usleep(1000);
     }
-  } while (OB_EAGAIN == ret);
+  } while (OB_DTL_WAIT_EAGAIN == ret);
   return ret;
 }
 

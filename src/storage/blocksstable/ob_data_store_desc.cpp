@@ -11,6 +11,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "share/schema/ob_column_schema.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -62,6 +63,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   exec_mode_ = desc.exec_mode_;
   micro_index_clustered_ = desc.micro_index_clustered_;
   need_submit_io_ = desc.need_submit_io_;
+  encoding_granularity_ = desc.encoding_granularity_;
   return ret;
 }
 
@@ -111,7 +113,8 @@ int ObStaticDataStoreDesc::init(
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
-    const bool need_submit_io)
+    const bool need_submit_io,
+    const uint64_t encoding_granularity)
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(merge_type);
@@ -127,6 +130,7 @@ int ObStaticDataStoreDesc::init(
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     exec_mode_ = exec_mode;
+    encoding_granularity_ = encoding_granularity;
 
     if (compaction::is_mds_merge(merge_type_)) {
       micro_index_clustered_ = false;
@@ -894,10 +898,20 @@ int ObWholeDataStoreDesc::init(
     const bool need_submit_io /*=true*/)
 {
   int ret = OB_SUCCESS;
+  uint64_t encoding_granularity = 0;
   reset();
+
+  if (is_ddl && !GCTX.is_shared_storage_mode() && cluster_version >= DATA_VERSION_4_3_3_0) {
+    // for ddl and direct load, we only limit the encoding granularit for share nothing mode
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      encoding_granularity = tenant_config->ob_encoding_granularity;
+    }
+  }
+
   if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type,
                                 snapshot_version, end_scn, cluster_version,
-                                exec_mode, micro_index_clustered, need_submit_io))) {
+                                exec_mode, micro_index_clustered, need_submit_io, encoding_granularity))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));

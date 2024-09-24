@@ -1506,6 +1506,55 @@ case type: {                                                            \
   return ret;
 }
 
+int ObPLDataType::datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null)
+{
+  int ret = OB_SUCCESS;
+
+  OV(OB_NOT_NULL(param), OB_ERR_UNEXPECTED);
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (!is_udt_type) {
+    is_null = param->is_null();
+  } else if (param->is_null() || param->extend_obj_->is_null()) {
+    is_null = true;
+  } else {
+    uint64_t ext = param->extend_obj_->get_ext();
+    switch (param->extend_obj_->get_meta().get_extend_type()) {
+#ifdef OB_BUILD_ORACLE_PL
+      case pl::PL_NESTED_TABLE_TYPE:
+      case pl::PL_ASSOCIATIVE_ARRAY_TYPE:
+      case pl::PL_VARRAY_TYPE: {
+        pl::ObPLCollection *collection = reinterpret_cast<pl::ObPLCollection*>(ext);
+        is_null = OB_ISNULL(collection) ? true : collection->is_collection_null();
+        break;
+      }
+      case pl::PL_OPAQUE_TYPE: {
+        pl::ObPLOpaque *opaque = reinterpret_cast<pl::ObPLOpaque *>(ext);
+        is_null = OB_ISNULL(opaque) ? true : opaque->is_invalid();
+        break;
+      }
+      case pl::PL_CURSOR_TYPE:
+      case pl::PL_REF_CURSOR_TYPE: {
+        is_null = param->extend_obj_->get_ext() == 0;
+      } break;
+#endif
+      case pl::PL_RECORD_TYPE: {
+        pl::ObPLRecord *rec = reinterpret_cast<pl::ObPLRecord *>(ext);
+        is_null = rec->is_null();
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("check complex value is null not supported", K(ret), K(param->extend_obj_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "check complex is null");
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 ObObjAccessIdx::ObObjAccessIdx(const ObPLDataType &elem_type,
                                AccessType access_type,
                                const common::ObString &var_name,
@@ -2090,7 +2139,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
     forall_rollback_ = src.forall_rollback_;
     trans_id_ = src.trans_id_;
     is_scrollable_ = src.is_scrollable_;
-    snapshot_ = src.snapshot_;
+    OZ (snapshot_.assign(src.snapshot_));
     is_need_check_snapshot_ = src.is_need_check_snapshot_;
     last_execute_time_ = src.last_execute_time_;
     sql_trace_id_ = src.sql_trace_id_;

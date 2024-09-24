@@ -159,6 +159,11 @@ public:
   int64_t task_id_;
 };
 
+enum ObDDLUpateParentTaskIDType
+{
+  UPDATE_CREATE_INDEX_ID = 0,
+  UPDATE_DROP_INDEX_TASK_ID,
+};
 
 struct ObVecIndexDDLChildTaskInfo final
 {
@@ -240,7 +245,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
                K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version),
                K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(aux_doc_word_schema),
-               K_(vec_rowkey_vid_schema), K_(vec_vid_rowkey_schema), K_(vec_index_id_schema), K_(vec_snapshot_data_schema),
+               K_(vec_rowkey_vid_schema), K_(vec_vid_rowkey_schema), K_(vec_domain_index_schema), K_(vec_index_id_schema), K_(vec_snapshot_data_schema),
                K_(ddl_need_retry_at_executor), K_(is_pre_split));
 public:
   int32_t sub_task_trace_id_;
@@ -261,6 +266,7 @@ public:
   const ObTableSchema *aux_doc_word_schema_;
   const ObTableSchema *vec_rowkey_vid_schema_;
   const ObTableSchema *vec_vid_rowkey_schema_;
+  const ObTableSchema *vec_domain_index_schema_;
   const ObTableSchema *vec_index_id_schema_;
   const ObTableSchema *vec_snapshot_data_schema_;
   uint64_t tenant_data_version_;
@@ -314,6 +320,16 @@ public:
       const int64_t task_id,
       const int ret_code,
       ObString &message);
+
+  static int update_parent_task_message(
+      const int64_t tenant_id,
+      const int64_t parent_task_id,
+      const ObTableSchema &index_schema,
+      const uint64_t target_table_id,
+      const uint64_t target_task_id,
+      ObDDLUpateParentTaskIDType update_type,
+      ObIAllocator &allocator,
+      common::ObISQLClient &proxy);
 
   static int get_schedule_info_for_update(
       common::ObISQLClient &proxy,

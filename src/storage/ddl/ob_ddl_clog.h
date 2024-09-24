@@ -34,6 +34,9 @@ enum class ObDDLClogType : int64_t
   DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG = 0x10,
   DDL_START_LOG = 0x20,
   DDL_COMMIT_LOG = 0x40,// rename from DDL_PREPARE_LOG
+  DDL_TABLET_SPLIT_START_LOG = 0x41,
+  DDL_TABLET_SPLIT_FINISH_LOG = 0x42,
+  DDL_TABLET_FREEZE_LOG = 0x43,
   DDL_FINISH_LOG = 0x80,// finish log, smilarity role in shared storage mode
 };
 
@@ -201,23 +204,20 @@ public:
            const uint64_t data_format_version,
            const int64_t execution_id,
            const ObDirectLoadType direct_load_type,
-           const ObTabletID &lob_meta_tablet_id,
-           const bool with_cs_replica);
+           const ObTabletID &lob_meta_tablet_id);
   bool is_valid() const { return table_key_.is_valid() && data_format_version_ >= 0 && execution_id_ >= 0 && is_valid_direct_load(direct_load_type_); }
   ObITable::TableKey get_table_key() const { return table_key_; }
   uint64_t get_data_format_version() const { return data_format_version_; }
   int64_t get_execution_id() const { return execution_id_; }
   ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
   const ObTabletID &get_lob_meta_tablet_id() const { return lob_meta_tablet_id_; }
-  bool get_with_cs_replica() const { return with_cs_replica_; }
-  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id), K_(direct_load_type), K_(lob_meta_tablet_id), K_(with_cs_replica));
+  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id), K_(direct_load_type), K_(lob_meta_tablet_id));
 private:
   ObITable::TableKey table_key_; // use table type to distinguish column store, column group id is valid
   uint64_t data_format_version_; // used for compatibility
   int64_t execution_id_;
   ObDirectLoadType direct_load_type_;
   ObTabletID lob_meta_tablet_id_; // avoid replay get newest mds data
-  bool with_cs_replica_;
 };
 
 class ObDDLRedoLog final

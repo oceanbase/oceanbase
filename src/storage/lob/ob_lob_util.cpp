@@ -37,6 +37,68 @@ ObLobAccessParam::~ObLobAccessParam()
   }
 }
 
+int ObLobAccessParam::assign(const ObLobAccessParam& other)
+{
+  int ret = OB_SUCCESS;
+  this->tmp_allocator_ = other.tmp_allocator_;
+  this->allocator_ = other.allocator_;
+  this->tx_desc_ = other.tx_desc_;
+  // use assign
+  // this->snapshot_ = other.snapshot_;
+  this->tx_id_ = other.tx_id_;
+  this->sql_mode_ = other.sql_mode_;
+  this->dml_base_param_ = other.dml_base_param_;
+
+  this->tenant_id_ = other.tenant_id_;
+  this->src_tenant_id_ = other.src_tenant_id_;
+  this->ls_id_ = other.ls_id_;
+  this->tablet_id_ = other.tablet_id_;
+  this->lob_meta_tablet_id_ = other.lob_meta_tablet_id_;
+  this->lob_piece_tablet_id_ = other.lob_piece_tablet_id_;
+
+  this->coll_type_ = other.coll_type_;
+  this->lob_locator_ = other.lob_locator_;
+  this->lob_common_ = other.lob_common_;
+  this->lob_data_ = other.lob_data_;
+  this->byte_size_ = other.byte_size_;
+  this->handle_size_ = other.handle_size_;
+
+  this->timeout_ = other.timeout_;
+  this->fb_snapshot_ = other.fb_snapshot_;
+
+  this->offset_ = other.offset_;
+  this->len_ = other.len_;
+
+  this->parent_seq_no_ = other.parent_seq_no_;
+  this->seq_no_st_ = other.seq_no_st_;
+  this->used_seq_cnt_ = other.used_seq_cnt_;
+  this->total_seq_cnt_ = other.total_seq_cnt_;
+  this->checksum_ = other.checksum_;
+  this->update_len_ = other.update_len_;
+  this->op_type_ = other.op_type_;
+
+  this->is_total_quantity_log_ = other.is_total_quantity_log_;
+  this->read_latest_ = other.read_latest_;
+  this->scan_backward_ = other.scan_backward_;
+  this->is_fill_zero_ = other.is_fill_zero_;
+  this->from_rpc_ = other.from_rpc_;
+  this->inrow_read_nocopy_ = other.inrow_read_nocopy_;
+  this->is_store_char_len_ = other.is_store_char_len_;
+
+  this->inrow_threshold_ = other.inrow_threshold_;
+  this->schema_chunk_size_ = other.schema_chunk_size_;
+
+  this->ext_info_log_ = other.ext_info_log_;
+  this->access_ctx_ = other.access_ctx_;
+  this->lob_id_geneator_ = other.lob_id_geneator_;
+  this->remote_query_ctx_ = other.remote_query_ctx_;
+
+  if (OB_FAIL(this->snapshot_.assign(other.snapshot_))) {
+    LOG_WARN("assign snapshot fail", K(ret), K(other));
+  }
+  return ret;
+}
+
 ObCollationType ObLobCharsetUtil::get_collation_type(ObObjType type, ObCollationType ori_coll_type)
 {
   ObCollationType coll_type = ori_coll_type;
@@ -244,19 +306,23 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
         ObLobAccessParam lob_param;
         lob_param.src_tenant_id_ = src_tenant_id;
         lob_param.tx_desc_ = tx_desc;
-        lob_param.snapshot_ = snapshot;
-        lob_param.sql_mode_ = SMO_DEFAULT;
-        lob_param.ls_id_ = ls_id;
-        lob_param.tablet_id_ = tablet_id;
-        lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(obj_type, cs_type);
-        lob_param.allocator_ = &allocator;
-        lob_param.lob_common_ = nullptr;
-        lob_param.timeout_ = timeout_ts;
-        lob_param.scan_backward_ = false;
-        lob_param.offset_ = 0;
-        lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
-        LOG_DEBUG("lob storage param", K(lob_storage_param), K(cs_type));
-        if (!src.is_valid()) {
+        if (OB_FAIL(lob_param.snapshot_.assign(snapshot))) {
+          LOG_WARN("assign snapshot fail", K(ret));
+        } else {
+          lob_param.sql_mode_ = SMO_DEFAULT;
+          lob_param.ls_id_ = ls_id;
+          lob_param.tablet_id_ = tablet_id;
+          lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(obj_type, cs_type);
+          lob_param.allocator_ = &allocator;
+          lob_param.lob_common_ = nullptr;
+          lob_param.timeout_ = timeout_ts;
+          lob_param.scan_backward_ = false;
+          lob_param.offset_ = 0;
+          lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
+          LOG_DEBUG("lob storage param", K(lob_storage_param), K(cs_type));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!src.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid src lob locator.", K(ret));
         } else if (OB_FAIL(lob_mngr->append(lob_param, src))) {

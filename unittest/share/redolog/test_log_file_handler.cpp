@@ -78,7 +78,7 @@ void TestLogFileHandler::SetUp()
 void TestLogFileHandler::TearDown()
 {
   //system("rm -rf ./log_file_test");
-  THE_IO_DEVICE->destroy();
+  LOCAL_DEVICE_INSTANCE.destroy();
   OB_LOG_FILE_READER.destroy();
   TestDataFilePrepare::TearDown();
 #ifdef ERRSIM
@@ -429,10 +429,10 @@ TEST_F(TestLogFileHandler, clean_tmp_files)
     common::ObIOFd io_fd;
     char full_path[MAX_PATH_SIZE] = { 0 };
     snprintf(full_path, sizeof(full_path), "%s/%d", log_dir, i);
-    ret = THE_IO_DEVICE->open(full_path, ObLogDefinition::LOG_APPEND_FLAG, ObLogDefinition::FILE_OPEN_MODE, io_fd);
+    ret = LOCAL_DEVICE_INSTANCE.open(full_path, ObLogDefinition::LOG_APPEND_FLAG, ObLogDefinition::FILE_OPEN_MODE, io_fd);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_TRUE(io_fd.is_normal_file());
-    ret = THE_IO_DEVICE->close(io_fd);
+    ret = LOCAL_DEVICE_INSTANCE.close(io_fd);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
@@ -441,10 +441,10 @@ TEST_F(TestLogFileHandler, clean_tmp_files)
     common::ObIOFd io_fd;
     char full_path[MAX_PATH_SIZE] = { 0 };
     snprintf(full_path, sizeof(full_path), "%s/%d.tmp", log_dir, i);
-    ret = THE_IO_DEVICE->open(full_path, ObLogDefinition::LOG_APPEND_FLAG, ObLogDefinition::FILE_OPEN_MODE, io_fd);
+    ret = LOCAL_DEVICE_INSTANCE.open(full_path, ObLogDefinition::LOG_APPEND_FLAG, ObLogDefinition::FILE_OPEN_MODE, io_fd);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_TRUE(io_fd.is_normal_file());
-    ret = THE_IO_DEVICE->close(io_fd);
+    ret = LOCAL_DEVICE_INSTANCE.close(io_fd);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
@@ -457,7 +457,7 @@ TEST_F(TestLogFileHandler, clean_tmp_files)
     bool b_exist = false;
     char full_path[MAX_PATH_SIZE] = { 0 };
     snprintf(full_path, sizeof(full_path), "%s/%d", log_dir, i);
-    ret = THE_IO_DEVICE->exist(full_path, b_exist);
+    ret = LOCAL_DEVICE_INSTANCE.exist(full_path, b_exist);
     ASSERT_TRUE(b_exist);
   }
 }

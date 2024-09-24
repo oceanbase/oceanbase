@@ -439,6 +439,11 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         } else { need_add_tx = true; }
       }
     } else if (!tx->tx_id_.is_valid()) {
+      if (tx->op_sn_ > 0) {
+        ObSpinLockGuard guard(tx->lock_);
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx op_sn > 0", K(ret), KPC(tx));
+        tx->print_trace_();
+      }
       // reuse, overwrite
       need_add_tx = true;
       audit_record.reuse_tx_ = true;
@@ -523,10 +528,11 @@ int ObTransService::update_logic_clock_(const int64_t logic_clock, const ObTxDes
 {
   // if logic clock drift too much, disconnect required
   int ret = OB_SUCCESS;
-  if (logic_clock - ObClockGenerator::getClock() > 1_day ) {
-    TRANS_LOG(WARN, "logic clock is fast more than 1 day", K(logic_clock), KPC(tx));
-  } else if (check_fallback && (ObClockGenerator::getClock() - logic_clock > 1_day)) {
-    TRANS_LOG(WARN, "logic clock is slow more than 1 day", K(logic_clock), KPC(tx));
+  const int64_t cur_clock = ObClockGenerator::getClock();
+  if (logic_clock - cur_clock > 1_day ) {
+    TRANS_LOG(WARN, "logic clock is fast more than 1 day", K(logic_clock), K(cur_clock), KPC(tx));
+  } else if (check_fallback && (cur_clock - logic_clock > 1_day)) {
+    TRANS_LOG(WARN, "logic clock is slow more than 1 day", K(logic_clock), K(cur_clock), KPC(tx));
     if (OB_NOT_NULL(tx)) { tx->print_trace_(); }
   }
   if (OB_SUCC(ret)) {
@@ -1274,8 +1280,9 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
 {
   int ret = OB_SUCCESS;
   // 1. skip txn born node
-  // 2. skip txn is idle state
-  if (ctx.txn_addr_.is_valid() && ctx.txn_addr_ != self_ && tx.is_in_tx()) {
+  // 2. skip txn is idle state, but with extra info (like serializable snapshot)
+  if (ctx.txn_addr_.is_valid() && ctx.txn_addr_ != self_
+      && tx.get_tx_id().is_valid() && tx.in_tx_or_has_extra_state()) {
     common::ObCurTraceId::init(self_);
     ObTxFreeRouteCheckAliveMsg m;
     m.request_id_ = ctx.get_local_version();

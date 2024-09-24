@@ -59,7 +59,8 @@ OB_SERIALIZE_MEMBER_INHERIT(ObLockTableRequest, ObLockRequest,
                             detect_param_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockPartitionRequest, ObLockTableRequest,
-                            part_object_id_);
+                            part_object_id_,
+                            is_sub_part_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockTabletRequest, ObLockTableRequest,
                             tablet_id_);

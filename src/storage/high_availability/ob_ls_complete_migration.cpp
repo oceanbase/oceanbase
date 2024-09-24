@@ -305,6 +305,7 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
   int32_t result = OB_SUCCESS;
   ObLSMigrationHandler *ls_migration_handler = nullptr;
   ObLSHandle ls_handle;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   LOG_INFO("start clear dag net ctx", K(ctx_));
 
   if (!is_inited_) {
@@ -331,6 +332,18 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
       LOG_WARN("failed to get ls complate migration ctx result", K(ret), K(ctx_));
     } else if (OB_FAIL(ls_migration_handler->switch_next_stage(result))) {
       LOG_WARN("failed to report result", K(ret), K(result), K(ctx_));
+    }
+
+    if (is_shared_storage) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      int tmp_ret = OB_SUCCESS;
+      ObSSMicroCache *micro_cache = nullptr;
+      if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("micro_cache should not be nullptr", K(tmp_ret), K(ret), K(ctx_));
+      } else if (FALSE_IT(micro_cache->finish_free_space_for_prewarm())) {
+      }
+#endif
     }
 
     ctx_.finish_ts_ = ObTimeUtil::current_time();

@@ -221,7 +221,10 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
   // wait until ls checkpoint updated.
   LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.4");
   // freeze data, make sure other type flushed.
-  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID, false /*is_sync*/));
+  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID,
+                                             false, /*is_sync*/
+                                             0,
+                                             ObFreezeSourceFlag::TEST_MODE));
   while (ls->get_clog_checkpoint_scn() < rec_scn) {
     usleep(100 * 1000); // sleep 100 ms
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {

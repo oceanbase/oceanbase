@@ -370,7 +370,7 @@ int ObBackupTableListMgr::read_from_tmp_file_(const int64_t read_size, const int
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(read_size));
   } else if (FALSE_IT(io_info.buf_ = buf)) {
-  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->pread(io_info, offset, handle))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(MTL_ID(), io_info, offset, handle))) {
     LOG_WARN("failed to pread from tmp file", K(ret), K(io_info), K(offset), K(read_size));
   } else {
     blocksstable::ObBufferReader buffer_reader(buf, read_size);

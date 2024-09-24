@@ -406,7 +406,7 @@ int ObDeleteLobMetaRowTask::process()
     ObTableScanParam scan_param;
     transaction::ObTxDesc *tx_desc = nullptr;
     transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-    ObNewRowIterator *scan_iter =  nullptr;
+    ObNewRowIterator *scan_iter = nullptr;
     ObAccessService *tsc_service = MTL(ObAccessService *);
     blocksstable::ObDatumRow *datum_row = nullptr;
     ObTableScanIterator *table_scan_iter = nullptr;
@@ -459,6 +459,13 @@ int ObDeleteLobMetaRowTask::process()
       if (OB_SUCCESS != (end_trans_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, INT64_MAX))) {
         LOG_WARN("fail to end read trans", K(ret));
         ret = end_trans_ret;
+      }
+    }
+
+    // revert_scan_iter if it is not null, even though ret != OB_SUCCESS
+    if (nullptr != scan_iter && nullptr != tsc_service) {
+      if (OB_SUCCESS != tsc_service->revert_scan_iter(scan_iter)) {
+        LOG_WARN("fail to revert scan iter", K(ret));
       }
     }
 

@@ -330,8 +330,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_insert)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 30;
@@ -390,8 +392,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_insert_fail)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 750;
@@ -437,8 +441,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_read)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 25;
@@ -494,8 +500,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_flush)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 28;
@@ -607,8 +615,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_flush_with_multi_io)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 25;
@@ -684,8 +694,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_major_flush)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 25;
@@ -735,8 +747,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_evict)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 25;
@@ -822,8 +836,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_clear)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   const int64_t item_num = 25;
@@ -857,8 +873,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_truncate)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   const int64_t item_num = 75;
@@ -935,8 +953,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_truncate_with_unfilled_page)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   const int64_t item_num = 75;
@@ -1020,8 +1040,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_truncate_with_data_item_remove)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   int64_t item_num = 9;
@@ -1127,8 +1149,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_flush_with_truncate_occurs_between_buf_g
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   int64_t item_num = 19;
@@ -1256,8 +1280,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_flush_with_truncate_occurs_between_buf_g
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   int64_t item_num = 19;
@@ -1354,8 +1380,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_flush_with_truncate_occurs_between_buf_g
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   int64_t item_num = 19;
@@ -1452,8 +1480,10 @@ void TestSNTmpFileMetaTree::test_tree_flush_with_truncate_occurs_before_update_m
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   int64_t item_num = 70;
@@ -1605,8 +1635,10 @@ TEST_F(TestSNTmpFileMetaTree, test_array_insert)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(100);
   meta_tree_.set_max_page_item_cnt(100);
   int64_t item_num = 30;
@@ -1616,8 +1648,13 @@ TEST_F(TestSNTmpFileMetaTree, test_array_insert)
   ASSERT_EQ(item_num, data_items.count());
   STORAGE_LOG(INFO, "=======================first insert=======================");
   //insert 30 items (insert a array)
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items));
+  ObSEArray<ObSharedNothingTmpFileDataItem, 1> tmp_data_item_arr;
+  for (int64_t i = 0; i < data_items.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(30, meta_tree_.data_item_array_.count());
 
   STORAGE_LOG(INFO, "=======================second insert=======================");
@@ -1625,8 +1662,12 @@ TEST_F(TestSNTmpFileMetaTree, test_array_insert)
   generate_data_items(item_num, 30 * 128, data_items_1);
   ASSERT_EQ(item_num, data_items_1.count());
   //insert 71 items (insert one by one)
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items_1));
+  for (int64_t i = 0; i < data_items_1.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items_1.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(0, meta_tree_.data_item_array_.count());
   ASSERT_EQ(2, meta_tree_.level_page_range_array_.count());
 
@@ -1644,8 +1685,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   int64_t item_num = 9;
@@ -1653,8 +1696,13 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert)
   generate_data_items(item_num, 0/*start virtual page id*/, data_items);
   ASSERT_EQ(item_num, data_items.count());
   STORAGE_LOG(INFO, "=======================first tree insert=======================");
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items));
+  ObSEArray<ObSharedNothingTmpFileDataItem, 1> tmp_data_item_arr;
+  for (int64_t i = 0; i < data_items.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(2, meta_tree_.level_page_range_array_.count());
   STORAGE_LOG(INFO, "level_page_range_array", K(meta_tree_.level_page_range_array_));
 
@@ -1689,9 +1737,13 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert)
   ObArray<ObSharedNothingTmpFileDataItem> data_items_1;
   generate_data_items(item_num, 9 * 128, data_items_1);
   ASSERT_EQ(item_num, data_items_1.count());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
-  ASSERT_EQ(1, meta_tree_.read_cache_rightmost_pages_.at(0).second);
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items_1));
+  for (int64_t i = 0; i < data_items_1.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items_1.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
+    ASSERT_EQ(1, meta_tree_.read_cache_rightmost_pages_.at(0).second);
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(2, meta_tree_.level_page_range_array_.count());
   ASSERT_EQ(2, meta_tree_.level_page_range_array_.at(0).cached_page_num_);
   ASSERT_EQ(1, meta_tree_.level_page_range_array_.at(0).evicted_page_num_);
@@ -1730,10 +1782,14 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert)
   ObArray<ObSharedNothingTmpFileDataItem> data_items_2;
   generate_data_items(item_num, 15 * 128, data_items_2);
   ASSERT_EQ(item_num, data_items_2.count());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
-  ASSERT_EQ(1, meta_tree_.read_cache_rightmost_pages_.at(0).second);
-  ASSERT_EQ(1, meta_tree_.read_cache_rightmost_pages_.at(1).second);
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items_2));
+  for (int64_t i = 0; i < data_items_2.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items_2.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
+    ASSERT_EQ(1, meta_tree_.read_cache_rightmost_pages_.at(0).second);
+    ASSERT_EQ(1, meta_tree_.read_cache_rightmost_pages_.at(1).second);
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(3, meta_tree_.level_page_range_array_.count());
   ASSERT_EQ(5, meta_tree_.level_page_range_array_.at(0).cached_page_num_);
   ASSERT_EQ(2, meta_tree_.level_page_range_array_.at(0).evicted_page_num_);
@@ -1754,8 +1810,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert_fail)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(2);
 
@@ -1764,8 +1822,13 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert_fail)
   ObArray<ObSharedNothingTmpFileDataItem> data_items;
   generate_data_items(item_num, 0/*start virtual page id*/, data_items);
   ASSERT_EQ(item_num, data_items.count());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items));
+  ObSEArray<ObSharedNothingTmpFileDataItem, 1> tmp_data_item_arr;
+  for (int64_t i = 0; i < data_items.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(4, meta_tree_.level_page_range_array_.count());
 
   STORAGE_LOG(INFO, "=======================first tree flush and evict=========================");
@@ -1802,7 +1865,7 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert_fail)
   STORAGE_LOG(INFO, "=======================build new meta tree=======================");
   //We build a new meta tree to take up most of the write cache memory
   ObTmpFileTestMetaTree meta_tree_1_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_1_.init(2, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_1_.init(2, &wbp, &callback_allocator, &block_manager));
   meta_tree_1_.set_max_array_item_cnt(2);
   meta_tree_1_.set_max_page_item_cnt(2);
 
@@ -1811,8 +1874,12 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert_fail)
   ObArray<ObSharedNothingTmpFileDataItem> data_items_1;
   generate_data_items(item_num, 0/*start virtual page id*/, data_items_1);
   ASSERT_EQ(item_num, data_items_1.count());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_1_.prepare_for_insert_items());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_1_.insert_items(data_items_1));
+  for (int64_t i = 0; i < data_items_1.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items_1.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_1_.prepare_for_insert_items());
+    ASSERT_EQ(OB_SUCCESS, meta_tree_1_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(8, meta_tree_1_.level_page_range_array_.count());//252 pages
 
   STORAGE_LOG(INFO, "=======================second insert=======================");
@@ -1830,8 +1897,12 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_prepare_for_insert_fail)
   ObArray<ObSharedNothingTmpFileDataItem> data_items_2;
   generate_data_items(item_num, 10 * 128/*start virtual page id*/, data_items_2);
   ASSERT_EQ(item_num, data_items_2.count());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(data_items_2));
+  for(int64_t i = 0; i < data_items_2.count(); i++) {
+    tmp_data_item_arr.reset();
+    ASSERT_EQ(OB_SUCCESS, tmp_data_item_arr.push_back(data_items_2.at(i)));
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.prepare_for_insert_items());
+    ASSERT_EQ(OB_SUCCESS, meta_tree_.insert_items(tmp_data_item_arr));
+  }
   ASSERT_EQ(5, meta_tree_.level_page_range_array_.count());
   ASSERT_EQ(6, meta_tree_.level_page_range_array_.at(0).cached_page_num_);
   ASSERT_EQ(4, meta_tree_.level_page_range_array_.at(0).evicted_page_num_);
@@ -1853,8 +1924,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_insert_fail_after_array_used)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(3);
   meta_tree_.set_max_page_item_cnt(3);
   STORAGE_LOG(INFO, "=======================first insert=======================");
@@ -1903,8 +1976,10 @@ TEST_F(TestSNTmpFileMetaTree, test_tree_insert_fail_after_tree_build)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(2);
   meta_tree_.set_max_page_item_cnt(3);
   STORAGE_LOG(INFO, "=======================first insert=======================");
@@ -1957,8 +2032,10 @@ TEST_F(TestSNTmpFileMetaTree, test_array_read)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(100);
   meta_tree_.set_max_page_item_cnt(100);
   STORAGE_LOG(INFO, "=======================first array insert=======================");
@@ -2041,8 +2118,10 @@ TEST_F(TestSNTmpFileMetaTree, test_read_fail)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(3);
   meta_tree_.set_max_page_item_cnt(5);
   STORAGE_LOG(INFO, "=======================tree insert=======================");
@@ -2087,8 +2166,10 @@ TEST_F(TestSNTmpFileMetaTree, test_array_read_after_truncate)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(100);
   meta_tree_.set_max_page_item_cnt(100);
   STORAGE_LOG(INFO, "=======================array insert=======================");
@@ -2133,8 +2214,10 @@ TEST_F(TestSNTmpFileMetaTree, test_write_tail)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   STORAGE_LOG(INFO, "=======================first insert=======================");
@@ -2216,8 +2299,10 @@ TEST_F(TestSNTmpFileMetaTree, test_page_is_dirty_again_during_flush)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   STORAGE_LOG(INFO, "=======================first tree insert=======================");
@@ -2312,8 +2397,10 @@ TEST_F(TestSNTmpFileMetaTree, test_insert_items_during_flush)
   ASSERT_EQ(OB_SUCCESS, callback_allocator.init(lib::ObMallocAllocator::get_instance(),
                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                 ObMemAttr(MTL_ID(), "TmpFileCallback", ObCtxIds::DEFAULT_CTX_ID)));
+  ObTmpFileBlockManager block_manager;
+  ASSERT_EQ(OB_SUCCESS, block_manager.init(MTL_ID(), 15 * 1024L * 1024L * 1024L));
   ObTmpFileTestMetaTree meta_tree_;
-  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator));
+  ASSERT_EQ(OB_SUCCESS, meta_tree_.init(1, &wbp, &callback_allocator, &block_manager));
   meta_tree_.set_max_array_item_cnt(5);
   meta_tree_.set_max_page_item_cnt(5);
   STORAGE_LOG(INFO, "=======================first tree insert=======================");

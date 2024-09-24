@@ -1381,7 +1381,9 @@ int ObInsertLogPlan::prepare_unique_constraint_info(const ObTableSchema &index_s
       uint64_t partkey_cid = partkey_ids.at(i);
       if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*insert_stmt,
                                                                         constraint_info.table_id_,
-                                                                        partkey_cid))) {
+                                                                        partkey_cid,
+                                                                        OB_INVALID_ID,
+                                                                        true))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column expr by id failed", K(ret), K(partkey_cid), K(i), K(partkey_ids));
       } else if (OB_FAIL(constraint_info.constraint_columns_.push_back(col_item->expr_))) {

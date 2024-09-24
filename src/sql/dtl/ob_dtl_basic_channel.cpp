@@ -547,6 +547,9 @@ int ObDtlBasicChannel::get_processed_buffer(int64_t timeout)
         }
       }
     } else {
+      if (ret == OB_EAGAIN) {
+        ret = OB_DTL_WAIT_EAGAIN;
+      }
       if (nullptr != msg_watcher_) {
         msg_watcher_->remove_data_list(this);
       }
@@ -570,7 +573,7 @@ int ObDtlBasicChannel::process1(
     if (!use_interm_result()) {
       do {
         if (nullptr == process_buffer_ && OB_FAIL(get_processed_buffer(timeout))) {
-          if (OB_EAGAIN == ret) {
+          if (OB_DTL_WAIT_EAGAIN == ret) {
           } else {
             LOG_WARN("failed to get buffer", K(ret));
           }
@@ -598,7 +601,7 @@ int ObDtlBasicChannel::process1(
                   msg_watcher_->remove_data_list(this);
                 }
               } else {
-                ret = OB_EAGAIN;
+                ret = OB_DTL_WAIT_EAGAIN;
               }
             }
             LOG_TRACE("process one piece", KP(id_), K_(peer), K(ret),
@@ -631,11 +634,11 @@ int ObDtlBasicChannel::process1(
       key.batch_id_ = batch_id_;
       MTL_SWITCH(tenant_id_) {
         if (channel_is_eof_) {
-          ret = OB_EAGAIN;
+          ret = OB_DTL_WAIT_EAGAIN;
         } else if (OB_FAIL(MTL(ObDTLIntermResultManager*)->atomic_get_interm_result_info(
               key, result_info_guard_))) {
           if (is_px_channel()) {
-            ret = OB_EAGAIN;
+            ret = OB_DTL_WAIT_EAGAIN;
           } else if (ignore_error()) {
             ret = OB_SUCCESS;
           } else {
@@ -814,7 +817,7 @@ int ObDtlBasicChannel::wait_unblocking()
             &block_proc_,
             got_channel_idx))) {
           // no msg, then don't process
-          if (OB_EAGAIN == ret) {
+          if (OB_DTL_WAIT_EAGAIN == ret) {
             // 这里需要检查是否超时以及worker是否已经处于异常状态(退出等)，否则当worker退出时，一直陷入在while中
             int64_t end_t = ObTimeUtility::current_time();
             if (end_t > timeout_ts) {

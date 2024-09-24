@@ -325,7 +325,9 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     // oracle模式下，select a from t group by 1这种语法被禁止，所以可以开放group by的参数化
     ret_bool = true;
   } else if (T_SORT_LIST == tree->type_) {
-    ret_bool = true;
+    // vector index query always use order by vec_func() approx limit, we should open Parameterization for this situation
+    bool is_vec_idx_query = is_vector_index_query(tree);
+    ret_bool = is_vec_idx_query ? false : true;
   } else if (T_HINT_OPTION_LIST == tree->type_) {
     ret_bool = true;
   } else if (T_COLLATION == tree->type_) {
@@ -2454,4 +2456,26 @@ int ObSqlParameterization::find_leftest_const_node(ParseNode &cur_node, ParseNod
     }
   }
   return ret;
+}
+
+bool ObSqlParameterization::is_vector_index_query(const ParseNode *tree)
+{
+  bool bret = false;
+  // for vector index query
+  if (T_SORT_LIST == tree->type_) {
+    if (tree->num_child_ == 1 && OB_NOT_NULL(tree->children_[0])) { // only one sort key
+      ParseNode *curr = tree->children_[0];
+      if (curr->type_ == T_SORT_KEY && curr->num_child_ == 2 && OB_NOT_NULL(curr->children_[0])) {
+        curr = curr->children_[0];
+        if (curr->type_ == T_FUN_SYS && curr->num_child_ == 2 && OB_NOT_NULL(curr->children_[0])) {
+          curr = curr->children_[0]; // sort key is sys func
+          if (curr->type_ == T_IDENT && OB_NOT_NULL(curr->str_value_)) {
+            ObString func_name(curr->str_len_, curr->str_value_);
+            bret = func_name.case_compare("l2_distance") == 0 || func_name.case_compare("negative_inner_product") == 0;
+          }
+        }
+      }
+    }
+  }
+  return bret;
 }

@@ -1847,7 +1847,8 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
       if (is_oracle && j_str.length() == 0) {
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
-                                                  expect_type, j_base, parse_flag))) {
+                                                  expect_type, j_base, parse_flag,
+                                                  ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to get json base", K(ret), K(j_in_type));
         if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
           is_cover_by_error = false;

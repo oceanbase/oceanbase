@@ -39,7 +39,7 @@ int JitContext::InitializeModule(const ObDataLayout &DL)
     TheModule->setDataLayout(DL);
     TheFPM->add(createInstructionCombiningPass());
     TheFPM->add(createReassociatePass());
-    TheFPM->add(createGVNPass());
+    // TheFPM->add(createGVNPass());
     TheFPM->add(createCFGSimplificationPass());
     TheFPM->doInitialization();
   }

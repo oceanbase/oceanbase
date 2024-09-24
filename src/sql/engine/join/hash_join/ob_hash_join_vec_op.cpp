@@ -112,7 +112,8 @@ ObHashJoinVecSpec::ObHashJoinVecSpec(common::ObIAllocator &alloc, const ObPhyOpe
   is_naaj_(false),
   is_sna_(false),
   is_shared_ht_(false),
-  is_ns_equal_cond_(alloc)
+  is_ns_equal_cond_(alloc),
+  build_rows_output_(alloc)
 {
 }
 
@@ -127,7 +128,8 @@ OB_SERIALIZE_MEMBER((ObHashJoinVecSpec, ObJoinVecSpec),
                     is_sna_,
                     is_shared_ht_,
                     is_ns_equal_cond_,
-                    jf_material_control_info_);
+                    jf_material_control_info_,
+                    build_rows_output_);
 
 ObHashJoinVecOp::ObHashJoinVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObJoinVecOp(ctx_, spec, input),

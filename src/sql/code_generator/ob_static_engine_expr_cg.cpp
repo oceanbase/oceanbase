@@ -1925,6 +1925,21 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
     } while (OB_SUCC(ret) && inc > 0);
   }
 
+  // flatten attr_exprs
+  if (OB_SUCC(ret)) {
+    const int64_t cnt = exprs.count();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cnt; idx++) {
+      ObExpr *expr = exprs.at(idx);
+      for (int64_t i = 0 ; OB_SUCC(ret) && i < expr->attrs_cnt_; i++) {
+        ObExpr *e = expr->attrs_[i];
+        if (!expr_is_added(*e)) {
+          OZ(exprs.push_back(e));
+          mark_expr_is_added(*e);
+        }
+      }
+    }
+  }
+
   // always clear expr is added flag
   FOREACH_CNT(e, exprs) {
     clear_expr_is_added(**e);

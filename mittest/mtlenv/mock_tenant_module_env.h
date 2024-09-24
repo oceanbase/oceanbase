@@ -110,6 +110,9 @@
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/memtable/ob_lock_wait_mgr.h"
+#include "observer/table/group/ob_table_tenant_group.h"
+#include "observer/table/ob_table_client_info_mgr.h"
+#include "observer/table/ob_table_query_async_processor.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 
 namespace oceanbase
@@ -566,7 +569,6 @@ int MockTenantModuleEnv::prepare_io()
 #endif
     common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
     share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice*>(get_device_inner(storage_type_prefix));
-    THE_IO_DEVICE = local_device;
     // for unifying init/add_device_channel/destroy local_device and local_cache_device code below
     ObIODeviceWrapper::get_instance().set_local_device(local_device);
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -900,6 +902,8 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, memtable::ObLockWaitMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
+      MTL_BIND2(mtl_new_default, table::ObTableClientInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, observer::ObTableQueryASyncMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {

@@ -242,11 +242,15 @@ public:
     : thread_group_id_(GET_GROUP_ID()), thread_func_type_(GET_FUNC_TYPE()), group_changed_(false), ret_(OB_SUCCESS)
   {
     THIS_WORKER.set_func_type_(func_type);
-    uint64_t group_id = 0;
-    ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);
-    if (OB_SUCCESS == ret_ && is_user_group(group_id) && group_id != thread_group_id_) {
-      group_changed_ = true;
-      ret_ = SET_GROUP_ID(group_id, true /* is_background */);
+    if (is_resource_manager_group(thread_group_id_)) {
+      // has set group id. do nothing.
+    } else {
+      uint64_t group_id = 0;
+      ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);
+      if (OB_SUCCESS == ret_ && group_id != thread_group_id_) {
+        group_changed_ = true;
+        ret_ = SET_GROUP_ID(group_id, true /* is_background */);
+      }
     }
   }
   ~ConsumerGroupFuncGuard()

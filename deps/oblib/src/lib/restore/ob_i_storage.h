@@ -58,7 +58,6 @@ int handle_listed_object(ObBaseDirEntryOperator &op,
     const char *obj_name, const int64_t obj_name_len, const int64_t obj_size);
 int handle_listed_directory(ObBaseDirEntryOperator &op,
     const char *dir_name, const int64_t dir_name_len);
-int get_storage_prefix_from_path(const common::ObString &uri, const char *&prefix);
 int build_bucket_and_object_name(ObIAllocator &allocator,
     const ObString &uri, ObString &bucket, ObString &object);
 int construct_fragment_full_name(const ObString &logical_appendable_object_name,
@@ -371,11 +370,17 @@ public:
   ~ObObjectStorageGuard();
 
 private:
-  void print_access_storage_log_();
+  void print_access_storage_log_() const;
+  bool is_slow_io_(const int64_t cost_time_us) const;
 
 private:
-  static constexpr int64_t WARN_THRESHOLD_TIME_US = 1 * 1000; // 1ms
-  static constexpr double WARN_THRESHOLD_SPEED_MB_S = 1.0; // 1MB/s
+  static constexpr int64_t SMALL_IO_SIZE = 128LL * 1024LL;             // 128KB
+  static constexpr int64_t MEDIUM_IO_SIZE = 2LL * 1024LL * 1024LL;     // 2MB
+
+  static constexpr int64_t UTIL_IO_WARN_THRESHOLD_TIME_US = 50LL * 1000;       // 50ms
+  static constexpr int64_t SMALL_IO_WARN_THRESHOLD_TIME_US = 100LL * 1000;     // 100ms
+  static constexpr int64_t MEDIUM_IO_WARN_THRESHOLD_TIME_US = 200LL * 1000;    // 200ms
+  static constexpr int64_t LARGE_IO_WARN_THRESHOLD_TIME_US = 300LL * 1000;     // 300ms
 
   const char *file_name_;
   const int64_t line_;

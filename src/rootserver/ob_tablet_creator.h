@@ -39,7 +39,8 @@ public:
      compat_mode_(lib::Worker::CompatMode::INVALID),
      is_create_bind_hidden_tablets_(false),
      tenant_data_version_(0),
-     need_create_empty_majors_() {}
+     need_create_empty_majors_(),
+     has_cs_replica_(false) {}
   virtual ~ObTabletCreatorArg() {}
   bool is_valid() const;
   void reset();
@@ -51,7 +52,8 @@ public:
            const lib::Worker::CompatMode &mode,
            const bool is_create_bind_hidden_tablets,
            const uint64_t tenant_data_version,
-           const ObIArray<bool> &need_create_empty_majors);
+           const ObIArray<bool> &need_create_empty_majors,
+           const bool has_cs_replica);
 
   DECLARE_TO_STRING;
   common::ObArray<common::ObTabletID> tablet_ids_;
@@ -62,6 +64,7 @@ public:
   bool is_create_bind_hidden_tablets_;
   uint64_t tenant_data_version_;
   common::ObArray<bool> need_create_empty_majors_;
+  bool has_cs_replica_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletCreatorArg);
 };

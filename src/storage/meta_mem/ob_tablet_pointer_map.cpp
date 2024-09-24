@@ -631,6 +631,7 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
         if (OB_FAIL(load_meta_obj(key, t_ptr, allocator, disk_addr, t))) {
           STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(t_ptr), K(lbt()));
         } else {
+          ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
           ObTabletPointerHandle tmp_ptr_hdl(*this);
           common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
           // some other thread finish loading
@@ -660,13 +661,12 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             }
           } else if (OB_FAIL(t->deserialize_post_work(allocator))) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-          } else {
-            ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-            guard.set_obj(t, &allocator, t3m);
+          } else if (OB_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), t->get_transfer_seq()))) {
             // TODO FEIDU t->pointer_hdl_.reset(); (external tablet should not hold tablet_pointer)
-            if (OB_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), t->get_transfer_seq()))) {
-              STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
-            }
+            // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
+            STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
+          } else {
+            guard.set_obj(t, &allocator, t3m);
           }
         }  // write lock end
         if ((OB_FAIL(ret) && OB_NOT_NULL(t)) || need_free_obj) {

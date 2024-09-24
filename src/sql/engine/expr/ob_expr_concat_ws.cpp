@@ -18,6 +18,7 @@
 #include "objit/common/ob_item_type.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -35,6 +36,14 @@ ObExprConcatWs::ObExprConcatWs(ObIAllocator &alloc)
 
 ObExprConcatWs::~ObExprConcatWs() {}
 
+static bool enable_return_longtext()
+{
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  // [4.2.5, 4.3.0) || [4.3.3, )
+  return (min_cluster_version >= CLUSTER_VERSION_4_3_3_0)
+    || (MOCK_CLUSTER_VERSION_4_2_5_0 <= min_cluster_version && min_cluster_version < CLUSTER_VERSION_4_3_0_0);
+}
+
 int ObExprConcatWs::calc_result_typeN(ObExprResType &type,
                                       ObExprResType *types,
                                       int64_t param_num,
@@ -49,15 +58,26 @@ int ObExprConcatWs::calc_result_typeN(ObExprResType &type,
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument number, param should not less than 1", K(ret), K(param_num));
   } else {
+    bool has_text = false;
+    for (int64_t i = 0; !has_text && i < param_num; ++i) {
+      if (ObTinyTextType != types[i].get_type() && types[i].is_lob()) {
+        has_text = true;
+      }
+    }
+    if (has_text && enable_return_longtext()) {
+      type.set_type(ObLongTextType);
+    } else {
+      type.set_varchar();
+    }
+
     ObLength len = 0;
     for (int64_t i = 1; i < param_num; ++i) {
       len += types[i].get_length();
-      types[i].set_calc_type(ObVarcharType);
+      types[i].set_calc_type(type.get_type());
     }
     len += static_cast<ObLength>(types[0].get_length() * (param_num - 1));
-    types[0].set_calc_type(ObVarcharType);
+    types[0].set_calc_type(type.get_type());
     type.set_length(len);
-    type.set_varchar();
     if (OB_FAIL(aggregate_charsets_for_string_result(type, types, param_num, type_ctx))) {
       LOG_WARN("aggregate_charsets_for_string_result failed", K(ret));
     } else {
@@ -185,11 +205,118 @@ int ObExprConcatWs::calc(const ObString &sep_str, const ObIArray<ObString> &word
   return ret;
 }  
 
+int ObExprConcatWs::calc_text(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+  const ObExpr *sep_expr = expr.args_[0];
+  const ObDatum &sep_datum = expr.locate_param_datum(ctx, 0);
+  ObString sep_str;
+  ObSEArray<int64_t, 32> words;
+  int64_t res_len = 0;
+  int64_t word_cnt = 0;
+
+  if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, sep_datum, sep_expr->datum_meta_, sep_expr->obj_meta_.has_lob_header(), sep_str))) {
+    LOG_WARN("fail to get real data.", K(ret), K(sep_datum));
+  }
+
+  for (int64_t i = 1; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+    const ObDatum &dat = expr.locate_param_datum(ctx, i);
+    if (!dat.is_null() && OB_FAIL(words.push_back(i))) {
+      LOG_WARN("push back string failed", K(ret), K(i));
+    }
+  }
+
+  // calc total len of all words
+  for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); i++) {
+    int64_t word_idx = words.at(i);
+    const ObExpr *word_expr = expr.args_[word_idx];
+    ObDatum &v = expr.locate_param_datum(ctx, word_idx);
+    if (! ob_is_text_tc(word_expr->datum_meta_.type_)) {
+      res_len += v.len_;
+    } else {
+      ObLobLocatorV2 locator(v.get_string(), word_expr->obj_meta_.has_lob_header());
+      int64_t lob_data_byte_len = 0;
+      if (OB_FAIL(locator.get_lob_data_byte_len(lob_data_byte_len))) {
+        LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+      } else {
+        res_len += lob_data_byte_len;
+      }
+    }
+  }
+
+  // calc total len with sep_str
+  if (OB_SUCC(ret) && words.count() > 0) {
+    res_len += (words.count() - 1) * sep_str.length();
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (res_len < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("res_len is less than zero", K(ret), K(res_len));
+  } else if (OB_FAIL(output_result.init(res_len))) {
+    LOG_WARN("output_result init failed", K(ret), K(res_len));
+  } else {
+    int64_t append_data_len = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); i++) {
+      int64_t word_idx = words.at(i);
+      const ObExpr *word_expr = expr.args_[word_idx];
+      ObDatum &word_datum = expr.locate_param_datum(ctx, word_idx);
+      ObDatumMeta word_meta = word_expr->datum_meta_;
+      bool has_lob_header = word_expr->obj_meta_.has_lob_header();
+
+      // append word
+      ObTextStringIter input_iter(word_meta.type_, word_meta.cs_type_, word_datum.get_string(), has_lob_header);
+      ObTextStringIterState state;
+      ObString src_block_data;
+      if (OB_FAIL(input_iter.init(0, NULL, &temp_allocator))) {
+        LOG_WARN("init input_iter fail", K(ret), K(input_iter));
+      }
+      while (OB_SUCC(ret)
+              && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+        if (OB_FAIL(output_result.append(src_block_data))) {
+          LOG_WARN("output_result append fail", K(ret), K(src_block_data));
+        } else {
+          append_data_len += src_block_data.length();
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+              input_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+      }
+
+      // append sep word if need
+      if (OB_FAIL(ret)) {
+      } else if (i == words.count() - 1) {
+        // last word is not need sep_str
+      } else if (OB_FAIL(output_result.append(sep_str))) {
+        LOG_WARN("output_result append sep fail", K(ret), K(sep_str));
+      } else {
+        append_data_len += sep_str.length();
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (append_data_len != res_len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("append data length is not equal res_len", K(ret), K(append_data_len), K(res_len));
+    } else {
+      output_result.set_result();
+    }
+  }
+  return ret;
+}
+
 int ObExprConcatWs::calc_concat_ws_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                         ObDatum &res)
 {
   int ret = OB_SUCCESS;
   ObDatum *sep = NULL;
+  ObObjType res_type = expr.datum_meta_.type_;
   if (OB_UNLIKELY(1 >= expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg cnt", K(ret), K(expr.arg_cnt_));
@@ -197,6 +324,10 @@ int ObExprConcatWs::calc_concat_ws_expr(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("eval param failed", K(ret));
   } else if (sep->is_null()) {
     res.set_null();
+  } else if (ob_is_text_tc(res_type)) {
+    if (OB_FAIL(calc_text(expr, ctx, res))) {
+      LOG_WARN("calc concat text ws failed", K(ret));
+    }
   } else {
     ObSEArray<ObString, 32> words;
     for (int64_t i = 1; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {

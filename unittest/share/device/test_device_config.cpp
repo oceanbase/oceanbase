@@ -31,112 +31,100 @@ class TestDeviceConfig: public ::testing::Test
 public:
   TestDeviceConfig() {}
   virtual ~TestDeviceConfig() {}
-  virtual void SetUp()
-  {
-    char buf_log_id[] = "used_for=LOG&path=oss://antsys-oceanbasebackup/backup_clog_1&endpoint="
-      "host=cn-hangzhou-alipay-b.oss-cdn.aliyun-inc.com&access_mode=access_by_id&access_id=a&ac"
-      "cess_key=b&encrypt_info=encrypt_key=b&extension=null&old_access_mode=access_by_id&old_access"
-      "_id=c&old_access_key=d&old_encrypt_info=encrypt_key=b&old_extension=null&state=ADDING&state"
-      "_info=is_connective=true&create_timestamp=1679579590156&last_check_timestamp=1679579590256"
-      "&op_id=1&sub_op_id=1&storage_id=1&max_iops=0&max_bandwidth=0";
-    char buf_log_ram_url[] = "used_for=LOG&path=oss://antsys-oceanbasebackup/backup_clog_2&endpoint"
-      "=host=cn-hangzhou-alipay-b.oss-cdn.aliyun-inc.com&access_mode=access_by_ram_url&ram_url=xxxx"
-      "&state=ADDING&state_info=is_connective=true&create_timestamp=1679579590356&last_check_timest"
-      "amp=1679579590456&op_id=2&sub_op_id=1&storage_id=2&max_iops=0&max_bandwidth=0";
-    char buf_data[] = "used_for=DATA&path=oss://antsys-oceanbasebackup/backup_sstable&endpoint="
-      "host=cn-hangzhou-alipay-b.oss-cdn.aliyun-inc.com&access_mode=access_by_id&access_id=a&ac"
-      "cess_key=b&encrypt_info=encrypt_key=b&extension=null&old_access_mode=access_by_id&old_access"
-      "_id=c&old_access_key=d&old_encrypt_info=encrypt_key=b&old_extension=null&state=ADDING&state"
-      "_info=is_connective=false&create_timestamp=1679579590556&last_check_timestamp=1679579590656"
-      "&op_id=3&sub_op_id=1&storage_id=3&max_iops=0&max_bandwidth=0";
-    memcpy(buf_log_id_, buf_log_id, sizeof(buf_log_id));
-    memcpy(buf_log_ram_url_, buf_log_ram_url, sizeof(buf_log_ram_url));
-    memcpy(buf_data_, buf_data, sizeof(buf_data));
-  }
+  virtual void SetUp() {}
   virtual void TearDown() {}
   static void SetUpTestCase() {}
   static void TearDownTestCase() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(TestDeviceConfig);
-protected:
-  char buf_log_id_[16384];
-  char buf_log_ram_url_[16384];
-  char buf_data_[16384];
 };
 
-TEST_F(TestDeviceConfig, DISABLED_test_device_config_parser)
+TEST_F(TestDeviceConfig, parser_and_dump_load_and_get)
 {
+  // 1. test device config parser
   ObDeviceConfig config;
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_log_id_, config));
+  const char *used_for_str = "used_for=LOG";
+  const char *path_str = "path=oss://bucket-name/root_dir";
+  const char *endpoint_str = "endpoint=host=cn-xxx.com";
+  const char *access_info_str = "access_info=access_id=aaa&encrypt_key=bbb";
+  const char *extension_str = "extension=appid=123&checksum_type=crc32";
+  const char *state_str = "state=ADDED";
+  const char *state_info_str = "state_info=is_connective=true";
+  const char *create_timestamp_str = "create_timestamp=1679579590156";
+  const char *last_check_timestamp_str = "last_check_timestamp=1679579590256";
+  const char *op_id_str = "op_id=1";
+  const char *sub_op_id_str = "sub_op_id=2";
+  const char *storage_id_str = "storage_id=1";
+  const char *max_iops_str = "max_iops=10000";
+  const char *max_bandwidth_str = "max_bandwidth=1024000000";
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(used_for_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(path_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(endpoint_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(access_info_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(extension_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(state_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(state_info_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(create_timestamp_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(last_check_timestamp_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(op_id_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(sub_op_id_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(storage_id_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(max_iops_str, config));
+  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_device_config_field(max_bandwidth_str, config));
   ASSERT_EQ(0, STRCMP(config.used_for_, "LOG"));
-  ASSERT_EQ(0, STRCMP(config.path_, "oss://antsys-oceanbasebackup/backup_clog_1"));
-  ASSERT_EQ(0, STRCMP(config.endpoint_, "host=cn-hangzhou-alipay-b.oss-cdn.aliyun-inc.com"));
-  ASSERT_EQ(0, STRCMP(config.access_info_, "access_mode=access_by_id&access_id=a&access_key=b"));
-  ASSERT_EQ(0, STRCMP(config.encrypt_info_, "encrypt_key=b"));
-  ASSERT_EQ(0, STRCMP(config.extension_, "null"));
-  ASSERT_EQ(0, STRCMP(config.old_access_info_, "old_access_mode=access_by_id&old_access_id=c&old_access_key=d"));
-  ASSERT_EQ(0, STRCMP(config.old_encrypt_info_, "encrypt_key=b"));
-  ASSERT_EQ(0, STRCMP(config.old_extension_, "null"));
-  ASSERT_EQ(0, STRCMP(config.state_, "ADDING"));
+  ASSERT_EQ(0, STRCMP(config.path_, "oss://bucket-name/root_dir"));
+  ASSERT_EQ(0, STRCMP(config.endpoint_, "host=cn-xxx.com"));
+  ASSERT_EQ(0, STRCMP(config.access_info_, "access_id=aaa&encrypt_key=bbb"));
+  ASSERT_EQ(0, STRCMP(config.extension_, "appid=123&checksum_type=crc32"));
+  ASSERT_EQ(0, STRCMP(config.state_, "ADDED"));
   ASSERT_EQ(0, STRCMP(config.state_info_, "is_connective=true"));
   ASSERT_EQ(1679579590156, config.create_timestamp_);
   ASSERT_EQ(1679579590256, config.last_check_timestamp_);
   ASSERT_EQ(1, config.op_id_);
-  ASSERT_EQ(1, config.sub_op_id_);
+  ASSERT_EQ(2, config.sub_op_id_);
   ASSERT_EQ(1, config.storage_id_);
-  ASSERT_EQ(0, config.max_iops_);
-  ASSERT_EQ(0, config.max_bandwidth_);
+  ASSERT_EQ(10000, config.max_iops_);
+  ASSERT_EQ(1024000000, config.max_bandwidth_);
 
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_log_ram_url_, config));
-  ASSERT_EQ(0, STRCMP(config.used_for_, "LOG"));
-  ASSERT_EQ(0, STRCMP(config.path_, "oss://antsys-oceanbasebackup/backup_clog_2"));
-  ASSERT_EQ(0, STRCMP(config.endpoint_, "host=cn-hangzhou-alipay-b.oss-cdn.aliyun-inc.com"));
-  ASSERT_EQ(0, STRCMP(config.access_info_, "access_mode=access_by_ram_url&ram_url=xxxx"));
-  ASSERT_EQ(0, STRCMP(config.state_, "ADDING"));
-  ASSERT_EQ(0, STRCMP(config.state_info_, "is_connective=true"));
-  ASSERT_EQ(1679579590356, config.create_timestamp_);
-  ASSERT_EQ(1679579590456, config.last_check_timestamp_);
-  ASSERT_EQ(2, config.op_id_);
-  ASSERT_EQ(1, config.sub_op_id_);
-  ASSERT_EQ(2, config.storage_id_);
-  ASSERT_EQ(0, config.max_iops_);
-  ASSERT_EQ(0, config.max_bandwidth_);
-}
 
-TEST_F(TestDeviceConfig, DISABLED_test_device_manifest)
-{
+  // 2. test device manifest dump2file and load
   ObDeviceManifest device_manifest;
   ObArray<ObDeviceConfig> dump_configs;
   ObArray<ObDeviceConfig> load_configs;
-  ObDeviceConfig config;
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_log_id_, config));
   ASSERT_EQ(OB_SUCCESS, dump_configs.push_back(config));
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_log_ram_url_, config));
-  ASSERT_EQ(OB_SUCCESS, dump_configs.push_back(config));
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_data_, config));
-  ASSERT_EQ(OB_SUCCESS, dump_configs.push_back(config));
-
+  ObDeviceConfig config2 = config;
+  MEMSET(config2.used_for_, 0, sizeof(config2.used_for_));
+  STRCPY(config2.used_for_, "DATA");
+  MEMSET(config2.old_access_info_, 0, sizeof(config2.old_access_info_));
+  STRCPY(config2.old_access_info_, "access_id=aaa&encrypt_key=bbb");
+  MEMSET(config2.access_info_, 0, sizeof(config2.access_info_));
+  STRCPY(config2.access_info_, "access_id=ccccc&encrypt_key=ddddd");
+  MEMSET(config2.old_extension_, 0, sizeof(config2.old_extension_));
+  STRCPY(config2.old_extension_, "appid=123&checksum_type=crc32");
+  MEMSET(config2.extension_, 0, sizeof(config2.extension_));
+  STRCPY(config2.extension_, "appid=456&checksum_type=md5");
+  config2.op_id_ = 3;
+  config2.sub_op_id_ = 4;
+  config2.storage_id_ = 2;
+  ASSERT_EQ(OB_SUCCESS, dump_configs.push_back(config2));
   ObDeviceManifest::HeadSection dump_head;
-  dump_head.version_ = 1;
-  dump_head.device_num_ = 3;
+  dump_head.device_num_ = 2;
   dump_head.modify_timestamp_us_ = ObTimeUtil::fast_current_time();
   dump_head.last_op_id_ = 3;
-  dump_head.last_sub_op_id_ = 1;
+  dump_head.last_sub_op_id_ = 4;
   ObDeviceManifest::HeadSection load_head;
 
   const char *data_dir = "./TestDeviceConfigDir";
   ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::create_directory(data_dir));
-
   ASSERT_EQ(OB_SUCCESS, device_manifest.init(data_dir));
   ASSERT_EQ(OB_SUCCESS, device_manifest.dump2file(dump_configs, dump_head));
   ASSERT_EQ(OB_SUCCESS, device_manifest.load(load_configs, load_head));
 
   // sort by used_for, path and endpoint
   ObArray<ObDeviceConfig> sorted_dump_configs;
-  ASSERT_EQ(OB_SUCCESS, sorted_dump_configs.push_back(dump_configs[2]));
-  ASSERT_EQ(OB_SUCCESS, sorted_dump_configs.push_back(dump_configs[0]));
   ASSERT_EQ(OB_SUCCESS, sorted_dump_configs.push_back(dump_configs[1]));
-  ASSERT_EQ(3, load_configs.count());
+  ASSERT_EQ(OB_SUCCESS, sorted_dump_configs.push_back(dump_configs[0]));
+  ASSERT_EQ(2, load_configs.count());
   for (int64_t i = 0; i < load_configs.count(); ++i) {
     ASSERT_EQ(0, STRCMP(sorted_dump_configs[i].used_for_, load_configs[i].used_for_));
     ASSERT_EQ(0, STRCMP(sorted_dump_configs[i].path_, load_configs[i].path_));
@@ -165,59 +153,58 @@ TEST_F(TestDeviceConfig, DISABLED_test_device_manifest)
   ASSERT_EQ(dump_head.last_op_id_, load_head.last_op_id_);
   ASSERT_EQ(dump_head.last_sub_op_id_, load_head.last_sub_op_id_);
 
-  // ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::delete_directory_rec(data_dir));
-}
 
-TEST_F(TestDeviceConfig, DISABLED_test_device_config_mgr)
-{
-  char data_dir[MAX_PATH_SIZE] = "./TestDeviceConfigDir";
-  // char shared_storage_info[share::OB_MAX_BACKUP_DEST_LENGTH] = "file://./test_bukcet/";
-  // ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::create_directory(data_dir));
-
+  // 3. test device config mgr
   ObDeviceConfigMgr &config_mgr = ObDeviceConfigMgr::get_instance();
   ASSERT_EQ(OB_SUCCESS, config_mgr.init(data_dir));
   ASSERT_EQ(OB_SUCCESS, config_mgr.load_configs());
-
   // test get_all_device_configs
-  ObArray<ObDeviceConfig> configs;
-  ObDeviceConfig config;
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_data_, config));
-  ASSERT_EQ(OB_SUCCESS, configs.push_back(config));
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_log_id_, config));
-  ASSERT_EQ(OB_SUCCESS, configs.push_back(config));
-  ASSERT_EQ(OB_SUCCESS, ObDeviceConfigParser::parse_one_device_config(buf_log_ram_url_, config));
-  ASSERT_EQ(OB_SUCCESS, configs.push_back(config));
   ObArray<ObDeviceConfig> all_configs;
   ASSERT_EQ(OB_SUCCESS, config_mgr.get_all_device_configs(all_configs));
-  ASSERT_EQ(3, all_configs.count());
-
-  // test get_device_configs
-  char used_for_data[] = "DATA";
-  ObArray<ObDeviceConfig> used_for_configs;
-  ASSERT_EQ(OB_SUCCESS, config_mgr.get_device_configs(used_for_data, used_for_configs));
-  ASSERT_EQ(1, used_for_configs.count());
-  ASSERT_EQ(0, STRCMP(configs[0].used_for_, used_for_configs[0].used_for_));
-  ASSERT_EQ(0, STRCMP(configs[0].path_, used_for_configs[0].path_));
-  ASSERT_EQ(0, STRCMP(configs[0].endpoint_, used_for_configs[0].endpoint_));
-  ASSERT_EQ(0, STRCMP(configs[0].access_info_, used_for_configs[0].access_info_));
-  ASSERT_EQ(0, STRCMP(configs[0].encrypt_info_, used_for_configs[0].encrypt_info_));
-  ASSERT_EQ(0, STRCMP(configs[0].extension_, used_for_configs[0].extension_));
-  ASSERT_EQ(0, STRCMP(configs[0].old_access_info_, used_for_configs[0].old_access_info_));
-  ASSERT_EQ(0, STRCMP(configs[0].old_encrypt_info_, used_for_configs[0].old_encrypt_info_));
-  ASSERT_EQ(0, STRCMP(configs[0].old_extension_, used_for_configs[0].old_extension_));
-  ASSERT_EQ(0, STRCMP(configs[0].state_, used_for_configs[0].state_));
-  ASSERT_EQ(0, STRCMP(configs[0].state_info_, used_for_configs[0].state_info_));
-  ASSERT_EQ(configs[0].create_timestamp_, used_for_configs[0].create_timestamp_);
-  ASSERT_EQ(configs[0].last_check_timestamp_, used_for_configs[0].last_check_timestamp_);
-  ASSERT_EQ(configs[0].op_id_, used_for_configs[0].op_id_);
-  ASSERT_EQ(configs[0].sub_op_id_, used_for_configs[0].sub_op_id_);
-  ASSERT_EQ(configs[0].storage_id_, used_for_configs[0].storage_id_);
-  ASSERT_EQ(configs[0].max_iops_, used_for_configs[0].max_iops_);
-  ASSERT_EQ(configs[0].max_bandwidth_, used_for_configs[0].max_bandwidth_);
-  char used_for_log[] = "LOG";
-  // used_for_configs.reuse();
-  ASSERT_EQ(OB_SUCCESS, config_mgr.get_device_configs(used_for_log, used_for_configs));
-  ASSERT_EQ(2, used_for_configs.count());
+  ASSERT_EQ(2, all_configs.count());
+  // test get_device_config
+  ObDeviceConfig data_device_config;
+  ASSERT_EQ(OB_SUCCESS, config_mgr.get_device_config(ObStorageUsedType::TYPE::USED_TYPE_DATA,
+                                                     data_device_config));
+  ASSERT_EQ(0, STRCMP(config2.used_for_, data_device_config.used_for_));
+  ASSERT_EQ(0, STRCMP(config2.path_, data_device_config.path_));
+  ASSERT_EQ(0, STRCMP(config2.endpoint_, data_device_config.endpoint_));
+  ASSERT_EQ(0, STRCMP(config2.access_info_, data_device_config.access_info_));
+  ASSERT_EQ(0, STRCMP(config2.encrypt_info_, data_device_config.encrypt_info_));
+  ASSERT_EQ(0, STRCMP(config2.extension_, data_device_config.extension_));
+  ASSERT_EQ(0, STRCMP(config2.old_access_info_, data_device_config.old_access_info_));
+  ASSERT_EQ(0, STRCMP(config2.old_encrypt_info_, data_device_config.old_encrypt_info_));
+  ASSERT_EQ(0, STRCMP(config2.old_extension_, data_device_config.old_extension_));
+  ASSERT_EQ(0, STRCMP(config2.state_, data_device_config.state_));
+  ASSERT_EQ(0, STRCMP(config2.state_info_, data_device_config.state_info_));
+  ASSERT_EQ(config2.create_timestamp_, data_device_config.create_timestamp_);
+  ASSERT_EQ(config2.last_check_timestamp_, data_device_config.last_check_timestamp_);
+  ASSERT_EQ(config2.op_id_, data_device_config.op_id_);
+  ASSERT_EQ(config2.sub_op_id_, data_device_config.sub_op_id_);
+  ASSERT_EQ(config2.storage_id_, data_device_config.storage_id_);
+  ASSERT_EQ(config2.max_iops_, data_device_config.max_iops_);
+  ASSERT_EQ(config2.max_bandwidth_, data_device_config.max_bandwidth_);
+  ObDeviceConfig log_device_config;
+  ASSERT_EQ(OB_SUCCESS, config_mgr.get_device_config(ObStorageUsedType::TYPE::USED_TYPE_LOG,
+                                                     log_device_config));
+  ASSERT_EQ(0, STRCMP(config.used_for_, log_device_config.used_for_));
+  ASSERT_EQ(0, STRCMP(config.path_, log_device_config.path_));
+  ASSERT_EQ(0, STRCMP(config.endpoint_, log_device_config.endpoint_));
+  ASSERT_EQ(0, STRCMP(config.access_info_, log_device_config.access_info_));
+  ASSERT_EQ(0, STRCMP(config.encrypt_info_, log_device_config.encrypt_info_));
+  ASSERT_EQ(0, STRCMP(config.extension_, log_device_config.extension_));
+  ASSERT_EQ(0, STRCMP(config.old_access_info_, log_device_config.old_access_info_));
+  ASSERT_EQ(0, STRCMP(config.old_encrypt_info_, log_device_config.old_encrypt_info_));
+  ASSERT_EQ(0, STRCMP(config.old_extension_, log_device_config.old_extension_));
+  ASSERT_EQ(0, STRCMP(config.state_, log_device_config.state_));
+  ASSERT_EQ(0, STRCMP(config.state_info_, log_device_config.state_info_));
+  ASSERT_EQ(config.create_timestamp_, log_device_config.create_timestamp_);
+  ASSERT_EQ(config.last_check_timestamp_, log_device_config.last_check_timestamp_);
+  ASSERT_EQ(config.op_id_, log_device_config.op_id_);
+  ASSERT_EQ(config.sub_op_id_, log_device_config.sub_op_id_);
+  ASSERT_EQ(config.storage_id_, log_device_config.storage_id_);
+  ASSERT_EQ(config.max_iops_, log_device_config.max_iops_);
+  ASSERT_EQ(config.max_bandwidth_, log_device_config.max_bandwidth_);
 
   // test get_last_op_id and get_last_sub_op_id
   uint64_t last_op_id = UINT64_MAX;
@@ -225,17 +212,20 @@ TEST_F(TestDeviceConfig, DISABLED_test_device_config_mgr)
   ASSERT_EQ(OB_SUCCESS, config_mgr.get_last_op_id(last_op_id));
   ASSERT_EQ(OB_SUCCESS, config_mgr.get_last_sub_op_id(last_sub_op_id));
   ASSERT_EQ(3, last_op_id);
-  ASSERT_EQ(1, last_sub_op_id);
+  ASSERT_EQ(4, last_sub_op_id);
 
   // test is_op_done
-  bool is_done_3_1 = false;
-  config_mgr.is_op_done(3, 1, is_done_3_1);
-  ASSERT_TRUE(is_done_3_1);
-  bool is_done_1_1 = false;
-  config_mgr.is_op_done(1, 1, is_done_1_1);
-  ASSERT_TRUE(is_done_1_1);
+  bool is_done_3_4 = false;
+  config_mgr.is_op_done(3, 4, is_done_3_4);
+  ASSERT_TRUE(is_done_3_4);
+  bool is_done_1_2 = false;
+  config_mgr.is_op_done(1, 2, is_done_1_2);
+  ASSERT_TRUE(is_done_1_2);
+  bool is_done_3_5 = false;
+  config_mgr.is_op_done(3, 5, is_done_3_5);
+  ASSERT_FALSE(is_done_3_5);
 
-  // ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::delete_directory_rec(data_dir));
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::delete_directory_rec(data_dir));
 }
 
 } // namespace unittest
@@ -245,7 +235,7 @@ int main(int argc, char **argv)
 {
   oceanbase::common::FileDirectoryUtils::delete_directory_rec("./TestDeviceConfigDir");
   system("rm -f test_device_config.log");
-  OB_LOGGER.set_file_name("test_device_config.log");
+  OB_LOGGER.set_file_name("test_device_config.log", true);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

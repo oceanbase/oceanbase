@@ -157,6 +157,7 @@ private:
   ObITable::TableKey table_key_;
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
   const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
   blocksstable::ObBufferReader data_buffer_; // Data used to assemble macroblocks
@@ -165,6 +166,10 @@ private:
   int64_t macro_block_index_;
   int64_t macro_block_count_;
   int64_t data_size_;
+  ObDatumRange datum_range_;
+  backup::ObBackupSSTableSecMetaIterator *sec_meta_iterator_;
+  ObTabletRestoreAction::ACTION restore_action_;
+  ObSelfBufferWriter meta_row_buf_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRestoreReader);
 };
 
@@ -688,8 +693,14 @@ private:
       const ObITable::TableKey &table_key,
       ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
   int build_sstable_range_info_(
+      const common::ObTabletID &tablet_id,
+      const storage::ObTabletHandle &tablet_handle,
       const ObITable::TableKey &table_key,
-      const common::ObIArray<ObRestoreMacroBlockId> &block_id_array,
+      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
+  int build_sstable_range_info_using_iterator_(
+      const common::ObTabletID &tablet_id,
+      const storage::ObTabletHandle &tablet_handle,
+      const ObITable::TableKey &table_key,
       ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
 
   int fetch_sstable_macro_range_header_(obrpc::ObCopySSTableMacroRangeInfoHeader &header);

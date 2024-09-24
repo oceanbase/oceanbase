@@ -304,7 +304,7 @@ int TestDDLCreateTablet::build_create_tablet_arg(
   } else if (OB_FAIL(tablet_schema_index_array.push_back(0))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
   } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array,
-      lib::get_compat_mode(), false/*is_create_bind_hidden_tablets*/))) {
+      lib::get_compat_mode(), false/*is_create_bind_hidden_tablets*/, false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.tablets_.push_back(tablet_info))) {

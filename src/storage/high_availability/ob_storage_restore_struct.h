@@ -103,9 +103,29 @@ struct ObTabletRestoreAction
 
 struct ObRestoreUtils
 {
-  static int  get_backup_data_type(
+  static int get_backup_data_type(
       const ObITable::TableKey &table_key,
       share::ObBackupDataType &data_type);
+
+  // call backup::ObLSBackupFactory::free to release iterator after not use.
+  static int create_backup_sstable_sec_meta_iterator(
+      const uint64_t tenant_id,
+      const common::ObTabletID &tablet_id,
+      const storage::ObTabletHandle &tablet_handle,
+      const ObITable::TableKey &table_key,
+      const blocksstable::ObDatumRange &query_range,
+      const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+      backup::ObBackupSSTableSecMetaIterator *&sstable_sec_meta_iterator);
+
+  static int create_backup_sstable_sec_meta_iterator(
+      const uint64_t tenant_id,
+      const common::ObTabletID &tablet_id,
+      const storage::ObTabletHandle &tablet_handle,
+      const ObITable::TableKey &table_key,
+      const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+      backup::ObBackupSSTableSecMetaIterator *&sstable_sec_meta_iterator);
 };
 
 struct ObTabletGroupRestoreArg
@@ -240,14 +260,6 @@ private:
       backup::ObBackupMetaIndexStoreWrapper &meta_index_store);
 
 private:
-  int prepare_backup_sstable_sec_meta_iterator_(
-      const common::ObTabletID &tablet_id,
-      const storage::ObTabletHandle &tablet_handle,
-      const ObITable::TableKey &table_key,
-      const ObRestoreBaseInfo &restore_base_info,
-      common::ObIAllocator &allocator,
-      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
-      backup::ObBackupSSTableSecMetaIterator *&sstable_sec_meta_iterator);
   int get_macro_block_index_list_from_iter_(
       backup::ObBackupSSTableSecMetaIterator &sstable_sec_meta_iterator,
       common::ObIArray<ObRestoreMacroBlockId> &macro_id_list);

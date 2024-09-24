@@ -730,6 +730,29 @@ int ObDiagnoseTenantInfo::set_stat(const int16_t stat_no, const int64_t value)
   return ret;
 }
 
+int ObDiagnoseTenantInfo::get_stat(const int16_t stat_no, int64_t &value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObStatEventIds::STAT_EVENT_ADD_END == stat_no)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (stat_no < ObStatEventIds::STAT_EVENT_ADD_END) {
+    ObStatEventAddStat *stat = stat_add_stats_.get(stat_no);
+    if (OB_ISNULL(stat)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      value = stat->stat_value_;
+    }
+  } else if (stat_no > ObStatEventIds::STAT_EVENT_ADD_END) {
+    ObStatEventSetStat *stat = stat_set_stats_.get(stat_no - ObStatEventIds::STAT_EVENT_ADD_END - 1);
+    if (OB_ISNULL(stat)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      value = stat->stat_value_;
+    }
+  }
+  return ret;
+}
+
 ObDiagnoseTenantInfo *ObDiagnoseTenantInfo::get_local_diagnose_info()
 {
   int ret = OB_SUCCESS;

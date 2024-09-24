@@ -199,8 +199,8 @@ int ObCreateIndexResolver::resolve_index_column_node(
           } else if (OB_NOT_NULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
             if (ob_is_collection_sql_type(column_schema->get_data_type()) && index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support index create on vector column yet", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector column is");
+              LOG_WARN("not support index type create on vector or array column yet", K(ret), K(index_keyname_));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector or array column is");
             }
           }
         }
@@ -685,6 +685,8 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   }
   if (OB_SUCC(ret)) {
     ObCreateIndexArg &index_arg = crt_idx_stmt->get_create_index_arg();
+    char* buf = nullptr;
+    int64_t pos = 0;
     if (is_vec_index(index_arg.index_type_)) {
       index_arg.index_schema_.set_index_params(index_params_);
       if (tbl_schema->is_view_table()) {
@@ -692,6 +694,13 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("create vector index on view table is not supported",
             KR(ret), K(tbl_schema->get_table_name()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on view table is");
+      } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_->alloc(sizeof(char) * OB_MAX_PROC_ENV_LENGTH)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc buffer", KR(ret), K(OB_MAX_PROC_ENV_LENGTH));
+      } else if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
+        LOG_WARN("fail to gen exec env", KR(ret));
+      } else {
+        index_arg.vidx_refresh_info_.exec_env_.assign_ptr(buf, pos);
       }
     }
   }

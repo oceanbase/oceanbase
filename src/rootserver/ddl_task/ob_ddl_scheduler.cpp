@@ -1069,6 +1069,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         break;
       case DDL_DROP_FTS_INDEX:
       case DDL_DROP_MULVALUE_INDEX:
+        drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_fts_index_task(proxy,
                                                param.src_table_schema_,
                                                param.schema_version_,
@@ -1076,6 +1077,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                param.aux_rowkey_doc_schema_,
                                                param.aux_doc_rowkey_schema_,
                                                param.aux_doc_word_schema_,
+                                               drop_index_arg,
                                                *param.allocator_,
                                                task_record))) {
           LOG_WARN("fail to create drop fts index task", K(ret));
@@ -1089,6 +1091,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                 param.consumer_group_id_,
                                                 param.vec_vid_rowkey_schema_,
                                                 param.vec_rowkey_vid_schema_,
+                                                param.vec_domain_index_schema_,
                                                 param.vec_index_id_schema_,
                                                 param.vec_snapshot_data_schema_,
                                                 param.tenant_data_version_,
@@ -1796,6 +1799,7 @@ int ObDDLScheduler::create_drop_fts_index_task(
     const share::schema::ObTableSchema *rowkey_doc_schema,
     const share::schema::ObTableSchema *doc_rowkey_schema,
     const share::schema::ObTableSchema *doc_word_schema,
+    const obrpc::ObDropIndexArg *drop_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
@@ -1811,9 +1815,9 @@ int ObDDLScheduler::create_drop_fts_index_task(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || OB_ISNULL(drop_index_arg)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(index_schema));
+    LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg));
   } else if (FALSE_IT(is_fts_index = index_schema->is_fts_index_aux())) {
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1860,6 +1864,7 @@ int ObDDLScheduler::create_drop_fts_index_task(
                                 doc_rowkey,
                                 domain_index,
                                 fts_doc_word,
+                                drop_index_arg->ddl_stmt_str_,
                                 schema_version,
                                 consumer_group_id))) {
       LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(domain_index));
@@ -1881,6 +1886,7 @@ int ObDDLScheduler::create_drop_vec_index_task(
     const int64_t consumer_group_id,
     const share::schema::ObTableSchema *vid_rowkey_schema,
     const share::schema::ObTableSchema *rowkey_vid_schema,
+    const share::schema::ObTableSchema *domain_index_schema,
     const share::schema::ObTableSchema *index_id_schema,
     const share::schema::ObTableSchema *snapshot_data_schema,
     const uint64_t tenant_data_version,
@@ -1909,9 +1915,11 @@ int ObDDLScheduler::create_drop_vec_index_task(
     LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
   } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), index_schema->get_tenant_id(), task_id))) {
     LOG_WARN("fetch new task id failed", K(ret));
-  } else if (OB_FAIL(index_schema->get_index_name(vec_domain_index_name))) {
-    LOG_WARN("fail to get vec index name", K(ret), KPC(index_schema));
   } else {
+    if (OB_FAIL(ret) || OB_ISNULL(domain_index_schema)) {
+    } else if (OB_FAIL(domain_index_schema->get_index_name(vec_domain_index_name))) {
+      LOG_WARN("fail to get vid rowkey name", K(ret), KPC(domain_index_schema));
+    }
     if (OB_FAIL(ret) || OB_ISNULL(vid_rowkey_schema)) {
     } else if (OB_FAIL(vid_rowkey_schema->get_index_name(vec_vid_rowkey_name))) {
       LOG_WARN("fail to get vid rowkey name", K(ret), KPC(vid_rowkey_schema));
@@ -1934,10 +1942,11 @@ int ObDDLScheduler::create_drop_vec_index_task(
 
     uint64_t vid_rowkey_table_id = OB_ISNULL(vid_rowkey_schema) ? OB_INVALID_ID : vid_rowkey_schema->get_table_id();
     uint64_t rowkey_vid_table_id = OB_ISNULL(rowkey_vid_schema) ? OB_INVALID_ID : rowkey_vid_schema->get_table_id();
+    uint64_t domain_index_table_id = OB_ISNULL(domain_index_schema) ? OB_INVALID_ID : domain_index_schema->get_table_id();
     uint64_t index_id_table_id = OB_ISNULL(index_id_schema) ? OB_INVALID_ID : index_id_schema->get_table_id();
     uint64_t snapshot_data_table_id = OB_ISNULL(snapshot_data_schema) ? OB_INVALID_ID : snapshot_data_schema->get_table_id();
 
-    const ObVecIndexDDLChildTaskInfo domain_index(vec_domain_index_name, index_schema->get_table_id(), init_task_id);
+    const ObVecIndexDDLChildTaskInfo domain_index(vec_domain_index_name, domain_index_table_id, init_task_id);
     const ObVecIndexDDLChildTaskInfo vid_rowkey(vec_vid_rowkey_name, vid_rowkey_table_id, init_task_id);
     const ObVecIndexDDLChildTaskInfo rowkey_vid(vec_rowkey_vid_name, rowkey_vid_table_id, init_task_id);
     const ObVecIndexDDLChildTaskInfo index_id(vec_index_id_name, index_id_table_id, init_task_id);

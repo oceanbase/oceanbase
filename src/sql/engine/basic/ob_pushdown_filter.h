@@ -460,7 +460,6 @@ public:
             ObPushdownFilterNode &filter_node,
             ObPushdownFilterExecutor *&filter_executor,
             ObPushdownOperator &op);
-  int convert_white_filter_to_black(ObPushdownFilterExecutor *&filter);
 
 private:
   // pushdown filter
@@ -696,7 +695,7 @@ public:
   int pull_up_common_node(
       const common::ObIArray<uint32_t> &filter_indexes,
       ObPushdownFilterExecutor *&common_filter_executor);
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) { return common::OB_NOT_SUPPORTED; }
+  virtual int init_evaluated_datums(bool &is_valid) { return common::OB_NOT_SUPPORTED; }
   int execute(
       ObPushdownFilterExecutor *parent,
       PushdownFilterInfo &filter_info,
@@ -762,7 +761,7 @@ public:
   {}
   virtual ~ObPhysicalFilterExecutor();
   int filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, const sql::ObBitVector &skip_bit, bool &ret_val);
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) = 0;
   INHERIT_TO_STRING_KV("ObPhysicalFilterExecutor", ObPushdownFilterExecutor,
                        K_(n_eval_infos), KP_(eval_infos));
@@ -1000,7 +999,7 @@ public:
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
   virtual const common::ObIArray<ObExpr *> *get_cg_col_exprs() const override { return &filter_.column_exprs_; }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   OB_INLINE const common::ObIArray<common::ObDatum> &get_datums() const
   { return datum_params_; }
   OB_INLINE const common::ObDatum &get_min_param() const
@@ -1054,7 +1053,7 @@ public:
   OB_INLINE ObPushdownAndFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   INHERIT_TO_STRING_KV("ObPushdownAndFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownAndFilterNode &filter_;
@@ -1072,7 +1071,7 @@ public:
   OB_INLINE ObPushdownOrFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   INHERIT_TO_STRING_KV("ObPushdownOrFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownOrFilterNode &filter_;
@@ -1104,7 +1103,7 @@ public:
   {
     return static_cast<const ObPushdownDynamicFilterNode &>(filter_);
   }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   int check_runtime_filter(ObPushdownFilterExecutor* parent_filter, bool &is_needed);
   void filter_on_bypass(ObPushdownFilterExecutor* parent_filter);
   void filter_on_success(ObPushdownFilterExecutor* parent_filter);

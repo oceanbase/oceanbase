@@ -140,17 +140,17 @@ int ObBackupLinkedBlockReader::get_backup_file_path_(const ObBackupLinkedBlockAd
 {
   int ret = OB_SUCCESS;
   ObBackupDataType backup_data_type;
-  backup_data_type.set_minor_data_backup(); // TODO(yanfeng): change to major when quick restore branch merge
+  backup_data_type.set_user_data_backup();
   if (!block_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arg", K(ret), K(block_addr));
-  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest_,
-                                                                   ObLSID(block_addr.ls_id_),
-                                                                   backup_data_type,
-                                                                   block_addr.turn_id_,
-                                                                   block_addr.retry_id_,
-                                                                   block_addr.file_id_,
-                                                                   backup_path))) {
+  } else if (OB_FAIL(ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest_,
+                                                                          ObLSID(block_addr.ls_id_),
+                                                                          backup_data_type,
+                                                                          block_addr.turn_id_,
+                                                                          block_addr.retry_id_,
+                                                                          block_addr.file_id_,
+                                                                          backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), K_(backup_set_dest), K(block_addr));
   }
   return ret;

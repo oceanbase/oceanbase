@@ -51,6 +51,8 @@ int ObTmpFilePageCacheController::start()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     STORAGE_LOG(WARN, "tmp file page cache controller is not inited");
+  } else if (OB_FAIL(flush_tg_.start())) {
+    STORAGE_LOG(WARN, "fail to start swap thread", KR(ret));
   } else if (OB_FAIL(swap_tg_.start())) {
     STORAGE_LOG(WARN, "fail to start swap thread", KR(ret));
   }
@@ -65,6 +67,7 @@ void ObTmpFilePageCacheController::stop()
   } else {
     // stop background threads should follow the order 'swap' -> 'flush' because 'swap' holds ref to 'flush'
     swap_tg_.stop();
+    flush_tg_.stop();
   }
 }
 
@@ -75,6 +78,7 @@ void ObTmpFilePageCacheController::wait()
     STORAGE_LOG(WARN, "tmp file page cache controller is not inited");
   } else {
     swap_tg_.wait();
+    flush_tg_.wait();
   }
 }
 

@@ -164,55 +164,78 @@ struct ObIOUsageInfo
   TO_STRING_KV(K(io_stat_), K(io_estimator_), K(avg_iops_), K(avg_byte_), K(avg_prepare_delay_us_), K(avg_schedule_delay_us_), K(avg_submit_delay_us_), K(avg_device_delay_us_), K(avg_total_delay_us_));
 };
 
+// avg delay array (us)
+struct ObIODelayArr
+{
+  ObIODelayArr():prepare_delay_us_(0), schedule_delay_us_(0), submit_delay_us_(0), device_delay_us_(0), total_delay_us_(0)
+  {}
+  ~ObIODelayArr(){}
+  int64_t prepare_delay_us_;
+  int64_t schedule_delay_us_;
+  int64_t submit_delay_us_;
+  int64_t device_delay_us_;
+  int64_t total_delay_us_;
+  void inc(const int prepare_delay, const int64_t schedule_delay, const int64_t submit_delay,
+      const int64_t device_delay, const int64_t total_delay)
+  {
+    ATOMIC_FAA(&prepare_delay_us_, prepare_delay);
+    ATOMIC_FAA(&schedule_delay_us_, schedule_delay);
+    ATOMIC_FAA(&submit_delay_us_, submit_delay);
+    ATOMIC_FAA(&device_delay_us_, device_delay);
+    ATOMIC_FAA(&total_delay_us_, total_delay);
+  }
+  int reset()
+  {
+    ATOMIC_SET(&prepare_delay_us_, 0);
+    ATOMIC_SET(&schedule_delay_us_, 0);
+    ATOMIC_SET(&submit_delay_us_, 0);
+    ATOMIC_SET(&device_delay_us_, 0);
+    ATOMIC_SET(&total_delay_us_, 0);
+    return OB_SUCCESS;
+  }
+  TO_STRING_KV(K(prepare_delay_us_), K(schedule_delay_us_), K(submit_delay_us_), K(device_delay_us_), K(total_delay_us_));
+};
+
 struct ObIOGroupUsage
 {
+  struct ObIOLastStat
+  {
+    ObIOLastStat() : avg_size_(0), avg_iops_(0), avg_bw_(0), avg_delay_arr_()
+    {}
+    ~ObIOLastStat()
+    {}
+    double avg_size_;
+    double avg_iops_;
+    int64_t avg_bw_;
+    ObIODelayArr avg_delay_arr_;
+    TO_STRING_KV(K(avg_size_), K(avg_iops_), K(avg_bw_), K(avg_delay_arr_));
+  };
   ObIOGroupUsage()
-      : last_ts_(ObTimeUtility::fast_current_time()),
-        io_count_(0),
-        size_(0),
-        last_io_ps_record_(0),
-        last_io_bw_record_(0),
-        total_prepare_delay_(0),
-        total_schedule_delay_(0),
-        total_submit_delay_(0),
-        total_device_delay_(0),
-        total_total_delay_(0)
+      : last_ts_(ObTimeUtility::fast_current_time()), last_stat_(), io_count_(0), size_(0), total_delay_arr_()
   {}
-  int calc(double &avg_size, double &avg_iops, int64_t &avg_bw, int64_t &avg_prepare_delay,
-      int64_t &avg_schedule_delay, int64_t &avg_submit_delay, int64_t &avg_device_delay, int64_t &avg_total_delay);
+  int calc(double &avg_size, double &avg_iops, int64_t &avg_bw, int64_t &avg_prepare_delay, int64_t &avg_schedule_delay,
+      int64_t &avg_submit_delay, int64_t &avg_device_delay, int64_t &avg_total_delay);
   void inc(const int64_t size, const int prepare_delay, const int64_t schedule_delay, const int64_t submit_delay,
       const int64_t device_delay, const int64_t total_delay)
   {
     ATOMIC_FAA(&size_, size);
     ATOMIC_FAA(&io_count_, 1);
-    ATOMIC_FAA(&total_prepare_delay_, prepare_delay);
-    ATOMIC_FAA(&total_schedule_delay_, schedule_delay);
-    ATOMIC_FAA(&total_submit_delay_, submit_delay);
-    ATOMIC_FAA(&total_device_delay_, device_delay);
-    ATOMIC_FAA(&total_total_delay_, total_delay);
+    total_delay_arr_.inc(prepare_delay, schedule_delay, submit_delay, device_delay, total_delay);
   }
   int clear()
   {
-    ATOMIC_SET(&total_prepare_delay_, 0);
-    ATOMIC_SET(&total_schedule_delay_, 0);
-    ATOMIC_SET(&total_submit_delay_, 0);
-    ATOMIC_SET(&total_device_delay_, 0);
-    ATOMIC_SET(&total_total_delay_, 0);
-    return OB_SUCCESS;
+    int ret = total_delay_arr_.reset();
+    return ret;
   }
-  int64_t last_ts_;
+  int record(const double avg_size, const double avg_iops, const int64_t avg_bw, const int64_t avg_prepare_delay,
+      const int64_t avg_schedule_delay, const int64_t avg_submit_delay, const int64_t avg_device_delay,
+      const int64_t avg_total_delay);
+  int64_t last_ts_;  // us
+  ObIOLastStat last_stat_;
   int64_t io_count_;
   int64_t size_;
-  int64_t last_io_ps_record_;    // iops
-  int64_t last_io_bw_record_;    // iobw
-  int64_t total_prepare_delay_;  // us
-  int64_t total_schedule_delay_;
-  int64_t total_submit_delay_;
-  int64_t total_device_delay_;
-  int64_t total_total_delay_;
-  TO_STRING_KV(K(last_ts_), K(io_count_), K(size_), K(last_io_ps_record_), K(last_io_bw_record_),
-      K(total_prepare_delay_), K(total_schedule_delay_), K(total_submit_delay_), K(total_device_delay_),
-      K(total_total_delay_));
+  ObIODelayArr total_delay_arr_;  // us
+  TO_STRING_KV(K(last_ts_), K(last_stat_), K(io_count_), K(size_), K(total_delay_arr_));
 };
 
 struct ObIOFailedReqUsageInfo : ObIOGroupUsage
@@ -618,6 +641,7 @@ struct ObIOFuncUsageByMode : ObIOGroupUsage
 {
 };
 typedef ObSEArray<ObIOFuncUsageByMode, static_cast<uint8_t>(ObIOGroupMode::MODECNT)> ObIOFuncUsage;
+typedef ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> ObIOFuncUsageArr;
 struct ObIOFuncUsages
 {
 public:
@@ -625,7 +649,7 @@ public:
   ~ObIOFuncUsages() = default;
   int accumulate(ObIORequest &req);
   TO_STRING_KV(K(func_usages_));
-  ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> func_usages_;
+  ObIOFuncUsageArr func_usages_;
 };
 
 // Device Health status

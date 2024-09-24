@@ -1111,7 +1111,7 @@ int ObLogTableScan::filter_before_index_back_set()
 {
   int ret = OB_SUCCESS;
   filter_before_index_back_.reset();
-  if (index_back_) {
+  if (index_back_ && !is_vec_idx_scan()) {
     if (OB_FAIL(ObOptimizerUtil::check_filter_before_indexback(filter_exprs_,
                                                                idx_columns_,
                                                                filter_before_index_back_))) {
@@ -2219,7 +2219,7 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
                      || table_schema->is_key_subpart() || table_schema->is_key_subpart();
     //Before GI is adapted to the real agent table, block gi cannot be assigned to it
     if (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())
-        || table_schema->is_spatial_index()) {
+        || table_schema->is_spatial_index() || table_schema->is_vec_index()) {
       ctx.set_force_partition();
     }
   } else { /*do nothing*/ }

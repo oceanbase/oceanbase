@@ -98,7 +98,7 @@ public:
       const bool only_persisted_ddl_data = false);
 
   int replay_create_tablet_direct_load(
-      const ObTabletHandle &tablet_handle,
+      const ObTablet *tablet,
       const int64_t execution_id,
       const ObTabletDirectLoadInsertParam &param);
 
@@ -400,9 +400,8 @@ public:
   int64_t get_cg_cnt() {return cg_cnt_; }
   // init column store related parameters when open in leader
   int init_column_store_params(
-      const ObLSHandle &ls_handle,
+      const ObTablet &tablet,
       const ObStorageSchema &storage_schema,
-      const ObTabletID &new_tablet_id,
       const ObDirectLoadType new_direct_load_type);
   /*
    * For full data direct load, row store table and column store table take diffrent way.
@@ -498,8 +497,7 @@ public:
       const share::SCN &start_scn,
       const uint64_t data_format_version,
       const int64_t execution_id,
-      const share::SCN &checkpoint_scn,
-      const bool replay_normal_in_cs_replica = false);
+      const share::SCN &checkpoint_scn);
   int start_with_checkpoint(
       ObTablet &tablet,
       const share::SCN &start_scn,
@@ -539,8 +537,9 @@ private:
   bool is_started() { return start_scn_.is_valid_and_not_min(); }
   int schedule_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool wait_major_generated, const bool is_replay); // try wait build major sstable
   int cleanup_unlock();
-  int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn, const bool replay_normal_in_cs_replica = false);
+  int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   int update_major_sstable();
+  int pre_process_cs_replica(const ObTabletID &tablet_id, bool &replay_normal_in_cs_replica);
 
 private:
   share::SCN start_scn_;

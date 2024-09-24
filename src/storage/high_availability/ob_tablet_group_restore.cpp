@@ -2537,7 +2537,7 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
       tablet_restore_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter,
-      tablet_restore_ctx_->action_, src_tablet_meta, tablet_restore_ctx_))) {
+      tablet_restore_ctx_->action_, src_tablet_meta, tablet_restore_ctx_, tablet_restore_ctx_->is_leader_))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_),
         KPC(tablet_restore_ctx_));
   }
@@ -2817,9 +2817,8 @@ int ObTabletRestoreTask::check_need_copy_macro_blocks_(
     bool &need_copy)
 {
   int ret = OB_SUCCESS;
-  if (ObTabletRestoreAction::is_restore_remote_sstable(tablet_restore_ctx_->action_)) {
-    need_copy = false;
-  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(param,
+  // TODO(wangxiaohui.wxh): do not copy macro blocks when restore remote sstable
+  if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(param,
                                                                  tablet_restore_ctx_->is_leader_,
                                                                  need_copy))) {
     LOG_WARN("failed to check need copy macro blocks", K(ret), K(param), KPC(tablet_restore_ctx_));

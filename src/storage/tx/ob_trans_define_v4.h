@@ -311,6 +311,7 @@ struct ObTxReadSnapshot
                K_(parts),
                K_(committed));
   OB_UNIS_VERSION(1);
+  DISABLE_COPY_ASSIGN(ObTxReadSnapshot);
 };
 
 class ObTxSavePoint
@@ -386,6 +387,7 @@ public:
   int merge_result(const ObTxExecResult &r);
   int assign(const ObTxExecResult &r);
   const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return conflict_txs_; }
+  DISABLE_COPY_ASSIGN(ObTxExecResult);
 };
 
 class RollbackMaskSet
@@ -779,7 +781,7 @@ public:
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
   void dump_and_print_trace();
-  bool in_tx_or_has_extra_state();
+  bool in_tx_or_has_extra_state() const;
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }
@@ -836,6 +838,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int64_t get_seq_base() const { return seq_base_; }
   int add_modified_tables(const ObIArray<uint64_t> &tables);
   bool has_modify_table(const uint64_t table_id) const;
+  DISABLE_COPY_ASSIGN(ObTxDesc);
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;

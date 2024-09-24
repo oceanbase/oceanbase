@@ -27,6 +27,7 @@
 #include "share/schema/ob_security_audit_sql_service.h"
 #include "share/schema/ob_sequence_sql_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::lib;
@@ -2231,6 +2232,11 @@ int ObCreateTableHelper::create_tables_()
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_temp_table_info(
                  trans_, new_table))) {
         LOG_WARN("insert_temp_table_info failed", KR(ret), K(new_table));
+      } else if (new_table.is_vec_delta_buffer_type() &&
+                 OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(trans_, new_table.get_tenant_id(),
+                                                                 new_table.get_table_id(),
+                                                                 new_table.get_exec_env()))) {
+        LOG_WARN("failed to add dbms_vector jobs", K(ret), K(new_table.get_tenant_id()), K(new_table));
       }
     } // end for
   }

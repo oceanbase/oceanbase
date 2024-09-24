@@ -151,7 +151,7 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
 {
   int ret = OB_SUCCESS;
   const bool need_padding = is_pad_char_to_full_length(context_.sql_mode_);
-  bool need_convert = false;
+  bool filter_valid = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret));
@@ -162,19 +162,14 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
   } else if (nullptr == pd_filter_info_.filter_) {
     // nothing to do
-  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(&pd_filter_info_.filter_->get_allocator(), need_convert))) {
+  } else if (OB_FAIL(pd_filter_info_.filter_->init_evaluated_datums(filter_valid))) {
     LOG_WARN("Failed to init pushdown filter evaluated datums", K(ret));
   } else {
-    if (OB_UNLIKELY(need_convert)) {
-      sql::ObPushdownFilterFactory filter_factory(&pd_filter_info_.filter_->get_allocator());
-      if (OB_FAIL(filter_factory.convert_white_filter_to_black(pd_filter_info_.filter_))) {
-        LOG_WARN("Failed to convert white filter to black filter", K(ret), KPC_(pd_filter_info_.filter));
-      } else {
-        iter_param.pushdown_filter_ = pd_filter_info_.filter_;
-      }
+    if (OB_UNLIKELY(!filter_valid)) {
+      iter_param.pd_storage_flag_.set_filter_pushdown(false);
+      pd_filter_info_.is_pd_filter_ = false;
     }
-    if (OB_FAIL(ret)) {
-    } else if (iter_param.is_use_column_store()) {
+    if (iter_param.is_use_column_store()) {
       if (OB_FAIL(pd_filter_info_.filter_->init_co_filter_param(iter_param, need_padding))) {
         LOG_WARN("Failed to init pushdown filter executor", K(ret));
       }

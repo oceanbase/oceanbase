@@ -541,9 +541,15 @@ int ObStorageSchema::init(
       if (OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
         STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
       }
-    } else if (NULL != column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, *column_group_schema))) {
-      STORAGE_LOG(WARN, "failed to deep copy column array from column group schema", K(ret), K(old_schema), KPC(column_group_schema));
-    } else if (NULL == column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, old_schema))) {
+    } else if (NULL != column_group_schema) {
+      if (OB_FAIL(deep_copy_column_group_array(allocator, *column_group_schema))) {
+        STORAGE_LOG(WARN, "failed to deep copy column array from column group schema", K(ret), K(old_schema), KPC(column_group_schema));
+      } else if (!old_schema.is_cs_replica_compat() && column_group_schema->is_cs_replica_compat()) {
+        // use row store storage schema from src when ls rebuild, but use column group from old tablet to init cg schemas
+        is_cs_replica_compat_ = true;
+        STORAGE_LOG(INFO, "[CS-Replica] take old schema from param and column group from old tablet in cs replica", K(ret), K(old_schema), KPC(column_group_schema));
+      }
+    } else if (OB_FAIL(deep_copy_column_group_array(allocator, old_schema))) {
       STORAGE_LOG(WARN, "failed to deep copy column array", K(ret), K(old_schema));
     }
 
@@ -1071,8 +1077,25 @@ int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocato
   int schema_rowkey_column_cnt = get_rowkey_column_num();
   cg_schemas.reset();
   ObStorageColumnGroupSchema column_group;
+  uint16_t normal_column_start_idx = schema_rowkey_column_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
 
-  if (OB_FAIL(cg_schemas.reserve(store_column_cnt_ + 1))) {
+  /*
+   * column idx in ObStorageColumnGroupSchema means the offset in column_ids(row keys in the front and according to the definition order).
+   * rowkey_array_ init with the definition order, so need sort to decide the column idx.
+   *
+   * For example, if create a table with (v1, k1, v2, k2, v3, k3, primary key(k3, k1, k2))
+   *                                [v1, k1, v2, k2, v3, k3]
+   * the column id from v1 to k3 is [16, 17, 18, 19, 20, 21]
+   *
+   *                                [k3, k1, k2, tid, sql, v1, v2, v3]
+   *          array idx is          [ 0,  1,  2,   3,   4,  5,  6,  7]
+   * but the column_ids is          [21, 17, 19,   7,   8, 16, 18, 20]
+   *
+   * so the column group is         [rowkey cg0,      cg1(v1), cg2(k1), cg3(v2), cg4(k2), cg5(v3), cg6(k3)]
+   *       with column_idxs         [[0, 1, 2, 3, 4],     [5],     [1],     [6],     [2],     [7],     [0]]
+   */
+
+  if (FAILEDx(cg_schemas.reserve(store_column_cnt_ + 1))) {
     STORAGE_LOG(WARN, "failed to reserve for column group array", K(ret), K_(store_column_cnt));
   } else if (OB_FAIL(generate_rowkey_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE, allocator))) {
     STORAGE_LOG(WARN, "failed to generate_rowkey_column_group_schema", K(ret));
@@ -1081,13 +1104,34 @@ int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocato
     column_group.destroy(allocator);
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < store_column_cnt_; i++) {
-    if (OB_FAIL(generate_single_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE,
-            i + (i >= schema_rowkey_column_cnt ? ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() : 0), allocator))) {
-      STORAGE_LOG(WARN, "failed to generate_single_column_group_schema", K(ret), K(i));
-    } else if (OB_FAIL(cg_schemas.push_back(column_group))) {
-      STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
-      column_group.destroy(allocator);
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_array_.count(); i++) {
+    const ObStorageColumnSchema &column = column_array_.at(i);
+    uint16_t column_idx = UINT16_MAX;
+    if (OB_UNLIKELY(!column.is_column_stored_in_sstable())) {
+    } else {
+      if (column.is_rowkey_column()) {
+        const uint32_t column_id = i + OB_APP_MIN_COLUMN_ID;
+        for (int16_t j = 0; j < rowkey_array_.count(); j++) {
+          if (rowkey_array_.at(j).column_idx_ == column_id) {
+            column_idx = j;
+            break;
+          }
+        }
+        if (OB_UNLIKELY(column_idx == UINT16_MAX)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "failed to find column idx in rowkey array", K(ret), K_(rowkey_array), K(column_id));
+        }
+      } else {
+        column_idx = normal_column_start_idx++;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(generate_single_column_group_schema(column_group, ObRowStoreType::CS_ENCODING_ROW_STORE, column_idx, allocator))) {
+        STORAGE_LOG(WARN, "failed to generate_single_column_group_schema", K(ret), K(i));
+      } else if (OB_FAIL(cg_schemas.push_back(column_group))) {
+        STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
+        column_group.destroy(allocator);
+      }
     }
   }
 

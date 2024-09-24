@@ -4272,6 +4272,7 @@ def_table_schema(
     ('data_checksum', 'int'),
     ('column_checksums', 'longtext', 'true'),
     ('b_column_checksums', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
+    ('data_checksum_type', 'int', 'false', 0)
   ],
 )
 
@@ -7492,6 +7493,7 @@ def_table_schema(
 # 525: __wr_sql_plan
 # 526: __wr_res_mgr_sysstat
 # 527: __all_kv_redis_table
+# 528: __all_ncomp_dll_v2
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -10058,7 +10060,12 @@ def_table_schema(
       ('end_cg_id', 'int'),
       ('kept_snapshot', 'varchar:OB_COMPACTION_INFO_LENGTH'),
       ('merge_level', 'varchar:OB_MERGE_LEVEL_STR_LENGTH'),
-      ('exec_mode', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
+      ('exec_mode', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('is_full_merge', 'bool'),
+      ('io_cost_time_percentage', 'int'),
+      ('merge_reason', 'varchar:OB_MERGE_REASON_STR_LENGTH'),
+      ('base_major_status', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('co_merge_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -10536,7 +10543,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'luhaopeng.lhp',
+    owner = 'baichangmin.bcm',
     table_name    = '__all_virtual_table_mgr',
     table_id      = '12034',
     table_type = 'VIRTUAL_TABLE',
@@ -13322,7 +13329,8 @@ def_table_schema(
     ('enable_sync', 'bool'),
     ('enable_vote', 'bool'),
     ('arb_srv_info', 'varchar:1024'),
-    ('parent', 'varchar:1024')
+    ('parent', 'varchar:1024'),
+    ('readonly_tx', 'varchar:1024'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -14956,8 +14964,31 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12493: __all_virtual_kv_group_commit_status
-
+def_table_schema(
+  owner      = 'wuguangxin.wgx',
+  table_name = '__all_virtual_kv_group_commit_status',
+  table_id = '12493',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('group_type', 'varchar:32'),
+    ('ls_id', 'int'),
+    ('table_id', 'int'),
+    ('schema_version', 'int'),
+    ('queue_size', 'int'),
+    ('batch_size', 'int'),
+    ('create_time', 'timestamp'),
+    ('update_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12494: __all_virtual_session_sys_variable
 # 12495: __all_virtual_spm_evo_result
 def_table_schema(
@@ -14999,12 +15030,60 @@ def_table_schema(
 # 12497: __all_virtual_pkg_type
 # 12498: __all_virtual_pkg_type_attr
 # 12499: __all_virtual_pkg_coll_type
-# 12500: __all_virtual_kv_client_info
+
+def_table_schema(
+  owner      = 'wuguangxin.wgx',
+  table_name = '__all_virtual_kv_client_info',
+  table_id = '12500',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [
+    ('client_id', 'uint'),
+    ('client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('client_port', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('user_name', 'varchar:OB_MAX_USER_NAME_LENGTH'),
+    ('first_login_ts', 'timestamp'),
+    ('last_login_ts', 'timestamp'),
+    ('client_info', 'varchar:2048')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12501: __all_virtual_wr_sql_plan
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
 
-# 12504: __all_virtual_function_io_stat
+def_table_schema(
+  owner             = 'zz412656',
+  table_name        = '__all_virtual_function_io_stat',
+  table_id          = '12504',
+  table_type        = 'VIRTUAL_TABLE',
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('tenant_id',           'int'),
+    ('function_name',       'varchar:32'),
+    ('mode',                'varchar:32')
+  ],
+  in_tenant_space   = True,
+  normal_columns    = [
+    ('size',                'int'),
+    ('real_iops',           'int'),
+    ('real_mbps',           'int'),
+    ('schedule_us',         'int'),
+    ('io_delay_us',         'int'),
+    ('total_us',            'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -15049,6 +15128,8 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+# 12506: __all_virtual_ncomp_dll_v2
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15564,9 +15645,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15467'
 # 15481: __all_virtual_wr_sql_plan
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
-# 15484: __all_virtual_function_io_stat
-
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15484', all_def_keywords['__all_virtual_function_io_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15485', all_def_keywords['__all_virtual_temp_file']))
+# 15486: __all_ncomp_dll_v2
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -18740,7 +18821,7 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'GV$OB_SSTABLES',
 table_id        = '21100',
 table_type      = 'SYSTEM_VIEW',
@@ -18781,7 +18862,7 @@ FROM
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'V$OB_SSTABLES',
 table_id        = '21101',
 table_type      = 'SYSTEM_VIEW',
@@ -24936,7 +25017,14 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      (CASE IS_FULL_MERGE
+           WHEN false THEN "FALSE"
+           ELSE "TRUE" END) AS IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -24981,7 +25069,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -35980,10 +36073,102 @@ AND
 """.replace("\n", " ")
 )
 
-# 21554: INNODB_LOCK_WAITS
-# 21555: INNODB_LOCKS
-# 21556: INNODB_TRX
-# 21557: ndb_transid_mysql_connection_map
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_LOCK_WAITS',
+  table_id        = '21554',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as REQUESTING_TRX_ID,
+           '0' as REQUESTED_LOCK_ID,
+           '0' as BLOCKING_TRX_ID,
+           '0' as BLOCKING_LOCK_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_LOCKS',
+  table_id        = '21555',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as LOCK_ID,
+           '0' as LOCK_TRX_ID,
+           '0' as LOCK_MODE,
+           '0' as LOCK_TYPE,
+           '0' as LOCK_TABLE,
+           '0' as LOCK_INDEX,
+           0 as LOCK_SPACE,
+           0 as LOCK_PAGE,
+           0 as LOCK_REC,
+           '0' as LOCK_DATA
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_TRX',
+  table_id        = '21556',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as TRX_ID,
+           '0' as TRX_STATE,
+           now() as TRX_STARTED,
+           '0' as TRX_REQUESTED_LOCK_ID,
+           now() as TRX_WAIT_STARTED,
+           0 as TRX_WEIGHT,
+           0 as TRX_MYSQL_THREAD_ID,
+           '0' as TRX_QUERY,
+           '0' as TRX_OPERATION_STATE,
+           0 as TRX_TABLE_IN_USE,
+           0 as TRX_TABLES_LOCKED,
+           0 as TRX_LOCK_STRUCTS,
+           0 as TRX_LOCK_MEMORY_BYTES,
+           0 as TRX_ROWS_LOCKED,
+           0 as TRX_ROWS_MODIFIED,
+           0 as TRX_CONCURRENCY_TICKETS,
+           '0' as TRX_ISOLATION_LEVEL,
+           0 as TRX_UNIQUE_CHECKS,
+           0 as TRX_FOREIGN_KEY_CHECKS,
+           '0' as TRX_LAST_FOREIGN_KEY_ERROR,
+           0 as TRX_ADAPTIVE_HASH_LATCHED,
+           0 as TRX_ADAPTIVE_HASH_TIMEOUT,
+           0 as TRX_IS_READ_ONLY,
+           0 as TRX_AUTOCOMMIT_NON_LOCKING
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'NDB_TRANSID_MYSQL_CONNECTION_MAP',
+  table_id        = '21557',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT 0 as MYSQL_CONNECTION_ID,
+           0 as NODE_ID,
+           0 as NDB_TRANSID
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'wyh329796',
@@ -36145,26 +36330,6 @@ def_table_schema(
   )
 """.replace("\n", " ")
 )
-
-# 21562: TABLESPACES
-# 21563: INNODB_BUFFER_PAGE
-# 21564: INNODB_BUFFER_PAGE_LRU
-# 21565: INNODB_BUFFER_POOL_STATS
-# 21566: INNODB_CMP
-# 21567: INNODB_CMP_PER_INDEX
-# 21568: INNODB_CMP_PER_INDEX_RESET
-# 21569: INNODB_CMP_RESET
-# 21570: INNODB_CMPMEM
-# 21571: INNODB_CMPMEM_RESET
-# 21572: INNODB_SYS_DATAFILES
-# 21573: INNODB_SYS_INDEXES
-# 21574: INNODB_SYS_TABLES
-# 21575: INNODB_SYS_TABLESPACES
-# 21576: INNODB_SYS_TABLESTATS
-# 21577: INNODB_SYS_VIRTUAL
-# 21578: INNODB_TEMP_TABLE_INFO
-# 21579: INNODB_METRICS
-# 21580: EVENTS
 
 def_table_schema(
   owner = 'chaser.ch',
@@ -37169,8 +37334,54 @@ def_table_schema(
 # 21598: V$OB_LOG_TRANSPORT_DEST_STAT
 # 21599: GV$OB_SS_LOCAL_CACHE
 # 21600: V$OB_SS_LOCAL_CACHE
-# 21601: GV$OB_KV_GROUP_COMMIT_STATUS
-# 21602: V$OB_KV_GROUP_COMMIT_STATUS
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'GV$OB_KV_GROUP_COMMIT_STATUS',
+  table_id        = '21601',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    table_id AS TABLE_ID,
+    ls_id AS LS_ID,
+    schema_version AS SCHEMA_VERSION,
+    group_type AS GROUP_TYPE,
+    queue_size AS QUEUE_SIZE,
+    batch_size AS BATCH_SIZE,
+    create_time AS CREATE_TIME,
+    update_time AS UPDATE_TIME
+    FROM oceanbase.__all_virtual_kv_group_commit_status
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'V$OB_KV_GROUP_COMMIT_STATUS',
+  table_id        = '21602',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, TABLE_ID, LS_ID, SCHEMA_VERSION,
+    GROUP_TYPE, QUEUE_SIZE, BATCH_SIZE, CREATE_TIME, UPDATE_TIME
+  FROM
+     oceanbase.GV$OB_KV_GROUP_COMMIT_STATUS
+  WHERE
+    SVR_IP=HOST_IP()
+  AND
+    SVR_PORT=RPC_PORT()
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'zhenjiang.xzj',
@@ -37245,8 +37456,61 @@ def_table_schema(
 )
 
 # 21606: GV$OB_VARIABLES_BY_SESSION
-# 21607: GV$OB_KV_CLIENT_INFO
-# 21608: V$OB_KV_CLIENT_INFO
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'GV$OB_KV_CLIENT_INFO',
+  table_id        = '21607',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+    oceanbase.__all_virtual_kv_client_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'V$OB_KV_CLIENT_INFO',
+  table_id        = '21608',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+     oceanbase.GV$OB_KV_CLIENT_INFO
+  WHERE
+    SVR_IP=HOST_IP()
+  AND
+    SVR_PORT=RPC_PORT()
+  """.replace("\n", " ")
+)
 # 21609: V$OB_VARIABLES_BY_SESSION
 # 21610: GV$OB_RES_MGR_SYSSTAT
 # 21611: V$OB_RES_MGR_SYSSTAT
@@ -37258,8 +37522,62 @@ def_table_schema(
 # 21617: CDB_OB_SPM_EVO_RESULT
 # 21618: DBA_OB_KV_REDIS_TABLE
 # 21619: CDB_OB_KV_REDIS_TABLE
-# 21620: GV$OB_FUNCTION_IO_STAT
-# 21621: V$OB_FUNCTION_IO_STAT
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_FUNCTION_IO_STAT',
+  table_id        = '21620',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    FUNCTION_NAME,
+    MODE,
+    SIZE,
+    REAL_IOPS,
+    REAL_MBPS,
+    SCHEDULE_US,
+    IO_DELAY_US,
+    TOTAL_US
+  FROM
+    oceanbase.__all_virtual_function_io_stat;
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_FUNCTION_IO_STAT',
+  table_id        = '21621',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    FUNCTION_NAME,
+    MODE,
+    SIZE,
+    REAL_IOPS,
+    REAL_MBPS,
+    SCHEDULE_US,
+    IO_DELAY_US,
+    TOTAL_US
+  FROM
+    OCEANBASE.GV$OB_FUNCTION_IO_STAT
+  WHERE
+    SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -37319,7 +37637,6 @@ def_table_schema(
   FROM oceanbase.__all_virtual_temp_file
 """.replace("\n", " ")
 )
-
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -59417,7 +59734,7 @@ SVR_PORT
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'GV$OB_SSTABLES',
 name_postfix    = '_ORA',
 database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -59457,7 +59774,7 @@ FROM
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'V$OB_SSTABLES',
 name_postfix    = '_ORA',
 database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -62798,7 +63115,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      CASE WHEN IS_FULL_MERGE = 0 THEN 'FALSE' ELSE 'TRUE' END AS IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -62845,7 +63167,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -65747,8 +66074,68 @@ def_table_schema(
 # 28259: DBA_WR_SQL_PLAN
 # 28260: DBA_WR_RES_MGR_SYSSTAT
 # 28261: DBA_OB_SPM_EVO_RESULT
-# 28262: GV$OB_FUNCTION_IO_STAT
-# 28263: V$OB_FUNCTION_IO_STAT
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_FUNCTION_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28262',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.TENANT_ID AS TENANT_ID,
+    A.FUNCTION_NAME AS FUNCTION_NAME,
+    A."MODE" AS "MODE",
+    A."SIZE" AS "SIZE",
+    A.REAL_IOPS AS REAL_IOPS,
+    A.REAL_MBPS AS REAL_MBPS,
+    A.SCHEDULE_US AS SCHEDULE_US,
+    A.IO_DELAY_US AS IO_DELAY_US,
+    A.TOTAL_US AS TOTAL_US
+  FROM
+    SYS.ALL_VIRTUAL_FUNCTION_IO_STAT A
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_FUNCTION_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28263',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.TENANT_ID AS TENANT_ID,
+    A.FUNCTION_NAME AS FUNCTION_NAME,
+    A."MODE" AS "MODE",
+    A."SIZE" AS "SIZE",
+    A.REAL_IOPS AS REAL_IOPS,
+    A.REAL_MBPS AS REAL_MBPS,
+    A.SCHEDULE_US AS SCHEDULE_US,
+    A.IO_DELAY_US AS IO_DELAY_US,
+    A.TOTAL_US AS TOTAL_US
+  FROM
+    SYS.GV$OB_FUNCTION_IO_STAT A
+  WHERE
+    SVR_IP=HOST_IP()
+    AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -65781,6 +66168,7 @@ def_table_schema(
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " "),
 )
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

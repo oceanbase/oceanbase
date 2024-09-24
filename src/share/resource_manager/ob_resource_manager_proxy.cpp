@@ -730,7 +730,11 @@ int ObResourceManagerProxy::check_if_function_exist(const ObString &function_nam
       0 == function_name.compare("CLOG_LOW")  ||
       0 == function_name.compare("CLOG_MID")  ||
       0 == function_name.compare("CLOG_HIGH") ||
-      0 == function_name.compare("OTHER_BACKGROUND")) {
+      0 == function_name.compare("OPT_STATS") ||
+      0 == function_name.compare("IMPORT") ||
+      0 == function_name.compare("EXPORT") ||
+      0 == function_name.compare("SQL_AUDIT") ||
+      0 == function_name.compare("GC_MACRO_BLOCK")) {
     exist = true;
   } else {
     exist = false;
@@ -960,7 +964,7 @@ int ObResourceManagerProxy::check_iops_validity(
       uint64_t total_min = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
         ObPlanDirective &cur_directive = directives.at(i);
-        if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+        if (OB_UNLIKELY(!is_resource_manager_group(cur_directive.group_id_))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected group id", K(cur_directive));
         } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
@@ -1076,9 +1080,10 @@ int ObResourceManagerProxy::update_plan_directive(
       LOG_USER_ERROR(OB_ERR_PLAN_DIRECTIVE_NOT_EXIST,
                      plan.length(), plan.ptr(), group.length(), group.ptr());
     } else if (comments.is_null() && mgmt_p1.is_null() && utilization_limit.is_null() &&
-               min_iops.is_null() && max_iops.is_null() && weight_iops.is_null()) {
+               min_iops.is_null() && max_iops.is_null() && weight_iops.is_null() && max_net_bandwidth.is_null() && net_bandwidth_weight.is_null()) {
       // 没有指定任何有效参数，什么都不做，也不报错。兼容 Oracle 行为。
       ret = OB_SUCCESS;
+      LOG_WARN("did not receive any valid parameter", K(ret));
     } else if (OB_FAIL(sql.assign_fmt("UPDATE /* UPDATE_PLAN_DIRECTIVE */ %s SET ", tname))) {
       STORAGE_LOG(WARN, "append table name failed, ", K(ret));
     } else {
@@ -1175,6 +1180,8 @@ int ObResourceManagerProxy::update_plan_directive(
               LOG_WARN("fail get percentage", K(ret));
             } else if (OB_FAIL(sql.append_fmt("%s MAX_NET_BANDWIDTH=%ld", comma, v))) {
               LOG_WARN("fail append value", K(ret));
+            } else {
+              comma = ",";
             }
           }
         }
@@ -1184,6 +1191,8 @@ int ObResourceManagerProxy::update_plan_directive(
               LOG_WARN("fail get percentage", K(ret));
             } else if (OB_FAIL(sql.append_fmt("%s NET_BANDWIDTH_WEIGHT=%ld", comma, v))) {
               LOG_WARN("fail append value", K(ret));
+            } else {
+              comma = ",";
             }
           }
         }

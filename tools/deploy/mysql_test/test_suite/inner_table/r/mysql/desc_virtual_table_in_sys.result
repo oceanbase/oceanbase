@@ -1862,6 +1862,11 @@ end_cg_id	bigint(20)	NO		NULL
 kept_snapshot	varchar(128)	NO		NULL	
 merge_level	varchar(64)	NO		NULL	
 exec_mode	varchar(64)	NO		NULL	
+is_full_merge	tinyint(4)	NO		NULL	
+io_cost_time_percentage	bigint(20)	NO		NULL	
+merge_reason	varchar(32)	NO		NULL	
+base_major_status	varchar(64)	NO		NULL	
+co_merge_type	varchar(64)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_compaction_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5946,6 +5951,7 @@ row_count	bigint(20)	NO		NULL
 data_checksum	bigint(20)	NO		NULL	
 column_checksums	longtext	YES		NULL	
 b_column_checksums	varbinary(65536)	YES		NULL	
+data_checksum_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_replica_checksum;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6540,7 +6546,7 @@ create_timestamp	bigint(20)	NO		NULL
 create_schema_version	bigint(20)	NO		NULL	
 extra_info	varchar(256)	NO		NULL	
 time_after_create	bigint(20)	NO		NULL	
-obj_type	varchar(16)	NO		NULL	
+obj_type	varchar(32)	NO		NULL	
 obj_id	bigint(20)	NO		NULL	
 owner_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_obj_lock;
@@ -7468,6 +7474,7 @@ enable_sync	tinyint(4)	NO		NULL
 enable_vote	tinyint(4)	NO		NULL	
 arb_srv_info	varchar(1024)	NO		NULL	
 parent	varchar(1024)	NO		NULL	
+readonly_tx	varchar(1024)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ha_diagnose;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9923,6 +9930,25 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_ss_local_cache_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_kv_group_commit_status;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+group_type	varchar(32)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+table_id	bigint(20)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
+queue_size	bigint(20)	NO		NULL	
+batch_size	bigint(20)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+update_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_kv_group_commit_status;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_kv_group_commit_status runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_vector_index_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -9947,6 +9973,43 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_vector_index_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_kv_client_info;
+Field	Type	Null	Key	Default	Extra
+client_id	bigint(20) unsigned	NO		NULL	
+client_ip	varchar(46)	NO		NULL	
+client_port	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+user_name	varchar(64)	NO		NULL	
+first_login_ts	timestamp(6)	NO		NULL	
+last_login_ts	timestamp(6)	NO		NULL	
+client_info	varchar(2048)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_kv_client_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_kv_client_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_function_io_stat;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+function_name	varchar(32)	NO	PRI	NULL	
+mode	varchar(32)	NO	PRI	NULL	
+size	bigint(20)	NO		NULL	
+real_iops	bigint(20)	NO		NULL	
+real_mbps	bigint(20)	NO		NULL	
+schedule_us	bigint(20)	NO		NULL	
+io_delay_us	bigint(20)	NO		NULL	
+total_us	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_function_io_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_function_io_stat runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_temp_file;

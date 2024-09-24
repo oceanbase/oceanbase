@@ -1999,7 +1999,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       && table_schema.get_kv_attributes().length() > 0
       && NULL != table_schema.get_kv_attributes().ptr()) {
     const ObString kv_attributes = table_schema.get_kv_attributes();
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = (%.*s) ",
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = '%.*s' ",
                             kv_attributes.length(), kv_attributes.ptr()))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print kv attributes", K(ret), K(kv_attributes));
     }
@@ -2502,7 +2502,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
     const ObString kv_attributes = table_schema.get_kv_attributes();
     if (kv_attributes.empty()) {
       // do nothing
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = (%.*s) ",
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = '%.*s' ",
          kv_attributes.length(), kv_attributes.ptr()))) {
       OB_LOG(WARN, "fail to print kv attributes", K(ret), K(kv_attributes));
     }
@@ -3063,6 +3063,11 @@ int ObSchemaPrinter::print_materialized_view_definition(
                                                                   agent_mode,
                                                                   tz_info))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print partition options", KR(ret), K(*container_table_schema));
+      } else if (OB_FAIL(print_table_definition_column_group(*container_table_schema,
+                                                              buf,
+                                                              buf_len,
+                                                              pos))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print materialized view column group", KR(ret), K(*container_table_schema));
       } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id, table_id, mview_info))) {
         SHARE_SCHEMA_LOG(WARN, "fail to fecth materialized view info", KR(ret), K(table_id));
       } else if (!strict_compat_) {
@@ -3128,11 +3133,6 @@ int ObSchemaPrinter::print_materialized_view_definition(
                   && OB_FAIL(databuff_printf(buf, buf_len, pos,
                                             "ENABLE ON QUERY COMPUTATION "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print materialized view on query computation", KR(ret));
-        } else if (OB_FAIL(print_table_definition_column_group(*container_table_schema,
-                                                              buf,
-                                                              buf_len,
-                                                              pos))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print materialized view column group", KR(ret), K(*container_table_schema));
         }
       }
     }
@@ -5678,6 +5678,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
       const ObCSVGeneralFormat &csv = format.csv_format_;
       const ObOriginFileFormat &origin_format = format.origin_file_format_str_;
+      const char *compression_name = compression_format_to_string(format.compression_format_);
       if (OB_FAIL(0 != csv.line_term_str_.case_compare(ObDataInFileStruct::DEFAULT_LINE_TERM_STR) &&
                         databuff_printf(buf, buf_len, pos, "\n  LINE_DELIMITER = %.*s,", origin_format.origin_line_term_str_.length(), origin_format.origin_line_term_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print LINE_DELIMITER", K(ret));
@@ -5707,6 +5708,10 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       } else if (OB_FAIL(0 != csv.null_if_.count() &&
                         databuff_printf(buf, buf_len, pos, "\n  NULL_IF = (%.*s),", origin_format.origin_null_if_str_.length(), origin_format.origin_null_if_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print NULL_IF", K(ret));
+      } else if (ObLoadCompressionFormat::NONE != format.compression_format_ &&
+                 OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COMPRESSION = %.*s,",
+                                         static_cast<int>(STRLEN(compression_name)), compression_name))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print compression", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
       const ObODPSGeneralFormat &odps = format.odps_format_;

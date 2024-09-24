@@ -52,7 +52,7 @@ public:
     if (OB_FAIL(check_status(timeout_ts))) {
       // nop
     } else if (!msg_set_) {
-      ret = OB_EAGAIN;
+      ret = OB_DTL_WAIT_EAGAIN;
     } else {
       msg = &msg_;
     }

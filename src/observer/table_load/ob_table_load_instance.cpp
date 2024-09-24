@@ -35,6 +35,7 @@ using namespace storage;
 using namespace table;
 using namespace transaction;
 using namespace transaction::tablelock;
+using namespace common;
 
 ObTableLoadInstance::ObTableLoadInstance()
   : execute_ctx_(nullptr),
@@ -499,7 +500,7 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
   } else if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, execute_ctx_->exec_ctx_))) {
+  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, ObString::make_string("")))) {
     LOG_WARN("fail to init table ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, execute_ctx_))) {
     LOG_WARN("fail to coordinator init ctx", KR(ret));

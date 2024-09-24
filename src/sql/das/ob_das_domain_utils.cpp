@@ -335,6 +335,7 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
   } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
     dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
+  } else if (FALSE_IT(record_num = (record_num == 0 ? 1 : record_num))) {
   } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(record_num * sizeof(blocksstable::ObDatumRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for multi value index rows buffer", K(ret));
@@ -348,25 +349,27 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
       if (OB_FAIL(rows[i].init(allocator, column_num))) {
         LOG_WARN("init datum row failed", K(ret), K(column_num));
       } else {
-        for(uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
+        for (uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
           ObObjMeta col_type = das_ctdef.column_types_.at(j);
           const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
           int64_t projector_idx = row_projector.at(j);
 
           if (multivalue_idx == projector_idx) {
-            // TODO: change obj to datum when do deserialize@xuanxi
+            // TODO: change obj to datum when do deserialize@yunyi
             obj.set_nop_value();
             if (OB_FAIL(obj.deserialize(data, data_len, pos))) {
               LOG_WARN("failed to deserialize datum", K(ret), K(json_str));
-            } else if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
-              LOG_WARN("failed to convert datum from obj", K(ret), K(obj));
             } else {
               if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
                 col_type.set_collation_level(CS_LEVEL_NUMERIC);
               } else {
                 col_type.set_collation_level(CS_LEVEL_IMPLICIT);
               }
+              obj.set_meta_type(col_type);
               is_none_unique_done = true;
+              if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
+                LOG_WARN("failed to convert datum from obj", K(ret), K(obj));
+              }
             }
           } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
             rows[i].storage_datums_[j].set_null();

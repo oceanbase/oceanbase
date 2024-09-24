@@ -51,6 +51,9 @@ ObTmpFileFlushTG::ObTmpFileFlushTG(
     fast_loop_cnt_(0),
     fast_idle_loop_cnt_(0)
 {
+  for (int32_t i = 0; i < ObTmpFileGlobal::FLUSH_TIMER_CNT; ++i) {
+    flush_timer_tg_id_[i] = -1;
+  }
 }
 
 int ObTmpFileFlushTG::init()
@@ -60,48 +63,97 @@ int ObTmpFileFlushTG::init()
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpFileSwapTG init twice");
   } else {
-    is_inited_ = true;
-    mode_ = RUNNING_MODE::NORMAL;
-    last_flush_timestamp_ = 0;
-    flush_io_finished_ret_ = OB_SUCCESS;
-    flush_io_finished_round_ = 0;
-    flushing_block_num_ = 0;
+    for (int32_t i = 0; OB_SUCC(ret) && i < ObTmpFileGlobal::FLUSH_TIMER_CNT; ++i) {
+      if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TmpFileFlush, flush_timer_tg_id_[i]))) {
+        STORAGE_LOG(WARN, "fail to create flush timer thread", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+      mode_ = RUNNING_MODE::NORMAL;
+      last_flush_timestamp_ = 0;
+      flush_io_finished_ret_ = OB_SUCCESS;
+      flush_io_finished_round_ = 0;
+      flushing_block_num_ = 0;
 
-    fast_flush_meta_task_cnt_ = 0;
-    wait_list_size_ = 0;
-    retry_list_size_ = 0;
-    finished_list_size_ = 0;
+      fast_flush_meta_task_cnt_ = 0;
+      wait_list_size_ = 0;
+      retry_list_size_ = 0;
+      finished_list_size_ = 0;
 
-    normal_loop_cnt_ = 0;
-    normal_idle_loop_cnt_ = 0;
-    fast_loop_cnt_ = 0;
-    fast_idle_loop_cnt_ = 0;
+      normal_loop_cnt_ = 0;
+      normal_idle_loop_cnt_ = 0;
+      fast_loop_cnt_ = 0;
+      fast_idle_loop_cnt_ = 0;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    destroy();
   }
   return ret;
 }
 
+int ObTmpFileFlushTG::start()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpFileSwapTG not init", KR(ret));
+  } else {
+    for (int32_t i = 0; OB_SUCC(ret) && i < ObTmpFileGlobal::FLUSH_TIMER_CNT; ++i) {
+      if (OB_FAIL(TG_START(flush_timer_tg_id_[i]))) {
+        LOG_WARN("TG_START flush_timer_tg_id_ failed", KR(ret), K(flush_timer_tg_id_[i]));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      flush_mgr_.set_flush_timer_tg_id(flush_timer_tg_id_, ObTmpFileGlobal::FLUSH_TIMER_CNT);
+    }
+  }
+  return ret;
+}
+
+void ObTmpFileFlushTG::stop()
+{
+  for (int32_t i = 0; i < ObTmpFileGlobal::FLUSH_TIMER_CNT; ++i) {
+    TG_STOP(flush_timer_tg_id_[i]);
+  }
+}
+
+void ObTmpFileFlushTG::wait()
+{
+  for (int32_t i = 0; i < ObTmpFileGlobal::FLUSH_TIMER_CNT; ++i) {
+    TG_WAIT(flush_timer_tg_id_[i]);
+  }
+}
+
 void ObTmpFileFlushTG::destroy()
 {
-  if (IS_INIT) {
-    clean_up_lists();
-    mode_ = RUNNING_MODE::INVALID;
-    last_flush_timestamp_ = 0;
-    flush_io_finished_ret_ = OB_SUCCESS;
-    flush_io_finished_round_ = 0;
-    flushing_block_num_ = 0;
+  clean_up_lists();
+  mode_ = RUNNING_MODE::INVALID;
+  last_flush_timestamp_ = 0;
+  flush_io_finished_ret_ = OB_SUCCESS;
+  flush_io_finished_round_ = 0;
+  flushing_block_num_ = 0;
 
-    is_fast_flush_meta_ = false;
-    fast_flush_meta_task_cnt_ = 0;
-    wait_list_size_ = 0;
-    retry_list_size_ = 0;
-    finished_list_size_ = 0;
+  is_fast_flush_meta_ = false;
+  fast_flush_meta_task_cnt_ = 0;
+  wait_list_size_ = 0;
+  retry_list_size_ = 0;
+  finished_list_size_ = 0;
 
-    normal_loop_cnt_ = 0;
-    normal_idle_loop_cnt_ = 0;
-    fast_loop_cnt_ = 0;
-    fast_idle_loop_cnt_ = 0;
+  normal_loop_cnt_ = 0;
+  normal_idle_loop_cnt_ = 0;
+  fast_loop_cnt_ = 0;
+  fast_idle_loop_cnt_ = 0;
 
-    is_inited_ = false;
+  is_inited_ = false;
+  for (int32_t i = 0; i < ObTmpFileGlobal::FLUSH_TIMER_CNT; ++i) {
+    if (-1 != flush_timer_tg_id_[i]) {
+      TG_DESTROY(flush_timer_tg_id_[i]);
+      flush_timer_tg_id_[i] = -1;
+    }
   }
 }
 
@@ -228,6 +280,7 @@ int ObTmpFileFlushTG::do_work_()
 
   if (is_fast_flush_meta_) {
     check_flush_task_io_finished_();
+    retry_fast_flush_meta_task_();
   } else {
     if (RUNNING_MODE::FAST == mode_) {
       flush_fast_();
@@ -259,19 +312,27 @@ void ObTmpFileFlushTG::flush_fast_()
 {
   int ret = OB_SUCCESS;
   int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
-  int64_t flush_size = min(get_fast_flush_size_(), get_flushing_block_num_threshold_() * BLOCK_SIZE);
+
   if (OB_FAIL(check_flush_task_io_finished_())) {
     STORAGE_LOG(WARN, "fail to check flush task io finished", KR(ret));
   }
   if (OB_FAIL(retry_task_())) {
     STORAGE_LOG(WARN, "fail to retry task", KR(ret));
   }
-  if (flush_size > 0) {
-    if (OB_FAIL(wash_(flush_size, RUNNING_MODE::FAST))) {
-      STORAGE_LOG(WARN, "fail to flush fast", KR(ret), KPC(this), K(flush_size));
-    }
+
+  int64_t flushing_block_num = ATOMIC_LOAD(&flushing_block_num_);
+  if (flushing_block_num >= get_flushing_block_num_threshold_()) {
+    STORAGE_LOG(DEBUG, "reach flushing block num threshold, skip flush", KPC(this));
   } else {
-    STORAGE_LOG(DEBUG, "current expect flush size is 0, skip flush", K(flush_size), K(this));
+    int64_t max_flushing_block_num_cur_round = get_flushing_block_num_threshold_() - flushing_block_num;
+    int64_t flush_size = min(get_fast_flush_size_(), max_flushing_block_num_cur_round * BLOCK_SIZE);
+    if (flush_size > 0) {
+      if (OB_FAIL(wash_(flush_size, RUNNING_MODE::FAST))) {
+        STORAGE_LOG(WARN, "fail to flush fast", KR(ret), KPC(this), K(flush_size));
+      }
+    } else {
+      STORAGE_LOG(DEBUG, "current expect flush size is 0, skip flush", K(flush_size), KPC(this));
+    }
   }
 }
 
@@ -381,6 +442,38 @@ int ObTmpFileFlushTG::wash_(const int64_t expect_flush_size, const RUNNING_MODE 
   return ret;
 }
 
+int ObTmpFileFlushTG::retry_fast_flush_meta_task_()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t cnt = retry_list_size_; cnt > 0 && !retry_list_.is_empty(); --cnt) {
+    ObTmpFileFlushTask *flush_task = nullptr;
+    pop_retry_list_(flush_task);
+    if (OB_ISNULL(flush_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "flush task is nullptr", KR(ret));
+    } else if (!flush_task->get_is_fast_flush_tree()) {
+      push_retry_list_(flush_task);
+    } else {
+      // only retry is_fast_flush_tree tasks
+      STORAGE_LOG(DEBUG, "retry is_fast_flush_tree flush task", KPC(flush_task));
+      if (OB_FAIL(flush_mgr_.retry(*flush_task))) {
+        STORAGE_LOG(WARN, "fail to retry flush task", KR(ret), KPC(flush_task));
+      }
+
+      FlushState state = flush_task->get_state();
+      if (FlushState::TFFT_WAIT == state) {
+        push_wait_list_(flush_task);
+      } else if (FlushState::TFFT_FILL_BLOCK_BUF < state) {
+        push_retry_list_(flush_task);
+      } else if (FlushState::TFFT_FILL_BLOCK_BUF >= state) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected flush task status in retry phase", KR(ret), KPC(flush_task));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTmpFileFlushTG::retry_task_()
 {
   int ret = OB_SUCCESS;
@@ -416,6 +509,9 @@ int ObTmpFileFlushTG::retry_task_()
           }
           break;
         }
+      } else if (FlushState::TFFT_FILL_BLOCK_BUF >= state) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected flush task status in retry phase", KR(ret), KPC(flush_task));
       }
     }
   }
@@ -445,12 +541,36 @@ int ObTmpFileFlushTG::check_flush_task_io_finished_()
     if (OB_ISNULL(flush_task)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "flush task is nullptr", KR(ret));
+    }
+    bool write_block_success = false;
+    if (OB_FAIL(ret)) {
+    } else if (!flush_task->atomic_get_write_block_executed()) {
+      push_wait_list_(flush_task); // not send IO yet, continue waiting
+      ret = OB_SUCCESS;
+    } else if (flush_task->atomic_get_write_block_ret_code() != OB_SUCCESS) {
+      if (flush_task->atomic_get_write_block_ret_code() == OB_SERVER_OUTOF_DISK_SPACE) {
+        signal_io_finish(OB_SERVER_OUTOF_DISK_SPACE);
+      }
+      // rollback to TFFT_ASYNC_WRITE and re-send IO
+      if (OB_FAIL(flush_mgr_.io_finished(*flush_task))) {
+        STORAGE_LOG(WARN, "fail to handle flush task finished", KR(ret), KPC(flush_task));
+      } else if (FlushState::TFFT_ASYNC_WRITE == flush_task->get_state()) {
+        push_retry_list_(flush_task);
+        STORAGE_LOG(DEBUG, "write block failure flush task push to retry list", KPC(flush_task));
+      } else {
+        STORAGE_LOG(ERROR, "unexpected flush task state", KR(ret), KPC(flush_task));
+      }
+    } else {
+      write_block_success = true;
+    }
+
+    if (OB_FAIL(ret) || !write_block_success) {
     } else if (OB_FAIL(flush_task->wait_macro_block_handle())) {
       if (OB_EAGAIN == ret) {
         push_wait_list_(flush_task); // IO is not completed, continue waiting
         ret = OB_SUCCESS;
       } else {
-        STORAGE_LOG(ERROR, "unexpected error in waiting flush task finished", KR(ret), KPC(this));
+        STORAGE_LOG(WARN, "unexpected error in waiting flush task finished", KR(ret), KPC(this));
       }
     } else if (!flush_task->atomic_get_io_finished()) {
       ret = OB_ERR_UNEXPECTED;
@@ -598,22 +718,21 @@ int ObTmpFileFlushTG::pop_finished_list_(ObTmpFileFlushTask *&flush_task)
   return ret;
 }
 
-// fast mode flush size is max(2MB, min(5% * tmp_file_memory，30MB))
 int ObTmpFileFlushTG::get_fast_flush_size_()
 {
   // TODO: move to page cache controller
   const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   int64_t wbp_mem_limit = wbp_.get_memory_limit();
-  int64_t flush_size = max(BLOCK_SIZE, min(MAX_FLUSHING_BLOCK_NUM * BLOCK_SIZE, upper_align(0.05 * wbp_mem_limit, BLOCK_SIZE)));
+  int64_t flush_size = max(BLOCK_SIZE, min(MAX_FLUSHING_BLOCK_NUM * BLOCK_SIZE, upper_align(0.1 * wbp_mem_limit, BLOCK_SIZE)));
   return flush_size;
 }
 
-// flushing threshold is MIN(20MB, (20% * tmp_file_memory))
-int ObTmpFileFlushTG::get_flushing_block_num_threshold_()
+int64_t ObTmpFileFlushTG::get_flushing_block_num_threshold_()
 {
   const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   int64_t wbp_mem_limit = wbp_.get_memory_limit();
-  int64_t flush_threshold = max(BLOCK_SIZE, min(MAX_FLUSHING_BLOCK_NUM, static_cast<int64_t>(0.2 * wbp_mem_limit / BLOCK_SIZE)));
+  int64_t flush_threshold =
+    max(1, min(MAX_FLUSHING_BLOCK_NUM, static_cast<int64_t>(0.2 * wbp_mem_limit / BLOCK_SIZE)));
   return flush_threshold;
 }
 

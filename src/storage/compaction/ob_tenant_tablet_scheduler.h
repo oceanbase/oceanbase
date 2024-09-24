@@ -132,17 +132,15 @@ public:
     : merge_version_(merge_version),
       is_tombstone_(is_tombstone),
       is_leader_(false),
-      could_major_merge_(false),
-      enable_adaptive_compaction_(false)
+      could_major_merge_(false)
     {}
   ~ObTenantTabletMediumParam() = default;
-  TO_STRING_KV(K_(merge_version), K_(is_tombstone), K_(is_leader), K_(could_major_merge), K_(enable_adaptive_compaction));
+  TO_STRING_KV(K_(merge_version), K_(is_tombstone), K_(is_leader), K_(could_major_merge));
 public:
   const int64_t merge_version_;
   bool is_tombstone_; // tombstone scene after mini
   bool is_leader_;
   bool could_major_merge_;
-  bool enable_adaptive_compaction_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantTabletMediumParam);
 };
@@ -227,8 +225,8 @@ public:
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
       bool &has_created_dag);
-  static int schedule_tablet_medium_merge(
-      ObLSHandle &ls_handle,
+  static int schedule_medium_merge_for_tombstone(
+      ObLS &ls,
       const ObTabletID &tablet_id,
       bool &succ_create_dag);
   template <class T>
@@ -252,7 +250,8 @@ public:
       const ObLSID &ls_id,
       const ObTablet &tablet,
       const int64_t retry_times,
-      const ObDagId& curr_dag_net_id);
+      const ObDagId& curr_dag_net_id,
+      int &schedule_ret);
   static int schedule_tablet_ddl_major_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
@@ -264,7 +263,6 @@ public:
       bool &all_ls_weak_read_ts_ready);
   int try_schedule_tablet_medium(
       ObLS &ls,
-      const share::ObLSID &ls_id,
       ObTabletHandle &tablet_handle,
       const share::SCN &weak_read_ts,
       ObTenantTabletMediumParam &param,
@@ -294,7 +292,7 @@ private:
   int schedule_all_tablets_medium();
   int schedule_ls_medium_merge(
       const int64_t merge_version,
-      ObLSHandle &ls_handle,
+      ObLS &ls,
       bool &all_ls_weak_read_ts_ready);
   OB_INLINE int schedule_tablet_medium(
     ObLS &ls,

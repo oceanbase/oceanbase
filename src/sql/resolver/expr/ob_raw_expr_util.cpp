@@ -2027,13 +2027,6 @@ int ObRawExprUtils::check_deterministic_single(const ObRawExpr *expr,
   CK (OB_NOT_NULL(expr));
   if (OB_SUCC(ret) && ObResolverUtils::DISABLE_CHECK != check_status) {
     if (is_oracle_mode()
-        && (ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status
-            || ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status)
-        && T_OP_IS == expr->get_expr_type()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use ISNULL() in generated column or functional index");
-      LOG_WARN("special function is not suppored in generated column", K(ret), KPC(expr));
-    } else if (is_oracle_mode()
               && T_FUN_SYS_DEFAULT == expr->get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use DEFAULT() in generated column or functional index or check constraint");

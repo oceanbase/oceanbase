@@ -27,6 +27,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+using namespace oceanbase::omt;
 
 int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &entity)
 {
@@ -54,24 +55,27 @@ int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &enti
 ////////////////////////////////////////////////////////////////
 ObTableApiExecuteP::ObTableApiExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
-     allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+     allocator_("TbExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
-     default_entity_factory_("TableExecuteEncFac", MTL_ID()),
-     need_rollback_trans_(false),
-     query_timeout_ts_(0)
+     is_group_commit_(false),
+     is_group_trigger_(false),
+     group_single_op_(nullptr)
 {
 }
 
 int ObTableApiExecuteP::deserialize()
 {
-  // we should set entity before deserialize
-  arg_.table_operation_.set_entity(request_entity_);
+  int ret = OB_SUCCESS;
+
+  arg_.table_operation_.set_entity(request_entity_); // deserialize to request_entity_
   result_.set_entity(result_entity_);
-  int ret = ParentType::deserialize();
-  if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
-    // @note modify the timestamp to be negative
-    ret = ObTableRpcProcessorUtil::negate_htable_timestamp(request_entity_);
+  if (OB_FAIL(ParentType::deserialize())) {
+    LOG_WARN("fail to deserialize parent type", K(ret));
+  } else if (ObTableEntityType::ET_HKV == arg_.entity_type_
+      && OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(request_entity_))) {
+    LOG_WARN("fail to  modify the timestamp to be negative", K(ret));
   }
+
   return ret;
 }
 
@@ -112,21 +116,29 @@ int ObTableApiExecuteP::check_arg2() const
 int ObTableApiExecuteP::init_tb_ctx()
 {
   int ret = OB_SUCCESS;
-  ObExprFrameInfo *expr_frame_info = nullptr;
   ObTableOperationType::Type op_type = arg_.table_operation_.type();
   tb_ctx_.set_entity(&arg_.table_operation_.entity());
   tb_ctx_.set_operation_type(op_type);
   tb_ctx_.set_entity_type(arg_.entity_type_);
-
+  tb_ctx_.set_schema_cache_guard(&schema_cache_guard_);
+  tb_ctx_.set_schema_guard(&schema_guard_);
+  tb_ctx_.set_simple_table_schema(simple_table_schema_);
+  tb_ctx_.set_sess_guard(&sess_guard_);
+  tb_ctx_.set_audit_ctx(&audit_ctx_);
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));
   } else if (OB_FAIL(tb_ctx_.init_common(credential_,
                                          arg_.tablet_id_,
-                                         arg_.table_name_,
                                          get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else {
     switch(op_type) {
+      case ObTableOperationType::PUT: {
+        if (OB_FAIL(tb_ctx_.init_put())) {
+          LOG_WARN("fail to init put ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
       case ObTableOperationType::INSERT: {
         if (tb_ctx_.is_ttl_table()) {
           if (OB_FAIL(tb_ctx_.init_insert_up(arg_.use_put()))) {
@@ -197,6 +209,48 @@ int ObTableApiExecuteP::init_tb_ctx()
   return ret;
 }
 
+int ObTableApiExecuteP::before_process()
+{
+  int ret = OB_SUCCESS;
+  bool is_group_config_enable = false;
+  bool is_group_commit_enable = false;
+  ObTableOperationType::Type op_type = arg_.table_operation_.type();
+
+  if (op_type == ObTableOperationType::Type::TRIGGER) {
+    is_group_trigger_ = true;
+    audit_ctx_.need_audit_ = false; // no need audit when packet is group commit trigger packet
+  } else {
+    if (ObTableGroupUtils::is_group_commit_config_enable(op_type)) {
+      TABLEAPI_GROUP_COMMIT_MGR->get_ops_counter().inc(op_type); // statistics OPS
+      if (!TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()) {
+        is_group_commit_enable = true;
+      }
+    }
+
+    if (is_group_commit_enable && ObTableOperationType::is_group_support_type(op_type)) {
+      group_single_op_ = TABLEAPI_GROUP_COMMIT_MGR->alloc_op();
+      if (OB_ISNULL(group_single_op_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc group single op", K(ret));
+      } else {
+        group_single_op_->op_ = arg_.table_operation_; // shaddow copy
+        group_single_op_->entity_ = request_entity_; // shaddow copy
+        group_single_op_->op_.set_entity(group_single_op_->entity_);
+        group_single_op_->req_ = req_;
+        group_single_op_->timeout_ts_ = get_timeout_ts();
+        group_single_op_->timeout_ = get_timeout();
+        is_group_commit_ = true;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = ParentType::before_process();
+  }
+
+  return ret;
+}
+
 int ObTableApiExecuteP::process()
 {
   int ret = OB_SUCCESS;
@@ -204,71 +258,200 @@ int ObTableApiExecuteP::process()
   return ret;
 }
 
+int ObTableApiExecuteP::init_group_ctx(ObTableGroupCtx &ctx, ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+
+  ctx.is_get_ = (arg_.table_operation_.type() == ObTableOperationType::Type::GET);
+  ctx.ls_id_ = ls_id;
+  ctx.entity_type_ = arg_.entity_type_;
+  ctx.credential_ = credential_;
+  ctx.timeout_ts_ = get_timeout_ts();
+  ctx.trans_param_ = &trans_param_;
+  ctx.schema_cache_guard_ = &schema_cache_guard_;
+  ctx.schema_guard_ = &schema_guard_;
+  ctx.simple_schema_ = simple_table_schema_;
+  ctx.sess_guard_ = &sess_guard_;
+  ctx.failed_groups_ = &TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups();
+  ctx.group_factory_ = &TABLEAPI_GROUP_COMMIT_MGR->get_group_factory();
+  ctx.op_factory_ = &TABLEAPI_GROUP_COMMIT_MGR->get_op_factory();
+  ctx.retry_count_ = retry_count_;
+  ctx.user_client_addr_ = user_client_addr_;
+  ctx.audit_ctx_.exec_timestamp_ = audit_ctx_.exec_timestamp_;
+
+  return ret;
+}
+
+int ObTableApiExecuteP::process_group_commit()
+{
+  int ret = OB_SUCCESS;
+  const ObTableOperation &op = arg_.table_operation_;
+  ObSchemaGetterGuard schema_guard;
+  uint64_t tenant_id = credential_.tenant_id_;
+  int64_t schema_version = -1;
+  bool is_cache_hit = false;
+  ObLSID ls_id(ObLSID::INVALID_LS_ID);
+
+  if (!tablet_id_.is_valid()) {
+    tablet_id_ = simple_table_schema_->get_tablet_id();
+  }
+  if (OB_NOT_NULL(group_single_op_)) {
+    group_single_op_->tablet_id_ = tablet_id_;
+  }
+
+  if (OB_FAIL(GCTX.location_service_->get(tenant_id,
+                                          tablet_id_,
+                                          0, /* expire_renew_time */
+                                          is_cache_hit,
+                                          ls_id))) {
+    LOG_WARN("fail to get ls id", K(ret), K(tenant_id), K_(tablet_id));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(TABLE_SCHEMA, tenant_id, table_id_, schema_version))) {
+    LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K_(table_id));
+  } else {
+    ObTableGroupCommitKey key(ls_id, table_id_, schema_version, op.type());
+    ObTableGroupCtx ctx;
+    bool is_insup_use_put = false;
+    int64_t binlog_row_image_type = ObBinlogRowImage::FULL;
+    ctx.key_ = &key;
+    if (arg_.table_operation_.type() == ObTableOperationType::Type::INSERT_OR_UPDATE) {
+      if (OB_FAIL(sess_guard_.get_sess_info().get_binlog_row_image(binlog_row_image_type))) {
+        LOG_WARN("fail to get binlog row image", K(ret));
+      } else if (OB_FAIL(ObTableCtx::check_insert_up_can_use_put(schema_cache_guard_,
+                                                                &arg_.table_operation_.entity(),
+                                                                arg_.use_put(),
+                                                                arg_.entity_type_ == ObTableEntityType::ET_HKV,
+                                                                binlog_row_image_type == ObBinlogRowImage::FULL,
+                                                                is_insup_use_put))) {
+        LOG_WARN("fail to check insert up can use put", K(ret), K(arg_.use_put()),
+                K(arg_.entity_type_), K(binlog_row_image_type));
+      } else if (is_insup_use_put) {
+        group_single_op_->is_insup_use_put_ = is_insup_use_put;
+        key.is_insup_use_put_ = is_insup_use_put;
+        key.op_type_ = ObTableOperationType::Type::PUT;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ctx.key_->init())) {
+      LOG_WARN("fail to init group commit key", K(ret));
+    } else if (OB_FAIL(init_group_ctx(ctx, ls_id))) {
+      LOG_WARN("fail to init group ctx", K(ret), K(ctx));
+    } else if (OB_FAIL(ObTableGroupService::process(ctx, group_single_op_))) {
+      LOG_WARN("fail to process group commit", K(ret)); // can not K(ctx) or KPC_(group_single_op), cause req may have been free
+    }
+
+    if (ctx.add_group_success_) {
+      this->set_req_has_wokenup(); // do not response packet
+    } else {
+      LOG_WARN("group commit op is not added success", K(ret), KPC(group_single_op_), K(ctx));
+    }
+  }
+
+  return ret;
+}
+
+ObTableProccessType ObTableApiExecuteP::get_stat_event_type()
+{
+  ObTableProccessType event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+  const ObTableOperation &table_operation = arg_.table_operation_;
+  switch (table_operation.type()) {
+    case ObTableOperationType::INSERT:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_INSERT;
+      break;
+    case ObTableOperationType::GET:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_GET;
+      break;
+    case ObTableOperationType::DEL:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_DELETE;
+      break;
+    case ObTableOperationType::UPDATE:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_UPDATE;
+      break;
+    case ObTableOperationType::INSERT_OR_UPDATE:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_INSERT_OR_UPDATE;
+      break;
+    case ObTableOperationType::PUT:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_PUT;
+      break;
+    case ObTableOperationType::REPLACE:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_REPLACE;
+      break;
+    case ObTableOperationType::INCREMENT:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
+      break;
+    case ObTableOperationType::APPEND:
+      event_type = ObTableProccessType::TABLE_API_SINGLE_APPEND;
+      break;
+    default:
+      event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+      break;
+  }
+  return event_type;
+}
+
 int ObTableApiExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
-  uint64_t table_id = arg_.table_id_;
-  bool is_index_supported = true;
   const ObTableOperation &table_operation = arg_.table_operation_;
-  if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret));
-  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
-  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
-  } else if (ObTableOperationType::GET != table_operation.type()) {
-    if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
-      LOG_WARN("fail to check index supported", K(ret), K(table_id));
+  stat_event_type_ = get_stat_event_type();
+  table_id_ = arg_.table_id_; // init move response need
+  tablet_id_ = arg_.tablet_id_;
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_,
+                       arg_.table_name_,
+                       &audit_ctx_,
+                       table_operation);
+
+  if (is_group_trigger_) {
+    if (OB_FAIL(ObTableGroupService::process_trigger())) {
+      LOG_WARN("fail to process group commit trigger", K(ret));
     }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_UNLIKELY(!is_index_supported)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "global index");
-    LOG_WARN("index type is not supported by table api", K(ret));
+    result_.set_err(ret);
+  } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+    LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
+  } else if (is_group_commit_) {
+    if (OB_FAIL(process_group_commit())) {
+      LOG_WARN("fail to process group commit", K(ret));
+    }
   } else if (OB_FAIL(init_tb_ctx())) {
     LOG_WARN("fail to init tb ctx", K(ret));
   } else {
     switch (table_operation.type()) {
       case ObTableOperationType::INSERT:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT;
         ret = process_insert();
         break;
       case ObTableOperationType::GET:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_GET;
         ret = process_get();
         break;
       case ObTableOperationType::DEL:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_DELETE;
         ret = process_dml_op<TABLE_API_EXEC_DELETE>();
         break;
       case ObTableOperationType::UPDATE:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_UPDATE;
         ret = process_dml_op<TABLE_API_EXEC_UPDATE>();
         break;
       case ObTableOperationType::INSERT_OR_UPDATE:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT_OR_UPDATE;
         ret = process_insert_up();
         break;
+      case ObTableOperationType::PUT:
+        ret = process_put();
+        break;
       case ObTableOperationType::REPLACE:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_REPLACE;
         ret = process_dml_op<TABLE_API_EXEC_REPLACE>();
         break;
       case ObTableOperationType::INCREMENT:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
-        ret = process_insert_up();
-        break;
       case ObTableOperationType::APPEND:
-        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_APPEND;
-        ret = process_insert_up();
+        ret = process_incr_or_append_op();
         break;
       default:
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid table operation type", K(ret), K(table_operation));
         break;
     }
-    audit_row_count_ = 1;
+    stat_row_count_ = 1;
   }
 
   if (OB_FAIL(ret)) {
@@ -285,17 +468,10 @@ int ObTableApiExecuteP::try_process()
   LOG_TRACE("[TABLE] execute operation", K(ret), K_(result),
               "receive_ts", get_receive_timestamp(), K_(retry_count));
 #endif
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, ObTableAuditUtils::get_stmt_type(table_operation.type()));
   return ret;
-}
-
-void ObTableApiExecuteP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
-      ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = result_.get_return_rows();
-  audit_record_.table_scan_ = false;
-  audit_record_.affected_rows_ = result_.get_affected_rows();
-  audit_record_.try_cnt_ = retry_count_ + 1;
 }
 
 uint64_t ObTableApiExecuteP::get_request_checksum()
@@ -315,7 +491,7 @@ uint64_t ObTableApiExecuteP::get_request_checksum()
 int ObTableApiExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
-  if (!need_retry_in_queue_ && !is_async_response()) {
+  if (!need_retry_in_queue_ && !had_do_response()) {
     if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
       // @note modify the value of timestamp to be positive
       ret = ObTableRpcProcessorUtil::negate_htable_timestamp(result_entity_);
@@ -344,42 +520,23 @@ int ObTableApiExecuteP::response(const int retcode)
 void ObTableApiExecuteP::reset_ctx()
 {
   ObTableApiProcessorBase::reset_ctx();
-  need_rollback_trans_ = false;
+  tb_ctx_.reset();
   need_retry_in_queue_ = false;
-}
-
-int ObTableApiExecuteP::get_tablet_id(uint64_t table_id, const ObRowkey &rowkey, ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  tablet_id = arg_.tablet_id_;
-  if (!tablet_id.is_valid()) {
-    ObSEArray<ObRowkey, 1> rowkeys;
-    ObSEArray<ObTabletID, 1> tablet_ids;
-    if (OB_FAIL(rowkeys.push_back(rowkey))) {
-      LOG_WARN("fail to push back", K(ret));
-    } else if (OB_FAIL(get_tablet_by_rowkey(table_id, rowkeys, tablet_ids))) {
-      LOG_WARN("fail to get partition", K(ret), K(table_id), K(rowkeys));
-    } else if (1 != tablet_ids.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("should have one tablet", K(ret));
-    } else {
-      tablet_id = tablet_ids.at(0);
-    }
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("partitioned table not supported", K(ret), K(table_id));
-  }
-  return ret;
 }
 
 int ObTableApiExecuteP::process_get()
 {
   int ret = OB_SUCCESS;
   ObNewRow *row = nullptr;
+
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
-  } else if (OB_FAIL(init_read_trans(arg_.consistency_level_,
-                                     tb_ctx_.get_ls_id(),
-                                     tb_ctx_.get_timeout_ts()))) {
+  } else if (OB_FAIL(trans_param_.init(arg_.consistency_level_,
+                                      tb_ctx_.get_ls_id(),
+                                      tb_ctx_.get_timeout_ts(),
+                                      false))) {
+    LOG_WARN("fail to inti trans param", K(ret));
+  } else if (OB_FAIL(ObTableTransUtils::init_read_trans(trans_param_))) {
     LOG_WARN("fail to init wead read trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
@@ -394,19 +551,22 @@ int ObTableApiExecuteP::process_get()
   } else {
     // fill result entity
     ObITableEntity *result_entity = nullptr;
-    const ObTableSchema *table_schema = tb_ctx_.get_table_schema();
-    if (OB_FAIL(result_.get_entity(result_entity))) {
+    ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx_.get_schema_cache_guard();
+    if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
+    } else if (OB_FAIL(result_.get_entity(result_entity))) {
       LOG_WARN("fail to get result entity", K(ret));
     } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator_,
                                                                  row,
-                                                                 table_schema,
+                                                                 *schema_cache_guard,
                                                                  tb_ctx_.get_query_col_names(),
                                                                  result_entity))) {
       LOG_WARN("fail to fill result entity", K(ret));
     }
   }
 
-  release_read_trans();
+  ObTableTransUtils::release_read_trans(trans_param_.trans_desc_);
   result_.set_err(ret);
   ObTableApiUtil::replace_ret_code(ret);
   result_.set_type(arg_.table_operation_.type());
@@ -414,30 +574,37 @@ int ObTableApiExecuteP::process_get()
   return ret;
 }
 
-
-////////////////////////////////////////////////////////////////
-// insert_or_update
-ObTableAPITransCb *ObTableApiExecuteP::new_callback(rpc::ObRequest *req)
+int ObTableApiExecuteP::process_incr_or_append_op()
 {
-  ObTableExecuteEndTransCb *cb = OB_NEW(ObTableExecuteEndTransCb, ObModIds::TABLE_PROC, req, arg_.table_operation_.type());
-  if (NULL != cb) {
-    // @todo optimize to avoid this copy
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(cb->assign_execute_result(result_))) {
-      LOG_WARN("fail to assign result", K(ret));
-      cb->~ObTableExecuteEndTransCb();
-      cb = NULL;
-    } else {
-      LOG_DEBUG("yzfdebug copy result", K_(result));
-    }
+  int ret = OB_SUCCESS;
+  table::ObTableExecuteCreateCbFunctor functor;
+  if (OB_FAIL(start_trans(false,
+                          arg_.consistency_level_,
+                          tb_ctx_.get_ls_id(),
+                          get_timeout_ts(),
+                          tb_ctx_.need_dist_das()))) {
+    SERVER_LOG(WARN, "fail to start transaction", K(ret), K_(tb_ctx));
+  } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+    SERVER_LOG(WARN, "fail to init trans", K(ret));
+  } else if (OB_FAIL(table::ObTableOpWrapper::process_incr_or_append_op(tb_ctx_, result_))) {
+    SERVER_LOG(WARN, "fail to process op", K(ret));
+  } else if (OB_FAIL(functor.init(req_, &result_, arg_.table_operation_.type()))) {
+    SERVER_LOG(WARN, "fail to init create execute callback functor", K(ret));
   }
-  return cb;
+
+  int tmp_ret = ret;
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, &functor))) {
+    SERVER_LOG(WARN, "fail to end trans", K(ret));
+  }
+
+  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  return ret;
 }
 
 int ObTableApiExecuteP::before_response(int error_code)
 {
   // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
-  if (!is_async_response() && OB_ISNULL(result_.get_entity())) {
+  if (!had_do_response() && OB_ISNULL(result_.get_entity())) {
     result_.set_entity(result_entity_);
   }
   return ObTableRpcProcessor::before_response(error_code);

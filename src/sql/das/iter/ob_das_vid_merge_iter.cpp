@@ -282,7 +282,9 @@ int ObDASVIdMergeIter::init_rowkey_vid_scan_param(
       rowkey_vid_scan_param_.trans_desc_ = trans_desc;
     }
     if (OB_NOT_NULL(snapshot)) {
-      rowkey_vid_scan_param_.snapshot_ = *snapshot;
+      if (OB_FAIL(rowkey_vid_scan_param_.snapshot_.assign(*snapshot))) {
+        LOG_WARN("assign snapshot fail", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null snapshot", K(ret), KPC(ctdef), KPC(rtdef));
@@ -296,7 +298,7 @@ int ObDASVIdMergeIter::init_rowkey_vid_scan_param(
       rowkey_vid_scan_param_.op_filters_ = &ctdef->pd_expr_spec_.pushdown_filters_;
     }
     rowkey_vid_scan_param_.pd_storage_filters_ = rtdef->p_pd_expr_op_->pd_storage_filters_;
-    if (OB_FAIL(rowkey_vid_scan_param_.column_ids_.assign(ctdef->access_column_ids_))) {
+    if (FAILEDx(rowkey_vid_scan_param_.column_ids_.assign(ctdef->access_column_ids_))) {
       LOG_WARN("failed to assign column ids", K(ret));
     }
     if (rtdef->sample_info_ != nullptr) {
@@ -606,7 +608,11 @@ int ObDASVIdMergeIter::get_vid_id(
     const int64_t rowkey_cnt = ctdef->table_param_.get_read_info().get_schema_rowkey_count();
     const int64_t extern_size = ctdef->trans_info_expr_ != nullptr ? 1 : 0;
     ObExpr *expr = nullptr;
-    if (GCONF.enable_strict_defensive_check()) {
+    // When the defensive check level is set to 2 (strict defensive check), the transaction information of the current
+    // row is recorded for 4377 diagnosis. Then, it will add pseudo_trans_info_expr into result output of das scan.
+    //
+    // just skip it if trans info expr in ctdef isn't nullptr.
+    if (OB_NOT_NULL(ctdef->trans_info_expr_)) {
       if (OB_UNLIKELY(ctdef->result_output_.count() != rowkey_cnt + 1 + extern_size)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected result output column count", K(ret), K(rowkey_cnt), K(ctdef->result_output_.count()));
@@ -714,6 +720,8 @@ int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id)
   if (OB_ISNULL(data_table_ctdef_) || OB_ISNULL(data_table_rtdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpeted error, data table ctdef is nullptr", K(ret), KP(data_table_ctdef_), KP(data_table_rtdef_));
+  } else if (data_table_ctdef_->vec_vid_idx_ == -1) {
+    LOG_INFO("get invalid vec vid idx, just do nothing", K(ret), KPC(data_table_ctdef_));
   } else {
     const int64_t vid_id_idx = data_table_ctdef_->vec_vid_idx_;
     ObExpr *vid_id_expr = nullptr;

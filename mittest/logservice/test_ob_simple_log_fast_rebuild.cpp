@@ -161,7 +161,9 @@ public:
           rebuild_palf = palf_list[server_idx_];
           EXPECT_EQ(OB_SUCCESS, test_base_->get_leader(test_base_->palf_id_, leader, leader_idx));
           EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_impl_->disable_sync());
-          EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_info(rebuild_lsn_, rebuild_base_info));
+          LSN base_lsn;
+          EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_lsn(base_lsn));
+          EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_info(base_lsn, rebuild_base_info));
           EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_impl_->advance_base_info(rebuild_base_info, true));
           EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_impl_->enable_sync());
           rebuild_palf = NULL;
@@ -215,7 +217,8 @@ TEST_F(TestObSimpleLogClusterRebuild, test_fast_rebuild)
   logservice::ObLogFastRebuildEngine *fast_rebuild_engine = (rebuild_log_srv->get_shared_log_service()->get_log_fast_rebuild_engine());
   obrpc::ObLogServiceRpcProxy *rpc_proxy = rebuild_log_srv->get_rpc_proxy();
   MockLocCB loc_cb;
-  loc_cb.leader_ = get_cluster()[leader_idx]->get_addr();
+  ObSimpleLogServer *log_server = dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx]);
+  loc_cb.leader_ = log_server->get_addr();
   EXPECT_EQ(OB_SUCCESS, rebuild_cb_adapter.init(rebuild_server_addr, id, fast_rebuild_engine, rpc_proxy, &loc_cb));
   EXPECT_EQ(OB_SUCCESS, rebuild_cb_adapter.register_rebuild_cb(&rebuild_cb));
   PalfRebuildCbNode rebuild_node(&rebuild_cb_adapter);
@@ -223,11 +226,11 @@ TEST_F(TestObSimpleLogClusterRebuild, test_fast_rebuild)
   // set fast rebuild threshold
   // the follower is empty
   block_net(leader_idx, follower_idx);
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 64, leader_idx, MB));
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 64 * 7, leader_idx, MB));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 64*3, leader_idx, MB));
   // recycle one block
-  LSN recycle_lsn(2 * PALF_BLOCK_SIZE);
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(recycle_lsn));
+  LSN expected_base_lsn = LSN(3*PALF_BLOCK_SIZE);
+  EXPECT_UNTIL_EQ(expected_base_lsn, leader.palf_handle_impl_->log_engine_.base_lsn_for_block_gc_);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->delete_block(0));
   update_disk_options(leader_idx, 8);
   sleep(1);
   block_id_t leader_min_block_id, follower_min_block_id, unused_id;
@@ -241,8 +244,6 @@ TEST_F(TestObSimpleLogClusterRebuild, test_fast_rebuild)
       PALF_LOG(INFO, "wait gc", K(leader_min_block_id));
     }
   }
-  // EXPECT_EQ(recycle_lsn, leader.palf_handle_impl_->log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_);
-
   // follower_idx will trigger rebuild when fetching log
   unblock_net(leader_idx, follower_idx);
   // check log sync and wait for rebuilding
@@ -257,12 +258,11 @@ TEST_F(TestObSimpleLogClusterRebuild, test_fast_rebuild)
 
   // check block_id
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 1 * 1024));
-  EXPECT_UNTIL_EQ(OB_SUCCESS, rebuild_server->palf_handle_impl_->log_engine_.get_block_id_range(follower_min_block_id, unused_id));
-  EXPECT_EQ(8, follower_min_block_id);
 
   // check base_lsn
   EXPECT_EQ(LSN(lsn_2_block(leader_end_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE), \
       rebuild_server->palf_handle_impl_->log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_);
+  EXPECT_EQ(expected_base_lsn, rebuild_server->palf_handle_impl_->log_engine_.base_lsn_for_block_gc_);
 
   leader.reset();
   rebuild_server->reset();

@@ -98,7 +98,6 @@ private:
   bool filter_applied_;
   bool disabled_;
   bool is_aggregated_in_prefetch_;
-
 };
 
 }

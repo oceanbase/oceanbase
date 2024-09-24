@@ -33,6 +33,9 @@
 #include "ob_storage_ha_utils.h"
 #include "ob_storage_ha_src_provider.h"
 #include "ob_cs_replica_migration.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
+#endif
 
 namespace oceanbase
 {
@@ -2843,7 +2846,13 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
       LOG_WARN("failed to add chiild task", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
     }
   } else {
-    if (FALSE_IT(init_param.tenant_id_ = ctx_->tenant_id_)) {
+    if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
+      LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
+    } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(*init_param.sstable_param_,
+                                                                          false /* is_leader_restore */,
+                                                                          need_copy))) {
+      LOG_WARN("failed to check need copy macro blocks", K(ret), K(init_param), K(copy_table_key));
+    } else if (FALSE_IT(init_param.tenant_id_ = ctx_->tenant_id_)) {
     } else if (FALSE_IT(init_param.ls_id_ = ctx_->arg_.ls_id_)) {
     } else if (FALSE_IT(init_param.tablet_id_ = copy_tablet_ctx_->tablet_id_)) {
     } else if (FALSE_IT(init_param.src_info_ = src_info)) {
@@ -2852,9 +2861,8 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
     } else if (FALSE_IT(init_param.need_sort_macro_meta_ = false)) {
     } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
     } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->local_rebuild_seq_)) {
-    } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
-      LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
-    } else if (OB_FAIL(copy_sstable_info_mgr_.get_copy_sstable_maro_range_info(copy_table_key, init_param.sstable_macro_range_info_))) {
+    } else if (!need_copy && FALSE_IT(init_param.sstable_macro_range_info_.copy_table_key_ = copy_table_key)) {
+    } else if (need_copy && OB_FAIL(copy_sstable_info_mgr_.get_copy_sstable_maro_range_info(copy_table_key, init_param.sstable_macro_range_info_))) {
       LOG_WARN("failed to get copy sstable macro range info", K(ret), K(copy_table_key));
     } else if (!init_param.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
@@ -2865,10 +2873,6 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
       LOG_WARN("failed to init finish task", K(ret), K(copy_table_key), K(*ctx_));
     } else if (OB_FAIL(finish_task->add_child(*child_task))) {
       LOG_WARN("failed to add child", K(ret));
-    } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(*init_param.sstable_param_,
-                                                                          false /* is_leader_restore */,
-                                                                          need_copy))) {
-      LOG_WARN("failed to check need copy macro blocks", K(ret), K(init_param), K(copy_table_key));
     } else if (need_copy) {
       //shared ddl sstable only put other block id into sstable, no need copy macro block which already in shared storage.
       // parent->copy->finish->child
@@ -2918,12 +2922,15 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
 {
   int ret = OB_SUCCESS;
   ObStorageHACopySSTableParam param;
+  ObArray<ObITable::TableKey> filter_table_key_array;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_FAIL(param.copy_table_key_array_.assign(copy_table_key_array_))) {
-    LOG_WARN("failed to assign copy table key info array", K(ret), K(copy_table_key_array_));
+  } else if (OB_FAIL(get_need_copy_sstable_info_key_(copy_table_key_array_, filter_table_key_array))) {
+    LOG_WARN("failed to get need copy sstable info key", K(ret), K(copy_table_key_array_));
+  } else if (OB_FAIL(param.copy_table_key_array_.assign(filter_table_key_array))) {
+    LOG_WARN("failed to assign copy table key info array", K(ret), K(filter_table_key_array));
   } else {
     param.tenant_id_ = ctx_->tenant_id_;
     param.ls_id_ = ctx_->arg_.ls_id_;
@@ -3002,6 +3009,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   observer::ObIMetaReport *reporter = GCTX.ob_service_;
   const ObTabletRestoreAction::ACTION restore_action = ObTabletRestoreAction::RESTORE_NONE;
   const ObMigrationTabletParam *src_tablet_meta = nullptr;
+  const bool is_leader_restore = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3016,7 +3024,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   } else if (OB_FAIL(check_transfer_seq_equal_(src_tablet_meta))) {
     LOG_WARN("failed to check transfer seq equal", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task->init(
-      copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta, copy_tablet_ctx_))) {
+      copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta, copy_tablet_ctx_, is_leader_restore))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else {
     LOG_INFO("generate tablet copy finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
@@ -3255,6 +3263,41 @@ int ObTabletMigrationTask::generate_mds_copy_tasks_(
   return ret;
 }
 
+int ObTabletMigrationTask::get_need_copy_sstable_info_key_(
+    const common::ObIArray<ObITable::TableKey> &copy_table_key_array,
+    common::ObIArray<ObITable::TableKey> &filter_table_key_array)
+{
+  int ret = OB_SUCCESS;
+  filter_table_key_array.reset();
+  const blocksstable::ObMigrationSSTableParam *sstable_param = nullptr;
+  bool need_copy = true;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration task do not init", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < copy_table_key_array.count(); ++i) {
+      need_copy = true;
+      const ObITable::TableKey &table_key = copy_table_key_array.at(i);
+      if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, table_key, sstable_param))) {
+        LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(table_key));
+      } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(*sstable_param,
+          false /* is_leader_restore */,
+          need_copy))) {
+        LOG_WARN("failed to check need copy macro blocks", K(ret), K(table_key), KPC(sstable_param));
+      } else if (!need_copy) {
+        //do nothing
+      } else if (OB_FAIL(filter_table_key_array.push_back(table_key))) {
+        LOG_WARN("failed to push table key into array", K(ret), K(table_key));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("succeed get need copy sstable info key", K(copy_table_key_array), K(filter_table_key_array));
+    }
+  }
+  return ret;
+}
+
 /******************ObTabletFinishMigrationTask*********************/
 ObTabletFinishMigrationTask::ObTabletFinishMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
@@ -3480,9 +3523,10 @@ void ObTabletFinishMigrationTask::schedule_convert_co_merge(
     // Specific dag net id for co merge dag net to convert row store tablet into columnar store one.
     // Use ObDataTabletsCheckCOConvertDag to check the convert result and re-schedule dag net if it failed, with the same dag net id.
     ObDagId co_dag_net_id;
+    int schedule_ret = OB_SUCCESS;
     if (OB_FAIL(group_convert_ctx->get_co_dag_net_id(tablet_id, co_dag_net_id))) {
       LOG_WARN("failed to get convert ctx", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, 0 /*retry_times*/, co_dag_net_id))) {
+    } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, 0 /*retry_times*/, co_dag_net_id, schedule_ret))) {
       LOG_WARN("failed to schedule convert co merge for cs replica", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(group_convert_ctx->set_convert_progressing(tablet_id))) {
       LOG_WARN("failed to set convert progressing", K(ret), K(tablet_id));
@@ -3786,6 +3830,26 @@ int ObDataTabletsMigrationTask::ls_online_()
   }
 #endif
     FLOG_INFO("succeed online ls", K(ret), KPC(ctx_));
+    if (OB_FAIL(ret)) {
+    } else {
+      // for migrate warmup, open rearrange free cache space
+      const bool is_shared_storage = GCTX.is_shared_storage_mode();
+      bool open_migration_warmup = true;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx_->tenant_id_));
+      if (tenant_config.is_valid()) {
+        open_migration_warmup = tenant_config->_enable_ss_migration_prewarm;
+      }
+      if (is_shared_storage && open_migration_warmup) {
+#ifdef OB_BUILD_SHARED_STORAGE
+        ObSSMicroCache *micro_cache = nullptr;
+        if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("micro_cache should not be nullptr", K(ret), KPC(ctx_));
+        } else if (FALSE_IT(micro_cache->begin_free_space_for_prewarm())) {
+        }
+#endif
+      }
+    }
   }
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("storage_ha", "after_ls_online");

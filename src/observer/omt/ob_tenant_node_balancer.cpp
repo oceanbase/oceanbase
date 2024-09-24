@@ -516,12 +516,11 @@ void ObTenantNodeBalancer::periodically_check_tenant()
 int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants, TenantUnits &new_tenants)
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  bool is_released = false;
+  // tenants that are not in inner-table but CAN NOT be deleted locally yet
   TenantUnits tenants;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < old_tenants.count(); i++) {
-    found = false;
+    bool found = false;
     const ObUnitInfoGetter::ObTenantConfig &tenant_config = old_tenants.at(i);
     const ObUnitInfoGetter::ObUnitStatus local_unit_status = tenant_config.unit_status_;
     for (int64_t j = 0; j < new_tenants.count(); j++) {
@@ -534,70 +533,50 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
     }
 
     if (!found) {
-      ObTenant *tenant = nullptr;
-      MTL_SWITCH(tenant_config.tenant_id_) {
-        if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(is_released, "[DELETE_TENANT]"))) {
-          LOG_WARN("fail to check_all_meta_mem_released", K(ret), K(tenant_config));
-        } else if (!is_released) {
-          // can not release now. dump some debug info
-          const uint64_t interval = 180 * 1000 * 1000; // 180s
-          if (!is_released && REACH_TIME_INTERVAL(interval)) {
-            MTL(ObTenantMetaMemMgr*)->dump_tablet_info();
-            MTL(ObLSService *)->dump_ls_info();
-            PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_MAX_NUM);
-          }
+      const int64_t now_time = ObTimeUtility::current_time();
+      const int64_t life_time = now_time - tenant_config.create_timestamp_;
+      if (life_time < RECYCLE_LATENCY && !tenant_config.is_removed_) {
+        // tenant-unit is only allowed to update to WAIT_GC after reaching RECYCLE_LATENCY,
+        // to avoid accidentally deleting tenants that haven't yet been persisted in inner-table.
+        // UNLESS the tenant is marked removed during this period.
+        if (OB_FAIL(tenants.push_back(tenant_config))) {
+          LOG_WARN("failed to push back tenant", KR(ret));
         } else {
-          // check ls service is empty.
-          is_released = MTL(ObLSService *)->is_empty();
+          LOG_INFO("[DELETE_TENANT] tenant has not reached the RECYCLE_LATENCY yet "
+              "and not marked removed, can not delete tenant",
+              "create_timestamp", tenant_config.create_timestamp_,
+              "is_removed", tenant_config.is_removed_,
+              "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
+              K(life_time), K(tenant_config));
         }
-
-        bool is_tenant_snapshot_released = false;
+      } else {
+        // tenant-unit has been deleted in inner-table or marked removed, and ready to be recycled.
+        // Notify tenant snapshot can start gc
         if (is_user_tenant(tenant_config.tenant_id_)) {
-          const int64_t now_time = ObTimeUtility::current_time();
-          const int64_t life_time = now_time - tenant_config.create_timestamp_;
-          if (tenant_config.is_removed_ || life_time >= RECYCLE_LATENCY) {
+          MTL_SWITCH(tenant_config.tenant_id_) {
             MTL(ObTenantSnapshotService*)->notify_unit_is_deleting();
           }
-          if (OB_FAIL(MTL(ObTenantSnapshotService*)->
-                check_all_tenant_snapshot_released(is_tenant_snapshot_released))) {
-            LOG_WARN("fail to check_all_tenant_snapshot_released", K(ret), K(tenant_config));
-          } else if (!is_tenant_snapshot_released) {
-            // can not release now. dump some debug info
-            const uint64_t interval = 180 * 1000 * 1000; // 180s
-            if (!is_tenant_snapshot_released && REACH_TIME_INTERVAL(interval)) {
-              MTL(ObTenantSnapshotService*)->dump_all_tenant_snapshot_info();
-            }
-            LOG_INFO("[DELETE_TENANT] tenant has been dropped, tenant snapshot is still waiting for gc",
-                K(tenant_config));
-          }
-          if (OB_SUCC(ret)) {
-            is_released = is_released && is_tenant_snapshot_released;
-          } else {
-            is_released = false;
-          }
         }
-      }
-
-      if (OB_SUCC(ret)) {
-        // remove local units after RECYCLE_LATENCY to avoid removing by mistake
-        // but if marked removed, remove it directly without waiting
-        const int64_t now_time = ObTimeUtility::current_time();
-        const int64_t life_time = now_time - tenant_config.create_timestamp_;
-        if ((!tenant_config.is_removed_ && life_time < RECYCLE_LATENCY) || !is_released) {
+        // Check if resources are already released:
+        // 1. if not released, update status to WAIT_GC if status is not WAIT_GC or DELETING,
+        //    and push it back to effective tenants to avoid starting deleting.
+        // 2. if released, ignore this tenant, let it be deleted in subsequent process.
+        bool is_released = false;
+        if (FAILEDx(check_tenant_resource_released(tenant_config.tenant_id_, is_released))) {
+          LOG_WARN("failed to check_tenant_resource_released", KR(ret), K(tenant_config));
+        } else if (!is_released) {
           if (OB_FAIL(tenants.push_back(tenant_config))) {
             LOG_WARN("failed to push back tenant", KR(ret));
           } else {
             // update tenant unit status which need be deleted
             // need wait gc in observer
             // NOTE: only update unit status when can not release resource
-            if (!is_released) {
-              tenants.at(tenants.count() - 1).unit_status_ = ObUnitInfoGetter::UNIT_WAIT_GC_IN_OBSERVER;
-              // add a event when try to gc for the first time
-              if (local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER &&
-                  local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
-                SERVER_EVENT_ADD("unit", "start unit gc", "tenant_id", tenant_config.tenant_id_,
-                    "unit_id", tenant_config.unit_id_, "unit_status", "WAIT GC");
-              }
+            tenants.at(tenants.count() - 1).unit_status_ = ObUnitInfoGetter::UNIT_WAIT_GC_IN_OBSERVER;
+            // add a event when try to gc for the first time
+            if (local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER &&
+                local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+              SERVER_EVENT_ADD("unit", "start unit gc", "tenant_id", tenant_config.tenant_id_,
+                  "unit_id", tenant_config.unit_id_, "unit_status", "WAIT GC");
             }
 
             LOG_INFO("[DELETE_TENANT] tenant has been dropped. can not delete tenant",
@@ -606,12 +585,12 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
                 "create_timestamp", tenant_config.create_timestamp_,
                 K(life_time), K(tenant_config));
           }
-        } else {
-            LOG_INFO("[DELETE_TENANT] tenant has been dropped. can delete tenant",
-                K(is_released), "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
-                "is_removed", tenant_config.is_removed_,
-                "create_timestamp", tenant_config.create_timestamp_,
-                K(life_time), K(tenant_config));
+        } else { // released
+          LOG_INFO("[DELETE_TENANT] tenant has been dropped. can delete tenant",
+              K(is_released), "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
+              "is_removed", tenant_config.is_removed_,
+              "create_timestamp", tenant_config.create_timestamp_,
+              K(life_time), K(tenant_config));
         }
       }
     }
@@ -623,6 +602,54 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
     }
   }
 
+  return ret;
+}
+
+int ObTenantNodeBalancer::check_tenant_resource_released(const uint64_t tenant_id, bool &is_released) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t dump_info_interval = 180 * 1000 * 1000; // 180s
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    is_released = false;
+    MTL_SWITCH(tenant_id) {
+      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(is_released, "[DELETE_TENANT]"))) {
+        LOG_WARN("fail to check_all_meta_mem_released", K(ret), K(tenant_id));
+      } else if (!is_released) {
+        // can not release now. dump some debug info
+        if (!is_released && REACH_TIME_INTERVAL(dump_info_interval)) {
+          MTL(ObTenantMetaMemMgr*)->dump_tablet_info();
+          MTL(ObLSService *)->dump_ls_info();
+          PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_MAX_NUM);
+        }
+      } else {
+        // check ls service is empty.
+        is_released = MTL(ObLSService *)->is_empty();
+      }
+
+      if (is_user_tenant(tenant_id)) {
+        bool is_tenant_snapshot_released = false;
+        if (OB_FAIL(MTL(ObTenantSnapshotService*)->
+              check_all_tenant_snapshot_released(is_tenant_snapshot_released))) {
+          LOG_WARN("fail to check_all_tenant_snapshot_released", K(ret), K(tenant_id));
+        } else if (!is_tenant_snapshot_released) {
+          // can not release now. dump some debug info
+          if (!is_tenant_snapshot_released && REACH_TIME_INTERVAL(dump_info_interval)) {
+            MTL(ObTenantSnapshotService*)->dump_all_tenant_snapshot_info();
+          }
+          LOG_INFO("[DELETE_TENANT] tenant has been dropped, tenant snapshot is still waiting for gc",
+              K(tenant_id));
+        }
+        if (OB_SUCC(ret)) {
+          is_released = is_released && is_tenant_snapshot_released;
+        } else {
+          is_released = false;
+        }
+      }
+    }
+  }
   return ret;
 }
 

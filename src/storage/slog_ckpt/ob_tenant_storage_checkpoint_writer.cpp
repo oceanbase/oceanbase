@@ -94,7 +94,7 @@ int ObTenantStorageCheckpointWriter::record_meta(MacroBlockId &ls_meta_entry)
     LOG_WARN("ObTenantStorageCheckpointWriter not inited", K(ret));
   } else if (OB_FAIL(record_ls_meta(ls_meta_entry))) {
     LOG_WARN("fail to construct ls ckpt linked list", K(ret));
-  } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
     LOG_WARN("fail to fsync_block", K(ret));
   }
   return ret;
@@ -305,7 +305,7 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
   const int64_t total_tablet_cnt = ls.get_tablet_svr()->get_tablet_count();
   int64_t processed_cnt = 0;
   ObMetaDiskAddr addr;
-  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
+  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
   ObTabletMapKey tablet_key;
   char slog_buf[sizeof(ObUpdateTabletLog)];
 

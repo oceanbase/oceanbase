@@ -137,6 +137,8 @@ public:
     }
   };
 public:
+  bool is_block_beginning_; // means buf_ points to the beginning of a memory block,
+                            // allocator only free page entry with this flag set to true.
   char *buf_;
   int64_t fd_;
   int32_t state_;
@@ -272,11 +274,10 @@ private:
                         char *&buf);
   // check if the specified PageEntryType has available space
   bool has_free_page_(PageEntryType type);
-  // ATTENTION! access fat_, needs to be protected by r-lock
   OB_INLINE bool is_valid_page_id_(const uint32_t page_id) const
   {
     return page_id != ObTmpFileGlobal::INVALID_PAGE_ID && page_id >= 0 &&
-           page_id < fat_.count() && OB_NOT_NULL(fat_[page_id].buf_);
+           page_id < fat_.count();
   }
   int expand_();
   int reduce_();

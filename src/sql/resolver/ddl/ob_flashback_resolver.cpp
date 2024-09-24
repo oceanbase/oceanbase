@@ -103,6 +103,7 @@ int ObFlashBackTableFromRecyclebinResolver::resolve(const ParseNode &parser_tree
         flashback_table_from_recyclebin_stmt->set_origin_db_name(origin_db_name);
       }
     }
+
     if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
       OZ (schema_checker_->check_ora_ddl_priv(
                             session_info_->get_effective_tenant_id(),

@@ -2311,7 +2311,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if ((type1.is_roaringbitmap() || type2.is_roaringbitmap())
              && !(type_ == T_FUN_SYS_NULLIF)) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("Incorrect cmp type with roaringbitmap arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()
              && (type1.is_json() || type2.is_json())

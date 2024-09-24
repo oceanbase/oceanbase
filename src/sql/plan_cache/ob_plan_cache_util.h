@@ -307,10 +307,12 @@ struct ObPCParamEqualInfo
   ObPCParamEqualInfo():use_abs_cmp_(false) {}
   inline bool operator==(const ObPCParamEqualInfo &other) const
   {
-    bool cmp_ret = first_param_idx_ == other.first_param_idx_ &&
-                   second_param_idx_ == other.second_param_idx_ &&
-                   use_abs_cmp_ == other.use_abs_cmp_;
-
+    bool cmp_ret = (first_param_idx_ == other.first_param_idx_ &&
+                    second_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_) ||
+                   (second_param_idx_ == other.first_param_idx_ &&
+                    first_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_);
     return cmp_ret;
   }
 };
@@ -673,6 +675,10 @@ struct ObPlanStat
       is_expired_(false),
       enable_plan_expiration_(false),
       first_exec_row_count_(-1),
+      first_exec_usec_(0),
+      sample_times_(0),
+      sample_exec_row_count_(0),
+      sample_exec_usec_(0),
       sessid_(0),
       plan_tmp_tbl_name_str_len_(0),
       is_use_jit_(false),
@@ -747,6 +753,10 @@ struct ObPlanStat
       is_expired_(false),
       enable_plan_expiration_(rhs.enable_plan_expiration_),
       first_exec_row_count_(rhs.first_exec_row_count_),
+      first_exec_usec_(rhs.first_exec_usec_),
+      sample_times_(rhs.sample_times_),
+      sample_exec_row_count_(rhs.sample_exec_row_count_),
+      sample_exec_usec_(rhs.sample_exec_usec_),
       sessid_(rhs.sessid_),
       plan_tmp_tbl_name_str_len_(rhs.plan_tmp_tbl_name_str_len_),
       is_use_jit_(rhs.is_use_jit_),

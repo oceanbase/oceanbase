@@ -263,6 +263,55 @@ private:
   int64_t group_io_stats_pos_;
 };
 
+class ObAllVirtualFunctionIOStat : public ObAllVirtualIOStatusIterator
+{
+public:
+  ObAllVirtualFunctionIOStat();
+  virtual ~ObAllVirtualFunctionIOStat();
+  int init(const common::ObAddr &addr);
+  int record_function_info(const uint64_t tenant_id, const ObIOFuncUsageArr& func_infos);
+  virtual void reset() override;
+  virtual int inner_get_next_row(common::ObNewRow *&row) override;
+private:
+  enum COLUMN
+  {
+    SVR_IP = common::OB_APP_MIN_COLUMN_ID,
+    SVR_PORT,
+    TENANT_ID,
+    FUNCTION_NAME,
+    MODE,
+    SIZE,
+    REAL_IOPS,
+    REAL_MBPS,
+    SCHEDULE_US,
+    IO_DELAY_US,
+    TOTAL_US
+  };
+  struct FuncInfo
+  {
+  public:
+    FuncInfo();
+    ~FuncInfo();
+    TO_STRING_KV(K(tenant_id_), K(function_type_), K(group_mode_), K(size_), K(real_iops_), K(real_bw_), K(schedule_us_), K(io_delay_us_), K(total_us_));
+  public:
+    uint64_t tenant_id_;
+    share::ObFunctionType function_type_;
+    common::ObIOGroupMode group_mode_;
+    int64_t size_;
+    int64_t real_iops_;
+    int64_t real_bw_;
+    int64_t schedule_us_;
+    int64_t io_delay_us_;
+    int64_t total_us_;
+  };
+  DISALLOW_COPY_AND_ASSIGN(ObAllVirtualFunctionIOStat);
+private:
+  ObArray<FuncInfo> func_infos_;
+  int64_t func_pos_;
+};
+
+
+
 }// namespace observer
 }// namespace oceanbase
 

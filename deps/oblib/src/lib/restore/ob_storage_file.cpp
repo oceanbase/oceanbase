@@ -63,54 +63,6 @@ int get_file_path(const common::ObString &uri, char *buf, const int64_t buf_size
   return ret;
 }
 
-// for example:
-// 1. uri is file:///root/00001000, dir is file:///root(result like dirname()),
-//    marker is 00001000(the result like basename())
-// 2. uri is fiel:///root/00001000/, dir is file:///root/00001000/
-//    marker is the char after last '/'.
-int get_marker_and_dir_path(
-  const common::ObString &uri,
-  char *marker,
-  const int64_t marker_size,
-  char *dir_buf,
-  const int64_t dir_buf_size)
-{
-  int ret = OB_SUCCESS;
-  char *last_forward_slash_ptr = NULL;
-  int64_t chars_after_last_forward_slash_ptr = 0;
-  int64_t uri_len = uri.length();
-  if (uri.empty() || OB_ISNULL(marker) || 0 >= marker_size || OB_ISNULL(dir_buf) || 0 >= dir_buf_size) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), K(uri), KP(marker), K(marker_size), KP(dir_buf), K(dir_buf_size));
-  } else if (!uri.prefix_match(OB_FILE_PREFIX)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid uri", K(ret), K(uri));
-  } else if (NULL == (last_forward_slash_ptr = ::strrchr(uri.ptr(), '/'))
-             // chars between the start of uri last_forward_slash_ptr is 'last_forward_slash_ptr - uri.ptr() + 1'
-             || (0 > (chars_after_last_forward_slash_ptr = (uri_len - (last_forward_slash_ptr - uri.ptr() + 1))))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error, there is no forward slash in uri", K(ret), K(uri));
-  } else if (OB_FAIL(databuff_printf(
-                     marker, marker_size, "%.*s",
-                     static_cast<int>(chars_after_last_forward_slash_ptr),
-                     uri.ptr() + uri_len - chars_after_last_forward_slash_ptr))) {
-    STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri), KCSTRING(marker), K(uri_len),
-                K(chars_after_last_forward_slash_ptr));
-  } else if (OB_FAIL(databuff_printf(
-                         dir_buf, dir_buf_size, "%.*s",
-                         static_cast<int>(uri.length() - chars_after_last_forward_slash_ptr),
-                         uri.ptr()))) {
-    STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
-  } else if (strlen(dir_buf) <= 0 && dir_buf[0] != '/') {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid file path", K(ret), K(uri), KCSTRING(dir_buf));
-  } else {
-    STORAGE_LOG(TRACE, "get_marker_and_dir_path success", K(ret), K(uri), KCSTRING(marker),
-                KCSTRING(dir_buf), K(chars_after_last_forward_slash_ptr));
-  }
-  return ret;
-}
-
 int lock_file(int fd)
 {
   int ret = OB_SUCCESS;

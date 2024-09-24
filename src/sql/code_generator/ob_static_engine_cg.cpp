@@ -932,7 +932,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_PSEUDO_PARTITION_LIST_COL != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())
-            && !(T_FUN_SYS_L2_DISTANCE == raw_expr->get_expr_type())) {
+            && !(raw_expr->is_vector_sort_expr())) {
           if (raw_expr->is_calculated()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is not from the child_op_output but it has been caculated already",
@@ -2307,15 +2307,15 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
 int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_type)
 {
   int ret = OB_SUCCESS;
+  compr_type = NONE_COMPRESSOR;
   int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
   // for normal sort we use default compress type. for online ddl, we use the compress type in source table
   ObLogicalOperator *child_op = op.get_child(0);
-  ObCompressorType tmp_compr_type = NONE_COMPRESSOR;
+  const share::schema::ObTableSchema *table_schema = nullptr;
   while(OB_SUCC(ret) && OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
     child_op = child_op->get_child(0);
     if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
       share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
-      const share::schema::ObTableSchema *table_schema = nullptr;
       uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
       if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2325,13 +2325,11 @@ int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("can't find table schema", K(ret), K(table_id));
-      } else {
-        tmp_compr_type = table_schema->get_compressor_type();
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(tmp_compr_type,
+  if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) {
+    if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema,
                                               op.get_parallel(),
                                               compr_type))) {
       LOG_WARN("fail to get compress type", K(ret));
@@ -7710,8 +7708,6 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_window_functions_order(op.get_window_exprs()))) {
-    LOG_WARN("failed to check window functions order", K(ret));
   } else if (OB_FAIL(spec.wf_infos_.prepare_allocate(op.get_window_exprs().count()))) {
     LOG_WARN("failed to prepare_allocate the window function.", K(ret));
   } else if (OB_FAIL(append_array_no_dup(all_expr, spec.get_child()->output_))) {
@@ -9804,27 +9800,6 @@ int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> 
           LOG_WARN("fail to remove batch nl param caches", K(ret));
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObStaticEngineCG::check_window_functions_order(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs)
-{
-  int ret = OB_SUCCESS;
-  int64_t partition_count = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < winfunc_exprs.count(); ++i) {
-    ObWinFunRawExpr * win_expr = winfunc_exprs.at(i);
-    if (OB_ISNULL(win_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (i == 0) {
-      partition_count = win_expr->get_partition_exprs().count();
-    } else if (partition_count < win_expr->get_partition_exprs().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("earlier partition by exprs must be subsets of the later partition by exprs", K(ret));
-    } else {
-      partition_count = win_expr->get_partition_exprs().count();
     }
   }
   return ret;

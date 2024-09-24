@@ -361,7 +361,7 @@ public:
   void inc_ref();
   void dec_ref();
   int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
-  int get_io_func_infos(ObIOFuncUsages &io_func_infos) const;
+  const ObIOFuncUsages& get_io_func_infos();
   OB_INLINE int64_t get_object_storage_io_timeout_ms() const { return io_config_.object_storage_io_timeout_ms_; }
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(ref_cnt_), K(io_memory_limit_), K(request_count_), K(result_count_),

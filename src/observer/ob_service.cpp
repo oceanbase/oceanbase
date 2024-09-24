@@ -1086,7 +1086,12 @@ int ObService::handle_ls_freeze_req_(const uint64_t tenant_id,
       } else if (tablet_id.is_valid()) {
         // tablet freeze
         const bool is_sync = true;
-        if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id, is_sync, 0 /*max_retry_time_us*/, false))) {
+        if (OB_FAIL(freezer->tablet_freeze(ls_id,
+                                           tablet_id,
+                                           is_sync,
+                                           0 /*max_retry_time_us*/,
+                                           false, /*rewrite_tablet_meta*/
+                                           ObFreezeSourceFlag::USER_MINOR_FREEZE))) {
           if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;
           } else {
@@ -1097,7 +1102,7 @@ int ObService::handle_ls_freeze_req_(const uint64_t tenant_id,
         }
       } else {
         // logstream freeze
-        if (OB_FAIL(freezer->ls_freeze_all_unit(ls_id))) {
+        if (OB_FAIL(freezer->ls_freeze_all_unit(ls_id, ObFreezeSourceFlag::USER_MINOR_FREEZE))) {
           if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;
           } else {
@@ -1127,7 +1132,7 @@ int ObService::tenant_freeze_(const uint64_t tenant_id)
         LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
       } else if (freezer->exist_ls_freezing()) {
         LOG_INFO("exist running ls_freeze", K(ret), K(tenant_id));
-      } else if (OB_FAIL(freezer->tenant_freeze())) {
+      } else if (OB_FAIL(freezer->tenant_freeze(ObFreezeSourceFlag::USER_MINOR_FREEZE))) {
         if (OB_ENTRY_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -2923,8 +2928,11 @@ int ObService::inner_fill_tablet_info_(
   } else if (OB_ISNULL(gctx_.config_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("gctx_.config_ is null", KR(ret), K(tenant_id), K(tablet_id));
+  } else if (ls->is_cs_replica() && !tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet is not complete in cs replica now, need retry later", KR(ret), KPC(ls), KPC(tablet));
   } else if (OB_FAIL(ObCSReplicaUtil::check_need_wait_major_convert(*ls, tablet_id, *tablet, need_wait_major_convert_in_cs_replica))) {
-    LOG_WARN("fail to check need wait major convert in cs replica", K(ret), KPC(ls), K(tablet));
+    LOG_WARN("fail to check need wait major convert in cs replica", K(ret), KPC(ls), KPC(tablet));
   } else if (need_wait_major_convert_in_cs_replica) {
     ret = OB_EAGAIN;
     LOG_WARN("need wait major convert for cs replica", K(ret), K(tablet_id));

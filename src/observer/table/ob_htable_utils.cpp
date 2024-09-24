@@ -33,7 +33,46 @@ ObHTableCellEntity::~ObHTableCellEntity()
 
 ObString ObHTableCellEntity::get_rowkey() const
 {
-  return ob_row_->get_cell(ObHTableConstants::COL_IDX_K).get_varchar();
+  ObString rowkey_str;
+  if (OB_ISNULL(ob_row_)) {
+    LOG_INFO("get_rowkey but ob_row is null", K(ob_row_));
+    rowkey_str = NULL;
+  } else {
+    rowkey_str = ob_row_->get_cell(ObHTableConstants::COL_IDX_K).get_varchar();
+  }
+  return rowkey_str;
+}
+
+int ObHTableCellEntity::deep_copy_ob_row(const common::ObNewRow *ob_row, common::ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ob_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deep copy param ob_row is null", K(ret));
+  } else {
+    int64_t buf_size = ob_row->get_deep_copy_size() + sizeof(ObNewRow);
+    char *tmp_row_buf = static_cast<char *>(allocator.alloc(buf_size));
+    if (OB_ISNULL(tmp_row_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc new row", KR(ret));
+    } else {
+      int64_t pos = sizeof(ObNewRow);
+      ob_row_ = new (tmp_row_buf) ObNewRow();
+      if (OB_FAIL(ob_row_->deep_copy(*ob_row, tmp_row_buf, buf_size, pos))) {
+        allocator.free(tmp_row_buf);
+        LOG_WARN("fail to deep copy ob_row", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+void ObHTableCellEntity::reset(common::ObArenaAllocator &allocator)
+{
+  if (OB_NOT_NULL(ob_row_)) {
+    allocator.free(ob_row_);
+    ob_row_ = NULL;
+  }
 }
 
 ObString ObHTableCellEntity::get_qualifier() const
@@ -264,7 +303,7 @@ int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &c
       // compare qualifiers
       ObString qualifier1 = cell1.get_qualifier();
       ObString qualifier2 = cell2.get_qualifier();
-      if(common::ObQueryFlag::Reverse == scan_order){ 
+      if (common::ObQueryFlag::Reverse == scan_order){
         cmp_ret = qualifier2.compare(qualifier1);
       } else {
         cmp_ret = qualifier1.compare(qualifier2);
@@ -328,16 +367,16 @@ int ObHTableUtils::int64_to_java_bytes(int64_t val, char bytes[8])
   return OB_SUCCESS;
 }
 
-int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObTableBatchOperation &mutations, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObIArray<ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
 {
   int ret = OB_SUCCESS;
-  const int64_t N = mutations.count();
+  const int64_t N = ops.count();
   if (table_id == OB_INVALID_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table id", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    const ObITableEntity &entity = mutations.at(i).entity();
+    const ObITableEntity &entity = ops.at(i).entity();
     ObHTableCellEntity3 htable_cell(&entity);
     ObString row = htable_cell.get_rowkey();
     if (row.empty()) {
@@ -377,6 +416,22 @@ int ObHTableUtils::lock_htable_row(uint64_t table_id, const ObTableQuery &htable
       }
     }
   }
+  return ret;
+}
+
+int ObHTableUtils::lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+{
+  int ret = OB_SUCCESS;
+  if (table_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  } else if (lock_key.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null redis lock_key", K(ret));
+  } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, lock_key, lock_mode, handle))) {
+    LOG_WARN("fail to lock redis key", K(ret), K(table_id), K(lock_key), K(lock_mode));
+  }
+
   return ret;
 }
 int ObHTableUtils::check_htable_schema(const ObTableSchema &table_schema)

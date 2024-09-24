@@ -581,10 +581,10 @@ int ObCOMergeRowWriter::process(
 {
   int ret = OB_SUCCESS;
   ObMacroBlockOp block_op;
-  if (OB_NOT_NULL(progressive_merge_helper_) && progressive_merge_helper_->is_valid()) {
-    if (OB_FAIL(progressive_merge_helper_->check_macro_block_op(macro_desc, block_op))) {
-      STORAGE_LOG(WARN, "failed to check macro operation", K(ret), K(macro_desc));
-    }
+  if (OB_ISNULL(progressive_merge_helper_) || !progressive_merge_helper_->is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(progressive_merge_helper_->check_macro_block_op(macro_desc, block_op))) {
+    STORAGE_LOG(WARN, "failed to check macro operation", K(ret), K(macro_desc));
   }
 
   if (OB_FAIL(ret)) {
@@ -601,7 +601,7 @@ int ObCOMergeRowWriter::process(
   } else if (OB_FAIL(write_helper_.append_macro_block(macro_desc, micro_block_data))) {
     STORAGE_LOG(WARN, "failed to append macro block", K(ret), K(macro_desc));
   }
-
+  STORAGE_LOG(DEBUG, "process micro data", K(ret), K(macro_desc), K(block_op), K(micro_block_data), KPC(this));
   return ret;
 }
 

@@ -40,6 +40,7 @@ add_subdirectory(utl_file)
 add_subdirectory(tx_table)
 add_subdirectory(ddl)
 add_subdirectory(share_storage)
+add_subdirectory(column_store_replica)
 
 storage_unittest(test_io_manager)
 storage_unittest(test_iocb_pool)

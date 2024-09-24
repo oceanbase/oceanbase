@@ -169,15 +169,15 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
         unwind->exception_cleanup = NULL;
         exception->type_.type_ = value->type_;
         exception->type_.error_code_ = value->error_code_;
-        if (NULL == value->sql_state_) {
-          exception->type_.sql_state_ = NULL;
+        if (NULL == value->sql_state_ || 0 == value->str_len_) {
+          exception->type_.sql_state_ = value->sql_state_;
         } else {
           char* str = static_cast<char*>(pl_allocator->alloc(value->str_len_));
           if (NULL != str) {
             STRNCPY(str, value->sql_state_, value->str_len_);
             exception->type_.sql_state_ = str;
           } else {
-            reinterpret_cast<ObIAllocator*>(allocator)->free(exception);
+            pl_allocator->free(exception);
             unwind = &pre_reserved_e.body_;
           }
         }
@@ -192,7 +192,10 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
 
 #ifdef OB_BUILD_ORACLE_PL
     CK (OB_NOT_NULL(pl_ctx));
-    OZ (eh_adjust_call_stack(*pl_ctx, loc, value->error_code_));
+    OZ (eh_adjust_call_stack(*pl_ctx, loc,
+      value->error_code_ < 0
+        ? value->error_code_
+        :(value->error_code_ & ~(UINT64_MAX << OB_PACKAGE_ID_SHIFT))));
 #endif
 
   }

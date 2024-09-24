@@ -58,6 +58,7 @@
 #include "share/ob_alive_server_tracer.h"//ServerAddr
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_multi_data_source.h"
@@ -85,6 +86,7 @@
 #include "share/ob_heartbeat_handler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h" // storage::ObSSMicroCacheStat
+#include "storage/shared_storage/micro_cache/ob_ss_arc_info.h"
 #endif
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 
@@ -1397,6 +1399,8 @@ public:
     is_in_recyclebin_ = false;
     is_inner_ = false;
     is_vec_inner_drop_ = false;
+    only_set_status_ = false;
+    index_ids_.reset();
   }
   virtual ~ObDropIndexArg() {}
   void reset()
@@ -1408,6 +1412,8 @@ public:
     is_in_recyclebin_ = false;
     is_inner_ = false;
     is_vec_inner_drop_ = false;
+    only_set_status_ = false;
+    index_ids_.reset();
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1416,6 +1422,8 @@ public:
   bool is_in_recyclebin_;
   bool is_inner_;
   bool is_vec_inner_drop_;
+  bool only_set_status_;
+  common::ObSEArray<int64_t, 5> index_ids_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -2709,7 +2717,8 @@ public:
         exist_all_column_group_(false),
         index_cgs_(),
         vidx_refresh_info_(),
-        is_rebuild_index_(false)
+        is_rebuild_index_(false),
+        is_index_scope_specified_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2743,6 +2752,7 @@ public:
     index_cgs_.reset();
     vidx_refresh_info_.reset();
     is_rebuild_index_ = false;
+    is_index_scope_specified_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2782,6 +2792,7 @@ public:
       exist_all_column_group_ = other.exist_all_column_group_;
       vidx_refresh_info_ = other.vidx_refresh_info_;
       is_rebuild_index_ = other.is_rebuild_index_;
+      is_index_scope_specified_ = other.is_index_scope_specified_;
     }
     return ret;
   }
@@ -2852,6 +2863,7 @@ public:
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
   bool is_rebuild_index_;
+  bool is_index_scope_specified_;
 };
 
 struct ObCreateAuxIndexArg : public ObDDLArg
@@ -4065,7 +4077,8 @@ public:
            const common::ObTabletID data_tablet_id,
            const common::ObIArray<int64_t> &table_schema_index,
            const lib::Worker::CompatMode &mode,
-           const bool is_create_bind_hidden_tablets);
+           const bool is_create_bind_hidden_tablets,
+           const bool has_cs_replica);
   common::ObTabletID get_data_tablet_id() const { return data_tablet_id_; }
   int64_t get_tablet_count() const { return tablet_ids_.count(); }
   DECLARE_TO_STRING;
@@ -4076,6 +4089,8 @@ public:
   common::ObSArray<int64_t> table_schema_index_;
   lib::Worker::CompatMode compat_mode_;
   bool is_create_bind_hidden_tablets_;
+  ObSArray<int64_t> create_commit_versions_;
+  bool has_cs_replica_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTabletInfo);
 };
@@ -4138,6 +4153,7 @@ public:
   ObArenaAllocator allocator_;
   common::ObSArray<ObCreateTabletExtraInfo> tablet_extra_infos_;
   share::SCN clog_checkpoint_scn_;
+  storage::ObTabletMdsUserDataType create_type_;
 };
 
 struct ObBatchRemoveTabletArg
@@ -10905,6 +10921,22 @@ public:
   ObSSMicroCacheSuperBlock super_block_;
   ObSSARCInfo arc_info_;
 };
+
+struct ObClearSSMicroCacheArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObClearSSMicroCacheArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObClearSSMicroCacheArg() {}
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_);
+  }
+  TO_STRING_KV(K_(tenant_id));
+
+public:
+  uint64_t tenant_id_;
+};
 #endif
 
 struct ObRpcRemoteWriteDDLIncCommitLogArg final
@@ -11426,18 +11458,19 @@ struct ObBatchSetTabletAutoincSeqArg final
   OB_UNIS_VERSION(1);
 public:
   ObBatchSetTabletAutoincSeqArg()
-    : tenant_id_(OB_INVALID_ID), ls_id_(), autoinc_params_()
+    : tenant_id_(OB_INVALID_ID), ls_id_(), autoinc_params_(), is_tablet_creating_(false)
   {}
   ~ObBatchSetTabletAutoincSeqArg() {}
 public:
   int assign(const ObBatchSetTabletAutoincSeqArg &other);
   bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && autoinc_params_.count() > 0; }
   int init(const uint64_t tenant_id_, const share::ObLSID &ls_id, const ObIArray<share::ObMigrateTabletAutoincSeqParam> &params);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(autoinc_params));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(autoinc_params), K_(is_tablet_creating));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObSEArray<share::ObMigrateTabletAutoincSeqParam, 1> autoinc_params_;
+  bool is_tablet_creating_;
 };
 
 struct ObBatchSetTabletAutoincSeqRes final
@@ -12580,6 +12613,10 @@ public:
   ~ObLSSyncHotMicroKeyArg() {}
   int assign(const ObLSSyncHotMicroKeyArg &other);
   bool is_valid() const;
+  // return reserved serialize size besides ObSSMicroBlockCacheKeyMeta elements (including
+  // OB_UNIS_VERSION, tenant_id_, ls_id_, leader_addr_.get_serialize_size(), count of ObSArray,
+  // and NS_::OB_SERIALIZE_SIZE_NEED_BYTES), which is smaller than 4KB.
+  OB_INLINE int64_t get_reserved_serialize_size() const { return 4096; }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(leader_addr), "micro_keys_cnt", micro_keys_.count());
 
 public:
@@ -12697,6 +12734,7 @@ public:
   int init(const ObAdminStorageArg &shared_storage_infos);
   int init(const ObIArray<ObAdminStorageArg> &shared_storage_infos);
   int assign(const ObNotifySharedStorageInfoArg &other);
+  const common::ObSArray<ObAdminStorageArg> &get_shared_storage_infos() const { return shared_storage_infos_; }
   TO_STRING_KV(K_(shared_storage_infos));
 private:
   // each server may have multiple shared_storage dest, because data and clog

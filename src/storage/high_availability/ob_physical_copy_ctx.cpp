@@ -65,7 +65,9 @@ bool ObPhysicalCopyCtx::is_valid() const
     } else if (OB_ISNULL(restore_base_info_)
                || OB_ISNULL(second_meta_index_store_)) {
       bool_ret = false;
-    } else if (!ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_) && OB_ISNULL(restore_macro_block_id_mgr_)) {
+    } else if (!ObTabletRestoreAction::is_restore_remote_sstable(restore_action_)
+               && !ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_)
+               && OB_ISNULL(restore_macro_block_id_mgr_)) {
       bool_ret = false;
       LOG_WARN_RET(OB_INVALID_ARGUMENT, "restore_macro_block_id_mgr_ is null", K_(restore_action), KP_(restore_macro_block_id_mgr));
     }

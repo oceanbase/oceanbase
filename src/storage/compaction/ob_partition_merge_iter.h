@@ -276,8 +276,8 @@ public:
     return OB_SUCCESS;
   }
   virtual int check_row_changed(const blocksstable::ObDatumRow &row, const int64_t row_id, bool &is_changed) override;
-  INHERIT_TO_STRING_KV("ObPartitionMicroMergeIter", ObPartitionMacroMergeIter, K_(micro_block_opened),
-                       K_(need_reuse_micro_block), KPC(curr_micro_block_), KP_(micro_row_scanner));
+  INHERIT_TO_STRING_KV("ObPartitionMicroMergeIter", ObPartitionMacroMergeIter, K_(micro_block_opened), K_(need_reuse_micro_block),
+                       K_(need_check_schema_version), KPC(curr_micro_block_), KP_(micro_row_scanner));
 private:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
@@ -291,6 +291,7 @@ private:
   bool micro_block_opened_;
   blocksstable::ObMacroBlockReader macro_reader_;
   bool need_reuse_micro_block_;
+  bool need_check_schema_version_; // used for reuse micro block
 };
 
 class ObPartitionMinorRowMergeIter : public ObPartitionMergeIter

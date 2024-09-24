@@ -963,57 +963,6 @@ int ObPushdownFilterFactory::alloc(
   return ret;
 }
 
-int ObPushdownFilterFactory::convert_white_filter_to_black(ObPushdownFilterExecutor *&filter)
-{
-  int ret = OB_SUCCESS;
-  ObPushdownFilterNode *new_node = nullptr;
-  ObPushdownFilterExecutor *new_filter = nullptr;
-  if (OB_UNLIKELY(nullptr == filter || !filter->is_filter_white_node() || nullptr == alloc_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid filter", K(ret), KP_(alloc), KPC(filter));
-  } else if (OB_FAIL(alloc(BLACK_FILTER, 0, new_node))) {
-    LOG_WARN("Failed to alloc pushdown black filter node", K(ret));
-  } else if (OB_FAIL(alloc(BLACK_FILTER_EXECUTOR, 0, *new_node, new_filter, filter->get_op()))) {
-    LOG_WARN("Failed to alloc pushdown black filter executor", K(ret));
-  } else {
-    ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(filter);
-    ObPushdownWhiteFilterNode &white_node = white_filter->get_filter_node();
-    ObPushdownBlackFilterNode &black_node = *static_cast<ObPushdownBlackFilterNode *>(new_node);
-    if (OB_FAIL(black_node.col_ids_.init(white_node.col_ids_.count()))) {
-      LOG_WARN("Failed to init col id array", K(ret), K(white_node.col_ids_.count()));
-    } else if (OB_FAIL(black_node.col_ids_.assign(white_node.col_ids_))) {
-      LOG_WARN("Failed to assign col id array", K(ret));
-    } else if (OB_FAIL(black_node.column_exprs_.init(white_node.column_exprs_.count()))) {
-      LOG_WARN("Failed to init column expr array", K(ret), K(white_node.column_exprs_.count()));
-    } else if (OB_FAIL(black_node.column_exprs_.assign(white_node.column_exprs_))) {
-      LOG_WARN("Failed to assign column expr array", K(ret));
-    } else if (OB_FAIL(black_node.filter_exprs_.init(1))) {
-      LOG_WARN("Failed to init filter expr array", K(ret));
-    } else if (OB_FAIL(black_node.filter_exprs_.push_back(white_node.expr_))) {
-      LOG_WARN("Failed to push back expr", K(ret));
-    } else {
-      white_filter->clear_in_datums();
-      filter = new_filter;
-      LOG_TRACE("convert white filter to black filter", K(ret), KPC(filter), KPC(white_filter));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(alloc_)) {
-      if (nullptr != new_filter) {
-        new_filter->~ObPushdownFilterExecutor();
-        alloc_->free(new_filter);
-        new_filter = nullptr;
-      }
-      if (nullptr != new_node) {
-        new_node->~ObPushdownFilterNode();
-        alloc_->free(new_node);
-        new_node = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObPushdownFilter::serialize_pushdown_filter(
     char *buf,
     int64_t buf_len,
@@ -1744,39 +1693,25 @@ int ObPushdownFilterExecutor::prepare_skip_filter()
 }
 
 // 初始化需要被清理的标记
-int ObAndFilterExecutor::init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+int ObAndFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  for (uint32_t i = 0; i < n_child_ && OB_SUCC(ret); ++i) {
-    need_convert = false;
-    if (OB_FAIL(childs_[i]->init_evaluated_datums(allocator, need_convert))) {
-      LOG_WARN("failed to filter child", K(ret));
-    } else if (OB_UNLIKELY(need_convert)) {
-      ObPushdownFilterFactory filter_factory(allocator);
-      if (OB_FAIL(filter_factory.convert_white_filter_to_black(childs_[i]))) {
-        LOG_WARN("Failed to convert white filter to black filter", K(ret), KPC(childs_[i]));
-      }
+  for (uint32_t i = 0; OB_SUCC(ret) && OB_LIKELY(is_valid) && i < n_child_; ++i) {
+    if (OB_FAIL(childs_[i]->init_evaluated_datums(is_valid))) {
+      LOG_WARN("failed to filter child", K(ret), K(i));
     }
   }
-  need_convert = false;
   return ret;
 }
 
-int ObOrFilterExecutor::init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+int ObOrFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  for (uint32_t i = 0; i < n_child_ && OB_SUCC(ret); ++i) {
-    need_convert = false;
-    if (OB_FAIL(childs_[i]->init_evaluated_datums(allocator, need_convert))) {
-      LOG_WARN("failed to filter child", K(ret));
-    } else if (OB_UNLIKELY(need_convert)) {
-      ObPushdownFilterFactory filter_factory(allocator);
-      if (OB_FAIL(filter_factory.convert_white_filter_to_black(childs_[i]))) {
-        LOG_WARN("Failed to convert white filter to black filter", K(ret), KPC(childs_[i]));
-      }
+  for (uint32_t i = 0; OB_SUCC(ret) && OB_LIKELY(is_valid) && i < n_child_; ++i) {
+    if (OB_FAIL(childs_[i]->init_evaluated_datums(is_valid))) {
+      LOG_WARN("failed to filter child", K(ret), K(i));
     }
   }
-  need_convert = false;
   return ret;
 }
 
@@ -1817,11 +1752,10 @@ int ObPhysicalFilterExecutor::filter(blocksstable::ObStorageDatum *datums, int64
 // 根据calc expr来设置每个列（空集）对应的清理Datum
 // 这里将clear的datum放在filter node是为了更精准处理，其实只有涉及到的表达式清理即可，其他不需要清理
 // 还有类似空集需要清理
-int ObPhysicalFilterExecutor::init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+int ObPhysicalFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
-  UNUSED(allocator);
   int ret = OB_SUCCESS;
-  need_convert = false;
+  is_valid = true;
   const int32_t cur_eval_info_cnt = n_eval_infos_;
   n_eval_infos_ = 0;
   n_datum_eval_flags_ = 0;
@@ -1908,38 +1842,36 @@ void ObPhysicalFilterExecutor::clear_evaluated_infos()
   }
 }
 
-int ObWhiteFilterExecutor::init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+int ObWhiteFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
-  UNUSED(allocator);
   int ret = OB_SUCCESS;
-  need_convert = false;
+  is_valid = true;
   if (OB_ISNULL(filter_.expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected filter expr", K(ret), KPC(filter_.expr_));
   } else if (WHITE_OP_IN == filter_.get_op_type()) {
-    if (OB_FAIL(init_in_eval_datums(need_convert))) {
-      if (OB_UNLIKELY(need_convert)) {
+    if (OB_FAIL(init_in_eval_datums(is_valid))) {
+      if (OB_UNLIKELY(!is_valid)) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("Failed to init eval datums for WHITE_OP_IN filter", K(ret));
       }
     }
-  } else if (OB_FAIL(init_compare_eval_datums(need_convert))) {
-    if (OB_UNLIKELY(need_convert)) {
+  } else if (OB_FAIL(init_compare_eval_datums(is_valid))) {
+    if (OB_UNLIKELY(!is_valid)) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("Failed to init eval datums for compare white filter", K(ret));
     }
   }
-  LOG_DEBUG("[PUSHDOWN], white pushdown filter inited datum params", K(need_convert), K(datum_params_));
+  LOG_DEBUG("[PUSHDOWN], white pushdown filter inited datum params", K(is_valid), K(datum_params_));
   return ret;
 }
 
 // In oracle mode, when the values in one column are all null,
 // the result should be empty set even though the expr.eval() is not valid (e.g., c1 < 1/0).
-// We do not handle this situation at the storage layer,
-// but convert it into a black filter and hand it over to the sql layer to process.
-int ObWhiteFilterExecutor::init_compare_eval_datums(bool &need_convert)
+// We do not pushdown filter to the storage layer in this situation.
+int ObWhiteFilterExecutor::init_compare_eval_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = op_.get_eval_ctx();
@@ -1949,7 +1881,7 @@ int ObWhiteFilterExecutor::init_compare_eval_datums(bool &need_convert)
   if (OB_UNLIKELY(filter_.expr_->arg_cnt_ < 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected filter expr", K(ret), KPC(filter_.expr_));
-  } else if (OB_FAIL(ObPhysicalFilterExecutor::init_evaluated_datums(nullptr, need_convert))) {
+  } else if (OB_FAIL(ObPhysicalFilterExecutor::init_evaluated_datums(is_valid))) {
     LOG_WARN("Failed to init evaluated datums", K(ret));
   } else if (OB_FAIL(init_array_param(datum_params_, filter_.expr_->arg_cnt_))) {
     LOG_WARN("Failed to alloc params", K(ret));
@@ -1968,7 +1900,7 @@ int ObWhiteFilterExecutor::init_compare_eval_datums(bool &need_convert)
         ObDatum *datum = NULL;
         if (OB_FAIL(filter_.expr_->args_[i]->eval(eval_ctx, datum))) {
           if (lib::is_oracle_mode()) {
-            need_convert = true;
+            is_valid = false;
           } else {
             LOG_WARN("evaluate filter arg expr failed", K(ret), K(i));
           }
@@ -1994,7 +1926,7 @@ int ObWhiteFilterExecutor::init_compare_eval_datums(bool &need_convert)
   return ret;
 }
 
-int ObWhiteFilterExecutor::init_in_eval_datums(bool &need_convert)
+int ObWhiteFilterExecutor::init_in_eval_datums(bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = op_.get_eval_ctx();
@@ -2009,7 +1941,7 @@ int ObWhiteFilterExecutor::init_in_eval_datums(bool &need_convert)
                          0 >= filter_.expr_->inner_func_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected filter expr", K(ret), KPC(filter_.expr_), KP(filter_.expr_->args_[0]), KP(filter_.expr_->args_[1]));
-  } else if (OB_FAIL(ObPhysicalFilterExecutor::init_evaluated_datums(nullptr, need_convert))) {
+  } else if (OB_FAIL(ObPhysicalFilterExecutor::init_evaluated_datums(is_valid))) {
     LOG_WARN("Failed to init evaluated datums", K(ret));
   } else if (OB_FAIL(init_array_param(datum_params_, filter_.expr_->inner_func_cnt_))) {
     LOG_WARN("Failed to alloc params", K(ret));
@@ -2030,7 +1962,8 @@ int ObWhiteFilterExecutor::init_in_eval_datums(bool &need_convert)
       if (OB_SUCC(ret)) {
         if (OB_FAIL(cur_arg->eval(eval_ctx, datum))) {
           if (lib::is_oracle_mode()) {
-            need_convert = true;
+            is_valid = false;
+            clear_in_datums();
           } else {
             LOG_WARN("Evaluate filter arg expr failed", K(ret), K(i));
           }
@@ -2466,11 +2399,10 @@ void ObDynamicFilterExecutor::filter_on_success(ObPushdownFilterExecutor* parent
   }
 }
 
-int ObDynamicFilterExecutor::init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+int ObDynamicFilterExecutor::init_evaluated_datums(bool &is_valid)
 {
-  UNUSED(allocator);
   int ret = OB_SUCCESS;
-  need_convert = false;
+  is_valid = true;
   if (is_data_prepared_ && OB_NOT_NULL(runtime_filter_ctx_)
       && runtime_filter_ctx_->need_reset_in_rescan()) {
     is_data_prepared_ = false;

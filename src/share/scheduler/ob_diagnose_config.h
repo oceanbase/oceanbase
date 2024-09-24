@@ -95,6 +95,7 @@ enum ObDiagnoseTabletType {
   TYPE_MDS_MINI_MERGE,
   TYPE_BATCH_EXECUTE, // for batch execute dag
   TYPE_S2_REFRESH, // for shared storage
+  TYPE_MICRO_MINI_MERGE,
   TYPE_DIAGNOSE_TABLET_MAX
 };
 

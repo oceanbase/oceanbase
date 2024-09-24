@@ -216,7 +216,7 @@ public:
            ObIAllocator *wbp_index_cache_bkt_allocator,
            ObTmpFilePageCacheController *page_cache_controller,
            const char* label);
-  int destroy();
+  int release_resource();
   void reset();
   bool can_remove();
   bool is_deleting();
@@ -270,6 +270,7 @@ public:
                                const int64_t flush_sequence,
                                const bool need_flush_tail);
   int insert_meta_tree_item(const ObTmpFileFlushInfo &info, int64_t block_index);
+  int copy_finish();
 public:
   int remove_flush_node(const bool is_meta);
   int reinsert_flush_node(const bool is_meta);
@@ -346,7 +347,7 @@ private:
                              int64_t &actual_write_size);
   int truncate_the_first_wbp_page_();
 
-  int copy_flush_data_from_wbp_(ObTmpFileFlushTask &flush_task, ObTmpFileFlushInfo &info,
+  int collect_flush_data_page_id_(ObTmpFileFlushTask &flush_task, ObTmpFileFlushInfo &info,
       ObTmpFileDataFlushContext &data_flush_context,
       const uint32_t copy_begin_page_id, const int64_t copy_begin_page_virtual_id,
       const uint32_t copy_end_page_id, const int64_t flush_sequence, const bool need_flush_tail);

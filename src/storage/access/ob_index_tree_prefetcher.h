@@ -658,9 +658,37 @@ protected:
       return index_block_read_handles_[fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH];
     }
 #ifdef OB_BUILD_SHARED_STORAGE
+    OB_INLINE int try_prefetch_data_macro_block(
+        const int64_t level,
+        const ObIndexTreeMultiPassPrefetcher &prefetcher,
+        const ObMicroIndexInfo &index_info)
+    {
+      int ret = OB_SUCCESS;
+      MacroBlockId macro_id;
+      if (!GCTX.is_shared_storage_mode()
+          || !prefetcher.use_multi_block_prefetch_
+          || prefetcher.index_tree_height_ - 1 != level
+          || !index_info.has_valid_shared_macro_id()
+          || !prefetcher.sstable_->is_major_sstable()
+          || prefetcher.sstable_->is_small_sstable()
+          || !ObStoreRowIterator::is_scan(prefetcher.iter_type_)) {
+        // do nothing
+      } else if (FALSE_IT(macro_id = index_info.get_shared_data_macro_id())) {
+      } else if (OB_UNLIKELY(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO != macro_id.storage_object_type()))  {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "macro id type is not SHARED_MAJOR_DATA_MACRO");
+      } else if (OB_FAIL(prefetch_macro_block(macro_id))) {
+        STORAGE_LOG(WARN, "fail to prefetch data macro block", K(ret), K(level));
+      } else {
+        STORAGE_LOG(DEBUG, "succeed to prefetch data macro block", K(level), K(macro_id));
+      }
+      return ret;
+    }
+
     OB_INLINE int prefetch_macro_block(const MacroBlockId &macro_id)
     {
       int ret = OB_SUCCESS;
+      const ObStorageObjectType object_type = macro_id.storage_object_type();
       if (!GCTX.is_shared_storage_mode()) {
         // do nothing
       } else if (OB_UNLIKELY(!macro_id.is_valid())) {

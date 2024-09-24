@@ -176,7 +176,11 @@ struct ObOptParamHint
     DEF(RUNTIME_FILTER_TYPE,)                       \
     DEF(BLOOM_FILTER_RATIO,)                        \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,)    \
+    DEF(CARDINALITY_ESTIMATION_MODEL,) \
     DEF(_PUSH_JOIN_PREDICATE,)                      \
+    DEF(RANGE_INDEX_DIVE_LIMIT,) \
+    DEF(PARTITION_INDEX_DIVE_LIMIT,) \
+    DEF(OB_TABLE_ACCESS_POLICY,)                    \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -196,6 +200,26 @@ struct ObOptParamHint
   int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
+
+  template<typename T>
+  using GET_PARAM_FUNC = int (ObOptParamHint::*)(const OptParamType, T&) const;
+  template<typename T, GET_PARAM_FUNC<T> PARAM_FUNC>
+  int inner_get_sys_var(const OptParamType param_type,
+                        const ObSQLSessionInfo *session,
+                        const share::ObSysVarClassType sys_var_id,
+                        T &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  int64_t &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  bool &val) const;
+  int get_enum_sys_var(const OptParamType param_type,
+                       const ObSQLSessionInfo *session,
+                       const share::ObSysVarClassType sys_var_id,
+                       int64_t &val) const;
   bool empty() const { return param_types_.empty();  }
   int check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param, bool &val) const;
   void reset();

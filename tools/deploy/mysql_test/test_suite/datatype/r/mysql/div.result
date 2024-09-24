@@ -198595,9 +198595,9 @@ Query Plan
 |0 |SCALAR GROUP BY              |                        |1       |6           |
 |1 |└─PX COORDINATOR             |                        |1       |6           |
 |2 |  └─EXCHANGE OUT DISTR       |:EX10000                |1       |6           |
-|3 |    └─MERGE GROUP BY         |                        |1       |6           |
-|4 |      └─PX PARTITION ITERATOR|                        |12      |5           |
-|5 |        └─TABLE FULL SCAN    |table1000_key_pk_parts_2|12      |5           |
+|3 |    └─MERGE GROUP BY         |                        |1       |5           |
+|4 |      └─PX PARTITION ITERATOR|                        |2       |5           |
+|5 |        └─TABLE FULL SCAN    |table1000_key_pk_parts_2|2       |5           |
 =================================================================================
 Outputs & filters:
 -------------------------------------

@@ -3858,7 +3858,8 @@ int ObDMLResolver::check_is_table_supported_for_mview(const ObItemType table_nod
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(T_RELATION_FACTOR != table_node_type
                   && T_SELECT != table_node_type
-                  && T_JOINED_TABLE != table_node_type)) {
+                  && T_JOINED_TABLE != table_node_type
+                  && T_JSON_TABLE_EXPRESSION != table_node_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported table type in materialized view", K(ret), K(get_type_name(table_node_type)));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-user table in materialized view is");
@@ -7209,33 +7210,72 @@ int ObDMLResolver::resolve_approx_clause(const ParseNode *approx_node)
   } else if (OB_NOT_NULL(approx_node) && stmt->get_order_item_size() == 1) {
     int order_size = stmt->get_order_item_size();
     bool found = false;
-    ObRawExpr *tmp_expr = stmt->get_order_item(0).expr_;
     bool has_const = false;
+    bool is_match = false;
+    ObRawExpr *tmp_expr = stmt->get_order_item(0).expr_;
     if (OB_NOT_NULL(tmp_expr) && tmp_expr->is_vector_sort_expr()) {
       // only order by distance with approx, set it true
       int size = tmp_expr->get_param_count();
-      for (int i = 0; i < size && OB_SUCC(ret) && !has_const; ++i) {
+      for (int i = 0; OB_SUCC(ret) && i < size; ++i) {
         ObRawExpr *param_expr = tmp_expr->get_param_expr(i);
         if (OB_ISNULL(param_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null pointer", KPC(tmp_expr), K(i), K(ret));
         } else if (param_expr->is_const_expr()) {
           has_const = true;
-          stmt->set_has_vec_approx(true);
+        } else if (param_expr->is_column_ref_expr()) {
+          const ObColumnRefRawExpr &ref_col_expr = static_cast<const ObColumnRefRawExpr&>(*param_expr);
+          share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+          const ObTableSchema *table_schema = nullptr;
+          const ObString column_name = ref_col_expr.get_column_name();
+          const int64_t column_id = ref_col_expr.get_column_id();
+          int64_t table_id = OB_INVALID_ID;
+          // find real table id
+          for (int64_t i = 0; OB_SUCC(ret) && table_id == OB_INVALID_ID && i < stmt->get_column_size(); ++i) {
+            ColumnItem &column_item = stmt->get_column_items().at(i);
+            if (column_item.column_id_ == column_id) {
+              table_id = column_item.base_tid_;
+            }
+          }
+          LOG_DEBUG("get table id of index column", K(table_id), K(column_id), K(column_name));
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null schema guard", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                               table_id,
+                                                               table_schema))) {
+            LOG_WARN("get table schema failed", K(ret), K(table_id), K(column_id), K(ref_col_expr));
+          } else if (OB_ISNULL(table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr", K(ret));
+          } else if (OB_FAIL(ObVectorIndexUtil::check_distance_algorithm_match(
+              *schema_guard, *table_schema, column_name, tmp_expr->get_expr_type(), is_match))) {
+            LOG_WARN("fail to check distance algorithn match", K(ret), K(column_name));
+          } else if (!is_match) {
+            LOG_WARN("distance expr and index distance algorithm is not match, will not set using index",
+              K(tmp_expr->get_expr_type()));
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using vector index without column ref or vector const expr is");
         }
+      }
+      if (OB_SUCC(ret) && is_match && tmp_expr->get_expr_type() != T_FUN_SYS_INNER_PRODUCT) {
+        stmt->set_has_vec_approx(true);
       }
       if (OB_SUCC(ret) && !has_const) {
         // if has vector expr, but no const param, not support use vector index
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't use vector index without const param.");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using vector index without const param is");
       }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't use vector index without vector_sort_expr.");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using vector index without vector_sort_expr is");
     }
   } else if (OB_NOT_NULL(approx_node)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support multi order by item when use vector index");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Multi order by item when using vector index is");
   }
   return ret;
 }

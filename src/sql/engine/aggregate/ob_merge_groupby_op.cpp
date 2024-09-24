@@ -243,7 +243,7 @@ int ObMergeGroupByOp::init_group_rows()
 int ObMergeGroupByOp::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+  if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(ctx_.get_my_session()->get_effective_tenant_id(), dir_id_))) {
     LOG_WARN("failed to alloc dir id", K(ret));
   } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {

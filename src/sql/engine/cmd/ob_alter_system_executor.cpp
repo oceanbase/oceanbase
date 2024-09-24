@@ -600,34 +600,62 @@ int ObFlushSSMicroCacheExecutor::execute(ObExecContext &ctx, ObFlushSSMicroCache
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
-  obrpc::ObCommonRpcProxy *common_rpc = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc = nullptr;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  uint64_t tenant_id = OB_INVALID_ID;
   if (OB_ISNULL(task_exec_ctx)) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
   } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+                 ctx.get_my_session()->get_effective_tenant_id(), schema_guard))) {
+    LOG_WARN("get_schema_guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_id(ObString::make_string(stmt.tenant_name_.ptr()), tenant_id)) ||
+             OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant not found", K(ret), K_(stmt.tenant_name));
   } else {
-    share::schema::ObSchemaGetterGuard schema_guard;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-            ctx.get_my_session()->get_effective_tenant_id(), schema_guard))) {
-      LOG_WARN("get_schema_guard failed", K(ret));
+    ObArray<ObAddr> server_list;
+    ObArray<ObUnit> tenant_units;
+    ObUnitTableOperator unit_op;
+    if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init unit op", KR(ret));
+    } else if (OB_FAIL(unit_op.get_units_by_tenant(tenant_id, tenant_units))) {
+      LOG_WARN("failed to get tenant units", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(0 == tenant_units.count())) {
+      ret = OB_TENANT_NOT_EXIST;
+      LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
     } else {
-      uint64_t tenant_id = OB_INVALID_ID;
-      if (OB_FAIL(schema_guard.get_tenant_id(ObString::make_string(stmt.tenant_name_.ptr()), tenant_id)) ||
-          OB_INVALID_ID == tenant_id) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("tenant not found", K(ret), K_(stmt.tenant_name));
+      FOREACH_X(unit, tenant_units, OB_SUCC(ret)) {
+        bool is_alive = false;
+        if (OB_FAIL(SVR_TRACER.check_server_alive(unit->server_, is_alive))) {
+          LOG_WARN("check_server_alive failed", KR(ret), K(unit->server_));
+        } else if (is_alive) {
+          if (has_exist_in_array(server_list, unit->server_)) {
+            // server exist
+          } else if (OB_FAIL(server_list.push_back(unit->server_))) {
+            LOG_WARN("push_back failed", KR(ret), K(unit->server_));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t rpc_timeout = 10000000; // 10s
+      obrpc::ObClearSSMicroCacheArg arg;
+      arg.tenant_id_ = tenant_id;
+      obrpc::ObSrvRpcProxy *srv_rpc_proxy = nullptr;
+      if (OB_ISNULL(srv_rpc_proxy = GCTX.srv_rpc_proxy_)) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("srv rpc proxy is null", KR(ret), KP(srv_rpc_proxy));
       } else {
-        MTL_SWITCH(tenant_id)
-        {
-          ObSSMicroCache *micro_cache = nullptr;
-          if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("micro_cache is nullptr", KR(ret));
+        FOREACH_X(server_addr, server_list, OB_SUCC(ret)) {
+          if (OB_FAIL(srv_rpc_proxy->to(*server_addr).timeout(rpc_timeout).clear_ss_micro_cache(arg))) {
+            LOG_WARN("fail to send clear_ss_micro_cache rpc", KR(ret), K(arg));
           } else {
-            micro_cache->clear_micro_cache();
-            LOG_INFO("success clear ss_micro_cache");
+            LOG_INFO("succ to send clear_ss_micro_cache rpc", K(arg));
           }
         }
       }
@@ -1325,7 +1353,11 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
   } else if (OB_FAIL(common_rpc->admin_set_config(stmt.get_rpc_arg()))) {
-    LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
+    if (stmt.get_rpc_arg().is_backup_config_) {
+      LOG_WARN("set backup config rpc failed", K(ret));
+    } else {
+      LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
+    }
   }
   return ret;
 }

@@ -93,11 +93,9 @@ public:
     const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
     const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
-    ObCompactionTimeGuard &time_guard,
-    const share::ObLSColumnReplicaCache &ls_cs_replica_cache);
+    ObCompactionTimeGuard &time_guard);
   static int check_replica_checksum_items(
       const ObReplicaCkmArray &checksum_items,
-      const ObLSColumnReplicaCache &ls_cs_replica_cache,
       const bool is_medium_checker);
   static int check_need_merge_and_schedule(
       ObLS &ls,
@@ -137,6 +135,7 @@ protected:
     const ObGetMergeTablesResult &result,
     const int64_t schema_version,
     ObMediumCompactionInfo &medium_info);
+  int choose_encoding_limit(ObMediumCompactionInfo &medium_info);
   int init_parallel_range_and_schema_changed_and_co_merge_type(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
@@ -166,7 +165,6 @@ protected:
   static int init_tablet_filters(share::ObTabletReplicaFilterHolder &filters);
   static int check_tablet_checksum(
       const share::ObReplicaCkmArray &checksum_items,
-      const ObLSColumnReplicaCache &ls_cs_replica_cache,
       const int64_t start_idx,
       const int64_t end_idx,
       const bool is_medium_checker,

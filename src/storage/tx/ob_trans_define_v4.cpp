@@ -446,6 +446,7 @@ int ObTxDesc::switch_to_idle()
   commit_task_.reset();
   modified_tables_.reset();
   state_ = State::IDLE;
+  op_sn_ = 0;
   return OB_SUCCESS;
 }
 
@@ -617,7 +618,7 @@ void ObTxDesc::dump_and_print_trace()
   }
 }
 
-bool ObTxDesc::in_tx_or_has_extra_state()
+bool ObTxDesc::in_tx_or_has_extra_state() const
 {
   ObSpinLockGuard guard(lock_);
   return in_tx_or_has_extra_state_();
@@ -1453,6 +1454,7 @@ int ObTxExecResult::assign(const ObTxExecResult &r)
     TRANS_LOG(WARN, "assign touched_ls_list fail, set incomplete", K(ret), KPC(this));
   }
   conflict_txs_.assign(r.conflict_txs_);
+  conflict_info_array_.assign(r.conflict_info_array_);
   return ret;
 }
 

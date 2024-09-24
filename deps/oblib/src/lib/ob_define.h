@@ -104,7 +104,7 @@ const int64_t MAX_LOCK_ID_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_ROWKEY_BUF_LENGTH = 512;
 const int64_t MAX_LOCK_REMOTE_ADDR_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_MODE_BUF_LENGTH = 8;
-const int64_t MAX_LOCK_OBJ_TYPE_BUF_LENGTH = 16;
+const int64_t MAX_LOCK_OBJ_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_LOCK_OP_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_LOCK_OP_STATUS_BUF_LENGTH = 16;
 const int64_t MAX_LOCK_OP_EXTRA_INFO_LENGTH = 256;
@@ -188,7 +188,7 @@ OB_INLINE bool is_valid_group(const uint64_t group_id)
   return group_id >= USER_RESOURCE_OTHER_GROUP_ID && group_id != OB_INVALID_GROUP_ID;
 }
 
-OB_INLINE bool is_user_group(const uint64_t group_id)
+OB_INLINE bool is_resource_manager_group(const uint64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
 }
@@ -196,7 +196,7 @@ OB_INLINE bool is_user_group(const uint64_t group_id)
 OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
 {
   //other group or user group
-  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_user_group(group_id);
+  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_resource_manager_group(group_id);
 }
 
 // See ObDeviceHealthStatus for more information
@@ -1499,6 +1499,7 @@ const int64_t OB_MERGE_COMMENT_INNER_STR_LENGTH = 800;
 const int64_t OB_CKM_ERROR_INFO_STR_LENGTH = 1024;
 const int64_t OB_COMPACTION_STATUS_STR_LENGTH = 256;
 const int64_t OB_STORAGE_PATH_STR_LENGTH = 256;
+const int64_t OB_MERGE_REASON_STR_LENGTH = 32;
 
 // for erasure code
 const int64_t OB_MAX_EC_STRIPE_COUNT = 32;
@@ -1732,6 +1733,7 @@ const int64_t OB_MALLOC_NORMAL_BLOCK_SIZE = (1LL << 13) - 256;                 /
 const int64_t OB_MALLOC_MIDDLE_BLOCK_SIZE = (1LL << 16) - 256;                 // 64KB
 const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2MB (-17KB)
 const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (240LL << 10);                 // 240KB
+const int64_t WARMUP_MAX_KEY_SET_SIZE_IN_RPC = (1LL << 22);                    // 4M
 
 const int64_t OB_MAX_MYSQL_RESPONSE_PACKET_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 

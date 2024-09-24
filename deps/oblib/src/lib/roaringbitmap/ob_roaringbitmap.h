@@ -22,6 +22,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/allocator/page_arena.h"
+#include "src/logservice/ob_log_service.h"
 
 
 namespace oceanbase {
@@ -32,10 +33,12 @@ namespace common {
 
 #define ROARING_TRY_CATCH(statement)                               \
     try {                                                          \
-      statement;                                                   \
+      if (OB_SUCC(ret)) {                                          \
+        statement;                                                 \
+      }                                                            \
     } catch (const std::bad_alloc &e) {                            \
       ret = OB_ALLOCATE_MEMORY_FAILED;                             \
-      LOG_WARN("fail to alloc memory in croaring", K(ret));        \
+      FLOG_WARN("fail to alloc memory in croaring", K(ret));       \
     }
 
 static const uint32_t RB_VERSION_SIZE = sizeof(uint8_t);

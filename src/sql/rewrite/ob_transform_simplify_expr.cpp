@@ -2182,7 +2182,8 @@ int ObTransformSimplifyExpr::replace_expr_when_filter_is_false(ObRawExpr*& expr)
     }
   } else if (expr->has_flag(IS_AGG)) {
     ObAggFunRawExpr* aggr_expr = static_cast<ObAggFunRawExpr*>(expr);
-    if (T_FUN_COUNT == aggr_expr->get_expr_type()) {
+    if (T_FUN_COUNT == aggr_expr->get_expr_type() ||
+        T_FUN_SUM_OPNSIZE == aggr_expr->get_expr_type()) {
       ObConstRawExpr* zero_expr = NULL;
       ObRawExpr* cast_expr = NULL;
       if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_, ObIntType, 0, zero_expr))) {

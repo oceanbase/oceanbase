@@ -58,7 +58,6 @@ public:
   int create_index(const obrpc::ObCreateIndexArg &arg,
                    obrpc::ObAlterTableRes &res);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
-
   // Check and update local index status.
   // if not all index table updated return OB_EAGAIN.
   int do_create_index(
@@ -109,6 +108,7 @@ public:
                                 const uint64_t tenant_data_version,
                                 common::ObIAllocator &allocator,
                                 ObDDLTaskRecord &task_record);
+  int drop_index_on_failed(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
 private:
   int recognize_vec_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
@@ -116,6 +116,7 @@ private:
       int64_t &index_ith,
       int64_t &rowkey_vid_ith,
       int64_t &vid_rowkey_ith,
+      int64_t &domain_index_ith,
       int64_t &index_id_ith,
       int64_t &snapshot_data_ith);
   int recognize_fts_index_schemas(
@@ -135,11 +136,16 @@ private:
                               share::schema::ObTableSchema &schema);
 
   bool is_final_index_status(const share::schema::ObIndexStatus index_status) const;
-  int check_has_none_shared_index_tables_for_fts_or_multivalue_or_vector_index_(
+  int check_has_none_shared_index_tables_for_fts_or_multivalue_index_(
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
-      bool &has_fts_or_multivalue_or_vector_index);
+      bool &has_fts_or_multivalue_index);
+  int check_has_none_shared_index_tables_for_vector_index_(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &has_none_share_vector_index);
   bool ignore_error_code_for_domain_index(
       const int ret,
       const obrpc::ObDropIndexArg &arg,

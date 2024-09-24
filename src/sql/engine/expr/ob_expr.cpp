@@ -714,7 +714,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     need_evaluate = true;
     to_bit_vector(frame + eval_flags_off_)->reset(ctx.get_batch_size());
     reset_datums_ptr(frame, ctx.get_batch_size());
-    reset_attrs_datums(frame, ctx.get_batch_size());
+    reset_attrs_datums(ctx);
     info->evaluated_ = true;
     info->cnt_ = ctx.get_batch_size();
     info->point_to_frame_ = true;
@@ -779,7 +779,7 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
     // FIXME bin.lb: maybe we can optimize this by ObEvalInfo::point_to_frame_
     if (!info->evaluated_) {
       reset_datums_ptr(frame, size);
-      reset_attrs_datums(frame, size);
+      reset_attrs_datums(ctx);
       info->notnull_ = false;
       info->point_to_frame_ = true;
       info->evaluated_ = true;
@@ -1113,22 +1113,11 @@ int ObExpr::init_vector(ObEvalCtx &ctx,
   return ret;
 }
 
-void ObExpr::reset_attr_datums_ptr(char *frame, const int64_t size)
+void ObExpr::reset_attrs_datums(ObEvalCtx &ctx) const
 {
-  ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
-  ObDatum *datum_end = datum + size;
-  char *ptr = frame + res_buf_off_;
-  for (; datum < datum_end; datum += 1) {
-    if (datum->ptr_ != ptr) {
-      datum->ptr_ = ptr;
-    }
-    ptr += res_buf_len_;
-  }
-}
-
-void ObExpr::reset_attrs_datums(char *frame, const int64_t size) const
-{
+  int64_t size = ctx.get_batch_size();
   for (uint32_t idx = 0; idx < attrs_cnt_; ++idx) {
+    char *frame = ctx.frames_[attrs_[idx]->frame_idx_];
     attrs_[idx]->reset_datums_ptr(frame, size);
   }
 }

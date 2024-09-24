@@ -1072,15 +1072,15 @@ int ObShardingInfo::is_sharding_equal(const ObShardingInfo *left_sharding,
     } else { /*do nothing*/ }
   } else if (left_sharding->is_match_all() || left_sharding->is_local()) {
     is_equal = true;
-  } else if (!ObOptimizerUtil::same_exprs(left_sharding->get_partition_keys(),
-                                          right_sharding->get_partition_keys(),
-                                          equal_sets) ||
-             !ObOptimizerUtil::same_exprs(left_sharding->get_sub_partition_keys(),
-                                          right_sharding->get_sub_partition_keys(),
-                                          equal_sets) ||
-             !ObOptimizerUtil::same_exprs(left_sharding->get_partition_func(),
-                                          right_sharding->get_partition_func(),
-                                          equal_sets)) {
+  } else if (!ObOptimizerUtil::is_exprs_equivalent(left_sharding->get_partition_keys(),
+                                                   right_sharding->get_partition_keys(),
+                                                   equal_sets) ||
+             !ObOptimizerUtil::is_exprs_equivalent(left_sharding->get_sub_partition_keys(),
+                                                   right_sharding->get_sub_partition_keys(),
+                                                   equal_sets) ||
+             !ObOptimizerUtil::is_exprs_equivalent(left_sharding->get_partition_func(),
+                                                   right_sharding->get_partition_func(),
+                                                   equal_sets)) {
     is_equal = false;
   } else if (NULL == left_sharding->get_phy_table_location_info() &&
              NULL == right_sharding->get_phy_table_location_info()) {

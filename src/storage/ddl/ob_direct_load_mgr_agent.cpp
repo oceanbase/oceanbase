@@ -14,6 +14,7 @@
 
 #include "ob_direct_load_mgr_agent.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
+#include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -213,10 +214,11 @@ int ObDirectLoadMgrAgent::fill_sstable_slice_for_sn(
   }
   if (OB_SUCC(ret) && need_consume_remained_rows) {
     const ObDatumRow *row = nullptr;
+    ObIDirectLoadRowIterator *interpret_iter = static_cast<ObIDirectLoadRowIterator *>(iter);
     while (OB_SUCC(ret)) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(static_cast<ObDDLInsertRowIterator*>(iter)->get_next_row(true/*skip_lob*/, row))) {
+      } else if (OB_FAIL(interpret_iter->get_next_row(true/*skip_lob*/, row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;

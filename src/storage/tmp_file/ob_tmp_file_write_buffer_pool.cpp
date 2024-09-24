@@ -149,7 +149,7 @@ int ObTmpWriteBufferPool::inner_alloc_page_(const int64_t fd,
     bool cas_succeed = false;
     do {
       curr_first_free_page_id = ATOMIC_LOAD(&first_free_page_id_);
-      if (!is_valid_page_id_(curr_first_free_page_id)) {
+      if (!is_valid_page_id_(curr_first_free_page_id) || OB_ISNULL(fat_[curr_first_free_page_id].buf_)) {
         ret = OB_SEARCH_NOT_FOUND;
         break;
       }
@@ -245,16 +245,15 @@ int ObTmpWriteBufferPool::get_next_page_id(
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
-                  !is_valid_page_id_(page_id) || !page_key.is_valid())) {
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key));
-  } else if (OB_UNLIKELY(fd != fat_[page_id].fd_)) {
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd || !page_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
+  } else if (OB_UNLIKELY(fd != fat_[page_id].fd_ || page_key != fat_[page_id].page_key_)) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("fd not match", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
-  } else if (OB_UNLIKELY(page_key != fat_[page_id].page_key_)) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("page key not match", KR(ret), K(page_key), K(page_id), K(fat_[page_id]));
+    LOG_WARN("fd not match", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
   } else {
     next_page_id = ATOMIC_LOAD(&fat_[page_id].next_page_id_);
   }
@@ -272,12 +271,14 @@ int ObTmpWriteBufferPool::read_page(
   buf = nullptr;
   next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
   common::TCRWLock::RLockGuard guard(lock_);
-
-  if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
-                  !is_valid_page_id_(page_id) ||
-                  !page_key.is_valid())) {
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("wbp fail to read page, invalid page id", KR(ret), K(page_id), K(fd), K(page_key));
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
+                         OB_ISNULL(fat_[page_id].buf_) ||
+                         !page_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp fail to read page, invalid page id", KR(ret), K(page_id), K(fd), K(page_key), K(fat_[page_id]));
   } else if (OB_UNLIKELY(fd != fat_[page_id].fd_ || page_key != fat_[page_id].page_key_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wbp fail to fetch page, PageEntry fd or offset not equal", KR(ret), K(page_id), K(fd),
@@ -298,12 +299,14 @@ int ObTmpWriteBufferPool::get_page_id_by_virtual_id(const int64_t fd,
   page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
 
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
+  if (OB_UNLIKELY(!is_valid_page_id_(begin_page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(virtual_page_id), K(begin_page_id), K(fat_.size()));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
                   ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID == virtual_page_id ||
-                  !is_valid_page_id_(begin_page_id) ||
                   fd != fat_[begin_page_id].fd_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(fd), K(virtual_page_id), K(begin_page_id));
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(virtual_page_id), K(begin_page_id), K(fat_[begin_page_id]));
   } else if (virtual_page_id < fat_[begin_page_id].page_key_.virtual_page_id_) {
     ret = OB_SEARCH_NOT_FOUND;
     LOG_WARN("virtual_page_id is smaller than that of page of begin_page_id",
@@ -335,7 +338,7 @@ int ObTmpWriteBufferPool::get_page_virtual_id(const int64_t fd, const uint32_t p
   common::TCRWLock::RLockGuard guard(lock_);
   if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd || !is_valid_page_id_(page_id))) {
     ret = OB_SEARCH_NOT_FOUND;
-    LOG_WARN("wbp fail to get page offset in file, invalid page id", KR(ret), K(fd), K(page_id));
+    LOG_WARN("wbp fail to get page offset in file, invalid page id", KR(ret), K(fd), K(page_id), K(fat_.size()));
   } else if (fd != fat_[page_id].fd_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("wbp fail to get page offset in file, fd not match", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
@@ -351,11 +354,14 @@ int ObTmpWriteBufferPool::truncate_page(const int64_t fd, const uint32_t page_id
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
-                  !is_valid_page_id_(page_id) || !page_key.is_valid() ||
-                  truncate_size > ObTmpFileGlobal::PAGE_SIZE || truncate_size <= 0)) {
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(truncate_size));
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(truncate_size), K(fat_.size()));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd || !page_key.is_valid() ||
+                  truncate_size > ObTmpFileGlobal::PAGE_SIZE || truncate_size <= 0 ||
+                  OB_ISNULL(fat_[page_id].buf_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(truncate_size), K(fat_[page_id]));
   } else if (fd != fat_[page_id].fd_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("wbp fail to truncate page, fd not match", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
@@ -376,9 +382,11 @@ int ObTmpWriteBufferPool::link_page(
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
-                  !is_valid_page_id_(page_id) || !is_valid_page_id_(prev_page_id) ||
-                  !prev_page_key.is_valid())) {
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id) || !is_valid_page_id_(prev_page_id) )) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(prev_page_id), K(prev_page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
+            !prev_page_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(page_id), K(prev_page_id), K(prev_page_key));
   } else if (OB_UNLIKELY(fat_[page_id].fd_ != fd || fat_[prev_page_id].fd_ != fd ||
@@ -420,9 +428,11 @@ int ObTmpWriteBufferPool::free_page(
   next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
   common::TCRWLock::RLockGuard guard(lock_);
 
-  if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
-                  !is_valid_page_id_(page_id) ||
-                  !page_key.is_valid())) {
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_TMP_FILE_FD == fd ||
+                        !page_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key));
   } else if (OB_UNLIKELY(fd != fat_[page_id].fd_
@@ -439,7 +449,7 @@ int ObTmpWriteBufferPool::free_page(
     } else {
       LOG_INFO("free meta page", KR(ret), K(page_id), K(fd), K(fat_[page_id]));
     }
-    ATOMIC_SET(&(fat_[page_id].fd_), -1);
+    ATOMIC_SET(&(fat_[page_id].fd_), ObTmpFileGlobal::INVALID_TMP_FILE_FD);
     ATOMIC_SET(&(fat_[page_id].next_page_id_), ObTmpFileGlobal::INVALID_PAGE_ID);
     if (ObPageEntry::State::DIRTY == ATOMIC_LOAD(&fat_[page_id].state_)) {
       ATOMIC_DEC(&dirty_page_num_);
@@ -502,6 +512,8 @@ int ObTmpWriteBufferPool::expand_()
     common::TCRWLock::WLockGuard guard(lock_);
     current_capacity = ATOMIC_LOAD(&capacity_);
     if (current_capacity < expect_capacity) {
+      int64_t old_fat_size = fat_.count();
+      int64_t cur_expand_capacity = 0;
       char * new_expand_buf = nullptr;
       // allocate a chunk of WBP_BLOCK_SIZE each time
       if (OB_ISNULL(new_expand_buf = static_cast<char *>(allocator_.alloc(WBP_BLOCK_SIZE)))) {
@@ -510,17 +522,34 @@ int ObTmpWriteBufferPool::expand_()
       } else {
         uint32_t new_page_id = fat_.count();
         for (uint32_t count = 0; OB_SUCC(ret) && count < BLOCK_PAGE_NUMS; ++new_page_id, ++count) {
-          if (OB_FAIL(fat_.push_back(ObPageEntry(-1,
-                                                ObTmpFileGlobal::INVALID_PAGE_ID,
-                                                new_expand_buf + count * ObTmpFileGlobal::PAGE_SIZE)))) {
+          if (OB_FAIL(fat_.push_back(ObPageEntry(ObTmpFileGlobal::INVALID_TMP_FILE_FD,
+                                                 ObTmpFileGlobal::INVALID_PAGE_ID,
+                                                 new_expand_buf + count * ObTmpFileGlobal::PAGE_SIZE)))) {
             LOG_WARN("wbp fail to push back page into fat", KR(ret), K(count), K(new_page_id));
           } else {
-            fat_[new_page_id].next_page_id_ = ATOMIC_LOAD(&first_free_page_id_);
-            ATOMIC_SET(&first_free_page_id_, new_page_id);
-            ATOMIC_FAA(&capacity_, ObTmpFileGlobal::PAGE_SIZE);
+            if (count > 0) {
+              fat_[new_page_id].next_page_id_ = new_page_id - 1;
+            } else {
+              fat_[new_page_id].next_page_id_ = first_free_page_id_;
+              fat_[new_page_id].is_block_beginning_ = true;
+            }
+            cur_expand_capacity += ObTmpFileGlobal::PAGE_SIZE;
           }
         }
         current_capacity += WBP_BLOCK_SIZE;
+      }
+
+      if (OB_SUCC(ret)) {
+        int64_t new_free_page_id = fat_.count() - 1;
+        ATOMIC_SET(&first_free_page_id_, new_free_page_id); // first_free_page_id_ points to the last page of this new block
+        ATOMIC_FAA(&capacity_, cur_expand_capacity);
+      } else {
+        while (fat_.count() > old_fat_size) {
+          fat_.pop_back();
+        }
+        if (OB_NOT_NULL(new_expand_buf)) {
+          allocator_.free(new_expand_buf);
+        }
       }
     } else {
       // maybe another thread has finish allocation, do nothing.
@@ -542,6 +571,9 @@ int ObTmpWriteBufferPool::reduce_()
     if (OB_ISNULL(buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("wbp get unexpected page buffer", KR(ret), K(i), KP(buf));
+    } else if (!fat_[i].is_block_beginning_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("wbp try to free a ptr which is not the address of a block", KR(ret), K(i), KP(buf), K(fat_[i]));
     } else {
       allocator_.free(buf);
     }
@@ -561,7 +593,7 @@ int64_t ObTmpWriteBufferPool::get_memory_limit()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (!tenant_config.is_valid()) {
       static const int64_t DEFAULT_MEMORY_LIMIT = 64 * 2 * 1024 * 1024; // 128MB
-      memory_limit = wbp_memory_limit_ == 0 ? DEFAULT_MEMORY_LIMIT : wbp_memory_limit_;
+      memory_limit = wbp_memory_limit_ <= 0 ? DEFAULT_MEMORY_LIMIT : wbp_memory_limit_;
       LOG_INFO("failed to get tenant config", K(MTL_ID()), K(memory_limit), K(wbp_memory_limit_));
     } else if (0 == tenant_config->_temporary_file_io_area_size) {
       memory_limit = 0;
@@ -606,15 +638,17 @@ bool ObTmpWriteBufferPool::is_exist(const int64_t fd, const uint32_t page_id,
                                     const ObTmpFilePageUniqKey page_key)
 {
   common::TCRWLock::RLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
   bool exist = false;
-  if (OB_LIKELY(is_valid_page_id_(page_id)
-      && fd == fat_[page_id].fd_
-      && page_key.is_valid()
-      && page_key == fat_[page_id].page_key_)) {
-    exist = ObPageEntry::State::INVALID < fat_[page_id].state_;
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if ((OB_ISNULL(fat_[page_id].buf_) || fd != fat_[page_id].fd_
+            || !page_key.is_valid() || page_key != fat_[page_id].page_key_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("wbp get unexpected page entry", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
   } else {
-    int ret = OB_ERR_UNEXPECTED; // TODO: too many warn logs
-    LOG_WARN("wbp get unexpected page entry", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
+    exist = ObPageEntry::State::INVALID < fat_[page_id].state_;
   }
   return exist;
 }
@@ -623,15 +657,17 @@ bool ObTmpWriteBufferPool::is_inited(const int64_t fd, const uint32_t page_id,
                                      const ObTmpFilePageUniqKey page_key)
 {
   common::TCRWLock::RLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
   bool inited = false;
-  if (OB_LIKELY(is_valid_page_id_(page_id)
-      && fd == fat_[page_id].fd_
-      && page_key.is_valid()
-      && page_key == fat_[page_id].page_key_)) {
-    inited = ObPageEntry::State::INITED == fat_[page_id].state_;
-  } else {
-    int ret = OB_ERR_UNEXPECTED;
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if ((OB_ISNULL(fat_[page_id].buf_) || fd != fat_[page_id].fd_
+            || !page_key.is_valid() || page_key != fat_[page_id].page_key_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wbp get unexpected page entry", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
+  } else {
+    inited = ObPageEntry::State::INITED == fat_[page_id].state_;
   }
   return inited;
 }
@@ -640,15 +676,17 @@ bool ObTmpWriteBufferPool::is_loading(const int64_t fd, const uint32_t page_id,
                                       const ObTmpFilePageUniqKey page_key)
 {
   common::TCRWLock::RLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
   bool loading = false;
-  if (OB_LIKELY(is_valid_page_id_(page_id)
-      && fd == fat_[page_id].fd_
-      && page_key.is_valid()
-      && page_key == fat_[page_id].page_key_)) {
-    loading = ObPageEntry::State::LOADING == fat_[page_id].state_;
-  } else {
-    int ret = OB_ERR_UNEXPECTED;
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if ((OB_ISNULL(fat_[page_id].buf_) || fd != fat_[page_id].fd_
+            || !page_key.is_valid() || page_key != fat_[page_id].page_key_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wbp get unexpected page entry", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
+  } else {
+    loading = ObPageEntry::State::LOADING == fat_[page_id].state_;
   }
   return loading;
 }
@@ -659,15 +697,17 @@ bool ObTmpWriteBufferPool::is_cached(
      const ObTmpFilePageUniqKey page_key)
 {
   common::TCRWLock::RLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
   bool cached = false;
-  if (OB_LIKELY(is_valid_page_id_(page_id)
-      && fd == fat_[page_id].fd_
-      && page_key.is_valid()
-      && page_key == fat_[page_id].page_key_)) {
-    cached = ObPageEntry::State::CACHED == fat_[page_id].state_;
-  } else {
-    int ret = OB_ERR_UNEXPECTED;
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if ((OB_ISNULL(fat_[page_id].buf_) || fd != fat_[page_id].fd_
+            || !page_key.is_valid() || page_key != fat_[page_id].page_key_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wbp get unexpected page entry", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
+  } else {
+    cached = ObPageEntry::State::CACHED == fat_[page_id].state_;
   }
   return cached;
 }
@@ -676,15 +716,17 @@ bool ObTmpWriteBufferPool::is_write_back(const int64_t fd, const uint32_t page_i
                                          const ObTmpFilePageUniqKey page_key)
 {
   common::TCRWLock::RLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
   bool write_back = false;
-  if (OB_LIKELY(is_valid_page_id_(page_id)
-      && fd == fat_[page_id].fd_
-      && page_key.is_valid()
-      && page_key == fat_[page_id].page_key_)) {
-    write_back = ObPageEntry::State::WRITE_BACK == fat_[page_id].state_;
-  } else {
-    int ret = OB_ERR_UNEXPECTED;
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if ((OB_ISNULL(fat_[page_id].buf_) || fd != fat_[page_id].fd_
+            || !page_key.is_valid() || page_key != fat_[page_id].page_key_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wbp get unexpected page entry", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
+  } else {
+    write_back = ObPageEntry::State::WRITE_BACK == fat_[page_id].state_;
   }
   return write_back;
 }
@@ -695,20 +737,23 @@ bool ObTmpWriteBufferPool::is_dirty(
      const ObTmpFilePageUniqKey page_key)
 {
   common::TCRWLock::RLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
   bool dirty = false;
-  if (OB_LIKELY(is_valid_page_id_(page_id)
-      && fd == fat_[page_id].fd_
-      && page_key.is_valid()
-      && page_key == fat_[page_id].page_key_)) {
-    dirty = ObPageEntry::State::DIRTY == fat_[page_id].state_;
-  } else {
-    int ret = OB_ERR_UNEXPECTED;
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if ((OB_ISNULL(fat_[page_id].buf_) || fd != fat_[page_id].fd_
+            || !page_key.is_valid() || page_key != fat_[page_id].page_key_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wbp get unexpected page entry", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
+  } else {
+    dirty = ObPageEntry::State::DIRTY == fat_[page_id].state_;
   }
   return dirty;
 }
 
-// 允许 INITED/CACHED/DIRTY/WRITE_BACK 状态页面切换为 DIRTY 状态
+// we allow the following states to transition to dirty:
+//   INVALID, INITED, CACHED, WRITE_BACK
 int ObTmpWriteBufferPool::notify_dirty(
     const int64_t fd,
     const uint32_t page_id,
@@ -718,9 +763,12 @@ int ObTmpWriteBufferPool::notify_dirty(
   common::TCRWLock::RLockGuard guard(lock_);
   bool is_already_dirty = false;
   bool is_write_back = false;
-  if (OB_UNLIKELY(!is_valid_page_id_(page_id)
-                  || INVALID_FD == fd
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(INVALID_FD == fd
                   || fd != fat_[page_id].fd_
+                  || OB_ISNULL(fat_[page_id].buf_)
                   || !page_key.is_valid()
                   || page_key != fat_[page_id].page_key_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -762,9 +810,12 @@ int ObTmpWriteBufferPool::notify_load(
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_valid_page_id_(page_id)
-                  || INVALID_FD == fd
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(INVALID_FD == fd
                   || fd != fat_[page_id].fd_
+                  || OB_ISNULL(fat_[page_id].buf_)
                   || !page_key.is_valid()
                   || page_key != fat_[page_id].page_key_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -780,9 +831,12 @@ int ObTmpWriteBufferPool::notify_load_succ(const int64_t fd, const uint32_t page
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_valid_page_id_(page_id)
-                  || INVALID_FD == fd
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(INVALID_FD == fd
                   || fd != fat_[page_id].fd_
+                  || OB_ISNULL(fat_[page_id].buf_)
                   || !page_key.is_valid()
                   || page_key != fat_[page_id].page_key_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -800,9 +854,12 @@ int ObTmpWriteBufferPool::notify_load_fail(
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_valid_page_id_(page_id)
-                  || INVALID_FD == fd
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(INVALID_FD == fd
                   || fd != fat_[page_id].fd_
+                  || OB_ISNULL(fat_[page_id].buf_)
                   || !page_key.is_valid()
                   || page_key != fat_[page_id].page_key_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -821,9 +878,12 @@ int ObTmpWriteBufferPool::notify_write_back(
   int ret = OB_SUCCESS;
   bool is_dirty = false;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_valid_page_id_(page_id)
-                  || INVALID_FD == fd
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(INVALID_FD == fd
                   || fd != fat_[page_id].fd_
+                  || OB_ISNULL(fat_[page_id].buf_)
                   || !page_key.is_valid()
                   || page_key != fat_[page_id].page_key_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -853,9 +913,12 @@ int ObTmpWriteBufferPool::notify_write_back_succ(
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_valid_page_id_(page_id)
-                  || INVALID_FD == fd
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(INVALID_FD == fd
                   || fd != fat_[page_id].fd_
+                  || OB_ISNULL(fat_[page_id].buf_)
                   || !page_key.is_valid()
                   || page_key != fat_[page_id].page_key_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -879,9 +942,12 @@ int ObTmpWriteBufferPool::notify_write_back_fail(int64_t fd, uint32_t page_id,
 {
   int ret = OB_SUCCESS;
   common::TCRWLock::RLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_valid_page_id_(page_id)
-                  || INVALID_FD == fd
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("wbp use unexpected page id", KR(ret), K(fd), K(page_id), K(page_key), K(fat_.size()));
+  } else if (OB_UNLIKELY(INVALID_FD == fd
                   || fd != fat_[page_id].fd_
+                  || OB_ISNULL(fat_[page_id].buf_)
                   || !page_key.is_valid()
                   || page_key != fat_[page_id].page_key_)) {
     ret = OB_INVALID_ARGUMENT;

@@ -36,7 +36,7 @@ namespace storage
     Read uncommitted row. Return tablet whatever it is in a MDS transaction or not.
 
   READ_READABLE_COMMITED:
-    Read commited row, not include deleted one. The most frequently used mode. Return
+    Read committed row, not include deleted one. The most frequently used mode. Return
     tablet in NORMAL, TRANSFER_IN status. Not return one in unreadable status.
     If latest tablet status is TRANSFER_OUT, we should check transfer scn to decide
     whether it is legal to return the tablet.

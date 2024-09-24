@@ -312,7 +312,6 @@ STAT_EVENT_ADD_DEF(STORAGE_INSERT_ROW_COUNT, "storage insert row count", ObStatC
 STAT_EVENT_ADD_DEF(STORAGE_UPDATE_ROW_COUNT, "storage update row count", ObStatClassIds::STORAGE, 60034, false, true, true)
 STAT_EVENT_ADD_DEF(MEMSTORE_ROW_PURGE_COUNT, "memstore row purge count", ObStatClassIds::STORAGE, 60037, false, true, true)
 STAT_EVENT_ADD_DEF(MEMSTORE_ROW_COMPACTION_COUNT, "memstore row compaction count", ObStatClassIds::STORAGE, 60038, false, true, true)
-
 STAT_EVENT_ADD_DEF(IO_READ_QUEUE_DELAY, "io read queue delay", ObStatClassIds::STORAGE, 60039, false, true, true)
 STAT_EVENT_ADD_DEF(IO_WRITE_QUEUE_DELAY, "io write queue delay", ObStatClassIds::STORAGE, 60040, false, true, true)
 STAT_EVENT_ADD_DEF(IO_READ_CB_QUEUE_DELAY, "io read callback queuing delay", ObStatClassIds::STORAGE, 60041, false, true, true)
@@ -321,6 +320,7 @@ STAT_EVENT_ADD_DEF(BANDWIDTH_IN_THROTTLE, "bandwidth in throttle size", ObStatCl
 STAT_EVENT_ADD_DEF(BANDWIDTH_OUT_THROTTLE, "bandwidth out throttle size", ObStatClassIds::STORAGE, 60052, false, true, true)
 STAT_EVENT_ADD_DEF(MEMSTORE_READ_ROW_COUNT, "memstore read row count", ObStatClassIds::STORAGE, 60056, true, true, true)
 STAT_EVENT_ADD_DEF(SSSTORE_READ_ROW_COUNT, "ssstore read row count", ObStatClassIds::STORAGE, 60057, true, true, true)
+STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_BYTES, "memstore write bytes", ObStatClassIds::STORAGE, 60058, true, true, true)
 
 STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT, "memstore write lock wakenup count in lock_wait_mgr", ObStatClassIds::STORAGE, 60068, false, true, true)
 

@@ -103,7 +103,7 @@ void ObTempBlockStore::reset()
 
   if (is_file_open()) {
     write_io_handle_.reset();
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(io_.fd_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(tenant_id_, io_.fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(io_.fd));
     } else {
       LOG_INFO("close file success", K(ret), K_(io_.fd), K_(file_size));
@@ -126,7 +126,7 @@ void ObTempBlockStore::reuse()
   inner_reader_.reset();
   if (is_file_open()) {
     write_io_handle_.reset();
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(io_.fd_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(tenant_id_, io_.fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(io_.fd));
     } else {
       LOG_INFO("close file success", K(ret), K_(io_.fd), K_(file_size));
@@ -178,7 +178,7 @@ int ObTempBlockStore::alloc_dir_id()
   int ret = OB_SUCCESS;
   if (-1 == io_.dir_id_) {
     io_.dir_id_ = 0;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(io_.dir_id_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(tenant_id_, io_.dir_id_))) {
       LOG_WARN("allocate file directory failed", K(ret));
     }
   }
@@ -1090,7 +1090,7 @@ int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     if (!is_file_open()) {
       if (OB_FAIL(alloc_dir_id())) {
         LOG_WARN("alloc file directory failed", K(ret));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.open(io_.fd_, io_.dir_id_))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(tenant_id_, io_.fd_, io_.dir_id_))) {
         LOG_WARN("open file failed", K(ret));
       } else {
         file_size_ = 0;
@@ -1107,7 +1107,7 @@ int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     const uint64_t start = rdtsc();
     if (write_io_handle_.is_valid() && OB_FAIL(write_io_handle_.wait())) {
       LOG_WARN("fail to wait write", K(ret), K(write_io_handle_));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_, write_io_handle_))) {
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(tenant_id_, io_, write_io_handle_))) {
       LOG_WARN("write to file failed", K(ret), K_(io), K(timeout_ms));
     }
     if (NULL != io_observer_) {
@@ -1147,11 +1147,11 @@ int ObTempBlockStore::read_file(void *buf, const int64_t size, const int64_t off
     tmp_read_id.io_timeout_ms_ = timeout_ms;
     const uint64_t start = rdtsc();
     if (is_async) {
-      if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(tmp_read_id, offset, handle))) {
+      if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_pread(tenant_id_, tmp_read_id, offset, handle))) {
         LOG_WARN("read form file failed", K(ret), K(tmp_read_id), K(offset), K(timeout_ms));
       }
     } else {
-      if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(tmp_read_id, offset, handle))) {
+      if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(tenant_id_, tmp_read_id, offset, handle))) {
         LOG_WARN("read form file failed", K(ret), K(tmp_read_id), K(offset), K(timeout_ms));
       } else if (OB_UNLIKELY(handle.get_done_size() != size)) {
         ret = OB_INNER_STAT_ERROR;
@@ -1597,7 +1597,7 @@ int ObTempBlockStore::truncate_file(int64_t offset)
   if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.truncate(get_file_fd(), offset))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.truncate(tenant_id_, get_file_fd(), offset))) {
     LOG_WARN("truncate failed", K(ret), K(get_file_fd()), K(offset));
   }
   return ret;

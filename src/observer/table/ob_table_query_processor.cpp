@@ -28,10 +28,11 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+using namespace oceanbase::sql::stmt;
 
 ObTableQueryP::ObTableQueryP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
-      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      allocator_("TbQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tb_ctx_(allocator_),
       result_row_count_(0)
 {
@@ -62,16 +63,6 @@ int ObTableQueryP::check_arg()
   return ret;
 }
 
-void ObTableQueryP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
-      ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = result_.get_row_count();
-  audit_record_.table_scan_ = tb_ctx_.is_full_table_scan();
-  audit_record_.affected_rows_ = 0;
-  audit_record_.try_cnt_ = retry_count_ + 1;
-}
-
 uint64_t ObTableQueryP::get_request_checksum()
 {
   uint64_t checksum = 0;
@@ -87,39 +78,7 @@ void ObTableQueryP::reset_ctx()
   need_retry_in_queue_ = false;
   result_row_count_ = 0;
   ObTableApiProcessorBase::reset_ctx();
-}
-
-ObTableAPITransCb *ObTableQueryP::new_callback(rpc::ObRequest *req)
-{
-  UNUSED(req);
-  return nullptr;
-}
-
-int ObTableQueryP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID tablet_id = arg_.tablet_id_;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = NULL;
-  if (!tablet_id.is_valid()) {
-    const uint64_t tenant_id = MTL_ID();
-    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id), K(table_schema));
-    } else if (!table_schema->is_partitioned_table()) {
-      tablet_id = table_schema->get_tablet_id();
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("partitioned table not supported", K(ret), K(table_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  return ret;
+  tb_ctx_.reset();
 }
 
 int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
@@ -129,17 +88,21 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
   bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   tb_ctx_.set_scan(true);
   tb_ctx_.set_entity_type(arg_.entity_type_);
+  tb_ctx_.set_schema_cache_guard(&schema_cache_guard_);
+  tb_ctx_.set_schema_guard(&schema_guard_);
+  tb_ctx_.set_simple_table_schema(simple_table_schema_);
+  tb_ctx_.set_sess_guard(&sess_guard_);
+  tb_ctx_.set_is_tablegroup_req(is_tablegroup_req_);
 
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));
   } else if (OB_FAIL(tb_ctx_.init_common(credential_,
                                          arg_.tablet_id_,
-                                         arg_.table_name_,
                                          get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
-  } else if (OB_FAIL(tb_ctx_.init_scan(arg_.query_, is_weak_read))) {
+  } else if (OB_FAIL(tb_ctx_.init_scan(arg_.query_, is_weak_read, arg_.table_id_))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_), K(arg_.table_id_));
-  } else if (arg_.table_id_ != tb_ctx_.get_ref_table_id()) { // todo: global_index need adapt
+  } else if (!tb_ctx_.is_global_index_scan() && arg_.table_id_ != tb_ctx_.get_ref_table_id()) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_.table_id_), K(tb_ctx_.get_ref_table_id()));
   } else if (OB_FAIL(cache_guard.init(&tb_ctx_))) {
@@ -166,6 +129,12 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   int32_t result_count = 0;
   const int64_t timeout_ts = get_timeout_ts();
   ObTableApiScanRowIterator row_iter;
+  ObCompressorType compressor_type = INVALID_COMPRESSOR;
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_,
+                       arg_.table_name_,
+                       &audit_ctx_,
+                       arg_.query_);
 
   // 1. create result iterator
   if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(allocator_,
@@ -179,18 +148,6 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
     LOG_WARN("fail to open scan row iterator", K(ret));
   } else {
     result_iter->set_scan_result(&row_iter);
-    // hbase model, compress the result packet
-    if (is_hkv) {
-      ObCompressorType compressor_type = INVALID_COMPRESSOR;
-      if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
-          GCONF.tableapi_transport_compress_func, compressor_type))) {
-        compressor_type = INVALID_COMPRESSOR;
-      } else if (NONE_COMPRESSOR == compressor_type) {
-        compressor_type = INVALID_COMPRESSOR;
-      }
-      this->set_result_compress_type(compressor_type);
-      ret = OB_SUCCESS; // reset ret
-    }
   }
 
   // 2. loop get row and serialize row
@@ -200,7 +157,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
     while (OB_SUCC(ret)) {
       ++result_count;
       // the last result_ does not need flush, it will be send automatically
-      if (ObTimeUtility::current_time() > timeout_ts) {
+      if (ObTimeUtility::fast_current_time() > timeout_ts) {
         ret = OB_TRANS_TIMEOUT;
         LOG_WARN("exceed operatiton timeout", K(ret));
       } else if (OB_FAIL(result_iter->get_next_result(one_result))) {
@@ -234,7 +191,14 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
       LOG_WARN("fail to close row iter", K(tmp_ret));
       ret = COVER_SUCC(tmp_ret);
     }
-    ObTableQueryUtils::destroy_result_iterator(result_iter);
+
+    // check if need compress the result
+    if (OB_SUCC(ret) &&
+        OB_NOT_NULL(one_result) &&
+        OB_TMP_FAIL(ObKVConfigUtil::get_compress_type(MTL_ID(), one_result->get_result_size(), compressor_type))) {
+      LOG_WARN("fail to check compress config", K(tmp_ret), K(compressor_type));
+    }
+    this->set_result_compress_type(compressor_type);
 
     LOG_DEBUG("last result", K(ret), "row_count", result_.get_row_count());
     NG_TRACE_EXT(tag1, OB_ID(return_rows), result_count, OB_ID(arg2), result_row_count_);
@@ -246,7 +210,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   } else {
     stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
   }
-  audit_row_count_ = result_row_count_;
+  stat_row_count_ = result_row_count_;
 
   #ifndef NDEBUG
     // debug mode
@@ -258,7 +222,20 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
               "receive_ts", get_receive_timestamp(), K(result_count), K_(result_row_count));
   #endif
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_QUERY,
+                     return_rows, result_.get_row_count(),
+                     has_table_scan, true,
+                     filter, (OB_ISNULL(result_iter) ? nullptr : result_iter->get_filter()));
+  ObTableQueryUtils::destroy_result_iterator(result_iter);
   return ret;
+}
+
+int ObTableQueryP::before_process()
+{
+  is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_);
+  return ParentType::before_process();
 }
 
 int ObTableQueryP::try_process()
@@ -268,22 +245,29 @@ int ObTableQueryP::try_process()
   ObTableApiExecutor *executor = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
-
-  if (OB_FAIL(init_tb_ctx(cache_guard))) {
+  // Tips: when table_name is tablegroup name
+  // Since we only have one table in a tablegroup now
+  // tableId and tabletId are correct, which are calculated by the client
+  table_id_ = arg_.table_id_; // init move response need
+  tablet_id_ = arg_.tablet_id_;
+  if (FALSE_IT(is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_))) {
+  } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+    LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
+  } else if (is_tablegroup_req_ && OB_NOT_NULL(simple_table_schema_) && arg_.table_id_ != simple_table_schema_->get_table_id()) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table id not correct in table group", K(ret));
+  } else if (OB_FAIL(init_tb_ctx(cache_guard))) {
     LOG_WARN("fail to init table ctx", K(ret));
   } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, spec))) {
     LOG_WARN("fail to get spec from cache", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
-  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
-  } else if (OB_FAIL(start_trans(true, /* is_readonly */
-                                 sql::stmt::T_SELECT,
+  } else if (OB_FAIL(start_trans(true,
                                  arg_.consistency_level_,
-                                 tb_ctx_.get_ref_table_id(),
                                  tb_ctx_.get_ls_id(),
-                                 tb_ctx_.get_timeout_ts()))) {
-    LOG_WARN("fail to start readonly transaction", K(ret));
+                                 tb_ctx_.get_timeout_ts(),
+                                 tb_ctx_.need_dist_das()))) {
+    LOG_WARN("fail to start transaction", K(ret), K_(tb_ctx));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(query_and_result(static_cast<ObTableApiScanExecutor*>(executor)))) {
@@ -297,7 +281,7 @@ int ObTableQueryP::try_process()
 
   int tmp_ret = ret;
   bool need_rollback_trans = (OB_SUCCESS != ret);
-  if (OB_FAIL(end_trans(need_rollback_trans, req_, tb_ctx_.get_timeout_ts()))) {
+  if (OB_FAIL(end_trans(need_rollback_trans, req_, nullptr/* ObTableCreateCbFunctor */))) {
     LOG_WARN("fail to end trans", K(ret), K(need_rollback_trans));
   }
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;

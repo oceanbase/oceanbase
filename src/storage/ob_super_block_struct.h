@@ -20,6 +20,7 @@
 #include "common/ob_tablet_id.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_store/ob_tenant_seq_generator.h"
+#include "share/transfer/ob_transfer_info.h" // INVALID_TRANSFER_SEQ
 
 namespace oceanbase
 {
@@ -190,7 +191,9 @@ public:
   ObLSItem() :
     ls_id_(),
     epoch_(0),
-    status_(ObLSItemStatus::MAX) {}
+    status_(ObLSItemStatus::MAX),
+    min_macro_seq_(UINT64_MAX),
+    max_macro_seq_(UINT64_MAX) {}
   virtual ~ObLSItem() { reset(); }
 
   void reset()
@@ -198,6 +201,8 @@ public:
     ls_id_.reset();
     epoch_ = 0;
     status_ = ObLSItemStatus::MAX;
+    min_macro_seq_ = UINT64_MAX;
+    max_macro_seq_ = UINT64_MAX;
   }
 
   bool is_valid() const
@@ -205,13 +210,15 @@ public:
     return ls_id_.is_valid() && epoch_ >= 0 && ObLSItemStatus::MAX != status_;
   }
 
-  TO_STRING_KV(K_(ls_id), K_(epoch), K_(status));
+  TO_STRING_KV(K_(ls_id), K_(epoch), K_(status), K_(min_macro_seq), K_(max_macro_seq));
   OB_UNIS_VERSION_V(1);
 
 public:
   share::ObLSID ls_id_;
   int64_t epoch_;
   ObLSItemStatus status_;
+  uint64_t min_macro_seq_;
+  uint64_t max_macro_seq_;
 };
 
 struct ObTenantSuperBlock final
@@ -327,7 +334,8 @@ public:
       tablet_meta_version_(0),
       status_(ObPendingFreeTabletStatus::MAX),
       free_time_(0),
-      gc_type_(GCTabletType::DropTablet)
+      gc_type_(GCTabletType::DropTablet),
+      tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ)
   {}
   ObPendingFreeTabletItem(
     const common::ObTabletID tablet_id,
@@ -337,7 +345,7 @@ public:
     GCTabletType gc_type)
     : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version),
       status_(status), free_time_(free_time),
-      gc_type_(gc_type)
+      gc_type_(gc_type), tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ)
   {}
 
   bool is_valid() const
@@ -348,10 +356,11 @@ public:
   bool operator == (const ObPendingFreeTabletItem &other) const {
     return tablet_id_ == other.tablet_id_ &&
            tablet_meta_version_ == other.tablet_meta_version_ &&
-           status_ == other.status_;
+           status_ == other.status_ &&
+           tablet_transfer_seq_ == other.tablet_transfer_seq_;
   }
 
-  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version), K_(status));
+  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version), K_(status), K_(tablet_transfer_seq));
   OB_UNIS_VERSION(1);
 
 public:
@@ -361,6 +370,7 @@ public:
   // pending_free_items in pending_free_tablet_arr are incremented according to free time
   int64_t free_time_;
   GCTabletType gc_type_;
+  int64_t tablet_transfer_seq_;
 };
 
 struct ObLSPendingFreeTabletArray

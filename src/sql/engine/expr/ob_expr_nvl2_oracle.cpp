@@ -52,6 +52,8 @@ int ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch(const ObExpr &expr,
   ObDatumVector args0;
   ObDatumVector args1;
   ObDatumVector args2;
+  bool is_udt_type = lib::is_oracle_mode() && expr.args_[0]->obj_meta_.is_ext();
+  bool v = false;
   if (OB_FAIL(expr.eval_batch_param_value(ctx, skip, batch_size, args0,
                                         args1, args2))) {
     LOG_WARN("eval batch args failed", K(ret));
@@ -64,7 +66,9 @@ int ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch(const ObExpr &expr,
       ObDatum *arg0 = args0.at(i);
       ObDatum *arg1 = args1.at(i);
       ObDatum *arg2 = args2.at(i);
-      if (!(arg0->is_null())) {
+      if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+        LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+      } else if (!v) {
         results[i].set_datum(*arg1);
       } else {
         results[i].set_datum(*arg2);

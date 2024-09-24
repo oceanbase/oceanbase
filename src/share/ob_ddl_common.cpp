@@ -2564,12 +2564,29 @@ bool ObDDLUtil::reach_time_interval(const int64_t i, volatile int64_t &last_time
   return bret;
 }
 
+int ObDDLUtil::get_temp_store_compress_type(const share::schema::ObTableSchema *table_schema,
+                                            const int64_t parallel,
+                                            ObCompressorType &compr_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret  = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(table_schema));
+  } else {
+    ObCompressorType schema_compr_type = table_schema->get_compressor_type();
+    if (NONE_COMPRESSOR == schema_compr_type && table_schema->get_row_store_type() != FLAT_ROW_STORE) { // encoding without compress
+      schema_compr_type = ZSTD_COMPRESSOR;
+    }
+    ret = get_temp_store_compress_type(schema_compr_type, parallel, compr_type);
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_type,
                                             const int64_t parallel,
                                             ObCompressorType &compr_type)
 {
   int ret = OB_SUCCESS;
-  const int64_t COMPRESS_PARALLELISM_THRESHOLD = 8;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   compr_type = NONE_COMPRESSOR;
   if (OB_UNLIKELY(!tenant_config.is_valid())) {
@@ -2583,7 +2600,8 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
     } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("LZ4")) {
       compr_type = LZ4_COMPRESSOR;
     } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("AUTO")) {
-      if (parallel >= COMPRESS_PARALLELISM_THRESHOLD) {
+      UNUSED(parallel);
+      if (schema_compr_type > INVALID_COMPRESSOR && schema_compr_type < MAX_COMPRESSOR) {
         compr_type = schema_compr_type;
       } else {
         compr_type = NONE_COMPRESSOR;
@@ -2593,7 +2611,7 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
       LOG_WARN("the temp store format config is unexpected", K(ret), K(tenant_config->_ob_ddl_temp_file_compress_func.get_value_string()));
     }
   }
-  LOG_INFO("get compressor type", K(ret), K(compr_type));
+  LOG_INFO("get compressor type", K(ret), K(compr_type), K(schema_compr_type));
   return ret;
 }
 

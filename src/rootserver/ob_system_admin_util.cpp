@@ -1655,7 +1655,7 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
       }
     } else if (OB_ISNULL(exist_schema)) {
       // no duplicate table name
-    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
+    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema, false/*delete_priv*/))) {
       LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
                "table", table.get_table_name(), "table_id", table.get_table_id());
     } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(

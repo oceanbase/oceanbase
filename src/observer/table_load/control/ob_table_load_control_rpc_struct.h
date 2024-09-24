@@ -29,7 +29,6 @@ namespace oceanbase
 namespace sql
 {
   class ObExecContext;
-  class ObDesExecContext;
 }
 
 namespace observer
@@ -181,6 +180,8 @@ public:
                K_(compressor_type),
                K_(online_sample_percent));
 
+  int set_exec_ctx_serialized_str(const sql::ObExecContext &exec_ctx);
+
 public:
   uint64_t table_id_;
   table::ObTableLoadConfig config_;
@@ -202,9 +203,8 @@ public:
   storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
   double online_sample_percent_;
-  sql::ObExecContext *exec_ctx_;
   common::ObArenaAllocator allocator_;
-  sql::ObDesExecContext *des_exec_ctx_;
+  common::ObString exec_ctx_serialized_str_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final

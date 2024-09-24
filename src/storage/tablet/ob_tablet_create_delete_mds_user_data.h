@@ -42,6 +42,14 @@ enum class ObTabletMdsUserDataType : int64_t
   FINISH_TRANSFER_IN = 6,
   // for start tranfer out prepare
   START_TRANSFER_OUT_PREPARE = 7,
+  // for start split src
+  START_SPLIT_SRC = 8,
+  // for start split dst
+  START_SPLIT_DST = 9,
+  // for finish split src
+  FINISH_SPLIT_SRC = 10,
+  // for finish split dst
+  FINISH_SPLIT_DST = 11,
 
   MAX_TYPE,
 };

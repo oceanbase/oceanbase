@@ -7767,7 +7767,7 @@ int ObDDLResolver::resolve_vec_index_constraint(
     } else if (!is_vector_memory_valid) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support vector index when ob_vector_memory_limit_percentage is 0", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when ob_vector_memory_limit_percentage = 0 or memsotre_limit >= 85, vector index is");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when ob_vector_memory_limit_percentage = 0 or memstore_limit >= 85, vector index is");
     } else {
       index_keyname_ = VEC_KEY;
       ParseNode *option_node = NULL;
@@ -13285,6 +13285,20 @@ int ObDDLResolver::check_skip_index(share::schema::ObTableSchema &table_schema)
     LOG_WARN("failed to check if skip index schema is valid", K(ret));
   }
   return ret;
+}
+
+bool ObDDLResolver::is_column_group_supported() const
+{
+  bool is_supported = true;
+  if (GCTX.is_shared_storage_mode()) {
+    // Note: shared-storage mode does not support column group in default. if want to test
+    // column group under shared-storage mode, then need to set tracepoint.
+    int tmp_ret = OB_E(EventTable::EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP) OB_SUCCESS;
+    is_supported = (tmp_ret != OB_SUCCESS);
+  } else {
+    // do nothing. column group is supported under shared-nothing mode
+  }
+  return is_supported;
 }
 
 }  // namespace sql

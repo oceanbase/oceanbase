@@ -47,6 +47,58 @@ int ObBackupSSTableSecMetaIterator::init(
     ObBackupMetaIndexStore &meta_index_store)
 {
   int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("iterator init twice", K(ret));
+  } else if (FALSE_IT(datum_range_.set_whole_range())) {
+  } else if (OB_FAIL(inner_init_(tablet_id,
+                                 tablet_handle,
+                                 table_key,
+                                 backup_dest,
+                                 backup_set_desc,
+                                 meta_index_store))) {
+    LOG_WARN("failed to inner init iterator", K(ret));
+  }
+
+  return ret;
+}
+
+int ObBackupSSTableSecMetaIterator::init(
+    const common::ObTabletID &tablet_id,
+    const storage::ObTabletHandle &tablet_handle,
+    const storage::ObITable::TableKey &table_key,
+    const blocksstable::ObDatumRange &query_range,
+    const share::ObBackupDest &backup_dest,
+    const share::ObBackupSetDesc &backup_set_desc,
+    ObBackupMetaIndexStore &meta_index_store)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("iterator init twice", K(ret));
+  } else if (OB_FAIL(deep_copy_query_range_(query_range))) {
+    LOG_WARN("failed to deep copy query range", K(ret), K(query_range));
+  } else if (OB_FAIL(inner_init_(tablet_id,
+                                 tablet_handle,
+                                 table_key,
+                                 backup_dest,
+                                 backup_set_desc,
+                                 meta_index_store))) {
+    LOG_WARN("failed to inner init iterator", K(ret));
+  }
+
+  return ret;
+}
+
+int ObBackupSSTableSecMetaIterator::inner_init_(
+    const common::ObTabletID &tablet_id,
+    const storage::ObTabletHandle &tablet_handle,
+    const storage::ObITable::TableKey &table_key,
+    const share::ObBackupDest &backup_dest,
+    const share::ObBackupSetDesc &backup_set_desc,
+    ObBackupMetaIndexStore &meta_index_store)
+{
+  int ret = OB_SUCCESS;
   ObBackupMetaIndex meta_index;
   ObBackupDataType backup_data_type;
   ObBackupPath backup_path;
@@ -54,10 +106,7 @@ int ObBackupSSTableSecMetaIterator::init(
   ObBackupSSTableMeta *sstable_meta_ptr = NULL;
   ObTabletCreateSSTableParam create_sstable_param;
 
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("iterator init twice", K(ret));
-  } else if (OB_FAIL(get_backup_data_type_(table_key, backup_data_type))) {
+  if (OB_FAIL(get_backup_data_type_(table_key, backup_data_type))) {
     LOG_WARN("failed to get backup data type", K(ret), K(table_key));
   } else if (OB_FAIL(
                  get_meta_index_(tablet_id, meta_index_store, meta_index))) {
@@ -104,6 +153,27 @@ int ObBackupSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
     LOG_INFO("get next macro block meta", K_(output_idx),K_(tablet_id), K_(table_key), K(macro_meta));
     output_idx_++;
   }
+  return ret;
+}
+
+int ObBackupSSTableSecMetaIterator::deep_copy_query_range_(const blocksstable::ObDatumRange &query_range)
+{
+  int ret = OB_SUCCESS;
+
+  // deep copy start/end key
+  if (OB_FAIL(query_range.start_key_.deep_copy(datum_range_.start_key_, allocator_))) {
+    LOG_WARN("failed to deep copy start key", K(ret), K(query_range));
+  } else if (OB_FAIL(query_range.start_key_.store_rowkey_.deep_copy(datum_range_.start_key_.store_rowkey_, allocator_))) {
+    LOG_WARN("failed to deep copy start store row key", K(ret), K(query_range));
+  } else if (OB_FAIL(query_range.end_key_.deep_copy(datum_range_.end_key_, allocator_))) {
+    LOG_WARN("failed to deep copy start key", K(ret), K(query_range));
+  } else if (OB_FAIL(query_range.end_key_.store_rowkey_.deep_copy(datum_range_.end_key_.store_rowkey_, allocator_))) {
+    LOG_WARN("failed to deep copy start store row key", K(ret), K(query_range));
+  } else {
+    datum_range_.group_idx_ = query_range.group_idx_;
+    datum_range_.border_flag_ = query_range.border_flag_;
+  }
+
   return ret;
 }
 
@@ -280,7 +350,6 @@ int ObBackupSSTableSecMetaIterator::create_tmp_sstable_(
 int ObBackupSSTableSecMetaIterator::init_sstable_sec_meta_iter_(const storage::ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  datum_range_.set_whole_range();
   ObSSTable *sstable = NULL;
   const storage::ObITableReadInfo *index_read_info = NULL;
   if (OB_FAIL(table_handle_.get_sstable(sstable))) {
@@ -292,7 +361,7 @@ int ObBackupSSTableSecMetaIterator::init_sstable_sec_meta_iter_(const storage::O
                                              *sstable,
                                              *index_read_info,
                                              allocator_))) {
-    LOG_WARN("failed to open sec meta iterator", K(ret));
+    LOG_WARN("failed to open sec meta iterator", K(ret), K(datum_range_));
   }
   return ret;
 }

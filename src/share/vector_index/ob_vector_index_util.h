@@ -32,6 +32,12 @@ public:
   static int parser_params_from_string(
       const ObString &origin_string,
       ObVectorIndexHNSWParam &param);
+  static int check_distance_algorithm_match(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      const ObString &index_column_name,
+      const ObItemType type,
+      bool &is_match);
   static int insert_index_param_str(
       const ObString &new_add_param,
       ObIAllocator &allocator,
@@ -100,9 +106,26 @@ public:
       const obrpc::ObCreateIndexArg &create_index_arg,
       const ObTableSchema &data_table_schema,
       ObTableSchema &new_index_schema);
+  static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                  const uint64_t vidx_table_id,
+                                  const common::ObString &exec_env);
+  static int remove_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                     const uint64_t vidx_table_id);
+  static int get_dbms_vector_job_info(common::ObISQLClient &sql_client,
+                                      const uint64_t tenant_id,
+                                      const uint64_t vidx_table_id,
+                                      common::ObIAllocator &allocator,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
+                                      dbms_scheduler::ObDBMSSchedJobInfo &job_info);
   static bool has_multi_index_on_same_column(
       ObIArray<uint64_t> &vec_index_cols,
       const uint64_t col_id);
+  static int check_table_exist(
+      const ObTableSchema &data_table_schema,
+      const ObString &domain_index_name);
+private:
+  static bool is_expr_type_and_distance_algorithm_match(
+      const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm);
 };
 
 // For vector index snapshot write data

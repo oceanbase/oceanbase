@@ -245,7 +245,8 @@ public:
               px_detectable_ids_(),
               interrupt_by_dm_(false),
               p2p_dh_map_info_(),
-              sqc_order_gi_tasks_(false)
+              sqc_order_gi_tasks_(false),
+              locations_order_()
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -378,6 +379,7 @@ public:
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   void set_branch_id_base(const int16_t branch_id_base) { branch_id_base_ = branch_id_base; }
   int16_t get_branch_id_base() const { return branch_id_base_; }
+  ObIArray<std::pair<int64_t, bool>> &get_locations_order() { return locations_order_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
                K_(branch_id_base), K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
@@ -457,6 +459,8 @@ private:
   int64_t sqc_count_;
   bool sqc_order_gi_tasks_;
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
+  // record ordering of locations. first is operator id of table scan and second is asc.
+  ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
 };
 
 class ObDfo

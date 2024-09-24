@@ -253,7 +253,6 @@ int ObBaseIndexBlockDumper::append_row(const ObDatumRow &row)
       STORAGE_LOG(WARN, "Fail to copy last key", K(ret), K(rowkey));
     } else {
       row_count_++;
-      FLOG_INFO("Index Block Dumper save last key", K(last_rowkey_), K(row));
     }
   }
   return ret;

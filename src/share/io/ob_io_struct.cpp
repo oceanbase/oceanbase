@@ -22,6 +22,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/file/file_directory_utils.h"
 #include "share/io/ob_io_manager.h"
+#include "share/ob_io_device_helper.h"
 #include "observer/ob_server.h"
 #include "common/storage/ob_fd_simulator.h"
 
@@ -579,6 +580,23 @@ int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const
   return pos;
 }
 
+/******************             IOGroupUsage              **********************/
+
+int ObIOGroupUsage::record(const double avg_size, const double avg_iops, const int64_t avg_bw,
+    const int64_t avg_prepare_delay, const int64_t avg_schedule_delay, const int64_t avg_submit_delay,
+    const int64_t avg_device_delay, const int64_t avg_total_delay)
+{
+  int ret = OB_SUCCESS;
+  last_stat_.avg_size_ = avg_size;
+  last_stat_.avg_iops_ = avg_iops;
+  ATOMIC_STORE(&last_stat_.avg_bw_, avg_bw);
+  ATOMIC_STORE(&last_stat_.avg_delay_arr_.prepare_delay_us_, avg_prepare_delay);
+  ATOMIC_STORE(&last_stat_.avg_delay_arr_.schedule_delay_us_, avg_schedule_delay);
+  ATOMIC_STORE(&last_stat_.avg_delay_arr_.submit_delay_us_, avg_submit_delay);
+  ATOMIC_STORE(&last_stat_.avg_delay_arr_.device_delay_us_, avg_device_delay);
+  ATOMIC_STORE(&last_stat_.avg_delay_arr_.total_delay_us_, avg_total_delay);
+  return ret;
+}
 int ObIOGroupUsage::calc(double &avg_size, double &avg_iops, int64_t &avg_bw,
     int64_t &avg_prepare_delay, int64_t &avg_schedule_delay, int64_t &avg_submit_delay, int64_t &avg_device_delay,
     int64_t &avg_total_delay)
@@ -586,26 +604,28 @@ int ObIOGroupUsage::calc(double &avg_size, double &avg_iops, int64_t &avg_bw,
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::fast_current_time();
   int64_t last_ts = ATOMIC_LOAD(&last_ts_);
-  if (0 != last_ts && now - last_ts > 1 * 1000L * 1000L && ATOMIC_BCAS(&last_ts_, last_ts, 0)) {
+  if (0 != last_ts && now - last_ts > 0 && ATOMIC_BCAS(&last_ts_, last_ts, 0)) {
     int64_t size = 0;
     int64_t io_count = 0;
     const int64_t diff = now - last_ts;
     io_count = ATOMIC_SET(&io_count_, 0);
     size = ATOMIC_SET(&size_, 0);
-    ATOMIC_STORE(&last_io_ps_record_, io_count * 1000L * 1000L / diff);
-    ATOMIC_STORE(&last_io_bw_record_, size * 1000L * 1000L / diff);
     ATOMIC_STORE(&last_ts_, now);
     if (io_count != 0) {
       avg_size = static_cast<double>(size) / io_count;
-      avg_prepare_delay = total_prepare_delay_ / io_count;
-      avg_schedule_delay = total_schedule_delay_ / io_count;
-      avg_submit_delay = total_submit_delay_ / io_count;
-      avg_device_delay = total_device_delay_ / io_count;
-      avg_total_delay = total_total_delay_ / io_count;
+      avg_prepare_delay = total_delay_arr_.prepare_delay_us_ / io_count;
+      avg_schedule_delay = total_delay_arr_.schedule_delay_us_ / io_count;
+      avg_submit_delay = total_delay_arr_.submit_delay_us_ / io_count;
+      avg_device_delay = total_delay_arr_.device_delay_us_ / io_count;
+      avg_total_delay = total_delay_arr_.total_delay_us_ / io_count;
     }
     avg_iops = static_cast<double>(io_count * 1000L * 1000L) / diff;
     avg_bw = size * 1000L * 1000L / diff;
-    clear();
+    if (OB_FAIL(record(avg_size, avg_iops, avg_bw, avg_prepare_delay, avg_schedule_delay, avg_submit_delay, avg_device_delay, avg_total_delay))) {
+      LOG_WARN("record io group usage failed", K(ret), K(*this));
+    } else if (OB_FAIL(clear())) {
+      LOG_WARN("clear io group usage failed", K(ret), K(*this));
+    }
   }
   return ret;
 }
@@ -1168,7 +1188,6 @@ int ObIOSender::enqueue_request(ObIORequest &req)
               LOG_WARN("push new req into phy queue failed", K(ret));
             } else {
               inc_queue_count(req);
-              ATOMIC_INC(&sender_req_count_);
               if (OB_NOT_NULL(req.io_result_)) {
                 req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();
               }
@@ -3446,7 +3465,7 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     retry_task->io_info_.flag_.set_time_detect();
     retry_task->io_info_.fd_.first_id_ = first_id;
     retry_task->io_info_.fd_.second_id_ = second_id;
-    retry_task->io_info_.fd_.device_handle_ = THE_IO_DEVICE;
+    retry_task->io_info_.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
     retry_task->io_info_.offset_ = 0;
     retry_task->io_info_.callback_ = nullptr;
     retry_task->timeout_ms_ = io_config_.data_storage_warning_tolerance_time_; // default 5s

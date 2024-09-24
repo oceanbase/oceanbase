@@ -698,7 +698,7 @@ int ObWindowFunctionVecOp::init()
     all_part_exprs_.set_attr(attr);
     int prev_pushdown_pby_col_count = -1;
     WFInfoFixedArray &wf_infos = const_cast<WFInfoFixedArray &>(MY_SPEC.wf_infos_);
-    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id, dir_id_))) {
       LOG_WARN("failed to alloc dir id", K(ret));
     } else if (MY_SPEC.max_batch_size_ > 0) {
       if (OB_FAIL(all_expr_vector_copy_.init(child_->get_spec().output_, eval_ctx_))) {

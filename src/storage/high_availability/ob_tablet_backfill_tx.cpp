@@ -713,6 +713,14 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
           ret = OB_EAGAIN;
           LOG_WARN("memtable start log ts is bigger than log sync scn but not empty, need retry", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
         }
+      } else if (table->get_end_scn() > backfill_tx_ctx_->backfill_scn_) {
+        if (tablet_info_.is_committed_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("memtable end log ts is bigger than log sync", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
+        } else {
+          ret = OB_EAGAIN;
+          LOG_WARN("memtable end log ts is bigger than log sync scn, need retry", K(ret), KPC(memtable), KPC_(backfill_tx_ctx));
+        }
       } else {
         memtable_end_scn = memtable->get_end_scn();
       }
@@ -1147,7 +1155,11 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
           } else if (!table->is_frozen_memtable()) {
             is_memtable_ready = false;
             const bool is_sync = false;
-            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_, is_sync))) {
+            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_,
+                                          is_sync,
+                                          0, /*timeout, useless for async one*/
+                                          false, /*need_rewrite_meta*/
+                                          ObFreezeSourceFlag::TRANSFER_BACKFILL))) {
               if (OB_EAGAIN == ret) {
                 ret = OB_SUCCESS;
               } else {

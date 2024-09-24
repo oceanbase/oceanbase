@@ -225,6 +225,7 @@ public:
   RPC_S(PR5 del_ss_tablet_meta, OB_DEL_SS_TABLET_META, (obrpc::ObDelSSTabletMetaArg));
   RPC_S(PR5 enable_ss_micro_cache, OB_ENABLE_SS_MICRO_CACHE, (obrpc::ObEnableSSMicroCacheArg));
   RPC_S(PR5 get_ss_micro_cache_info, OB_GET_SS_MICRO_CACHE_INFO, (obrpc::ObGetSSMicroCacheInfoArg), obrpc::ObGetSSMicroCacheInfoResult);
+  RPC_S(PR5 clear_ss_micro_cache, OB_CLEAR_SS_MICRO_CACHE, (obrpc::ObClearSSMicroCacheArg));
   #endif
   RPC_S(PR5 remote_write_ddl_inc_commit_log, OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG, (obrpc::ObRpcRemoteWriteDDLIncCommitLogArg), ObRpcRemoteWriteDDLIncCommitLogRes);
   RPC_S(PR5 check_ls_can_offline, OB_CHECK_LS_CAN_OFFLINE, (obrpc::ObCheckLSCanOfflineArg));

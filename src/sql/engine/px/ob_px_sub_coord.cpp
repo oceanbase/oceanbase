@@ -251,12 +251,13 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
           if (OB_FAIL(sqc_ctx.gi_pump_.init_pump_args(&ctx, scan_ops, tablets_array,
               sqc_ctx.partitions_info_, sqc.get_access_external_table_files(),
               dml_op, sqc.get_task_count(),
-              gi_op->get_tablet_size(), gi_op->get_gi_flags()))) {
+              gi_op->get_tablet_size(), gi_op->get_gi_flags(), sqc.get_locations_order()))) {
             LOG_WARN("fail to init pump args", K(ret));
           } else {
             gi_input->set_granule_pump(&sqc_ctx.gi_pump_);
             gi_input->add_table_location_keys(scan_ops);
-            LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_), K(sqc_ctx.gi_pump_.get_task_array_map()));
+            LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_),
+                      K(sqc_ctx.gi_pump_.get_task_array_map()), K(sqc.get_locations_order()));
           }
         }
       }
@@ -909,9 +910,12 @@ int ObPxSubCoord::start_ddl()
     const int64_t ref_table_id = location_keys.at(0).ref_table_id_;
     const int64_t ddl_table_id = phy_plan->get_ddl_table_id();
     const int64_t ddl_task_id = phy_plan->get_ddl_task_id();
-    const int64_t schema_version = phy_plan->get_ddl_schema_version();
     const int64_t ddl_execution_id = phy_plan->get_ddl_execution_id();
-    if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, ddl_task_id, data_format_version, snapshot_version, unused_task_status))) {
+
+    uint64_t unused_taget_object_id = OB_INVALID_ID;
+    int64_t schema_version = OB_INVALID_VERSION;
+
+    if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, ddl_task_id, data_format_version, snapshot_version, unused_task_status, unused_taget_object_id, schema_version))) {
       LOG_WARN("get ddl cluster version failed", K(ret));
     } else if (OB_UNLIKELY(snapshot_version <= 0)) {
       ret = OB_NEED_RETRY;
@@ -931,7 +935,7 @@ int ObPxSubCoord::start_ddl()
       direct_load_param.runtime_only_param_.exec_ctx_ = exec_ctx;
       direct_load_param.runtime_only_param_.task_id_ = ddl_task_id;
       direct_load_param.runtime_only_param_.table_id_ = ddl_table_id;
-      direct_load_param.runtime_only_param_.schema_version_ = schema_version;
+      direct_load_param.runtime_only_param_.schema_version_ = schema_version; /* set schema version as get from ddl record which is a fixed val */
       direct_load_param.runtime_only_param_.task_cnt_ = sqc_arg_.sqc_.get_task_count();
       if (OB_FAIL(tenant_direct_load_mgr->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
         LOG_WARN("alloc execution context id failed", K(ret));

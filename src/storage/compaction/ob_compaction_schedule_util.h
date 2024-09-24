@@ -80,8 +80,7 @@ public:
   virtual int schedule_merge(const int64_t broadcast_version) = 0;
   static const int64_t INIT_COMPACTION_SCN = 1;
 protected:
-  void update_frozen_version(const int64_t broadcast_version);
-  void init_merge_progress(const int64_t broadcast_version);
+  void update_frozen_version_and_merge_progress(const int64_t broadcast_version);
   void update_merge_progress(const int64_t merge_version);
 protected:
   static const int64_t PRINT_SLOG_REPLAY_INVERVAL = 10_s;

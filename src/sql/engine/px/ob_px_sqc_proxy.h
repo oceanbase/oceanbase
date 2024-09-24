@@ -291,7 +291,7 @@ int ObPxSQCProxy::inner_get_dh_msg(
           ret = process_dtl_msg(timeout_ts);
           SQL_LOG(DEBUG, "process dtl msg done", K(ret));
         }
-        if (OB_EAGAIN == ret || OB_SUCCESS == ret) {
+        if (OB_DTL_WAIT_EAGAIN == ret || OB_SUCCESS == ret) {
           const dtl::ObDtlMsg *msg = nullptr;
           if (OB_FAIL(p->get_msg_nonblock(msg, timeout_ts))) {
             SQL_LOG(TRACE, "fail get msg", K(timeout_ts), K(ret));
@@ -299,7 +299,7 @@ int ObPxSQCProxy::inner_get_dh_msg(
             whole = static_cast<const WholeMsg *>(msg);
           }
         }
-        if (common::OB_EAGAIN == ret) {
+        if (common::OB_DTL_WAIT_EAGAIN == ret) {
           if(0 == (++wait_count) % 100) {
             SQL_LOG(TRACE, "try to get datahub data repeatly",
                     K(timeout_ts), K(wait_count), K(ret));
@@ -307,7 +307,7 @@ int ObPxSQCProxy::inner_get_dh_msg(
           // wait 50us
           ob_usleep(50);
         }
-      } while (common::OB_EAGAIN == ret &&
+      } while (common::OB_DTL_WAIT_EAGAIN == ret &&
                OB_SUCC(THIS_WORKER.check_status()));
     }
   }

@@ -157,6 +157,9 @@ enum ObLogBaseType
   // for table lock split
   TABLE_LOCK_LOG_BASE_TYPE = 49,
 
+  // for DBMS_SCHEDULER GC
+  DBMS_SCHEDULER_GC_LOG_BASE_TYPE = 50,
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -273,6 +276,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str, "TABLE_LOCK_LOG_BASE_TYPE", str_len);
   } else if (log_type == VEC_INDEX_LOG_BASE_TYPE) {
     strncpy(str ,"VEC_INDEX_SERVICE", str_len);
+  } else if (log_type == DBMS_SCHEDULER_GC_LOG_BASE_TYPE) {
+    strncpy(str ,"DBMS_SCHEDULER_GC", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

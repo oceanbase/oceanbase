@@ -31,6 +31,7 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "ob_i_storage.h"
 #include "common/storage/ob_device_common.h"
+#include "cos/ob_singleton.h"
 
 namespace oceanbase
 {
@@ -63,19 +64,19 @@ int init_oss_env();
 void fin_oss_env();
 
 int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src);
-class ObStorageOssStaticVar
+
+class ObStorageOSSRetryStrategy : public ObStorageIORetryStrategy<aos_status_t *>
 {
 public:
-  ObStorageOssStaticVar();
-  virtual ~ObStorageOssStaticVar();
-  static ObStorageOssStaticVar &get_instance();
-  int set_oss_compress_name(const char *name);
-  common::ObCompressor *get_oss_compressor();
-  common::ObCompressorType get_compressor_type();
+  ObStorageOSSRetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US);
+  virtual ~ObStorageOSSRetryStrategy();
 
-private:
-  common::ObCompressor *compressor_;
-  common::ObCompressorType compress_type_;
+  virtual void log_error(
+      const RetType &outcome, const int64_t attempted_retries) const override;
+
+protected:
+  virtual bool should_retry_impl_(
+      const RetType &outcome, const int64_t attempted_retries) const override;
 };
 
 struct FrozenInfo

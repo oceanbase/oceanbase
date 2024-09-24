@@ -554,6 +554,7 @@ int ObVecIndexBuildTask::prepare()
   } else {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_STATUS);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_ERR) OB_SUCCESS;
@@ -600,8 +601,6 @@ int ObVecIndexBuildTask::prepare_aux_table(const ObIndexType index_type,
                                                                    obrpc::ObRpcProxy::myaddr_,
                                                                    OB_VEC_INDEX_BUILD_CHILD_TASK_NUM))) {
       LOG_WARN("fail to prepare_aux_table", K(ret), K(index_type));
-    } else if (OB_FAIL(update_task_message())) {
-      LOG_WARN("fail to update task message", K(ret), K(index_type));
     }
   } // samart var
   return ret;
@@ -630,6 +629,7 @@ int ObVecIndexBuildTask::prepare_rowkey_vid_table()
   if (OB_SUCC(ret) && (rowkey_vid_task_submitted_ || is_rebuild_index_)) {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_ROWKEY_VID);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_ROWKEY_VID_TBL_ERR) OB_SUCCESS;
@@ -683,6 +683,7 @@ int ObVecIndexBuildTask::prepare_aux_index_tables()
   if (OB_SUCC(ret) && delta_buffer_task_submitted_ && index_id_task_submitted_) {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_AUX_INDEX);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_DELTA_OR_INDEX_ID_TBL_ERR) OB_SUCCESS;
@@ -770,6 +771,7 @@ int ObVecIndexBuildTask::prepare_vid_rowkey_table()
     (vid_rowkey_task_submitted_ || is_rebuild_index_) && index_snapshot_data_task_submitted_) {
     state_finished = true;
   }
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_VID_ROWKEY);
   #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(common::EventTable::EN_POST_VEC_INDEX_PREPARE_VID_ROWKEY_OR_SNAP_TBL_ERR) OB_SUCCESS;
@@ -1673,6 +1675,7 @@ int ObVecIndexBuildTask::ChangeTaskStatusFn::operator()(common::hash::HashMapPai
         if (OB_ENTRY_NOT_EXIST == ret) {
           // ongoing child task
           ret = OB_SUCCESS;
+          not_finished_cnt_++;
           ObMySQLTransaction trans;
           if (OB_FAIL(trans.start(&rt_service_->get_sql_proxy(),
                                   dest_tenant_id_))) {
@@ -1710,7 +1713,8 @@ int ObVecIndexBuildTask::clean_on_failed()
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else {
     // 1. cancel ongoing build index task
-    ChangeTaskStatusFn change_statu_fn(dependent_task_result_map_, dst_tenant_id_, root_service_);
+    int64_t not_finished_cnt = 0;
+    ChangeTaskStatusFn change_statu_fn(dependent_task_result_map_, dst_tenant_id_, root_service_, not_finished_cnt);
     if (OB_FAIL(dependent_task_result_map_.foreach_refactored(change_statu_fn))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("foreach refactored failed", K(ret), K(dst_tenant_id_));
@@ -1720,6 +1724,8 @@ int ObVecIndexBuildTask::clean_on_failed()
     }
     // 2. drop already built index
     if (OB_FAIL(ret)) {
+    } else if (not_finished_cnt > 0) {
+      LOG_INFO("child task not finished, not submit drop vec index task.", K(not_finished_cnt));
     } else if (!drop_index_task_submitted_) {
       if (OB_FAIL(submit_drop_vec_index_task())) {
         LOG_WARN("failed to drop vec index", K(ret));
@@ -1749,6 +1755,9 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
   const ObTableSchema *index_table_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
   const ObTableSchema *data_table_schema = nullptr;
+
+  obrpc::ObDropIndexArg drop_index_arg;
+  obrpc::ObDropIndexRes drop_index_res;
   ObString index_name;
   ObSqlString drop_index_sql;
   bool is_index_exist = true;
@@ -1760,55 +1769,56 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     LOG_WARN("should not be null", K(ret));
   } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
-  } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id, is_index_exist))) {
-    LOG_WARN("check table exist failed", K(ret), K_(tenant_id), K(index_table_id));
-  } else if (!is_index_exist) {
+  } else if (OB_INVALID_ID != rowkey_vid_aux_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(rowkey_vid_aux_table_id_))) {
+    LOG_WARN("fail to push back rowkey_vid_aux_table_id_", K(ret));
+  } else if (OB_INVALID_ID != vid_rowkey_aux_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(vid_rowkey_aux_table_id_))) {
+    LOG_WARN("fail to push back vid_rowkey_aux_table_id_", K(ret));
+  } else if (OB_INVALID_ID != delta_buffer_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(delta_buffer_table_id_))) {
+    LOG_WARN("fail to push back delta_buffer_table_id_", K(ret), K(delta_buffer_table_id_));
+  } else if (OB_INVALID_ID != index_id_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(index_id_table_id_))) {
+    LOG_WARN("fail to push back index_id_table_id_", K(ret), K(index_id_table_id_));
+  } else if (OB_INVALID_ID != index_snapshot_data_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(index_snapshot_data_table_id_))) {
+    LOG_WARN("fail to push back index_snapshot_data_table_id_", K(ret));
+  } else if (drop_index_arg.index_ids_.count() <= 0) {
+    LOG_INFO("no table need to be drop, skip", K(ret)); // no table exist, skip drop
+  } else if (schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema)) {
+    LOG_WARN("fail to get table schema", K(ret), K(object_id_));
+  } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("vec index aux schema is nullptr, fail to roll back", K(ret), K(index_table_id), K(delta_buffer_table_id_), K(index_table_id_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_table_id, index_table_schema))) {
-    LOG_WARN("get index schema failed", K(ret), K(tenant_id_), K(index_table_id));
-  } else if (OB_ISNULL(index_table_schema)) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("index schema is null", K(ret), K(index_table_id));
-  } else if (index_table_schema->is_in_recyclebin()) {
-    // the index has been dropped, just finish this task
-  } else if (OB_FAIL(index_table_schema->get_index_name(index_name))) {
-    LOG_WARN("get index name failed", KR(ret), K(index_table_schema->get_table_type()), KPC(index_table_schema));
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_table_schema->get_database_id(), database_schema))) {
-    LOG_WARN("get database schema failed", KR(ret), K(index_table_schema->get_database_id()));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_table_schema->get_data_table_id(), data_table_schema))) {
-    LOG_WARN("get data table schema failed", KR(ret), K(index_table_schema->get_data_table_id()));
-  } else if (OB_UNLIKELY(nullptr == database_schema || nullptr == data_table_schema)) {
+    LOG_WARN("data_table_schema is null", K(ret), KP(data_table_schema));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("get database schema failed", KR(ret), K(data_table_schema->get_database_id()));
+  } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null schema", KR(ret), KP(database_schema), KP(data_table_schema));
+    LOG_WARN("database_schema is null", KR(ret), KP(database_schema));
   } else {
     int64_t ddl_rpc_timeout = 0;
-    obrpc::ObDropIndexArg drop_index_arg;
-    obrpc::ObDropIndexRes drop_index_res;
     drop_index_arg.is_inner_          = true;
     drop_index_arg.tenant_id_         = tenant_id_;
     drop_index_arg.exec_tenant_id_    = tenant_id_;
     drop_index_arg.index_table_id_    = index_table_id;
-    drop_index_arg.session_id_        = data_table_schema->get_session_id();
-    drop_index_arg.index_name_        = index_name;
-    drop_index_arg.table_name_        = data_table_schema->get_table_name();
-    drop_index_arg.database_name_     = database_schema->get_database_name_str();
+    drop_index_arg.index_name_        = data_table_schema->get_table_name();  // not in used
     drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
     drop_index_arg.is_add_to_scheduler_ = true;
-    drop_index_arg.task_id_           = task_id_;
-    drop_index_arg.is_vec_inner_drop_ = has_aux_table ? true : false;  // if want to drop only one index, is_vec_inner_drop_ should be false, else should be true.
-    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
+    drop_index_arg.task_id_           = task_id_; // parent task
+    drop_index_arg.session_id_        = data_table_schema->get_session_id();
+    drop_index_arg.table_name_        = data_table_schema->get_table_name();
+    drop_index_arg.database_name_     = database_schema->get_database_name_str();
+    drop_index_arg.is_vec_inner_drop_ = true;  // if want to drop only one index, is_vec_inner_drop_ should be false, else should be true.
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
       LOG_WARN("ddl sim failure", KR(ret), K(tenant_id_), K(task_id_));
-    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index(drop_index_arg, drop_index_res))) {
+    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index_on_failed(drop_index_arg, drop_index_res))) {
       LOG_WARN("drop index failed", KR(ret), K(ddl_rpc_timeout));
     } else {
       drop_index_task_submitted_ = true;
       drop_index_task_id_ = drop_index_res.task_id_;
-      if (OB_FAIL(update_task_message())) {
-        LOG_WARN("fail to update task message", K(ret));
-      }
       LOG_INFO("success submit drop vec index task", K(ret), K(drop_index_task_id_));
     }
   }
@@ -1912,6 +1922,9 @@ int ObVecIndexBuildTask::cleanup_impl()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", K(ret));
   } else if (OB_FAIL(report_error_code(unused_str))) {
     LOG_WARN("report error code failed", K(ret));
   } else {
@@ -1975,7 +1988,7 @@ int ObVecIndexBuildTask::cleanup_impl()
   return ret;
 }
 
-int ObVecIndexBuildTask::update_task_message()
+int ObVecIndexBuildTask::update_task_message(common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
@@ -1991,7 +2004,7 @@ int ObVecIndexBuildTask::update_task_message()
     LOG_WARN("failed to serialize params to message", KR(ret));
   } else {
     msg.assign(buf, serialize_param_size);
-    if (OB_FAIL(ObDDLTaskRecordOperator::update_message(root_service_->get_sql_proxy(), tenant_id_, task_id_, msg))) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_message(proxy, tenant_id_, task_id_, msg))) {
       LOG_WARN("failed to update message", KR(ret));
     }
   }

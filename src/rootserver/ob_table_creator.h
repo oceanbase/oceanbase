@@ -17,6 +17,7 @@
 #include "share/tablet/ob_tablet_info.h" // ObTabletTablePair
 
 #include "share/tablet/ob_tablet_to_ls_operator.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
 {
@@ -95,7 +96,8 @@ private:
       const int64_t subpart_idx,
       const bool is_create_bind_hidden_tablets,
       const uint64_t tenant_data_version,
-      const common::ObIArray<bool> &need_create_empty_majors);
+      const common::ObIArray<bool> &need_create_empty_majors,
+      const ObGlobalCSReplicaMgr &cs_replica_mgr);
   int get_tablet_list_str_(
       const share::schema::ObTableSchema &table_schema,
       ObSqlString &tablet_list);

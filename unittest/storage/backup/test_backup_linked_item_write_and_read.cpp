@@ -92,7 +92,7 @@ int prepare_backup_data_param(
     param.backup_set_desc_.backup_set_id_ = 1;
     param.backup_set_desc_.backup_type_.type_ = ObBackupType::FULL_BACKUP;
     param.ls_id_ = ObLSID(1001);
-    param.backup_data_type_.set_minor_data_backup();
+    param.backup_data_type_.set_user_data_backup();
     param.turn_id_ = 1;
     param.retry_id_ = 0;
   }
@@ -121,7 +121,7 @@ int prepare_file_write_ctx(
   int ret = OB_SUCCESS;
   common::ObBackupIoAdapter util;
   ObBackupDataType backup_data_type;
-  backup_data_type.set_minor_data_backup();
+  backup_data_type.set_user_data_backup();
   share::ObBackupPath backup_path;
   const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
   const int64_t data_file_size = share::DEFAULT_BACKUP_DATA_FILE_SIZE;
@@ -129,7 +129,7 @@ int prepare_file_write_ctx(
   if (!param.is_valid() || !backup_set_dest.is_valid() || file_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(param), K(backup_set_dest), K(file_id));;
-  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest,
+  } else if (OB_FAIL(ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest,
       param.ls_id_, backup_data_type, param.turn_id_, param.retry_id_, file_id, backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), K(param));
   } else if (OB_FAIL(util.mk_parent_dir(backup_path.get_obstr(), backup_set_dest.get_storage_info()))) {

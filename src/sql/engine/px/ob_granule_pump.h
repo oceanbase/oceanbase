@@ -91,6 +91,7 @@ public :
     run_time_pruning_flags_.reset();
     external_table_files_.reset();
     query_range_by_runtime_filter_.reset();
+    locations_order_.reset();
   }
 
   int assign(const ObGranulePumpArgs &rhs);
@@ -115,6 +116,7 @@ public :
   bool lucky_one_; // atomic, indicatee which thread is luckly to do extract query range
   ObSEArray<ObNewRange, 16> query_range_by_runtime_filter_;
   bool extract_finished_;
+  ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
   //-----end
 };
 
@@ -160,7 +162,7 @@ public:
   int get_next_gi_task_pos(int64_t &pos);
   int get_next_gi_task(ObGranuleTaskInfo &info);
   int assign(const ObGITaskSet &other);
-  int set_pw_affi_partition_order(bool asc);
+  int set_pw_affi_partition_order(bool asc, bool force_reverse);
   int set_block_order(bool asc);
   int construct_taskset(common::ObIArray<ObDASTabletLoc*> &taskset_tablets,
                         common::ObIArray<ObNewRange> &taskset_ranges,
@@ -331,7 +333,8 @@ public:
                     GITaskArrayMap &gi_task_array_result,
                     ObGITaskSet::ObGIRandomType random_type,
                     bool partition_granule = true);
-  int adjust_task_order(bool asc, ObGITaskArray &taskset_array);
+  int adjust_task_order(bool asc, ObGITaskArray &taskset_array, int64_t tsc_op_id,
+                        const ObIArray<std::pair<int64_t, bool>> &locations_order);
 };
 
 //A task will be send to many DFO and we use many threads to execute the DFO.
@@ -511,7 +514,8 @@ public:
                            const ObTableModifySpec* modify_op,
                            int64_t parallelism,
                            int64_t tablet_size,
-                           uint64_t gi_attri_flag);
+                           uint64_t gi_attri_flag,
+                           const ObIArray<std::pair<int64_t, bool>> &locations_order);
 
    int init_pump_args(ObExecContext *ctx,
                       ObIArray<const ObTableScanSpec*> &scan_ops,
@@ -521,7 +525,8 @@ public:
                       const ObTableModifySpec* modify_op,
                       int64_t parallelism,
                       int64_t tablet_size,
-                      uint64_t gi_attri_flag);
+                      uint64_t gi_attri_flag,
+                      const ObIArray<std::pair<int64_t, bool>> &locations_order);
 
   int add_new_gi_task(ObGranulePumpArgs &args);
 
@@ -596,7 +601,8 @@ private:
                const ObTableModifySpec* modify_op,
                int64_t parallelism,
                int64_t tablet_size,
-               uint64_t gi_attri_flag);
+               uint64_t gi_attri_flag,
+               const ObIArray<std::pair<int64_t, bool>> &locations_order);
 
   int check_can_randomize(ObGranulePumpArgs &args, bool &can_randomize);
 

@@ -898,7 +898,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 4);
       break;
     }
-    case CORRELATION_FOR_CARDINALITY_ESTIMATION: {
+    case CORRELATION_FOR_CARDINALITY_ESTIMATION:
+    case CARDINALITY_ESTIMATION_MODEL: {
       if (val.is_int()) {
         is_valid = 0 <= val.get_int() && val.get_int() < static_cast<int64_t>(ObEstCorrelationType::MAX);
       } else if (val.is_varchar()) {
@@ -911,6 +912,20 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case _PUSH_JOIN_PREDICATE: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case RANGE_INDEX_DIVE_LIMIT:
+    case PARTITION_INDEX_DIVE_LIMIT:
+      is_valid = val.is_int();
+      break;
+    case OB_TABLE_ACCESS_POLICY: {
+      if (val.is_int()) {
+        is_valid = 0 <= val.get_int() && val.get_int() < static_cast<int64_t>(ObTableAccessPolicy::MAX);
+      } else if (val.is_varchar()) {
+        int64_t type = OB_INVALID_ID;
+        ObSysVarObTableAccessPolicy sv;
+        is_valid = (OB_SUCCESS == sv.find_type(val.get_varchar(), type));
+      }
       break;
     }
     default:
@@ -1036,8 +1051,16 @@ int ObOptParamHint::get_enum_opt_param(const OptParamType param_type, int64_t &v
     val = obj.get_int();
   } else if (obj.is_varchar()) {
     switch (param_type) {
-      case CORRELATION_FOR_CARDINALITY_ESTIMATION: {
+      case CORRELATION_FOR_CARDINALITY_ESTIMATION:
+      case CARDINALITY_ESTIMATION_MODEL: {
         ObSysVarCardinalityEstimationModel sv;
+        if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
+          LOG_WARN("param obj is invalid", K(ret), K(obj));
+        }
+        break;
+      }
+      case OB_TABLE_ACCESS_POLICY: {
+        ObSysVarObTableAccessPolicy sv;
         if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
           LOG_WARN("param obj is invalid", K(ret), K(obj));
         }
@@ -1078,6 +1101,56 @@ int ObOptParamHint::check_and_get_bool_opt_param(const OptParamType param_type, 
     LOG_WARN("get opt param value failed", K(ret));
   }
   return ret;
+}
+
+template<typename T, ObOptParamHint::GET_PARAM_FUNC<T> PARAM_FUNC>
+int ObOptParamHint::inner_get_sys_var(const OptParamType param_type,
+                                      const ObSQLSessionInfo *session,
+                                      const share::ObSysVarClassType sys_var_id,
+                                      T &val) const
+{
+  int ret = OB_SUCCESS;
+  bool has_hint = false;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(session));
+  } else if (OB_FAIL(has_opt_param(param_type, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    if (OB_FAIL((this->*PARAM_FUNC)(param_type, val))) {
+      LOG_WARN("failed to get bool hint param", K(ret));
+    }
+  } else if (OB_FAIL(session->get_sys_variable(sys_var_id, val))) {
+    LOG_WARN("failed to get sys variable", K(ret));
+  }
+  return ret;
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                int64_t &val) const
+{
+  return inner_get_sys_var<int64_t, &ObOptParamHint::get_integer_opt_param>
+            (param_type, session, sys_var_id, val);
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                bool &val) const
+{
+  return inner_get_sys_var<bool, &ObOptParamHint::get_bool_opt_param>
+            (param_type, session, sys_var_id, val);
+}
+
+int ObOptParamHint::get_enum_sys_var(const OptParamType param_type,
+                                     const ObSQLSessionInfo *session,
+                                     const share::ObSysVarClassType sys_var_id,
+                                     int64_t &val) const
+{
+  return inner_get_sys_var<int64_t, &ObOptParamHint::get_enum_opt_param>
+            (param_type, session, sys_var_id, val);
 }
 
 void ObOptParamHint::reset()

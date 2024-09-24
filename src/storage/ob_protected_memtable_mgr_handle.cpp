@@ -54,7 +54,6 @@ bool ObProtectedMemtableMgrHandle::need_reset_without_lock_()
   bool ret = false;
   ObIMemtableMgr *mgr = NULL;
   if (!memtable_mgr_handle_.is_valid()) {
-    STORAGE_LOG(INFO, "tablet_memtable_handle has been invalid", KR(ret));
   } else if (FALSE_IT(mgr = memtable_mgr_handle_.get_memtable_mgr())) {
   } else if (!mgr->has_memtable()) {
     ret = true;

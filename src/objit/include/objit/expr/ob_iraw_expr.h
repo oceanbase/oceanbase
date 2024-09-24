@@ -159,6 +159,7 @@ public:
   void set_subschema_id(const uint16_t subschema_id);
   void set_param(const common::ObObj &param);
   void set_length(common::ObLength length);
+  void set_has_lob_header() { result_type_.set_has_lob_header(); }
 
   virtual int64_t get_children_count() const;
   virtual int get_children(ExprArray &jit_exprs) const;

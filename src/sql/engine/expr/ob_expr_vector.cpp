@@ -249,6 +249,29 @@ int ObExprVectorIPDistance::calc_inner_product(const ObExpr &expr, ObEvalCtx &ct
   return ObExprVectorDistance::calc_distance(expr, ctx, res_datum, ObVecDisType::DOT);
 }
 
+ObExprVectorNegativeIPDistance::ObExprVectorNegativeIPDistance(ObIAllocator &alloc)
+    : ObExprVectorDistance(alloc, T_FUN_SYS_NEGATIVE_INNER_PRODUCT, N_VECTOR_NEGATIVE_INNER_PRODUCT, 2, NOT_ROW_DIMENSION) {}
+
+int ObExprVectorNegativeIPDistance::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                    ObExpr &rt_expr) const
+{
+    int ret = OB_SUCCESS;
+    rt_expr.eval_func_ = ObExprVectorNegativeIPDistance::calc_negative_inner_product;
+    return ret;
+}
+
+int ObExprVectorNegativeIPDistance::calc_negative_inner_product(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObExprVectorDistance::calc_distance(expr, ctx, res_datum, ObVecDisType::DOT))) {
+    LOG_WARN("fail to calc distance", K(ret), K(ObVecDisType::DOT));
+  } else if (!res_datum.is_null()) {
+    double value = -1 * res_datum.get_double();
+    res_datum.set_double(value);
+  }
+  return ret;
+}
+
 ObExprVectorDims::ObExprVectorDims(ObIAllocator &alloc)
     : ObExprVector(alloc, T_FUN_SYS_VECTOR_DIMS, N_VECTOR_DIMS, 1, NOT_ROW_DIMENSION) {}
 
@@ -271,6 +294,13 @@ int ObExprVectorDims::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
 {
     int ret = OB_SUCCESS;
     rt_expr.eval_func_ = ObExprVectorDims::calc_dims;
+    if (rt_expr.arg_cnt_ != 1 || OB_ISNULL(rt_expr.args_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count of children is not 1 or children is null", K(ret), K(rt_expr.arg_cnt_), K(rt_expr.args_));
+    } else if (rt_expr.args_[0]->type_ == T_FUN_SYS_CAST) {
+      // return error if cast failed
+      rt_expr.args_[0]->extra_  &= ~CM_WARN_ON_FAIL;
+    }
     return ret;
 }
 
@@ -305,6 +335,13 @@ int ObExprVectorNorm::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
 {
     int ret = OB_SUCCESS;
     rt_expr.eval_func_ = ObExprVectorNorm::calc_norm;
+    if (rt_expr.arg_cnt_ != 1 || OB_ISNULL(rt_expr.args_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count of children is not 1 or children is null", K(ret), K(rt_expr.arg_cnt_), K(rt_expr.args_));
+    } else if (rt_expr.args_[0]->type_ == T_FUN_SYS_CAST) {
+      // return error if cast failed
+      rt_expr.args_[0]->extra_  &= ~CM_WARN_ON_FAIL;
+    }
     return ret;
 }
 

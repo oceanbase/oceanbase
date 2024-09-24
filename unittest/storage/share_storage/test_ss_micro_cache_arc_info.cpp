@@ -18,8 +18,9 @@
 #include "lib/ob_errno.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "lib/container/ob_array.h"
+#include "storage/shared_storage/micro_cache/ob_ss_arc_info.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_basic_op.h"
-
+#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
 namespace oceanbase
 {
 namespace storage

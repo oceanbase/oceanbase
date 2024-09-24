@@ -81,7 +81,7 @@ int ObGetFileSizeFunctor::func(const dirent *entry)
       LOG_WARN("file name too long", K(ret), K_(dir), K(entry->d_name));
     } else {
       ObIODFileStat statbuf;
-      if (OB_FAIL(THE_IO_DEVICE->stat(full_path, statbuf))
+      if (OB_FAIL(LOCAL_DEVICE_INSTANCE.stat(full_path, statbuf))
           && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
         LOG_WARN("fail to stat file", K(full_path), K(statbuf));
       } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
@@ -91,7 +91,7 @@ int ObGetFileSizeFunctor::func(const dirent *entry)
         total_size_ += statbuf.size_;
       } else if (S_ISDIR(statbuf.mode_)) {
         ObGetFileSizeFunctor functor(full_path);
-        if (OB_FAIL(THE_IO_DEVICE->scan_dir(full_path, functor))) {
+        if (OB_FAIL(LOCAL_DEVICE_INSTANCE.scan_dir(full_path, functor))) {
           LOG_WARN("fail to scan dir", K(ret), K(full_path), K(entry->d_name));
         } else {
           total_size_ += functor.get_total_size();
@@ -173,7 +173,6 @@ int ObSNIODeviceWrapper::init(
     ret = OB_IO_ERROR;
     LOG_ERROR("unknown storage type, not support", K(ret), K(data_dir));
   } else {
-    THE_IO_DEVICE = local_device_;
     iod_opt_array[0].set("data_dir", data_dir);
     iod_opt_array[1].set("sstable_dir", sstable_dir);
     iod_opt_array[2].set("block_size", block_size);
@@ -182,8 +181,8 @@ int ObSNIODeviceWrapper::init(
     iod_opts.opt_cnt_ = MAX_IOD_OPT_CNT;
   }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(THE_IO_DEVICE)) {
-    if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(local_device_)) {
+    if (OB_FAIL(local_device_->init(iod_opts))) {
       LOG_WARN("fail to init io device", K(ret), K(data_dir), K(sstable_dir), K(block_size),
           K(data_disk_percentage), K(data_disk_size));
     } else {
@@ -203,7 +202,6 @@ int ObSNIODeviceWrapper::init(
 void ObSNIODeviceWrapper::destroy()
 {
   if (is_inited_) {
-    THE_IO_DEVICE = nullptr;
     if (NULL != local_device_) {
       local_device_->destroy();
       common::ObDeviceManager::get_instance().release_device((ObIODevice*&)local_device_);
@@ -735,9 +733,9 @@ int ObIODeviceLocalFileOp::convert_sys_errno(const int error_no)
       break;
   }
   if (use_warn_log) {
-    SHARE_LOG(WARN, "convert sys errno", K(ret), K(error_no), KERRMSG);
+    SHARE_LOG(WARN, "convert sys errno", K(ret), K(error_no), KERRNOMSG(error_no));
   } else {
-    SHARE_LOG(INFO, "convert sys errno", K(ret), K(error_no), KERRMSG);
+    SHARE_LOG(INFO, "convert sys errno", K(ret), K(error_no), KERRNOMSG(error_no));
   }
   return ret;
 }

@@ -45,6 +45,8 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
+
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
 
@@ -6118,7 +6120,9 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       if ((CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
         j_base = &j_null;
       }
-    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree, parse_flag))) {
+    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text,
+                                              j_tree, parse_flag,
+                                              sql::ObJsonExprHelper::get_json_max_depth_config()))) {
       if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode)
                      && !CM_IS_COLUMN_CONVERT(cast_mode)
                      && is_convert_jstr_type) {
@@ -14570,15 +14574,22 @@ int string_length_check_only(const ObAccuracy &accuracy, const ObCollationType c
   const ObLength max_len_char = accuracy.get_length();
   const char *str = obj.get_string_ptr();
   const int32_t str_len_byte = obj.get_string_len();
-  const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
   if (OB_UNLIKELY(max_len_char <= 0)) {
     if (OB_UNLIKELY(0 == max_len_char && str_len_byte > 0)) {
+      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
       ret = OB_ERR_DATA_TOO_LONG;
       OB_LOG(WARN, "char type length is too long", K(obj), K(max_len_char), K(str_len_char));
     }
-  } else if (OB_UNLIKELY(str_len_char > max_len_char)) {
-    ret = OB_ERR_DATA_TOO_LONG;
-    LOG_WARN("string length is too long", K(max_len_char), K(str_len_char), K(obj));
+  } else {
+    if (str_len_byte <= max_len_char) {
+      // do nonthing
+    } else {
+      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
+      if (OB_UNLIKELY(str_len_char > max_len_char)) {
+        ret = OB_ERR_DATA_TOO_LONG;
+        LOG_WARN("string length is too long", K(max_len_char), K(str_len_char), K(obj));
+      }
+    }
   }
   return ret;
 }

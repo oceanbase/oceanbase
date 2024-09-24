@@ -196,7 +196,15 @@ int ObRawExprDeduceType::visit(ObColumnRefRawExpr &expr)
       ObSubSchemaValue meta_unused;
       if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, meta_unused))) {
         LOG_WARN("invalid subschema id", K(ret), K(subschema_id));
+      } else if (OB_FAIL(construct_collecton_attr_expr(expr))) {
+        LOG_WARN("failed to construct collection attr expr", K(ret));
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (expr.get_result_type().is_lob_storage() && !IS_CLUSTER_VERSION_BEFORE_4_1_0_0) {
+      expr.set_has_lob_header();
     }
   }
   return ret;
@@ -3074,8 +3082,13 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         if (ob_is_numeric_type(bound_expr_arr[i]->get_data_type())
             || ob_is_string_tc(bound_expr_arr[i]->get_data_type())
             || ob_is_interval_tc(bound_expr_arr[i]->get_data_type())) {
-          if (!ob_is_numeric_type(order_res_type) && !ob_is_datetime_tc(order_res_type)
-              && !ob_is_date_tc(order_res_type) && !ob_is_otimestampe_tc(order_res_type)) {
+         if (ob_is_otimestampe_tc(order_res_type)) {
+            if (!ob_is_interval_tc(bound_expr_arr[i]->get_data_type())) {
+              ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
+              LOG_WARN("invalid datatype in order by for range clause", K(ret), K(order_res_type));
+            }
+          } else  if (!ob_is_numeric_type(order_res_type) && !ob_is_datetime_tc(order_res_type)
+              && !ob_is_date_tc(order_res_type)) {
             ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
             LOG_WARN("invalid datatype in order by for range clause", K(ret), K(order_res_type));
           }
@@ -4030,6 +4043,10 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
     uint64_t udt_id = (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type())
                       ? dst_type.get_udt_id()
                       : dst_type.get_calc_accuracy().get_accuracy();
+    cast_dst_type.set_udt_id(udt_id);
+  }
+  if (lib::is_oracle_mode() && cast_dst_type.is_ext()) {
+    uint64_t udt_id = dst_type.is_ext() ? dst_type.get_udt_id() : dst_type.get_calc_accuracy().get_accuracy();
     cast_dst_type.set_udt_id(udt_id);
   }
   // 这里仅设置部分情况的accuracy，其他情况的accuracy信息交给cast类型推导设置

@@ -386,6 +386,7 @@
 #include "ob_expr_func_ceil.h"
 #include "ob_expr_topn_filter.h"
 #include "ob_expr_sdo_relate.h"
+#include "ob_expr_gtid.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_password.h"
 #include "ob_expr_decode_trace_id.h"
@@ -1189,10 +1190,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIsUsedLock::is_used_lock,                                     /* 683 */
   ObExprReleaseLock::release_lock,                                    /* 684 */
   ObExprReleaseAllLocks::release_all_locks,                           /* 685 */
-  NULL, // ObExprGTIDSubset::eval_subset,                             /* 686 */
-  NULL, // ObExprGTIDSubtract::eval_subtract,                         /* 687 */
-  NULL, // ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set, /* 688 */
-  NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
+  ObExprGTIDSubset::eval_subset,                                      /* 686 */
+  ObExprGTIDSubtract::eval_subtract,                                  /* 687 */
+  ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set,      /* 688 */
+  ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids, /* 689 */
   ObExprLastRefreshScn::eval_last_refresh_scn,                        /* 690 */
   ObExprDocLength::generate_doc_length,                               /* 691 */
   ObExprTopNFilter::eval_topn_filter,                                 /* 692 */
@@ -1259,6 +1260,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArrayContains::eval_array_contains_ObString,                  /* 753 */
   ObExprArrayContains::eval_array_contains_array,                     /* 754 */
   ObExprSplitPart::calc_split_part_expr,                              /* 755 */
+  NULL, // ObExprRbSelect::eval_rb_select,                            /* 756 */
+  ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
+  NULL, // ObExprTokenize::eval_tokenize,                             /* 758 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1533,6 +1537,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprArrayContains::eval_array_contains_array_vector,        /* 121 */
   ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,/* 122 */
   NULL, // ObExprTrim::eval_trim_vector                         /* 123 */
+  NULL, // ObExprEncodeSortkey::eval_encode_sortkey_vector      /* 124 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

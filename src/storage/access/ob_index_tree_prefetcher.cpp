@@ -335,9 +335,14 @@ int ObIndexTreePrefetcher::check_bloom_filter(
     LOG_WARN("Invalid argument", K(ret), K(index_info), K(read_handle));
   } else if (!access_ctx_->query_flag_.is_index_back() && access_ctx_->enable_bf_cache()) {
     bool is_contain = true;
-    if (is_multi_check) {
+    const MacroBlockId macro_id = GCTX.is_shared_storage_mode() && index_info.has_valid_shared_macro_id() ?
+      index_info.get_shared_data_macro_id() : index_info.get_macro_id();
+    if (OB_UNLIKELY(!macro_id.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid macro id", K(ret), "is_shared_storage_mode", GCTX.is_shared_storage_mode(), K(macro_id), K(index_info));
+    } else if (is_multi_check) {
       if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().may_contain(MTL_ID(),
-                                                            index_info.get_macro_id(),
+                                                            macro_id,
                                                             index_info.rows_info_,
                                                             index_info.rowkey_begin_idx_,
                                                             index_info.rowkey_end_idx_,
@@ -349,7 +354,7 @@ int ObIndexTreePrefetcher::check_bloom_filter(
       }
     } else if (read_handle.is_sorted_multi_get_) {
       if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().may_contain(MTL_ID(),
-                                                            index_info.get_macro_id(),
+                                                            macro_id,
                                                             index_info.rowkeys_info_,
                                                             index_info.rowkey_begin_idx_,
                                                             index_info.rowkey_end_idx_,
@@ -360,7 +365,7 @@ int ObIndexTreePrefetcher::check_bloom_filter(
         }
       }
     } else if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().may_contain(MTL_ID(),
-                                                                 index_info.get_macro_id(),
+                                                                 macro_id,
                                                                  read_handle.get_rowkey(),
                                                                  *datum_utils_,
                                                                  is_contain))) {
@@ -1848,19 +1853,15 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
           } else {
             prefetch_idx_++;
             parent.current_block_read_handle().end_prefetched_row_idx_++;
+#ifdef OB_BUILD_SHARED_STORAGE
+            if (OB_TMP_FAIL(try_prefetch_data_macro_block(level, prefetcher, index_info))) {
+              LOG_WARN("fail to run try prefetch data macro index block", K(ret), K(level), K(index_info));
+            }
+#endif
           }
         } else if (prefetcher.is_multi_check()) {
           read_handle.row_state_ = ObSSTableRowState::IN_BLOCK;
         }
-#ifdef OB_BUILD_SHARED_STORAGE
-        if (OB_FAIL(ret)) {
-        } else if (prefetcher.use_multi_block_prefetch_ &&
-                   prefetcher.index_tree_height_ - 1 == level &&
-                   index_info.has_valid_shared_macro_id() &&
-                   OB_TMP_FAIL(prefetch_macro_block(index_info.get_shared_data_macro_id()))) {
-          LOG_WARN("fail to prefetch macro block", K(ret), K(level), K(index_info));
-        }
-#endif
       }
     }
   }

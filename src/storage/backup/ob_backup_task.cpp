@@ -125,7 +125,10 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
         ret = OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT;
         LOG_WARN("backup advance checkpoint by flush timeout", K(ret), K(tenant_id), K(ls_id), K(start_scn));
       } else if (need_advance_checkpoint) {
-        if (OB_FAIL(ls->advance_checkpoint_by_flush(start_scn))) {
+        if (OB_FAIL(ls->advance_checkpoint_by_flush(start_scn,
+                                                    INT64_MAX, /*timeout*/
+                                                    false,     /*is_tenant_freeze*/
+                                                    ObFreezeSourceFlag::BACKUP))) {
           if (OB_NO_NEED_UPDATE == ret) {
             // clog checkpoint ts has passed start log ts
             ret = OB_SUCCESS;

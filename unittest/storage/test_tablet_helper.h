@@ -139,7 +139,7 @@ inline int TestTabletHelper::create_tablet(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
         snapshot_version, create_tablet_schema, need_create_empty_major_sstable,
-        false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, freezer))){
+        false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, false/*has_cs_replica*/, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;

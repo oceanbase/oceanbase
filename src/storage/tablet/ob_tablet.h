@@ -184,6 +184,7 @@ public:
       const bool need_create_empty_major_sstable,
       const bool micro_index_clustered,
       const bool need_generate_cs_replica_cg_array,
+      const bool has_cs_replica,
       ObFreezer *freezer);
   // dump/merge build new multi version tablet
   int init_for_merge(
@@ -219,10 +220,12 @@ public:
       const bool clear_wait_check_flag);
 
   // TODO(@gaishun.gs && @fengjingkun.fjk) tmp interface for force_freeze on column store, should removed later.
-  int init_with_new_snapshot_version(
+  int init_with_replace_members(
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
-      const int64_t snapshot_version);
+      const int64_t snapshot_version,
+      const ObTabletDataStatus::STATUS &data_status,
+      bool need_generate_cs_replica_cg_array = false);
   // init for mds table mini merge
   int init_with_mds_sstable(
       common::ObArenaAllocator &allocator,
@@ -467,9 +470,21 @@ public:
   int get_migration_sstable_size(int64_t &data_size);
 
   // column store replica
-  int check_cs_replica_compat_schema(bool &is_cs_replica_compat);
-  int pre_process_cs_replica(ObTabletDirectLoadInsertParam &direct_load_param);
-
+public:
+  int check_cs_replica_compat_schema(bool &is_cs_replica_compat) const;
+  int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
+  int pre_process_cs_replica(
+      const ObDirectLoadType direct_load_type,
+      bool &replay_normal_in_cs_replica);
+  int pre_process_cs_replica(
+      const ObDirectLoadType direct_load_type,
+      ObITable::TableKey &table_key);
+private:
+  int inner_pre_process_cs_replica(
+      const ObDirectLoadType direct_load_type,
+      ObITable::TableKey &table_key,
+      bool &replay_normal_in_cs_replica);
+public:
   // other
   const ObMetaDiskAddr &get_tablet_addr() const { return tablet_addr_; }
   const ObTabletMeta &get_tablet_meta() const { return tablet_meta_; }
@@ -861,6 +876,11 @@ private:
 
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int check_table_store_flag_match_with_table_store_(const ObTabletTableStore *table_store);
+  int build_migration_shared_table_addr_(
+      const ObRootBlockInfo &block_info,
+      common::ObIAllocator &allocator,
+      storage::ObMetaDiskAddr &addr,
+      char *&buf) const;
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;

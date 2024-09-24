@@ -141,6 +141,7 @@ inline bool is_major_sstable_match_schema(const ObCOMajorSSTableStatus& major_ss
   return major_sstable_status == COL_WITH_ALL || major_sstable_status == PURE_COL;
 }
 
+const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status);
 /*
  * The base part of ObCOSSTable maybe
  */
@@ -223,7 +224,9 @@ public:
       ObTableAccessContext &context,
       const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
-  int fill_column_ckm_array(const ObStorageSchema &storage_schema, ObIArray<int64_t> &column_checksums) const;
+  int fill_column_ckm_array(
+      const ObStorageSchema &storage_schema,
+      ObIArray<int64_t> &column_checksums) const;
   INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta),
       K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:

@@ -509,9 +509,6 @@ int ObMacroBlockWriter::open(
     STORAGE_LOG(WARN, "invalid macro block writer input argument.", K(ret), K(data_store_desc), K(parallel_idx),
       K(macro_seq_param), K(pre_warm_param), KP(validator));
   } else {
-    // tmp debug log, remove later
-    FLOG_INFO("danling debug: open macro block writer: ", K(data_store_desc), K(parallel_idx), K(macro_seq_param));
-
     ObSSTableIndexBuilder *sstable_index_builder = data_store_desc.sstable_index_builder_;
     object_cleaner_ = &object_cleaner;
     callback_ = callback;
@@ -1609,9 +1606,9 @@ int ObMacroBlockWriter::wait_io_finish(ObStorageObjectHandle &macro_handle, ObMa
         merge_block_info_.block_io_us_ += block_io_us;
       }
       int64_t check_level = 0;
-      if (OB_ISNULL(micro_writer_)) {
+      if (OB_ISNULL(micro_writer_) || OB_UNLIKELY(!macro_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "micro_writer is null", K(ret));
+        STORAGE_LOG(WARN, "invalid micro writer or macro handle", K(ret), KP(micro_writer_), K(macro_handle));
       } else if (FALSE_IT(check_level = micro_writer_->get_micro_block_merge_verify_level())) {
       } else if (MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE == check_level) {
         if (OB_FAIL(check_write_complete(macro_handle.get_macro_id()))) {
@@ -1623,6 +1620,11 @@ int ObMacroBlockWriter::wait_io_finish(ObStorageObjectHandle &macro_handle, ObMa
       } else if (nullptr == callback_) {
         /* do nothing */
       } else if (OB_FAIL(exec_callback(macro_handle, macro_block))) {
+        LOG_WARN("failed to exec callback func", K(ret), K(macro_handle));
+      }
+    } else if (!data_store_desc_->get_need_submit_io() && OB_NOT_NULL(callback_)) {
+      // column store replica do not submit macro block io, but need ddl redo callback
+      if (OB_FAIL(exec_callback(macro_handle, macro_block))) {
         LOG_WARN("failed to exec callback func", K(ret), K(macro_handle));
       }
     }
@@ -1643,7 +1645,7 @@ int ObMacroBlockWriter::wait_io_finish(ObStorageObjectHandle &macro_handle, ObMa
 int ObMacroBlockWriter::exec_callback(const ObStorageObjectHandle &macro_handle, ObMacroBlock *macro_block)
 {
   int ret = OB_SUCCESS;
-  if (nullptr == macro_block || nullptr == callback_ || !macro_handle.is_valid()) {
+  if (nullptr == macro_block || nullptr == callback_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(macro_block), KP(callback_), K(macro_handle));
   } else {
@@ -1910,6 +1912,8 @@ int ObMacroBlockWriter::build_micro_writer(const ObDataStoreDesc *data_store_des
     encoding_ctx.row_store_type_ = data_store_desc->get_row_store_type();
     encoding_ctx.need_calc_column_chksum_ = data_store_desc->is_major_merge_type();
     encoding_ctx.compressor_type_ = data_store_desc->get_compressor_type();
+    encoding_ctx.encoding_granularity_ = data_store_desc->static_desc_->encoding_granularity_ > 0 ?
+                    data_store_desc->static_desc_->encoding_granularity_ : UINT64_MAX;
     if (ObStoreFormat::is_row_store_type_with_pax_encoding(data_store_desc->get_row_store_type())) {
       if (OB_ISNULL(buf = allocator.alloc(sizeof(ObMicroBlockEncoder)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

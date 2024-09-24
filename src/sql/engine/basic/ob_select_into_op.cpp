@@ -1027,8 +1027,7 @@ int ObSelectIntoOp::print_str_or_json_with_escape(const ObObj &obj, ObIOBufferWr
   ObCharsetType dst_type = ObCharset::charset_type_by_coll(MY_SPEC.cs_type_);
   escape_printer_.do_encode_ = !(src_type == CHARSET_BINARY || src_type == dst_type
                                  || src_type == CHARSET_INVALID);
-  escape_printer_.need_enclose_ = has_enclose_ && !obj.is_null()
-                                  && (!MY_SPEC.is_optional_ || obj.is_string_type());
+  escape_printer_.need_enclose_ = has_enclose_ && !obj.is_null();
   escape_printer_.do_escape_ = true;
   escape_printer_.print_hex_ = obj.get_collation_type() == CS_TYPE_BINARY
                                && print_params_.binary_string_print_hex_;
@@ -1352,7 +1351,9 @@ int ObSelectIntoOp::print_field(const ObObj &obj, ObIOBufferWriter &data_writer)
   int ret = OB_SUCCESS;
   char char_n = 'N';
   const bool need_enclose = has_enclose_ && !obj.is_null()
-                            && (!MY_SPEC.is_optional_ || obj.is_string_type());
+                            && (!MY_SPEC.is_optional_ || obj.is_string_type()
+                                || obj.is_json() || obj.is_geometry() || obj.is_date()
+                                || obj.is_time() || obj.is_timestamp() || obj.is_datetime());
   if (need_enclose) {
     OZ(write_single_char_to_file(&char_enclose_, data_writer));
   }
@@ -1401,7 +1402,7 @@ int ObSelectIntoOp::into_outfile(ObIOBufferWriter *data_writer)
                                      select_exprs.at(i)->obj_meta_,
                                      select_exprs.at(i)->obj_datum_map_))) {
       LOG_WARN("failed to get obj from datum", K(ret));
-    } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())) {
+    } else if (!ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type()) || obj.is_null()) {
       OZ(print_field(obj, *data_writer));
     } else { // text tc
       OZ(print_lob_field(obj, *select_exprs.at(i), *datum, *data_writer));
@@ -1518,21 +1519,21 @@ int ObSelectIntoOp::into_odps_batch(const ObBatchRows &brs)
         if (brs.skip_->contain(i)) {
           // do nothing
         } else {
-          for (int64_t j = 0; OB_SUCC(ret) && j < select_exprs.count(); ++j) {
-            if (OB_ISNULL(datum = datum_vectors.at(j).at(i))) {
+          for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < select_exprs.count(); ++col_idx) {
+            if (OB_ISNULL(datum = datum_vectors.at(col_idx).at(i))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("datum is unexpected null", K(ret));
             } else if (lib::is_mysql_mode()
                        && OB_FAIL(set_odps_column_value_mysql(*table_record, *datum,
-                                                              select_exprs.at(j)->datum_meta_,
-                                                              select_exprs.at(j)->obj_meta_,
-                                                              j))) {
+                                                              select_exprs.at(col_idx)->datum_meta_,
+                                                              select_exprs.at(col_idx)->obj_meta_,
+                                                              col_idx))) {
               LOG_WARN("failed to set odps column value", K(ret));
             } else if (lib::is_oracle_mode()
                        && OB_FAIL(set_odps_column_value_oracle(*table_record, *datum,
-                                                               select_exprs.at(j)->datum_meta_,
-                                                               select_exprs.at(j)->obj_meta_,
-                                                               j))) {
+                                                               select_exprs.at(col_idx)->datum_meta_,
+                                                               select_exprs.at(col_idx)->obj_meta_,
+                                                               col_idx))) {
               LOG_WARN("failed to set odps column value", K(ret));
             }
           }
@@ -1729,7 +1730,8 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
                                                                 &ctx_))) {
             LOG_WARN("failed to read string", K(ret));
           } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, json_str, in_type,
-                                                              in_type, j_base, parse_flag))) {
+                                                              in_type, j_base, parse_flag,
+                                                              ObJsonExprHelper::get_json_max_depth_config()))) {
             COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
           } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
             COMMON_LOG(WARN, "fail to convert json to string", K(ret));
@@ -2001,7 +2003,8 @@ int ObSelectIntoOp::set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRec
                                                                 &ctx_))) {
             LOG_WARN("failed to read string", K(ret));
           } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, json_str, in_type,
-                                                              in_type, j_base, parse_flag))) {
+                                                              in_type, j_base, parse_flag,
+                                                              ObJsonExprHelper::get_json_max_depth_config()))) {
             COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
           } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
             COMMON_LOG(WARN, "fail to convert json to string", K(ret));
@@ -2148,21 +2151,21 @@ int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs, ObIOBufferWriter 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < select_exprs.count(); ++j) {
-        if (OB_ISNULL(datum = datum_vectors.at(j).at(i))) {
+      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < select_exprs.count(); ++col_idx) {
+        if (OB_ISNULL(datum = datum_vectors.at(col_idx).at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("datum is unexpected null", K(ret));
         } else if (OB_FAIL(datum->to_obj(obj,
-                                         select_exprs.at(j)->obj_meta_,
-                                         select_exprs.at(j)->obj_datum_map_))) {
+                                         select_exprs.at(col_idx)->obj_meta_,
+                                         select_exprs.at(col_idx)->obj_datum_map_))) {
           LOG_WARN("failed to get obj from datum", K(ret));
-        } else if (!ob_is_text_tc(select_exprs.at(j)->obj_meta_.get_type())) {
+        } else if (!ob_is_text_tc(select_exprs.at(col_idx)->obj_meta_.get_type()) || obj.is_null()) {
           OZ(print_field(obj, *data_writer));
         } else { // text tc
-          OZ(print_lob_field(obj, *select_exprs.at(j), *datum, *data_writer));
+          OZ(print_lob_field(obj, *select_exprs.at(col_idx), *datum, *data_writer));
         }
         // print field terminator
-        if (OB_SUCC(ret) && j != select_exprs.count() - 1) {
+        if (OB_SUCC(ret) && col_idx != select_exprs.count() - 1) {
           OZ(write_obj_to_file(MY_SPEC.field_str_, *data_writer));
         }
       }

@@ -6764,12 +6764,19 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
         }
       }
     }
-
+    if (OB_FAIL(ret) && OB_NOT_NULL(desc)) {
+      desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
+    }
     if (OB_SUCC(ret)) {
       if (desc->is_continue() || handler_analyzer_.in_continue()) {
         //如果自己是continue或者已经在continue里，把自己压栈
         if (OB_FAIL(handler_analyzer_.set_handler(desc, current_level_))) {
+          desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
           LOG_WARN("failed to set handler", K(ret));
+        } else if (desc->is_continue()
+                   && OB_FAIL(func.get_continue_handler_desc_bodys().push_back(desc->get_body()))) {
+          desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
+          LOG_WARN("failed to save continue handler body", K(ret));
         }
       }
     }
@@ -6787,6 +6794,7 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
       ObPLDeclareHandlerStmt::DeclareHandler handler;
       handler.set_desc(desc);
       if (OB_FAIL(stmt->add_handler(handler))) {
+        desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
         LOG_WARN("failed to add handler", K(ret));
       }
     }
@@ -8467,8 +8475,8 @@ int ObPLResolver::convert_cursor_actual_params(
     } else if (convert_expr->get_result_type().is_ext()) {
       CK (OB_NOT_NULL(current_block_));
       OZ (check_composite_compatible(current_block_->get_namespace(),
-                                     pl_data_type.get_user_type_id(),
                                      convert_expr->get_result_type().get_udt_id(),
+                                     pl_data_type.get_user_type_id(),
                                      is_compatible));
     }
     if (OB_SUCC(ret) && !is_compatible) {

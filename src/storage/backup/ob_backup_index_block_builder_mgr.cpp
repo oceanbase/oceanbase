@@ -582,16 +582,17 @@ int ObBackupTabletSSTableIndexBuilderMgr::init(const uint64_t tenant_id, const c
     const common::ObIArray<storage::ObITable::TableKey> &table_key_array)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr mem_attr(tenant_id, ObModIds::BACKUP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup tablet sstable index builder mgr init twice", K(ret), K(tablet_id));
   } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is not valid", K(ret), K(tablet_id));
+  } else if (FALSE_IT(table_keys_.set_attr(mem_attr))) {
   } else if (OB_FAIL(table_keys_.assign(table_key_array))) {
     LOG_WARN("failed to assign table keys", K(ret));
   } else {
-    ObMemAttr mem_attr(tenant_id, ObModIds::BACKUP);
     builders_.set_attr(mem_attr);
     merge_results_.set_attr(mem_attr);
     sstable_ready_list_.set_attr(mem_attr);

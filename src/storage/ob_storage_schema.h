@@ -66,6 +66,8 @@ public:
   int construct_column_param(share::schema::ObColumnParam &column_param) const;
   inline common::ColumnType get_data_type() const { return meta_type_.get_type(); }
   inline bool is_generated_column() const { return is_generated_column_; }
+  inline bool is_column_stored_in_sstable() const { return is_column_stored_in_sstable_;}
+  inline bool is_rowkey_column() const { return is_rowkey_column_; }
   inline const common::ObObj &get_orig_default_value()  const { return orig_default_value_; }
   int deep_copy_default_val(ObIAllocator &allocator, const ObObj &default_val);
 

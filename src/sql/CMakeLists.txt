@@ -773,6 +773,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_vec_key.cpp
   engine/expr/ob_expr_vec_data.cpp
   engine/expr/ob_expr_topn_filter.cpp
+  engine/expr/ob_expr_gtid.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
   engine/expr/ob_expr_rb_build_empty.cpp
   engine/expr/ob_expr_rb_is_empty.cpp
@@ -912,7 +913,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
   engine/table/ob_external_table_access_service.cpp
-  # engine/table/ob_orc_table_row_iter.cpp
+  engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
   engine/table/ob_odps_table_row_iter.cpp
 )
@@ -1430,7 +1431,7 @@ else()
 target_link_libraries(ob_sql_static
   PUBLIC ob_sql
   ob_sql_server_parser_static
-  ${DEP_DIR}/lib64/libprotobuf.a
+  ${DEP_DIR}/lib64/libprotobuf-v371.a
   ${DEP_DIR}/lib64/libzstd.a
   ${DEP_DIR}/lib64/libbrotlidec.a
   ${DEP_DIR}/lib64/libbrotlienc.a

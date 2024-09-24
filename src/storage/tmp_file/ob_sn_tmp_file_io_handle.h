@@ -27,14 +27,14 @@ class ObSNTmpFileIOHandle final
 public:
   ObSNTmpFileIOHandle();
   ~ObSNTmpFileIOHandle();
-  int init_write(const ObTmpFileIOInfo &io_info);
-  int init_read(const ObTmpFileIOInfo &io_info);
-  int init_pread(const ObTmpFileIOInfo &io_info, const int64_t read_offset);
+  int init_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
+  int init_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
+  int init_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t read_offset);
   int wait();
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(K(is_inited_), K(fd_), K(ctx_),
+  TO_STRING_KV(K(is_inited_), K(tenant_id_), K(fd_), K(ctx_),
                KP(buf_), K(update_offset_in_file_),
                K(buf_size_), K(done_size_),
                K(read_offset_in_file_));
@@ -49,6 +49,7 @@ private:
 
 private:
   bool is_inited_;
+  uint64_t tenant_id_;
   int64_t fd_;
   ObTmpFileIOCtx ctx_;
   char *buf_;

@@ -309,41 +309,37 @@ int ObTableCkmItems::build_column_ckm_sum_array(
       LOG_WARN("failed to reserve tablet column checksum array", KR(ret));
     }
     // items are order by tablet_id
-    int64_t pair_idx = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && (i < items_cnt); ++i) {
-      const ObTabletReplicaChecksumItem &cur_item = ckm_items_.at(i);
-      LOG_TRACE("build_column_ckm_sum_array", KR(ret), K(i), K(cur_item), K(compaction_scn), K(row_cnt));
-      if (OB_UNLIKELY(cur_item.column_meta_.column_checksums_.count() != column_checksums_cnt)) {
+    for (int64_t pair_idx = 0; OB_SUCC(ret) && (pair_idx < tablet_pairs_.count()); ++pair_idx) {
+      const ObTabletID &tablet_id = tablet_pairs_.at(pair_idx).get_tablet_id();
+      const ObTabletReplicaChecksumItem *cur_item = nullptr;
+      if (OB_FAIL(ckm_items_.get(tablet_id, cur_item))) {
+        LOG_WARN("failed to get ckm item", KR(ret), K(tablet_id), K(pair_idx), K(tablet_pairs_));
+      } else if (OB_UNLIKELY(cur_item->column_meta_.column_checksums_.count() != column_checksums_cnt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column ckm count is unexpected", KR(ret), K(cur_item), K(column_checksums_cnt));
-      } else if (cur_item.compaction_scn_ == compaction_scn) {
-        const ObTabletReplicaReportColumnMeta &cur_column_meta = cur_item.column_meta_;
+      } else if (cur_item->compaction_scn_ == compaction_scn) {
+        const ObTabletReplicaReportColumnMeta &cur_column_meta = cur_item->column_meta_;
         if (pre_tablet_id == OB_INVALID_ID) { // first ckm item
           for (int64_t j = 0; OB_SUCC(ret) && (j < column_checksums_cnt); ++j) {
             if (OB_FAIL(ckm_sum_array_.push_back(cur_column_meta.column_checksums_.at(j)))) {
               LOG_WARN("failed to push back column ckm", KR(ret), K(j), K(cur_column_meta));
             }
           } // end of for
-          row_count_ += cur_item.row_count_;
-        } else if (cur_item.tablet_id_.id() != pre_tablet_id) { // start new tablet
+          row_count_ += cur_item->row_count_;
+        } else if (cur_item->tablet_id_.id() != pre_tablet_id) { // start new tablet
           for (int64_t j = 0; j < column_checksums_cnt; ++j) {
             ckm_sum_array_.at(j) += cur_column_meta.column_checksums_.at(j);
           } // end of for
-          row_count_ += cur_item.row_count_;
+          row_count_ += cur_item->row_count_;
         }
-
-        if (OB_FAIL(ret)) {
-        } else if (OB_UNLIKELY(cur_item.tablet_id_.id() != pre_tablet_id // meet new tablet
-            && (pair_idx >= tablet_pairs_.count() || tablet_pairs_.at(pair_idx++).get_tablet_id() != cur_item.tablet_id_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tablet pair and ckm items are mismatch", KR(ret), K(i), K(cur_item), K(tablet_pairs_), K(pair_idx));
-        } else {
-          pre_tablet_id = cur_item.tablet_id_.id();
+        if (OB_SUCC(ret)) {
+          pre_tablet_id = cur_item->tablet_id_.id();
         }
       } else {
         ret = OB_ITEM_NOT_MATCH;
         LOG_WARN("compaction scn mismtach", KR(ret), K(cur_item), K(compaction_scn));
       }
+      LOG_TRACE("build_column_ckm_sum_array", KR(ret), K(pair_idx), KPC(cur_item), K(compaction_scn), K(row_cnt));
     } // end of for
   }
   if (OB_SUCC(ret)) {

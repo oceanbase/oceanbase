@@ -925,7 +925,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         } else if (INDEX_TYPE_PRIMARY == create_index_arg->index_type_ ||
             is_fts_index(create_index_arg->index_type_) ||
             is_multivalue_index(create_index_arg->index_type_)) {
-          // TODO hanxuan temporary bypass, since res.res_arg_array_ is empty
+          // TODO yunshan.tys temporary bypass, since res.res_arg_array_ is empty
           // TODO yunyi temporary bypass, since res.res_arg_array_ is empty
         } else if (!is_sync_ddl_user) {
           // 只考虑非备份恢复时的索引同步检查

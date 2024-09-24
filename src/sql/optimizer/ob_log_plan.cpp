@@ -5366,6 +5366,7 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
                scan_op->get_index_back() ||
                scan_op->is_text_retrieval_scan() ||
                scan_op->is_sample_scan() ||
+               (scan_op->is_index_scan() && !groupby_columns.empty()) ||
                (is_descending_direction(scan_op->get_scan_direction()) && !groupby_columns.empty())) {
       //aggr func cannot be pushed down to the storage layer in these scenarios:
       //1. TSC has index lookup
@@ -5373,6 +5374,7 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
       //3. TSC contains filters that cannot be pushed down to the storage
       //4. TSC is point get
       //5. TSC is text retrieval scan
+      //6. TSC is index table scan with group by
     } else if (OB_FAIL(scan_op->get_pushdown_aggr_exprs().assign(aggr_items))) {
       LOG_WARN("failed to assign group exprs", K(ret));
     } else if (OB_FAIL(scan_op->get_pushdown_groupby_columns().assign(groupby_columns))) {
@@ -5875,7 +5877,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
   } else if (!is_only_full_group_by) {
     OPT_TRACE("not only full group by disable storage pushdwon");
   } else if (static_cast<const ObSelectStmt*>(stmt)->has_rollup() ||
-             group_exprs.count() > 1) {
+             static_cast<const ObSelectStmt*>(stmt)->get_group_expr_size() > 1) {
     /*do nothing*/
   } else {
     const ObIArray<ObRawExpr *> &filters = stmt->get_condition_exprs();
@@ -5950,16 +5952,24 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
   ObColumnRefRawExpr* column = NULL;
   const OptTableMeta *table_meta = NULL;
   const OptColumnMeta *column_meta = NULL;
+  uint64_t first_column_id = 0;
   can_push = false;
   if (OB_UNLIKELY(pushdown_groupby_columns.empty()) ||
              OB_ISNULL(pushdown_groupby_columns.at(0)) ||
              OB_UNLIKELY(!pushdown_groupby_columns.at(0)->is_column_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FALSE_IT(column = static_cast<ObColumnRefRawExpr*>(pushdown_groupby_columns.at(0)))) {
+  } else if (FALSE_IT(schema_guard = get_optimizer_context().get_schema_guard())) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret));
+  } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_id(0, first_column_id))) {
+    LOG_WARN("failed to get first rowkey column id", K(ret));
+  } else if (column->get_column_id() == first_column_id) {
+    can_push = false;
   } else if (OB_UNLIKELY(EN_FORCE_GBY_PUSHDOWN_STORAGE)) {
     can_push = true;
     LOG_TRACE("force pushdown group by to storage layer", K(ret), K(can_push));
-  } else if (OB_FALSE_IT(column = static_cast<ObColumnRefRawExpr*>(pushdown_groupby_columns.at(0)))) {
   } else if (!ObColumnStatParam::is_valid_opt_col_type(column->get_data_type())) {
     can_push = false;
   } else if (NULL == (table_meta =
@@ -5972,9 +5982,6 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
     LOG_WARN("column meta not find", K(ret), K(*table_meta), K(column));
   } else if (table_meta->get_micro_block_count() <= 0) {
     can_push = false;
-  } else if (FALSE_IT(schema_guard = get_optimizer_context().get_schema_guard())) {
-  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(ret));
   } else {
     double micro_block_avg_count = table_meta->get_rows() / table_meta->get_micro_block_count();
     // TODO it's better to use stat of column group in column store
@@ -7440,7 +7447,7 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         !(table_scan->get_is_index_global() && table_scan->get_index_back() && table_scan->has_index_lookup_filter()) &&
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr())) &&
-         (table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL || table_scan->get_vector_index_info().topk_limit_expr_ == NULL)) {
+         table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL) {
       bool das_multi_partition = false;
       if (table_scan->use_das() && NULL != table_scan->get_table_partition_info()) {
         int64_t partition_count = table_scan->get_table_partition_info()->
@@ -10018,23 +10025,12 @@ int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constra
 int ObLogPlan::check_enable_plan_expiration(bool &enable) const
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session = NULL;
-#ifdef OB_BUILD_SPM
-  int64_t spm_mode = 0;
-#endif
   enable = false;
-  if (OB_ISNULL(get_stmt()) ||
-      OB_ISNULL(session = optimizer_context_.get_session_info())) {
+  if (OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
-#ifdef OB_BUILD_SPM
-  } else if (OB_FAIL(session->get_spm_mode(spm_mode))) {
-    LOG_WARN("failed to check is spm enabled", K(ret));
-  } else if (spm_mode > 0) {
-    // do nothing
-#endif
   } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
              optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
     // do nothing
@@ -10685,6 +10681,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(adjust_final_plan_info(root))) {
     LOG_WARN("failed to adjust parent-child relationship", K(ret));
+  } else if (OB_FAIL(remove_duplicate_constraints())) {
+    LOG_WARN("failed to remove duplicate constraints", K(ret));
   } else if ((((min_cluster_version >= CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
               || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0)) && is_oracle_mode()) &&
                OB_FAIL(set_identify_seq_expr_for_recursive_union_all(root))) {
@@ -11288,6 +11286,8 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       rel_info.ref_table_id_ = tsc_op.get_ref_table_id();
       if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_ref_table_id()))) {
         LOG_WARN("store the source table id failed", K(ret));
+      } else if (tsc_op.is_tsc_with_vid() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_rowkey_vid_table_id()))) {
+        LOG_WARN("fail to store rowkey vid table id", K(ret));
       } else if (nullptr != tsc_op.get_global_index_back_table_partition_info() && OB_FAIL(rel_info.table_part_infos_.push_back(tsc_op.get_global_index_back_table_partition_info()))) {
         LOG_WARN("collect table partition info to relation info failed", K(ret));
       }
@@ -11686,9 +11686,9 @@ int ObLogPlan::get_cached_hash_sharding_info(const ObIArray<ObRawExpr*> &hash_ex
     if (OB_ISNULL(temp_sharding = hash_dist_info_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (ObOptimizerUtil::same_exprs(hash_exprs,
-                                           temp_sharding->get_partition_keys(),
-                                           equal_sets)) {
+    } else if (ObOptimizerUtil::is_exprs_equivalent(hash_exprs,
+                                                    temp_sharding->get_partition_keys(),
+                                                    equal_sets)) {
       cached_sharding = temp_sharding;
     } else { /*do nothing*/ }
   }
@@ -13274,8 +13274,8 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
   const ObDMLStmt *stmt = NULL;
   bool hint_force_use_column_store = false;
   bool hint_force_no_use_column_store = false;
-  bool has_all_column_group = false;
-  bool has_normal_column_group = false;
+  bool has_row_store = false;
+  bool has_column_store = false;
   bool session_disable_column_store = false;
   bool is_link = false;
   if (OB_ISNULL(stmt = get_stmt()) ||
@@ -13297,43 +13297,41 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
   } else if (OB_ISNULL(schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null table schema", K(ret));
-  } else if (OB_FAIL(schema->has_all_column_group(has_all_column_group))) {
+  } else if (OB_FAIL(schema->has_all_column_group(has_row_store))) {
     LOG_WARN("failed to check has row store", K(ret));
-  } else if (OB_FAIL(schema->get_is_column_store(has_normal_column_group))) {
+  } else if (OB_FAIL(schema->get_is_column_store(has_column_store))) {
     LOG_WARN("failed to get is column store", K(ret));
+  } else if (!has_row_store && !has_column_store) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect schema statue", K(ret));
+  } else if (!has_column_store) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (!has_row_store) {
+    use_row_store = false;
+    use_column_store = true;
   } else if (OB_FAIL(get_log_plan_hint().check_use_column_store(table_id,
                                                                 hint_force_use_column_store,
                                                                 hint_force_no_use_column_store))) {
     LOG_WARN("table_item is null", K(ret), K(table_id));
+  } else if (hint_force_use_column_store) {
+    use_row_store = false;
+    use_column_store = true;
+  } else if (hint_force_no_use_column_store) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (session_disable_column_store) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (ObTableAccessPolicy::ROW_STORE == get_optimizer_context().get_table_acces_policy()) {
+    use_row_store = true;
+    use_column_store = false;
+  } else if (ObTableAccessPolicy::COLUMN_STORE == get_optimizer_context().get_table_acces_policy()) {
+    use_row_store = false;
+    use_column_store = true;
   } else {
-    if (hint_force_use_column_store) {
-      if (has_normal_column_group) {
-        use_row_store = false;
-        use_column_store = true;
-      } else {
-        use_row_store = true;
-        use_column_store = false;
-      }
-    } else if (hint_force_no_use_column_store) {
-      if (has_all_column_group) {
-        use_row_store = true;
-        use_column_store = false;
-      } else {
-        use_row_store = false;
-        use_column_store = true;
-      }
-    } else if (session_disable_column_store) {
-      if (has_all_column_group) {
-        use_row_store = true;
-        use_column_store = false;
-      } else {
-        use_row_store = false;
-        use_column_store = true;
-      }
-    } else {
-      use_row_store = has_all_column_group;
-      use_column_store = has_normal_column_group;
-    }
+    use_row_store = has_row_store;
+    use_column_store = has_column_store;
   }
   return ret;
 }
@@ -13538,6 +13536,34 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
   return ret;
 }
 
+int ObLogPlan::check_stmt_is_all_distinct_col(const ObSelectStmt *stmt,
+                                              const ObIArray<ObRawExpr*> &distinct_exprs,
+                                              bool &is_all_distinct_col)
+{
+  int ret = OB_SUCCESS;
+  is_all_distinct_col = true;
+  ObSEArray<ObRawExpr *, 4> exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_select_exprs(exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(stmt->get_order_exprs(exprs))) {
+    LOG_WARN("failed to get order exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_all_distinct_col && i < exprs.count(); i++) {
+    if (OB_FAIL(ObTransformUtils::check_group_by_subset(exprs.at(i), distinct_exprs, is_all_distinct_col))) {
+      LOG_WARN("check group by exprs failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_all_distinct_col && i < stmt->get_having_exprs().count(); i++) {
+    if (OB_FAIL(ObTransformUtils::check_group_by_subset(stmt->get_having_exprs().at(i), distinct_exprs, is_all_distinct_col))) {
+      LOG_WARN("check group by exprs failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
                                                bool &can_push)
 {
@@ -13548,6 +13574,7 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
   bool has_virtual_col = false;
   bool dummy = false;
   bool enable_groupby_push_down = false;
+  bool is_all_distinct_col = true;
   can_push = true;
   if (OB_ISNULL(stmt = get_stmt()) ||
       OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
@@ -13561,7 +13588,8 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
     can_push = false;
   } else if (static_cast<const ObSelectStmt*>(stmt)->has_group_by() ||
              stmt->has_for_update() ||
-             !stmt->is_single_table_stmt()) {
+             !stmt->is_single_table_stmt() ||
+             static_cast<const ObSelectStmt*>(stmt)->get_select_item_size() > 1) {
     can_push = false;
   } else if (!enable_groupby_push_down) {
     can_push = false;
@@ -13580,6 +13608,12 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
     can_push = false;
   } else if (distinct_exprs.count() != 1) {
     can_push = false;
+  } else if (OB_FAIL(check_stmt_is_all_distinct_col(static_cast<const ObSelectStmt*>(stmt),
+                                                    distinct_exprs, is_all_distinct_col))) {
+    LOG_WARN("failed to check stmt is only full distinct", K(ret));
+  } else if (!is_all_distinct_col) {
+    can_push = false;
+    OPT_TRACE("not only full distinct disable storage pushdown");
   } else if (OB_ISNULL(distinct_exprs.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -14319,6 +14353,51 @@ int ObLogPlan::init_lateral_table_depend_info(const ObIArray<TableItem*> &table_
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
+  }
+  return ret;
+}
+
+int ObLogPlan::remove_duplicate_constraints()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && OB_NOT_NULL(get_optimizer_context().get_query_ctx())) {
+    ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
+    for (int64_t i = query_ctx->all_equal_param_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_equal_param_constraints_.at(i) == query_ctx->all_equal_param_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_equal_param_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
+    for (int64_t i = query_ctx->all_plan_const_param_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_plan_const_param_constraints_.at(i) == query_ctx->all_plan_const_param_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_plan_const_param_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
+    for (int64_t i = query_ctx->all_expr_constraints_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      bool find_duplicate = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_duplicate && j < i; j++) {
+        if (query_ctx->all_expr_constraints_.at(i) == query_ctx->all_expr_constraints_.at(j)) {
+          find_duplicate = true;
+        }
+      }
+      if (OB_SUCC(ret) && find_duplicate &&
+          OB_FAIL(query_ctx->all_expr_constraints_.remove(i))) {
+        LOG_WARN("failed to remove a element from array", K(ret));
+      }
+    }
   }
   return ret;
 }

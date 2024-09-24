@@ -6953,6 +6953,9 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
       } else if (lib::is_oracle_mode() && is_distinct && right_type.is_geometry()) {
         ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
         LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      } else if (is_distinct && (left_type.is_roaringbitmap() || right_type.is_roaringbitmap())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
       } else {
         res_type = left_type;
       }

@@ -65,7 +65,11 @@ int ObBatchFreezeTabletsTask::inner_process()
       LOG_WARN_RET(tmp_ret, "get invalid tablet pair", K(cur_pair));
     } else if (cur_pair.schedule_merge_scn_ > weak_read_ts) {
       // no need to force freeze
-    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(cur_pair.tablet_id_, true/*is_sync*/, max_retry_time_us, true/*need_rewrite_meta*/))) {
+    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(cur_pair.tablet_id_,
+                                                                 true/*is_sync*/,
+                                                                 max_retry_time_us,
+                                                                 true,/*need_rewrite_meta*/
+                                                                 ObFreezeSourceFlag::MAJOR_FREEZE))) {
       LOG_WARN_RET(tmp_ret, "failed to force freeze tablet", K(param), K(cur_pair));
       ++cnt_.failure_cnt_;
     } else if (FALSE_IT(++cnt_.success_cnt_)) {

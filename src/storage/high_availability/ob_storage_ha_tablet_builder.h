@@ -349,6 +349,12 @@ public:
       ObTablet *tablet,
       bool &is_exist);
 private:
+  static int build_tablet_for_hybrid_store_(
+      ObLS *ls,
+      const common::ObTabletID &tablet_id,
+      const ObTablesHandleArray &hybrid_major_tables,
+      const ObStorageSchema &storage_schema,
+      const BatchBuildTabletTablesExtraParam &extra_param);
   static int build_tablet_for_row_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,

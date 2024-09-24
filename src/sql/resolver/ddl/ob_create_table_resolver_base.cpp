@@ -486,7 +486,10 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
     table_schema.set_column_store(true);
     bool is_each_cg_exist = false;
     if (OB_NOT_NULL(cg_node)) {
-      if (OB_FAIL(parse_column_group(cg_node, table_schema, table_schema))) {
+      if (!is_column_group_supported()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("column group is not enabled", KR(ret));
+      } else if (OB_FAIL(parse_column_group(cg_node, table_schema, table_schema))) {
         LOG_WARN("fail to parse column group", K(ret));
       }
     }

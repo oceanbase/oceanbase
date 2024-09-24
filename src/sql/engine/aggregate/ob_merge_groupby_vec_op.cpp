@@ -544,7 +544,7 @@ int ObMergeGroupByVecOp::init()
   int ret = OB_SUCCESS;
   group_rows_.set_tenant_id(MTL_ID());
   group_rows_.set_ctx_id(ObCtxIds::DEFAULT_CTX_ID);
-  if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+  if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(ctx_.get_my_session()->get_effective_tenant_id(), dir_id_))) {
     LOG_WARN("failed to alloc dir id", K(ret));
   } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {

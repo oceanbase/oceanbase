@@ -116,7 +116,8 @@ private:
   int generate_table_lookup_ctdef(const ObLogTableScan &op,
                                   ObTableScanCtDef &tsc_ctdef,
                                   ObDASBaseCtDef *scan_ctdef,
-                                  ObDASTableLookupCtDef *&lookup_ctdef);
+                                  ObDASTableLookupCtDef *&lookup_ctdef,
+                                  ObDASVIdMergeCtDef *&vid_merge_ctdef);
   int extract_doc_id_index_back_access_columns(const ObLogTableScan &op,
                                                ObIArray<ObRawExpr *> &access_exprs);
   int extract_vec_id_index_back_access_columns(const ObLogTableScan &op,

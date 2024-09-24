@@ -392,6 +392,10 @@ private:
   int generate_mds_copy_tasks_(
       ObTabletCopyFinishTask *tablet_copy_finish_task,
       share::ObITask *&parent_task);
+  int get_need_copy_sstable_info_key_(
+      const common::ObIArray<ObITable::TableKey> &copy_table_key_array,
+      common::ObIArray<ObITable::TableKey> &filter_table_key_array);
+
 
 private:
   bool is_inited_;

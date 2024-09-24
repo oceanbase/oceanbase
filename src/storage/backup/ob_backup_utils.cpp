@@ -1860,7 +1860,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
         }
       }
     }
-    if (FAILEDx(add_tablet_item_(tablet_id))) {
+    if (FAILEDx(add_tablet_item_(tablet_id, has_ss_ddl, ss_ddl_table_key))) {
       LOG_WARN("failed to add tablet item if need", K(ret), K(tablet_id));
     }
     if (OB_SUCC(ret)) {
@@ -1870,7 +1870,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
       }
     }
   }
-  LOG_INFO("prepare tablet", K(tenant_id), K(ls_id), K(tablet_id), K_(backup_data_type), K(total_count));
+  LOG_INFO("prepare tablet", K(tenant_id), K(ls_id), K(tablet_id), K(sstable_array), K_(backup_data_type), K(total_count));
   return ret;
 }
 
@@ -2441,7 +2441,8 @@ bool ObBackupTabletProvider::is_same_type_(const storage::ObITable::TableKey &lh
   return bret;
 }
 
-int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id)
+int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id,
+    const bool has_ss_ddl, const storage::ObITable::TableKey &table_key)
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
@@ -2449,6 +2450,7 @@ int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id
   backup_data_type.set_user_data_backup();
   if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_TABLET_AND_SSTABLE_META, tablet_id, backup_data_type))) {
     LOG_WARN("failed to set item", K(ret), K(tablet_id), K(backup_data_type));
+  } else if (has_ss_ddl && OB_FALSE_IT(item.table_key_ = table_key)) {
   } else if (!item.is_valid()) {
     ret = OB_INVALID_DATA;
     LOG_WARN("backup item is not valid", K(ret), K(item));

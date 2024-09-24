@@ -789,6 +789,25 @@ struct ObHistogramParam
 
 struct ObSetTableStatParam
 {
+
+  ObSetTableStatParam():
+  numrows_(NULLOPT),
+  numblks_(NULLOPT),
+  avgrlen_(NULLOPT),
+  flags_(NULLOPT),
+  cachedblk_(NULLOPT),
+  cachehit_(NULLOPT),
+  nummacroblks_(NULLOPT),
+  nummicroblks_(NULLOPT)
+  {}
+
+  inline bool is_invalid() const {
+    return (numrows_ < 0 && numrows_ != NULLOPT) ||
+            (avgrlen_ < 0 && avgrlen_ != NULLOPT) ||
+            (nummacroblks_ < 0 && nummacroblks_ != NULLOPT) ||
+            (nummicroblks_ < 0 && nummicroblks_ != NULLOPT);
+  }
+
   ObTableStatParam table_param_;
 
   int64_t numrows_;
@@ -799,6 +818,8 @@ struct ObSetTableStatParam
   int64_t cachehit_;
   int64_t nummacroblks_;
   int64_t nummicroblks_;
+
+  static constexpr int64_t NULLOPT = -1;
 
   TO_STRING_KV(K(table_param_),
                K(numrows_),
@@ -815,14 +836,22 @@ struct ObSetColumnStatParam
 {
   ObSetColumnStatParam():
   table_param_(),
-  distcnt_(0),
-  density_(0.0),
-  nullcnt_(0),
+  distcnt_(NULLOPT),
+  density_(NULLOPT),
+  nullcnt_(NULLOPT),
   hist_param_(),
-  avgclen_(0),
-  flags_(0),
+  avgclen_(NULLOPT),
+  flags_(NULLOPT),
   col_meta_()
   {}
+
+  inline bool is_invalid() const {
+    return (distcnt_ < 0 && distcnt_ != NULLOPT) ||
+           (density_ < 0 && density_ != NULLOPT) ||
+           (nullcnt_ < 0 && nullcnt_ != NULLOPT) ||
+           (avgclen_ < 0 && avgclen_ != NULLOPT);
+  }
+
   ObTableStatParam table_param_;
   int64_t distcnt_;
   double density_;
@@ -831,6 +860,7 @@ struct ObSetColumnStatParam
   int64_t avgclen_;
   int64_t flags_;
   common::ObObjMeta col_meta_;
+  static constexpr int64_t NULLOPT = -1;
 
   TO_STRING_KV(K(table_param_),
                K(distcnt_),

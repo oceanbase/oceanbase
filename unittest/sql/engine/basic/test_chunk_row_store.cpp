@@ -210,13 +210,13 @@ public:
   {
     ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR, 2 << 20);
     ObChunkRowStore rs(&alloc);
-    ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
     int64_t v = 0;
     int64_t i;
     int64_t begin = ObTimeUtil::current_time();
     int ret = OB_SUCCESS;
     ret = rs.init(0, tenant_id_, ctx_id_, label_);
     ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
     rs.set_block_size(block_size);
     begin = ObTimeUtil::current_time();
     for (i = 0; i < rows; i++) {
@@ -337,10 +337,10 @@ TEST_F(TestChunkRowStore, multi_iter)
   int64_t i = 0;
   int64_t j = 0;
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
 
   ret = rs.init(1 << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
 
   LOG_INFO("starting basic test: append 3000 rows");
   CALL(append_rows, rs, total); // approximate 1MB, no need to dump
@@ -380,9 +380,9 @@ TEST_F(TestChunkRowStore, multi_iter)
 TEST_F(TestChunkRowStore, keep_projector0)
 {
   ObChunkRowStore rs(NULL);
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, tenant_id_, ObCtxIds::DEFAULT_CTX_ID,
                                 common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -438,10 +438,10 @@ TEST_F(TestChunkRowStore, keep_projector0)
 TEST_F(TestChunkRowStore, keep_projector2)
 {
   ObChunkRowStore rs(NULL);
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, tenant_id_, ObCtxIds::DEFAULT_CTX_ID,
                                 common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true,
                                 ObChunkRowStore::STORE_MODE::FULL));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -495,15 +495,15 @@ TEST_F(TestChunkRowStore, keep_projector2)
 TEST_F(TestChunkRowStore, keep_projector2_with_copy)
 {
   ObChunkRowStore rs(NULL);
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, tenant_id_, ObCtxIds::DEFAULT_CTX_ID,
+                                common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true,
+                                ObChunkRowStore::STORE_MODE::FULL));
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
-                                common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true,
-                                ObChunkRowStore::STORE_MODE::FULL));
   ObChunkRowStore rs2(NULL);
-  ASSERT_EQ(OB_SUCCESS, rs2.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS, rs2.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
+  ASSERT_EQ(OB_SUCCESS, rs2.init(100 << 20, tenant_id_, ObCtxIds::DEFAULT_CTX_ID,
                                 common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true,
                                 ObChunkRowStore::STORE_MODE::FULL));
+  ASSERT_EQ(OB_SUCCESS, rs2.alloc_dir_id());
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -555,11 +555,11 @@ TEST_F(TestChunkRowStore, basic2)
 {
   int ret = OB_SUCCESS;
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   //mem limit 5M
   ret = rs.init(5L << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   CALL(append_rows, rs, 100000);
   ASSERT_GT(rs.get_mem_hold(), 0);
   ASSERT_GT(rs.get_file_size(), 0);
@@ -577,12 +577,12 @@ TEST_F(TestChunkRowStore, chunk_iterator)
 {
   int ret = OB_SUCCESS;
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::ChunkIterator chunk_it;
   ObChunkRowStore::RowIterator it;
   //mem limit 5M
   ret = rs.init(5L << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   CALL(append_rows, rs, 100000);
   ASSERT_GT(rs.get_mem_hold(), 0);
   ASSERT_GT(rs.get_file_size(), 0);
@@ -636,13 +636,13 @@ TEST_F(TestChunkRowStore, test_copy_row)
   int ret = OB_SUCCESS;
   int64_t rows = 1000;
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   const ObChunkRowStore::StoredRow *sr;
   LOG_INFO("starting mem_perf test: append rows", K(rows));
   int64_t begin = ObTimeUtil::current_time();
   ret = rs.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   CALL(append_rows, rs, rows);
   ASSERT_EQ(OB_SUCCESS, rs.begin(it));
   ASSERT_EQ(OB_SUCCESS, it.get_next_row(sr));
@@ -653,12 +653,12 @@ TEST_F(TestChunkRowStore, mem_perf)
   int ret = OB_SUCCESS;
   int64_t rows = 2000000;
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   LOG_INFO("starting mem_perf test: append rows", K(rows));
   int64_t begin = ObTimeUtil::current_time();
   ret = rs.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   CALL(append_rows, rs, rows);
   LOG_WARN("write time:", K(rows), K(ObTimeUtil::current_time() - begin));
   CALL(verify_n_rows, rs, it, 10000, true);
@@ -748,12 +748,12 @@ TEST_F(TestOARowStore, disk_time_cmp)
   int ret = OB_SUCCESS;
   int64_t rows = 2000000;
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   int64_t v = 0;
   int64_t i;
   int64_t begin = ObTimeUtil::current_time();
   ret = rs.init(1 << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   begin = ObTimeUtil::current_time();
   for (int64_t i = 0; i < rows; i++) {
     ObNewRow &row = gen_row(i);
@@ -812,9 +812,9 @@ TEST_F(TestChunkRowStore, disk)
   int64_t rows = round * 10000;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(100L << 20);
   for (int64_t i = 0; i < round; i++) {
     if (i == round / 2) {
@@ -849,9 +849,9 @@ TEST_F(TestChunkRowStore, disk_with_chunk)
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(1L << 20);
   for (int64_t i = 0; i < round; i++) {
     //if (i == round / 2) {
@@ -920,9 +920,9 @@ TEST_F(TestChunkRowStore, disk_with_chunk)
 //   LOG_INFO("starting dump mem test: append rows", K(500000));
 //   int ret = OB_SUCCESS;
 //   ObChunkRowStore rs;
-//   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
 //   ObChunkRowStore::Iterator it;
 //   ret = rs.init(0, tenant_id_, ctx_id_, mod_id_);
+//   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
 //   CALL(append_rows, rs, 500000);
 //   int64_t avg_row_size = rs.get_mem_hold() / rs.get_row_cnt();
 //   LOG_WARN("average row size", K(avg_row_size));
@@ -1005,7 +1005,6 @@ TEST_F(TestChunkRowStore, test_add_block)
   int ret = OB_SUCCESS;
   //send
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Block *block;
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR, 2 << 20);
 
@@ -1014,6 +1013,7 @@ TEST_F(TestChunkRowStore, test_add_block)
 
   ret = rs.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
 
   int64_t min_size = rs.min_blk_size(row_size);
   void *mem = alloc.alloc(min_size);
@@ -1037,10 +1037,10 @@ TEST_F(TestChunkRowStore, test_add_block)
 
   //recv
   ObChunkRowStore rs2;
-  ASSERT_EQ(OB_SUCCESS, rs2.alloc_dir_id());
   ObChunkRowStore::Block *block2 = reinterpret_cast<ObChunkRowStore::Block *>(mem2);
   ret = rs2.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, rs2.alloc_dir_id());
   ret = rs2.add_block(block2, true);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1064,10 +1064,10 @@ TEST_F(TestChunkRowStore, row_extend_row)
   int64_t rows = round * 10000;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS,
             rs.init(0, tenant_id_, ctx_id_, label_, true, ObChunkRowStore::WITHOUT_PROJECTOR, 8));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   LOG_INFO("starting basic test: append 3000 rows");
   int64_t ret = OB_SUCCESS;
   int64_t base = rs.get_row_cnt();
@@ -1113,9 +1113,9 @@ TEST_F(TestChunkRowStore, test_both_disk_and_memory)
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(1L << 30);
   // disk data
   CALL(append_rows, rs, cnt);
@@ -1140,9 +1140,9 @@ TEST_F(TestChunkRowStore, test_only_disk_data)
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(1L << 30);
   // disk data
   CALL(append_rows, rs, cnt);

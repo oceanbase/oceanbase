@@ -162,12 +162,6 @@ public:
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg,
                     obrpc::ObAlterTableRes &res);
 
-  int rebuild_index_in_trans(share::schema::ObSchemaGetterGuard &schema_guard,
-                             const share::schema::ObTableSchema &data_table_schema,
-                             share::schema::ObTableSchema &table_schema,
-                             const ObString *ddl_stmt_str,
-                             ObMySQLTransaction *sql_trans,
-                             const uint64_t tenant_data_version);
 
   int create_inner_expr_index(ObMySQLTransaction &trans,
                               const share::schema::ObTableSchema &orig_table_schema,
@@ -1257,6 +1251,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       share::schema::ObTableSchema &schema);
 
   int reset_parallel_cache(const uint64_t tenant_id);
+  static int set_dbms_job_exec_env(const obrpc::ObCreateIndexArg &create_index_arg,
+                                   ObTableSchema& vidx_table_schema);
 private:
   enum PartitionBornMethod : int64_t
   {
@@ -1334,7 +1330,60 @@ private:
       const share::schema::ObTableSchema &orig_table_schema,
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
-      const uint64_t tenant_data_version);
+      const uint64_t tenant_data_version,
+      obrpc::ObAlterTableRes &res,
+      ObIArray<ObDDLTaskRecord> &ddl_tasks);
+  // this function will discarded later since an index could not drop directly
+  int drop_directly_and_create_index_schema_(share::schema::ObSchemaGetterGuard &schema_guard,
+                                             const share::schema::ObTableSchema &data_table_schema,
+                                             share::schema::ObTableSchema &table_schema,
+                                             const ObString *ddl_stmt_str,
+                                             ObMySQLTransaction *sql_trans,
+                                             const uint64_t tenant_data_version);
+  int old_update_global_index_schema_(const obrpc::ObAlterTableArg &arg,
+                                      ObMySQLTransaction &trans,
+                                      ObDDLOperator &ddl_operator,
+                                      ObSchemaGetterGuard &schema_guard,
+                                      const ObTableSchema &orig_table_schema,
+                                      const ObTableSchema &index_table_schema,
+                                      ObTableSchema &new_index_table_schema,
+                                      const int64_t tenant_data_version);
+  int make_index_unusable_(common::ObIAllocator &allocator,
+                           ObMySQLTransaction &trans,
+                           ObDDLOperator &ddl_operator,
+                           const ObTableSchema &orig_table_schema,
+                           const ObTableSchema &index_table_schema,
+                           ObTableSchema &new_index_table_schema,
+                           ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                           ObIArray<obrpc::ObDDLRes> &ddl_res_array);
+  int drop_and_create_index_schema_(obrpc::ObAlterTableArg &arg,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    ObMySQLTransaction &trans,
+                                    ObDDLOperator &ddl_operator,
+                                    const ObTableSchema &orig_table_schema,
+                                    const ObTableSchema &index_table_schema,
+                                    const int64_t tenant_data_version,
+                                    ObTableSchema &new_index_table_schema,
+                                    ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                    ObIArray<obrpc::ObDDLRes> &ddl_res_array);
+  int prepare_create_index_arg_(common::ObIAllocator &allocator,
+                                const ObTableSchema &new_index_table_schema,
+                                const obrpc::ObIndexArg::IndexActionType index_action_type,
+                                obrpc::ObCreateIndexArg *&create_index_arg);
+  int prepare_drop_index_arg_(common::ObIAllocator &allocator,
+                              ObTableSchema &index_table_schema,
+                              const bool only_set_status,
+                              const bool is_add_to_scheduler,
+                              const bool is_inner,
+                              obrpc::ObDropIndexArg *&drop_index_arg);
+  int submit_drop_index_task_and_fill_ddl_result_(common::ObIAllocator &allocator,
+                                                  ObMySQLTransaction &trans,
+                                                  const common::ObIArray<share::schema::ObTableSchema> &drop_index_schemas,
+                                                  const ObTableSchema &orig_table_schema,
+                                                  const obrpc::ObDropIndexArg *drop_index_arg,
+                                                  bool &has_index_task,
+                                                  ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                                  ObIArray<obrpc::ObDDLRes> &ddl_res_array);
   int fill_interval_info_for_set_interval(const ObTableSchema &orig_table_schema,
       ObTableSchema &new_table_schema,
       AlterTableSchema &inc_table_schema);
@@ -2716,6 +2765,17 @@ private:
   int gen_inc_table_schema_for_drop_subpart(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int inner_drop_index_to_scheduler_(ObMySQLTransaction &trans,
+                                     ObSchemaGetterGuard &schema_guard,
+                                     ObArenaAllocator &allocator,
+                                     const ObTableSchema &origin_table_schema,
+                                     ObTableSchema &new_table_schema,
+                                     obrpc::ObDropIndexArg *drop_index_arg,
+                                     DropIndexNameHashSet &drop_index_name_set,
+                                     RenameIndexNameHashSet &rename_ori_index_name_set,
+                                     ObDDLOperator &ddl_operator,
+                                     obrpc::ObAlterTableRes &res,
+                                     ObIArray<ObDDLTaskRecord> &ddl_tasks);
 public:
   //not check belong to the same table
   int check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,

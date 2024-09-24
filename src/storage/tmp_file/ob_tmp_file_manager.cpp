@@ -30,19 +30,6 @@ int ObTenantTmpFileManager::mtl_init(ObTenantTmpFileManager *&manager)
   return ret;
 }
 
-ObTenantTmpFileManager &ObTenantTmpFileManager::get_instance()
-{
-  int ret = OB_SUCCESS;
-  ObTenantTmpFileManager *tmp_file_manager = MTL(tmp_file::ObTenantTmpFileManager *);
-  if (OB_ISNULL(tmp_file_manager)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ObTenantTmpFileManager is null, please check whether MTL module is normal", KR(ret));
-    ob_abort();
-  }
-
-  return *tmp_file_manager;
-}
-
 int ObTenantTmpFileManager::init()
 {
   int ret = OB_SUCCESS;
@@ -162,8 +149,8 @@ int ObTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id, const char*
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.open(fd, dir_id))) {
-      LOG_WARN("fail to open file in sn tmp file manager", KR(ret), K(fd), K(dir_id));
+    if (OB_FAIL(sn_file_manager_.open(fd, dir_id, label))) {
+      LOG_WARN("fail to open file in sn tmp file manager", KR(ret), K(fd), K(dir_id), KP(label));
     }
   }
   return ret;
@@ -190,7 +177,8 @@ int ObTenantTmpFileManager::remove(const int64_t fd)
 }
 
 
-int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                     ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -203,14 +191,15 @@ int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIO
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.aio_read(io_info, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.aio_read(tenant_id, io_info, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                      const int64_t offset, ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -223,14 +212,15 @@ int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info, const int6
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.aio_pread(io_info, offset, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.aio_pread(tenant_id, io_info, offset, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info), K(offset));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                 ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -243,14 +233,15 @@ int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHand
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.read(io_info, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.read(tenant_id, io_info, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                  const int64_t offset, ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -263,14 +254,15 @@ int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t 
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.pread(io_info, offset, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.pread(tenant_id, io_info, offset, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to read file in sn tmp file manager", KR(ret), K(io_info), K(offset));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+int ObTenantTmpFileManager::aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                      ObTmpFileIOHandle &io_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -283,14 +275,14 @@ int ObTenantTmpFileManager::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileI
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.aio_write(io_info, io_handle.get_sn_handle()))) {
+    if (OB_FAIL(sn_file_manager_.aio_write(tenant_id, io_info, io_handle.get_sn_handle()))) {
       LOG_WARN("fail to write file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
   return ret;
 }
 
-int ObTenantTmpFileManager::write(const ObTmpFileIOInfo &io_info)
+int ObTenantTmpFileManager::write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -303,7 +295,7 @@ int ObTenantTmpFileManager::write(const ObTmpFileIOInfo &io_info)
     }
 #endif
   } else {
-    if (OB_FAIL(sn_file_manager_.write(io_info))) {
+    if (OB_FAIL(sn_file_manager_.write(tenant_id, io_info))) {
       LOG_WARN("fail to write file in sn tmp file manager", KR(ret), K(io_info));
     }
   }
@@ -385,6 +377,342 @@ int ObTenantTmpFileManager::get_tmp_file_info(const int64_t fd, ObSNTmpFileInfo 
   } else {
     if (OB_FAIL(sn_file_manager_.get_tmp_file_info(fd, tmp_file_info))) {
       LOG_WARN("fail to get tmp file info in sn tmp file manager", KR(ret), K(fd));
+    }
+  }
+  return ret;
+}
+
+ObTenantTmpFileManagerWithMTLSwitch &ObTenantTmpFileManagerWithMTLSwitch::get_instance()
+{
+  static ObTenantTmpFileManagerWithMTLSwitch mgr;
+
+  return mgr;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::alloc_dir(const uint64_t tenant_id, int64_t &dir_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->alloc_dir(dir_id))) {
+      LOG_WARN("fail to alloc dir", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::open(const uint64_t tenant_id,
+                                              int64_t &fd,
+                                              const int64_t &dir_id,
+                                              const char* const label)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->open(fd, dir_id, label))) {
+      LOG_WARN("fail to open", KR(ret), K(tenant_id), K(fd), K(dir_id), KP(label));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::remove(const uint64_t tenant_id, const int64_t fd)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->remove(fd))) {
+      LOG_WARN("fail to remove", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->aio_read(tenant_id, io_info, io_handle))) {
+      LOG_WARN("fail to aio read", KR(ret), K(tenant_id), K(io_info));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
+                                                   const int64_t offset, ObTmpFileIOHandle &io_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->aio_pread(tenant_id, io_info, offset, io_handle))) {
+      LOG_WARN("fail to aio pread", KR(ret), K(tenant_id), K(io_info), K(offset));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->read(tenant_id, io_info, io_handle))) {
+      LOG_WARN("fail to read", KR(ret), K(tenant_id), K(io_info));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->pread(tenant_id, io_info, offset, io_handle))) {
+      LOG_WARN("fail to pread", KR(ret), K(tenant_id), K(io_info), K(offset));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->aio_write(tenant_id, io_info, io_handle))) {
+      LOG_WARN("fail to aio write", KR(ret), K(tenant_id), K(io_info));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->write(tenant_id, io_info))) {
+      LOG_WARN("fail to write", KR(ret), K(tenant_id), K(io_info));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::truncate(const uint64_t tenant_id, const int64_t fd, const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->truncate(fd, offset))) {
+      LOG_WARN("fail to truncate", KR(ret), K(tenant_id), K(fd), K(offset));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::get_tmp_file_size(const uint64_t tenant_id, const int64_t fd, int64_t &file_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->get_tmp_file_size(fd, file_size))) {
+      LOG_WARN("fail to get tmp file size", KR(ret), K(tenant_id), K(fd));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::get_tmp_file_fds(const uint64_t tenant_id, ObIArray<int64_t> &fd_arr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->get_tmp_file_fds(fd_arr))) {
+      LOG_WARN("fail to get tmp file fds", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObTenantTmpFileManagerWithMTLSwitch::get_tmp_file_info(const uint64_t tenant_id, const int64_t fd, ObSNTmpFileInfo &tmp_file_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (tenant_id != MTL_ID()) {
+      if (OB_FAIL(guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+    ObTenantTmpFileManager* tmp_file_mgr = MTL(ObTenantTmpFileManager*);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_file_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tmp file manager is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tmp_file_mgr->get_tmp_file_info(fd, tmp_file_info))) {
+      LOG_WARN("fail to get tmp file info", KR(ret), K(tenant_id), K(fd));
     }
   }
   return ret;

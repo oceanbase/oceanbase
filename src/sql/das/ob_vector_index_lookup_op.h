@@ -94,6 +94,7 @@ public:
   int init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
                 ObDASVecAuxScanRtDef *ir_rtdef);
   int revert_iter_for_complete_data();
+  void reuse_scan_param_complete_data();
   int prepare_state(const ObVidAdaLookupStatus& cur_state, ObVectorQueryAdaptorResultContext &ada_ctx);
   int vector_do_index_lookup();
   int get_cmpt_aux_table_rowkey();

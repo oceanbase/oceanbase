@@ -35,6 +35,7 @@ struct TICUpdateInfo
     RENAME_TABLE_ADD = 2,
     RENAME_TABLE_REMOVE = 3,
     DROP_DATABASE = 4,
+    RECOVER_TABLE_END = 5,
   };
   static const char *print_tic_update_reason(const TICUpdateReason reason);
   TICUpdateReason reason_;

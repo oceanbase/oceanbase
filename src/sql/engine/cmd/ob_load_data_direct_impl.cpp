@@ -2480,7 +2480,7 @@ int ObLoadDataDirectImpl::init_execute_param()
   // compressor_type_
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
-                 table_schema->get_compressor_type(), execute_param_.parallel_, execute_param_.compressor_type_))) {
+                 table_schema, execute_param_.parallel_, execute_param_.compressor_type_))) {
       LOG_WARN("fail to get tmp store compressor type", KR(ret));
     }
   }

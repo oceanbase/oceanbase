@@ -1739,6 +1739,7 @@ ObBackupUnorderdMacroBlockIndexMerger::ObBackupUnorderdMacroBlockIndexMerger()
 
 ObBackupUnorderdMacroBlockIndexMerger::~ObBackupUnorderdMacroBlockIndexMerger()
 {
+  external_sort_.clean_up();
 }
 
 int ObBackupUnorderdMacroBlockIndexMerger::init(

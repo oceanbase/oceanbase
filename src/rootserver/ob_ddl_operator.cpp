@@ -81,6 +81,7 @@
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mview_refresh_stats_params.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
+#include "share/vector_index/ob_vector_index_util.h"
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 
@@ -1691,6 +1692,13 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
         }
       }
     }
+  }
+
+  if (OB_SUCC(ret) && table_schema.is_vec_delta_buffer_type() &&
+      OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(trans, tenant_id,
+                                                      table_schema.get_table_id(),
+                                                      table_schema.get_exec_env()))) {
+    LOG_WARN("failed to add dbms_vector jobs", K(ret), K(tenant_id), K(table_schema));
   }
   return ret;
 }
@@ -4748,7 +4756,7 @@ int ObDDLOperator::drop_table(
     LOG_WARN("failed to modify obj status", K(ret));
   } else if (OB_FAIL(drop_table_for_not_dropped_schema(
               table_schema, trans, ddl_stmt_str, is_truncate_table,
-              drop_table_set, is_drop_db))) {
+              drop_table_set, is_drop_db, delete_priv))) {
     LOG_WARN("drop table for not dropped shema failed", K(ret));
   } else if (table_schema.is_view_table()
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
@@ -4806,6 +4814,9 @@ int ObDDLOperator::drop_table(
         LOG_WARN("failed to remove mlog purge job",
             KR(ret), K(tenant_id), K(table_id));
       }
+    } else if (table_schema.is_vec_delta_buffer_type() &&
+               OB_FAIL(ObVectorIndexUtil::remove_dbms_vector_jobs(trans, tenant_id, table_schema.get_table_id()))) {
+      LOG_WARN("failed to remove dbms vector jobs", K(ret), K(tenant_id), K(table_schema.get_table_id()));
     }
   }
 

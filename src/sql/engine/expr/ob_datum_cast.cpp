@@ -4014,7 +4014,9 @@ static int common_string_json(const ObExpr &expr,
         }
       } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
         j_base = &j_null;
-      } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree, parse_flag))) {
+      } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree,
+                                                parse_flag,
+                                                ObJsonExprHelper::get_json_max_depth_config()))) {
         if (!is_oracle && CM_IS_IMPLICIT_CAST(expr.extra_) && !CM_IS_COLUMN_CONVERT(expr.extra_)) {
           ret = OB_SUCCESS;
           j_base = &j_string;
@@ -9634,7 +9636,7 @@ CAST_FUNC_NAME(collection, collection)
       } else if (OB_FAIL(ObArrayTypeCastFactory::alloc(temp_allocator, *arr_type,
                                                        *dst_arr_type, arr_cast))) {
         LOG_WARN("alloc array cast failed", K(ret), K(src_coll_info));
-      } else if (OB_FAIL(arr_cast->cast(temp_allocator, arr_src, elem_type, arr_dst, dst_elem_type))) {
+      } else if (OB_FAIL(arr_cast->cast(temp_allocator, arr_src, elem_type, arr_dst, dst_elem_type, expr.extra_))) {
         LOG_WARN("array element cast failed", K(ret), K(*src_coll_info), K(*dst_coll_info));
         if (ret == OB_ERR_ARRAY_TYPE_MISMATCH) {
           ObString dst_def = dst_coll_info->get_def_string();

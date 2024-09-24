@@ -150,6 +150,11 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
           } else if (T_DEFAULT == set_node->children_[1]->type_) {
             // set 系统变量 = default
             var_node.is_set_default_ = true;
+          } else if (T_FUN_SYS_ARRAY == set_node->children_[1]->type_) {
+            // set 系统变量 = array type isn't supported
+             ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("Variable value type is not supported", K(ret), K(set_node->children_[1]->type_));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value type");
           } else if (var_node.is_system_variable_) {
             ParseNode value_node;
             if (T_IDENT == set_node->children_[1]->type_) {

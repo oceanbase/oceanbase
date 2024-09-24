@@ -141,6 +141,26 @@ void ObS3Logger::LogStream(Logging::LogLevel logLevel, const char* tag, const Aw
 }
 
 /*--------------------------------ObS3Client--------------------------------*/
+// max allowed idle duration for a s3 client: 20min
+static int64_t MAX_S3_CLIENT_IDLE_DURATION_US = 20LL * 600LL * 1000LL * 1000LL;
+
+int set_max_s3_client_idle_duration_us(const int64_t duration_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(duration_us <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arg", K(ret), K(duration_us));
+  } else {
+    MAX_S3_CLIENT_IDLE_DURATION_US = duration_us;
+  }
+  return ret;
+}
+
+int64_t get_max_s3_client_idle_duration_us()
+{
+  return MAX_S3_CLIENT_IDLE_DURATION_US;
+}
+
 ObS3Client::ObS3Client()
     : lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       is_inited_(false),
@@ -155,6 +175,19 @@ ObS3Client::~ObS3Client()
 {
   destroy();
 }
+
+// Disable the internal retry mechanism within the S3 SDK
+class ObStorageS3DisabledRetryStrategy : public Aws::Client::DefaultRetryStrategy
+{
+public:
+  ObStorageS3DisabledRetryStrategy() : DefaultRetryStrategy() {}
+  virtual ~ObStorageS3DisabledRetryStrategy() {}
+
+  virtual bool ShouldRetry(const AWSError<CoreErrors>& error, long attemptedRetries) const override
+  {
+    return false;
+  }
+};
 
 int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
                                               S3ClientConfiguration &config)
@@ -177,8 +210,8 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
     config.executor = nullptr;
 
     // Default maxRetries is 10
-    std::shared_ptr<Aws::Client::DefaultRetryStrategy> retryStrategy =
-        Aws::MakeShared<Aws::Client::DefaultRetryStrategy>(S3_SDK, 1/*maxRetries*/);
+    std::shared_ptr<ObStorageS3DisabledRetryStrategy> retryStrategy =
+        Aws::MakeShared<ObStorageS3DisabledRetryStrategy>(S3_SDK);
     config.retryStrategy = retryStrategy;
   }
   return ret;
@@ -255,8 +288,9 @@ bool ObS3Client::try_stop(const int64_t timeout)
   bool is_stopped = true;
   if (OB_SUCCESS == lock_.wrlock(timeout)) {
     if (is_inited_) {
-      const int64_t cur_time = ObTimeUtility::current_time();
-      if (ref_cnt_ <= 0 && cur_time - last_modified_ts_ >= MAX_S3_CLIENT_IDLE_DURATION) {
+      const int64_t cur_time_us = ObTimeUtility::current_time();
+      if (ref_cnt_ <= 0
+          && cur_time_us - last_modified_ts_ >= get_max_s3_client_idle_duration_us()) {
         stopped_ = true;
       } else {
         is_stopped = false;
@@ -289,27 +323,34 @@ void ObS3Client::release()
   last_modified_ts_ = ObTimeUtility::current_time();
 }
 
-template<typename RequestType, typename OutcomeType>
-int ObS3Client::do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
-                                 const RequestType &request, OutcomeType &outcome)
+int ObS3Client::check_status()
 {
   int ret = OB_SUCCESS;
-  {
-    SpinRLockGuard guard(lock_);
-    if (!is_inited_) {
-      ret = OB_NOT_INIT;
-      OB_LOG(WARN, "ObS3Client not init", K(ret));
-    } else if (stopped_) {
-      ret = OB_IN_STOP_STATE;
-      OB_LOG(WARN, "ObS3Client has been stopped", K(ret));
-    } else if (OB_ISNULL(client_)) {
-      ret = OB_S3_ERROR;
-      OB_LOG(WARN, "client is NULL in ObS3Client", K(ret), KP(client_));
-    }
+  SpinRLockGuard guard(lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "ObS3Client not init", K(ret));
+  } else if (stopped_) {
+    ret = OB_IN_STOP_STATE;
+    OB_LOG(WARN, "ObS3Client has been stopped", K(ret));
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_S3_ERROR;
+    OB_LOG(WARN, "client is NULL in ObS3Client", K(ret), KP(client_));
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    outcome = (client_->*s3_op_func)(request);
+template<typename RequestType, typename OutcomeType>
+int ObS3Client::do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
+                                 const RequestType &request, OutcomeType &outcome,
+                                 const int64_t retry_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_status())) {
+    OB_LOG(WARN, "ObS3Client is not in running state", K(ret));
+  } else {
+    ObStorageS3RetryStrategy<OutcomeType> strategy(retry_timeout_us);
+    outcome = execute_until_timeout(strategy, std::mem_fn(s3_op_func), client_, request);
     last_modified_ts_ = ObTimeUtility::current_time();
   }
   return ret;
@@ -408,7 +449,9 @@ int ObS3Client::complete_multipart_upload(const Model::CompleteMultipartUploadRe
 {
   S3OperationFunc<Model::CompleteMultipartUploadRequest, Model::CompleteMultipartUploadOutcome>
       s3_op_func = &S3Client::CompleteMultipartUpload;
-  return do_s3_operation_(s3_op_func, request, outcome);
+  // disable the retry mechanism
+  const int64_t DO_NOT_RETRY = 0;
+  return do_s3_operation_(s3_op_func, request, outcome, DO_NOT_RETRY/*retry_timeout_us*/);
 }
 
 int ObS3Client::abort_multipart_upload(const Model::AbortMultipartUploadRequest &request,
@@ -547,6 +590,7 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
 {
   int ret = OB_SUCCESS;
   const int64_t key = account.hash();
+  client = nullptr;
   SpinWLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -554,29 +598,39 @@ int ObS3Env::get_or_create_s3_client(const ObS3Account &account, ObS3Client *&cl
   } else if (OB_UNLIKELY(!account.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "S3 account not valid", K(ret));
-  } else if (OB_FAIL(s3_client_map_.get_refactored(key, client))) {
+  } else if (REACH_TIME_INTERVAL(get_max_s3_client_idle_duration_us())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(clean_s3_client_map_())) {
+      OB_LOG(WARN, "failed to clean s3 client map", K(tmp_ret), K(s3_client_map_.size()));
+    }
+  }
+
+  if (FAILEDx(s3_client_map_.get_refactored(key, client))) {
     if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
-      void *client_buf = NULL;
-      if (s3_client_map_.size() > MAX_S3_CLIENT_MAP_THRESHOLD && OB_FAIL(clean_s3_client_map_())) {
-        OB_LOG(WARN, "failed to clean s3 client map", K(ret), K(s3_client_map_.size()));
-      } else if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
+      void *client_buf = nullptr;
+      if (OB_ISNULL(client_buf = ob_malloc(sizeof(ObS3Client), OB_STORAGE_S3_ALLOCATOR))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "failed to alloc buf for ob s3 client", K(ret));
       } else {
         client = new(client_buf) ObS3Client();
         if (OB_FAIL(client->init(account))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to init ObS3Client", K(ret), K(account));
         } else if (OB_FAIL(s3_client_map_.set_refactored(key, client))) {
-          client->~ObS3Client();
-          ob_free(client_buf);
-          client = nullptr;
           OB_LOG(WARN, "failed to insert into s3 client map", K(ret), K(account));
         } else {
           OB_LOG(DEBUG, "succeed create new s3 client", K(account), K(s3_client_map_.size()));
+        }
+
+        if (OB_FAIL(ret)) {
+          if (OB_NOT_NULL(client)) {
+            client->~ObS3Client();
+            client = nullptr;
+          }
+          if (OB_NOT_NULL(client_buf)) {
+            ob_free(client_buf);
+            client_buf = nullptr;
+          }
         }
       }
     } else {
@@ -761,6 +815,10 @@ static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
   const int code = static_cast<int>(outcome.GetError().GetResponseCode());
   const char *exception = outcome.GetError().GetExceptionName().c_str();
   const char *err_msg = outcome.GetError().GetMessage().c_str();
+  if (OB_OBJECT_NOT_EXIST != ob_errcode) {
+    // force printing log
+    allow_next_syslog();
+  }
   if (OB_CHECKSUM_ERROR == ob_errcode) {
     OB_LOG_RET(ERROR, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
   } else {
@@ -1649,6 +1707,7 @@ int ObStorageS3Util::batch_del_files_(
   int ret = OB_SUCCESS;
   ObStorageS3Base s3_base;
   const int64_t n_files_to_delete = files_to_delete.size();
+  ObArenaAllocator allocator(OB_STORAGE_S3_ALLOCATOR);
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
@@ -1662,12 +1721,18 @@ int ObStorageS3Util::batch_del_files_(
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "batch tagging is not supported", K(ret), K(uri), K(s3_base.s3_account_));
   } else {
+    char *tmp_key = nullptr;
     Aws::S3::Model::Delete delete_info;
     delete_info.SetQuiet(false); // return all object's status
     hash::ObHashMap<ObString, int64_t>::const_iterator iter = files_to_delete.begin();
     while (OB_SUCC(ret) && iter != files_to_delete.end()) {
-      delete_info.AddObjects(Aws::S3::Model::ObjectIdentifier().WithKey(iter->first.ptr()));
-      iter++;
+      if (OB_FAIL(ob_dup_cstring(allocator, iter->first, tmp_key))) {
+        OB_LOG(WARN, "fail to copy c string", K(ret), K(uri),
+            K(iter->first), KPC_(storage_info), K(s3_base.bucket_), K(s3_base.object_));
+      } else {
+        delete_info.AddObjects(Aws::S3::Model::ObjectIdentifier().WithKey(tmp_key));
+        iter++;
+      }
     }
 
     Aws::S3::Model::DeleteObjectsRequest request;
@@ -1695,16 +1760,16 @@ int ObStorageS3Util::batch_del_files_(
       for (int64_t i = 0; OB_SUCC(ret) && i < deleted_object_list.size(); i++) {
         object_name = deleted_object_list[i].GetKey().c_str();
         object_name_len = deleted_object_list[i].GetKey().size();
-        if (OB_ISNULL(object_name)) {
+        if (OB_ISNULL(object_name) || OB_UNLIKELY(object_name_len <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "returned object name is null",
-              K(ret), K(s3_base.s3_account_), K(i), K(object_name));
+              K(ret), K(s3_base.s3_account_), K(i), K(object_name), K(object_name_len));
         }
         // S3 returns the successfully deleted object in the structure of the basic_string.
         // We use the size of string to construct ObString.
         else if (OB_FAIL(files_to_delete.erase_refactored(ObString(object_name_len, object_name)))) {
-          OB_LOG(WARN, "fail to erase succeed deleted object",
-              K(ret), K(s3_base.s3_account_), K(i), K(object_name));
+          OB_LOG(WARN, "fail to erase succeed deleted object", K(ret),
+              K(s3_base.s3_account_), K(i), K(object_name), K(object_name_len));
         } else {
           OB_LOG(DEBUG, "succeed deleting object", K(object_name));
         }

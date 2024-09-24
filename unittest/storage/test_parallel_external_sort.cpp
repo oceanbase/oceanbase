@@ -371,7 +371,7 @@ int TestParallelExternalSort::build_reader(const ObVector<TestItem *> &items, co
     ObFragmentWriterV2<TestItem> writer;
     int64_t dir_id = -1;
     std::sort(items.begin(), items.end(), compare);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id))) {
       COMMON_LOG(WARN, "fail to allocate file directory", K(ret));
     } else if (OB_FAIL(writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id))) {
       COMMON_LOG(WARN, "fail to open writer", K(ret));
@@ -682,7 +682,7 @@ TEST_F(TestParallelExternalSort, test_writer)
   int ret = OB_SUCCESS;
   int64_t dir_id = -1;
 
-  ret = FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id);
+  ret = FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // single macro buffer, total write bytes is less than single macro buffer length
   ret = writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id);
@@ -739,7 +739,7 @@ TEST_F(TestParallelExternalSort, test_reader)
   int ret = OB_SUCCESS;
   int64_t dir_id = -1;
 
-  ret = FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id);
+  ret = FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // single macro buffer, total write bytes is less than single macro buffer length
   ret = writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id);

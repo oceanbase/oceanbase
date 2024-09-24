@@ -101,43 +101,10 @@ int ObExprIs::calc_collection_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     LOG_WARN("evaluate parameter failed", K(ret));
   } else {
     bool v = false;
-    if (param->is_null() || param->extend_obj_->is_null()) {
-      v = true;
+    if (OB_FAIL(pl::ObPLDataType::datum_is_null(param, true, v))) {
+      LOG_WARN("check complex value is null not supported", K(ret), K(param->extend_obj_));
     } else {
-      uint64_t ext = param->extend_obj_->get_ext();
-      switch (param->extend_obj_->get_meta().get_extend_type()) {
-#ifdef OB_BUILD_ORACLE_PL
-        case pl::PL_NESTED_TABLE_TYPE:
-        case pl::PL_ASSOCIATIVE_ARRAY_TYPE:
-        case pl::PL_VARRAY_TYPE: {
-          pl::ObPLCollection *collection = reinterpret_cast<pl::ObPLCollection*>(ext);
-          v = OB_ISNULL(collection) ? true : collection->is_collection_null();
-          break;
-        }
-        case pl::PL_OPAQUE_TYPE: {
-          pl::ObPLOpaque *opaque = reinterpret_cast<pl::ObPLOpaque *>(ext);
-          v = OB_ISNULL(opaque) ? true : opaque->is_invalid();
-          break;
-        }
-        case pl::PL_CURSOR_TYPE:
-        case pl::PL_REF_CURSOR_TYPE: {
-          v = param->extend_obj_->get_ext() == 0;
-        } break;
-#endif
-        case pl::PL_RECORD_TYPE: {
-          pl::ObPLRecord *rec = reinterpret_cast<pl::ObPLRecord *>(ext);
-          v = rec->is_null();
-          break;
-        }
-        default: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("check complex value is null not supported", K(ret), K(param->extend_obj_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "check complex is null");
-        } break;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      expr_datum.set_int32(v);
+      OX(expr_datum.set_int32(v));
     }
   }
   return ret;

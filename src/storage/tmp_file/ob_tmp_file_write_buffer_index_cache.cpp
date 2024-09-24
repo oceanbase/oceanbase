@@ -23,7 +23,7 @@ namespace oceanbase
 namespace tmp_file
 {
 ObTmpFileWBPIndexCache::ObTmpFileWBPIndexCache() :
-  ObTmpFileCircleArray(), bucket_array_allocator_(), bucket_allocator_(),
+  ObTmpFileCircleArray(), bucket_array_allocator_(nullptr), bucket_allocator_(nullptr),
   page_buckets_(nullptr) ,
   fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD), wbp_(nullptr),
   max_bucket_array_capacity_(MAX_BUCKET_ARRAY_CAPACITY) {}

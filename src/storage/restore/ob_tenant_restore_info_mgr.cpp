@@ -179,9 +179,19 @@ int ObTenantRestoreInfoMgr::refresh_restore_info()
 int ObTenantRestoreInfoMgr::get_backup_dest(const int64_t backup_set_id, share::ObBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  const bool enable_error_test = GCONF.enable_quick_restore_remove_backup_dest_test;
+  if (enable_error_test) {
+    ret = OB_EAGAIN;
+    LOG_WARN("enable error test, fake backup dest is removed", K(ret));
+  }
+#endif
+
   lib::ObMutexGuard guard(mutex_);
   int64_t idx = -1;
-  if (!is_refreshed_) {
+  if (OB_FAIL(ret)) {
+  } else if (!is_refreshed_) {
     ret = OB_EAGAIN;
     LOG_WARN("restore info has not been refreshed", K(ret), K(backup_set_id));
   } else if (OB_FAIL(get_restore_backup_set_brief_info_(backup_set_id, idx))) {

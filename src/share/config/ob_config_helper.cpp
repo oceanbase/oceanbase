@@ -1298,9 +1298,23 @@ bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
 }
 
 bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
+  bool bret = true;
   const ObString tmp_str(t.str());
-  return 0 == tmp_str.case_compare("ROW") || 0 == tmp_str.case_compare("COLUMN") ||
-      0 == tmp_str.case_compare("COMPOUND");
+  // Note: Shared-Storage mode does not support column store in default. if want to test
+  // column store under shared-storage mode, then need to set tracepoint.
+  bool is_column_store_supported = true;
+  if (GCTX.is_shared_storage_mode()) {
+    int tmp_ret = OB_E(EventTable::EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP) OB_SUCCESS;
+    is_column_store_supported = (tmp_ret != OB_SUCCESS);
+  }
+  if (is_column_store_supported) {
+    bret = ((0 == tmp_str.case_compare("ROW")) ||
+            (0 == tmp_str.case_compare("COLUMN")) ||
+            (0 == tmp_str.case_compare("COMPOUND")));
+  } else {
+    bret = (0 == tmp_str.case_compare("ROW"));
+  }
+  return bret;
 }
 
 bool ObConfigMigrationChooseSourceChecker::check(const ObConfigItem &t) const
@@ -1411,6 +1425,14 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
   return bret;
 }
 
+bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("all")
+    || 0 == v_str.case_compare("read")
+    || 0 == v_str.case_compare("write");
+}
+
 bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
 {
   bool valid = false;
@@ -1425,6 +1447,29 @@ bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
     valid = (0 == ObString::make_string("ICU").case_compare(t.str()));
   }
   return valid;
+}
+
+bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
+{
+  // When compliantRfc3986Encoding is set to true:
+  // - Adhere to RFC 3986 by supporting the encoding of reserved characters
+  //   such as '-', '_', '.', '$', '@', etc.
+  // - This approach mitigates inconsistencies in server behavior when accessing
+  //   COS using the S3 SDK.
+  // Otherwise, the reserved characters will not be encoded,
+  // following the default behavior of the S3 SDK.
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  if (0 == tmp_str.case_compare("default")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(false);
+  } else if (0 == tmp_str.case_compare("compliantRfc3986Encoding")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(true);
+  } else {
+    bret = false;
+  }
+  return bret;
 }
 
 } // end of namepace common

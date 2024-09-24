@@ -427,10 +427,9 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out(
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
+  } else if (transfer_scn.is_min()) {
+    // noop, before on_redo()
   } else if (read_snapshot >= transfer_scn) {
-    // TODO(@gaishun.gs): TEMP SOLUTION,
-    // return OB_TABLET_NOT_EXIST if read snapshot is no smaller than transfer scn,
-    // no matter start transfer out transaction is committed or not.
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("read snapshot is no smaller than transfer scn under transfer out status, should retry on dst ls",
         K(ret), K(read_snapshot), K(transfer_scn), K(tablet_status));

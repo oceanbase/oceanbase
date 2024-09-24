@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "gtest/gtest.h"
+#include <thread>
 #define private public
 #define protected public
 

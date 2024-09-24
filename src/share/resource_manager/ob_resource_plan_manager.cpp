@@ -232,7 +232,7 @@ int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
       ObPlanDirective &cur_directive = directives.at(i);
-      if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+      if (OB_UNLIKELY(!is_resource_manager_group(cur_directive.group_id_))) {
         ret = OB_ERR_UNEXPECTED;
         // 理论上不应该出现
         LOG_WARN("unexpected error!!!", K(cur_directive));
@@ -277,7 +277,7 @@ int ObResourcePlanManager::normalize_net_bandwidth_directives(const uint64_t ten
     // step 1. sum total net bandwidth weight
     for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
       ObPlanDirective &cur_directive = directives.at(i);
-      if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+      if (OB_UNLIKELY(!is_resource_manager_group(cur_directive.group_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error!!!", K(cur_directive));
       } else if (OB_UNLIKELY(!cur_directive.is_valid())) {

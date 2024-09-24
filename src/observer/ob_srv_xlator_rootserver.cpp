@@ -114,6 +114,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcCreateAuxIndexP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateIndexP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropIndexP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcDropIndexOnFailedP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateMLogP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTableLikeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcExecuteBootstrapP, *gctx_.root_service_);

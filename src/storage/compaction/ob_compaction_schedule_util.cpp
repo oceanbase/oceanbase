@@ -147,17 +147,15 @@ int ObBasicMergeScheduler::refresh_data_version()
   return ret;
 }
 
-void ObBasicMergeScheduler::update_frozen_version(const int64_t broadcast_version)
+void ObBasicMergeScheduler::update_frozen_version_and_merge_progress(const int64_t broadcast_version)
 {
   if (broadcast_version > get_frozen_version()) {
-    obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
-    frozen_version_ = broadcast_version;
-  }
-}
+    {
+      obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
+      frozen_version_ = broadcast_version;
+    }
 
-void ObBasicMergeScheduler::init_merge_progress(const int64_t broadcast_version)
-{
-  if (broadcast_version > get_frozen_version()) {
+    // init merge progress
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->add_progress(broadcast_version))) {
       LOG_WARN_RET(tmp_ret, "failed to add progress", K(broadcast_version));

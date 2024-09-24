@@ -12037,7 +12037,7 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIAr
         ObSelectStmt *query = set_queries.at(i);
         if (OB_ISNULL(query)) {
           ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null stmt", K(ret));
+          LOG_WARN("unexpect null stmt", K(ret));
         // somehow, the following implemenation is quite tircky,
         // the function actually modify the origin set stmt
         } else if (OB_FAIL(create_spj_and_pullup_correlated_exprs(exec_params, query, ctx))) {
@@ -12074,6 +12074,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIAr
       } else if (OB_FAIL(stmt->create_select_list_for_set_stmt(*ctx->expr_factory_))) {
         LOG_WARN("failed to create select list for union", K(ret));
       } else {
+        first_query->set_limit_offset(stmt->get_limit_expr(), stmt->get_offset_expr());
+        stmt->set_limit_offset(NULL, NULL);
         view_table->ref_query_ = stmt;
         stmt = first_query;
       }

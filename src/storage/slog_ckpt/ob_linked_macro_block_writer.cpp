@@ -110,8 +110,6 @@ int ObLinkedMacroBlockWriter::write_block(
       if (OB_FAIL(handle_.wait())) {
         LOG_WARN("fail to wait io finish", K(ret));
       } else {
-        // TODO gaishun.gs delete this log, after 9120(bug:58054839)
-        FLOG_INFO("LinkedMacroBlock write sussess", K(ret), K(handle_.get_macro_id()));
         previous_block_id = handle_.get_macro_id();
         pre_block_id = previous_block_id;
       }
@@ -169,8 +167,6 @@ int ObLinkedMacroBlockWriter::close(blocksstable::ObIMacroBlockFlushCallback *wr
     if (OB_FAIL(handle_.wait())) {
       LOG_WARN("fail to wait io finish", K(ret));
     } else {
-      // TODO gaishun.gs delete this log, after 9120(bug:58054839)
-      FLOG_INFO("LinkedMacroBlock write sussess", K(ret), K(handle_.get_macro_id()));
       entry_block_id_ = handle_.get_macro_id();
       pre_block_id = entry_block_id_;
     }

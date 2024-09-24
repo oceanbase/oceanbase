@@ -711,6 +711,7 @@ DEFINE_ERROR(OB_SERVICE_NOT_FULLY_STARTED, -4781, -1, "HY000", "The service has 
 DEFINE_ERROR(OB_NOT_PRIMARY_TENANT, -4782, -1, "HY000", "The tenant is not PRIMARY");
 DEFINE_ERROR(OB_SERVICE_STOPPED, -4783, -1, "HY000", "The service has stopped");
 DEFINE_ERROR(OB_SERVER_CONNECTION_ERROR, -4784, -1, "HY000", "Server '%s' connection error");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX, -4785, ER_DROP_INDEX_FK, "HY000", "Cannot drop index: needed in a foreign key constraint", "Cannot drop index '%.*s': needed in a foreign key constraint", 02266, "Cannot drop index: needed in a foreign key constraint", "Cannot drop index '%.*s': needed in a foreign key constraint");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2202,6 +2203,7 @@ DEFINE_ERROR_DEP(OB_FILE_LENGTH_INVALID, -9007, -1, "HY000", "Invalid OSS file l
 DEFINE_ERROR(OB_NOT_READ_ALL_DATA, -9008, -1, "HY000", "Read all data fail");
 DEFINE_ERROR(OB_BUILD_MD5_ERROR, -9009, -1, "HY000", "Build MD5 fail");
 DEFINE_ERROR(OB_MD5_NOT_MATCH, -9010, -1, "HY000", "OSS file MD5 not match");
+// do not use OB_BACKUP_FILE_NOT_EXIST, use OB_OBJECT_NOT_EXIST instead
 DEFINE_ERROR_DEP(OB_BACKUP_FILE_NOT_EXIST, -9011, -1, "HY000", "cannot find backup file");
 DEFINE_ERROR(OB_OSS_DATA_VERSION_NOT_MATCHED, -9012, -1, "HY000", "Can not get data version from timestamp");
 DEFINE_ERROR(OB_OSS_WRITE_ERROR, -9013, -1, "HY000", "Write OSS file error");
@@ -2649,6 +2651,23 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CHARACTER, -9782, -1, "HY000", "invalid chara
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE, -9783, -1, "HY000", "cannot ENABLE ON QUERY COMPUTATION for the materialized view", "cannot ENABLE ON QUERY COMPUTATION for the materialized view `%s`.`%s`", 32361, "cannot ENABLE ON QUERY COMPUTATION for the materialized view", "cannot ENABLE ON QUERY COMPUTATION for the materialized view %s.%s");
 DEFINE_PLS_ERROR_EXT(OB_ERR_CURSOR_ATTR_APPLY, -9784, -1, "HY000", "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s", 324, "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s");
 
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_BUFFER_TOO_SMALL, -9785, -1, "HY000", "buffer too small", 29258, "buffer too small");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_END_OF_INPUT, -9786, -1, "HY000", "end-of-input reached", 29259, "end-of-input reached");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_TCP_NETWORK_ERROR, -9787, -1, "HY000", "network error:", "network error: %.*s", 29260, "network error:", "network error: %.*s");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_BAD_ARGUMENT, -9788, -1, "HY000", "bad argument", 29261, "bad argument");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_PARTIAL_MULTIBYTE_CHAR, -9789, -1, "HY000", "partial multibyte character", 29275, "partial multibyte character");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_TRANSFER_TIMEOUT, -9790, -1, "HY000", "transfer timeout", 29276, "transfer timeout");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_NETWORK_ACCCESS_DENIED, -9791, -1, "HY000", "network access denied by access control list (ACL)", 24247, "network access denied by access control list (ACL)");
+DEFINE_ORACLE_ERROR(OB_ERR_UTL_TCP_TOO_MANY_CONNS, -9792, -1, "HY000", "too many open connections", 30678, "too many open connections");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_SECURITY_VIOLATION, -9793, -1, "HY000", "security violation", 53203, "security violation");
+
+DEFINE_ORACLE_ERROR(OB_UTL_SMTP_INVALID_OPERATION, -9794, -1, "HY000", "invalid SMTP operation", 29277, "invalid SMTP operation");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_TRANSIENT_ERROR, -9795, -1, "HY000", "SMTP transient error:", "SMTP transient error: %.*s", 29278, "SMTP transient error:", "SMTP transient error: %.*s");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_PERMANENT_ERROR, -9796, -1, "HY000", "SMTP permanent error:", "SMTP permanent error: %.*s", 29279, "SMTP permanent error:", "SMTP permanent error: %.*s");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_UNSUPPORTED_SCHEME, -9797, -1, "HY000", "Authentication scheme '' not supported", "Authentication scheme '%.*s' not supported", 24249, "Authentication scheme '' not supported", "Authentication scheme '%.*s' not supported");
+DEFINE_ORACLE_ERROR(OB_UTL_SMTP_NO_SUPPORTED_SCHEME, -9798, -1, "HY000", "No supported authentication scheme found", 24250, "No supported authentication scheme found");
+DEFINE_ERROR(OB_DTL_WAIT_EAGAIN, -9799, -1, "HY000", "Px wait for dtl message again");
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
@@ -2684,6 +2703,7 @@ DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range
 DEFINE_ERROR_EXT(OB_KV_FILTER_PARSE_ERROR, -10514, -1, "HY000", "OBKV filter parse error", "Filter parse errror, the input filter string is: '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_REDIS_PARSE_ERROR, -10515, -1, "HY000", "OBKV redis protocol parse error", "Redis protocol parse errror, the input redis string is: '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG, -10516, -1, "HY000", "When invoking the Increment interface only HBase cells with a length of 8 can be converted to int64_t", "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'.");
+DEFINE_ERROR_EXT(OB_KV_REDIS_ERROR, -10517, -1, "HY000", "OBKV redis error", "Redis err need return to client");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置
@@ -2769,6 +2789,7 @@ DEFINE_ERROR_DEP(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, -11058, -1, "HY000", "JAVA_HO
 DEFINE_ERROR_DEP(OB_JNI_ENSURE_CAPACTIY_ERROR, -11059, -1, "HY000", "JNI cound not ensure capacity")
 DEFINE_ERROR_DEP(OB_JNI_FIELD_NOT_FOUND_ERROR, -11060, -1, "HY000", "field could not be found during jni operation")
 DEFINE_ERROR_DEP(OB_JNI_OBJECT_NOT_FOUND_ERROR, -11061, -1, "HY000", "object could not be found during jni operation")
+DEFINE_ERROR_EXT(OB_ERR_INCORRECT_STRING_VALUE_FOR_INET, -11062, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect string value for function inet", "Incorrect string value for function %s");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

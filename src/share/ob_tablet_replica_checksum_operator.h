@@ -88,10 +88,11 @@ public:
   int assign_key(const ObTabletReplicaChecksumItem &other);
   int assign(const ObTabletReplicaChecksumItem &other);
   int set_tenant_id(const uint64_t tenant_id);
+  int check_data_checksum_type(bool &is_cs_replica) const;
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(server), K_(row_count),
-      K_(compaction_scn), K_(data_checksum), K_(column_meta));
+      K_(compaction_scn), K_(data_checksum), K_(column_meta), K_(data_checksum_type));
 
 public:
   uint64_t tenant_id_;
@@ -102,6 +103,7 @@ public:
   SCN compaction_scn_;
   int64_t data_checksum_;
   ObTabletReplicaReportColumnMeta column_meta_;
+  ObDataChecksumType data_checksum_type_;
 };
 typedef ObArrayWithMap<share::ObTabletReplicaChecksumItem> ObReplicaCkmArray;
 // Operator for __all_tablet_replica_checksum
@@ -146,7 +148,6 @@ public:
   static int set_column_meta_with_hex_str(
       const ObString &hex_str,
       ObTabletReplicaReportColumnMeta &column_meta);
-
   static int get_visible_column_meta(
       const ObTabletReplicaReportColumnMeta &column_meta,
       common::ObIAllocator &allocator,
@@ -349,7 +350,7 @@ public:
   ObTabletDataChecksumChecker();
   ~ObTabletDataChecksumChecker();
   void reset();
-  int check_data_checksum(const ObTabletReplicaChecksumItem& curr_item, bool is_cs_replica);
+  int check_data_checksum(const ObTabletReplicaChecksumItem& curr_item);
   TO_STRING_KV(KPC_(normal_ckm_item), KPC_(cs_replica_ckm_item));
 private:
   const ObTabletReplicaChecksumItem *normal_ckm_item_;

@@ -48,6 +48,7 @@ int ObDropFTSIndexTask::init(
     const ObFTSDDLChildTaskInfo &doc_rowkey,
     const ObFTSDDLChildTaskInfo &domain_index,
     const ObFTSDDLChildTaskInfo &fts_doc_word,
+    const ObString &ddl_stmt_str,
     const int64_t schema_version,
     const int64_t consumer_group_id)
 {
@@ -73,6 +74,8 @@ int ObDropFTSIndexTask::init(
     LOG_WARN("fail to deep copy from other", K(ret), K(domain_index));
   } else if (is_fts_task && OB_FAIL(fts_doc_word_.deep_copy_from_other(fts_doc_word, allocator_))) {
     LOG_WARN("fail to deep copy from other", K(ret), K(fts_doc_word));
+  } else if (OB_FAIL(set_ddl_stmt_str(ddl_stmt_str))) {
+    LOG_WARN("fail to deep copy drop index arg", K(ret));
   } else {
     task_type_ = ddl_type;
     set_gmt_create(ObTimeUtility::current_time());
@@ -188,6 +191,8 @@ int ObDropFTSIndexTask::serialize_params_to_message(char *buf, const int64_t buf
     LOG_WARN("fail to serialize aux fts index table info", K(ret), K(domain_index_));
   } else if (OB_FAIL(fts_doc_word_.serialize(buf, buf_size, pos))) {
     LOG_WARN("fail to serialize aux doc word aux table info", K(ret), K(fts_doc_word_));
+  } else if (OB_FAIL(ddl_stmt_str_.serialize(buf, buf_size, pos))) {
+    LOG_WARN("fail to serialize ddl stmt string", K(ret));
   }
   return ret;
 }
@@ -199,8 +204,8 @@ int ObDropFTSIndexTask::deserialize_params_from_message(
     int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObDropIndexArg tmp_drop_index_arg;
   ObFTSDDLChildTaskInfo tmp_info;
+  ObString tmp_ddl_stmt_str;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(buf_size));
@@ -222,6 +227,13 @@ int ObDropFTSIndexTask::deserialize_params_from_message(
     LOG_WARN("fail to deserialize aux doc word table info", K(ret));
   } else if (OB_FAIL(fts_doc_word_.deep_copy_from_other(tmp_info, allocator_))) {
     LOG_WARN("fail to deep copy from tmp info", K(ret), K(tmp_info));
+  } else if (OB_UNLIKELY(pos >= buf_size)) {
+    // The end of the message has been reached. It is an old version message without drop index arg.
+    // just skip.
+  } else if (OB_FAIL(tmp_ddl_stmt_str.deserialize(buf, buf_size, pos))) {
+    LOG_WARN("fail to deserialize drop index arg", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_, tmp_ddl_stmt_str, ddl_stmt_str_))) {
+    LOG_WARN("fail to copy ddl stmt string", K(ret), K(tmp_ddl_stmt_str));
   }
   return ret;
 }
@@ -232,7 +244,8 @@ int64_t ObDropFTSIndexTask::get_serialize_param_size() const
        + rowkey_doc_.get_serialize_size()
        + doc_rowkey_.get_serialize_size()
        + domain_index_.get_serialize_size()
-       + fts_doc_word_.get_serialize_size();
+       + fts_doc_word_.get_serialize_size()
+       + ddl_stmt_str_.get_serialize_size();
 }
 
 int ObDropFTSIndexTask::check_switch_succ()
@@ -417,6 +430,7 @@ int ObDropFTSIndexTask::create_drop_index_task(
   const ObTableSchema *index_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
   const ObTableSchema *data_table_schema = nullptr;
+  ObSqlString drop_index_sql;
   bool is_index_exist = false;
   if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -444,6 +458,8 @@ int ObDropFTSIndexTask::create_drop_index_task(
   } else if (OB_UNLIKELY(nullptr == database_schema || nullptr == data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, schema is nullptr", K(ret), KP(database_schema), KP(data_table_schema));
+  } else if (index_schema->is_fts_index_aux() && OB_FAIL(drop_index_sql.assign(ddl_stmt_str_))) {
+    LOG_WARN("fail to assign drop index sql", K(ret));
   } else {
     int64_t ddl_rpc_timeout_us = 0;
     obrpc::ObDropIndexArg arg;
@@ -460,6 +476,9 @@ int ObDropFTSIndexTask::create_drop_index_task(
     arg.ddl_stmt_str_        = nullptr;
     arg.is_add_to_scheduler_ = true;
     arg.task_id_             = task_id_;
+    if (index_schema->is_fts_index_aux()) {
+      arg.ddl_stmt_str_ = drop_index_sql.string();
+    }
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(
             index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout_us))) {
       LOG_WARN("fail to get ddl rpc timeout", K(ret));
@@ -470,7 +489,8 @@ int ObDropFTSIndexTask::create_drop_index_task(
     }
     LOG_INFO("drop index", K(ret), K(index_tid), K(index_name), K(task_id),
         "data table name", data_table_schema->get_table_name_str(),
-        "database name", database_schema->get_database_name_str());
+        "database name", database_schema->get_database_name_str(),
+        K(drop_index_sql.ptr()));
   }
   return ret;
 }

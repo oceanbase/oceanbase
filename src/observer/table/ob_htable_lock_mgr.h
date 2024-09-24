@@ -15,6 +15,7 @@
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/lock/ob_latch.h"
 #include "storage/tx/ob_trans_define.h"
+#include "lib/hash/ob_linear_hash_map.h"
 
 namespace oceanbase
 {
@@ -149,6 +150,7 @@ private:
 class ObHTableLockMgr
 {
 public:
+  typedef common::ObLinearHashMap<ObHTableLockKey *, ObHTableLock *, UniqueMemMgrTag> ObHTableLockMap;
   ObHTableLockMgr() : is_inited_(false), spin_lock_(), lock_map_(), allocator_(MTL_ID()) {}
   ~ObHTableLockMgr() {}
   /**
@@ -214,9 +216,6 @@ private:
   int rd2wrlock(ObHTableLockNode &lock_node);
   int release_node(ObHTableLockNode &lock_node);
 private:
-  static const uint64_t DEFAULT_BUCKET_NUM = 20480;
-  typedef common::hash::ObHashMap<ObHTableLockKey *, ObHTableLock *, common::hash::ReadWriteDefendMode> ObHTableLockMap;
-
   bool is_inited_;
   common::SpinRWLock spin_lock_;
   ObHTableLockMap lock_map_;
@@ -236,7 +235,7 @@ public:
     ret_code_(common::OB_SUCCESS)
   {}
   virtual ~ObHTableLockOp() {}
-  void operator() (common::hash::HashMapPair<ObHTableLockKey *, ObHTableLock *> &entry);
+  bool operator() (ObHTableLockKey *&key, ObHTableLock *&value);
   ObHTableLockKey *get_lock_key() { return old_lock_key_; }
   bool is_called() { return is_called_; }
   int get_ret() { return ret_code_; }
@@ -254,13 +253,15 @@ private:
 class ObHTableUnLockOpPred
 {
 public:
-  explicit ObHTableUnLockOpPred() : ret_code_(common::OB_SUCCESS) {}
+  explicit ObHTableUnLockOpPred() : ret_code_(common::OB_SUCCESS), lock_(nullptr) {}
   virtual ~ObHTableUnLockOpPred() {}
-  bool operator() (common::hash::HashMapPair<ObHTableLockKey *, ObHTableLock *> &entry);
+  bool operator() (ObHTableLockKey *&key, ObHTableLock *&value);
   int get_ret() { return ret_code_; }
+  ObHTableLock *get_lock() { return lock_; }
 
 private:
   int ret_code_;
+  ObHTableLock *lock_;
   DISALLOW_COPY_AND_ASSIGN(ObHTableUnLockOpPred);
 };
 
@@ -270,7 +271,7 @@ class ObHTableRd2WrLockOp
 public:
   ObHTableRd2WrLockOp() : ret_code_(common::OB_SUCCESS) {}
   virtual ~ObHTableRd2WrLockOp() {}
-  void operator() (common::hash::HashMapPair<ObHTableLockKey *, ObHTableLock *> &entry);
+  bool operator() (ObHTableLockKey *&key, ObHTableLock *&value);
   int get_ret() { return ret_code_; }
 
 private:

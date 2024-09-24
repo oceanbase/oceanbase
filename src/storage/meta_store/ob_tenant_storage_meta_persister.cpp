@@ -332,7 +332,7 @@ int ObTenantStorageMetaPersister::write_active_tablet_array(ObLS *ls)
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
     ObMetaDiskAddr addr;
-    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
+    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
     ObTabletMapKey tablet_key;
     ObLSActiveTabletArray active_tablet_arr;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
@@ -554,7 +554,7 @@ int ObTenantStorageMetaPersister::write_update_tablet_slog_(
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey tablet_key(ls_id, tablet_id);
-  if (OB_FAIL(THE_IO_DEVICE->fsync_block())) { // make sure that all data or meta written on the macro block is flushed
+  if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) { // make sure that all data or meta written on the macro block is flushed
     LOG_WARN("fail to fsync_block", K(ret));
   } else {
     ObUpdateTabletLog slog_entry(ls_id, tablet_id, disk_addr);

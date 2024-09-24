@@ -54,6 +54,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     read_base_version_(0),
     create_snapshot_version_(0),
     start_time_(0),
+    encoding_granularity_(0),
     merge_scn_(),
     version_range_(),
     scn_range_(),
@@ -83,6 +84,7 @@ void ObStaticMergeParam::reset()
   ls_handle_.reset(); // ls_handle could release before tablet_handle
   tx_id_ = 0;
   tablet_schema_guard_.reset();
+  encoding_granularity_ = 0;
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -684,7 +686,9 @@ int ObBasicTabletMergeCtx::generate_macro_id_list(char *buf, const int64_t buf_l
       MacroBlockId macro_id;
       for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_id(macro_id)); ++i) {
         LOG_INFO("print macro id", K(macro_id));
-        const int64_t block_seq = is_local_exec_mode(get_exec_mode()) ? macro_id.fourth_id() : macro_id.third_id();
+        const int64_t block_seq = is_local_exec_mode(get_exec_mode())
+                                ? (GCTX.is_shared_storage_mode() ? macro_id.fourth_id() : macro_id.second_id())
+                                : macro_id.third_id();
         if (0 == i) {
           pret = snprintf(buf + strlen(buf), remain_len, "%ld", block_seq);
         } else {
@@ -733,17 +737,6 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
 
 #define ADD_COMMENT(...) \
   ADD_COMPACTION_INFO_PARAM(running_info.comment_, sizeof(running_info.comment_), __VA_ARGS__)
-  if (get_is_full_merge()) {
-    ADD_COMMENT("is_full_merge", true);
-  }
-  if (ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE != static_param_.merge_reason_) {
-    ADD_COMMENT("merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(static_param_.merge_reason_));
-  }
-  if (is_major_merge_type(get_merge_type())
-      && ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE != static_param_.co_major_merge_type_) {
-    ADD_COMMENT("major", static_param_.major_sstable_status_);
-    ADD_COMMENT("co", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_param_.co_major_merge_type_));
-  }
   // calc flush macro speed
   uint32_t exe_ts = time_guard.get_specified_cost_time(ObStorageCompactionTimeGuard::EXECUTE);
   if (exe_ts > 0 && block_info.new_micro_info_.get_data_micro_size() > 0) {
@@ -751,7 +744,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
     int64_t io_percentage = block_info.block_io_us_ * 100 / (float)exe_ts;
     ADD_COMMENT("block_io_us", block_info.block_io_us_);
     if (io_percentage > 0) {
-      ADD_COMMENT("io_percent", io_percentage);
+      running_info.io_percentage_ = io_percentage;
     }
   }
   int64_t mem_peak_mb = mem_ctx_.get_total_mem_peak() >> 20;
@@ -807,7 +800,9 @@ int ObBasicTabletMergeCtx::init_static_param_and_desc()
                                 static_param_.scn_range_.end_scn_,
                                 static_param_.data_version_,
                                 static_param_.get_exec_mode(),
-                                get_tablet()->get_tablet_meta().micro_index_clustered_))) {
+                                get_tablet()->get_tablet_meta().micro_index_clustered_,
+                                true,
+                                static_param_.encoding_granularity_))) {
     LOG_WARN("failed to init static desc", KR(ret), KPC(this));
   } else {
     LOG_INFO("[SharedStorage] success to set exec mode", KR(ret), "exec_mode", exec_mode_to_str(static_desc_.exec_mode_));
@@ -1173,6 +1168,7 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     if (medium_info->medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4) {
       static_param_.is_schema_changed_ = medium_info->is_schema_changed_;
     }
+    static_param_.encoding_granularity_ = medium_info->encoding_granularity_;
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info->medium_merge_reason_;
     if (!static_param_.is_cs_replica_) {
       static_param_.co_major_merge_type_ = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);
@@ -1317,6 +1313,9 @@ int ObBasicTabletMergeCtx::init_sstable_merge_history()
   static_history_.is_full_merge_ = static_param_.is_full_merge_;
   static_history_.merge_level_ = static_param_.merge_level_;
   static_history_.exec_mode_ = get_exec_mode();
+  static_history_.merge_reason_ = static_param_.merge_reason_;
+  static_history_.base_major_status_ = static_param_.major_sstable_status_;
+  static_history_.co_major_merge_type_ = static_param_.co_major_merge_type_;
   if (!static_history_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("static info is invalid", KR(ret), K_(static_history));

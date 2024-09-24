@@ -1418,7 +1418,7 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
     }
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(fts_index_aux_schema)) {
-    // TODO hanxuan fix create drop fts index when fts index schema is not generated
+    // TODO yunshan.tys fix create drop fts index when fts index schema is not generated
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fts index aux schema is nullptr, fail to roll back", K(ret));
     } else {
@@ -1522,7 +1522,7 @@ int ObFtsIndexBuildTask::validate_checksum()
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else {
-    // TODO hanxuan validate checksum, set next status to FAIL if validation failed
+    // TODO yunshan.tys validate checksum, set next status to FAIL if validation failed
     if (OB_SUCC(ret)) {
       state_finished = true;
     }

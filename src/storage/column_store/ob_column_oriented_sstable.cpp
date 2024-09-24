@@ -215,6 +215,27 @@ int ObCOSSTableMeta::deserialize(const char *buf, const int64_t data_len, int64_
   return ret;
 }
 
+/************************************* ObCOMajorSSTableStatus *************************************/
+const char* ObCOMajorSSTableStatusStr[] = {
+  "INVALID_STATUS",
+  "COL_WITH_ALL",
+  "COL_ONLY_ALL",
+  "PURE_COL",
+  "PURE_COL_ONLY_ALL",
+  "COL_REPLICA_MAJOR"
+};
+
+const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  STATIC_ASSERT(static_cast<int64_t>(MAX_CO_MAJOR_SSTABLE_STATUS) == ARRAYSIZEOF(ObCOMajorSSTableStatusStr), "co major sstable str len is mismatch");
+  const char *str = "";
+  if (is_valid_co_major_sstable_status(major_sstable_status)) {
+    str = ObCOMajorSSTableStatusStr[major_sstable_status];
+  } else {
+    str = "invalid_co_major_status";
+  }
+  return str;
+}
 
 /************************************* ObCOSSTableV2 *************************************/
 ObCOSSTableV2::ObCOSSTableV2()
@@ -902,7 +923,7 @@ int ObCOSSTableV2::fill_column_ckm_array(
   ObIArray<int64_t> &column_checksums) const
 {
   int ret = OB_SUCCESS;
-  if (is_cgs_empty_co_table()) {
+  if (is_all_cg_base()) {
     ret = ObSSTable::fill_column_ckm_array(column_checksums);
   } else {
     const common::ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();
@@ -915,7 +936,8 @@ int ObCOSSTableV2::fill_column_ckm_array(
     }
 
     common::ObArray<ObSSTableWrapper> cg_tables;
-    if (FAILEDx(get_all_tables(cg_tables))) {
+    if (is_empty()) {
+    } else if (FAILEDx(get_all_tables(cg_tables))) {
       LOG_WARN("fail to get_all_tables", K(ret));
     } else {
       ObSSTableMetaHandle cg_table_meta_hdl;

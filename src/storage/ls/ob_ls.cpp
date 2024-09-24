@@ -78,6 +78,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #endif
+#include "storage/tx_storage/ob_tx_leak_checker.h"
 
 namespace oceanbase
 {
@@ -88,7 +89,6 @@ using namespace rootserver;
 
 namespace storage
 {
-ERRSIM_POINT_DEF(EN_LS_NOT_SEE_CS_REPLICA);
 
 using namespace checkpoint;
 using namespace mds;
@@ -503,11 +503,22 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
 {
   int ret = OB_SUCCESS;
   has_cs_replica = false;
+  ObRole role = INVALID_ROLE;
   ObMemberList member_list;
   GlobalLearnerList learner_list;
+  int64_t proposal_id = 0;
   int64_t paxos_replica_number = 0;
-  if (OB_FAIL(get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
-    LOG_WARN("fail to get member list and learner list", K(ret), K(ls_meta_.ls_id_));
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
+    LOG_WARN("fail to get role", K(ret), KPC(this));
+  } else if (LEADER != role) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("local ls is not leader", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
+    LOG_WARN("fail to get member list and learner list", K(ret), K_(ls_meta));
   } else {
     for (int64_t i = 0; i < learner_list.get_member_number(); i++) {
       const ObMember &learner = learner_list.get_learner(i);
@@ -517,16 +528,6 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
       }
     }
   }
-
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    if (EN_LS_NOT_SEE_CS_REPLICA) {
-      has_cs_replica = false;
-      LOG_INFO("ERRSIM EN_LS_NOT_SEE_CS_REPLICA", K(ret), K(has_cs_replica));
-    }
-  }
-#endif
-
   return ret;
 }
 
@@ -720,6 +721,7 @@ bool ObLS::safe_to_destroy()
                  K(ret), KP(this), KPC(this));
         ref_mgr_.print();
         PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_LS_HANDLE);
+        READ_CHECKER_PRINT(ls_meta_.ls_id_);
       }
     } else {
       LOG_INFO("this ls is safe to destroy", KP(this), KPC(this));
@@ -2006,11 +2008,17 @@ int ObLS::replay_get_tablet(
   return ret;
 }
 
-int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t input_abs_timeout_ts)
+int ObLS::logstream_freeze(const int64_t trace_id,
+                           const bool is_sync,
+                           const int64_t input_abs_timeout_ts,
+                           const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
 
-  if (is_sync) {
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (is_sync) {
     const int64_t abs_timeout_ts = (0 == input_abs_timeout_ts)
                                        ? ObClockGenerator::getClock() + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME
                                        : input_abs_timeout_ts;
@@ -2027,7 +2035,8 @@ int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int
   return ret;
 }
 
-int ObLS::logstream_freeze_task(const int64_t trace_id, const int64_t abs_timeout_ts)
+int ObLS::logstream_freeze_task(const int64_t trace_id,
+                                const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObClockGenerator::getClock();
@@ -2071,17 +2080,27 @@ int ObLS::logstream_freeze_task(const int64_t trace_id, const int64_t abs_timeou
 int ObLS::tablet_freeze(const ObTabletID &tablet_id,
                         const bool is_sync,
                         const int64_t input_abs_timeout_ts,
-                        const bool need_rewrite_meta)
+                        const bool need_rewrite_meta,
+                        const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
-  if (tablet_id.is_ls_inner_tablet()) {
+
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (tablet_id.is_ls_inner_tablet()) {
     ret = ls_freezer_.ls_inner_tablet_freeze(tablet_id);
   } else {
     ObSEArray<ObTabletID, 1> tablet_ids;
     if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
       STORAGE_LOG(WARN, "push back tablet id failed", KR(ret), K(tablet_id));
     } else {
-      ret = tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_ids, is_sync, input_abs_timeout_ts, need_rewrite_meta);
+      ret = tablet_freeze(checkpoint::INVALID_TRACE_ID,
+                          tablet_ids,
+                          is_sync,
+                          input_abs_timeout_ts,
+                          need_rewrite_meta,
+                          source);
     }
   }
   return ret;
@@ -2091,13 +2110,18 @@ int ObLS::tablet_freeze(const int64_t trace_id,
                         const ObIArray<ObTabletID> &tablet_ids,
                         const bool is_sync,
                         const int64_t input_abs_timeout_ts,
-                        const bool need_rewrite_meta)
+                        const bool need_rewrite_meta,
+                        const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
   STORAGE_LOG(
       DEBUG, "start tablet freeze", K(tablet_ids), K(is_sync), KTIME(input_abs_timeout_ts), K(need_rewrite_meta));
   int64_t freeze_epoch = ATOMIC_LOAD(&switch_epoch_);
-  if (need_rewrite_meta && (!is_sync)) {
+
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (need_rewrite_meta && (!is_sync)) {
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(ERROR,
                 "tablet freeze for rewrite meta must be sync freeze ",
@@ -2214,7 +2238,10 @@ void ObLS::record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_
   (void)ls_freezer_.record_async_freeze_tablet(tablet_info);
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tenant_freeze)
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn,
+                                      const int64_t abs_timeout_ts,
+                                      const bool is_tenant_freeze,
+                                      const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -2228,7 +2255,9 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
       ObDataCheckpoint::set_tenant_freeze();
       LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
     }
+    ObDataCheckpoint::set_freeze_source(source);
     ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+    ObDataCheckpoint::reset_freeze_source();
     ObDataCheckpoint::reset_tenant_freeze();
   }
   return ret;
@@ -2237,9 +2266,9 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
 int ObLS::flush_to_recycle_clog()
 {
   int ret = OB_SUCCESS;
-
   int64_t read_lock = LSLOCKALL;
   int64_t write_lock = 0;
+
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2247,11 +2276,11 @@ int ObLS::flush_to_recycle_clog()
   } else if (OB_UNLIKELY(is_offline())) {
     ret = OB_MINOR_FREEZE_NOT_ALLOW;
     LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
+  } else if (FALSE_IT(ObDataCheckpoint::set_freeze_source(ObFreezeSourceFlag::CLOG_CHECKPOINT))) {
   } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush(SCN::invalid_scn() /*recycle_scn*/))) {
     STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", KR(ret), K(get_ls_id()));
-  } else {
-    // do nothing
   }
+  ObDataCheckpoint::reset_freeze_source();
   return ret;
 }
 
@@ -2506,6 +2535,8 @@ int ObLS::diagnose(DiagnoseInfo &info) const
     // election, palf, log handler角色不统一时可能出现无主
     STORAGE_LOG(WARN, "diagnose rc service failed", K(ret), K(ls_id));
   }
+  DiagnoseFunctor fn(MTL_ID(), ls_id, info.read_only_tx_info_, 0, sizeof(info.read_only_tx_info_));
+  READ_CHECKER_FOR_EACH(fn);
   STORAGE_LOG(INFO, "diagnose finish", K(ret), K(info), K(ls_id));
   return ret;
 }

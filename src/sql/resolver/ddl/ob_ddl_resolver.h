@@ -1003,6 +1003,7 @@ protected:
       const bool is_char_type,
       const ObCollationType &collation_type,
       ObObj &default_value, ObString &str);
+  bool is_column_group_supported() const;
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;

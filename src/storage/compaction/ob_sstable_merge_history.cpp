@@ -120,6 +120,9 @@ ObMergeStaticInfo::ObMergeStaticInfo()
     participant_table_info_(),
     merge_level_(MERGE_LEVEL_MAX),
     exec_mode_(ObExecMode::EXEC_MODE_MAX),
+    merge_reason_(ObAdaptiveMergePolicy::NONE),
+    base_major_status_(ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS),
+    co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
     is_full_merge_(false),
     is_fake_(false)
 {}
@@ -145,6 +148,9 @@ void ObMergeStaticInfo::reset()
   participant_table_info_.reset();
   merge_level_ = MERGE_LEVEL_MAX;
   exec_mode_ = ObExecMode::EXEC_MODE_MAX;
+  merge_reason_ = ObAdaptiveMergePolicy::NONE;
+  base_major_status_ = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
+  co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   is_full_merge_ = false;
 }
 
@@ -161,6 +167,9 @@ void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
   participant_table_info_ = other.participant_table_info_;
   merge_level_ = other.merge_level_;
   exec_mode_ = other.exec_mode_;
+  merge_reason_ = other.merge_reason_;
+  base_major_status_ = other.base_major_status_;
+  co_major_merge_type_ = other.co_major_merge_type_;
   is_full_merge_ = other.is_full_merge_;
 }
 /**
@@ -171,6 +180,7 @@ ObMergeRunningInfo::ObMergeRunningInfo()
     merge_finish_time_(0),
     start_cg_idx_(0),
     end_cg_idx_(0),
+    io_percentage_(0),
     dag_id_(),
     parallel_merge_info_(),
     comment_("\0")
@@ -182,6 +192,7 @@ void ObMergeRunningInfo::reset()
   merge_finish_time_ = 0;
   start_cg_idx_ = 0;
   end_cg_idx_ = 0;
+  io_percentage_ = 0;
   dag_id_.reset();
   parallel_merge_info_.reset();
   MEMSET(comment_, '\0', sizeof(comment_));
@@ -198,6 +209,7 @@ void ObMergeRunningInfo::shallow_copy(const ObMergeRunningInfo &other)
   merge_finish_time_ = other.merge_finish_time_;
   start_cg_idx_ = other.start_cg_idx_;
   end_cg_idx_ = other.end_cg_idx_;
+  io_percentage_ = other.io_percentage_;
   dag_id_ = other.dag_id_;
   parallel_merge_info_ = other.parallel_merge_info_;
   MEMSET(comment_, '\0', sizeof(comment_));

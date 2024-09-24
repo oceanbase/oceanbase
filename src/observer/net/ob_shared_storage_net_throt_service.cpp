@@ -747,6 +747,7 @@ int ObSharedStorageNetThrotManager::is_unlimited_category(const ObStorageInfoTyp
   return category == ObStorageInfoType::ALL_DDL_STORAGE_INFO ||
          category == ObStorageInfoType::ALL_EXTERNAL_STORAGE_INFO ||
          category == ObStorageInfoType::ALL_EXPORT_STORAGE_INFO ||
+         category == ObStorageInfoType::ALL_SQL_AUDIT_STORAGE_INFO ||
          category == ObStorageInfoType::ALL_OTHER_STORAGE_INFO;
 }
 

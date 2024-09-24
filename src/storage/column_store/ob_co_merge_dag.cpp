@@ -26,6 +26,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/column_store/ob_co_merge_ctx.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -224,6 +225,7 @@ int ObCOMergePrepareTask::create_schedule_dag(ObCOTabletMergeCtx &ctx)
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_PREPARE_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_prepare_failed", "ret_code", ret);
       STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_CO_MERGE_PREPARE_FAILED", K(ret));
     }
   }
@@ -281,6 +283,7 @@ int ObCOMergePrepareTask::schedule_minor_exec_dag(
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_PREPARE_MINOR_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "prepare_co_minor_failed", "ret_code", ret);
       STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_CO_MERGE_PREPARE_MINOR_FAILED", K(ret));
     }
   }
@@ -411,6 +414,7 @@ int ObCOMergeScheduleTask::process()
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_SCHEDULE_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_schedule_failed", "ret_code", ret);
       STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_CO_MERGE_SCHEDULE_FAILED", K(ret));
     }
   }
@@ -877,6 +881,7 @@ int ObCOMergeBatchFinishTask::process()
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_EXE_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_exe_failed", "ret_code", ret);
       STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_CO_MERGE_EXE_FAILED", K(ret));
     }
   }
@@ -988,6 +993,7 @@ int ObCOMergeFinishTask::process()
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_FINISH_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_finish_failed", "ret_code", ret);
       STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_CO_MERGE_FINISH_FAILED", K(ret));
     }
   }
@@ -1628,6 +1634,7 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_PREPARE_CTX_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_prepare_ctx_failed", "ret_code", ret);
       STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_CO_MERGE_PREPARE_CTX_FAILED", K(ret));
     }
   }

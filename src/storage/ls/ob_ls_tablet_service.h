@@ -167,6 +167,7 @@ public:
       const lib::Worker::CompatMode &compat_mode,
       const bool need_create_empty_major_sstable,
       const bool micro_index_clustered,
+      const bool has_cs_replica,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
       const share::ObLSID &ls_id,
@@ -607,7 +608,20 @@ private:
       ObRowsInfo &rows_info,
       int64_t &afct_num,
       int64_t &dup_num);
+  static int put_rows_to_tablet(
+      ObTabletHandle &tablet_handle,
+      ObDMLRunningCtx &run_ctx,
+      blocksstable::ObDatumRow *rows,
+      const int64_t row_count,
+      ObRowsInfo &rows_info,
+      int64_t &afct_num);
   static int insert_tablet_rows(
+      const int64_t row_count,
+      ObTabletHandle &tablet_handle,
+      ObDMLRunningCtx &run_ctx,
+      blocksstable::ObDatumRow *rows,
+      ObRowsInfo &rows_info);
+  static int put_tablet_rows(
       const int64_t row_count,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,

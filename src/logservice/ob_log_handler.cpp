@@ -2016,10 +2016,8 @@ int ObLogHandler::handle_acquire_log_rebuild_info_msg(const LogAcquireRebuildInf
           LogRebuildType::FULL_REBUILD: LogRebuildType::FAST_REBUILD;
       palf::LSN base_lsn;
       palf::PalfBaseInfo base_info;
-      if (LogRebuildType::FULL_REBUILD == type && OB_FAIL(palf_handle_.get_base_lsn(base_lsn))) {
+      if (OB_FAIL(palf_handle_.get_base_lsn(base_lsn))) {
         CLOG_LOG(WARN, "get_base_lsn failed", K(ret), K_(id));
-      } else if (LogRebuildType::FAST_REBUILD == type && OB_FAIL(palf_handle_.get_end_lsn(base_lsn))) {
-        CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K_(id));
       } else if (FALSE_IT(base_lsn = LSN(lsn_2_block(base_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE))) {
       } else if (OB_FAIL(palf_handle_.get_base_info(base_lsn, base_info))) {
         CLOG_LOG(WARN, "get_base_info failed", K(ret), K_(id));

@@ -197,17 +197,22 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     }
   }
 
+  ObDASVIdMergeCtDef *vid_merge_ctdef = nullptr;
   if (OB_SUCC(ret) && op.get_index_back()) {
     ObDASTableLookupCtDef *lookup_ctdef = nullptr;
-    if (OB_FAIL(generate_table_lookup_ctdef(op, tsc_ctdef, root_ctdef, lookup_ctdef))) {
+    if (OB_FAIL(generate_table_lookup_ctdef(op, tsc_ctdef, root_ctdef, lookup_ctdef, vid_merge_ctdef))) {
       LOG_WARN("generate table lookup ctdef failed", K(ret));
+    } else if (op.is_tsc_with_vid()) {
+      need_attach = true;
+      if (op.get_is_index_global()) {
+        root_ctdef = vid_merge_ctdef;
+      } else {
+        root_ctdef = lookup_ctdef;
+      }
     } else {
       root_ctdef = lookup_ctdef;
     }
-  }
-
-  ObDASVIdMergeCtDef *vid_merge_ctdef = nullptr;
-  if (OB_SUCC(ret) && op.is_tsc_with_vid()) {
+  } else if (op.is_tsc_with_vid()) {
     if (OB_UNLIKELY(root_ctdef != &scan_ctdef)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, root ctdef isn't equal to scan ctdef", K(ret));
@@ -220,8 +225,10 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
   }
 
   if (OB_SUCC(ret) && need_attach) {
-    tsc_ctdef.lookup_ctdef_ = nullptr;
-    tsc_ctdef.lookup_loc_meta_ = nullptr;
+    if (!op.get_is_index_global()) {
+      tsc_ctdef.lookup_ctdef_ = nullptr;
+      tsc_ctdef.lookup_loc_meta_ = nullptr;
+    }
     tsc_ctdef.attach_spec_.attach_ctdef_ = root_ctdef;
   }
 
@@ -1215,9 +1222,9 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
     loc_meta.is_weak_read_ = 0;
   }
   loc_meta.route_policy_ = route_policy;
-  if (OB_SUCC(ret) && !table_schema.is_global_index_table()) {
+  if (OB_SUCC(ret) && !table_schema.is_global_index_table() && !table_schema.is_vec_rowkey_vid_type()) {
     TableLocRelInfo *rel_info = nullptr;
-    ObTableID data_table_id = table_schema.is_index_table() && !table_schema.is_rowkey_doc_id() ?
+    ObTableID data_table_id = table_schema.is_index_table() && !table_schema.is_rowkey_doc_id() && !table_schema.is_vec_rowkey_vid_type() ?
                               table_schema.get_data_table_id() :
                               real_table_id;
     rel_info = cg_.opt_ctx_->get_loc_rel_info_by_id(table_loc_id, data_table_id);
@@ -2250,7 +2257,8 @@ int ObTscCgService::generate_das_scan_ctdef_with_vid(
 int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
                                                 ObTableScanCtDef &tsc_ctdef,
                                                 ObDASBaseCtDef *scan_ctdef,
-                                                ObDASTableLookupCtDef *&lookup_ctdef)
+                                                ObDASTableLookupCtDef *&lookup_ctdef,
+                                                ObDASVIdMergeCtDef *&vid_merge_ctdef)
 {
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = cg_.phy_plan_->get_allocator();
@@ -2313,6 +2321,13 @@ int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
       }
     }
   }
+
+  if (OB_SUCC(ret) && op.is_tsc_with_vid()) {
+    if (OB_FAIL(generate_das_scan_ctdef_with_vid(op, tsc_ctdef, tsc_ctdef.lookup_ctdef_, vid_merge_ctdef))) {
+      LOG_WARN("fail to generate das scan ctdef with vec vid", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_TABLE_LOOKUP, allocator, lookup_ctdef))) {
       LOG_WARN("alloc aux lookup ctdef failed", K(ret));
@@ -2325,7 +2340,8 @@ int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
         LOG_WARN("store scan loc meta failed", K(ret));
       } else {
         lookup_ctdef->children_[0] = scan_ctdef;
-        lookup_ctdef->children_[1] = tsc_ctdef.lookup_ctdef_;
+        lookup_ctdef->children_[1] = op.is_tsc_with_vid() ? static_cast<ObDASBaseCtDef *>(vid_merge_ctdef)
+                                                          : static_cast<ObDASBaseCtDef *>(tsc_ctdef.lookup_ctdef_);
       }
     }
   }
