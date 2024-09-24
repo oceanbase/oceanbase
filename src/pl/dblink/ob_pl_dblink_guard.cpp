@@ -419,6 +419,16 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
     }
 #undef BIND_BASIC_BY_POS
   }
+  if (NULL != dblink_schema
+      && NULL != dblink_proxy
+      && NULL != dblink_conn
+      && DblinkDriverProto::DBLINK_DRV_OCI == static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+      LOG_WARN("failed to close oci result", K(tmp_ret));
+      ret = (OB_SUCC(ret) ? tmp_ret : ret);
+    }
+  }
 #endif
   return ret;
 }
