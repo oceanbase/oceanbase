@@ -1010,6 +1010,9 @@ void ObLockWaitMgr::ls_switch_to_follower(const share::ObLSID &ls_id)
       }
     }
   }
+  if (NULL != retire_iter) {
+    WaitQuiescent(get_qs());
+  }
   while (NULL != retire_iter) {
     Node* cur = CONTAINER_OF(retire_iter, Node, retire_link_);
     retire_iter = retire_iter->next_;
