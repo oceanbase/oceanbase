@@ -598,6 +598,7 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
                                                   ObIArray<sql::ObRawExpr*> &part_keys_expr)
 {
   int ret = OB_SUCCESS;
+  bool is_global_index_part_key = ctx.has_global_index();
   for (int64_t i = 0; OB_SUCC(ret) && i < partition_keys.get_size(); i++) {
     uint64_t column_id = OB_INVALID_ID;
     const ObTableColumnItem *column_item = nullptr;
@@ -608,7 +609,9 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
     } else if (OB_ISNULL(column_item) || OB_ISNULL(column_item->column_info_) || OB_ISNULL(column_item->raw_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column item is NULL", K(ret), K(column_item));
-    }  else if (!column_item->raw_expr_->is_column_ref_expr()) {
+    }  else if (!column_item->raw_expr_->is_column_ref_expr() ||
+                (is_global_index_part_key &&
+                 column_item->column_info_->is_generated_column_)) {
       // allow generate col as part key here, because of obkv redis
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("non-common column partition key is not supported", K(ret), K(column_id));

@@ -320,8 +320,8 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
       ObObj *rowkey_cells = nullptr;
       ObSEArray<uint64_t, 4> rowkey_column_ids;
       ObSEArray<uint64_t, 4> rowkey_idxs;
-      if (OB_SUCC(ret) && OB_FAIL(schema_cache_guard->get_rowkey_column_ids(rowkey_column_ids))) {
-        ret = OB_ERR_UNEXPECTED;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema_cache_guard->get_rowkey_column_ids(rowkey_column_ids))) {
         LOG_WARN("fail to get rowkey column ids", K(ret));
       } else if (OB_ISNULL(
                      rowkey_cells =

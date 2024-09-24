@@ -81,6 +81,9 @@ enum ObTableProccessType
   TABLE_API_REDIS_LINSERT,
   TABLE_API_REDIS_LLEN,
 
+  // group commit
+  TABLE_API_GROUP_TRIGGER,
+
   TABLE_API_PROCESS_TYPE_MAX
 };
 
@@ -339,7 +342,12 @@ public:
         EVENT_ADD(TABLEAPI_QUERY_AND_MUTATE_ROW, rows);
         COLLECT_RESPONSE_TIME(enable_response_time_stats, sql::stmt::T_KV_QUERY_AND_MUTATE, elapsed_us);
         break;
-
+      case ObTableProccessType::TABLE_API_GROUP_TRIGGER:
+        EVENT_INC(TABLEAPI_GROUP_TRIGGER_COUNT);
+        EVENT_ADD(TABLEAPI_GROUP_TRIGGER_TIME, elapsed_us);
+        EVENT_ADD(TABLEAPI_GROUP_TRIGGER_ROW, rows);
+        COLLECT_RESPONSE_TIME(enable_response_time_stats, sql::stmt::T_KV_OTHER, elapsed_us);
+        break;
       default:
         SERVER_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unknow process type", K(process_type), K(elapsed_us), K(rows));
         break;

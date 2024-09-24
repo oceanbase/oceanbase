@@ -464,6 +464,7 @@ int ObTableGroupCommitMgr::clean_expired_groups()
   while (!expired_groups_.get_clean_groups().empty()) {
     ObITableGroupValue *group = nullptr;
     if (OB_FAIL(expired_groups_.pop_clean_group(group))) {
+      // overwrite ret
       LOG_WARN("fail to pop clean group", K(ret));
     } else if (OB_NOT_NULL(group)) {
       group->~ObITableGroupValue();
@@ -506,10 +507,12 @@ void ObTableGroupCommitMgr::destroy()
     }
     // 3. clean remain groups in expired_groups
     if (OB_FAIL(clean_expired_groups())) {
+      // overwrite ret
       LOG_WARN("fail to clean expired groups", K(ret));
     }
     // 4. clean remian groups in failed groups
     if (OB_FAIL(clean_failed_groups())) {
+      // overwrite ret
       LOG_WARN("fail to clean failed groups", K(ret));
     }
     // 5. clear resource
