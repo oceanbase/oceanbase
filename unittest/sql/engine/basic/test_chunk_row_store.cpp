@@ -104,6 +104,7 @@ public:
     ASSERT_EQ(OB_SUCCESS, rs_.alloc_dir_id());
 
     memset(str_buf_, 'z', BUF_SIZE);
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
     LOG_WARN("setup finished", K_(row));
   }
 

@@ -15,6 +15,7 @@
 #include "storage/tmp_file/ob_tmp_file_thread_wrapper.h"
 #include "share/ob_thread_mgr.h"
 #include "storage/blocksstable/ob_block_manager.h"
+#include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
 #include "storage/tmp_file/ob_sn_tmp_file_manager.h"
 
@@ -243,7 +244,9 @@ int64_t ObTmpFileFlushTG::cal_idle_time()
 {
   int64_t idle_time = 0;
   int64_t dirty_page_percentage = wbp_.get_dirty_page_percentage();
-  if (!wait_list_.is_empty() || !retry_list_.is_empty() || !finished_list_.is_empty()
+  if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())) {
+    idle_time = ObTmpFilePageCacheController::FLUSH_INTERVAL;
+  } else if (!wait_list_.is_empty() || !retry_list_.is_empty() || !finished_list_.is_empty()
       || ObTmpFileFlushManager::FLUSH_WATERMARK_F1 <= dirty_page_percentage) {
     idle_time = ObTmpFilePageCacheController::FLUSH_FAST_INTERVAL;
   } else if (RUNNING_MODE::FAST == mode_) {
@@ -265,7 +268,11 @@ int ObTmpFileFlushTG::try_work()
 
   int64_t cur_time = ObTimeUtility::current_monotonic_time();
   if (0 == last_flush_timestamp_ || cur_time - last_flush_timestamp_ >= cal_idle_time() * 1000) {
-    if (OB_FAIL(do_work_())) {
+    if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())) {
+      ret = OB_NOT_RUNNING;
+      LOG_INFO("ObTmpFileFlushTG does not work before server slog replay finished",
+          KR(ret), KPC(this));
+    } else if (OB_FAIL(do_work_())) {
       STORAGE_LOG(WARN, "fail do flush", KR(ret), KPC(this));
     }
     last_flush_timestamp_ = ObTimeUtility::current_monotonic_time();
@@ -874,7 +881,9 @@ void ObTmpFileSwapTG::notify_doing_swap()
 int64_t ObTmpFileSwapTG::cal_idle_time()
 {
   int64_t swap_idle_time = ObTmpFilePageCacheController::SWAP_INTERVAL;
-  if (ATOMIC_LOAD(&swap_job_num_) != 0 || ATOMIC_LOAD(&working_list_size_) != 0) {
+  if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())) {
+    swap_idle_time = ObTmpFilePageCacheController::SWAP_INTERVAL;
+  } else if (ATOMIC_LOAD(&swap_job_num_) != 0 || ATOMIC_LOAD(&working_list_size_) != 0) {
     if (flush_io_finished_round_ < flush_tg_ref_.get_flush_io_finished_round()) {
       swap_idle_time  = 0;
     } else {
