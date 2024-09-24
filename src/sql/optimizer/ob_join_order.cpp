@@ -6664,10 +6664,28 @@ int JoinPath::compute_hash_hash_sharding_info()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   } else {
-    bool use_left = true;
-    bool use_right = true;
+    bool use_left = false;
+    bool use_right = false;
     ObSEArray<ObRawExpr*, 8> left_join_exprs;
     ObSEArray<ObRawExpr*, 8> right_join_exprs;
+    switch (join_type_) {
+      case INNER_JOIN:
+        use_left = true;
+        use_right = true;
+        break;
+      case LEFT_OUTER_JOIN:
+      case LEFT_SEMI_JOIN:
+      case LEFT_ANTI_JOIN:
+        use_left = true;
+        break;
+      case RIGHT_OUTER_JOIN:
+      case RIGHT_SEMI_JOIN:
+      case RIGHT_ANTI_JOIN:
+        use_right = true;
+        break;
+      default:
+        break;
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < equal_join_conditions_.count(); i++) {
       ObRawExpr *join_expr = NULL;
       ObRawExpr *left_expr = NULL;
@@ -6716,8 +6734,7 @@ int JoinPath::compute_hash_hash_sharding_info()
       if (use_hybrid_hash_dm_) {
         // fix issue/45941566
         strong_sharding_ = log_plan->get_optimizer_context().get_distributed_sharding();
-      } else if ((use_left && FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) ||
-          (use_right && FULL_OUTER_JOIN != join_type_ && LEFT_OUTER_JOIN != join_type_)) {
+      } else if (use_left || use_right) {
         ObShardingInfo *target_sharding = NULL;
         if (use_left && OB_FAIL(log_plan->get_cached_hash_sharding_info(left_join_exprs,
                                                                         parent_->get_output_equal_sets(),
@@ -6737,9 +6754,9 @@ int JoinPath::compute_hash_hash_sharding_info()
         } else {
           target_sharding = new (target_sharding) ObShardingInfo();
           target_sharding->set_distributed();
-          if (use_left && FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) {
+          if (use_left) {
             ret = target_sharding->get_partition_keys().assign(left_join_exprs);
-          } else if (use_right && FULL_OUTER_JOIN != join_type_ && LEFT_OUTER_JOIN != join_type_) {
+          } else if (use_right) {
             ret = target_sharding->get_partition_keys().assign(right_join_exprs);
           } else { /*do nothing*/ }
           if (OB_FAIL(ret)) {
