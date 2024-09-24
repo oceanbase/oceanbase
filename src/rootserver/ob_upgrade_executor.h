@@ -114,6 +114,9 @@ private:
       const int64_t buf_len,
       char *buf);
   int batch_upgrade_system_table_(const uint64_t tenant_id, ObIArray<uint64_t> &table_ids);
+
+  int run_upgrade_processor_(const uint64_t tenant_id,
+      share::ObBaseUpgradeProcessor *processor, int64_t &version);
 private:
   bool inited_;
   bool stopped_;

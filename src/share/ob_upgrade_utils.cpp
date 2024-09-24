@@ -655,8 +655,8 @@ int ObUpgradeUtils::filter_sys_stat(
 ObUpgradeProcesserSet::ObUpgradeProcesserSet()
   : inited_(false), allocator_(ObMemAttr(MTL_CTX() ? MTL_ID() : OB_SERVER_TENANT_ID,
                                          "UpgProcSet")),
-    processor_list_(OB_MALLOC_NORMAL_BLOCK_SIZE,
-                    ModulePageAllocator(allocator_))
+    processor_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+    all_version_upgrade_processor_(NULL)
 {
 }
 
@@ -666,6 +666,9 @@ ObUpgradeProcesserSet::~ObUpgradeProcesserSet()
     if (OB_NOT_NULL(processor_list_.at(i))) {
       processor_list_.at(i)->~ObBaseUpgradeProcessor();
     }
+  }
+  if (OB_NOT_NULL(all_version_upgrade_processor_)) {
+    all_version_upgrade_processor_->~ObBaseUpgradeProcessor();
   }
 }
 
@@ -683,22 +686,19 @@ int ObUpgradeProcesserSet::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
   } else {
-#define INIT_PROCESSOR_BY_VERSION(MAJOR, MINOR, MAJOR_PATCH, MINOR_PATCH) \
+#define INIT_PROCESSOR_BY_NAME_AND_VERSION(PROCESSOR_NAME, VERSION, processor) \
     if (OB_SUCC(ret)) { \
       void *buf = NULL; \
-      ObBaseUpgradeProcessor *processor = NULL; \
-      int64_t version = static_cast<int64_t>(cal_version((MAJOR), (MINOR), (MAJOR_PATCH), (MINOR_PATCH))); \
-      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObUpgradeFor##MAJOR##MINOR##MAJOR_PATCH##MINOR_PATCH##Processor)))) { \
+      int64_t version = VERSION; \
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(PROCESSOR_NAME)))) { \
         ret = OB_ALLOCATE_MEMORY_FAILED; \
         LOG_WARN("fail to alloc upgrade processor", KR(ret)); \
-      } else if (OB_ISNULL(processor = new(buf)ObUpgradeFor##MAJOR##MINOR##MAJOR_PATCH##MINOR_PATCH##Processor)) { \
+      } else if (OB_ISNULL(processor = new(buf)PROCESSOR_NAME)) { \
         ret = OB_NOT_INIT; \
         LOG_WARN("fail to new upgrade processor", KR(ret)); \
       } else if (OB_FAIL(processor->init(version, mode, sql_proxy, oracle_sql_proxy, rpc_proxy, common_proxy, \
                                          schema_service, check_server_provider))) { \
         LOG_WARN("fail to init processor", KR(ret), KDV(version)); \
-      } else if (OB_FAIL(processor_list_.push_back(processor))) { \
-        LOG_WARN("fail to push back processor", KR(ret), KDV(version)); \
       } \
       if (OB_FAIL(ret)) { \
         if (OB_NOT_NULL(processor)) { \
@@ -712,6 +712,20 @@ int ObUpgradeProcesserSet::init(
         } \
       } \
     }
+
+#define INIT_PROCESSOR_BY_VERSION(MAJOR, MINOR, MAJOR_PATCH, MINOR_PATCH) \
+    if (OB_SUCC(ret)) { \
+      ObBaseUpgradeProcessor *processor = NULL; \
+      int64_t data_version = cal_version(MAJOR, MINOR, MAJOR_PATCH, MINOR_PATCH); \
+      INIT_PROCESSOR_BY_NAME_AND_VERSION(ObUpgradeFor##MAJOR##MINOR##MAJOR_PATCH##MINOR_PATCH##Processor,  \
+          data_version, processor); \
+      if (FAILEDx(processor_list_.push_back(processor))) { \
+        LOG_WARN("fail to push back processor", KR(ret), KDV(data_version)); \
+      } \
+    }
+
+    INIT_PROCESSOR_BY_NAME_AND_VERSION(ObUpgradeForAllVersionProcessor, OB_INVALID_VERSION,
+        all_version_upgrade_processor_);
 
     // order by data version asc
     INIT_PROCESSOR_BY_VERSION(4, 0, 0, 0);
@@ -735,6 +749,8 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 3, 1);
     INIT_PROCESSOR_BY_VERSION(4, 2, 4, 0);
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 0);
+
+#undef INIT_PROCESSOR_BY_NAME_AND_VERSION
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }
@@ -788,6 +804,21 @@ int ObUpgradeProcesserSet::get_processor_by_version(
     LOG_WARN("fail to get processor idx by version", KR(ret), KDV(version));
   } else if (OB_FAIL(get_processor_by_idx(idx, processor))) {
     LOG_WARN("fail to get processor by idx", KR(ret), KDV(version));
+  }
+  return ret;
+}
+
+int ObUpgradeProcesserSet::get_all_version_processor(ObBaseUpgradeProcessor *&processor) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check inner stat failed", KR(ret));
+  } else if (OB_ISNULL(all_version_upgrade_processor_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("processor is NULL", KR(ret), KP(all_version_upgrade_processor_));
+  } else {
+    processor = all_version_upgrade_processor_;
+    processor->set_tenant_id(OB_INVALID_ID); // reset
   }
   return ret;
 }
@@ -915,6 +946,7 @@ int ObBaseUpgradeProcessor::init(
 #undef FORMAT_STR
 
 /* =========== special upgrade processor start ============= */
+int ObUpgradeForAllVersionProcessor::post_upgrade() { return OB_SUCCESS; }
 
 int ObUpgradeFor4100Processor::post_upgrade()
 {
