@@ -122,12 +122,12 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
 
   if (OB_SUCC(ret)) {
     bool has_rownum = false;
-    bool has_special_expr = false;
+    bool is_deterministic_query = true;
     if (OB_FAIL(stmt.has_rownum(has_rownum))) {
       LOG_WARN("failed to check has rownum", K(ret));
-    } else if (OB_FAIL(check_mv_stmt_use_special_expr(stmt, has_special_expr))) {
+    } else if (OB_FAIL(stmt.is_query_deterministic(is_deterministic_query))) {
       LOG_WARN("failed to check mv stmt use special expr", K(ret));
-    } else if (has_special_expr || has_rownum || stmt.has_ora_rowscn()) {
+    } else if (!is_deterministic_query || has_rownum || stmt.has_ora_rowscn()) {
       is_valid = false;
       append_fast_refreshable_note("rownum/ora_rowscn/rand_func not support");
     }
@@ -149,30 +149,6 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
     } else if (has_dup_exprs) {
       is_valid = false;
     }
-  }
-  return ret;
-}
-
-int ObMVChecker::check_mv_stmt_use_special_expr(const ObSelectStmt &stmt, bool &has_special_expr)
-{
-  int ret = OB_SUCCESS;
-  ObSqlBitSet<> flags;
-  ObExprInfoFlag flag_arr[] = { CNT_RAND_FUNC,
-                                CNT_STATE_FUNC,
-                                CNT_SEQ_EXPR,
-                                CNT_VOLATILE_CONST,
-                                CNT_DYNAMIC_USER_VARIABLE,
-                                CNT_CUR_TIME,
-                                /* add new check flag above CNT_ASSOCIATED_FLAG_END */
-                                CNT_ASSOCIATED_FLAG_END };
-  for (int64_t i = 0; OB_SUCC(ret) && CNT_ASSOCIATED_FLAG_END != flag_arr[i] ; ++i) {
-    if (OB_FAIL(flags.add_member(flag_arr[i]))) {
-      LOG_WARN("failed to add member", K(ret), K(i), K(flag_arr[i]));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(stmt.has_special_exprs(flags, has_special_expr))) {
-    LOG_WARN("failed to check has special exprs", K(ret));
   }
   return ret;
 }

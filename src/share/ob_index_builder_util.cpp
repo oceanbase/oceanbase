@@ -862,9 +862,6 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
                                                         ObResolverUtils::CHECK_FOR_FUNCTION_INDEX,
                                                         NULL))) {
             LOG_WARN("build generated column expr failed", K(ret));
-          } else if (!expr->is_deterministic()) {
-            ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-            LOG_WARN("only pure functions can be indexed", K(ret));
           } else if (!expr->is_column_ref_expr()) {
             //real index expr, so generate hidden generated column in data table schema
             if (lib::Worker::CompatMode::MYSQL == compat_mode) {

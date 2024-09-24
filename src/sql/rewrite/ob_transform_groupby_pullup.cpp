@@ -292,7 +292,6 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   bool can_pullup = false;
   bool hint_valid = false;
-  bool has_rand = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(stmt), K(table), K(ret));
@@ -341,12 +340,10 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       LOG_WARN("failed to check null propagate select expr", K(ret));
     } else if (!can_pullup) {
       //do nothing
-    } else if (OB_FAIL(sub_stmt->has_rand(has_rand))) {
+    } else if (OB_FAIL(sub_stmt->is_query_deterministic(can_pullup))) {
       LOG_WARN("failed to check stmt has rand func", K(ret));
-      //stmt不能包含rand函数
-    } else if (!(can_pullup = !has_rand)) {
-      // do nothing
-      OPT_TRACE("view has rand expr, can not transform");
+    } else if (!can_pullup) {
+      OPT_TRACE("view is not deterministic, can not transform");
     } else if (OB_FALSE_IT(helper.need_merge_ = (NULL != myhint 
                           && myhint->enable_group_by_pull_up(ctx_->src_qb_name_)))) {
     } else if (!helper.need_merge_ && stmt->get_table_size() > 1 && sub_stmt->get_table_size() > 1 &&

@@ -1854,9 +1854,6 @@ public:
   static int check_group_by_subset(ObRawExpr *expr,
                                    const ObIArray<ObRawExpr *> &group_exprs,
                                    bool &bret);
-
-  static int check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid);
-
   static int expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
 
   static int get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
@@ -1989,7 +1986,8 @@ public:
                             UnionFind &uf);
   static int check_contain_correlated_function_table(const ObDMLStmt *stmt, bool &is_contain);
   static int check_contain_correlated_json_table(const ObDMLStmt *stmt, bool &is_contain);
-  static int check_contain_cannot_duplicate_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain);
+  static int check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
+                                                   bool &is_contain);
   static bool is_enable_values_table_rewrite(const uint64_t compat_version);
   // check whether the score calculated by match expr is actually utilized
   static int check_need_calc_match_score(ObExecContext *exec_ctx,
@@ -2094,7 +2092,6 @@ private:
                                        ObIArray<ObRawExpr*> &outer_conditions,
                                        ObIArray<TableItem*> &right_tables,
                                        ObIArray<ObSEArray<ObRawExpr*, 4>> &new_outer_conds);
-  static int recursive_check_cannot_duplicate_expr(const ObRawExpr *expr, bool &is_contain);
   static int inner_check_need_calc_match_score(ObExecContext *exec_ctx,
                                               ObRawExpr* expr,
                                               ObRawExpr* match_expr,

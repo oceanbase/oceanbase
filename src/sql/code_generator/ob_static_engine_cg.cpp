@@ -6728,13 +6728,14 @@ int ObStaticEngineCG::generate_spec(
   if (OB_SUCC(ret)) {
     //add all right children there
     int64_t subquery_cnt = spec.get_child_cnt() - 1;
+    bool is_all_subquery_deterministic = true;
     if (OB_FAIL(spec.exec_param_array_.init(subquery_cnt))) {
       LOG_WARN("failed to init exec param array", K(ret));
     } else {
-       ObFixedArray<ObExpr *, ObIAllocator> cache_vec(phy_plan_->get_allocator());
-       for (int64_t child_idx = 1; OB_SUCC(ret) && child_idx < spec.get_child_cnt(); ++child_idx) {
-         SubPlanInfo *sp_info = nullptr;
-         ObLogicalOperator *curr_child = nullptr;
+      ObFixedArray<ObExpr *, ObIAllocator> cache_vec(phy_plan_->get_allocator());
+      for (int64_t child_idx = 1; OB_SUCC(ret) && child_idx < spec.get_child_cnt(); ++child_idx) {
+        SubPlanInfo *sp_info = nullptr;
+        ObLogicalOperator *curr_child = nullptr;
         if (OB_ISNULL(curr_child = op.get_child(child_idx))
               || OB_ISNULL(curr_child->get_stmt())) {
             ret = OB_ERR_UNEXPECTED;
@@ -6748,6 +6749,8 @@ int ObStaticEngineCG::generate_spec(
           cache_vec.reset();
           if (OB_FAIL(cache_vec.init(sp_info->init_expr_->get_param_count()))) {
             LOG_WARN("failed to init tmp_vec", K(ret));
+          } else if (!sp_info->init_expr_->is_deterministic()) {
+            is_all_subquery_deterministic = false;
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < sp_info->init_expr_->get_param_count(); ++j) {
             ObExecParamRawExpr *exec_param = sp_info->init_expr_->get_exec_param(j);
@@ -6762,7 +6765,9 @@ int ObStaticEngineCG::generate_spec(
           }
         }
       }
-      OX(spec.exec_param_idxs_inited_ = true);
+      if (OB_SUCC(ret) && is_all_subquery_deterministic) {
+        spec.exec_param_idxs_inited_ = true;
+      }
     }
   }
 

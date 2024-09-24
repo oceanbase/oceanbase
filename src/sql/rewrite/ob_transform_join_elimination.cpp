@@ -1277,7 +1277,7 @@ int ObTransformJoinElimination::check_vaild_non_sens_dul_vals(ObIArray<ObParentD
     ObDMLStmt *parent_stmt = NULL;
     bool has_rownum_expr = false;
     bool has_state_func = false;
-    bool has_rand = false;
+    bool is_deterministic = false;
     if (select_stmt->has_group_by() ||
         select_stmt->is_set_stmt() ||
         select_stmt->has_rollup() ||
@@ -1290,13 +1290,9 @@ int ObTransformJoinElimination::check_vaild_non_sens_dul_vals(ObIArray<ObParentD
       LOG_WARN("failed to check has rownum", K(ret));
     } else if (has_rownum_expr) {
       is_valid = false;
-    } else if (OB_FAIL(select_stmt->has_rand(has_rand))) {
+    } else if (OB_FAIL(select_stmt->is_query_deterministic(is_deterministic))) {
       LOG_WARN("failed to check has rand", K(ret));
-    } else if (has_rand) {
-      is_valid = false;
-    } else if (OB_FAIL(select_stmt->has_special_expr(CNT_STATE_FUNC, has_state_func))) {
-      LOG_WARN("failed to check has state func", K(ret));
-    } else if (has_state_func) {
+    } else if (!is_deterministic) {
       is_valid = false;
     } else if (select_stmt->is_distinct()) {
       is_valid = true;
