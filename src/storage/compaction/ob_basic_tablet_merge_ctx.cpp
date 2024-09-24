@@ -742,10 +742,12 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   if (exe_ts > 0 && block_info.new_micro_info_.get_data_micro_size() > 0) {
     block_info.new_flush_data_rate_ = (int)(((float)block_info.new_micro_info_.get_data_micro_size()/ 1024) / ((float)exe_ts / 1_s));
     int64_t io_percentage = block_info.block_io_us_ * 100 / (float)exe_ts;
-    ADD_COMMENT("block_io_us", block_info.block_io_us_);
     if (io_percentage > 0) {
       running_info.io_percentage_ = io_percentage;
     }
+  }
+  if (running_info.execute_time_ > 30_s && (get_concurrent_cnt() > 1 || end_cg_idx > 0)) {
+    ADD_COMMENT("execute_time", running_info.execute_time_);
   }
   int64_t mem_peak_mb = mem_ctx_.get_total_mem_peak() >> 20;
   if (mem_peak_mb > 0) {

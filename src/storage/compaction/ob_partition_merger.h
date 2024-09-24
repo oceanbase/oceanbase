@@ -112,12 +112,13 @@ protected:
   compaction::ObLocalArena &merger_arena_;
   ObBasicTabletMergeCtx *merge_ctx_;
   int64_t task_idx_;
-  bool force_flat_format_;
   ObMergeParameter merge_param_;
   ObIPartitionMergeFuser *partition_fuser_;
   ObPartitionMergeHelper *merge_helper_;
   ObPartitionMergeIter *base_iter_;
   ObCachedTransStateMgr trans_state_mgr_;
+  int64_t start_time_;
+  bool force_flat_format_;
 };
 
 class ObPartitionMerger : public ObMerger

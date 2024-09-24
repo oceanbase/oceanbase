@@ -253,7 +253,10 @@ public:
   int build_update_table_store_param(
     const blocksstable::ObSSTable *sstable,
     ObUpdateTableStoreParam &param);
-  virtual int update_block_info(const ObMergeBlockInfo &block_info) { return OB_NOT_SUPPORTED; }
+  virtual int update_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time)
+  { return OB_NOT_SUPPORTED; }
   VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
     K_(info_collector), KP_(merge_dag));
 protected:

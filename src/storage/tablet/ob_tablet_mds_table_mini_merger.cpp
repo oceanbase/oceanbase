@@ -424,7 +424,7 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     SMART_VARS_2((ObSSTableMergeRes, res), (ObTabletCreateSSTableParam, param)) {
       if (OB_FAIL(macro_writer_.close())) {
         LOG_WARN("fail to close macro writer", K(ret), K(macro_writer_));
-      } else if (OB_FAIL(ctx_->update_block_info(macro_writer_.get_merge_block_info()))) {
+      } else if (OB_FAIL(ctx_->update_block_info(macro_writer_.get_merge_block_info(), 0/*cost_time*/))) {
         STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
       } else if (OB_FAIL(sstable_builder_.close(res))) {
         LOG_WARN("fail to close sstable builder", K(ret), K(sstable_builder_));

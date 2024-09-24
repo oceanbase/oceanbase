@@ -65,6 +65,10 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int cal_merge_param() override;
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
+  int collect_running_info_in_batch(
+    const uint32_t start_cg_idx,
+    const uint32_t end_cg_idx,
+    const ObCompactionTimeGuard &time_guard);
   virtual int build_ctx(bool &finish_flag) override;
   virtual int check_merge_ctx_valid() override;
   OB_INLINE bool all_cg_finish() const // locked by ObCODagNet ctx_lock_

@@ -110,6 +110,19 @@ int ObTabletMergeCtx::collect_running_info()
   return ret;
 }
 
+int ObTabletMergeCtx::update_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(merge_info_.get_merge_history().update_block_info(block_info, false/*without_row_cnt*/))) {
+    LOG_WARN("failed to update block info", KR(ret), K(block_info));
+  } else {
+    merge_info_.get_merge_history().update_execute_time(cost_time);
+  }
+  return ret;
+}
+
 /*
  *  ----------------------------------------------ObTabletMiniMergeCtx--------------------------------------------------
  */
