@@ -1443,21 +1443,17 @@ case type: {                                                            \
   return ret;
 }
 
-int ObPLDataType::datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null)
+int ObPLDataType::obj_is_null(ObObj& obj, bool &is_null)
 {
   int ret = OB_SUCCESS;
 
-  OV(OB_NOT_NULL(param), OB_ERR_UNEXPECTED);
+  is_null = false;
 
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (!is_udt_type) {
-    is_null = param->is_null();
-  } else if (param->is_null() || param->extend_obj_->is_null()) {
+  if (obj.is_null()) {
     is_null = true;
-  } else {
-    uint64_t ext = param->extend_obj_->get_ext();
-    switch (param->extend_obj_->get_meta().get_extend_type()) {
+  } else if (obj.is_ext()) {
+    uint64_t ext = obj.get_ext();
+    switch (obj.get_meta().get_extend_type()) {
 #ifdef OB_BUILD_ORACLE_PL
       case pl::PL_NESTED_TABLE_TYPE:
       case pl::PL_ASSOCIATIVE_ARRAY_TYPE:
@@ -1473,9 +1469,10 @@ int ObPLDataType::datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null)
       }
       case pl::PL_CURSOR_TYPE:
       case pl::PL_REF_CURSOR_TYPE: {
-        is_null = param->extend_obj_->get_ext() == 0;
-      } break;
-#endif
+        is_null = obj.get_ext() == 0;
+        break;
+      }
+  #endif
       case pl::PL_RECORD_TYPE: {
         pl::ObPLRecord *rec = reinterpret_cast<pl::ObPLRecord *>(ext);
         is_null = rec->is_null();
@@ -1483,10 +1480,33 @@ int ObPLDataType::datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null)
       }
       default: {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("check complex value is null not supported", K(ret), K(param->extend_obj_));
+        LOG_WARN("check complex value is null not supported", K(ret), K(obj));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "check complex is null");
         break;
       }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check obj is null unexcepted error", K(ret), K(obj));
+  }
+  return ret;
+}
+
+int ObPLDataType::datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null)
+{
+  int ret = OB_SUCCESS;
+
+  OV(OB_NOT_NULL(param), OB_ERR_UNEXPECTED);
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (!is_udt_type) {
+    is_null = param->is_null();
+  } else if (param->is_null() || param->extend_obj_->is_null()) {
+    is_null = true;
+  } else {
+    if (OB_FAIL(ObPLDataType::obj_is_null(*(ObObj*)param->extend_obj_, is_null))) {
+      LOG_WARN("check obj is null failed", K(ret), K(param->extend_obj_));
     }
   }
   return ret;

@@ -6370,6 +6370,27 @@ int ObSPIService::prepare_static_sql_params(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *session)
+{
+  int  ret = OB_SUCCESS;
+  bool is_ext_null = false;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); i++) {
+    if (params.at(i).is_ext()) {
+      if (OB_FAIL(ObPLDataType::obj_is_null(params.at(i), is_ext_null))) {
+        LOG_WARN("check obj_is_null failed", K(ret));
+      } else if (is_ext_null) {
+        ObObjMeta param_meta = params.at(i).get_meta();
+        CK (OB_NOT_NULL(session));
+        OZ (ObUserDefinedType::destruct_obj(params.at(i), session));
+        OX (params.at(i).set_null());
+        OX (params.at(i).set_param_meta(param_meta));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::inner_open(ObPLExecCtx *ctx,
                              ObIAllocator &param_allocator,
                              const ObString &sql,
@@ -6413,6 +6434,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
   }
 
   CK (OB_NOT_NULL(curr_params));
+  OZ (convert_ext_null_params(*curr_params, ctx->exec_ctx_->get_my_session()));
   OZ (inner_open(ctx, sql, ps_sql, type, *curr_params, spi_result, out_params, is_dynamic_sql));
 
   // if failed, we need release complex parameter memory in here
