@@ -142,7 +142,11 @@ private:
       bool &in_new_partition_group,
       const uint64_t part_group_uid);
   int prepare_tablet_data_size_();
-
+  int prepare_related_tablets_map_();
+  int add_to_related_tablets_map_(
+      const share::schema::ObSimpleTableSchemaV2 &primary_table_schema,
+      const share::schema::ObSimpleTableSchemaV2 &related_table_schema);
+  int get_data_size_with_related_tablets_(const ObTabletID &tablet_id, uint64_t &data_size);
 private:
   static const int64_t MAP_BUCKET_NUM = 40960;
 
@@ -157,6 +161,8 @@ private:
   share::ObTenantTabletToLSMap tablet_to_ls_;
 
   hash::ObHashMap<ObTabletID, uint64_t> tablet_data_size_;
+  ObArenaAllocator allocator_;
+  hash::ObHashMap<ObTabletID, common::ObIArray<ObTabletID> *> related_tablets_map_;
 };
 
 }
