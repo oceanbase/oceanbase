@@ -177,6 +177,7 @@ int ObRbMemMgr::init()
 
 void ObRbMemMgr::destroy()
 {
+  FLOG_INFO("destroy Roaring bitmap manager", K(MTL_ID()));
   allocator_.destroy();
   is_inited_ = false;
 }

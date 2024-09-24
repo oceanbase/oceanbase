@@ -421,8 +421,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObStorageHADiagMgr*,                  \
       common::sqlclient::ObTenantDblinkKeeper*,      \
       storage::ObGlobalIteratorPool*,                \
-      share::ObPluginVectorIndexService*,            \
       common::ObRbMemMgr*,                           \
+      share::ObPluginVectorIndexService*,            \
       storage::ObTenantRestoreInfoMgr*,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
