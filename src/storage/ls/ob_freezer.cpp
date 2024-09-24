@@ -572,14 +572,34 @@ void ObFreezer::submit_checkpoint_task()
   } while (OB_FAIL(ret));
 }
 
-int ObFreezer::ls_freeze_task()
+int ObFreezer::ls_freeze_task(const share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
-  share::ObLSID ls_id = get_ls_id();
+  ObLSHandle ls_handle;
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    STORAGE_LOG(WARN, "get ls handle failed. stop freeze task", KR(ret), K(ls_id));
+  } else {
+    uint32_t freeze_clock = get_freeze_clock();
+    TRANS_LOG(INFO, "[Freezer] logstream_freeze task start", K(ls_id), K(freeze_clock));
+
+    ret = do_ls_freeze_task_(ls_id);
+
+    stat_.add_diagnose_info("logstream_freeze success");
+    FLOG_INFO("[Freezer] logstream_freeze success", K(ls_id), K(freeze_clock));
+    stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObTimeUtility::current_time(), ret);
+    unset_freeze_();
+
+    (void)try_freeze_tx_data_();
+  }
+
+  return ret;
+}
+
+int ObFreezer::do_ls_freeze_task_(const share::ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
   const int64_t start = ObTimeUtility::current_time();
   int64_t last_submit_log_time = start;
-  uint32_t freeze_clock = get_freeze_clock();
-  TRANS_LOG(INFO, "[Freezer] freeze_clock", K(ls_id), K(freeze_clock));
 
   // wait till all memtables are moved from frozen_list to prepare_list
   // this means that all memtables can be dumped
@@ -596,7 +616,7 @@ int ObFreezer::ls_freeze_task()
         ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
         if (OB_FAIL(check_ls_state())) {
         } else {
-          submit_log_for_freeze(false/*try*/);
+          submit_log_for_freeze(false /*try*/);
           TRANS_LOG(INFO, "[Freezer] resubmit log for ls_freeze", K(ls_id));
         }
       }
@@ -604,21 +624,14 @@ int ObFreezer::ls_freeze_task()
       const int64_t cost_time = ObTimeUtility::current_time() - start;
 
       if (cost_time > 5 * 1000 * 1000) {
-        TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "[Freezer] finish ls_freeze costs too much time",
-                      K(ls_id), K(cost_time));
+        TRANS_LOG_RET(
+            WARN, OB_ERR_TOO_MUCH_TIME, "[Freezer] finish ls_freeze costs too much time", K(ls_id), K(cost_time));
         stat_.add_diagnose_info("finish ls_freeze costs too much time");
       }
     }
 
     ob_usleep(100);
   }
-  stat_.add_diagnose_info("logstream_freeze success");
-  FLOG_INFO("[Freezer] logstream_freeze success", K(ls_id), K(freeze_clock));
-
-  stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObTimeUtility::current_time(), ret);
-  unset_freeze_();
-
-  (void)try_freeze_tx_data_();
 
   return ret;
 }
@@ -626,15 +639,15 @@ int ObFreezer::ls_freeze_task()
 void ObFreezer::try_freeze_tx_data_()
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_RETRY_DURATION = 10LL * 1000LL * 1000LL;  // 10 seconds
+  const int64_t MAX_RETRY_DURATION = 5LL * 1000LL * 1000LL;  // 5 seconds
   int64_t retry_times = 0;
   int64_t start_freeze_ts = ObClockGenerator::getClock();
   do {
     if (OB_FAIL(ls_->get_tx_table()->self_freeze_task())) {
       if (OB_EAGAIN == ret) {
-        // sleep and retry
+        // sleep 100ms and retry
         retry_times++;
-        usleep(100);
+        usleep(100LL * 1000LL);
       } else {
         STORAGE_LOG(WARN, "freeze tx data table failed", KR(ret), K(get_ls_id()));
       }
@@ -1362,8 +1375,8 @@ int ObFreezer::submit_freeze_task(const bool is_ls_freeze, ObFuture<int> *result
     do {
       if (OB_ISNULL(result)) {
         if (is_ls_freeze) {
-          ret = tenant_freezer->freeze_thread_pool_.commit_task_ignore_ret([this]() {
-            return ls_freeze_task(); });
+          ret = tenant_freezer->freeze_thread_pool_.commit_task_ignore_ret([this, ls_id]() {
+            return ls_freeze_task(ls_id); });
         } else {
           ret = tenant_freezer->freeze_thread_pool_.commit_task_ignore_ret([this, handle]() {
             return tablet_freeze_task(handle); });
@@ -1371,7 +1384,7 @@ int ObFreezer::submit_freeze_task(const bool is_ls_freeze, ObFuture<int> *result
       } else {
         if (is_ls_freeze) {
           ret = tenant_freezer->freeze_thread_pool_.commit_task(*result,
-            [this]() { return ls_freeze_task(); });
+            [this, ls_id]() { return ls_freeze_task(ls_id); });
         } else {
           ret = tenant_freezer->freeze_thread_pool_.commit_task(*result,
             [this, handle]() { return tablet_freeze_task(handle); });

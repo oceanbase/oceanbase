@@ -309,7 +309,8 @@ private:
                                     const ObTablet *tablet,
                                     const SCN freeze_snapshot_version,
                                     SCN &real_snapshot_version);
-  int ls_freeze_task();
+  int ls_freeze_task(const share::ObLSID ls_id);
+  int do_ls_freeze_task_(const share::ObLSID ls_id);
   int tablet_freeze_task(ObTableHandleV2 handle);
   int submit_freeze_task(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
   void wait_memtable_ready_for_flush(memtable::ObMemtable *memtable);
