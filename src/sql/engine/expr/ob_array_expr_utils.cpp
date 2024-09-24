@@ -515,9 +515,13 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
     } else if (i == 0) {
       // do nothing
     } else if (types_stack[i - 1].get_type() != types_stack[i].get_type()
-               && !types_stack[i].is_null() && !types_stack[i - 1].is_null()) { // null is legal input type
-      is_all_same_type = false;
-      if (!is_all_num_tc) {
+               && !types_stack[i].is_null()) { // null is legal input type
+      for (int64_t j = i - 1; j >= 0 && is_all_same_type; j--) {
+        if (!types_stack[j].is_null() && types_stack[j].get_type() != types_stack[i].get_type()) {
+          is_all_same_type = false;
+        }
+      }
+      if (!is_all_same_type && !is_all_num_tc) {
         ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
         LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
       }
