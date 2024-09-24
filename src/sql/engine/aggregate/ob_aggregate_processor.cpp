@@ -1538,6 +1538,21 @@ OB_INLINE int ObAggregateProcessor::clone_number_cell(const ObNumber &src_number
   return ret;
 }
 
+OB_INLINE int ObAggregateProcessor::clone_vector_cell(const ObDatum &src_cell, AggrCell &aggr_cell)
+{
+  int ret = OB_SUCCESS;
+  int64_t need_size = sizeof(int64_t) * 2 + src_cell.len_;
+  if (OB_FAIL(clone_cell(aggr_cell, need_size, nullptr))) {
+    SQL_LOG(WARN, "failed to clone cell", K(ret));
+  } else {
+    ObDatum &target_cell = aggr_cell.get_iter_result();
+    memcpy((char*)target_cell.ptr_, src_cell.ptr_, src_cell.len_);
+    target_cell.pack_ = src_cell.pack_;
+  }
+  OX(SQL_LOG(DEBUG, "succ to clone cell", K(src_cell), K(aggr_cell), K(need_size)));
+  return ret;
+}
+
 int ObAggregateProcessor::prepare(GroupRow &group_row)
 {
   int ret = OB_SUCCESS;
@@ -5631,8 +5646,19 @@ int ObAggregateProcessor::add_calc(
     case ObCollectionSQLTC: {
       if (result_datum.is_null()) {
         ret = clone_aggr_cell(aggr_cell, iter_value, false);
-      } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_))) {
-        LOG_WARN("failed to add vector", K(ret));
+      } else {
+        ObString blob_res = result_datum.get_string();
+        ObLobLocatorV2 locator(blob_res, true/*has_lob_header*/);
+        bool is_outrow = !locator.has_inrow_data();
+        ObDatum tmp_datum;
+        if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_,
+            is_outrow ? &tmp_datum : nullptr))) {
+          LOG_WARN("failed to add vector", K(ret));
+        } else if (is_outrow) {
+          if (OB_FAIL(clone_vector_cell(tmp_datum, aggr_cell))) {
+            LOG_WARN("failed to clone vector cell", K(ret));
+          }
+        }
       }
       break;
     }
@@ -5803,8 +5829,19 @@ int ObAggregateProcessor::sub_calc(
     case ObCollectionSQLTC: {
       if (result_datum.is_null()) {
         ret = clone_aggr_cell(aggr_cell, iter_value, false);
-      } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_, true /*negative*/))) {
-        LOG_WARN("failed to sub vector", K(ret));
+      } else {
+        ObString blob_res = result_datum.get_string();
+        ObLobLocatorV2 locator(blob_res, true/*has_lob_header*/);
+        bool is_outrow = !locator.has_inrow_data();
+        ObDatum tmp_datum;
+        if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, iter_value, aggr_alloc_,
+            is_outrow ? &tmp_datum : nullptr, true /*negative*/))) {
+          LOG_WARN("failed to add vector", K(ret));
+        } else if (is_outrow) {
+          if (OB_FAIL(clone_vector_cell(tmp_datum, aggr_cell))) {
+            LOG_WARN("failed to clone vector cell", K(ret));
+          }
+        }
       }
       break;
     }
@@ -6352,8 +6389,19 @@ int ObAggregateProcessor::add_calc_batch(
         }
         if (result_datum.is_null()) {
           ret = clone_aggr_cell(aggr_cell, *src.at(i), false);
-        } else if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, *src.at(i), aggr_alloc_))) {
-          LOG_WARN("failed to add vector", K(ret));
+        } else {
+          ObString blob_res = result_datum.get_string();
+          ObLobLocatorV2 locator(blob_res, true/*has_lob_header*/);
+          bool is_outrow = !locator.has_inrow_data();
+          ObDatum tmp_datum;
+          if (OB_FAIL(ObArrayExprUtils::vector_datum_add(result_datum, *src.at(i), aggr_alloc_,
+              is_outrow ? &tmp_datum : nullptr))) {
+            LOG_WARN("failed to add vector", K(ret));
+          } else if (is_outrow) {
+            if (OB_FAIL(clone_vector_cell(tmp_datum, aggr_cell))) {
+              LOG_WARN("failed to clone vector cell", K(ret));
+            }
+          }
         }
       }
       break;

@@ -975,6 +975,7 @@ private:
 public:
   OB_INLINE int clone_number_cell(const number::ObNumber &src_cell,
                                   AggrCell &aggr_cell);
+  OB_INLINE int clone_vector_cell(const ObDatum &src_cell, AggrCell &aggr_cell);
 private:
   template <typename T>
   int init_group_extra_aggr_info(
