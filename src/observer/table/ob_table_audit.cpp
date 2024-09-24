@@ -112,30 +112,26 @@ int ObTableAuditMultiOp::generate_stmt(const ObString &table_name, char *buf, in
   ObString tmp_table_name = table_name.empty() ? ObString::make_string("(null)") : table_name;
 
   const char *op_name = ObTableOperation::get_op_name(op_type_);
+  int64_t prefix_len = MULTI_PREFIX_LEN + strlen(op_name) + tmp_table_name.length() + 3; // 3 * ' '
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buf is bull", KR(ret));
-  } else if (buf_len < strlen(op_name)) {
+  } else if (buf_len <= prefix_len) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("buffer not enough", K(ret), K(buf_len), K(strlen(op_name)));
+    LOG_WARN("buffer not enough", K(ret), K(buf_len), K(strlen(op_name)), K(tmp_table_name));
   } else {
-    int64_t n = snprintf(buf + pos, buf_len - pos, "multi %s %s ", op_name, tmp_table_name.ptr()); // "multi $op_name $table_name"
-    if (n < 0 || n > buf_len - pos) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
-    } else {
-      pos += n;
-      if (!ops_.empty()) {
-        const ObIArray<ObString> *propertiy_names = ops_.at(0).entity().get_all_properties_names();
-        if (OB_NOT_NULL(propertiy_names)) {
-          int64_t N = propertiy_names->count();
-          for (int64_t index = 0; index < N - 1; ++index) {
-            BUF_PRINTO(propertiy_names->at(index)); // pos will change in BUF_PRINTO
-            J_COMMA(); // ", "
-          }
-          if (0 < N) {
-            BUF_PRINTO(propertiy_names->at(N - 1));
-          }
+    int64_t n = snprintf(buf + pos, prefix_len + 1, "multi %s %s ", op_name, tmp_table_name.ptr()); // "multi $op_name $table_name"
+    pos += prefix_len;
+    if (!ops_.empty()) {
+      const ObIArray<ObString> *propertiy_names = ops_.at(0).entity().get_all_properties_names();
+      if (OB_NOT_NULL(propertiy_names)) {
+        int64_t N = propertiy_names->count();
+        for (int64_t index = 0; index < N - 1; ++index) {
+          BUF_PRINTO(propertiy_names->at(index)); // pos will change in BUF_PRINTO
+          J_COMMA(); // ", "
+        }
+        if (0 < N) {
+          BUF_PRINTO(propertiy_names->at(N - 1));
         }
       }
     }
@@ -162,17 +158,15 @@ int ObTableAuditRedisOp::generate_stmt(const ObString &table_name, char *buf, in
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buf is bull", KR(ret));
-  } else if (buf_len < tmp_cmd_name.length()) {
+  } else if (buf_len - pos < tmp_cmd_name.length() + 1) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("buffer not enough", K(ret), K(buf_len), K(tmp_cmd_name));
+    LOG_WARN("buffer not enough", K(ret), K(buf_len), K(pos), K(tmp_cmd_name));
   } else {
-    int64_t n = snprintf(buf + pos, buf_len - pos, "%s", tmp_cmd_name.ptr());
-    if (n < 0 || n > buf_len - pos) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
-    } else {
-      pos += n;
-    }
+    // snprintf return value:
+    // buf_size > str_size, return str_size
+    // buf_size < str_size, truncate str and return str_size
+    int64_t n = snprintf(buf + pos, tmp_cmd_name.length() + 1, "%s", tmp_cmd_name.ptr());
+    pos += tmp_cmd_name.length();
   }
 
   return ret;

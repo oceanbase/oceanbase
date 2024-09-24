@@ -192,6 +192,8 @@ int ObTableGroupService::process_expired_group()
   if (OB_NOT_NULL(ls_group) && OB_TMP_FAIL(expired_group.add_clean_group(ls_group))) {
     // overwrite ret
     LOG_WARN("fail to add expired ls group to clean group", K(tmp_ret), KPC(ls_group));
+  } else {
+    LOG_DEBUG("[group commit debug] add clean group", K(ret), KP(ls_group), K(expired_group.get_clean_group_counts()));
   }
 
   return ret;

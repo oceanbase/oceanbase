@@ -46,6 +46,8 @@ int ObRedisExecuteP::before_process()
 
   if (OB_FAIL(ParentType::before_process())) {
     LOG_WARN("before process failed", K(ret));
+  } else if (OB_FAIL(redis_ctx_.decode_request())) {
+    LOG_WARN("init redis_ctx set req failed", K(ret));
   }
 
   return ret;
@@ -76,8 +78,6 @@ int ObRedisExecuteP::init_redis_ctx()
                                           is_cache_hit,
                                           redis_ctx_.ls_id_))) {
     LOG_WARN("fail to get ls id", K(ret), K(credential_.tenant_id_), K_(tablet_id));
-  } else if (OB_FAIL(redis_ctx_.decode_request())) {
-    LOG_WARN("init redis_ctx set req failed", K(ret));
   }
 
   return ret;

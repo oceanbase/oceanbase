@@ -153,6 +153,30 @@ int ObTableFailedGroups::construct_trigger_requests(ObIAllocator &request_alloca
   return ret;
 }
 
+int ObTableExpiredGroups::construct_trigger_requests(ObIAllocator &request_allocator,
+                                                     ObIArray<ObTableGroupTriggerRequest*> &requests)
+{
+  int ret = OB_SUCCESS;
+  ObLockGuard<ObSpinLock> guard(lock_);
+  FOREACH_X(tmp_node, expired_groups_, OB_SUCC(ret)) {
+    ObTableLsGroup *group = *tmp_node;
+    ObTableGroupTriggerRequest *request = nullptr;
+    if (OB_ISNULL(group)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expired group is null", K(ret));
+    } else if (OB_ISNULL(request = OB_NEWx(ObTableGroupTriggerRequest, &request_allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc request", K(ret));
+    } else if (OB_FAIL(request->init(group->meta_.credential_))) {
+      LOG_WARN("fail to init request", K(ret));
+    } else if (OB_FAIL(requests.push_back(request))) {
+      LOG_WARN("fail to push back request");
+    }
+  }
+
+  return ret;
+}
+
 int ObTableGroupMeta::init(bool is_get,
                            bool is_same_type,
                            const ObTableApiCredential &credential,

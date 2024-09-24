@@ -63,7 +63,7 @@ int CommandOperator::process_table_batch_op(const ObTableBatchOperation &req_ops
     SMART_VAR(ObTableBatchCtx,
               batch_ctx,
               redis_ctx_.allocator_,
-              const_cast<ObTableAuditCtx &>(*redis_ctx_.tb_ctx_.get_audit_ctx()))
+              redis_ctx_.audit_ctx_)
     {
       if (OB_FAIL(results.init(req_ops.count()))) {
         LOG_WARN("fail to init results", K(ret), K(req_ops.count()));

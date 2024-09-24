@@ -96,6 +96,8 @@ int ObTableGroupCommitMgr::ObTableGroupTriggerTask::run_trigger_task()
     LOG_WARN("fail to trigger other group", K(ret));
   } else if (OB_FAIL(trigger_failed_group())) {
     LOG_WARN("fail to trigger failed group", K(ret));
+  } else if (OB_FAIL(trigger_expire_group())) {
+    LOG_WARN("fail to triggrt expired group", K(ret));
   }
 
   return ret;
@@ -151,6 +153,33 @@ int ObTableGroupCommitMgr::ObTableGroupTriggerTask::trigger_failed_group()
     }
   }
 
+  return ret;
+}
+
+int ObTableGroupCommitMgr::ObTableGroupTriggerTask::trigger_expire_group()
+{
+  int ret = OB_SUCCESS;
+  ObTableExpiredGroups &expire_groups = group_mgr_.get_expired_groups();
+  if (!expire_groups.get_expired_groups().empty()) {
+    ObArenaAllocator tmp_allocator;
+    tmp_allocator.set_attr(ObMemAttr(MTL_ID(), "KvExpiredGroup", ObCtxIds::DEFAULT_CTX_ID));
+    ObSEArray<ObTableGroupTriggerRequest*, 32> trigger_requests;
+    trigger_requests.set_attr(ObMemAttr(MTL_ID(), "GroupTrigger"));
+    if (OB_FAIL(expire_groups.construct_trigger_requests(tmp_allocator, trigger_requests))) {
+      LOG_WARN("fail to construct trigger requests", K(ret));
+    } else {
+      for (int64_t i = 0; i < trigger_requests.count() && OB_SUCC(ret); i++) {
+        ObTableGroupTriggerRequest *request = trigger_requests.at(i);
+        if (OB_ISNULL(request)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("trigger request is null", K(ret));
+        } else if (OB_FAIL(ObTableGroupUtils::trigger(*request))) {
+          LOG_WARN("fail to trigger", K(ret), KPC(request));
+        }
+      }
+      LOG_DEBUG("[group commit debug] trigger expired group", K(ret), K(trigger_requests.count()));
+    }
+  }
   return ret;
 }
 
@@ -339,6 +368,123 @@ void ObTableGroupCommitMgr::wait()
   }
 }
 
+int ObTableGroupCommitMgr::clean_group_map()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTableGroupCommitSingleOp*, 16> ops;
+  ObHashMap<uint64_t, ObTableLsGroup*>::iterator iter = group_map_.begin();
+  for (; iter != group_map_.end(); iter++) {
+    ObTableLsGroup *ls_group = iter->second;
+    int64_t batch_size = -1;
+    ops.reuse();
+    if (OB_NOT_NULL(ls_group)) {
+      batch_size = get_group_size(ls_group->meta_.is_get_);
+      while(ls_group->has_executable_ops()) {
+        if (OB_FAIL(ls_group->get_executable_batch(batch_size, ops, false))) {
+          LOG_WARN("fail to get executable batch", K(ret));
+        } else if (ops.count() == 0) {
+          // do nothing
+        } else {
+          ObTableGroupCommitOps *group = group_factory_.alloc();
+          if (OB_ISNULL(group)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc group", K(ret));
+          } else if (OB_FAIL(group->init(ls_group->meta_, ops))) {
+            LOG_WARN("fail to init group", K(ret), K(ls_group->meta_), K(ops));
+          } else if (OB_FAIL(ObTableGroupExecuteService::execute(*group,
+                                                                  &failed_groups_,
+                                                                  &group_factory_,
+                                                                  &op_factory_,
+                                                                  false /*add_failed_group */))) {
+            LOG_WARN("fail to execute group", K(ret));
+          }
+        }
+      } // end while
+
+      // free ls_group whether succes or not
+      ls_group->~ObTableLsGroup();
+      allocator_.free(ls_group);
+      ls_group = nullptr;
+    }
+  }
+
+  return ret;
+}
+
+int ObTableGroupCommitMgr::clean_expired_groups()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("clean expired groups:", K(expired_groups_.get_expired_groups().size()),
+            K(expired_groups_.get_clean_group_counts()));
+  // 1. clean all remaining expired groups
+  while (!expired_groups_.get_expired_groups().empty()) {
+    ObTableLsGroup *ls_group = nullptr;
+    if (OB_FAIL(expired_groups_.pop_expired_group(ls_group))) {
+      LOG_WARN("fail to pop expired group", K(ret));
+    } else if (OB_NOT_NULL(ls_group)) {
+      int64_t batch_size = TABLEAPI_GROUP_COMMIT_MGR->get_group_size(ls_group->meta_.is_get_);
+      ObSEArray <ObTableGroupCommitSingleOp*, 16> ops;
+      while(ls_group->has_executable_ops()) {
+        if (OB_FAIL(ls_group->get_executable_batch(batch_size, ops, false))) {
+          LOG_WARN("fail to get executable queue", K(ret));
+        } else if (ops.count() == 0) {
+          // do nothing
+          LOG_DEBUG("ops count is 0");
+        } else {
+          ObTableGroupCommitOps *group = group_factory_.alloc();
+          if (OB_ISNULL(group)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc group", K(ret));
+          } else if (OB_FAIL(group->init(ls_group->meta_, ops))) {
+            LOG_WARN("fail to init group", K(ret), K(ls_group->meta_), K(ops));
+          } else if (OB_FAIL(ObTableGroupExecuteService::execute(*group,
+                                                                &failed_groups_,
+                                                                &group_factory_,
+                                                                &op_factory_))) {
+            LOG_WARN("fail to execute group", K(ret));
+          }
+        }
+      } // end while
+      // free ls_group whether succes or not
+      ls_group->~ObTableLsGroup();
+      allocator_.free(ls_group);
+      ls_group = nullptr;
+    }
+  }
+
+  // 2. clean all remaining clean group
+  while (!expired_groups_.get_clean_groups().empty()) {
+    ObTableLsGroup *ls_group = nullptr;
+    if (OB_FAIL(expired_groups_.pop_clean_group(ls_group))) {
+      // overwrite ret
+      LOG_WARN("fail to pop clean group", K(ret));
+    } else if (OB_NOT_NULL(ls_group)) {
+      ls_group->~ObTableLsGroup();
+      allocator_.free(ls_group);
+      ls_group = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObTableGroupCommitMgr::clean_failed_groups()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("clean failed groups:", K(failed_groups_.get_failed_groups().size()));
+  while (!failed_groups_.empty()) {
+    ObTableGroupCommitOps *group = failed_groups_.get();
+    if (OB_NOT_NULL(group)) {
+      if (OB_FAIL(ObTableGroupService::process_one_by_one(*group))) {
+        LOG_WARN("fail to process group one by one", K(ret));
+      }
+      if (OB_NOT_NULL(group)) {
+        group_factory_.free(group);
+      }
+    }
+  }
+  return ret;
+}
+
 void ObTableGroupCommitMgr::destroy()
 {
   int ret = OB_SUCCESS;
@@ -347,101 +493,20 @@ void ObTableGroupCommitMgr::destroy()
     if (timer_.inited()) {
       timer_.destroy();
     }
-
-    // 2. check whether there are any remaining operations in the groups_ that have not been executed
-    ObSEArray<ObTableGroupCommitSingleOp*, 16> ops;
-    ObHashMap<uint64_t, ObTableLsGroup*>::iterator iter = group_map_.begin();
-    for (; iter != group_map_.end(); iter++) {
-      ObTableLsGroup *ls_group = iter->second;
-      int64_t batch_size = -1;
-      ops.reuse();
-      if (OB_NOT_NULL(ls_group)) {
-        batch_size = get_group_size(ls_group->meta_.is_get_);
-        while(ls_group->has_executable_ops()) {
-          if (OB_FAIL(ls_group->get_executable_batch(batch_size, ops, false))) {
-            LOG_WARN("fail to get executable batch", K(ret));
-          } else if (ops.count() == 0) {
-            // do nothing
-          } else {
-            ObTableGroupCommitOps *group = group_factory_.alloc();
-            if (OB_ISNULL(group)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("fail to alloc group", K(ret));
-            } else if (OB_FAIL(group->init(ls_group->meta_, ops))) {
-              LOG_WARN("fail to init group", K(ret), K(ls_group->meta_), K(ops));
-            } else if (OB_FAIL(ObTableGroupExecuteService::execute(*group,
-                                                                   &failed_groups_,
-                                                                   &group_factory_,
-                                                                   &op_factory_,
-                                                                   false /*add_failed_group */))) {
-              LOG_WARN("fail to execute group", K(ret));
-            }
-          }
-        } // end while
-
-        // free ls_group whether succes or not
-        ls_group->~ObTableLsGroup();
-        allocator_.free(ls_group);
-        ls_group = nullptr;
-      }
+    // 2. clean remian groups in group_map
+    if (OB_FAIL(clean_group_map())) {
+      LOG_WARN("fail to clean group map", K(ret));
     }
-
-    // 3. clean expired group
-    FOREACH_X(tmp_node, expired_groups_.get_expired_groups(), true) {
-      ObTableLsGroup *ls_group = nullptr;
-      if (OB_NOT_NULL(ls_group)) {
-        int64_t batch_size = TABLEAPI_GROUP_COMMIT_MGR->get_group_size(ls_group->meta_.is_get_);
-        ObSEArray <ObTableGroupCommitSingleOp*, 16> ops;
-        while(ls_group->has_executable_ops()) {
-          if (OB_FAIL(ls_group->get_executable_batch(batch_size, ops, false))) {
-            LOG_WARN("fail to get executable queue", K(ret));
-          } else if (ops.count() == 0) {
-            // do nothing
-            LOG_DEBUG("ops count is 0");
-          } else {
-            ObTableGroupCommitOps *group = group_factory_.alloc();
-            if (OB_ISNULL(group)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("fail to alloc group", K(ret));
-            } else if (OB_FAIL(group->init(ls_group->meta_, ops))) {
-              LOG_WARN("fail to init group", K(ret), K(ls_group->meta_), K(ops));
-            } else if (OB_FAIL(ObTableGroupExecuteService::execute(*group,
-                                                                  &failed_groups_,
-                                                                  &group_factory_,
-                                                                  &op_factory_))) {
-              LOG_WARN("fail to execute group", K(ret));
-            }
-          }
-        } // end while
-        // free ls_group whether succes or not
-        ls_group->~ObTableLsGroup();
-        allocator_.free(ls_group);
-        ls_group = nullptr;
-      }
+    // 3. clean remain groups in expired_groups
+    if (OB_FAIL(clean_expired_groups())) {
+      // overwrite ret
+      LOG_WARN("fail to clean expired groups", K(ret));
     }
-
-    FOREACH_X(tmp_node, expired_groups_.get_clean_groups(), true) {
-      ObTableLsGroup *ls_group = nullptr;
-      if (OB_NOT_NULL(ls_group)) {
-        ls_group->~ObTableLsGroup();
-        allocator_.free(ls_group);
-        ls_group = nullptr;
-      }
+    // 4. clean remian groups in failed groups
+    if (OB_FAIL(clean_failed_groups())) {
+      // overwrite ret
+      LOG_WARN("fail to clean failed groups", K(ret));
     }
-
-    // 4. check whether there are any remaining operations in the failed groups_ that have not been executed
-    FOREACH_X(tmp_node, failed_groups_.get_failed_groups(), true) {
-      ObTableGroupCommitOps *group = *tmp_node;
-      if (OB_NOT_NULL(group)) {
-        if (OB_FAIL(ObTableGroupService::process_one_by_one(*group))) {
-          LOG_WARN("fail to process group one by one", K(ret));
-        }
-        if (OB_NOT_NULL(group)) {
-          group_factory_.free(group);
-        }
-      }
-    }
-
     // 5. clear resource
     group_map_.clear();
     group_info_map_.clear();

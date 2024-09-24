@@ -1589,23 +1589,38 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
         LOG_WARN("not support increment auto increment column", K(ret), K(assign));
       } else if (assign.column_info_->auto_filled_timestamp_) {
         // do nothing
+      } else if (OB_UNLIKELY(!ob_is_int_tc(assign.column_info_->type_.get_type()) &&
+                !ob_is_varbinary_type(assign.column_info_->type_.get_type(),
+                                      assign.column_info_->type_.get_collation_type()))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-integer or varbinary types for increment operation");
+        LOG_WARN("invalid type for increment", K(ret), K(assign));
       } else {
         const ObString &column_name = assign.column_info_->column_name_;
         int64_t total_len = 0;
         ObString format_str;
-        if (ob_is_varbinary_type(delta.get_type(), delta.get_collation_type())) {
+        if (ob_is_varbinary_type(assign.column_info_->type_.get_type(), assign.column_info_->type_.get_collation_type())
+            && ob_is_varbinary_type(delta.get_type(), delta.get_collation_type())) {
           // for Redis varbinary increment
           total_len = strlen("trim(trailing '.' from trim(trailing '0' from IFNULL(CAST(`` AS DECIMAL(65,17)), 0) + CAST(`` AS DECIMAL(65,17))))")
                           + 1 + column_name.length() + column_name.length();
           format_str = "trim(trailing '.' from trim(trailing '0' from IFNULL(CAST(`%s` AS DECIMAL(65,17)), 0) + CAST(`%s` AS DECIMAL(65,17))))";
-        } else {
+        } else if (ob_is_int_tc(assign.column_info_->type_.get_type()) && ob_is_int_tc(delta.get_type())) {
           total_len = strlen("IFNULL(``, 0) + ``") + 1
             + column_name.length() + column_name.length();
           format_str = "IFNULL(`%s`, 0) + `%s`";
+        } else {
+          ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
+          const char *schema_type_str = ob_obj_type_str(assign.column_info_->type_.get_type());
+          const char *obj_type_str = ob_obj_type_str(delta.get_type());
+          LOG_USER_ERROR(OB_KV_COLUMN_TYPE_NOT_MATCH, column_name.length(), column_name.ptr(),
+              static_cast<int>(strlen(schema_type_str)), schema_type_str, static_cast<int>(strlen(obj_type_str)), obj_type_str);
+          LOG_WARN("delta should only be signed integer type or varbinary", K(ret), K(delta));
         }
         int64_t actual_len = -1;
         char *buf = NULL;
-        if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(total_len)))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(total_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", K(ret), K(total_len));
         } else if ((actual_len = snprintf(buf, total_len, format_str.ptr(),

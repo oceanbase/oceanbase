@@ -169,6 +169,7 @@ public:
   explicit ObRedisRequest(common::ObIAllocator &allocator, const ObTableOperationRequest &request)
       : allocator_(allocator),
         request_(request),
+        cmd_name_(),
         args_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisArgs")),
         db_(-1)
   {}
@@ -178,7 +179,7 @@ public:
   // Parse request_ as cmd_name_, args_
   int decode();
 
-  OB_INLINE ObString get_cmd_name() const
+  OB_INLINE const ObString &get_cmd_name() const
   {
     return cmd_name_;
   }

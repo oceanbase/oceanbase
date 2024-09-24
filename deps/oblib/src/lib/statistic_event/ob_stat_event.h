@@ -531,6 +531,11 @@ STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_COUNT, "multi put execute count", ObStatCl
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_TIME, "multi put execute time", ObStatClassIds::TABLEAPI, 191304, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_ROW, "multi put rows", ObStatClassIds::TABLEAPI, 191305, true, true, true)
 
+// -- table trigger 1914xx
+STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_COUNT, "group commit trigger execute count", ObStatClassIds::TABLEAPI, 191401, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_TIME, "group commit trigger execute execute time", ObStatClassIds::TABLEAPI, 191402, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_ROW, "group commit trigger execute rows", ObStatClassIds::TABLEAPI, 191403, true, true, true)
+
 // sys_time_model related (20xxxx)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_TIME, "DB time", ObStatClassIds::SYS, 200001, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_CPU, "DB CPU", ObStatClassIds::SYS, 200002, false, true, true)

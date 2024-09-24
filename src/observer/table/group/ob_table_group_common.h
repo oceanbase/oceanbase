@@ -483,6 +483,8 @@ public:
   OB_INLINE int64_t get_clean_group_counts() const { return clean_groups_.size(); }
   OB_INLINE const common::ObList<ObTableLsGroup *, common::ObIAllocator>& get_expired_groups() const { return expired_groups_; }
   OB_INLINE const common::ObList<ObTableLsGroup *, common::ObIAllocator>& get_clean_groups() const { return clean_groups_; }
+  int construct_trigger_requests(common::ObIAllocator &request_allocator,
+                                common::ObIArray<ObTableGroupTriggerRequest*> &requests);
 private:
   bool is_inited_;
   common::ObSpinLock lock_;

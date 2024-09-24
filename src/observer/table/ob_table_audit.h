@@ -313,6 +313,7 @@ public:
 
 struct ObTableAuditMultiOp
 {
+  static const int64_t MULTI_PREFIX_LEN = 5;
 public:
   ObTableAuditMultiOp(ObTableOperationType::Type op_type, const common::ObIArray<ObTableOperation> &ops)
       : op_type_(op_type),
