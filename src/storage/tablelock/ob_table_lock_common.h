@@ -183,6 +183,7 @@ enum ObTableLockOpType : char
   OUT_TRANS_LOCK = 2, // will be unlock use OUT_TRANS_UNLOCK
   OUT_TRANS_UNLOCK = 3,
   IN_TRANS_COMMON_LOCK = 4,
+  TABLET_SPLIT = 5,
   MAX_VALID_LOCK_OP_TYPE,
 };
 
@@ -202,6 +203,8 @@ int lock_op_type_to_string(const ObTableLockOpType op_type,
     strncpy(str ,"OUT_TRANS_UNLOCK", str_len);
   } else if (IN_TRANS_COMMON_LOCK == op_type) {
     strncpy(str ,"IN_TRANS_COMMON_LOCK", str_len);
+  } else if (TABLET_SPLIT == op_type) {
+    strncpy(str ,"TABLET_SPLIT", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
