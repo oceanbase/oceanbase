@@ -1381,6 +1381,8 @@ private:
                                                   const common::ObIArray<share::schema::ObTableSchema> &drop_index_schemas,
                                                   const ObTableSchema &orig_table_schema,
                                                   const obrpc::ObDropIndexArg *drop_index_arg,
+                                                  const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                                                  const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                                                   bool &has_index_task,
                                                   ObIArray<ObDDLTaskRecord> &ddl_tasks,
                                                   ObIArray<obrpc::ObDDLRes> &ddl_res_array);
@@ -2770,17 +2772,16 @@ private:
   int gen_inc_table_schema_for_drop_subpart(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
-  int inner_drop_index_to_scheduler_(ObMySQLTransaction &trans,
-                                     ObSchemaGetterGuard &schema_guard,
-                                     ObArenaAllocator &allocator,
-                                     const ObTableSchema &origin_table_schema,
-                                     ObTableSchema &new_table_schema,
-                                     obrpc::ObDropIndexArg *drop_index_arg,
-                                     DropIndexNameHashSet &drop_index_name_set,
-                                     RenameIndexNameHashSet &rename_ori_index_name_set,
-                                     ObDDLOperator &ddl_operator,
-                                     obrpc::ObAlterTableRes &res,
-                                     ObIArray<ObDDLTaskRecord> &ddl_tasks);
+  int drop_index_to_scheduler_(ObMySQLTransaction &trans,
+                               ObSchemaGetterGuard &schema_guard,
+                               ObArenaAllocator &allocator,
+                               const ObTableSchema &orig_table_schema,
+                               const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                               const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
+                               obrpc::ObDropIndexArg *drop_index_arg,
+                               ObDDLOperator &ddl_operator,
+                               obrpc::ObAlterTableRes &res,
+                               ObIArray<ObDDLTaskRecord> &ddl_tasks);
 public:
   //not check belong to the same table
   int check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
