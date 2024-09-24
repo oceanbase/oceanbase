@@ -4893,7 +4893,7 @@ int ObOptSelectivity::calc_expr_basic_info(const OptTableMetas &table_metas,
         OB_FAIL(calculate_distinct(table_metas,
                                    ctx,
                                    *expr,
-                                   -1.0,
+                                   ctx.get_current_rows(),
                                    *ndv))) {
       LOG_WARN("Failed to calculate distinct", K(ret));
     } else if (OB_NOT_NULL(nns) &&
@@ -4906,9 +4906,9 @@ int ObOptSelectivity::calc_expr_basic_info(const OptTableMetas &table_metas,
                OB_FAIL(calculate_distinct(table_metas,
                                           ctx,
                                           *expr,
-                                          -1.0,
+                                          ctx.get_current_rows(),
                                           *base_ndv,
-                                          true,
+                                          false,
                                           DistinctEstType::BASE))) {
       LOG_WARN("Failed to calculate distinct", K(ret));
     }
