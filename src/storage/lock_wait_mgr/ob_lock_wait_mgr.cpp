@@ -975,7 +975,7 @@ int ObLockWaitMgr::register_local_node_to_deadlock_(const transaction::ObTransID
   } else {// waiting for other trans
     LocalExecutionWaitingForTransFillVirtualInfoOperation fill_virtual_info_callback(ObLSID(node->ls_id_),
                                                                                      blocked_tx_id,
-                                                                                     ObTxSEQ::mk_v0(node->holder_tx_hold_seq_value_));
+                                                                                     ObTxSEQ::mk_v0(node->holder_tx_hold_seq_value_ == 0 ? 1 : node->holder_tx_hold_seq_value_));
     if (OB_FAIL(ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_for_trans(on_collect_callback,
                                                                                                      fill_virtual_info_callback,
                                                                                                      blocked_tx_id,
@@ -1053,7 +1053,7 @@ int ObLockWaitMgr::register_remote_exec_side_node_to_deadlock_(const transaction
   } else {// waiting for other trans
     LocalExecutionWaitingForTransFillVirtualInfoOperation fill_virtual_info_callback(ObLSID(node->ls_id_),
                                                                                      blocked_tx_id,
-                                                                                     ObTxSEQ::mk_v0(node->holder_tx_hold_seq_value_));
+                                                                                     ObTxSEQ::mk_v0(node->holder_tx_hold_seq_value_ == 0 ? 1 : node->holder_tx_hold_seq_value_));
     if (OB_FAIL(ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_for_trans_without_session(on_collect_callback,
                                                                                                                      fill_virtual_info_callback,
                                                                                                                      blocked_tx_id,
