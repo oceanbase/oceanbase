@@ -635,7 +635,8 @@ struct EstimateCostInfo {
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         index_prefix_(-1),
         can_batch_rescan_(false),
-        can_das_dynamic_part_pruning_(-1)
+        can_das_dynamic_part_pruning_(-1),
+        is_valid_inner_path_(false)
     {
     }
     virtual ~AccessPath() {
@@ -724,6 +725,8 @@ struct EstimateCostInfo {
     {
       return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
     }
+    // compute current path is inner path and contribute query ranges
+    int compute_valid_inner_path();
 
     int compute_access_path_batch_rescan();
     bool is_rescan_path() const { return est_cost_info_.is_rescan_; }
@@ -758,7 +761,8 @@ struct EstimateCostInfo {
                  K_(use_das),
                  K_(use_skip_scan),
                  K_(can_batch_rescan),
-                 K_(can_das_dynamic_part_pruning));
+                 K_(can_das_dynamic_part_pruning),
+                 K_(is_valid_inner_path));
   public:
     //member variables
     uint64_t table_id_;
@@ -790,6 +794,8 @@ struct EstimateCostInfo {
     int64_t index_prefix_;
     bool can_batch_rescan_;
     int64_t can_das_dynamic_part_pruning_;
+    // mark this access path is inner path and contribute query range
+    bool is_valid_inner_path_;
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
