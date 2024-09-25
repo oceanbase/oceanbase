@@ -44,7 +44,6 @@ public:
       dblink_groupby_expr_(NULL),
       only_need_contraints_(false),
       param_store_(param_store)
-
   {}
   virtual ~ObGroupByChecker()
   {}
@@ -85,6 +84,7 @@ private:
   // if true, only add constraints for shared exprs which will be replaced in replace_stmt_expr_with_groupby_exprs
   bool only_need_contraints_;
   const ParamStore *param_store_;
+
 private:
   // Top select stmt 是指当前调用group by checker的select_stmt，不是select_stmt的level
   // 其他select_stmt会每进入一层，递增一层，同时检查结束退出，会递减一层

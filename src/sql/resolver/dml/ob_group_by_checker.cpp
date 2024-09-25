@@ -319,7 +319,7 @@ int ObGroupByChecker::add_pc_const_param_info(ObExprEqualCheckContext &check_ctx
   if (OB_ISNULL(query_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (param_store_ != NULL) {
+  } else if (param_store_ != NULL && !param_store_->empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < check_ctx.param_expr_.count(); i++) {
       ObExprEqualCheckContext::ParamExprPair &param_pair = check_ctx.param_expr_.at(i);
       if (OB_FAIL(const_param_info.const_idx_.push_back(param_pair.param_idx_))) {
@@ -362,6 +362,7 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
       check_ctx.reset();
       check_ctx.override_const_compare_ = true;
       check_ctx.override_query_compare_ = true;
+      check_ctx.param_list_ = param_store_;
       if (expr.same_as(*rollup_exprs_->at(nth_rollup), &check_ctx)) {
         found = true;
         LOG_DEBUG("found in rollup exprs", K(expr));
@@ -375,6 +376,7 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
           check_ctx.ignore_param_ = true;
           check_ctx.override_const_compare_ = true;
           check_ctx.override_query_compare_ = true;
+          check_ctx.param_list_ = param_store_;
           if (expr.same_as(*rollup_exprs_->at(nth_rollup), &check_ctx)) {
             found_same_structure = true;
             LOG_DEBUG("found same structure in rollup exprs", K(expr));
@@ -410,6 +412,7 @@ bool ObGroupByChecker::find_in_cube(ObRawExpr &expr)
       check_ctx.reset();
       check_ctx.override_const_compare_ = true;
       check_ctx.override_query_compare_ = true;
+      check_ctx.param_list_ = param_store_;
       if (expr.same_as(*cube_exprs_->at(nth_cube), &check_ctx)) {
         found = true;
       }
@@ -442,6 +445,7 @@ bool ObGroupByChecker::find_in_group_by(ObRawExpr &expr)
       check_ctx.reset();
       check_ctx.override_const_compare_ = true;
       check_ctx.override_query_compare_ = !is_check_order_by_;
+      check_ctx.param_list_ = param_store_;
       if (expr.same_as(*group_by_exprs_->at(nth_group_by), &check_ctx)) {
         found = true;
         LOG_DEBUG("found in group by exprs", K(expr));
@@ -486,6 +490,7 @@ bool ObGroupByChecker::find_in_grouping_sets(ObRawExpr &expr)
         check_ctx.reset();
         check_ctx.override_const_compare_ = true;
         check_ctx.override_query_compare_ = true;
+        check_ctx.param_list_ = param_store_;
         if (expr.same_as(*grouping_sets_exprs_->at(nth_gs).groupby_exprs_.at(nth_group_by),
                          &check_ctx)) {
           found = true;
@@ -502,6 +507,7 @@ bool ObGroupByChecker::find_in_grouping_sets(ObRawExpr &expr)
           check_ctx.ignore_param_ = true;
           check_ctx.override_const_compare_ = true;
           check_ctx.override_query_compare_ = true;
+          check_ctx.param_list_ = param_store_;
           if (expr.same_as(*grouping_sets_exprs_->at(nth_gs).groupby_exprs_.at(nth_group_by),
                           &check_ctx)) {
             found_same_structure = true;

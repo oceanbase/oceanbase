@@ -1414,7 +1414,8 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(false),
     ignore_param_(false),
-    error_code_(0)
+    error_code_(0),
+    param_list_(NULL)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
   : override_const_compare_(false),
@@ -1427,7 +1428,8 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
     ignore_param_(false),
-    error_code_(0)
+    error_code_(0),
+    param_list_(NULL)
   { }
   virtual ~ObExprEqualCheckContext() {}
   struct ParamExprPair
@@ -1472,6 +1474,7 @@ struct ObExprEqualCheckContext
     need_check_deterministic_ = false;
     ignore_param_ = false;
     error_code_ = 0;
+    param_list_ = NULL;
   }
   bool override_const_compare_;
   bool override_column_compare_;
@@ -1485,7 +1488,7 @@ struct ObExprEqualCheckContext
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
   int64_t error_code_; //error code to return
-
+  const ParamStore *param_list_;//param store list
 private:
   DISABLE_COPY_ASSIGN(ObExprEqualCheckContext);
 };
