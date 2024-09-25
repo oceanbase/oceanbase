@@ -268,6 +268,8 @@ int ObTableAccessParam::init(
   } else if (OB_UNLIKELY(nullptr == rowkey_read_info && nullptr == tablet_handle)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(rowkey_read_info), KP(tablet_handle));
+  } else if (OB_NOT_NULL(tablet_handle) && OB_FAIL(check_valid_before_query_init(*scan_param.table_param_, *tablet_handle))) {
+    LOG_WARN("failed to check cs replica compat schema", K(ret), KPC(tablet_handle));
   } else {
     const share::schema::ObTableParam &table_param = *scan_param.table_param_;
     iter_param_.table_id_ = table_param.get_table_id();
@@ -358,6 +360,22 @@ int ObTableAccessParam::init(
     }
   }
 
+  return ret;
+}
+
+int ObTableAccessParam::check_valid_before_query_init(
+    const ObTableParam &table_param,
+    const ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  if (OB_UNLIKELY(!tablet_handle.is_valid() || OB_ISNULL(tablet = tablet_handle.get_obj()))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid table handle", K(ret), K(tablet_handle), KPC(tablet));
+  } else if (OB_UNLIKELY(tablet->is_cs_replica_compat() && !table_param.is_column_replica_table())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid table param for cs replica tablet", K(ret), K(table_param), KPC(tablet));
+  }
   return ret;
 }
 

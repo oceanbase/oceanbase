@@ -955,10 +955,11 @@ int ObTableParam::construct_columns_and_projector(
   } else if (!is_cs && query_cs_replica) {
     is_cs = true;
     is_column_replica_table_ = true;
+    has_all_column_group = false;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+  } else if (!is_column_replica_table_ && OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
   } else {
     // column array

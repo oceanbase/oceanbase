@@ -218,7 +218,7 @@ TEST_F(TestLSMigrationParam, test_placeholder_storage_schema)
   placeholder_tablet.tablet_meta_.compat_mode_ = lib::Worker::get_compatibility_mode();
   ASSERT_NE(nullptr, ptr = allocator.alloc(sizeof(ObRowkeyReadInfo)));
   placeholder_tablet.rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
-  placeholder_tablet.build_read_info(allocator);
+  placeholder_tablet.build_read_info(allocator, nullptr /*tablet*/, false /*is_cs_replica_compat*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 

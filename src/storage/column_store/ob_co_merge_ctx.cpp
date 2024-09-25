@@ -172,11 +172,14 @@ int ObCOTabletMergeCtx::prepare_cs_replica_param()
   ObStorageSchema *schema_on_tablet = nullptr;
   ObSSTable *sstable = nullptr;
   if (static_param_.ls_handle_.get_ls()->is_cs_replica()) {
-    if (OB_FAIL(static_param_.tablet_schema_guard_.init(tablet_handle_, mem_ctx_))) {
+    if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet handle is invalid", K(ret), K_(tablet_handle));
+    } else if (OB_FAIL(static_param_.tablet_schema_guard_.init(tablet_handle_, mem_ctx_))) {
       LOG_WARN("failed to init cs replica schema guard", K(ret), KPC(this));
     } else if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
       LOG_WARN("failed to load schema on tablet", K(ret));
-    } else if (schema_on_tablet->is_cs_replica_compat()) {
+    } else if (tablet_handle_.get_obj()->is_cs_replica_compat()) {
       static_param_.is_cs_replica_ = true;
     } else if (is_convert_co_major_merge(get_merge_type())) {
       static_param_.is_cs_replica_ = true;

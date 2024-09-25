@@ -148,6 +148,7 @@ public:
       allocator_(nullptr),
       schema_column_count_(0),
       compat_version_(READ_INFO_VERSION_V2),
+      is_cs_replica_compat_(false),
       reserved_(0),
       schema_rowkey_cnt_(0),
       rowkey_cnt_(0),
@@ -225,6 +226,7 @@ public:
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise all column group");
     return false;
   }
+  OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
   DECLARE_VIRTUAL_TO_STRING;
   int generate_for_column_store(ObIAllocator &allocator,
                                 const ObColDesc &desc,
@@ -232,12 +234,16 @@ public:
   void init_basic_info(const int64_t schema_column_count,
                        const int64_t schema_rowkey_cnt,
                        const bool is_oracle_mode,
-                       const bool is_cg_sstable);
+                       const bool is_cg_sstable,
+                       const bool is_cs_replica_compat);
   int prepare_arrays(common::ObIAllocator &allocator,
                      const common::ObIArray<ObColDesc> &cols_desc,
                      const int64_t col_cnt);
   int init_compat_version();
 protected:
+  static const int32_t READ_INFO_ONE_BIT = 1;
+  static const int32_t READ_INFO_RESERVED_BITS = 15;
+
   const int64_t READ_INFO_VERSION_V0 = 0;
   const int64_t READ_INFO_VERSION_V1 = 1;
   const int64_t READ_INFO_VERSION_V2 = 2;
@@ -250,7 +256,8 @@ protected:
     struct {
       uint32_t schema_column_count_;
       uint16_t compat_version_;
-      uint16_t reserved_;
+      uint16_t is_cs_replica_compat_ : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
+      uint16_t reserved_             : READ_INFO_RESERVED_BITS;
     };
   };
   int64_t schema_rowkey_cnt_;
@@ -387,7 +394,8 @@ public:
       const bool is_oracle_mode,
       const common::ObIArray<ObColDesc> &rowkey_col_descs,
       const bool is_cg_sstable = false,
-      const bool use_default_compat_version = false);
+      const bool use_default_compat_version = false,
+      const bool is_cs_replica_compat = false);
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override
