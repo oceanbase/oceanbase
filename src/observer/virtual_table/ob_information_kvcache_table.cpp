@@ -165,23 +165,25 @@ int ObInfoSchemaKvCacheTable::get_handles(ObKVCacheInst *&inst, ObDiagnoseTenant
 
   inst = nullptr;
   tenant_info = nullptr;
-  if (cache_iter_ >= inst_handles_.count()) {
-    ret = OB_ITER_END;
-  } else {
-    inst = inst_handles_.at(cache_iter_++).get_inst();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (!oceanbase::lib::is_diagnose_info_enabled()) {
-  } else if (is_sys_tenant(effective_tenant_id_)) {
-    for (int64_t i = 0 ; i < tenant_dis_.count() ; ++i) {
-      if (tenant_dis_.at(i).first == inst->tenant_id_) {
-        tenant_info = tenant_dis_.at(i).second;
-        break;
-      }
+  do {
+    if (cache_iter_ >= inst_handles_.count()) {
+      ret = OB_ITER_END;
+    } else {
+      inst = inst_handles_.at(cache_iter_++).get_inst();
     }
-  } else {
-    tenant_info = &tenant_di_info_;
-  }
+    if (OB_FAIL(ret)) {
+    } else if (!oceanbase::lib::is_diagnose_info_enabled()) {
+    } else if (is_sys_tenant(effective_tenant_id_)) {
+      for (int64_t i = 0; i < tenant_dis_.count(); ++i) {
+        if (tenant_dis_.at(i).first == inst->tenant_id_) {
+          tenant_info = tenant_dis_.at(i).second;
+          break;
+        }
+      }
+    } else {
+      tenant_info = &tenant_di_info_;
+    }
+  } while (OB_SUCC(ret) && OB_ISNULL(tenant_info));
 
   return ret;
 }
