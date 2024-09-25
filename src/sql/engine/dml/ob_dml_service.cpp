@@ -2285,7 +2285,7 @@ int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxLi
   return ret;
 }
 
-int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *dml_op)
+int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *dml_op, bool is_iter_end)
 {
   int ret = OB_SUCCESS;
   const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
@@ -2294,10 +2294,10 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
   if (OB_ISNULL(dml_modify_rows) || OB_ISNULL(dml_op) || OB_ISNULL(dml_op->get_child())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dml operator or modify rows list is null", K(dml_modify_rows), K(dml_op));
-  } else if (OB_ISNULL(dml_op->last_store_row_.get_store_row()) &&
+  } else if (!is_iter_end && OB_ISNULL(dml_op->last_store_row_.get_store_row()) &&
     OB_FAIL(dml_op->last_store_row_.init(dml_op->get_exec_ctx().get_allocator(), dml_op->get_child()->get_spec().output_.count()))) {
     LOG_WARN("failed to init shadow stored row", K(ret));
-  } else if (OB_FAIL(dml_op->last_store_row_.shadow_copy(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
+  } else if (!is_iter_end && OB_FAIL(dml_op->last_store_row_.shadow_copy(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
     LOG_WARN("failed to backup the datum ptr of child operator", K(ret));
   } else {
     ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
@@ -2361,7 +2361,7 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
     if (OB_SUCC(ret)) {
       if (dml_op->get_spec().check_fk_batch_ && OB_FAIL(dml_op->perform_batch_fk_check())) {
         LOG_WARN("failed to perform batch foreign key check", K(ret));
-      } else if (OB_FAIL(dml_op->last_store_row_.restore(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
+      } else if (!is_iter_end && OB_FAIL(dml_op->last_store_row_.restore(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
         LOG_WARN("failed to restore the datum ptr", K(ret));
       }
     }
@@ -2415,7 +2415,8 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_mo
 }
 
 int ObDMLService::handle_after_row_processing(ObTableModifyOp *op,
-                                              ObDMLModifyRowsList *dml_modify_rows)
+                                              ObDMLModifyRowsList *dml_modify_rows,
+                                              bool is_iter_end)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op) || OB_ISNULL(dml_modify_rows)) {
@@ -2429,7 +2430,7 @@ int ObDMLService::handle_after_row_processing(ObTableModifyOp *op,
   } else if (op->execute_single_row_) {
     ret = handle_after_processing_single_row(dml_modify_rows);
   } else {
-    ret = handle_after_processing_multi_row(dml_modify_rows, op);
+    ret = handle_after_processing_multi_row(dml_modify_rows, op, is_iter_end);
   }
   return ret;
 }

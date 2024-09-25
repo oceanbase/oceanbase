@@ -247,7 +247,7 @@ public:
   void clear_dml_evaluated_flag(ObExpr *clear_expr);
 
   ObDMLModifyRowsList& get_dml_modify_row_list() { return dml_modify_rows_;}
-  int submit_all_dml_task();
+  int submit_all_dml_task(bool is_iter_end = false);
 
   int perform_batch_fk_check();
 protected:
@@ -293,7 +293,7 @@ protected:
                              int64_t update_rows,
                              int64_t delete_rows,
                              int64_t found_rows);
-  int discharge_das_write_buffer();
+  int discharge_das_write_buffer(bool is_iter_end = false);
   virtual void record_err_for_load_data(int err_ret, int row_num) { UNUSED(err_ret); UNUSED(row_num); }
 public:
   common::ObMySQLProxy *sql_proxy_;
