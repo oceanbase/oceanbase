@@ -978,21 +978,21 @@ void ObTabletMeta::update_extra_medium_info(
 }
 
 void ObTabletMeta::update_extra_medium_info(
-    const compaction::ObExtraMediumInfo &src_addr_extra_info,
-    const compaction::ObExtraMediumInfo &src_data_extra_info,
-    const int64_t finish_medium_scn)
+    const compaction::ObExtraMediumInfo &local_extra_info,
+    const compaction::ObExtraMediumInfo &remote_extra_info,
+    const int64_t last_major_snapshot)
 {
-  if (finish_medium_scn < src_addr_extra_info.last_medium_scn_
-      || src_addr_extra_info.last_medium_scn_ < src_data_extra_info.last_medium_scn_) {
-    extra_medium_info_.last_compaction_type_ = src_data_extra_info.last_compaction_type_;
-    extra_medium_info_.last_medium_scn_ = src_data_extra_info.last_medium_scn_;
-    if (0 == src_data_extra_info.last_medium_scn_) {
-      extra_medium_info_.wait_check_flag_ = false;
-    } else {
-      extra_medium_info_.wait_check_flag_ = true;
-    }
-  } else {
-    extra_medium_info_ = src_addr_extra_info;
+  const int64_t local_last_medium_scn = local_extra_info.last_medium_scn_;
+  const int64_t remote_last_medium_scn = remote_extra_info.last_medium_scn_;
+
+  if (local_last_medium_scn < remote_last_medium_scn || last_major_snapshot < local_last_medium_scn) {
+    extra_medium_info_.last_compaction_type_ = remote_extra_info.last_compaction_type_;
+    extra_medium_info_.last_medium_scn_ = remote_last_medium_scn;
+    extra_medium_info_.wait_check_flag_ = (remote_last_medium_scn == 0)
+                                        ? false
+                                        : !GCTX.is_shared_storage_mode();
+  } else { // use local extra medium info
+    extra_medium_info_ = local_extra_info;
   }
 }
 
