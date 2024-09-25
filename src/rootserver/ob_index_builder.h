@@ -83,6 +83,8 @@ public:
       const share::schema::ObTableSchema &data_schema,
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const obrpc::ObDropIndexArg &arg,
+      const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+      const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
       common::ObIAllocator &allocator,
       bool &task_has_exist,
       ObDDLTaskRecord &task_record);
