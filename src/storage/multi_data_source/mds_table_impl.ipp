@@ -957,52 +957,52 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
   int ret = OB_SUCCESS;
   share::SCN do_flush_scn = max_decided_scn;// this scn is defined for calculation
   int64_t undump_node_cnt = 0;
-  MdsWLockGuard lg(lock_);
-  if (OB_UNLIKELY(!need_advanced_rec_scn_lower_limit.is_valid() || !max_decided_scn.is_valid() || max_decided_scn.is_max())) {
-    ret = OB_INVALID_ARGUMENT;
-    MDS_LOG_FLUSH(WARN, "invalid recycle scn");
-  } else if (get_rec_scn().is_max()) {
-    MDS_LOG_FLUSH(TRACE, "no need do flush cause rec_scn is MAX already");
-  } else if (need_advanced_rec_scn_lower_limit < get_rec_scn()) {// no need dump this mds table to advance rec_scn
-    MDS_LOG_FLUSH(TRACE, "no need do flush need_advanced_rec_scn_lower_limit less than rec_scn");
-  } else if (MDS_FAIL(calculate_flush_scn_and_need_dumped_nodes_cnt_(do_flush_scn, undump_node_cnt))) {
-    MDS_LOG_FLUSH(WARN, "fail to call calculate_flush_scn_and_need_dumped_nodes_cnt_");
-  } else if (undump_node_cnt == 0) {// no need do flush actually
-    if (flushing_scn_.is_valid()) {
-      MDS_LOG_FLUSH(INFO, "there is a merge dag running, can not advance rec_scn here");
-    } else {
+  int64_t construct_sequence = 0;
+  bool need_do_merge = false;
+  {
+    MdsWLockGuard lg(lock_);
+    construct_sequence = construct_sequence_;
+    if (OB_UNLIKELY(!need_advanced_rec_scn_lower_limit.is_valid() || !max_decided_scn.is_valid() || max_decided_scn.is_max())) {
+      ret = OB_INVALID_ARGUMENT;
+      MDS_LOG_FLUSH(WARN, "invalid recycle scn");
+    } else if (get_rec_scn().is_max()) {
+      MDS_LOG_FLUSH(TRACE, "no need do flush cause rec_scn is MAX already");
+    } else if (need_advanced_rec_scn_lower_limit < get_rec_scn()) {// no need dump this mds table to advance rec_scn
+      MDS_LOG_FLUSH(TRACE, "no need do flush need_advanced_rec_scn_lower_limit less than rec_scn");
+    } else if (flushing_scn_.is_valid()) {
+      do_flush_scn = flushing_scn_;
+      MDS_LOG_FLUSH(TRACE, "flushing scn can not be changed, cause a dag maybe running with this flushing_scn");
+    } else if (MDS_FAIL(calculate_flush_scn_and_need_dumped_nodes_cnt_(do_flush_scn, undump_node_cnt))) {
+      MDS_LOG_FLUSH(WARN, "fail to call calculate_flush_scn_and_need_dumped_nodes_cnt_");
+    } else if (undump_node_cnt == 0) {// no need do flush actually
       // mds_ckpt_scn on tablet won't be advanced,
       // replay will cost more time after restart process, but saved cpu and io for dump dag
       MDS_LOG_FLUSH(INFO, "no undump nodes below do flush scn, directly advance rec_scn");
       flushing_scn_ = do_flush_scn;// will be resetted in on_flush_()
       on_flush_(do_flush_scn, OB_SUCCESS);
-    }
-  } else {
-#ifndef UNITTEST_DEBUG
-    if (MDS_FAIL(merge(construct_sequence_, do_flush_scn))) {
-      if (OB_EAGAIN == ret) {
-        if (REACH_TIME_INTERVAL(100_ms)) {
-          MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause already exist");
-          ret = OB_SUCCESS;
-        } else if (OB_SIZE_OVERFLOW == ret) {// throw out
-          MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause queue already full");
-        }
-      } else {
-        MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag");
-      }
     } else {
-      if (flushing_scn_.is_valid()) {
-        MDS_LOG_FLUSH(WARN, "flushing_scn is valid scn, that means last committed dag not scheduled, and dropped for some unknown reason");
-      }
       flushing_scn_ = do_flush_scn;
       report_flush_event_("DO_FLUSH", flushing_scn_);
       // if commit dag success, there is no guarantee that dag will be executed finally
       debug_info_.last_flush_ts_ = ObClockGenerator::getClock();// record commit dag ts to debug
     }
-#else
-    flushing_scn_ = do_flush_scn;
-#endif
+    need_do_merge = flushing_scn_.is_valid();
   }
+#ifndef UNITTEST_DEBUG
+  if (OB_FAIL(ret) || !need_do_merge) {
+  } else if (MDS_FAIL(merge(construct_sequence, do_flush_scn))) {
+    if (OB_EAGAIN == ret) {
+      if (REACH_TIME_INTERVAL(100_ms)) {
+        MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause already exist");
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_SIZE_OVERFLOW == ret) {// throw out
+      MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause queue already full");
+    } else {
+      MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag");
+    }
+  }
+#endif
   MDS_LOG_FLUSH(DEBUG, "call flush mds_table");
   return ret;
   #undef PRINT_WRAPPER
@@ -1103,7 +1103,7 @@ void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const in
     if (rec_scn_ == share::SCN::max_scn()) {
       MDS_LOG_FLUSH(WARN, "maybe meet concurrent reset mds table");
     } else {
-      MDS_LOG_FLUSH(ERROR, "flush version mismatch!");
+      MDS_LOG_FLUSH(WARN, "flush version mismatch!");
     }
   } else {
     flushing_scn_.reset();
@@ -1137,7 +1137,7 @@ int MdsTableImpl<MdsTableType>::scan_all_nodes_to_dump(DUMP_OP &&for_each_op,
   if (OB_SUCC(ret)) {
     if (for_flush) {
       if (!flushing_scn_.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NO_NEED_MERGE;
         MDS_LOG_FLUSH(WARN, "not in flushing process");
       } else {
         flushing_version = flushing_scn_;
@@ -1465,11 +1465,12 @@ struct ForcelyReleaseNodesRedoScnBelowOp
       [this, &row](const UserMdsNode<K, V> &mds_node) {
         UserMdsNode<K, V> &cast_node = const_cast<UserMdsNode<K, V> &>(mds_node);
         if (mds_node.redo_scn_ <= redo_below_scn_) {
-          // below_scn_ comes from mds sstable mds_ckpt_scn, it must not cross any node's [redo, end) scn range
-          // before support dump uncommitted nodes, all nodes be scanned must satisfy this rule
-          MDS_ASSERT(mds_node.end_scn_ <= redo_below_scn_);
           if (!cast_node.is_committed_()) {
             MDS_LOG_GC(INFO, "release uncommitted node");
+          } else {
+            // below_scn_ comes from mds sstable mds_ckpt_scn, it must not cross any node's [redo, end) scn range
+            // before support dump uncommitted nodes, all nodes be scanned must satisfy this rule
+            MDS_ASSERT(mds_node.end_scn_ <= redo_below_scn_);
           }
           const_cast<MdsRow<K, V> &>(row).sorted_list_.del((ListNodeBase*)(ListNode<UserMdsNode<K, V>>*)(&cast_node));
           MdsFactory::destroy(&cast_node);
