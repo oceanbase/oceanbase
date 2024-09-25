@@ -81,11 +81,13 @@ int ObArrayExprUtils::get_type_vector(
   return ret;
 }
 
-int ObArrayExprUtils::vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, bool negative)
+int ObArrayExprUtils::vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, ObDatum *tmp_res, bool negative)
 {
   int ret = OB_SUCCESS;
   ObString blob_res = res.get_string();
   ObString blob_data = data.get_string();
+  ObLobLocatorV2 locator(blob_res, true/*has_lob_header*/);
+  bool is_outrow = !locator.has_inrow_data();
   if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator,
                                                         ObLongTextType,
                                                         CS_TYPE_BINARY,
@@ -107,6 +109,16 @@ int ObArrayExprUtils::vector_datum_add(ObDatum &res, const ObDatum &data, ObIAll
       if (isinff(float_res[i]) != 0) {
         ret = OB_OPERATE_OVERFLOW;
         SQL_LOG(WARN, "value overflow", K(ret), K(i), K(float_data[i]), K(float_res[i]));
+      }
+    }
+    if (OB_SUCC(ret) && is_outrow) {
+      ObString res_str;
+      if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, blob_res.length(), allocator, res_str, blob_res.ptr()))) {
+        SQL_LOG(WARN, "failed to set array res", K(ret));
+      } else if (OB_NOT_NULL(tmp_res)) {
+        tmp_res->set_string(res_str);
+      } else {
+        res.set_string(res_str);
       }
     }
   }

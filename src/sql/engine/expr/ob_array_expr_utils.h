@@ -94,7 +94,7 @@ public:
   static int collect_vector_cast_info(ObExprResType &type, ObExecContext &exec_ctx, ObVectorCastInfo &info);
 
   // update inplace
-  static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, bool negative = false);
+  static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, ObDatum *tmp_res = nullptr, bool negative = false);
 private:
   static const char* DEFAULT_CAST_TYPE_NAME;
   static const ObString DEFAULT_CAST_TYPE_STR;
