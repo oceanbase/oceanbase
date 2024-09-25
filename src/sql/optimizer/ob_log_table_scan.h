@@ -217,6 +217,10 @@ public:
         vector_index_info_(),
         das_keep_ordering_(false),
         filter_monotonicity_(),
+        is_tsc_with_doc_id_(false),
+        rowkey_doc_tid_(common::OB_INVALID_ID),
+        multivalue_col_idx_(common::OB_INVALID_ID),
+        multivalue_type_(-1),
         is_tsc_with_vid_(false),
         rowkey_vid_tid_(common::OB_INVALID_ID)
   {
@@ -636,6 +640,7 @@ public:
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
+  inline bool is_tsc_with_doc_id() const { return is_tsc_with_doc_id_; }
   inline bool is_tsc_with_vid() const { return is_tsc_with_vid_; }
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
@@ -648,7 +653,10 @@ public:
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
   inline uint64_t get_rowkey_vid_table_id() const { return rowkey_vid_tid_; }
-  inline const common::ObIArray<ObRawExpr *> &get_rowkey_vid_exprs() const { return rowkey_vid_exprs_; }
+  inline uint64_t get_rowkey_doc_table_id() const { return rowkey_doc_tid_; }
+  inline uint64_t get_multivalue_col_idx() const { return multivalue_col_idx_; }
+  inline int32_t get_multivalue_type() const { return multivalue_type_; }
+  inline const common::ObIArray<ObRawExpr *> &get_rowkey_id_exprs() const { return rowkey_id_exprs_; }
   virtual int get_card_without_filter(double &card) override;
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
   inline int has_exec_param(bool &bool_ret) const
@@ -663,7 +671,7 @@ public:
   inline bool das_need_keep_ordering() const { return das_keep_ordering_; }
 
   int check_das_need_keep_ordering();
-  int check_das_need_scan_with_vid();
+  int check_das_need_scan_with_domain_id();
 
   const ObIArray<ObRawFilterMonotonicity>& get_filter_monotonicity() const
   { return filter_monotonicity_; }
@@ -707,7 +715,7 @@ private: // member functions
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
-  int prepare_rowkey_vid_dep_exprs();
+  int prepare_rowkey_domain_id_dep_exprs();
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -851,10 +859,17 @@ protected: // memeber variables
   typedef common::ObSEArray<ObRawFilterMonotonicity, 4, common::ModulePageAllocator, true> FilterMonotonicity;
   FilterMonotonicity filter_monotonicity_;
 
+  // begin for table scan with doc id
+  bool is_tsc_with_doc_id_;
+  uint64_t rowkey_doc_tid_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_id_exprs_;
+  uint64_t multivalue_col_idx_;
+  int32_t multivalue_type_;
+  // end for table scan with doc id
+
   // begin for table scan with vid
   bool is_tsc_with_vid_;
   uint64_t rowkey_vid_tid_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_vid_exprs_;
   // end for table scan with vid
 
   // disallow copy and assign

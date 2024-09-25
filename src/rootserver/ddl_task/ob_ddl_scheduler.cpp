@@ -1023,6 +1023,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         }
         break;
       case DDL_CREATE_FTS_INDEX:
+      case DDL_CREATE_MULTIVALUE_INDEX:
         create_index_arg = static_cast<const obrpc::ObCreateIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_build_fts_index_task(proxy,
                                                 param.src_table_schema_,
@@ -1030,6 +1031,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                 param.parallelism_,
                                                 param.parent_task_id_,
                                                 param.consumer_group_id_,
+                                                param.tenant_data_version_,
                                                 create_index_arg,
                                                 *param.allocator_,
                                                 task_record))) {
@@ -1071,6 +1073,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_DROP_MULVALUE_INDEX:
         drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_fts_index_task(proxy,
+                                               param.type_,
                                                param.src_table_schema_,
                                                param.schema_version_,
                                                param.consumer_group_id_,
@@ -1611,6 +1614,7 @@ int ObDDLScheduler::create_build_fts_index_task(
     const int64_t parallelism,
     const int64_t parent_task_id,
     const int64_t consumer_group_id,
+    const uint64_t tenant_data_version,
     const obrpc::ObCreateIndexArg *create_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1621,10 +1625,13 @@ int ObDDLScheduler::create_build_fts_index_task(
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
-    } else if (OB_ISNULL(create_index_arg) || OB_ISNULL(data_table_schema) || OB_ISNULL(index_schema)) {
+    } else if (OB_ISNULL(create_index_arg) ||
+               OB_ISNULL(data_table_schema) ||
+               OB_ISNULL(index_schema) ||
+               tenant_data_version <= 0) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
-          KPC(data_table_schema), KPC(index_schema));
+          KPC(data_table_schema), KPC(index_schema), K(tenant_data_version));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),
@@ -1635,6 +1642,7 @@ int ObDDLScheduler::create_build_fts_index_task(
                                        parallelism,
                                        consumer_group_id,
                                        *create_index_arg,
+                                       tenant_data_version,
                                        parent_task_id))) {
       LOG_WARN("init fts index task failed", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
@@ -1793,6 +1801,7 @@ int ObDDLScheduler::create_drop_index_task(
 
 int ObDDLScheduler::create_drop_fts_index_task(
     common::ObISQLClient &proxy,
+    const share::ObDDLType ddl_type,
     const share::schema::ObTableSchema *index_schema,
     const int64_t schema_version,
     const int64_t consumer_group_id,
@@ -1806,57 +1815,70 @@ int ObDDLScheduler::create_drop_fts_index_task(
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
   ObDropFTSIndexTask index_task;
-  common::ObString domain_index_name;
   common::ObString fts_doc_word_name;
   common::ObString rowkey_doc_name;
   common::ObString doc_rowkey_name;
-  // multivalue index may run here, need calc index type first
-  bool is_fts_index = false;
+  uint64_t data_table_id = OB_INVALID_ID;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(index_schema) || OB_ISNULL(drop_index_arg)) {
+  } else if (OB_ISNULL(drop_index_arg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg));
-  } else if (FALSE_IT(is_fts_index = index_schema->is_fts_index_aux())) {
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
-  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), index_schema->get_tenant_id(),
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), drop_index_arg->tenant_id_,
           task_id))) {
     LOG_WARN("fetch new task id failed", K(ret));
-  } else if (OB_FAIL(index_schema->get_index_name(domain_index_name))) {
-    LOG_WARN("fail to get domain index name", K(ret), KPC(index_schema));
   } else {
-    if (is_fts_index) {
-      if (OB_FAIL(ret) || OB_ISNULL(doc_word_schema)) {
-      } else if (OB_FAIL(doc_word_schema->get_index_name(fts_doc_word_name))) {
-        LOG_WARN("fail to get fts doc word name", K(ret), KPC(doc_word_schema));
-      }
+    if (OB_FAIL(ret) || OB_ISNULL(doc_word_schema)) {
+    } else if (OB_FAIL(doc_word_schema->get_index_name(fts_doc_word_name))) {
+      LOG_WARN("fail to get fts doc word name", K(ret), KPC(doc_word_schema));
+    } else {
+      data_table_id = doc_word_schema->get_data_table_id();
     }
     if (OB_FAIL(ret) || OB_ISNULL(rowkey_doc_schema)) {
     } else if (OB_FAIL(rowkey_doc_schema->get_index_name(rowkey_doc_name))) {
       LOG_WARN("fail to get rowkey doc name", K(ret), KPC(rowkey_doc_schema));
+    } else {
+      data_table_id = rowkey_doc_schema->get_data_table_id();
     }
+
     if (OB_FAIL(ret) || OB_ISNULL(doc_rowkey_schema)) {
     } else if (OB_FAIL(doc_rowkey_schema->get_index_name(doc_rowkey_name))) {
       LOG_WARN("fail to get doc rowkey name", K(ret), KPC(doc_rowkey_schema));
     }
-    const uint64_t data_table_id = index_schema->get_data_table_id();
-    const ObFTSDDLChildTaskInfo domain_index(domain_index_name, index_schema->get_table_id(), 0/*task_id*/);
+
+    int64_t target_object_id = drop_index_arg->index_table_id_;
+    if (OB_FAIL(ret)) {
+    } else if (target_object_id == OB_INVALID_ID) {
+      if (OB_ISNULL(index_schema)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("fail to get valid target object id", K(ret));
+      } else {
+        target_object_id = index_schema->get_table_id();
+      }
+    }
+
+    common::ObString domain_index_name = drop_index_arg->index_name_;
+    uint64_t domain_index_table_id = OB_ISNULL(index_schema) ? OB_INVALID_ID :
+                                   index_schema->get_table_id();
     uint64_t rowkey_doc_table_id = OB_ISNULL(rowkey_doc_schema) ? OB_INVALID_ID :
                                    rowkey_doc_schema->get_table_id();
     uint64_t doc_rowkey_table_id = OB_ISNULL(doc_rowkey_schema) ? OB_INVALID_ID :
                                    doc_rowkey_schema->get_table_id();
     uint64_t doc_word_table_id = OB_ISNULL(doc_word_schema) ? OB_INVALID_ID :
                                    doc_word_schema->get_table_id();
-    const ObFTSDDLChildTaskInfo fts_doc_word(fts_doc_word_name,
-      is_fts_index ? doc_word_table_id : OB_INVALID_ID, 0/*task_id*/);
+
+    const ObFTSDDLChildTaskInfo domain_index(domain_index_name, domain_index_table_id, 0/*task_id*/);
+    const ObFTSDDLChildTaskInfo fts_doc_word(fts_doc_word_name, doc_word_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo rowkey_doc(rowkey_doc_name, rowkey_doc_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo doc_rowkey(doc_rowkey_name, doc_rowkey_table_id, 0/*task_id*/);
-    const ObDDLType ddl_type = is_fts_index ? DDL_DROP_FTS_INDEX : DDL_DROP_MULVALUE_INDEX;
+
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
+    } else if (OB_FAIL(index_task.init(drop_index_arg->tenant_id_,
                                 task_id,
                                 data_table_id,
                                 ddl_type,
@@ -1866,7 +1888,8 @@ int ObDDLScheduler::create_drop_fts_index_task(
                                 fts_doc_word,
                                 drop_index_arg->ddl_stmt_str_,
                                 schema_version,
-                                consumer_group_id))) {
+                                consumer_group_id,
+                                target_object_id))) {
       LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(domain_index));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));
@@ -1877,7 +1900,6 @@ int ObDDLScheduler::create_drop_fts_index_task(
   LOG_INFO("ddl_scheduler create drop fts index task finished", K(ret), K(index_task));
   return ret;
 }
-
 
 int ObDDLScheduler::create_drop_vec_index_task(
     common::ObISQLClient &proxy,
@@ -2446,6 +2468,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
         ret = schedule_drop_index_task(record);
         break;
       case ObDDLType::DDL_CREATE_FTS_INDEX:
+      case ObDDLType::DDL_CREATE_MULTIVALUE_INDEX:
         ret = schedule_build_fts_index_task(record);
         break;
       case ObDDLType::DDL_DROP_VEC_INDEX:

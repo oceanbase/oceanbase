@@ -1197,6 +1197,7 @@ public:
 
   void reset();
   bool is_valid() const;
+  int hash(uint64_t &hash_val) const;
   ObString get_string() const;
   int from_string(const ObString &doc_id);
 
@@ -1207,6 +1208,7 @@ public:
 
   TO_STRING_KV(K_(tablet_id), K_(seq_id));
 public:
+  static const int64_t OB_DOC_ID_HASH = 10;
   uint64_t tablet_id_;
   uint64_t seq_id_;
 };

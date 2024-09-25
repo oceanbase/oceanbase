@@ -795,6 +795,7 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
   int ret = OB_SUCCESS;
   switch (ddl_type) {
     case DDL_CREATE_INDEX:
+    case DDL_CREATE_MULTIVALUE_INDEX:
       ddl_type_str =  "create index";
       break;
     case DDL_CREATE_FTS_INDEX:
@@ -3888,6 +3889,31 @@ int ObDDLTaskRecordOperator::get_all_ddl_task_record(common::ObMySQLProxy &proxy
         "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s ", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME))) {
     LOG_WARN("assign sql string failed", K(ret));
   } else if (OB_FAIL(get_task_record(OB_INVALID_TENANT_ID, sql_string, proxy, allocator, records))) {
+    LOG_WARN("get task record failed", K(ret), K(sql_string));
+  }
+  return ret;
+}
+
+int ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(const uint64_t tenant_id,
+                                                             const uint64_t table_id,
+                                                             common::ObMySQLProxy &proxy,
+                                                             common::ObIAllocator &allocator,
+                                                             common::ObIArray<ObDDLTaskRecord> &records)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  ObArray<ObDDLTaskRecord> task_records;
+  if (OB_UNLIKELY(!proxy.is_inited())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || table_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type, "
+      "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
+      "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s WHERE object_id=%lu", OB_ALL_DDL_TASK_STATUS_TNAME, table_id))) {
+    LOG_WARN("assign sql string failed", K(ret), K(table_id));
+  } else if (OB_FAIL(get_task_record(tenant_id, sql_string, proxy, allocator, task_records))) {
     LOG_WARN("get task record failed", K(ret), K(sql_string));
   }
   return ret;

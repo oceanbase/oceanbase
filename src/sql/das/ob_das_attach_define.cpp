@@ -33,6 +33,10 @@ const ObDASScanCtDef *ObDASTableLookupCtDef::get_lookup_scan_ctdef() const
   OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
   if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
     scan_ctdef = static_cast<const ObDASScanCtDef*>(children_[1]);
+  } else if (DAS_OP_DOC_ID_MERGE == children_[1]->op_type_) {
+    ObDASDocIdMergeCtDef *doc_id_merge_ctdef = static_cast<ObDASDocIdMergeCtDef *>(children_[1]);
+    OB_ASSERT(2 == doc_id_merge_ctdef->children_cnt_ && doc_id_merge_ctdef->children_ != nullptr);
+    scan_ctdef = static_cast<ObDASScanCtDef*>(doc_id_merge_ctdef->children_[0]);
   } else if (DAS_OP_VID_MERGE == children_[1]->op_type_) {
     ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(children_[1]);
     OB_ASSERT(2 == vid_merge_ctdef->children_cnt_ && vid_merge_ctdef->children_ != nullptr);
@@ -49,6 +53,10 @@ ObDASScanRtDef *ObDASTableLookupRtDef::get_lookup_scan_rtdef()
   OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
   if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
     scan_rtdef = static_cast<ObDASScanRtDef*>(children_[1]);
+  } else if (DAS_OP_DOC_ID_MERGE == children_[1]->op_type_) {
+    ObDASDocIdMergeRtDef *doc_id_merge_rtdef = static_cast<ObDASDocIdMergeRtDef *>(children_[1]);
+    OB_ASSERT(2 == doc_id_merge_rtdef->children_cnt_ && doc_id_merge_rtdef->children_ != nullptr);
+    scan_rtdef = static_cast<ObDASScanRtDef*>(doc_id_merge_rtdef->children_[0]);
   } else if (DAS_OP_VID_MERGE == children_[1]->op_type_) {
     ObDASVIdMergeRtDef *vid_merge_rtdef = static_cast<ObDASVIdMergeRtDef *>(children_[1]);
     OB_ASSERT(2 == vid_merge_rtdef->children_cnt_ && vid_merge_rtdef->children_ != nullptr);
@@ -66,6 +74,10 @@ OB_SERIALIZE_MEMBER((ObDASSortCtDef, ObDASAttachCtDef),
                     fetch_with_ties_);
 
 OB_SERIALIZE_MEMBER((ObDASSortRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASDocIdMergeCtDef, ObDASAttachCtDef));
+
+OB_SERIALIZE_MEMBER((ObDASDocIdMergeRtDef, ObDASAttachRtDef));
 
 OB_SERIALIZE_MEMBER((ObDASVIdMergeCtDef, ObDASAttachCtDef));
 

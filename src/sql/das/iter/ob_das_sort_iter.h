@@ -29,12 +29,13 @@ public:
     : ObDASIterParam(ObDASIterType::DAS_ITER_SORT),
       sort_ctdef_(nullptr),
       child_(nullptr),
-      limit_param_() {}
+      limit_param_(),
+      need_rewind_(false) {}
   virtual ~ObDASSortIterParam() {}
   const ObDASSortCtDef *sort_ctdef_;
   ObDASIter *child_;
   common::ObLimitParam limit_param_;
-
+  bool need_rewind_;
   virtual bool is_valid() const override
   {
     return ObDASIterParam::is_valid() && nullptr != sort_ctdef_ && nullptr != child_;
@@ -52,6 +53,7 @@ public:
       sort_row_(),
       child_(nullptr),
       sort_finished_(false),
+      need_rewind_(false),
       limit_param_(),
       input_row_cnt_(0),
       output_row_cnt_(0),
@@ -80,6 +82,7 @@ private:
   ObSEArray<ObExpr *, 2> sort_row_;
   ObDASIter *child_;
   bool sort_finished_;
+  bool need_rewind_;
   // limit param was set only once at do_table_scan of TSC, which means it should not be reset at reuse,
   // input row cnt and output row cnt are the same as well.
   common::ObLimitParam limit_param_;

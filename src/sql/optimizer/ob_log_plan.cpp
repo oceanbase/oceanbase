@@ -10793,8 +10793,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("failed to set duplicated table location", K(ret));
   } else if (OB_FAIL(set_advisor_table_id(root))) {
     LOG_WARN("failed to set advise table id from duplicate table", K(ret));
-  } else if (OB_FAIL(check_das_need_scan_with_vid(root))) {
-    LOG_WARN("failed to check das need scan with vid", K(ret));
+  } else if (OB_FAIL(check_das_need_scan_with_domain_id(root))) {
+    LOG_WARN("failed to check das need scan with domain id", K(ret));
   } else if (OB_FAIL(collect_table_location(root))) {
     LOG_WARN("failed to collect table location", K(ret));
   } else if (OB_FAIL(build_location_related_tablet_ids())) {
@@ -11356,6 +11356,12 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
         }
       }
 
+      if (OB_SUCC(ret) && tsc_op.is_tsc_with_doc_id()) {
+        if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_rowkey_doc_table_id()))) {
+          LOG_WARN("fail to store rowkey doc table id", K(ret));
+        }
+      }
+
       if (OB_SUCC(ret) && tsc_op.is_vec_idx_scan()) {
         if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_vector_index_info().delta_buffer_tid_))) {
           LOG_WARN("failed to append index id table id", K(ret));
@@ -11396,6 +11402,8 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       rel_info.ref_table_id_ = tsc_op.get_ref_table_id();
       if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_ref_table_id()))) {
         LOG_WARN("store the source table id failed", K(ret));
+      } else if (tsc_op.is_tsc_with_doc_id() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_rowkey_doc_table_id()))) {
+        LOG_WARN("fail to store rowkey doc table id", K(ret));
       } else if (tsc_op.is_tsc_with_vid() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_rowkey_vid_table_id()))) {
         LOG_WARN("fail to store rowkey vid table id", K(ret));
       } else if (nullptr != tsc_op.get_global_index_back_table_partition_info() && OB_FAIL(rel_info.table_part_infos_.push_back(tsc_op.get_global_index_back_table_partition_info()))) {
@@ -11544,7 +11552,7 @@ int ObLogPlan::check_das_need_keep_ordering(ObLogicalOperator *op)
   return ret;
 }
 
-int ObLogPlan::check_das_need_scan_with_vid(ObLogicalOperator *op)
+int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op)) {
@@ -11552,12 +11560,12 @@ int ObLogPlan::check_das_need_scan_with_vid(ObLogicalOperator *op)
     LOG_WARN("unexpected null param", K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
     ObLogTableScan *scan = static_cast<ObLogTableScan*>(op);
-    if (OB_FAIL(scan->check_das_need_scan_with_vid())) {
+    if (OB_FAIL(scan->check_das_need_scan_with_domain_id())) {
       LOG_WARN("failed to check das scan with doc id", K(ret));
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
-    if (OB_FAIL(SMART_CALL(check_das_need_scan_with_vid(op->get_child(i))))) {
+    if (OB_FAIL(SMART_CALL(check_das_need_scan_with_domain_id(op->get_child(i))))) {
       LOG_WARN("failed to check das need scan with doc id", K(ret));
     }
   }

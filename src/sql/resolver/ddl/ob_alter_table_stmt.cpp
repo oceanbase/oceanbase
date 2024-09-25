@@ -35,14 +35,6 @@ ObAlterTableStmt::ObAlterTableStmt()
 
 ObAlterTableStmt::~ObAlterTableStmt()
 {
-  for (int64_t i = 0; i < index_arg_list_.count(); ++i) {
-    obrpc::ObCreateIndexArg *index_arg = index_arg_list_.at(i);
-    if (is_fts_index(index_arg->index_type_)
-        || is_multivalue_index(index_arg->index_type_)) {
-      index_arg->~ObCreateIndexArg();
-      fts_arg_allocator_->free(index_arg);
-    }
-  }
   index_arg_list_.reuse();
   fts_arg_allocator_ = nullptr;
 }

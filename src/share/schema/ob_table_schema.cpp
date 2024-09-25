@@ -6005,7 +6005,7 @@ int ObTableSchema::get_column_ids_without_rowkey(
         }
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {
-          LOG_WARN("Fail to add column id to column_ids", K(ret));
+          LOG_WARN("Fail to add column id to column_ids", K(ret), K(i), K(column_array_[i]), K(column_cnt_));
         }
       }
     }
@@ -8407,6 +8407,23 @@ int ObTableSchema::get_spatial_geo_column_id(uint64_t &geo_column_id) const
   return ret;
 }
 
+int ObTableSchema::get_multivalue_column_id(uint64_t &multivalue_col_id) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_multivalue_generated_column()) {
+      multivalue_col_id = column_schema->get_column_id();
+      break;
+    }
+  }
+
+  return ret;
+}
+
 int ObTableSchema::get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const
 {
   int ret = OB_SUCCESS;
@@ -9357,6 +9374,22 @@ int ObTableSchema::get_doc_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const
     }
   }
   if (OB_INVALID_ID == doc_id_rowkey_tid) {
+    ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+  }
+  return ret;
+}
+
+int ObTableSchema::get_rowkey_doc_id_tid(uint64_t &rowkey_doc_id_tid) const
+{
+  int ret = OB_SUCCESS;
+  rowkey_doc_id_tid = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
+    if (is_rowkey_doc_aux(simple_index_infos_.at(i).index_type_)) {
+      rowkey_doc_id_tid = simple_index_infos_.at(i).table_id_;
+      break;
+    }
+  }
+  if (OB_INVALID_ID == rowkey_doc_id_tid) {
     ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
   }
   return ret;

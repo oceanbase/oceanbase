@@ -39,6 +39,7 @@
 #include "ob_expr_greatest.h"
 #include "ob_expr_host_ip.h"
 #include "ob_expr_trim.h"
+#include "ob_expr_tokenize.h"
 #include "ob_expr_insert.h"
 #include "ob_expr_int2ip.h"
 #include "ob_expr_int_div.h"
@@ -1262,7 +1263,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSplitPart::calc_split_part_expr,                              /* 755 */
   NULL, // ObExprRbSelect::eval_rb_select,                            /* 756 */
   ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
-  NULL, // ObExprTokenize::eval_tokenize,                             /* 758 */
+  ObExprTokenize::eval_tokenize,                                      /* 758 */
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_decrypt                 /* 760 */
 };
@@ -1400,7 +1401,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 129 */
   ObExprTopNFilter::eval_topn_filter_batch,                           /* 130 */
   NULL,//ObRelationalExprOperator::eval_batch_min_max_compare,        /* 131 */
-  NULL,//ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
+  ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
   NULL,// ObExprAdd::add_vec_vec_batch,                               /* 133 */
   NULL,// ObExprMinus::minus_vec_vec_batch,                           /* 134 */
   ObExprMul::mul_vec_vec_batch,                                       /* 135 */

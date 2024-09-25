@@ -34,6 +34,7 @@ public:
       const int64_t parallelism,
       const int64_t consumer_group_id,
       const obrpc::ObCreateIndexArg &create_index_arg,
+      const uint64_t tenant_data_version,
       const int64_t parent_task_id = 0,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
@@ -57,16 +58,17 @@ public:
     const uint64_t child_task_key,
     const int ret_code) override;
   TO_STRING_KV(K(index_table_id_), K(rowkey_doc_aux_table_id_),
-      K(doc_rowkey_aux_table_id_), K(fts_index_aux_table_id_),
+      K(doc_rowkey_aux_table_id_), K(domain_index_aux_table_id_),
       K(fts_doc_word_aux_table_id_), K(rowkey_doc_task_submitted_),
-      K(doc_rowkey_task_submitted_), K(fts_index_aux_task_submitted_),
+      K(doc_rowkey_task_submitted_), K(domain_index_aux_task_submitted_),
       K(fts_doc_word_task_submitted_), K(rowkey_doc_task_id_),
-      K(doc_rowkey_task_id_), K(fts_index_aux_task_id_),
+      K(doc_rowkey_task_id_), K(domain_index_aux_task_id_),
       K(fts_doc_word_task_id_), K(drop_index_task_id_),
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
       K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
 
 private:
+  bool is_fts_task() const { return task_type_ == DDL_CREATE_FTS_INDEX; }
   int get_next_status(share::ObDDLTaskStatus &next_status);
   int prepare_aux_table(
       const ObIndexType index_type,
@@ -80,7 +82,7 @@ private:
       obrpc::ObCreateIndexArg &arg);
   int construct_rowkey_doc_arg(obrpc::ObCreateIndexArg &arg);
   int construct_doc_rowkey_arg(obrpc::ObCreateIndexArg &arg);
-  int construct_fts_index_aux_arg(obrpc::ObCreateIndexArg &arg);
+  int construct_domain_index_aux_arg(obrpc::ObCreateIndexArg &arg);
   int construct_fts_doc_word_arg(obrpc::ObCreateIndexArg &arg);
   int record_index_table_id(
       const obrpc::ObCreateIndexArg *create_index_arg_,
@@ -108,7 +110,26 @@ private:
       common::ObIAllocator &allocator,
       const obrpc::ObCreateIndexArg &source_arg,
       obrpc::ObCreateIndexArg &dest_arg);
+  int get_task_status();
+  int get_task_status(int64_t task_id, uint64_t aux_table_id, bool& is_succ);
+private:
+  typedef share::ObDomainDependTaskStatus DependTaskStatus;
 
+  struct ColumnChecksumInfo final
+  {
+  public:
+    ColumnChecksumInfo() : table_id_(OB_INVALID_ID), task_id_(OB_INVALID_ID) {}
+    ~ColumnChecksumInfo() = default;
+    bool is_valid() const { return OB_INVALID_ID != table_id_ && OB_INVALID_ID != task_id_; }
+    TO_STRING_KV(K_(table_id), K_(task_id));
+  public:
+    uint64_t table_id_;
+    int64_t task_id_;
+  };
+
+private:
+  int verify_children_checksum() const;
+  int check_column_checksum(const ColumnChecksumInfo &a, const ColumnChecksumInfo &b) const;
 private:
   static const int64_t OB_FTS_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::tenant_id_;
@@ -125,19 +146,23 @@ private:
   uint64_t &index_table_id_;
   uint64_t rowkey_doc_aux_table_id_;
   uint64_t doc_rowkey_aux_table_id_;
-  uint64_t fts_index_aux_table_id_;
+  uint64_t domain_index_aux_table_id_;
   uint64_t fts_doc_word_aux_table_id_;
   bool rowkey_doc_task_submitted_;
   bool doc_rowkey_task_submitted_;
-  bool fts_index_aux_task_submitted_;
+  bool domain_index_aux_task_submitted_;
   bool fts_doc_word_task_submitted_;
   int64_t rowkey_doc_task_id_;
   int64_t doc_rowkey_task_id_;
-  int64_t fts_index_aux_task_id_;
+  int64_t domain_index_aux_task_id_;
   int64_t fts_doc_word_task_id_;
   int64_t drop_index_task_id_;
   bool drop_index_task_submitted_;
   ObRootService *root_service_;
+  bool is_rowkey_doc_succ_;
+  bool is_doc_rowkey_succ_;
+  bool is_domain_aux_succ_;
+  bool is_fts_doc_word_succ_;
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
 };

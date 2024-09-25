@@ -2955,6 +2955,25 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_TOKENIZE: {
+        int64_t param_num = expr->get_param_count();
+        if (param_num < 1 || param_num > 3) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid param count", K(ret), K(param_num));
+        } else {
+          DATA_PRINTF("tokenize(");
+          PRINT_EXPR(expr->get_param_expr(0));
+          if (param_num >= 2) {
+            DATA_PRINTF(" with parser ");
+            PRINT_EXPR(expr->get_param_expr(1));
+          }
+          if (param_num >= 3) {
+            DATA_PRINTF(" config ");
+            PRINT_EXPR(expr->get_param_expr(2));
+          }
+          DATA_PRINTF(")");
+        }
+      }
       case T_OP_GET_USER_VAR: {
         int64_t param_num = expr->get_param_count();
         if (1 != param_num || OB_ISNULL(expr->get_param_expr(0))) {

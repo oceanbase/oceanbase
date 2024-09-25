@@ -6175,7 +6175,7 @@ int ObPartitionUtils::check_param_valid_(
           }
           if (OB_SUCC(ret) && !finded && related_tid != data_table_id) {
             ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("local index not exist", KR(ret), K(table_id));
+            LOG_WARN("local index not exist", KR(ret), K(related_tid), K(data_table_id), K(table_id), K(simple_index_infos));
           }
         } // end for related_tids
         if (OB_SUCC(ret) && !index_exist) {

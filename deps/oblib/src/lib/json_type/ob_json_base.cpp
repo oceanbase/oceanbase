@@ -5491,8 +5491,22 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
   switch (json_type()) {
     case ObJsonNodeType::J_INT:
     case ObJsonNodeType::J_OINT: {
-      // for oracle json json_element_t::to_Date()
-      datetime = (1000 * 1000) *  get_int();
+      if (lib::is_oracle_mode()) {
+        // for oracle json json_element_t::to_Date()
+        datetime = (1000 * 1000) *  get_int();
+      } else {
+        if (get_int() < 0) {
+          ret = OB_INVALID_DATE_FORMAT;
+          LOG_WARN("fail to get json obtime", K(ret), K(get_int()));
+        } else {
+          ObDateSqlMode date_sql_mode;
+          date_sql_mode.allow_invalid_dates_ = false;
+          date_sql_mode.no_zero_date_ = false;
+          if (OB_FAIL(ObTimeConverter::int_to_datetime(get_int(), 0, cvrt_ctx, datetime, date_sql_mode))) {
+            LOG_WARN("fail to convert int to obtime", K(ret), K(get_int()));
+          }
+        }
+      }
       break;
     }
 

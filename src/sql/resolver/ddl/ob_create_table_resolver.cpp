@@ -2416,7 +2416,7 @@ int ObCreateTableResolver::generate_index_arg()
           LOG_WARN("not support global fts index now", K(ret));
         } else {
           // set type to fts_doc_rowkey first, append other fts arg later
-          type = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
+          type = INDEX_TYPE_FTS_INDEX_LOCAL;
         }
       } else if (MULTI_KEY == index_keyname_) {
         if (tenant_data_version < DATA_VERSION_4_3_1_0) {
@@ -2759,6 +2759,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 ObColumnSchemaV2 *budy_column_schema = NULL;
                 bool force_rebuild = true;
                 if (OB_FAIL(ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
+                                                                                  *allocator_,
                                                                                   sort_item,
                                                                                   *params_.expr_factory_,
                                                                                   *session_info_,

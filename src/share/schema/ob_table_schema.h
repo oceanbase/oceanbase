@@ -602,6 +602,7 @@ public:
     UNUSED(check_large);
     return common::OB_NOT_SUPPORTED;
   }
+
   virtual int get_store_column_count(int64_t &column_count, const bool full_col) const
   {
     UNUSED(column_count);
@@ -1000,6 +1001,7 @@ public:
   inline bool is_vec_index_snapshot_data_type() const;
   inline bool is_fts_index() const;
   inline bool is_built_in_fts_index() const;
+  inline bool is_built_in_multivalue_index() const;
   inline bool is_built_in_index() const;  // fts / vector index
   inline bool is_rowkey_doc_id() const;
   inline bool is_doc_id_rowkey() const;
@@ -1069,7 +1071,27 @@ public:
   inline bool has_rowid() const { return is_user_table() || is_tmp_table(); }
   inline bool gen_normal_tablet() const { return has_rowid() && !is_extended_rowid_mode(); }
   inline bool is_new_queuing_table_mode() const { return is_new_queuing_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
-
+  /**
+  * During the construction of a local index in a partition table, the included columns may not contain the partition key.
+  * Since it's necessary to calculate which partition the data will be stored in, the partition key must be supplied to augment the index.
+  *
+  * For the function to return true, the following conditions must be met:
+  * 1) Local index
+  * 2) The indexed table does not contain the partition key.
+  *
+  * Current case:
+  * 1) the local index of the heap
+  * 2) two of the fts related table : fts_index_aux and fts_doc_word_aux.
+  *    Note: other tables of the fts related table (doc_rowkey table and rowkey_doc table) contain the partition key.
+  **/
+  inline bool need_partition_key_for_build_local_index(const ObSimpleTableSchemaV2 &data_table_schema) const
+  {
+    const bool heap_case =  is_index_local_storage() && data_table_schema.is_heap_table();
+    const bool fts_case = is_partitioned_table() && is_index_local_storage() && (is_fts_index_aux() || is_fts_doc_word_aux());
+    const bool multivalue_case = is_partitioned_table() && is_index_local_storage() && is_multivalue_index_aux();
+    const bool vec_case = is_partitioned_table() && is_index_local_storage() && (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type());
+    return heap_case || fts_case || vec_case || multivalue_case;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   uint64_t tenant_id_;
@@ -1506,6 +1528,8 @@ public:
   int get_spatial_geo_column_id(uint64_t &geo_column_id) const;
   int get_spatial_index_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
+  int get_multivalue_column_id(uint64_t &multivalue_col_id) const;
+
   int get_vec_index_column_id(uint64_t &vec_vector_id) const;
   int get_vec_index_vid_col_id(uint64_t &vec_id_col_id) const;
   // get columns for building rowid
@@ -1779,6 +1803,7 @@ public:
                              uint64_t column_id,
                              bool &is_mul) const;
   int get_doc_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const;
+  int get_rowkey_doc_id_tid(uint64_t &rowkey_doc_id_tid) const;
   int get_vec_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const;
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
@@ -2078,7 +2103,8 @@ inline bool ObSimpleTableSchemaV2::is_local_unique_index_table() const
 {
   //
   return INDEX_TYPE_UNIQUE_LOCAL == index_type_
-      || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_;
+      || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_
+      || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type_;
 }
 
 inline bool ObSimpleTableSchemaV2::is_global_local_index_table() const
@@ -2159,6 +2185,11 @@ inline bool ObSimpleTableSchemaV2::is_fts_index() const
 inline bool ObSimpleTableSchemaV2::is_built_in_fts_index() const
 {
   return share::schema::is_built_in_fts_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_built_in_multivalue_index() const
+{
+  return share::schema::is_built_in_multivalue_index(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_built_in_index() const

@@ -95,6 +95,7 @@ public:
                        K_(ir_scan_type),
                        K_(rowkey_exprs),
                        K_(table_scan_opt),
+                       K_(doc_id_idx),
                        K_(vec_vid_idx),
                        K_(index_merge_idx),
                        K_(pre_query_range),
@@ -265,6 +266,7 @@ public:
   ObDASScanRtDef *get_lookup_rtdef();
   int get_aux_lookup_tablet_id(common::ObTabletID &tablet_id) const;
   int get_table_lookup_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_rowkey_doc_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_vid_tablet_id(common::ObTabletID &tablet_id) const;
   int init_scan_param();
   int do_vec_index_rescan();

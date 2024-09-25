@@ -386,7 +386,8 @@ int ObStaticEngineCG::disable_use_rich_format(const ObLogicalOperator &op, ObOpS
         || (NULL != spec.get_parent() && PHY_UPDATE == spec.get_parent()->type_)
         || (NULL != spec.get_parent() && PHY_DELETE == spec.get_parent()->type_)
         || (static_cast<ObTableScanSpec &>(spec)).tsc_ctdef_.scan_ctdef_.is_get_
-        || tsc.is_text_retrieval_scan()) {
+        || tsc.is_text_retrieval_scan()
+        || tsc.is_tsc_with_doc_id()) {
       use_rich_format = false;
       LOG_DEBUG("tsc disable use rich format", K(tsc.get_index_back()), K(tsc.use_batch()),
                 K(is_virtual_table(tsc.get_ref_table_id())));
@@ -3162,6 +3163,8 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
     OZ(schema_guard->get_table_schema(MTL_ID(), primary_dml_info->ref_table_id_, table_schema));
     CK(OB_NOT_NULL(table_schema));
     OZ(check_only_one_unique_key(*log_plan, table_schema, spec.only_one_unique_key_));
+    uint64_t ft_col_id = OB_INVALID_ID;
+    OZ(table_schema->get_fulltext_column_ids(spec.doc_id_col_id_, ft_col_id));
 
     // 记录当前主表的rowkey的column_ref表达式和column_id
     CK(primary_dml_info->column_exprs_.count() == primary_dml_info->column_convert_exprs_.count());
@@ -5322,12 +5325,17 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
             op.is_table_scan()) {
           if (expr->get_expr_type() == T_REF_COLUMN) {
             const ObColumnRefRawExpr *column_expr = static_cast<const ObColumnRefRawExpr*>(expr);
-            if (OB_NOT_NULL(column_expr->get_dependant_expr())
-                && column_expr->get_dependant_expr()->get_expr_type() == T_FUN_SYS_SPATIAL_CELLID) {
+            if (OB_ISNULL(column_expr->get_dependant_expr())) {
+            } else if (column_expr->get_dependant_expr()->get_expr_type() == T_FUN_SYS_SPATIAL_CELLID) {
               spec.set_spatial_ddl(true);
             }
           } else if (expr->get_expr_type() == T_FUN_SYS_SPATIAL_CELLID) {
             spec.set_spatial_ddl(true);
+          } else if (expr->get_expr_type() == T_FUN_SYS_JSON_QUERY && expr->is_multivalue_index_column_expr()) {
+            // TODO: @yunyi, remove me later after support post-building multivalue index vectorization.
+            spec.max_batch_size_ = 0;
+            spec.set_multivalue_ddl(true);
+
           }
         }
       } else if (OB_FAIL(generate_rt_expr(*expr, rt_expr))) {
@@ -5344,6 +5352,32 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     spec.is_external_table_ = true;
   }
 
+  if (OB_SUCC(ret) && opt_ctx_->is_insert_stmt_in_online_ddl()) {
+    const TableItem *insert_table_item = opt_ctx_->get_root_stmt()->get_table_item(0);
+    if (OB_ISNULL(insert_table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect error, insert table item is nullptr", K(ret), K(opt_ctx_->get_root_stmt()->get_table_items()));
+    } else {
+      const uint64_t ddl_table_id = insert_table_item->ddl_table_id_;
+      const schema::ObTableSchema *ddl_table_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(ddl_table_id, ddl_table_schema))) {
+        LOG_WARN("fail to get ddl table id", K(ret), K(ddl_table_id));
+      } else if (OB_ISNULL(ddl_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, ddl table schema is nullptr", K(ret), KP(ddl_table_schema));
+      } else if (ddl_table_schema->is_fts_index_aux() || ddl_table_schema->is_fts_doc_word_aux()) {
+        spec.is_fts_ddl_ = true;
+        spec.is_fts_index_aux_ = ddl_table_schema->is_fts_index_aux();
+        spec.max_batch_size_ = 0; // TODO: @jinzhu, remove me later after support post-building fts index vectorization.
+        if (OB_UNLIKELY(ddl_table_schema->get_parser_name_str().empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, parser name is empty", K(ret), KPC(ddl_table_schema));
+        } else {
+          OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_name_str(), spec.parser_name_));
+        }
+      }
+    }
+  }
   return ret;
 }
 

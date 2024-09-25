@@ -393,6 +393,12 @@ public:
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,
       common::ObIArray<ObDDLTaskRecord> &records);
+  static int get_ddl_task_record_by_table_id(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObDDLTaskRecord> &records);
 
   static int check_task_id_exist(
       common::ObMySQLProxy &proxy,

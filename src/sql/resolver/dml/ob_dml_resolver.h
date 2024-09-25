@@ -1067,6 +1067,9 @@ protected:
       const TableItem &table_item,
       TableItem *rowkey_doc_table,
       common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
+  int check_doc_id_need_column_ref_expr(
+      ObDMLStmt &stmt,
+      bool &need_column_ref_expr);
   int check_vec_vid_need_column_ref_expr(
       ObDMLStmt &stmt,
       bool &need_column_ref_expr);

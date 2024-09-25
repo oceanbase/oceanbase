@@ -8722,6 +8722,9 @@ int ObDDLResolver::generate_global_index_schema(
       } else if (OB_FAIL(share::ObIndexBuilderUtil::adjust_expr_index_args(
               my_create_index_arg, new_table_schema, *allocator_, gen_columns))) {
         LOG_WARN("fail to adjust expr index args", K(ret));
+      } else if (share::schema::is_fts_index(my_create_index_arg.index_type_) &&
+                 OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(my_create_index_arg, allocator_))) {
+        LOG_WARN("failed to genearte fts parser name", K(ret));
       } else if (share::schema::is_vec_index(my_create_index_arg.index_type_) &&
                  OB_FAIL((ObVecIndexBuilderUtil::generate_vec_index_name(allocator_, my_create_index_arg.index_type_,
                                                                         my_create_index_arg.index_name_,

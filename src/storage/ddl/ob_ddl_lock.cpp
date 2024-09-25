@@ -157,7 +157,7 @@ int ObDDLLock::unlock_for_add_drop_index(
     LOG_WARN("failed to unlock data tablet", K(ret));
   } else if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, data_table_id, ROW_EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
     LOG_WARN("failed to unlock data table", K(ret));
-  }  else if (is_global_index) {
+  } else if (is_global_index) {
     if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, index_table_id, EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
       LOG_WARN("failed to unlock index table", K(ret));
     }

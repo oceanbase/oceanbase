@@ -803,6 +803,60 @@ int ObDDLUtil::generate_spatial_index_column_names(const ObTableSchema &dest_tab
   return ret;
 }
 
+
+int ObDDLUtil::generate_multivalue_index_column_names(const ObTableSchema &dest_table_schema,
+                                                   const ObTableSchema &source_table_schema,
+                                                   ObArray<ObColumnNameInfo> &insert_column_names,
+                                                   ObArray<ObColumnNameInfo> &column_names,
+                                                   ObArray<int64_t> &select_column_ids)
+{
+  int ret = OB_SUCCESS;
+  if (dest_table_schema.is_multivalue_index_aux()) {
+    uint64_t mulvalue_col_id = OB_INVALID_ID;
+    uint64_t mulvalue_array_col_id = OB_INVALID_ID;
+    ObArray<ObColDesc> column_ids;
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    const ObColumnSchemaV2 *array_column = nullptr;
+    // get dest table column names
+    if (OB_FAIL(dest_table_schema.get_column_ids(column_ids))) {
+      LOG_WARN("fail to get column ids", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+        const int64_t col_id =  column_ids.at(i).col_id_;
+        if (OB_ISNULL(column_schema = dest_table_schema.get_column_schema(col_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+        } else if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+          LOG_WARN("push back insert column name failed", K(ret));
+        } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+          LOG_WARN("push back rowkey column name failed", K(ret));
+        } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
+          LOG_WARN("push back select column id failed", K(ret), K(col_id));
+        } else if (OB_ISNULL(column_schema = source_table_schema.get_column_schema(col_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+        } else if (column_schema->is_multivalue_generated_column()) {
+          array_column = source_table_schema.get_column_schema(col_id + 1);
+        }
+      } // end for
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(array_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, array column schema must not be nullptr", K(ret));
+      } else {
+        if (OB_FAIL(column_names.push_back(ObColumnNameInfo(array_column->get_column_name_str(), false)))) {
+          LOG_WARN("push back rowkey column name failed", K(ret));
+        } else if (OB_FAIL(select_column_ids.push_back(array_column->get_column_id()))) {
+          LOG_WARN("push back select column id failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObDDLUtil::generate_build_replica_sql(
     const uint64_t tenant_id,
     const int64_t data_table_id,
@@ -831,7 +885,7 @@ int ObDDLUtil::generate_build_replica_sql(
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, GENERATE_BUILD_REPLICA_SQL))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-      tenant_id, schema_guard, schema_version))) {
+      tenant_id, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id));
   } else if (OB_FAIL(schema_guard.check_formal_guard())) {
     LOG_WARN("fail to check formal guard", K(ret));
@@ -857,6 +911,11 @@ int ObDDLUtil::generate_build_replica_sql(
     // get dest table column names
     if (dest_table_schema->is_spatial_index()) {
       if (OB_FAIL(ObDDLUtil::generate_spatial_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
+                                                                 column_names, select_column_ids))) {
+        LOG_WARN("generate spatial index column names failed", K(ret));
+      }
+    } else if (dest_table_schema->is_multivalue_index_aux()) {
+      if (OB_FAIL(ObDDLUtil::generate_multivalue_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
                                                                  column_names, select_column_ids))) {
         LOG_WARN("generate spatial index column names failed", K(ret));
       }
@@ -894,13 +953,7 @@ int ObDDLUtil::generate_build_replica_sql(
         }
       }
     }
-    bool need_add_partition_key = source_table_schema->is_heap_table() && dest_table_schema->is_index_local_storage();
-    bool is_partitioned_vec_idx_table = dest_table_schema->is_partitioned_table() && dest_table_schema->is_index_local_storage() &&
-                                        (dest_table_schema->is_vec_delta_buffer_type() ||
-                                         dest_table_schema->is_vec_index_id_type() ||
-                                         dest_table_schema->is_vec_index_snapshot_data_type());
-    need_add_partition_key = is_partitioned_vec_idx_table || need_add_partition_key;
-    if (OB_SUCC(ret) && need_add_partition_key) {
+    if (OB_SUCC(ret) && dest_table_schema->need_partition_key_for_build_local_index(*source_table_schema)) {
       ObArray<ObColDesc> src_column_ids;
       ObSEArray<uint64_t, 5> extra_column_ids;
       if (OB_FAIL(source_table_schema->get_column_ids(src_column_ids))) {
@@ -973,7 +1026,9 @@ int ObDDLUtil::generate_build_replica_sql(
         } else if (OB_ISNULL(column_schema = dest_table_schema->get_column_schema(col_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, column schema must not be nullptr", K(ret), K(col_id));
-        } else if (column_schema->is_generated_column() && !dest_table_schema->is_spatial_index()) {
+        } else if (column_schema->is_generated_column() &&
+          !dest_table_schema->is_spatial_index() &&
+          !dest_table_schema->is_multivalue_index_aux()) {
           // generated columns cannot be row key.
         } else if (OB_FAIL(rowkey_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), is_shadow_column)))) {
           LOG_WARN("fail to push back rowkey column name", K(ret));

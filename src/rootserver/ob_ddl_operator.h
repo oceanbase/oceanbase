@@ -417,6 +417,10 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &index_schema,
       share::schema::ObTableSchema &new_data_table_schema);
+  virtual int drop_inner_generated_domain_extra_column(common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema *ori_data_schema,
+      const share::schema::ObColumnSchemaV2 &ori_column_schema,
+      share::schema::ObTableSchema &new_data_table_schema);
 
 //  virtual int log_ddl_operation(share::schema::ObSchemaOperation &ddl_operation,
 //                                       common::ObMySQLTransaction &trans);

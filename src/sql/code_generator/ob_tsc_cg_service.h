@@ -23,6 +23,7 @@ class ObPushdownExprSpec;
 struct ObTableScanCtDef;
 struct ObDASScanCtDef;
 struct AgentVtAccessMeta;
+struct ObDASDocIdMergeCtDef;
 //help to cg the tsc ctdef
 struct ObDASVIdMergeCtDef;
 class ObTscCgService
@@ -47,6 +48,7 @@ public:
                               const ObSQLSessionInfo &session,
                               ObDASTableLocMeta &loc_meta);
   int generate_das_result_output(const common::ObIArray<uint64_t> &output_cids,
+                                 common::ObIArray<ObExpr *> &doc_id_expr,
                                  common::ObIArray<ObExpr *> &vec_vid_expr,
                                  ObDASScanCtDef &scan_ctdef,
                                  const ObRawExpr *trans_info_expr,
@@ -54,6 +56,7 @@ public:
 private:
   int generate_access_ctdef(const ObLogTableScan &op,
                             ObDASScanCtDef &scan_ctdef,
+                            common::ObIArray<ObExpr *> &doc_id_expr,
                             common::ObIArray<ObExpr *> &vec_vid_expr,
                             bool &has_rowscn);
   int generate_pushdown_aggr_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
@@ -82,6 +85,13 @@ private:
   int extract_text_ir_das_output_column_ids(const ObLogTableScan &op,
                                             const ObDASScanCtDef &scan_ctdef,
                                             ObIArray<uint64_t> &output_cids);
+  int extract_rowkey_doc_access_columns(const ObLogTableScan &op,
+                                        const ObDASScanCtDef &scan_ctdef,
+                                        ObIArray<ObRawExpr*> &access_exprs);
+  int extract_rowkey_doc_output_columns_ids(const share::schema::ObTableSchema &schema,
+                                            const ObLogTableScan &op,
+                                            const ObDASScanCtDef &scan_ctdef,
+                                            ObIArray<uint64_t> &output_cids);
   int extract_vector_das_output_column_ids(const ObLogTableScan &op,
                                           const ObDASScanCtDef &scan_ctdef,
                                           ObIArray<uint64_t> &output_cids);
@@ -102,6 +112,13 @@ private:
                                    ObDASBaseCtDef *ir_scan_ctdef,
                                    ObExpr *doc_id_expr,
                                    ObDASIRAuxLookupCtDef *&aux_lookup_ctdef);
+  int generate_rowkey_doc_ctdef(const ObLogTableScan &op,
+                                ObTableScanCtDef &tsc_ctdef,
+                                ObDASScanCtDef *&rowkey_doc_scan_ctdef);
+  int generate_das_scan_ctdef_with_doc_id(const ObLogTableScan &op,
+                                          ObTableScanCtDef &tsc_ctdef,
+                                          ObDASScanCtDef *scan_ctdef,
+                                          ObDASDocIdMergeCtDef *&doc_id_merge_ctdef);
   int generate_vec_id_lookup_ctdef(const ObLogTableScan &op,
                                    ObTableScanCtDef &tsc_ctdef,
                                    ObDASBaseCtDef *vec_scan_ctdef,
@@ -117,6 +134,7 @@ private:
                                   ObTableScanCtDef &tsc_ctdef,
                                   ObDASBaseCtDef *scan_ctdef,
                                   ObDASTableLookupCtDef *&lookup_ctdef,
+                                  ObDASDocIdMergeCtDef *&doc_id_merge_ctdef,
                                   ObDASVIdMergeCtDef *&vid_merge_ctdef);
   int extract_doc_id_index_back_access_columns(const ObLogTableScan &op,
                                                ObIArray<ObRawExpr *> &access_exprs);

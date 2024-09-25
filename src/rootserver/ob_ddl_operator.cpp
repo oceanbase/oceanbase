@@ -10565,8 +10565,13 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
       }
       // There are no other indexes, delete the hidden column.
       if (OB_SUCC(ret) && !exist_index) {
-				// if generate column is not the last column // 1. update prev_column_id // 2. update inner table
-        if (OB_FAIL(update_prev_id_for_delete_column(*data_table, new_data_table_schema, *index_col, trans))) {
+        if (index_col->is_multivalue_generated_array_column() || index_col->is_multivalue_generated_column()) {
+          // multivalue array column not in the index schema, need do delete as well do real delete in drop_inner_generated_domain_extra_column
+          if (OB_FAIL(drop_inner_generated_domain_extra_column(trans, data_table, *index_col, new_data_table_schema))) {
+            LOG_WARN("failed to drop budy column", K(ret));
+          }
+        // if generate column is not the last column // 1. update prev_column_id // 2. update inner table
+        } else if (OB_FAIL(update_prev_id_for_delete_column(*data_table, new_data_table_schema, *index_col, trans))) {
           LOG_WARN("failed to update column previous id for delete column", K(ret));
         } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, index_col->get_column_name_str()))) {
           LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*index_col));
@@ -10592,6 +10597,47 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
         }
       }
     }
+  }
+
+  return ret;
+}
+
+int ObDDLOperator::drop_inner_generated_domain_extra_column(
+  common::ObMySQLTransaction &trans,
+  const share::schema::ObTableSchema *ori_data_schema,
+  const share::schema::ObColumnSchemaV2 &ori_column_schema,
+  share::schema::ObTableSchema &new_data_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ori_data_schema->get_tenant_id();
+  const ObColumnSchemaV2 *budy_col = NULL;
+  bool is_match = false;
+
+  if (OB_ISNULL(ori_data_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, ori_data_schema is nullptr", K(ret));
+  } else if (ori_column_schema.is_multivalue_generated_array_column()) {
+  } else if (OB_ISNULL(budy_col = ori_data_schema->get_column_schema(tenant_id, ori_column_schema.get_column_id() + 1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, budy column schema is nullptr", K(ret), K(ori_column_schema));
+  } else if (!budy_col->is_multivalue_generated_array_column()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, budy column schema not fould", K(ret), K(*budy_col));
+  } else if (OB_FAIL(ObMulValueIndexBuilderUtil::is_matched_budy_column(ori_column_schema, *budy_col, is_match))) {
+    LOG_WARN("failed to match column", K(ret));
+  } else if (!is_match) {
+    ret = OB_ERR_COLUMN_NOT_FOUND;
+    LOG_WARN("unexpected error, budy column not found", K(ret), K(*budy_col));
+  // delete budy column
+  } else if (OB_FAIL(update_prev_id_for_delete_column(*ori_data_schema, new_data_table_schema, *budy_col, trans))) {
+    LOG_WARN("failed to update column previous id for delete column", K(ret));
+  } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, budy_col->get_column_name_str()))) {
+    LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*budy_col));
+  // delete index column
+  } else if (OB_FAIL(update_prev_id_for_delete_column(*ori_data_schema, new_data_table_schema, ori_column_schema, trans))) {
+    LOG_WARN("failed to update column previous id for delete column", K(ret));
+  } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, ori_column_schema.get_column_name_str()))) {
+    LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*budy_col));
   }
 
   return ret;

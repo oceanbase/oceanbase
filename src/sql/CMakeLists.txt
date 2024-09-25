@@ -79,6 +79,7 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_text_retrieval_iter.cpp
   das/iter/ob_das_text_retrieval_merge_iter.cpp
   das/iter/ob_das_iter_utils.cpp
+  das/iter/ob_das_doc_id_merge_iter.cpp
   das/iter/ob_das_vid_merge_iter.cpp
   das/iter/ob_das_index_merge_iter.cpp
 )
@@ -774,6 +775,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_vec_key.cpp
   engine/expr/ob_expr_vec_data.cpp
   engine/expr/ob_expr_topn_filter.cpp
+  engine/expr/ob_expr_tokenize.cpp
   engine/expr/ob_expr_gtid.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
   engine/expr/ob_expr_rb_build_empty.cpp

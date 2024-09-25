@@ -563,15 +563,7 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
       }
     }
     if (OB_SUCC(ret)) {
-      TableItem *rowkey_doc = NULL;
-      if (OB_FAIL(try_add_join_table_for_fts(table_item, rowkey_doc))) {
-        LOG_WARN("fail to try add join table for fts", K(ret), KPC(table_item));
-      } else if (OB_NOT_NULL(rowkey_doc) && OB_FAIL(try_update_column_expr_for_fts(
-                                                                      *table_item,
-                                                                      rowkey_doc,
-                                                                      table_info->column_exprs_))) {
-        LOG_WARN("fail to try update column expr for fts", K(ret), KPC(table_item));
-      } else if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
+      if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         update_stmt->set_has_global_index(true);

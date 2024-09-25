@@ -4729,10 +4729,6 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (is_multivalue_index(arg.index_type_)) {
-    // todo yunyi not dynamic create multivlaue index
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported", K(ret));
   } else {
     ObIndexBuilder index_builder(ddl_service_);
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {

@@ -158,6 +158,13 @@ public:
   OB_INLINE bool use_index_skip_scan() const {
     return (1 == ss_key_ranges_.count()) && (!ss_key_ranges_.at(0).is_whole_range());
   }
+  void destroy() override
+  {
+    if (OB_UNLIKELY(ss_key_ranges_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
+      ss_key_ranges_.destroy();
+    }
+    ObVTableScanParam::destroy();
+  }
   bool is_thread_scope_;
   ObRangeArray ss_key_ranges_;  // used for index skip scan, use as postfix range for ObVTableScanParam::key_ranges_
 

@@ -647,10 +647,6 @@ int ObTabletCreateMdsHelper::check_and_get_create_tablet_schema_info(
     micro_index_clustered = extra_info.micro_index_clustered_;
     if (DATA_VERSION_4_3_0_0 <= extra_info.tenant_data_version_) {
       need_create_empty_major_sstable = extra_info.need_create_empty_major_;
-      // TODO: @jinzhu, please remove me later, after implement fts ddl task for post-creating index.
-      if (create_tablet_schema->is_fts_index() && !create_tablet_schema->can_read_index()) {
-        need_create_empty_major_sstable = true;
-      }
     } else {
       need_create_empty_major_sstable =
         !(create_tablet_schema->is_user_hidden_table() || (create_tablet_schema->is_index_table() && !create_tablet_schema->can_read_index()));

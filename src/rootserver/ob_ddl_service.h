@@ -1309,7 +1309,9 @@ private:
   int calc_table_tablet_id_cnt_(
       const ObTableSchema &table_schema,
       uint64_t &tablet_cnt);
-
+  int check_alter_domain_column_allowed(
+      obrpc::ObAlterTableArg &alter_table_arg,
+      const ObTableSchema *orig_table_schema);
   int check_has_domain_index(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t tenant_id,
@@ -2213,7 +2215,7 @@ public:
   int create_aux_index(
       const obrpc::ObCreateAuxIndexArg &arg,
       obrpc::ObCreateAuxIndexRes &result);
-  int check_aux_index_schema_exist_(
+  int check_aux_index_schema_exist(
       const uint64_t tenant_id,
       const obrpc::ObCreateIndexArg &arg,
       ObSchemaGetterGuard &schema_guard,
@@ -2244,7 +2246,7 @@ public:
   int check_create_tenant_replica_options(
       share::schema::ObTenantSchema &tenant_schema,
       share::schema::ObSchemaGetterGuard &schema_guard);
-
+  int check_fts_index_conflict(const uint64_t tenant_id, const uint64_t table_id);
   static int gen_tenant_init_config(
              const uint64_t tenant_id,
              const uint64_t compatible_version,

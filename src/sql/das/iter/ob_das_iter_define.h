@@ -75,6 +75,7 @@ public:
 
   common::ObTabletID lookup_tablet_id_;
   common::ObTabletID aux_lookup_tablet_id_;
+  common::ObTabletID rowkey_doc_tablet_id_;
   common::ObTabletID rowkey_vid_tablet_id_;
 
   /* used by fulltext index */
@@ -91,6 +92,7 @@ public:
   {
     lookup_tablet_id_.reset();
     aux_lookup_tablet_id_.reset();
+    rowkey_doc_tablet_id_.reset();
     rowkey_vid_tablet_id_.reset();
     inv_idx_tablet_id_.reset();
     fwd_idx_tablet_id_.reset();

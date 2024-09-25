@@ -182,16 +182,27 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
         sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
                                           static_cast<int32_t>(col_node->children_[0]->str_len_));
-        bool is_multivalue_index = false;
-        if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(sort_item.column_name_,
-                                                                         is_multivalue_index))) {
-          LOG_WARN("failed to resolve index type", K(ret));
-        } else if (is_multivalue_index) {
-          // not support dynamic create multi-value index
-          // todo: weiyouchao.wyc
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support dynaimic create multivlaue index", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support dynaimic create multivlaue index");
+        bool is_multi_value_index = false;
+        if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(sort_item.column_name_,
+                                                                  is_multi_value_index,
+                                                                  reinterpret_cast<int*>(&index_keyname_)))) {
+          LOG_WARN("failed to adjust index type", K(ret));
+        } else if (is_multi_value_index) {
+          ObCreateIndexArg &index_arg =crt_idx_stmt->get_create_index_arg();
+          if (index_keyname_ == MULTI_KEY) {
+            index_arg.index_type_ = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
+          }
+          uint64_t tenant_data_version = 0;
+          if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret));
+          } else if (tenant_data_version < DATA_VERSION_4_3_4_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("tenant data version is less than 4.3.4, multivalue index not supported", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, multivalue index");
+          }
         }
         if (OB_SUCC(ret)) {
           const ObColumnSchemaV2 *column_schema = NULL;
@@ -232,6 +243,12 @@ int ObCreateIndexResolver::resolve_index_column_node(
       }
       if (OB_FAIL(ret)) {
         // do nothing
+      } else if (index_keyname_ == MULTI_KEY || index_keyname_ == MULTI_UNIQUE_KEY) {
+        if (!GCONF._enable_add_fulltext_index_to_existing_table) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("experimental feature: build multivalue index afterward is experimental feature", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "build multivalue index afterward");
+        }
       } else if (index_keyname_ == FTS_KEY) {
         if (!GCONF._enable_add_fulltext_index_to_existing_table) {
           ret = OB_NOT_SUPPORTED;
@@ -814,17 +831,34 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
     } else if (FTS_KEY == index_keyname_) {
       uint64_t tenant_data_version = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
-      LOG_WARN("get tenant data version failed", K(ret));
-      } else if (tenant_data_version < DATA_VERSION_4_3_2_0) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_3_4_0) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("tenant data version is less than 4.3.2, create fulltext index on existing table not supported", K(ret), K(tenant_data_version));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, fulltext index");
+        LOG_WARN("tenant data version is less than 4.3.4, create fulltext index on existing table not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, fulltext index");
       } else if (global_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support global fts index now", K(ret));
       } else {
         // set type to fts_index_aux first, append other fts arg later
         index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
+      }
+    } else if (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_) {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_3_4_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant data version is less than 4.3.4, multivalue index not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, multivalue index");
+      } else if (global_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support global multivalue index now", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support global multivalue index");
+      } else if (MULTI_KEY == index_keyname_) {
+        index_arg.index_type_ = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
+      } else {
+        index_arg.index_type_ = INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
       }
     } else if (INDEX_KEYNAME::VEC_KEY == index_keyname_) {
       uint64_t tenant_data_version = 0;
@@ -862,6 +896,10 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
       LOG_WARN("generate vec parser name failed", K(ret), K(index_arg));
     } else if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
       LOG_WARN("fail to set encryption str", K(ret));
+    } else if (FTS_KEY == index_keyname_ &&
+               OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(index_arg,
+                                                                       allocator_))) {
+      LOG_WARN("generate fts parser name failed", K(ret), K(index_arg));
     }
   }
   return ret;

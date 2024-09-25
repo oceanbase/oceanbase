@@ -644,6 +644,23 @@ bool ObRawExpr::is_multivalue_expr() const
   return IS_MULTIVALUE_EXPR(expr->get_expr_type());
 }
 
+bool ObRawExpr::is_multivalue_index_column_expr() const
+{
+  bool bool_ret = false;
+  const ObRawExpr *param_asis = nullptr;
+  const ObRawExpr *param_multi = nullptr;
+  if (get_expr_type() == T_FUN_SYS_JSON_QUERY &&
+      get_param_count() >= 13 &&
+      OB_NOT_NULL(param_asis = get_param_expr(8)) && param_asis->is_const_raw_expr() &&
+      OB_NOT_NULL(param_multi = get_param_expr(12)) && param_multi->is_const_raw_expr())
+  {
+    common::ObObj value_asis = (static_cast<const ObConstRawExpr *>(param_asis))->get_value();
+    common::ObObj value_multi = (static_cast<const ObConstRawExpr *>(param_multi))->get_value();
+    bool_ret = value_asis.get_int() == 1 && value_multi.get_int() == 0;
+  }
+  return bool_ret;
+}
+
 ObRawExpr* ObRawExpr::get_json_domain_param_expr()
 {
   ObRawExpr* param_expr = nullptr;

@@ -1086,6 +1086,13 @@ bool ObDocId::is_valid() const
   return ObTabletID(tablet_id_).is_valid() && seq_id_ > 0;
 }
 
+int ObDocId::hash(uint64_t &hash_val) const
+{
+  hash_val = murmurhash(&tablet_id_, sizeof(seq_id_), OB_DOC_ID_HASH);
+  hash_val = murmurhash(&seq_id_, sizeof(seq_id_), hash_val);
+  return common::OB_SUCCESS;
+}
+
 ObString ObDocId::get_string() const
 {
   return ObString(OB_DOC_ID_COLUMN_BYTE_LENGTH, reinterpret_cast<const char *>(this));

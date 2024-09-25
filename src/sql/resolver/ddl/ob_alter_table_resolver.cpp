@@ -1556,6 +1556,12 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
         }
         if (OB_FAIL(ret)) {
           // do nothing
+        } else if (index_keyname_ == MULTI_KEY || index_keyname_ == MULTI_UNIQUE_KEY) {
+          if (!GCONF._enable_add_fulltext_index_to_existing_table) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("experimental feature: build multivalue index afterward is experimental feature", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "build multivalue index afterward");
+          }
         } else if (index_keyname_ == FTS_KEY) {
           if (!GCONF._enable_add_fulltext_index_to_existing_table) {
             ret = OB_NOT_SUPPORTED;
@@ -1915,6 +1921,9 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                          && INDEX_TYPE_SPATIAL_GLOBAL == create_index_arg->index_type_) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "spatial global index");
+              } else if (share::schema::is_fts_index(create_index_arg->index_type_)
+                  && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(*create_index_arg, allocator_))) {
+                LOG_WARN("failed to generate fts parser name", K(ret));
               } else {
                 create_index_arg->index_schema_.set_table_type(USER_INDEX);
                 create_index_arg->index_schema_.set_index_type(create_index_arg->index_type_);
@@ -1963,24 +1972,20 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               if (OB_SUCC(ret)) {
                 if (OB_FAIL(create_index_arg->assign(index_arg))) {
                   LOG_WARN("fail to assign create index arg", K(ret));
-                } else if (share::schema::is_fts_index(index_arg.index_type_)) {
-                  if (OB_FAIL(ObDDLResolver::append_domain_index_args(*table_schema_,
-                                                                      resolve_result,
-                                                                      create_index_arg,
-                                                                      have_generate_fts_arg_,
-                                                                      resolve_results,
-                                                                      index_arg_list,
-                                                                      allocator_))) {
-                    LOG_WARN("failed to append domain index args", K(ret), K(index_arg));
-                  } else {
-                    // record allocator to free fts arg in desctructor
-                    alter_table_stmt->set_fts_arg_allocator(allocator_);
+                } else if (share::schema::is_multivalue_index(index_arg.index_type_)) {
+                  uint64_t tenant_data_version = 0;
+                  if (OB_ISNULL(session_info_)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected null", K(ret));
+                  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+                    LOG_WARN("get tenant data version failed", K(ret));
+                  } else if (tenant_data_version < DATA_VERSION_4_3_4_0) {
+                    ret = OB_NOT_SUPPORTED;
+                    LOG_WARN("tenant data version is less than 4.3.4, create dynamic multivalue index not supported", K(ret), K(tenant_data_version));
+                    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, multivalue index not support dynamic create.");
                   }
-                } else if (is_multivalue_index(index_arg.index_type_)) {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("dynamic add multivalue index not supported yet", K(ret));
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic add multivalue index not supported yet");
-                } else {
+                }
+                if (OB_SUCC(ret)) {
                   if (OB_FAIL(resolve_results.push_back(resolve_result))) {
                     LOG_WARN("fail to push back index_stmt_list", K(ret),
                         K(resolve_result));
@@ -2489,7 +2494,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_GLOBAL;
           } else if (index_keyname_ == FTS_KEY) {
-            type = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL;
+            type = INDEX_TYPE_FTS_INDEX_GLOBAL;
           } else if (index_keyname_ == MULTI_KEY) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("global multivalue index not supported", K(ret));
@@ -2501,7 +2506,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_LOCAL;
           } else if (index_keyname_ == FTS_KEY) {
-            type = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
+            type = INDEX_TYPE_FTS_INDEX_LOCAL;
           } else if (index_keyname_ == MULTI_KEY) {
             type = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
           } else {

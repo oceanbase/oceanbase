@@ -1981,6 +1981,7 @@ public:
   bool is_oracle_spatial_expr() const;
   bool is_json_domain_expr() const;
   bool is_multivalue_expr() const;
+  bool is_multivalue_index_column_expr() const;
   ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;
   bool is_domain_expr() const;

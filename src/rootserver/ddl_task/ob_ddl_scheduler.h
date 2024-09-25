@@ -374,6 +374,7 @@ private:
       const int64_t parallelism,
       const int64_t parent_task_id,
       const int64_t consumer_group_id,
+      const uint64_t tenant_data_version,
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -491,6 +492,7 @@ private:
 
   int create_drop_fts_index_task(
       common::ObISQLClient &proxy,
+      const share::ObDDLType ddl_type,
       const share::schema::ObTableSchema *index_schema,
       const int64_t schema_version,
       const int64_t consumer_group_id,

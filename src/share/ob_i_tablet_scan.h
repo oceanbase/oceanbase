@@ -380,7 +380,7 @@ ObVTableScanParam() :
     destroy_schema_guard();
   }
 
-  void destroy()
+  virtual void destroy()
   {
     if (OB_UNLIKELY(column_ids_.get_capacity() > OB_PREALLOCATED_COL_ID_NUM)) {
       column_ids_.destroy();
