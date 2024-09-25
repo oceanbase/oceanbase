@@ -224,8 +224,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
     ObLLVMType ir_type;
     ObLLVMValue value;
     bool is_complex_type_var = false;
-    ObLLVMValue stack;
-    OZ (generator_.get_helper().stack_save(stack));
     for (int64_t i = 0; OB_SUCC(ret) && i < s.get_index().count(); ++i) {
       const ObPLVar *var = s.get_var(i);
       CK (OB_NOT_NULL(var));
@@ -303,6 +301,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
         && OB_INVALID_INDEX != s.get_default()
         && PL_CONSTRUCT_COLLECTION != s.get_default()) {
       ObLLVMValue p_result_obj;
+      ObLLVMValue stack;
+      OZ (generator_.get_helper().stack_save(stack));
       OZ (generator_.generate_expr(s.get_default(),
                                    s,
                                    is_complex_type_var ? OB_INVALID_ID : s.get_index(0),
@@ -379,6 +379,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
           }
         }
       }
+      OZ (generator_.get_helper().stack_restore(stack));
     }
     if (lib::is_mysql_mode()) {
       ObLLVMValue ret_err;
@@ -394,7 +395,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
     }
 
     OZ (generator_.generate_spi_pl_profiler_after_record(s));
-    OZ (generator_.get_helper().stack_restore(stack));
   }
   return ret;
 }
