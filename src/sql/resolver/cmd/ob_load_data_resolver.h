@@ -62,6 +62,7 @@ public:
   int local_infile_enabled(bool &enabled) const;
 
   int check_trigger_constraint(const ObTableSchema *table_schema);
+  int check_collection_sql_type(const ObTableSchema *table_schema);
 private:
   int pattern_match(const ObString& str, const ObString& pattern, bool &matched);
   bool exist_wildcard(const ObString& str);
