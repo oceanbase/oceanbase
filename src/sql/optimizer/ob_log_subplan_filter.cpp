@@ -381,7 +381,8 @@ int ObLogSubPlanFilter::compute_sharding_info()
     }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
-  } else if (DistAlgo::DIST_NONE_ALL == dist_algo_) {
+  } else if (DistAlgo::DIST_NONE_ALL == dist_algo_||
+             DistAlgo::DIST_HASH_ALL == dist_algo_) {
     ObShardingInfo *sharding = NULL;
     if (OB_ISNULL(get_child(0)) ||
         OB_ISNULL(sharding = get_child(0)->get_sharding())) {
@@ -393,6 +394,8 @@ int ObLogSubPlanFilter::compute_sharding_info()
       strong_sharding_ = get_child(0)->get_strong_sharding();
       inherit_sharding_index_ = 0;
     }
+  } else if (DistAlgo::DIST_RANDOM_ALL == dist_algo_) {
+    strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (DistAlgo::DIST_PARTITION_WISE == dist_algo_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
       ObShardingInfo *sharding = NULL;

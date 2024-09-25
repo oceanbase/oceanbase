@@ -7186,6 +7186,7 @@ public:
   virtual ~ObDropOutlineArg() {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
+  int assign(const ObDropOutlineArg &other);
   TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name), K_(is_format));
 
   uint64_t tenant_id_;

@@ -17199,6 +17199,7 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
+                         format_sql_id as FORMAT_SQL_ID,
                          stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -17609,6 +17610,7 @@ def_table_schema(
     FLT_TRACE_ID,
     PL_TRACE_ID,
     PLSQL_EXEC_TIME,
+    FORMAT_SQL_ID,
     stmt_type as STMT_TYPE,
     TOTAL_MEMSTORE_READ_ROW_COUNT,
     TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -27231,7 +27233,7 @@ def_table_schema(
       A.SQL_ID,
       A.OUTLINE_CONTENT
     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
-    WHERE A.OUTLINE_ID = B.OUTLINE_ID
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " "),
 
     normal_columns = [
@@ -34134,7 +34136,35 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 #21482: CDB_WR_SYSTEM_EVENT
 #21483: DBA_WR_EVENT_NAME
 #21484: CDB_WR_EVENT_NAME
-#21485: DBA_OB_FORMAT_OUTLINES
+def_table_schema(
+    owner = 'guoyun.lgy',
+    table_name     = 'DBA_OB_FORMAT_OUTLINES',
+    table_id       = '21485',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+      B.GMT_CREATE AS CREATE_TIME,
+      B.GMT_MODIFIED AS MODIFY_TIME,
+      A.TENANT_ID,
+      A.DATABASE_ID,
+      A.OUTLINE_ID,
+      A.DATABASE_NAME,
+      A.OUTLINE_NAME,
+      A.VISIBLE_SIGNATURE,
+      A.FORMAT_SQL_TEXT,
+      A.OUTLINE_TARGET,
+      A.OUTLINE_SQL,
+      A.FORMAT_SQL_ID,
+      A.OUTLINE_CONTENT
+    FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0
+""".replace("\n", " "),
+    normal_columns = [
+   ],
+)
 
 def_table_schema(
   owner = 'mingye.swj',
@@ -51582,6 +51612,7 @@ def_table_schema(
         WHEN 'USER_TAB_PRIVS' THEN ''
         WHEN 'STMT_AUDIT_OPTION_MAP' THEN ''
         WHEN 'DBA_OB_OUTLINES' THEN ''
+        WHEN 'DBA_OB_FORMAT_OUTLINES' THEN ''
         WHEN 'GV$OB_SQL_AUDIT' THEN ''
         WHEN 'V$OB_SQL_AUDIT' THEN ''
         WHEN 'DBA_AUDIT_SESSION' THEN ''
@@ -56694,7 +56725,39 @@ def_table_schema(
 # 25269: DBA_WR_SYSTEM_EVENT
 # 25270: DBA_WR_EVENT_NAME
 # 25271: DBA_SCHEDULER_RUNNING_JOBS
-# 25272: DBA_OB_FORMAT_OUTLINES
+
+def_table_schema(
+    owner = 'guoyun.lgy',
+    table_name     = 'DBA_OB_FORMAT_OUTLINES',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25272',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+      CAST(B.GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
+      CAST(B.GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,
+      A.TENANT_ID,
+      A.DATABASE_ID,
+      A.OUTLINE_ID,
+      A.DATABASE_NAME,
+      A.OUTLINE_NAME,
+      A.VISIBLE_SIGNATURE,
+      A.FORMAT_SQL_TEXT,
+      A.OUTLINE_TARGET,
+      A.OUTLINE_SQL,
+      A.FORMAT_SQL_ID,
+      A.OUTLINE_CONTENT
+    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0;
+""".replace("\n", " "),
+   normal_columns = [
+   ],
+)
+
 # 25273: DBA_WR_SQLSTAT
 # 25274: DBA_WR_SYS_TIME_MODEL
 def_table_schema(
@@ -58195,6 +58258,7 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
+                         format_sql_id as FORMAT_SQL_ID,
                          stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -58309,6 +58373,7 @@ TX_STATE_VERSION,
 FLT_TRACE_ID,
 PL_TRACE_ID,
 PLSQL_EXEC_TIME,
+FORMAT_SQL_ID,
 STMT_TYPE,
 TOTAL_MEMSTORE_READ_ROW_COUNT,
 TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -63732,7 +63797,7 @@ def_table_schema(
                           A.SQL_ID,
                           A.OUTLINE_CONTENT
                    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
-                   WHERE A.OUTLINE_ID = B.OUTLINE_ID
+                   WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " ")
 )
 
@@ -66203,6 +66268,7 @@ def_table_schema(
 #       * # 100001: idx_data_table_id
 #       * # 100001: __all_table
 ################################################################################
+
 
 ################################################################################
 # Lob Table (50000, 70000)

@@ -10607,6 +10607,7 @@ void ObOutlineInfo::reset()
   format_ = HINT_NORMAL;
   format_outline_ = false;
   outline_params_wrapper_.destroy();
+  format_outline_ = false;
   ObSchema::reset();
 }
 
@@ -10634,10 +10635,15 @@ bool ObOutlineInfo::is_valid() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
-             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
+  } else if (name_.empty()
              || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
+    valid_ret = false;
+  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
+                  || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
+    valid_ret = false;
+  } else if (is_format() && !(((format_sql_text_.empty() && is_sql_id_valid(format_sql_id_))
+                  || (!format_sql_text_.empty() && format_sql_id_.empty())))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_ || OB_INVALID_ID == outline_id_) {
     valid_ret = false;
@@ -10652,10 +10658,14 @@ bool ObOutlineInfo::is_valid_for_replace() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
-             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
-             || owner_.empty() || version_.empty()
+  } else if (name_.empty() || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
+    valid_ret = false;
+  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty()) ||
+                                (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
+    valid_ret = false;
+  } else if (is_format() && !((!signature_.empty() && !format_sql_text_.empty() && sql_id_.empty()) ||
+                             (signature_.empty() && format_sql_text_.empty() && is_sql_id_valid(format_sql_id_)))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_
              || OB_INVALID_ID == outline_id_) {
@@ -10820,6 +10830,7 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
     LOG_WARN("Fail to deep copy outline_content", K(ret));
   } else if (OB_FAIL(deep_copy_str(sql_text, sql_text_))) {
     LOG_WARN("Fail to deep copy sql_text", K(ret));
+
   } else if (OB_FAIL(deep_copy_str(outline_target, outline_target_))) {
     LOG_WARN("Fail to deep copy outline target", K(ret));
   } else if (OB_FAIL(deep_copy_str(owner, owner_))) {
@@ -11069,12 +11080,6 @@ int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &ds
 
 #endif
   return ret;
-}
-
-int ObDbLinkBaseInfo::set_host_ip(const common::ObString &host_ip)
-{
-  bool bret = host_addr_.set_ip_addr(host_ip, 0);
-  return bret ? common::OB_SUCCESS : common::OB_ERR_UNEXPECTED;
 }
 
 OB_SERIALIZE_MEMBER(ObDbLinkInfo,

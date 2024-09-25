@@ -399,6 +399,7 @@ int ObMicroBlockHandleMgr::init(const bool enable_prefetch_limiting, ObTableScan
 }
 
 int ObMicroBlockHandleMgr::get_micro_block_handle(
+    ObTableAccessContext *access_ctx,
     ObMicroIndexInfo &index_block_info,
     const bool is_data_block,
     const bool need_submit_io,
@@ -446,6 +447,8 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
                                          use_multi_block_prefetch,
                                          micro_block_handle))) {
         LOG_WARN("Fail to submit async io for prefetch", K(ret), K(index_block_info), K(micro_block_handle));
+      } else {
+        REALTIME_MONITOR_ADD_IO_READ_BYTES(access_ctx, size);
       }
     } else {
       // get data / index block cache from cache
@@ -465,6 +468,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
 }
 
 int ObMicroBlockHandleMgr::prefetch_multi_data_block(
+    ObTableAccessContext *access_ctx,
     const ObMicroIndexInfo *micro_data_infos,
     ObMicroBlockDataHandle *micro_data_handles,
     const int64_t max_micro_handle_cnt,
@@ -493,6 +497,7 @@ int ObMicroBlockHandleMgr::prefetch_multi_data_block(
           micro_handle.io_handle_ = macro_handle;
           micro_handle.allocator_ = &block_io_allocator_;
           cache_mem_ctrl_.update_data_block_io_size(index_info.get_block_size(), true, true);
+          REALTIME_MONITOR_ADD_IO_READ_BYTES(access_ctx, index_info.get_block_size());
         }
       }
     } else if (OB_FAIL(data_block_cache_->prefetch_multi_block(
@@ -518,6 +523,7 @@ int ObMicroBlockHandleMgr::prefetch_multi_data_block(
       if (OB_SUCC(ret)) {
         cache_mem_ctrl_.add_hold_size(multi_io_params.get_data_cache_size());
         cache_mem_ctrl_.update_data_block_io_size(multi_io_params.get_data_cache_size(), true, true);
+        REALTIME_MONITOR_ADD_IO_READ_BYTES(access_ctx, multi_io_params.get_data_cache_size());
       }
     }
   }

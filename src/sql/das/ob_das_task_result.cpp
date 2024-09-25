@@ -43,6 +43,10 @@ ObDASTCB::ObDASTCB()
     vec_stored_row_arr_(NULL),
     vec_row_store_(),
     vec_result_iter_(),
+    io_read_bytes_(0),
+    ssstore_read_bytes_(0),
+    ssstore_read_row_cnt_(0),
+    memstore_read_row_cnt_(0),
     tcb_lock_()
 {
 }
@@ -130,7 +134,7 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
                                          common::ObNewRowIterator &result,
                                          int64_t read_rows,
                                          const ObDASScanCtDef *scan_ctdef,
-                                         const ObDASScanRtDef * scan_rtdef,
+                                         ObDASScanRtDef *scan_rtdef,
                                          ObDASScanOp & scan_op)
 {
   int ret = OB_SUCCESS;
@@ -280,6 +284,13 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
         }
       }
       if (OB_SUCC(ret)) {
+        if (OB_NOT_NULL(scan_rtdef->tsc_monitor_info_)) {
+          tcb->io_read_bytes_ += *scan_rtdef->tsc_monitor_info_->io_read_bytes_;
+          tcb->ssstore_read_bytes_ += *scan_rtdef->tsc_monitor_info_->ssstore_read_bytes_;
+          tcb->ssstore_read_row_cnt_ += *scan_rtdef->tsc_monitor_info_->ssstore_read_row_cnt_;
+          tcb->memstore_read_row_cnt_ += *scan_rtdef->tsc_monitor_info_->memstore_read_row_cnt_;
+          scan_rtdef->tsc_monitor_info_->reset_stat();
+        }
         if (OB_FAIL(tcb_map_.insert_and_get(tcb_info, tcb))) {
           LOG_WARN("insert das tcb failed", KR(ret));
         } else {
@@ -449,7 +460,11 @@ int ObDASTaskResultMgr::erase_task_result(int64_t task_id)
   return ret;
 }
 
-int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res)
+int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
+                                             int64_t &io_read_bytes,
+                                             int64_t &ssstore_read_bytes,
+                                             int64_t &ssstore_read_row_cnt,
+                                             int64_t &memstore_read_row_cnt)
 {
   int ret = OB_SUCCESS;
   bool has_more = false;
@@ -481,6 +496,12 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res)
         OZ (fetch_result_by_normal(tcb, res, has_more));
       }
       if (OB_SUCC(ret)) {
+        if (tcb->packet_cnt_ == 0) {
+          io_read_bytes += tcb->io_read_bytes_;
+          ssstore_read_bytes += tcb->ssstore_read_bytes_;
+          ssstore_read_row_cnt += tcb->ssstore_read_row_cnt_;
+          memstore_read_row_cnt += tcb->memstore_read_row_cnt_;
+        }
         tcb->packet_cnt_++;
       }
       int save_ret = ret;

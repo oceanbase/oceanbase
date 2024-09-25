@@ -705,6 +705,7 @@ TX_STATE_VERSION	bigint(20) unsigned	NO		NULL
 FLT_TRACE_ID	varchar(1024)	NO		NULL	
 PL_TRACE_ID	varchar(128)	YES		NULL	
 PLSQL_EXEC_TIME	bigint(20)	NO		NULL	
+FORMAT_SQL_ID	varchar(32)	NO		NULL	
 STMT_TYPE	varchar(128)	YES		NULL	
 TOTAL_MEMSTORE_READ_ROW_COUNT	bigint(20)	NO		NULL	
 TOTAL_SSSTORE_READ_ROW_COUNT	bigint(20)	NO		NULL	
@@ -1024,6 +1025,7 @@ TX_STATE_VERSION	bigint(20) unsigned	NO
 FLT_TRACE_ID	varchar(1024)	NO			
 PL_TRACE_ID	varchar(128)	NO			
 PLSQL_EXEC_TIME	bigint(20)	NO			
+FORMAT_SQL_ID	varchar(32)	NO			
 STMT_TYPE	varchar(128)	NO			
 TOTAL_MEMSTORE_READ_ROW_COUNT	bigint(20)	NO			
 TOTAL_SSSTORE_READ_ROW_COUNT	bigint(20)	NO			
@@ -8480,6 +8482,24 @@ CFS_PERIOD_US	bigint(20)	NO
 SHARES	bigint(20)	NO			
 CGROUP_PATH	varchar(256)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_CGROUP_CONFIG limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_FORMAT_OUTLINES;
+Field	Type	Null	Key	Default	Extra
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+TENANT_ID	bigint(20)	NO		NULL	
+DATABASE_ID	bigint(20)	NO		NULL	
+OUTLINE_ID	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+OUTLINE_NAME	varchar(128)	NO			
+VISIBLE_SIGNATURE	longtext	NO		NULL	
+FORMAT_SQL_TEXT	longtext	YES		NULL	
+OUTLINE_TARGET	longtext	NO		NULL	
+OUTLINE_SQL	longtext	NO		NULL	
+FORMAT_SQL_ID	varbinary(32)	NO			
+OUTLINE_CONTENT	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_FORMAT_OUTLINES limit 1);
 cnt
 1
 desc mysql.procs_priv;

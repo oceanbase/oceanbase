@@ -122,12 +122,14 @@ enum DistAlgo
   DIST_NONE_PARTITION = (1UL << 9),
   DIST_NONE_ALL = (1UL << 10), // all side is allowed for EXPRESSION/DAS
   DIST_ALL_NONE = (1UL << 11),
-  DIST_PARTITION_WISE = (1UL << 12), // pure partition wise
-  DIST_EXT_PARTITION_WISE = (1UL << 13), // extended partition wise
-  DIST_MAX_JOIN_METHOD = (1UL << 14), // represents max join method
+  DIST_RANDOM_ALL = (1UL << 12), //Only used in NLJ so far
+  DIST_HASH_ALL = (1UL << 13),  //Only used in SPF so far
+  DIST_PARTITION_WISE = (1UL << 14), // pure partition wise
+  DIST_EXT_PARTITION_WISE = (1UL << 15), // extended partition wise
+  DIST_MAX_JOIN_METHOD = (1UL << 16), // represents max join method
   // only for set operator
-  DIST_SET_RANDOM = (1UL << 15),
-  DIST_SET_PARTITION_WISE = (1UL << 16) // non-strict set pw with phy_table_location_info_
+  DIST_SET_RANDOM = (1UL << 17),
+  DIST_SET_PARTITION_WISE = (1UL << 18) // non-strict set pw with phy_table_location_info_
 };
 
 inline const ObString &ob_dist_algo_str(DistAlgo algo)
@@ -147,6 +149,8 @@ inline const ObString &ob_dist_algo_str(DistAlgo algo)
     "NONE PARTITION",
     "NONE ALL",
     "ALL NONE",
+    "RANDOM ALL",
+    "HASH ALL",
     "PARTITION WISE",
     "EXTEND PARTITION WISE",
     "UNKNOWN ALGO",
@@ -198,6 +202,10 @@ inline DistAlgo get_dist_algo(int64_t method)
     return DIST_NONE_ALL;
   } else if (method & DIST_ALL_NONE) {
     return DIST_ALL_NONE;
+  } else if (method & DIST_RANDOM_ALL) {
+    return DIST_RANDOM_ALL;
+  } else if (method & DIST_HASH_ALL) {
+    return DIST_HASH_ALL;
   } else if (method & DIST_SET_RANDOM) {
     return DIST_SET_RANDOM;
   } else {

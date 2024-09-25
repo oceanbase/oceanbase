@@ -14,11 +14,15 @@
 
 #include "rpc/obmysql/packet/ompk_handshake.h"
 
+ObString __attribute__((weak)) get_display_mysql_version_cfg()
+{
+  return ObString((DEFAULT_MYSQL_VERSION_CSTR)); // default server version string for mysql mode
+}
+
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 
 //FIXME::here we use hard code to avoid security flaw from AliYun. In fact, ob do not use any mysql code
-const char *OMPKHandshake::SERVER_VERSION_STR = "5.7.25";
 const char *OMPKHandshake::AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
 const char *OMPKHandshake::AUTH_PLUGIN_MYSQL_OLD_PASSWORD = "mysql_old_password";
 const char *OMPKHandshake::AUTH_PLUGIN_MYSQL_CLEAR_PASSWORD = "mysql_clear_password";
@@ -29,7 +33,7 @@ OMPKHandshake::OMPKHandshake()
       terminated_(0)
 {
   protocol_version_ = 10; // Protocol::HandshakeV10
-  server_version_ = ObString::make_string(SERVER_VERSION_STR);
+  server_version_ = get_display_mysql_version_cfg();
   thread_id_ = 1;
   memset(scramble_buff_, 'a', 8);
   filler_ = 0;
@@ -182,8 +186,7 @@ int OMPKHandshake::decode()
     ObMySQLUtil::get_uint1(pos, protocol_version_);
 
     int64_t sv_len = strlen(pos);
-    server_version_.assign_ptr(SERVER_VERSION_STR,
-        static_cast<ObString::obstr_size_t>(strlen(SERVER_VERSION_STR)));
+    server_version_ = get_display_mysql_version_cfg();
     pos += sv_len + 1;
 
     ObMySQLUtil::get_uint4(pos, thread_id_);

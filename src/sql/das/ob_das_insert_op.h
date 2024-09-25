@@ -119,7 +119,7 @@ public:
   virtual int reuse() override;
   virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
   virtual void reset();
-  virtual int link_extra_result(ObDASExtraData &extra_result) override;
+  virtual int link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op) override;
   int init_result_newrow_iter(const ObjMetaFixedArray *output_types);
   ObDASWriteBuffer &get_result_buffer() { return result_buffer_; }
   int64_t get_affected_rows() const { return affected_rows_; }

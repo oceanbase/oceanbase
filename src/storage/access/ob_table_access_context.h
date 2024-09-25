@@ -38,26 +38,18 @@ class ObStoreRowIterPool;
 class ObBlockRowStore;
 class ObCGIterParamPool;
 
-struct ObRowStat
-{
-  int64_t base_row_count_;
-  int64_t inc_row_count_;
-  int64_t merge_row_count_;
-  int64_t result_row_count_;
-  int64_t filt_del_count_;
+#define REALTIME_MONITOR_ADD_IO_READ_BYTES(CTX, SIZE) \
+  if (OB_NOT_NULL(CTX)) CTX->add_io_read_bytes(SIZE)  \
 
-  ObRowStat() : base_row_count_(0), inc_row_count_(0), merge_row_count_(0), result_row_count_(0), filt_del_count_(0) {}
+#define REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(CTX, SIZE) \
+  if (OB_NOT_NULL(CTX)) CTX->add_ssstore_read_bytes(SIZE)
 
-  void reset()
-  {
-    base_row_count_ = 0;
-    inc_row_count_ = 0;
-    merge_row_count_ = 0;
-    result_row_count_ = 0;
-    filt_del_count_ = 0;
-  }
-  TO_STRING_KV(K_(base_row_count), K_(inc_row_count), K_(merge_row_count), K_(result_row_count), K_(filt_del_count));
-};
+#define REALTIME_MONITOR_INC_READ_ROW_CNT(ITER, CTX) \
+  if (OB_LIKELY(nullptr != ITER && nullptr != CTX))  \
+    ITER->is_sstable_iter() ? CTX->add_ssstore_read_row_cnt() : CTX->add_memstore_read_row_cnt();
+
+#define REALTIME_MONITOR_ADD_READ_ROW_CNT(CTX, COUNT) \
+  if (OB_NOT_NULL(CTX)) CTX->add_ssstore_read_row_cnt(COUNT);
 
 struct ObTableScanStoreStat
 {
@@ -204,6 +196,31 @@ struct ObTableAccessContext
   int alloc_iter_pool(const bool use_column_store);
   void inc_micro_access_cnt();
   int init_scan_allocator(ObTableScanParam &scan_param);
+  // update realtime monitor info
+  OB_INLINE void add_io_read_bytes(const int64_t bytes)
+  {
+    if (OB_LIKELY(nullptr != table_scan_stat_ && nullptr != table_scan_stat_->tsc_monitor_info_)) {
+      *table_scan_stat_->tsc_monitor_info_->io_read_bytes_ += bytes;
+    }
+  }
+  OB_INLINE void add_ssstore_read_bytes(const int64_t bytes)
+  {
+    if (OB_LIKELY(nullptr != table_scan_stat_ && nullptr != table_scan_stat_->tsc_monitor_info_)) {
+      *table_scan_stat_->tsc_monitor_info_->ssstore_read_bytes_ += bytes;
+    }
+  }
+  OB_INLINE void add_ssstore_read_row_cnt(const int64_t count = 1)
+  {
+    if (OB_LIKELY(nullptr != table_scan_stat_ && nullptr != table_scan_stat_->tsc_monitor_info_)) {
+      *table_scan_stat_->tsc_monitor_info_->ssstore_read_row_cnt_ += count;
+    }
+  }
+  OB_INLINE void add_memstore_read_row_cnt(const int64_t count = 1)
+  {
+    if (OB_LIKELY(nullptr != table_scan_stat_ && nullptr != table_scan_stat_->tsc_monitor_info_)) {
+      *table_scan_stat_->tsc_monitor_info_->memstore_read_row_cnt_ += count;
+    }
+  }
   TO_STRING_KV(
     K_(is_inited),
     K_(use_fuse_row_cache),

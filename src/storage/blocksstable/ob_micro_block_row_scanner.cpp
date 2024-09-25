@@ -279,6 +279,7 @@ int ObIMicroBlockRowScanner::get_next_rows()
     if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
       context_->table_store_stat_.logical_read_cnt_ += (current_ - prev_current);
       context_->table_store_stat_.physical_read_cnt_ += (current_ - prev_current);
+      REALTIME_MONITOR_ADD_READ_ROW_CNT(context_, current_ - prev_current);
     }
   }
   return ret;

@@ -405,6 +405,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     LOG_DEBUG("last micro block handle hits", K(is_data), K(index_block_info),
                                               K(last_micro_block_handle_), K(micro_handle));
   } else if (OB_FAIL(access_ctx_->micro_block_handle_mgr_.get_micro_block_handle(
+                         access_ctx_,
                          index_block_info,
                          is_data,
                          !is_data || need_submit_io, /* need submit io */
@@ -643,6 +644,7 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Fail to prefetch, unexpected read handle", K(ret), K(read_handle), KPC(this));
         } else if (OB_FAIL(access_ctx_->micro_block_handle_mgr_.get_micro_block_handle(
+                    access_ctx_,
                     cur_index_info,
                     cur_index_info.is_data_block(),
                     false, /* need submit io */
@@ -1759,6 +1761,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
   int ret = OB_SUCCESS;
   if (multi_io_params_.count() > 0) {
     if (OB_FAIL(access_ctx_->micro_block_handle_mgr_.prefetch_multi_data_block(
+                access_ctx_,
                 micro_data_infos_,
                 micro_data_handles_,
                 max_micro_handle_cnt_,

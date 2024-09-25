@@ -722,6 +722,7 @@ public:
   bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
   bool disable_auto_memory_mgr_;
+
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 public:

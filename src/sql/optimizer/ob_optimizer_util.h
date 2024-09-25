@@ -78,6 +78,7 @@ struct SubPlanInfo;
 class OptSelectivityCtx;
 class Path;
 class ObSharedExprResolver;
+class ObTableMetaInfo;
 class ObOptimizerUtil
 {
 public:
@@ -1603,6 +1604,12 @@ public:
                                     const ObIArray<TableItem*> &table_items,
                                     const ObRawExpr *expr,
                                     bool &is_filter);
+
+  static int compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerContext *opt_ctx,
+                                                           uint64_t ref_table_id,
+                                                           const ObTableMetaInfo *esti_table_meta_info,
+                                                           int64_t compute_parallel,
+                                                           int64_t &px_expected_work_count);
   template<typename T>
   static int choose_random_members(const uint64_t seed,
                                    const ObIArray<T> &input_array,

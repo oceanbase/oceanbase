@@ -618,6 +618,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "disabled_storage_engines",
   "disconnect_on_expired_password",
   "div_precision_increment",
+  "enable_sql_plan_monitor",
   "enforce_gtid_consistency",
   "eq_range_index_dive_limit",
   "error_count",
@@ -1229,6 +1230,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_DISABLED_STORAGE_ENGINES,
   SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD,
   SYS_VAR_DIV_PRECISION_INCREMENT,
+  SYS_VAR_ENABLE_SQL_PLAN_MONITOR,
   SYS_VAR_ENFORCE_GTID_CONSISTENCY,
   SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT,
   SYS_VAR_ERROR_COUNT,
@@ -2149,6 +2151,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_sync_debug",
   "default_collation_for_utf8mb4",
   "_enable_old_charset_aggregation",
+  "enable_sql_plan_monitor",
   "insert_id",
   "join_buffer_size",
   "max_join_size",
@@ -2961,6 +2964,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbSyncDebug)
         + sizeof(ObSysVarDefaultCollationForUtf8mb4)
         + sizeof(ObSysVarEnableOldCharsetAggregation)
+        + sizeof(ObSysVarEnableSqlPlanMonitor)
         + sizeof(ObSysVarInsertId)
         + sizeof(ObSysVarJoinBufferSize)
         + sizeof(ObSysVarMaxJoinSize)
@@ -6863,6 +6867,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableOldCharsetAggregation));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableSqlPlanMonitor())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableSqlPlanMonitor", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ENABLE_SQL_PLAN_MONITOR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableSqlPlanMonitor));
       }
     }
     if (OB_SUCC(ret)) {
@@ -13166,6 +13179,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOldCharsetAggregation())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarEnableOldCharsetAggregation", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableSqlPlanMonitor)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableSqlPlanMonitor)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableSqlPlanMonitor())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableSqlPlanMonitor", K(ret));
       }
       break;
     }

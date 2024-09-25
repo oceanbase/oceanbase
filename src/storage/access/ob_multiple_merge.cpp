@@ -55,7 +55,6 @@ ObMultipleMerge::ObMultipleMerge()
       curr_scan_index_(0),
       curr_rowkey_(),
       nop_pos_(),
-      row_stat_(),
       scan_cnt_(0),
       need_padding_(false),
       need_fill_default_(false),
@@ -153,7 +152,6 @@ int ObMultipleMerge::init(
     iters_.reuse();
     access_param_ = &param;
     access_ctx_ = &context;
-    row_stat_.reset();
     cur_row_.count_ = access_param_->iter_param_.out_cols_project_->count();
     scan_state_ = ScanState::NONE;
     read_memtable_only_ = false;
@@ -900,7 +898,6 @@ void ObMultipleMerge::reset()
 void ObMultipleMerge::reuse()
 {
   reuse_iter_array();
-  row_stat_.reset();
   range_idx_delta_ = 0;
   unprojected_row_.row_flag_.reset();
   if (nullptr != block_row_store_) {
@@ -946,7 +943,6 @@ void ObMultipleMerge::inner_reset()
   access_param_ = NULL;
   access_ctx_ = NULL;
   nop_pos_.reset();
-  row_stat_.reset();
   scan_cnt_ = 0;
   need_padding_ = false;
   need_fill_default_ = false;

@@ -2874,6 +2874,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_compat_version(uint_val));
       break;
     }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_enable_sql_plan_monitor(int_val != 0));
+      break;
+    }
     case SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -3369,6 +3375,11 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
             get_runtime_filter_type(str.ptr(), str.length());
         sys_vars_cache.set_base_runtime_filter_type(run_time_filter_type);
       }
+    }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_enable_sql_plan_monitor(int_val != 0));
       break;
     }
     default: {
