@@ -5654,10 +5654,8 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             join_filter_create->set_is_use_filter_shuffle(true);
             join_filter_use->set_is_use_filter_shuffle(true);
           }
-          if ((is_partition_wise_ || DistAlgo::DIST_PARTITION_NONE == join_dist_algo) && !right_has_exchange) {
-            join_filter_create->set_is_non_shared_join_filter();
-            join_filter_use->set_is_non_shared_join_filter();
-          } else {
+
+          if ((DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) || right_has_exchange) {
             join_filter_create->set_is_shared_join_filter();
             join_filter_use->set_is_shared_join_filter();
             int64_t max_wait_time_ms = 0;
@@ -5666,6 +5664,9 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             } else {
               join_filter_use->set_rf_max_wait_time(max_wait_time_ms);
             }
+          } else {
+            join_filter_create->set_is_non_shared_join_filter();
+            join_filter_use->set_is_non_shared_join_filter();
           }
 
           if (OB_FAIL(ret)) {
