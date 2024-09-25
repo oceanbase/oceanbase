@@ -244,6 +244,27 @@ enum class ProbeAction
  PROBE_STACK,
 };
 
+class ObSyncLogGuard
+{
+public:
+  ObSyncLogGuard()
+    : last_(enable_tl_sync_log())
+  {
+    enable_tl_sync_log() = true;
+  }
+  ~ObSyncLogGuard()
+  {
+    enable_tl_sync_log() = last_;
+  }
+  static bool &enable_tl_sync_log()
+  {
+    static __thread bool tl_enable = false;
+    return tl_enable;
+  }
+private:
+  const bool last_;
+};
+
 //@class ObLogger
 //@brief main class of logging facilities. Provide base function, for example log_message(),
 //parse_set().
@@ -825,8 +846,7 @@ private:
   void free_log_item(ObPLogItem *log_item);
   void inc_dropped_log_count(const int32_t level);
   template<typename Function>
-  void do_log_message(const bool is_async,
-                      const char *mod_name,
+  void do_log_message(const char *mod_name,
                       const char *dba_event,
                       int32_t level,
                       const char *file,
@@ -1071,7 +1091,7 @@ void ObLogger::log_it(const char *mod_name,
           }
         }
       } else {
-        do_log_message(is_async_log_used(), mod_name, dba_event, level, file, line, function, true,
+        do_log_message(mod_name, dba_event, level, file, line, function, true,
                        location_hash_val, errcode, log_data_func);
       }
     }
@@ -1247,8 +1267,7 @@ inline void ObLogger::check_probe(
 }
 
 template<typename Function>
-inline void ObLogger::do_log_message(const bool is_async,
-                                     const char *mod_name,
+inline void ObLogger::do_log_message(const char *mod_name,
                                      const char *dba_event,
                                      int32_t level,
                                      const char *file,
@@ -1285,11 +1304,19 @@ inline void ObLogger::do_log_message(const bool is_async,
   } else {
     ++curr_logging_seq_;
     // format to local buf
+    const int BUF_LEN = 512;
+    char sync_log_buf[BUF_LEN];
     ObPLogItem *log_item = nullptr;
-    if (OB_FAIL(alloc_log_item(level, LOG_ITEM_SIZE + MAX_LOG_SIZE, log_item))) {
+    if (ObSyncLogGuard::enable_tl_sync_log()) {
+      log_item = new (sync_log_buf) ObPLogItem();
+      STATIC_ASSERT(BUF_LEN > LOG_ITEM_SIZE, "BUF_LEN should be larger than LOG_ITEM_SIZE!");
+      log_item->set_buf_size(BUF_LEN - LOG_ITEM_SIZE);
+    } else if (OB_FAIL(alloc_log_item(level, LOG_ITEM_SIZE + MAX_LOG_SIZE, log_item))) {
       LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
     } else {
       log_item->set_buf_size(MAX_LOG_SIZE);
+    }
+    if (OB_NOT_NULL(log_item)) {
       log_item->set_log_level(level);
       log_item->set_timestamp(start_ts);
       log_item->set_tl_type(tl_type_);
@@ -1333,7 +1360,7 @@ inline void ObLogger::do_log_message(const bool is_async,
         }
       }
       BASIC_TIME_GUARD_CLICK("FORMAT_END");
-
+      const bool is_async = !ObSyncLogGuard::enable_tl_sync_log() && is_async_log_used();
       if (OB_SUCC(ret)) {
         limited_left_log_size_ = std::max(0L, log_item->get_data_len() - NORMAL_LOG_SIZE);
         if (is_async) {
@@ -1354,23 +1381,16 @@ inline void ObLogger::do_log_message(const bool is_async,
         }
         check_reset_force_allows();
       } /* not allow */
-
       // free log_item if necessary
-      bool need_free_item = false;
-      if (OB_FAIL(ret)) {
-        inc_dropped_log_count(level);
-        need_free_item = true;
-      } else { // if OB_SUCCESS == ret
-        if (!is_async) {
-          need_free_item = true;
-        }
-      }
-      if (need_free_item) {
-        if ((char*)log_item != nullptr) {
-          free_log_item(log_item);
-        }
+      if (NULL == log_item || sync_log_buf == (char*)log_item) {
+        // do-nothing
+      } else if (OB_FAIL(ret) || !is_async) {
+        free_log_item(log_item);
         log_item = nullptr;
         BASIC_TIME_GUARD_CLICK("FREE_END");
+      }
+      if (OB_FAIL(ret)) {
+        inc_dropped_log_count(level);
       }
     }
   }

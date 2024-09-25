@@ -474,6 +474,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
                                            T &allocator)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
+  ObSyncLogGuard guard;
   void *nptr = NULL;
   if (!attr.label_.is_valid()) {
     LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
