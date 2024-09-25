@@ -509,7 +509,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
       } else if (index_count > 0) {
         // do nothing
         LOG_INFO("memdata sync snapshot index has data", K(index_count), K(ls_id), K(index_type), KPC(adapter));
-      } else if (OB_FAIL(index_seri.deserialize(snap_memdata->index_, param, cb))) {
+      } else if (OB_FAIL(index_seri.deserialize(snap_memdata->index_, param, cb, MTL_ID()))) {
         LOG_WARN("serialize index failed.", K(ret));
       } else if (OB_FAIL(obvectorutil::get_index_number(snap_memdata->index_, index_count))) {
         ret = OB_ERR_VSAG_RETURN_ERROR;
