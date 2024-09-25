@@ -708,12 +708,15 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
     LOG_ERROR("stored col cnt in curr schema is less than old major sstable", K(ret),
       "col_cnt_in_sstable", tablet_handle_.get_obj()->get_last_major_column_count(),
       "col_cnt_in_schema", full_stored_col_cnt, KPC(this));
+  } else if (medium_info.data_version_ >= DATA_VERSION_4_3_3_0) {
+    // do not check schema changed
+    medium_info.is_schema_changed_ = false;
   } else if (tablet_handle_.get_obj()->get_last_major_column_count() != full_stored_col_cnt
     || tablet_handle_.get_obj()->get_last_major_compressor_type() != schema.get_compressor_type()
     || (ObRowStoreType::DUMMY_ROW_STORE != tablet_handle_.get_obj()->get_last_major_latest_row_store_type()
       && tablet_handle_.get_obj()->get_last_major_latest_row_store_type() != schema.row_store_type_)) {
     medium_info.is_schema_changed_ = true;
-    LOG_INFO("schema changed", KPC(this), K(schema),
+    LOG_INFO("schema changed", KPC(this), K(schema), K(full_stored_col_cnt),
       "col_cnt_in_sstable", tablet_handle_.get_obj()->get_last_major_column_count(),
       "compressor_type_in_sstable", tablet_handle_.get_obj()->get_last_major_compressor_type(),
       "latest_row_store_type_in_sstable", tablet_handle_.get_obj()->get_last_major_latest_row_store_type());
