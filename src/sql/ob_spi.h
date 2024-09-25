@@ -816,6 +816,7 @@ public:
   static int spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *code);
 
   static int spi_check_early_exit(pl::ObPLExecCtx *ctx);
+  static int spi_check_timeout(sql::ObExecContext &exec_ctx);
 
   static int spi_check_exception_handler_legal(pl::ObPLExecCtx *ctx, int64_t code);
 
@@ -915,7 +916,8 @@ public:
                                 uint64_t package_id,
                                 uint64_t proc_id,
                                 ParamStore &params,
-                                ObObj *result);
+                                ObObj *result,
+                                const ObRoutineInfo *dblink_routine_info);
   static int spi_execute_dblink(ObExecContext &exec_ctx,
                                 ObIAllocator &allocator,
                                 const pl::ObPLDbLinkInfo *dblink_info,
