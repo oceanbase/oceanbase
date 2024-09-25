@@ -32804,18 +32804,25 @@ int ObDDLService::drop_routine(const ObRoutineInfo &routine_info,
           LOG_WARN("sys variable schema is null", KR(ret));
         } else if (OB_FAIL(sys_var->get_value(&alloc, NULL, val))) {
           LOG_WARN("fail to get charset var value", K(ret));
-        } else {
-          bool revoke_priv = val.get_bool();
-          if (revoke_priv) {
-            int64_t db_id = routine_info.get_database_id();
-            const ObDatabaseSchema* database_schema = NULL;
-            if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
-              LOG_WARN("get database schema failed", K(ret));
-            } else if (OB_ISNULL(database_schema)) {
+        } else if (val.get_bool()) {
+          int64_t db_id = routine_info.get_database_id();
+          const ObDatabaseSchema* database_schema = NULL;
+          ObSEArray<const ObUserInfo*, 10> user_infos;
+          if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
+            LOG_WARN("get database schema failed", K(ret));
+          } else if (OB_ISNULL(database_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("database schema is null", K(ret));
+          } else if (OB_FAIL(schema_guard.get_user_infos_with_tenant_id(tenant_id, user_infos))) {
+            LOG_WARN("fail to get all user in tenant", K(ret));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < user_infos.count(); ++i) {
+            const ObUserInfo *user_info = user_infos.at(i);
+            if (OB_ISNULL(user_info)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("database schema is null", K(ret));
+              LOG_WARN("unexpected null", K(ret));
             } else {
-              ObRoutinePrivSortKey routine_key(tenant_id, routine_info.get_owner_id(),
+              ObRoutinePrivSortKey routine_key(tenant_id, user_info->get_user_id(),
                                             database_schema->get_database_name_str(),
                                             routine_info.get_routine_name(), routine_info.is_procedure() ?
                                             ObRoutineType::ROUTINE_PROCEDURE_TYPE : ObRoutineType::ROUTINE_FUNCTION_TYPE);
