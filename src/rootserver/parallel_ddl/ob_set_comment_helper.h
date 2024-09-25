@@ -40,19 +40,22 @@ public:
     const obrpc::ObSetCommentArg &arg,
     obrpc::ObParallelDDLRes &res);
   virtual ~ObSetCommentHelper();
-  virtual int execute() override;
 private:
   virtual int check_inner_stat_() override;
-  int lock_objects_();
+  virtual int lock_objects_() override;
   int check_database_legitimacy_();
-  int generate_schemas_();
+  virtual int generate_schemas_() override;
   virtual int calc_schema_version_cnt_() override;
-  int alter_schema_();
+  virtual int operate_schemas_() override;
   int lock_databases_by_obj_name_();
   int lock_objects_by_id_();
   int lock_objects_by_name_();
   int lock_for_common_ddl_();
   int check_table_legitimacy_();
+  virtual int init_();
+  virtual int construct_and_adjust_result_(int &return_ret) override;
+  virtual int operation_before_commit_() override;
+  virtual int clean_on_fail_commit_() override;
 private:
   const obrpc::ObSetCommentArg &arg_;
   obrpc::ObParallelDDLRes &res_;

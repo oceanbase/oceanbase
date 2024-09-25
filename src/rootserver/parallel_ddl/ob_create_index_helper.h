@@ -40,9 +40,9 @@ public:
     const obrpc::ObCreateIndexArg &arg,
     obrpc::ObAlterTableRes &res);
   virtual ~ObCreateIndexHelper();
-  virtual int execute() override;
+
 private:
-  int lock_objects_();
+  virtual int lock_objects_() override;
   int lock_database_by_obj_name_();
   int lock_objects_by_name_();
   int check_database_legitimacy_();
@@ -50,13 +50,19 @@ private:
   int check_table_legitimacy_();
   int generate_index_schema_();
   int calc_schema_version_cnt_();
-  int create_index_();
+  virtual int operate_schemas_() override;
   int is_local_generate_schema_(bool &is_local_generate);
   int create_table_();
   int create_tablets_();
   int add_index_name_to_cache_();
   int check_fk_related_table_ddl_(const share::schema::ObTableSchema &data_table_schema,
                                   const share::ObDDLType &ddl_type);
+  virtual int init_() override;
+  virtual int generate_schemas_() override;
+  virtual int clean_on_fail_commit_() override;
+  virtual int operation_before_commit_() override;
+  virtual int construct_and_adjust_result_(int &return_ret) override;
+
 private:
   const obrpc::ObCreateIndexArg &arg_;
   obrpc::ObCreateIndexArg *new_arg_;

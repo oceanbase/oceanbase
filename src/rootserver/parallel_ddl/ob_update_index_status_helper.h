@@ -39,13 +39,16 @@ public:
     const obrpc::ObUpdateIndexStatusArg &arg,
     obrpc::ObParallelDDLRes &res);
   virtual ~ObUpdateIndexStatusHelper();
-  virtual int execute() override;
 private:
-  int lock_objects_();
-  int check_and_set_schema_();
+  virtual int lock_objects_() override;
+  virtual int generate_schemas_() override;
   int calc_schema_version_cnt_();
-  int update_status_();
+  virtual int operate_schemas_() override;
   int lock_database_by_obj_name_();
+  virtual int init_() override;
+  virtual int operation_before_commit_() override;
+  virtual int clean_on_fail_commit_() override;
+  virtual int construct_and_adjust_result_(int &return_ret) override;
 private:
   const obrpc::ObUpdateIndexStatusArg &arg_;
   obrpc::ObParallelDDLRes &res_;

@@ -31,7 +31,7 @@ ObCreateViewHelper::ObCreateViewHelper(
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
     obrpc::ObCreateTableRes &res)
-  : ObDDLHelper(schema_service, tenant_id),
+  : ObDDLHelper(schema_service, tenant_id, "[parallel create view]"),
     arg_(arg),
     res_(res),
     new_table_schema_(nullptr),
@@ -53,64 +53,8 @@ ObCreateViewHelper::~ObCreateViewHelper()
 {
 }
 
-int ObCreateViewHelper::execute()
-{
-  RS_TRACE(create_view_begin);
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(pre_check_())) {
-    LOG_WARN("fail to pre check()", KR(ret));
-  } else if (OB_FAIL(start_ddl_trans_())) {
-    LOG_WARN("fail to start ddl trans", KR(ret));
-  } else if (OB_FAIL(lock_objects_())) {
-    LOG_WARN("fail to lock objects", KR(ret));
-  } else if (OB_FAIL(generate_schemas_())) {
-    LOG_WARN("fail to generate schemas", KR(ret));
-  } else if (OB_FAIL(calc_schema_version_cnt_())) {
-    LOG_WARN("fail to calc schema version cnt", KR(ret));
-  } else if (OB_FAIL(gen_task_id_and_schema_versions_())) {
-    LOG_WARN("fail to gen task id and schema versions", KR(ret));
-  } else if (OB_FAIL(drop_schemas_())) {
-    LOG_WARN("fail to drop schemas", KR(ret));
-  } else if (OB_FAIL(create_schemas_())) {
-    LOG_WARN("fail create schemas", KR(ret));
-  } else if (OB_FAIL(serialize_inc_schema_dict_())) {
-    LOG_WARN("fail to serialize inc schema dict", KR(ret));
-  } else if (OB_FAIL(wait_ddl_trans_())) {
-    LOG_WARN("fail to wait ddl trans", KR(ret));
-  }
-  if (OB_FAIL(end_ddl_trans_(ret))) { // won't overwrite ret
-    LOG_WARN("fail to end ddl trans", KR(ret));
-  }
-  if (OB_SUCC(ret)) {
-    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
-    int64_t last_schema_version = OB_INVALID_VERSION;
-    int64_t end_schema_version = OB_INVALID_VERSION;
-    if (OB_ISNULL(new_table_schema_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("new table schema is null", KR(ret));
-    } else if (OB_ISNULL(tsi_generator)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tsi schema version generator is null", KR(ret));
-    } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
-      LOG_WARN("fail to get current version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_FAIL(tsi_generator->get_end_version(end_schema_version))) {
-      LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_UNLIKELY(last_schema_version != end_schema_version)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("too much schema versions may be allocated", KR(ret), KPC(tsi_generator));
-    } else {
-      res_.table_id_ = new_table_schema_->get_table_id();
-      res_.schema_version_ = last_schema_version;
-    }
-  }
-  RS_TRACE(create_view_end);
-  FORCE_PRINT_TRACE(THE_RS_TRACE, "[parallel create view]");
-  return ret;
-}
 
-int ObCreateViewHelper::pre_check_()
+int ObCreateViewHelper::init_()
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = OB_INVALID_VERSION;
@@ -1131,6 +1075,50 @@ int ObCreateViewHelper::restore_obj_privs_()
           LOG_WARN("fail to grant table ora only", KR(ret), K(no_option_priv));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObCreateViewHelper::operate_schemas_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(drop_schemas_())) {
+    LOG_WARN("fail to drop schemas", KR(ret));
+  } else if (OB_FAIL(create_schemas_())) {
+    LOG_WARN("fail create schemas", KR(ret));
+  }
+  return ret;
+}
+int ObCreateViewHelper::clean_on_fail_commit_()
+{
+  // do nothing
+  return OB_SUCCESS;
+}
+int ObCreateViewHelper::operation_before_commit_()
+{
+  // do nothing
+  return OB_SUCCESS;
+}
+
+int ObCreateViewHelper::construct_and_adjust_result_(int &return_ret)
+{
+  int ret = return_ret;
+  if (FAILEDx(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else {
+    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+    if (OB_ISNULL(tsi_generator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tsi schema version generator is null", KR(ret));
+    } else if (OB_ISNULL(new_table_schema_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("new table schema is null", KR(ret));
+    } else {
+      tsi_generator->get_current_version(res_.schema_version_);
+      res_.table_id_ = new_table_schema_->get_table_id();
     }
   }
   return ret;

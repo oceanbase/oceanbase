@@ -40,15 +40,14 @@ public:
     obrpc::ObCreateTableRes &res);
   virtual ~ObCreateViewHelper();
 
-  virtual int execute() override;
 private:
-  int pre_check_();
-  int lock_objects_();
+  int init_();
+  virtual int lock_objects_() override;
   int lock_and_check_database_();
   int lock_and_check_view_name_();
   int lock_object_id_();
   int check_parallel_ddl_conflict_();
-  int generate_schemas_();
+  virtual int generate_schemas_() override;
   virtual int calc_schema_version_cnt_() override;
   int drop_schemas_();
   int drop_rls_schemas_();
@@ -68,6 +67,10 @@ private:
                                 const std::pair<uint64_t, share::schema::ObObjectType> &b)
                                 { return a.first > b.first
                                          || (a.first == b.first && a.second > b.second); }
+  virtual int operate_schemas_() override;
+  virtual int clean_on_fail_commit_() override;
+  virtual int operation_before_commit_() override;
+  virtual int construct_and_adjust_result_(int &return_ret) override;
 private:
   const obrpc::ObCreateTableArg &arg_;
   obrpc::ObCreateTableRes &res_;
