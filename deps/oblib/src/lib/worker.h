@@ -331,7 +331,30 @@ private:
 };
 #endif
 
-// used to check compatibility mode.
+struct ObExtraRpcHeader {
+  OB_UNIS_VERSION(1);
+public:
+  ObExtraRpcHeader()
+      : src_addr_()
+  {}
+  ObExtraRpcHeader(const ObAddr &addr)
+      : src_addr_(addr)
+  {}
+  int assign(const ObExtraRpcHeader &arg)
+  {
+    int ret = OB_SUCCESS;
+    src_addr_ = arg.src_addr_;
+    return ret;
+  }
+  void reset()
+  {
+    src_addr_.reset();
+  }
+  ObAddr src_addr_;
+  TO_STRING_KV(K(src_addr_));
+};
+
+// used to check compatibility mode and save extra rpc packet header.
 class ObRuntimeContext
 {
   OB_UNIS_VERSION(1);
@@ -345,6 +368,7 @@ public:
   ObErrsimModuleType module_type_;
 #endif
   LogReductionMode log_reduction_mode_;
+  ObExtraRpcHeader extra_rpc_header_;
 };
 
 inline ObRuntimeContext &get_ob_runtime_context()
@@ -398,6 +422,11 @@ OB_INLINE void Worker::set_log_reduction_mode(const LogReductionMode log_reducti
   set_log_reduction(log_reduction_mode);
 }
 
+
+OB_INLINE ObAddr &get_rpc_src_addr()
+{
+  return get_ob_runtime_context().extra_rpc_header_.src_addr_;
+}
 
 #ifdef ERRSIM
 OB_INLINE void Worker::set_module_type(const ObErrsimModuleType &module_type)

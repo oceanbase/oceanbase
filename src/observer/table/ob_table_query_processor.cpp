@@ -165,7 +165,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
           LOG_WARN("fail to get next result", K(ret));
         }
       } else if (result_iter->has_more_result()) {
-        if (OB_FAIL(this->flush())) {
+        if (OB_FAIL(this->flush(rpc_pkt_->get_timeout()))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("fail to flush result packet", K(ret));
           } else {

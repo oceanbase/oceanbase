@@ -65,6 +65,7 @@ ObRpcProcessorBase::~ObRpcProcessorBase()
     sc_->~ObRpcStreamCond();
     sc_ = NULL;
   }
+  get_ob_runtime_context().extra_rpc_header_.reset();
 }
 
 int ObRpcProcessorBase::run()
@@ -578,8 +579,8 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout, const ObAddr *src_addr)
   rpc::ObRequest *req = NULL;
   UNIS_VERSION_GUARD(unis_version_);
 
-  const int64_t stream_rpc_max_wait_timeout = get_stream_rpc_max_wait_timeout(tenant_id_);
   if (0 == wait_timeout) {
+    const int64_t stream_rpc_max_wait_timeout = get_stream_rpc_max_wait_timeout(tenant_id_);
     wait_timeout = stream_rpc_max_wait_timeout;
   }
 
@@ -600,7 +601,7 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout, const ObAddr *src_addr)
   } else if (rpc_pkt_ && rpc_pkt_->is_stream_last()) {
     ret = OB_ITER_END;
     RPC_OBRPC_LOG(WARN, "stream is end", K(ret), K(*rpc_pkt_));
-  } else if (OB_FAIL(sc_->prepare(src_addr, rpc_pkt_))) {
+  } else if (OB_FAIL(sc_->prepare(&get_rpc_src_addr(), rpc_pkt_))) {
     RPC_OBRPC_LOG(WARN, "prepare stream session fail", K(ret));
   } else if (OB_FAIL(part_response(common::OB_SUCCESS, false))) {
     RPC_OBRPC_LOG(WARN, "response part result to peer fail", K(ret));

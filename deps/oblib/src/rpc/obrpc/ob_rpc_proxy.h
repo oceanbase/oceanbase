@@ -291,6 +291,7 @@ class Handle {
 
 public:
   Handle();
+  ~Handle();
   const common::ObAddr &get_dst_addr() const { return dst_; }
 
 protected:
