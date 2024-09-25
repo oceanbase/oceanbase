@@ -117,6 +117,8 @@ class ObTabletPointer final
   friend class ObLSTabletService;
   friend class ObTenantMetaMemMgr;
   friend class ObTabletResidentInfo;
+  friend class ObTabletPointerMap;
+  friend class ObFlyingTabletPointerMap;
 public:
   template <LockMode MODE>
   void get_mds_truncate_lock_guard(TabletMdsLockGuard<MODE> &lock_guard) const {
@@ -167,7 +169,7 @@ public:
 
   // do not KPC memtable_mgr, may dead lock
   TO_STRING_KV(K_(phy_addr), K_(obj), K_(ls_handle), K_(ddl_kv_mgr_handle), K_(attr),
-      K_(protected_memtable_mgr_handle), K_(ddl_info), K_(initial_state), KP_(old_version_chain));
+      K_(protected_memtable_mgr_handle), K_(ddl_info), K_(initial_state), KP_(old_version_chain), K_(flying));
 public:
   bool get_initial_state() const;
   ObTabletResidentInfo get_tablet_resident_info(const ObTabletMapKey &key) const;
@@ -201,6 +203,10 @@ private:
   int wash_obj();
   int add_tablet_to_old_version_chain(ObTablet *tablet);
   int remove_tablet_from_old_version_chain(ObTablet *tablet);
+  void set_flying() { flying_ = true; }
+  bool is_flying() const { return flying_; }
+  bool need_push_to_flying_() const;
+  bool need_remove_from_flying_() const;
 private:
   ObMetaDiskAddr phy_addr_; // 48B
   ObMetaObj<ObTablet> obj_; // 40B
@@ -209,6 +215,7 @@ private:
   ObProtectedMemtableMgrHandle protected_memtable_mgr_handle_; // 32B
   ObTabletDDLInfo ddl_info_; // 32B
   bool initial_state_; // 1B
+  bool flying_; // 1B
   ObByteLock ddl_kv_mgr_lock_; // 1B
   mutable mds::MdsLock mds_lock_;// 12B
   mds::ObMdsTableHandler mds_table_handler_;// 48B

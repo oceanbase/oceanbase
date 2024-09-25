@@ -909,7 +909,7 @@ private:
   int64_t memtable_count_;                                   // size: 8B, alignment: 8B
   ObDDLKV **ddl_kvs_;                                        // size: 8B, alignment: 8B
   int64_t ddl_kv_count_;                                     // size: 8B, alignment: 8B
-  ObTabletPointerHandle pointer_hdl_;                        // size: 24B, alignment: 8B
+  ObTabletPointerHandle pointer_hdl_;                   // size: 24B, alignment: 8B
   ObMetaDiskAddr tablet_addr_;                               // size: 48B, alignment: 8B 1080
   // NOTICE: these two pointers: memtable_mgr_ and log_handler_,
   // are considered as cache for tablet.

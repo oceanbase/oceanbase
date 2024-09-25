@@ -234,7 +234,7 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
         } else if (macro_id.is_shared_data_or_meta()) {
           info.macro_block_index_ = macro_id.third_id();
         } else if (macro_id.is_private_data_or_meta()) {
-          info.macro_block_index_ = macro_id.fourth_id();
+          info.macro_block_index_ = macro_id.tenant_seq();
         }
         info.macro_block_id_ = macro_id;
         info.row_count_ = macro_header.fixed_header_.row_count_;
@@ -294,7 +294,7 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
     } else if (macro_desc.macro_block_id_.is_shared_data_or_meta()) {
       info.macro_block_index_ = macro_desc.macro_block_id_.third_id();
     } else if (macro_desc.macro_block_id_.is_private_data_or_meta()) {
-      info.macro_block_index_ = macro_desc.macro_block_id_.fourth_id();
+      info.macro_block_index_ = macro_desc.macro_block_id_.tenant_seq();
     }
     info.macro_block_id_ = macro_desc.macro_block_id_;
     info.row_count_ = macro_desc.row_count_;

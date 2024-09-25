@@ -1000,7 +1000,7 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     param.merge_type_ = merge_type;
     param.merge_version_ = merge_snapshot_version;
     param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
-    param.transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
+    param.schedule_transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     param.exec_mode_ = exec_mode;
     if (OB_UNLIKELY(nullptr != dag_net_id)) {
       param.dag_net_id_ = *dag_net_id;
@@ -1017,7 +1017,7 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;
     param.merge_type_ = merge_type;
     param.merge_version_ = merge_snapshot_version;
-    param.transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
+    param.schedule_transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     param.exec_mode_ = exec_mode;
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
@@ -1114,7 +1114,7 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
         dag_param.tablet_id_ = tablet_id;
         dag_param.merge_type_ = META_MAJOR_MERGE;
         dag_param.merge_version_ = result.merge_version_;
-        dag_param.transfer_seq_ = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
+        dag_param.schedule_transfer_seq_ = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
         dag_param.exec_mode_ = EXEC_MODE_LOCAL;
 
 	if (OB_FAIL(schedule_merge_execute_dag<ObTabletMergeExecuteDag>(dag_param, ls_handle, tablet_handle, result))) {
@@ -1131,7 +1131,7 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
         dag_param.merge_type_ = META_MAJOR_MERGE;
         dag_param.merge_version_ = result.merge_version_;
         dag_param.compat_mode_ = tablet->get_tablet_meta().compat_mode_;
-        dag_param.transfer_seq_ = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
+        dag_param.schedule_transfer_seq_ = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
         dag_param.exec_mode_ = EXEC_MODE_LOCAL;
         if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(dag_param))) {
           if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
@@ -1288,6 +1288,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
       LOG_WARN("failed to check need merge", K(ret), K(merge_type), K(tablet_id), K(tablet_handle));
     }
   } else {
+    result.transfer_seq_ = tablet_handle.get_obj()->get_transfer_seq();
     int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
     {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));

@@ -176,6 +176,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     bucket_lock_(),
     full_tablet_creator_(),
     tablet_map_(),
+    flying_tablet_map_(FLYING_TABLET_THRESHOLD),
     external_tablet_cnt_map_(),
     tg_id_(-1),
     table_gc_task_(this),
@@ -241,6 +242,8 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
   } else if (OB_FAIL(external_tablet_cnt_map_.init(193/*prime bucket_num*/, tenant_id_))) {
     LOG_WARN("fail to initialize external tablet cnt map", K(ret), K(bucket_num), K(tenant_id_));
+  } else if (OB_FAIL(flying_tablet_map_.init(tenant_id_))) {
+    LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
   } else if (OB_FAIL(gc_memtable_map_.create(10, "GCMemtableMap", "GCMemtableMap", tenant_id_))) {
     LOG_WARN("fail to initialize gc memtable map", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, tg_id_))) {
@@ -270,6 +273,30 @@ int ObTenantMetaMemMgr::fetch_tenant_config()
   } else {
     is_tablet_leak_checker_enabled_ = tenant_config->_enable_trace_tablet_leak;
     LOG_INFO("fetch tenant config", K(tenant_id_), K(is_tablet_leak_checker_enabled_));
+  }
+  return ret;
+}
+
+int ObTenantMetaMemMgr::check_allow_tablet_gc(
+    const ObTabletID &tablet_id,
+    const int64_t transfer_seq,
+    bool &allow)
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  allow = false;
+  ObDieingTabletMapKey key(tablet_id.id(), transfer_seq);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been inited", K(ret));
+  } else if (OB_FAIL(flying_tablet_map_.check_exist(key, is_exist))) {
+    LOG_WARN("fail to check tablet exist", K(ret), K(key));
+  } else if (is_exist) {
+    allow = false;
+  } else if (OB_FAIL(external_tablet_cnt_map_.check_exist(key, is_exist))) {
+    LOG_WARN("fail to check tablet exist", K(ret), K(key));
+  } else {
+    allow = !is_exist;
   }
   return ret;
 }
@@ -347,8 +374,9 @@ void ObTenantMetaMemMgr::destroy()
     tg_id_ = -1;
   }
   full_tablet_creator_.reset(); // must reset after gc_tablets
-  tablet_map_.destroy();
+  flying_tablet_map_.destroy();
   external_tablet_cnt_map_.destroy();
+  tablet_map_.destroy();
   for (common::hash::ObHashMap<share::ObLSID, memtable::ObMemtableSet*>::iterator iter = gc_memtable_map_.begin();
       OB_SUCC(ret) && iter != gc_memtable_map_.end(); ++iter) {
     memtable::ObMemtableSet *memtable_set = iter->second;
@@ -771,6 +799,7 @@ int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
   } else {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     const ObTabletMapKey key(tablet_meta.ls_id_, tablet_meta.tablet_id_);
+    const ObDieingTabletMapKey dieing_tablet_key(key, tablet->get_transfer_seq());
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
 
     const ObTabletPointerHandle &ptr_handle = tablet->get_pointer_handle();
@@ -781,6 +810,8 @@ int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
     } else if (OB_FAIL(tablet_ptr->remove_tablet_from_old_version_chain(tablet))) {
       LOG_WARN("fail to remove tablet from old version chain", K(ret), K(key), KPC(tablet));
     } else if (FALSE_IT(tablet->reset_memtable())) {
+    } else if (tablet_ptr->need_remove_from_flying_() && OB_FAIL(flying_tablet_map_.erase(dieing_tablet_key))) {
+      LOG_WARN("Fail to erase tablet_ptr from flying_tablet_map", K(ret), K(dieing_tablet_key));
     } else if (OB_FAIL(inner_push_tablet_into_gc_queue(tablet))) {
       LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
     }
@@ -1710,6 +1741,7 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
     int64_t &tablet_version,
+    int64_t &tablet_transfer_seq,
     bool &allow_tablet_version_gc)
 {
   int ret = OB_SUCCESS;
@@ -1741,8 +1773,10 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
       if (OB_FAIL(external_tablet_cnt_map_.check_exist(dieing_key, exist_in_external))) {
         LOG_WARN("fail to check ex_tablet exist or not", K(ret), K(dieing_key), K(exist_in_external));
       } else {
-        tablet_version = tablet_ptr->get_addr().fifth_id();
+        tablet_version = tablet_ptr->get_addr().block_id().meta_version_id();
+        tablet_transfer_seq = tablet_ptr->get_addr().block_id().meta_transfer_seq();
         allow_tablet_version_gc = tablet_ptr->is_old_version_chain_empty() && !exist_in_external;
+        FLOG_INFO("PRINT TABLET ADDRESS", K(ret), K(tablet_ptr->get_addr()), K(tablet_handle.get_obj()->get_tablet_addr()));
       }
     }
   }
@@ -2031,6 +2065,71 @@ bool ObTenantMetaMemMgr::is_tablet_handle_leak_checker_enabled()
   return is_tablet_leak_checker_enabled_;
 }
 
+int ObTenantMetaMemMgr::push_tablet_pointer_to_fly_map_if_need_(
+    const ObTabletMapKey &key)
+{
+  int ret = OB_SUCCESS;
+  int64_t tablet_transfer_seq = -1;
+  ObTabletPointer *tablet_ptr = nullptr;
+  ObTabletPointerHandle tp_handle(tablet_map_);
+  ObTabletHandle t_handle;
+  if (!key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(tablet_map_.get(key, tp_handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ptr handle", K(ret), K(key));
+    }
+  } else if (OB_ISNULL(tablet_ptr = static_cast<ObTabletPointer*>(tp_handle.get_resource_ptr()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet ptr is NULL", K(ret), K(tp_handle));
+  } else  if (!tablet_ptr->need_push_to_flying_()) {
+    LOG_INFO("need not push tablet_ptr to flying", K(ret), K(key), KPC(tablet_ptr));
+  } else if (OB_FAIL(get_tablet(WashTabletPriority::WTP_HIGH, key, t_handle))) { // for get tablet_transfer_seq
+    if (OB_ITEM_NOT_SETTED == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("tablet has not been persisted, need not push_to_fly", K(ret), K(key));
+    } else {
+      LOG_WARN("failed to get tablet", K(ret), K(key), K(t_handle));
+    }
+  } else if (!t_handle.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet_handle", K(ret), K(t_handle));
+  } else { // need push tablet_ptr to flying map
+    bool exist = false;
+    tablet_transfer_seq = t_handle.get_obj()->get_transfer_seq();
+    ObDieingTabletMapKey dieing_tablet_key(key, tablet_transfer_seq);
+
+    if (OB_FAIL(flying_tablet_map_.check_exist(dieing_tablet_key, exist))) {
+      LOG_WARN("failed to check exist", K(ret), K(dieing_tablet_key));
+    } else if (exist) {
+      // do nothing
+      LOG_INFO("tablet_pointer has exist in flying_map", K(ret), K(dieing_tablet_key));
+    } else if (OB_FAIL(flying_tablet_map_.set(dieing_tablet_key, tp_handle))) {
+      LOG_WARN("fail to push referred tablet_pointer to flying_tablet_map", K(ret), K(dieing_tablet_key), KPC(tablet_ptr));
+    } else if (OB_FAIL(tablet_ptr->add_tablet_to_old_version_chain(t_handle.get_obj()))) {
+      LOG_WARN("failed to add tablet to old_chain", K(ret), KPC(tablet_ptr), KPC(t_handle.get_obj()));
+    } else {
+      tablet_ptr->set_flying();
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(tablet_ptr)) {
+      int tmp_ret = OB_SUCCESS;
+      ObDieingTabletMapKey dieing_tablet_key(key, tablet_transfer_seq);
+      if (OB_TMP_FAIL(flying_tablet_map_.erase(dieing_tablet_key))) {
+        LOG_WARN("fail to erase tablet from tablet_pointer", K(tmp_ret), K(dieing_tablet_key));
+      } else {
+        tablet_ptr->flying_ = false;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
 {
   int ret = OB_SUCCESS;
@@ -2049,7 +2148,9 @@ int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
     // unregister step need ahead of erase, cause a new tablet maybe created after erase but before unregister
     // and that new tablet's register step will failed
     mark_mds_table_deleted_(key);
-    if (OB_FAIL(tablet_map_.erase(key, handle))) {
+    if (OB_FAIL(push_tablet_pointer_to_fly_map_if_need_(key))) {
+      LOG_WARN("fail to try push tablet_pointer into flying_map", K(ret), K(key));
+    } else if (OB_FAIL(tablet_map_.erase(key, handle))) { // reuse handle
       LOG_WARN("fail to erase tablet pointer", K(ret), K(key));
     } else {
       if (OB_NOT_NULL(handle.get_obj()) && OB_ISNULL(handle.get_obj()->get_allocator())) {
@@ -2230,9 +2331,12 @@ int ObTenantMetaMemMgr::check_all_meta_mem_released(bool &is_released, const cha
     const int64_t tx_ctx_memtable_cnt_ = tx_ctx_memtable_pool_.get_used_obj_cnt();
     const int64_t lock_memtable_cnt_ = lock_memtable_pool_.get_used_obj_cnt();
     const int64_t full_tablet_cnt = full_tablet_creator_.get_used_obj_cnt();
+    const int64_t external_tablet_cnt = external_tablet_cnt_map_.count();
+    const int64_t flying_tablet_pointer_cnt = flying_tablet_map_.count();
     if (memtable_cnt != 0 || ddl_kv_cnt != 0 || tablet_cnt != 0 || 0 != large_tablet_cnt || ddl_kv_mgr_cnt != 0
         || tx_data_memtable_cnt_ != 0 || tx_ctx_memtable_cnt_ != 0
-        || lock_memtable_cnt_ != 0 || full_tablet_cnt != 0) {
+        || lock_memtable_cnt_ != 0 || full_tablet_cnt != 0
+        || external_tablet_cnt != 0 || flying_tablet_pointer_cnt != 0) {
       is_released = false;
     } else {
       is_released = true;
@@ -2243,7 +2347,8 @@ int ObTenantMetaMemMgr::check_all_meta_mem_released(bool &is_released, const cha
     LOG_INFO("check all meta mem in t3m", K(module), K(is_released), K(memtable_cnt), K(ddl_kv_cnt),
         K(tablet_cnt), K(large_tablet_cnt), K(ddl_kv_mgr_cnt), K(tx_data_memtable_cnt_),
         K(tx_ctx_memtable_cnt_), K(lock_memtable_cnt_), K(full_tablet_cnt),
-        K(wait_gc_tablets_cnt), K(wait_gc_tables_cnt), K(tablet_cnt_in_map));
+        K(wait_gc_tablets_cnt), K(wait_gc_tables_cnt), K(tablet_cnt_in_map), K(external_tablet_cnt),
+        K(flying_tablet_pointer_cnt));
   }
   return ret;
 }

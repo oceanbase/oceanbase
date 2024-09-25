@@ -71,6 +71,7 @@ public:
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
       const int64_t tablet_version,
+      const int64_t tablet_transfer_seq,
       ObIArray<blocksstable::MacroBlockId> &block_ids);
   int get_shared_blocks_for_tablet(
       const ObTabletID &tablet_id,
@@ -119,7 +120,7 @@ public:
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int inner_get_blocks_for_tablet_(
-    const ObMetaDiskAddr &addr,
+    const ObMetaDiskAddr &tablet_addr,
     const int64_t ls_epoch,
     const bool is_shared,
     ObIArray<blocksstable::MacroBlockId> &block_ids/*OUT*/) const;

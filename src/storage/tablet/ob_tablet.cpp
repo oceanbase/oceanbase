@@ -2129,7 +2129,6 @@ int ObTablet::load_deserialize(
 int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObLinkedMacroBlockItemWriter linked_writer; // it needs to hold ref cnt until inner_inc_macro_ref_cnt is called
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot deserialize inited tablet meta", K(ret), K_(is_inited));

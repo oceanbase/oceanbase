@@ -200,13 +200,13 @@ public:
   void set_incarnation_id(const uint64_t incarnation_id) { incarnation_id_ = incarnation_id; }
   int64_t column_group_id() const { return column_group_id_; }
   void set_column_group_id(const uint64_t column_group_id) { column_group_id_ = column_group_id; }
-  int64_t macro_transfer_seq() const { return 0; }  // TODO 这里应该return macro_transfer_seq_; 需要费渡修改 @gaishun.gs by xiaotao
-  void set_macro_transfer_seq(const uint64_t macro_transfer_seq) { macro_transfer_seq_ = macro_transfer_seq; }
-  int64_t tenant_seq() const { return fourth_id_; }  // TODO 这里应该return tenant_seq_; 需要费渡修改 @gaishun.gs by xiaotao
+  int64_t macro_transfer_seq() const { return macro_transfer_seq_; }
+  void set_macro_transfer_seq(const int64_t macro_transfer_seq) { macro_transfer_seq_ = macro_transfer_seq; }
+  uint64_t tenant_seq() const { return tenant_seq_; }
   void set_tenant_seq(const uint64_t tenant_seq) { tenant_seq_ = tenant_seq; }
-  int64_t meta_transfer_seq() const { return 0; }  // TODO 这里应该return meta_transfer_seq_; 需要费渡修改 @gaishun.gs by xiaotao
-  void set_meta_transfer_seq(const uint64_t meta_transfer_seq) { meta_transfer_seq_ = meta_transfer_seq; }
-  int64_t meta_version_id() const { return fourth_id_; }  // TODO 这里应该return meta_version_id_; 需要费渡修改 @gaishun.gs by xiaotao
+  int64_t meta_transfer_seq() const { return meta_transfer_seq_; }
+  void set_meta_transfer_seq(const int64_t meta_transfer_seq) { meta_transfer_seq_ = meta_transfer_seq; }
+  uint64_t meta_version_id() const { return meta_version_id_; }
   void set_meta_version_id(const uint64_t meta_version_id) { meta_version_id_ = meta_version_id; }
 
   // Deivce mode
@@ -251,7 +251,7 @@ public:
   static const uint64_t SF_BIT_VERSION = 4;
   static const uint64_t SF_BIT_TRANSFER_SEQ = 20;
   static const uint64_t SF_BIT_TENANT_SEQ = 44;
-  static const uint64_t SF_BIT_META_VERSION_ID = 44;
+  static constexpr uint64_t SF_BIT_META_VERSION_ID = 44;
 
   static const uint64_t MAX_WRITE_SEQ = (0x1UL << MacroBlockId::SF_BIT_WRITE_SEQ) - 1;
 
@@ -292,12 +292,12 @@ private:
     int64_t fourth_id_;
     // for PRIVATE_DATA_MACRO and PRIVATE_META_MACRO
     struct {
-      uint64_t macro_transfer_seq_  : SF_BIT_TRANSFER_SEQ;
+      int64_t macro_transfer_seq_  : SF_BIT_TRANSFER_SEQ;
       uint64_t tenant_seq_          : SF_BIT_TENANT_SEQ;
     };
     // for PRIVATE_TABLET_META and PRIVATE_TABLET_CURRENT_VERSION
     struct {
-      uint64_t meta_transfer_seq_   : SF_BIT_TRANSFER_SEQ;
+      int64_t meta_transfer_seq_   : SF_BIT_TRANSFER_SEQ;
       uint64_t meta_version_id_     : SF_BIT_META_VERSION_ID;
     };
   };

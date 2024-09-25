@@ -288,6 +288,7 @@ public:
   int persist_linked_block_if_need(
       ObArenaAllocator &allocator,
       const ObTabletID &tablet_id,
+      const int64_t tablet_transfer_seq,
       const int64_t snapshot_version,
       blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
       int64_t &macro_start_seq,

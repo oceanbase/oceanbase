@@ -224,7 +224,7 @@ TEST_F(TestBlockIdList, test_meta_macro_ref_cnt)
   blocksstable::ObStorageObjectOpt default_opt;
 
   // persist 4k tablet
-  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   ASSERT_EQ(OB_SUCCESS, meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt));
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
@@ -417,7 +417,7 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
   ObBlockManager::BlockInfo block_info;
   int64_t ref_cnt = 0;
   ObTabletHandle new_tablet_handle;
-  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id);
+  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
   ObTablet *new_tablet = new_tablet_handle.get_obj();
   ASSERT_EQ(OB_SUCCESS, new_tablet->tablet_addr_.get_block_addr(macro_id, offset, size));

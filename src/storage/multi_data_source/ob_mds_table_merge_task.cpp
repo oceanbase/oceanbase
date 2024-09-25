@@ -138,6 +138,7 @@ int ObMdsTableMergeTask::process()
       ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
       share::dag_yield();
     } else if (FALSE_IT(ctx.static_param_.scn_range_.start_scn_ = tablet->get_mds_checkpoint_scn())) {
+    } else if (FALSE_IT(ctx.static_desc_.tablet_transfer_seq_ = tablet->get_transfer_seq())) {
     } else if (MDS_FAIL(build_mds_sstable(ctx, mds_construct_sequence, table_handle))) {
       LOG_WARN("fail to build mds sstable", K(ret), K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
     } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(

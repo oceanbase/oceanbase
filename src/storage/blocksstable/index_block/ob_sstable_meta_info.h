@@ -235,12 +235,14 @@ private:
       int64_t &other_block_count);
   int persist_block_ids(
       const ObTabletID &tablet_id,
+      const int64_t tablet_transfer_seq,
       const int64_t snapshot_version,
       common::ObArenaAllocator &allocator,
       storage::ObSSTableLinkBlockWriteInfo * const link_write_info,
       ObSharedObjectsWriteCtx &linked_block_write_ctx);
   int write_block_ids(
       const ObTabletID &tablet_id,
+      const int64_t tablet_transfer_seq,
       const int64_t snapshot_version,
       storage::ObLinkedMacroBlockItemWriter &writer,
       MacroBlockId &entry_id,

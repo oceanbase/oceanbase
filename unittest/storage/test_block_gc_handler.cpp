@@ -18,7 +18,7 @@
 // #include "storage/blocksstable/ob_data_file_prepare.h"
 // #include "share/ob_simple_mem_limit_getter.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
-
+#include "storage/ls/ob_ls.h"
 namespace oceanbase
 {
 using namespace common;
@@ -135,7 +135,7 @@ TEST_F(TestBlockGCHandler, test_block_gc)
 }
 
 class TestPublicBlockGCHandler : public ::testing::Test,
-                           public storage::ObPublicBlockGCHandler
+                                 public storage::ObPublicBlockGCHandler
 {
 public:
   TestPublicBlockGCHandler()
@@ -211,6 +211,83 @@ TEST_F(TestPublicBlockGCHandler, test_detect_and_gc)
     ASSERT_EQ(0, macro_block_ids_[i].first_id_);
   }
   LOG_INFO("test detect_and_gc finish", KPC(this));
+}
+
+class TestPrivateBlockGCHandler : public ::testing::Test,
+                                  public storage::ObPrivateBlockGCHandler
+{
+public:
+  TestPrivateBlockGCHandler()
+  : storage::ObPrivateBlockGCHandler(share::ObLSID(1), 1, ObTabletID(1), 1, 1, 10, 20)
+  {
+    for (int i = 0; i < 30; i++) {
+      macro_block_ids_[i].id_mode_ = 2; // ID_MODE_SHARE
+      macro_block_ids_[i].storage_object_type_ = 0; //blocksstable::ObStorageObjectType::PRIVATE_DATA_MACRO;
+      macro_block_ids_[i].third_id_ = 1;
+      macro_block_ids_[i].tenant_seq_ = i;
+    }
+  }
+  virtual ~TestPrivateBlockGCHandler() {}
+
+  TO_STRING_KV(K(macro_block_ids_[0].tenant_seq_), K(macro_block_ids_[11].tenant_seq_), K(macro_block_ids_[12].tenant_seq_), K(macro_block_ids_[21].tenant_seq_));
+
+  int get_blocks_for_tablet(
+      int64_t tablet_meta_version,
+      ObIArray<blocksstable::MacroBlockId> &block_ids)
+  {
+    for (int i = 11; i < 20; i++) {
+      if (0 == i % 2) {
+        block_ids.push_back(macro_block_ids_[i]);
+      }
+    }
+    return OB_SUCCESS;
+  }
+  int list_tablet_meta_version(
+      ObIArray<int64_t> &tablet_versions)
+  {
+    tablet_versions.push_back(1);
+    return OB_SUCCESS;
+  }
+  int get_block_ids_from_dir(
+    ObIArray<blocksstable::MacroBlockId> &block_ids)
+  {
+    for (int i = 0; i < 30; i++) {
+      if (10 != i && 20 != i) {
+        block_ids.push_back(macro_block_ids_[i]);
+      }
+    }
+    return OB_SUCCESS;
+  }
+  int delete_macro_blocks(
+        ObIArray<blocksstable::MacroBlockId> &block_ids)
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; i < block_ids.count(); i++) {
+      macro_block_ids_[block_ids.at(i).tenant_seq_].third_id_ = 2;
+    }
+    return ret;
+  }
+
+  blocksstable::MacroBlockId macro_block_ids_[30];
+};
+
+TEST_F(TestPrivateBlockGCHandler, test_macro_check)
+{
+  LOG_INFO("test detect_and_gc start", KPC(this));
+  ASSERT_EQ(OB_SUCCESS, macro_block_check());
+  for (int i = 11; i < 20; i++) {
+    if (0 == i % 2) {
+      ASSERT_EQ(1, macro_block_ids_[i].third_id_);
+    } else {
+      ASSERT_EQ(2, macro_block_ids_[i].third_id_);
+    }
+  }
+  for (int i = 0; i < 30; i++) {
+    if (i < 10 || i >= 20) {
+      ASSERT_EQ(1, macro_block_ids_[i].third_id_);
+    }
+  }
+  LOG_INFO("test test_macro_check finish", KPC(this));
 }
 
 }  // end namespace unittest

@@ -405,7 +405,8 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
     // do nothing
   } else {
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id());
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(),
+                               tablet_handle.get_obj()->get_transfer_seq());
     ObStorageObjectWriteInfo object_write_info;
     object_write_info.buffer_ = write_info.buffer_;
     object_write_info.size_= write_info.size_;
@@ -471,7 +472,8 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
   } else {
     const ObDDLMacroBlockRedoInfo &redo_info = log_->get_redo_info();
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id());
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(),
+                               tablet_handle.get_obj()->get_transfer_seq());
     ObStorageObjectHandle macro_handle;
     ObStorageObjectWriteInfo write_info;
     write_info.buffer_ = redo_info.data_buffer_.ptr();

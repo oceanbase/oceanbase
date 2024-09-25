@@ -124,6 +124,8 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
     if (OB_SUCC(ret) && OB_FAIL(result.handle_.check_continues(nullptr))) {
       LOG_WARN("failed to check continues for major merge", K(ret));
       SET_DIAGNOSE_LOCATION(result.error_location_);
+    } else {
+      result.transfer_seq_ = tablet.get_transfer_seq();
     }
   }
 
@@ -199,6 +201,7 @@ int ObPartitionMergePolicy::get_mds_merge_tables(
     result.handle_.reset();
   } else {
     result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
+    result.transfer_seq_ = tablet.get_transfer_seq();
   }
   return ret;
 }
@@ -342,6 +345,8 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     // do nothing
   } else if (OB_FAIL(deal_with_minor_result(merge_type, ls, tablet, result))) {
     LOG_WARN("failed to deal with minor merge result", K(ret));
+  } else {
+    result.transfer_seq_ = tablet.get_transfer_seq();
   }
 
   return ret;
@@ -524,6 +529,8 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get minor merge tables", K(ret), K(max_snapshot_version));
     }
+  } else {
+    result.transfer_seq_ = tablet.get_transfer_seq();
   }
 
   return ret;
@@ -778,6 +785,8 @@ int ObPartitionMergePolicy::get_hist_minor_merge_tables(
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get minor tables for hist minor merge", K(ret));
     }
+  } else {
+    result.transfer_seq_ = tablet.get_transfer_seq();
   }
   return ret;
 }
@@ -1538,6 +1547,8 @@ int ObAdaptiveMergePolicy::get_meta_merge_tables(
     if (OB_FAIL(ObPartitionMergePolicy::get_multi_version_start(
         merge_type, ls, tablet, result.version_range_, result.snapshot_info_))) {
       LOG_WARN("failed to get multi version_start", K(ret));
+    } else {
+      result.transfer_seq_ = tablet.get_transfer_seq();
     }
   }
 

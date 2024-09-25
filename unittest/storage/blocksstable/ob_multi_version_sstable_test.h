@@ -425,7 +425,7 @@ void ObMultiVersionSSTableTest::reset_writer(
   SCN scn;
   scn.convert_for_tx(snapshot_version);
   ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type, snapshot_version, DATA_VERSION_4_1_0_0,
-                                        table_schema_.get_micro_index_clustered(), scn));
+                                        table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   ASSERT_NE(nullptr, root_index_builder_);

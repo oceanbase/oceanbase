@@ -217,7 +217,8 @@ void ObAdminSlogExecutor::print_usage()
                     "       -f --log_file_id specify the slog file id which is to be dumped\n"
                     "       -o --offset specify the offset from which to start scanning / default value is 0, meaning reading from the begining of the file\n"
                     "       -c --parse_count specify the count of slogs needed to be read / default value is -1, meaning reading all slogs left\n"
-                    "eg.    1.ob_admin slog_tool -d /home/fenggu.yh/ob1.obs0/store -u 1 -f 1 \n\n");
+                    "eg.    1.ob_admin slog_tool -d/home/fenggu.yh/ob1.obs0/store -u1 -f1\n"
+                    "         (NOTICE: no space between -d/home...)\n\n");
 }
 
 ObLogDirEntryOperation::~ObLogDirEntryOperation()

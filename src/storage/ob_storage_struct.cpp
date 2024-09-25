@@ -254,16 +254,21 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     error_location_(nullptr),
     snapshot_info_(),
     is_backfill_(false),
-    backfill_scn_()
+    backfill_scn_(),
+    transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ)
 {
 }
 
 bool ObGetMergeTablesResult::is_valid() const
 {
-  return scn_range_.is_valid()
-      && (is_simplified_ || handle_.get_count() >= 1)
-      && merge_version_ >= 0
-      && (!is_backfill_ || backfill_scn_.is_valid());
+  bool valid = scn_range_.is_valid()
+            && (is_simplified_ || handle_.get_count() >= 1)
+            && merge_version_ >= 0
+            && (!is_backfill_ || backfill_scn_.is_valid());
+  if (valid && GCTX.is_shared_storage_mode()) {
+    valid &= (ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ != transfer_seq_);
+  }
+  return valid;
 }
 
 void ObGetMergeTablesResult::reset_handle_and_range()
@@ -291,6 +296,7 @@ void ObGetMergeTablesResult::reset()
   snapshot_info_.reset();
   is_backfill_ = false;
   backfill_scn_.reset();
+  transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
 }
 
 int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
@@ -309,6 +315,7 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
     is_backfill_ = src.is_backfill_;
     backfill_scn_ = src.backfill_scn_;
     snapshot_info_ = src.snapshot_info_;
+    transfer_seq_ = src.transfer_seq_;
   }
   return ret;
 }

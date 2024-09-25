@@ -59,7 +59,7 @@ int ObTabletGCService::mtl_init(ObTabletGCService* &m)
 int ObTabletGCService::init()
 {
   int ret = OB_SUCCESS;
-  bool is_shared_storage = GCTX.is_shared_storage_mode();
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTabletGCService init twice.", KR(ret));

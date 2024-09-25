@@ -1974,6 +1974,7 @@ int ObSSTable::get_cs_range(
 int ObSSTable::persist_linked_block_if_need(
     ObArenaAllocator &allocator,
     const ObTabletID &tablet_id,
+    const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
     blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
     int64_t &macro_start_seq,
@@ -1992,6 +1993,7 @@ int ObSSTable::persist_linked_block_if_need(
   } else if (OB_FAIL(link_write_info.init(ddl_redo_cb))) {
     LOG_WARN("fail to init link_write_info", K(ret), KP(ddl_redo_cb));
   } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(tablet_id,
+                                                          tablet_transfer_seq,
                                                           snapshot_version,
                                                           allocator,
                                                           &link_write_info,

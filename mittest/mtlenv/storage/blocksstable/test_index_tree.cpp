@@ -432,7 +432,7 @@ void TestIndexTree::prepare_data()
 
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-                       table_schema_.get_micro_index_clustered());
+                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -604,7 +604,7 @@ void TestIndexTree::prepare_data_desc(ObWholeDataStoreDesc &data_desc,
   int ret = OB_SUCCESS;
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-                       table_schema_.get_micro_index_clustered());
+                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/);
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -618,7 +618,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
   scn.convert_for_tx(SNAPSHOT_VERSION);
   const bool is_ddl = false;
   ASSERT_EQ(OB_SUCCESS, desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
-  MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/));
+  MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/, 0/*transfer_seq*/));
   ObIArray<ObColDesc> &col_descs = desc.get_desc().col_desc_->col_desc_array_;
   for (int64_t i = 0; i < col_descs.count(); ++i) {
     if (col_descs.at(i).col_type_.type_ == ObIntType) {
@@ -636,7 +636,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
   cg_schema.column_idxs_ = cg_cols;
 
   ASSERT_EQ(OB_SUCCESS, data_desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
-                    MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/,
+                    MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/, 0/*transfer_seq*/,
                     scn, &cg_schema, 0));
   data_desc.get_desc().static_desc_->schema_version_ = 10;
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
@@ -2337,7 +2337,7 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
   ObWholeDataStoreDesc index_desc;
   OK(index_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                      ObTimeUtility::fast_current_time()/*snapshot*/, 0/*cluster_version*/,
-                     table_schema_.get_micro_index_clustered()));
+                     table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/));
   index_desc.static_desc_.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
   --index_desc.get_desc().col_desc_->full_stored_col_cnt_;
   index_desc.get_desc().col_desc_->col_default_checksum_array_.pop_back();

@@ -313,6 +313,7 @@ struct ObGetMergeTablesResult
   //for backfill
   bool is_backfill_;
   share::SCN backfill_scn_;
+  int64_t transfer_seq_; // is_used for write_macro_block in ss, used for all compaction.
   ObGetMergeTablesResult();
   bool is_valid() const;
   void reset_handle_and_range();
@@ -322,7 +323,7 @@ struct ObGetMergeTablesResult
   int copy_basic_info(const ObGetMergeTablesResult &src);
   share::SCN get_merge_scn() const;
   TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(is_simplified),
-      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn));
+      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn), K_(transfer_seq));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)

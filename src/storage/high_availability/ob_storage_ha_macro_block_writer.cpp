@@ -305,7 +305,6 @@ int ObStorageHALocalMacroBlockWriter::set_macro_write_info_(
     blocksstable::ObStorageObjectOpt &opt)
 {
   int ret = OB_SUCCESS;
-  UNUSED(macro_block_id);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
@@ -317,7 +316,7 @@ int ObStorageHALocalMacroBlockWriter::set_macro_write_info_(
     write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     write_info.mtl_tenant_id_ = MTL_ID();
     write_info.offset_ = 0;
-    opt.set_private_object_opt(tablet_id_.id());
+    opt.set_private_object_opt(tablet_id_.id(), macro_block_id.macro_transfer_seq());
   }
   return ret;
 }

@@ -831,6 +831,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                               tablet->get_snapshot_version(),
                                               0/*cluster_version*/,
                                               false/*micro_index_clustered*/,
+                                              tablet->get_transfer_seq(),
                                               table_key.get_end_scn()))) {
         LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema));
       }
@@ -861,6 +862,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                         tablet->get_snapshot_version(),
                                         0/*cluster_version*/,
                                         false/*micro_index_clustered*/,
+                                        tablet->get_transfer_seq(),
                                         table_key.get_end_scn(),
                                         cg_schema,
                                         cg_idx))) {

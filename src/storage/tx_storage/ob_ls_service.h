@@ -172,7 +172,7 @@ public:
     if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
       STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id), K(tablet_id));
     } else {
-      ls_handle.get_ls()->get_ls_private_block_gc_handler().report_tablet_id_for_gc(tablet_info);
+      ls_handle.get_ls()->get_ls_private_block_gc_handler().report_tablet_id_for_gc_service(tablet_info);
     }
   }
 #endif
