@@ -40,6 +40,14 @@ __attribute__((constructor)) void init_global_di_container()
   int ret = OB_SUCCESS;
   // dummy di no need to sum di info.
   ObDiagnosticInfo::dummy_di_.set_aggregated();
+  // make static variable ObFixedClassAllocator construct before get_global_di_container
+  // so that it deconstruct after.
+  common::ObFixedClassAllocator<common::LinkHashNode<ObDiagnosticKey>> *inst_key =
+      common::ObFixedClassAllocator<common::LinkHashNode<ObDiagnosticKey>>::get(
+          "LinkHashNode<ObDiagnosticKey>");
+  common::ObFixedClassAllocator<common::LinkHashNode<SessionID>> *inst_id =
+      common::ObFixedClassAllocator<common::LinkHashNode<SessionID>>::get(
+          "LinkHashNode<SessionID>");
   if (OB_FAIL(ObDiagnosticInfoContainer::get_global_di_container()->init(get_cpu_num()))) {
     LOG_WARN("failed to init global di container", K(ret));
   } else {

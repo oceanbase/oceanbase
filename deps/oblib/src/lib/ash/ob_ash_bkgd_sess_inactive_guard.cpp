@@ -17,9 +17,12 @@
 
 using namespace oceanbase::common;
 
-ObBKGDSessInActiveGuard::ObBKGDSessInActiveGuard() {
+ObBKGDSessInActiveGuard::ObBKGDSessInActiveGuard()
+{
+  prev_stat_ = ObActiveSessionGuard::get_stat().is_active_session_;
   ObActiveSessionGuard::set_sess_inactive();
 }
-ObBKGDSessInActiveGuard::~ObBKGDSessInActiveGuard() {
-  ObActiveSessionGuard::set_sess_active();
+ObBKGDSessInActiveGuard::~ObBKGDSessInActiveGuard()
+{
+  ObActiveSessionGuard::get_stat().is_active_session_ = prev_stat_;
 }

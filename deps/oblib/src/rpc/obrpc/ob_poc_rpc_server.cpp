@@ -426,8 +426,6 @@ int tranlate_to_ob_error(int err) {
   }
   return ret;
 }
-void ob_set_bkgd_session_active();
-void ob_set_bkgd_session_inactive();
 #define PKT_NIO_MALLOC(sz, label)  pkt_nio_malloc(sz, label)
 #define PKT_NIO_FREE(ptr)   pkt_nio_free(ptr)
 #define SERVER_IN_BLACK(sa) server_in_black(sa)

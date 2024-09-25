@@ -23,6 +23,8 @@ class ObBKGDSessInActiveGuard
 public:
   ObBKGDSessInActiveGuard();
   ~ObBKGDSessInActiveGuard();
+private:
+  bool prev_stat_;
 };
 
 }

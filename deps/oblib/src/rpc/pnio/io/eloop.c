@@ -61,9 +61,7 @@ static void eloop_refire(eloop_t* ep, int64_t timeout) {
   const int maxevents = 512;
   struct epoll_event events[maxevents];
   int cnt = 0;
-  ob_set_bkgd_session_inactive();
   cnt = ob_epoll_wait(ep->fd, events, maxevents, timeout);
-  ob_set_bkgd_session_active();
 
   for(int i = 0; i < cnt; i++) {
     sock_t* s = (sock_t*)events[i].data.ptr;

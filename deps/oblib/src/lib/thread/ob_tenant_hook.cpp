@@ -138,6 +138,7 @@ int ob_epoll_wait(int __epfd, struct epoll_event *__events,
 		  int __maxevents, int __timeout) = epoll_wait;
   int ret = 0;
   oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
+  oceanbase::common::ObBKGDSessInActiveGuard inactive_guard;
   ret = SYS_HOOK(epoll_wait, __epfd, __events, __maxevents, __timeout);
   return ret;
 }
@@ -180,6 +181,11 @@ void ob_usleep(const useconds_t v)
   oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(v);
 }
 
+void ob_idle_usleep(const useconds_t v)
+{
+  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(v, true);
+}
+
 int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout)
 {
   static long int (*real_syscall)(long int __sysno, ...) = syscall;
@@ -201,17 +207,6 @@ int64_t ob_update_loop_ts()
 {
   return ::oceanbase::lib::Thread::update_loop_ts();
 }
-
-void ob_set_bkgd_session_active()
-{
-  ::oceanbase::common::ObActiveSessionGuard::set_sess_active();
-}
-
-void ob_set_bkgd_session_inactive()
-{
-  ::oceanbase::common::ObActiveSessionGuard::set_sess_inactive();
-}
-
 
 } /* extern "C" */
 

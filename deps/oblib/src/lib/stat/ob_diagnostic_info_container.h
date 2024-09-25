@@ -129,10 +129,12 @@ public:
   // used to reset global di container when observer elegant exit.
   static void clear_global_di_container()
   {
-    get_global_di_container()->stop();
-    get_global_di_container()->summarys_.reset();
-    get_global_di_container()->runnings_.reset();
-    COMMON_LOG(INFO, "clear global di container");
+    if (get_global_di_container()->is_inited()) {
+      get_global_di_container()->stop();
+      get_global_di_container()->summarys_.reset();
+      get_global_di_container()->runnings_.reset();
+      COMMON_LOG(INFO, "clear global di container");
+    }
   }
   ObBaseDiagnosticInfoSummary &get_base_summary()
   {
