@@ -187,7 +187,6 @@ public:
       const common::ObString &plan,
       const common::ObString &group,
       ObPlanDirective &directive);
-  int reset_all_mapping_rules();
 
 private:
   int allocate_consumer_group_id(
