@@ -802,11 +802,12 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos, 
                session_id,
                node_type,
                cflict_info.conflict_happened_addr_);
-    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_tx_id_, cflict_info.conflict_tx_id_);
-    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_data_seq_num_, cflict_info.conflict_tx_hold_seq_.get_seq());
-    int64_t holder_lock_timestamp = calc_holder_tx_lock_timestamp(cflict_info.holder_tx_start_time_, cflict_info.conflict_tx_hold_seq_.get_seq());
-    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_lock_timestamp_, holder_lock_timestamp);
-    common::ObActiveSessionGuard::get_stat().block_sessid_ = cflict_info.holder_sess_id_;
+    set_ash_rowlock_diag_info(cflict_info);
+    ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+        ObWaitEventIds::ROW_LOCK_WAIT,
+        cflict_info.conflict_tx_id_,
+        cflict_info.conflict_tx_hold_seq_.get_seq(),
+        calc_holder_tx_lock_timestamp(cflict_info.holder_tx_start_time_, cflict_info.conflict_tx_hold_seq_.get_seq()));
     TRANS_LOG_RET(LOG_LEVEL_FOR_LWM, OB_SUCCESS, "handle lock conflict end", K(ret), K(cflict_infos), KPC(node));
   }
   if (OB_UNLIKELY(!ObDeadLockDetectorMgr::is_deadlock_enabled())) {
@@ -1570,6 +1571,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                       sess_id_pair.assoc_sess_id_,
                       holder_session_id,
                       holder_tx_start_time);
+      set_ash_rowlock_diag_info(cflict_info);
       if (OB_SUCCESS != ObTransDeadlockDetectorAdapter::
                   get_trans_info_on_participant(cflict_info.conflict_tx_id_,
                                                 cflict_info.conflict_ls_,
@@ -1645,6 +1647,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                       0,
                       holder_session_id,
                       holder_tx_start_time);
+      set_ash_rowlock_diag_info(cflict_info);
       if (OB_SUCCESS != ObTransDeadlockDetectorAdapter::
                   get_trans_info_on_participant(cflict_info.conflict_tx_id_,
                                                 cflict_info.conflict_ls_,
@@ -1871,6 +1874,15 @@ void ObLockWaitMgr::end_row_lock_wait_event(const Node * const node)
       }
     }
   }
+}
+
+void ObLockWaitMgr::set_ash_rowlock_diag_info(const ObRowConflictInfo &cflict_info)
+{
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_tx_id_, cflict_info.conflict_tx_id_);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_data_seq_num_, cflict_info.conflict_tx_hold_seq_.get_seq());
+  int64_t holder_lock_timestamp = calc_holder_tx_lock_timestamp(cflict_info.holder_tx_start_time_, cflict_info.conflict_tx_hold_seq_.get_seq());
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_lock_timestamp_, holder_lock_timestamp);
+  common::ObActiveSessionGuard::get_stat().block_sessid_ = cflict_info.holder_sess_id_;
 }
 }; // end namespace lockwaitmgr
 }; // end namespace oceanbase

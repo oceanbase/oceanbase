@@ -310,6 +310,9 @@ public:
   inline void stop_das_retry_wait_event() {
     end_retry_wait_event();
   }
+  inline bool is_in_row_lock_wait() {
+    return retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT;
+  }
 
 private:
   inline void set_retry_ash_diag_info_ptr(sql::ObQueryRetryASHDiagInfo* query_retry_ash_diag_info_ptr) {

@@ -442,6 +442,7 @@ private:
   ObDiagnosticInfo *prev_di_;
   bool need_record_;
   bool has_finish_switch_di_;
+  int64_t prev_block_sessid_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

@@ -133,7 +133,8 @@ void ObActiveSessHistTask::runTimerTask()
 
 bool ObActiveSessHistTask::process_running_di(const SessionID &session_id, ObDiagnosticInfo *di)
 {
-  if (di->is_active_session()) {
+  if (di->is_active_session() ||
+      di->get_ash_stat().is_in_row_lock_wait()) {
     di->get_ash_stat().sample_time_ = sample_time_;
     ObActiveSessionStat::calc_db_time(di, sample_time_, tsc_sample_time_);
     ObActiveSessionStat::calc_retry_wait_event(di->get_ash_stat(), sample_time_);

@@ -423,6 +423,7 @@ private:
   inline int64_t calc_holder_tx_lock_timestamp(const int64_t holder_tx_start_time, const int64_t holder_data_seq_num);
   void begin_row_lock_wait_event(const Node * const node);
   void end_row_lock_wait_event(const Node * const node);
+  void set_ash_rowlock_diag_info(const ObRowConflictInfo &cflict_info);
 private:
   bool is_inited_;
   Hash hash_ref_;

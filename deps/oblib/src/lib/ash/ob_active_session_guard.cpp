@@ -173,7 +173,7 @@ void ObActiveSessionStat::calc_retry_wait_event(ObActiveSessionStat &stat, const
           sample_time - stat.curr_query_start_time_ > stat.last_query_exec_use_time_us_)  {
       // end query retry wait event
       stat.end_retry_wait_event();
-      if (retry_wait_event_no == ObWaitEventIds::ROW_LOCK_WAIT) {
+      if (retry_wait_event_no == ObWaitEventIds::ROW_LOCK_WAIT && stat.need_calc_wait_event_end_) {
         stat.block_sessid_ = 0;
       }
     } else {

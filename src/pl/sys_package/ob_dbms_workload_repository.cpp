@@ -3918,7 +3918,7 @@ int ObDbmsWorkloadRepository::print_top_blocking_session(const AshReportParams &
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
       } else if (OB_FAIL(sql_string.append(
-                    " and blocking_session_id != 0 and event_id = 14003) top_event GROUP BY blocking_session_id, event, p1, p2 having count(*) > 1) "))) {
+                    " and blocking_session_id != 0 and event_id = 14003) top_event GROUP BY blocking_session_id, event, p1, p2 having count(*) >= 1) "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (lib::is_oracle_mode() && OB_FAIL(sql_string.append(" ORDER BY CNT DESC) WHERE ROWNUM <= 100 "))) {
         LOG_WARN("append sql failed", K(ret));

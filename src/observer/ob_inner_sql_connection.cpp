@@ -2337,7 +2337,8 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, common::Ob
       inner_sql_di_(nullptr),
       prev_di_(nullptr),
       need_record_(true),
-      has_finish_switch_di_(false)
+      has_finish_switch_di_(false),
+      prev_block_sessid_(0)
 {
   if (is_inner_session_ && OB_NOT_NULL(di) && /*when remote sql or bootstraping, do not record */
       OB_NOT_NULL(GCTX.omt_) && 0 != di->get_session_id()) {
@@ -2346,6 +2347,7 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, common::Ob
     WAIT_BEGIN(ObWaitEventIds::INNER_SQL_EXEC_WAIT, 0 /*timeout_ms*/,
         ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_ /*p1*/, inner_session_id_ /*p2*/,
         0 /*p3*/, false /* is_atomic*/);
+    prev_block_sessid_ = common::ObActiveSessionGuard::get_stat().block_sessid_;
     common::ObActiveSessionGuard::get_stat().block_sessid_ = inner_session_id_;
 
     // 2. switch the ptr of the thread-local ASH stat to the inner session ASH stat.
@@ -2376,7 +2378,7 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
     }
 
     // 4. wait event end
-    common::ObActiveSessionGuard::get_stat().block_sessid_ = 0;
+    common::ObActiveSessionGuard::get_stat().block_sessid_ = prev_block_sessid_;
     WAIT_END(ObWaitEventIds::INNER_SQL_EXEC_WAIT);
   }
 }
