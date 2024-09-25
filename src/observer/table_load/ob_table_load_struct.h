@@ -85,10 +85,10 @@ public:
 };
 
 enum class ObTableLoadExeMode {
-  FAST_HEAP_TABLE = 0,
-  GENERAL_TABLE_COMPACT = 1,
-  MULTIPLE_HEAP_TABLE_COMPACT = 2,
-  MEM_COMPACT = 3,
+  FAST_HEAP_TABLE = 0,  //快速堆表
+  GENERAL_TABLE_COMPACT = 1,  // 非堆表不排序
+  MULTIPLE_HEAP_TABLE_COMPACT = 2,  //堆表排序
+  MEM_COMPACT = 3,  //非堆表排序
   MAX_TYPE
 };
 
