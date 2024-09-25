@@ -387,8 +387,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) ||
+             (data_version < DATA_VERSION_4_3_3_0)) {
     // do nothing
   } else {
     uint64_t action = 0;
@@ -527,8 +527,8 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) ||
+             (data_version < DATA_VERSION_4_3_3_0)) {
     // do nothing
   } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
     // do nothing
@@ -572,8 +572,8 @@ int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
   ObMySQLProxy *sql_proxy = nullptr;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0) ||
+             (data_version < DATA_VERSION_4_3_3_0)) {
     // do nothing
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
