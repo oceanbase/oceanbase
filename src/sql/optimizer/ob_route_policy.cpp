@@ -129,7 +129,14 @@ int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (candi_replicas.count() <= 1) {//do nothing
+  } else if (candi_replicas.count() <= 1) {
+    ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
+    if (1 == candi_replicas.count() &&
+        policy_type == COLUMN_STORE_ONLY &&
+        !ObReplicaTypeCheck::is_columnstore_replica(candi_replicas.at(0).get_replica_type())) {
+      ret = OB_NO_REPLICA_VALID;
+      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
+    }
   } else if (WEAK == ctx.consistency_level_) {
     if (OB_FAIL(filter_replica(local_server, ls_id, candi_replicas, ctx))) {
       LOG_WARN("fail to filter replicas", K(candi_replicas), K(ctx), K(ret));
