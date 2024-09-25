@@ -2425,7 +2425,7 @@ int ObPrefetchBackupInfoTask::inner_check_backup_item_need_copy_when_change_retr
       } else {
         LOG_DEBUG("find, no need copy", K(logic_id));
         need_copy = false;
-        if (OB_FAIL(iter->physical_id_.get_backup_macro_block_index(backup_data_type_, iter->logic_id_, macro_index))) {
+        if (OB_FAIL(iter->physical_id_.get_backup_macro_block_index(iter->logic_id_, macro_index))) {
           LOG_WARN("failed to get backup macro block index", K(ret), K_(backup_data_type));
         }
       }
@@ -3102,13 +3102,19 @@ int ObLSBackupDataTask::write_ddl_other_block_(const blocksstable::ObBufferReade
   if (OB_FAIL(backup_data_ctx_.write_other_block(buffer_reader, offset, length))) {
     LOG_WARN("failed to write ddl other block", K(ret), K(buffer_reader));
   } else {
+    ObBackupDataType backup_data_type;
+    backup_data_type.set_user_data_backup();
     physical_id.backup_set_id_ = param_.backup_set_desc_.backup_set_id_;
     physical_id.ls_id_ = param_.ls_id_.id();
     physical_id.turn_id_ = param_.turn_id_;
     physical_id.retry_id_ = param_.retry_id_;
     physical_id.file_id_ = task_id_;
-    physical_id.aligned_offset_ = offset / DIO_READ_ALIGN_SIZE;
-    physical_id.aligned_length_ = length / DIO_READ_ALIGN_SIZE;
+    physical_id.data_type_ = backup_data_type.type_;
+    physical_id.offset_ = offset / DIO_READ_ALIGN_SIZE;
+    physical_id.length_ = length / DIO_READ_ALIGN_SIZE;
+    physical_id.block_type_ = ObBackupDeviceMacroBlockId::DATA_BLOCK;
+    physical_id.id_mode_ = static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP);
+    physical_id.version_ = ObBackupDeviceMacroBlockId::BACKUP_MACRO_BLOCK_ID_VERSION;
   }
   return ret;
 }
@@ -3165,14 +3171,14 @@ int ObLSBackupDataTask::deal_with_sstable_other_block_root_blocks_(
       } else if (OB_FAIL(linked_writer->write(link_item))) {
         LOG_WARN("failed to write link item", K(ret));
       } else {
-        LOG_INFO("write link item", K(link_item));
+        LOG_INFO("write link item", K(tablet_id), K(table_key), K(link_item));
       }
     }
     if (FAILEDx(linked_writer->close())) {
       LOG_WARN("failed to close item writer", K(ret));
     }
+    LOG_INFO("deal with ddl sstable root blocks", K(tablet_id), K(table_key));
   }
-  LOG_INFO("deal with ddl sstable root blocks", K(tablet_id), K(table_key));
   return ret;
 }
 

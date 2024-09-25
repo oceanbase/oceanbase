@@ -112,8 +112,8 @@ int ObBackupLinkedBlockReader::pread_block_(const ObBackupLinkedBlockAddr &block
 {
   int ret = OB_SUCCESS;
   ObBackupPath backup_path;
-  const int64_t offset = static_cast<int64_t>(block_addr.aligned_offset_) * DIO_READ_ALIGN_SIZE;
-  const int64_t length = static_cast<int64_t>(block_addr.aligned_length_) * DIO_READ_ALIGN_SIZE;
+  const int64_t offset = static_cast<int64_t>(block_addr.offset_) * DIO_READ_ALIGN_SIZE;
+  const int64_t length = static_cast<int64_t>(block_addr.length_) * DIO_READ_ALIGN_SIZE;
   const ObBackupStorageInfo *storage_info = backup_set_dest_.get_storage_info();
   if (!block_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

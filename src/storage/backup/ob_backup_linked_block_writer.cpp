@@ -106,7 +106,7 @@ int ObBackupLinkedBlockWriter::calc_next_block_addr_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file offset should not be null", K(ret), KP_(file_offset));
   } else {
-    current_block_addr_.aligned_offset_ = *file_offset_ / DIO_READ_ALIGN_SIZE;
+    current_block_addr_.offset_ = *file_offset_ / DIO_READ_ALIGN_SIZE;
   }
   return ret;
 }
@@ -241,13 +241,16 @@ int ObBackupLinkedBlockItemWriter::get_entry_block_addr_(
     ObBackupDataType backup_data_type;
     backup_data_type.set_user_data_backup();
     block_addr.ls_id_ = param.ls_id_.id();
-    block_addr.type_ = backup_data_type.type_;
+    block_addr.data_type_ = backup_data_type.type_;
     block_addr.turn_id_ = param.turn_id_;
     block_addr.retry_id_ = param.retry_id_;
     block_addr.file_id_ = file_id;
     block_addr.backup_set_id_ = param.backup_set_desc_.backup_set_id_;
-    block_addr.aligned_offset_ = file_offset / DIO_READ_ALIGN_SIZE; // aligned offset is real file offset divided by 4096
-    block_addr.aligned_length_ = BLOCK_SIZE / DIO_READ_ALIGN_SIZE;
+    block_addr.offset_ = file_offset / DIO_READ_ALIGN_SIZE; // aligned offset is real file offset divided by 4096
+    block_addr.length_ = BLOCK_SIZE / DIO_READ_ALIGN_SIZE;
+    block_addr.block_type_ = ObBackupDeviceMacroBlockId::DATA_BLOCK;
+    block_addr.id_mode_ = static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP);
+    block_addr.version_ = ObBackupDeviceMacroBlockId::BACKUP_MACRO_BLOCK_ID_VERSION;
   }
   return ret;
 }

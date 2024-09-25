@@ -618,7 +618,7 @@ int ObCopyMacroBlockRestoreReader::fetch_macro_block_index_(
     backup::ObBackupDeviceMacroBlockId macro_id;
     if (OB_FAIL(restore_macro_block_id_mgr_->get_macro_block_id(block_id_idx, logic_block_id, macro_id))) {
       LOG_WARN("failed to get macro block id", K(ret), K(block_id_idx));
-    } else if (OB_FAIL(macro_id.get_backup_macro_block_index(backup_data_type, logic_block_id, macro_index))) {
+    } else if (OB_FAIL(macro_id.get_backup_macro_block_index(logic_block_id, macro_index))) {
       LOG_WARN("failed to get backup macro block index", K(ret));
     }
   } else {
@@ -811,8 +811,9 @@ int ObCopyDDLMacroBlockRestoreReader::get_next_macro_block(
     LOG_WARN("macro block count is bigger than link item count", K(ret), K(macro_block_count_), K(link_item_));
   } else {
     const ObLogicMacroBlockId logic_block_id(1, 1, 1); //TODO(yanfeng.yyy)Fake logical block id
-    backup::ObBackupPhysicalID physic_block_id;
+    backup::ObBackupDeviceMacroBlockId physic_block_id;
     share::ObBackupDataType data_type;
+    data_type.set_user_data_backup();
     share::ObBackupPath backup_path;
     const int64_t align_size = DIO_READ_ALIGN_SIZE;
     backup::ObBackupMacroBlockIndex macro_index;
@@ -828,8 +829,6 @@ int ObCopyDDLMacroBlockRestoreReader::get_next_macro_block(
     physic_block_id = link_item_.at(macro_block_count_).backup_id_;
     if (OB_FAIL(physic_block_id.get_backup_macro_block_index(logic_block_id, macro_index))) {
       LOG_WARN("failed to get backup macro block index", K(ret), K(logic_block_id), K(physic_block_id));
-    } else if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key_, data_type))) {
-      LOG_WARN("fail to get backup data type", K(ret), K(table_key_));
     } else if (OB_FAIL(restore_base_info_->get_restore_backup_set_dest(macro_index.backup_set_id_, backup_set_brief_info))) {
       LOG_WARN("fail to get backup set dest", K(ret), K(macro_index));
     } else if (OB_FAIL(restore_base_info_->get_restore_data_dest_id(*GCTX.sql_proxy_, MTL_ID(), dest_id))) {
@@ -837,7 +836,7 @@ int ObCopyDDLMacroBlockRestoreReader::get_next_macro_block(
     } else if (OB_FALSE_IT(mod.storage_id_ = static_cast<uint64_t>(dest_id))) {
     } else if (OB_FAIL(backup_set_dest.set(backup_set_brief_info.backup_set_path_))) {
       LOG_WARN("fail to set backup set dest", K(ret));
-    } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest, macro_index.ls_id_,
+    } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest, macro_index.ls_id_,
         data_type, macro_index.turn_id_, macro_index.retry_id_, macro_index.file_id_, backup_path))) {
       LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(macro_index), KPC(restore_base_info_));
     } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data(backup_path.get_obstr(),
@@ -4243,7 +4242,7 @@ int ObCopyRemoteSSTableMacroBlockRestoreReader::get_backup_macro_block_index_(
   share::ObBackupDataType data_type;
   if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key_, data_type))) {
     LOG_WARN("fail to get backup data type", K(ret), K(table_key_));
-  } else if (OB_FAIL(macro_id.macro_id_.get_backup_macro_block_index(data_type, macro_id.logic_block_id_, macro_index))) {
+  } else if (OB_FAIL(macro_id.macro_id_.get_backup_macro_block_index(macro_id.logic_block_id_, macro_index))) {
     LOG_WARN("failed to get backup macro block index", K(ret), K(data_type), K(macro_id));
   }
   return ret;

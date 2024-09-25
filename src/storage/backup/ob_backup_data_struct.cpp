@@ -1573,7 +1573,7 @@ bool ObBackupDeviceMacroBlockId::is_valid() const
       && static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP) == id_mode_;
 }
 
-int ObBackupDeviceMacroBlockId::get_backup_macro_block_index(const share::ObBackupDataType &backup_data_type,
+int ObBackupDeviceMacroBlockId::get_backup_macro_block_index(
     const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const
 {
   int ret = OB_SUCCESS;

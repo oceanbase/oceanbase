@@ -154,14 +154,19 @@ int prepare_one_item(const int64_t idx, const int64_t file_id, const ObLSBackupD
   item.macro_id_.third_id_ = 0;
   item.macro_id_.fourth_id_ = 0;
 
+  ObBackupDataType backup_data_type;
+  backup_data_type.set_user_data_backup();
   item.backup_id_.ls_id_ = param.ls_id_.id();
-  item.backup_id_.type_ = 0;
+  item.backup_id_.data_type_ = backup_data_type.type_;
   item.backup_id_.turn_id_ = param.turn_id_;
   item.backup_id_.retry_id_ = param.retry_id_;
   item.backup_id_.file_id_ = file_id;
   item.backup_id_.backup_set_id_ = param.backup_set_desc_.backup_set_id_;
-  item.backup_id_.aligned_offset_ = idx * OB_DEFAULT_MACRO_BLOCK_SIZE / 4096;
-  item.backup_id_.aligned_length_ = OB_DEFAULT_MACRO_BLOCK_SIZE / 4096;
+  item.backup_id_.offset_ = idx * OB_DEFAULT_MACRO_BLOCK_SIZE / 4096;
+  item.backup_id_.length_ = OB_DEFAULT_MACRO_BLOCK_SIZE / 4096;
+  item.backup_id_.block_type_ = ObBackupDeviceMacroBlockId::DATA_BLOCK;
+  item.backup_id_.id_mode_ = static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP);
+  item.backup_id_.version_ = ObBackupDeviceMacroBlockId::BACKUP_MACRO_BLOCK_ID_VERSION;
   return ret;
 }
 
@@ -226,9 +231,9 @@ struct ObBackupLinkItemCompare
 
 struct ObBackupPhysicalIDCompare
 {
-  bool operator()(const ObBackupPhysicalID &lhs, const ObBackupPhysicalID &rhs)
+  bool operator()(const ObBackupDeviceMacroBlockId &lhs, const ObBackupDeviceMacroBlockId &rhs)
   {
-    return lhs.aligned_offset_ < rhs.aligned_offset_;
+    return lhs.offset_ < rhs.offset_;
   }
 };
 
@@ -257,8 +262,8 @@ int sort_and_compare_item_list(
 }
 
 int sort_and_compare_block_list(
-    common::ObArray<ObBackupPhysicalID> &block_list1,
-    common::ObArray<ObBackupPhysicalID> &block_list2)
+    common::ObArray<ObBackupDeviceMacroBlockId> &block_list1,
+    common::ObArray<ObBackupDeviceMacroBlockId> &block_list2)
 {
   int ret = OB_SUCCESS;
   ObBackupPhysicalIDCompare cmp;
@@ -269,8 +274,8 @@ int sort_and_compare_block_list(
     std::sort(block_list1.begin(), block_list1.end(), cmp);
     std::sort(block_list2.begin(), block_list2.end(), cmp);
     ARRAY_FOREACH_X(block_list1, idx, cnt, OB_SUCC(ret)) {
-      const ObBackupPhysicalID &id1 = block_list1.at(idx);
-      const ObBackupPhysicalID &id2 = block_list2.at(idx);
+      const ObBackupDeviceMacroBlockId &id1 = block_list1.at(idx);
+      const ObBackupDeviceMacroBlockId &id2 = block_list2.at(idx);
       if (id1 != id2) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("item not same", K(ret), K(idx), K(cnt), K(id1), K(id2));
@@ -351,7 +356,7 @@ int write_and_read_items(const int64_t item_count, const int64_t expected_block_
   ObArray<ObBackupLinkedItem> write_item_list;
   ObBackupLinkedBlockItemWriter writer;
   int64_t file_offset = 0;
-  ObBackupPhysicalID entry_block_id;
+  ObBackupDeviceMacroBlockId entry_block_id;
   int64_t total_block_count = 0;
   ObArray<ObBackupLinkedItem> read_item_list;
   ObBackupLinkedBlockItemReader reader;
@@ -359,8 +364,8 @@ int write_and_read_items(const int64_t item_count, const int64_t expected_block_
   ObStorageIdMod id_mod;
   id_mod.storage_id_ = 1;
   id_mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
-  ObArray<ObBackupPhysicalID> written_block_list;
-  ObArray<ObBackupPhysicalID> read_block_list;
+  ObArray<ObBackupDeviceMacroBlockId> written_block_list;
+  ObArray<ObBackupDeviceMacroBlockId> read_block_list;
   ObInOutBandwidthThrottle bandwidth_throttle;
 
   if (OB_FAIL(bandwidth_throttle.init(1024 * 1024 * 60)))  {

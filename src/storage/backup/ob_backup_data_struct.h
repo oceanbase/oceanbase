@@ -275,7 +275,7 @@ public:
 };
 
 struct ObBackupDeviceMacroBlockId;
-typedef ObBackupPhysicalID ObBackupLinkedBlockAddr;
+typedef ObBackupDeviceMacroBlockId ObBackupLinkedBlockAddr;
 
 struct ObBackupMacroBlockIndex {
   OB_UNIS_VERSION(1);
@@ -475,7 +475,7 @@ public:
 public:
   ObBackupDeviceMacroBlockId();
   ~ObBackupDeviceMacroBlockId();
-  int get_backup_macro_block_index(const share::ObBackupDataType &backup_data_type,
+  int get_backup_macro_block_index(
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const;
   int set(const int64_t backup_set_id, const int64_t ls_id, const int64_t dir_id,
       const int64_t turn_id, const int64_t retry_id, const int64_t file_id,
