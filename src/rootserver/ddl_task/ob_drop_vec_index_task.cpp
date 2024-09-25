@@ -538,6 +538,7 @@ int ObDropVecIndexTask::prepare(const share::ObDDLTaskStatus &new_status)
 {
   int ret = OB_SUCCESS;
   bool state_finished = false;
+  DEBUG_SYNC(DROP_VECTOR_INDEX_PREPARE_STATUS);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

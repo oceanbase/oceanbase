@@ -2243,6 +2243,8 @@ public:
       share::schema::ObTenantSchema &tenant_schema,
       share::schema::ObSchemaGetterGuard &schema_guard);
 
+  int check_vec_index_conflict(const uint64_t tenant_id, const uint64_t table_id);
+
   static int gen_tenant_init_config(
              const uint64_t tenant_id,
              const uint64_t compatible_version,
