@@ -114,7 +114,7 @@ int ObRecursiveInnerDataOp::get_all_data_from_left_batch()
           }
         }
       }
-      if (child_brs->end_) {
+      if (OB_SUCC(ret) && child_brs->end_) {
         break;
       }
     }
