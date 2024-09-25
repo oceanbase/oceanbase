@@ -456,6 +456,8 @@ int ObLogSubPlanFilter::check_if_match_das_group_rescan(ObLogicalOperator *root,
       LOG_WARN("unexpected null", K(ret));
     } else if (!tsc->use_das()) {
       group_rescan = false;
+    } else if (tsc->use_index_merge()) {
+      group_rescan = false;
     }
     if (OB_SUCC(ret) && group_rescan) {
       group_rescan = !(is_virtual_table(ap->ref_table_id_)

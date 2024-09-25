@@ -147,6 +147,10 @@ struct ObDASVIdMergeRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_VID_MERGE, ObDASVIdMergeCtDef, ObDASVIdMergeRtDef);
 
 
+struct ObDASIndexMergeCtDef;
+struct ObDASIndexMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_INDEX_MERGE, ObDASIndexMergeCtDef, ObDASIndexMergeRtDef);
+
 #undef REGISTER_DAS_ATTACH_OP
 }  // namespace sql
 }  // namespace oceanbase

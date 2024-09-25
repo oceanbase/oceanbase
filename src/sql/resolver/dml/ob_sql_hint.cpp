@@ -1345,7 +1345,8 @@ int ObStmtHint::merge_hint(ObHint &hint,
       || hint.is_join_filter_hint()
       || hint.is_table_parallel_hint()
       || hint.is_table_dynamic_sampling_hint()
-      || hint.is_pq_subquery_hint()) {
+      || hint.is_pq_subquery_hint()
+      || hint.is_union_merge_hint()) {
     if (OB_FAIL(add_var_to_array_no_dup(other_opt_hints_, &hint))) {
       LOG_WARN("failed to add var to array", K(ret));
     }
@@ -1501,6 +1502,10 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
       if (OB_FAIL(normal_hints_.push_back(hint))) {
         LOG_WARN("failed to push back", K(ret));
       }
+    } else if (hint->is_union_merge_hint()) {
+      if (OB_FAIL(add_union_merge_hint(stmt, query_hint, *static_cast<const ObUnionMergeHint*>(hint)))) {
+        LOG_WARN("failed to add union merge hint", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type in other_opt_hints_", K(ret), K(*hint));
@@ -1562,6 +1567,25 @@ int ObLogPlanHint::add_index_hint(const ObDMLStmt &stmt,
     }
   } else if (OB_FAIL(log_table_hint->index_hints_.push_back(&index_hint))) {
     LOG_WARN("failed to push back", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlanHint::add_union_merge_hint(const ObDMLStmt &stmt,
+                                        const ObQueryHint &query_hint,
+                                        const ObUnionMergeHint &union_merge_hint)
+{
+  int ret = OB_SUCCESS;
+  LogTableHint *log_table_hint = NULL;
+  if (OB_FAIL(get_log_table_hint_for_update(stmt, query_hint, union_merge_hint.get_table(),
+                                            true, log_table_hint))) {
+    LOG_WARN("failed to get log table hint by hint", K(ret));
+  } else if (NULL == log_table_hint) {
+    /* do nothing */
+  } else if (T_UNION_MERGE_HINT == union_merge_hint.get_hint_type()) {
+    if (NULL == log_table_hint->union_merge_hint_) {
+      log_table_hint->union_merge_hint_ = &union_merge_hint;
+    }
   }
   return ret;
 }
@@ -1857,6 +1881,13 @@ int ObLogPlanHint::check_use_das(uint64_t table_id, bool &force_das, bool &force
     force_no_das = true;
   }
   return ret;
+}
+
+const ObUnionMergeHint *ObLogPlanHint::get_union_merge_hint(uint64_t table_id) const
+{
+  int ret = OB_SUCCESS;
+  const LogTableHint *log_table_hint = get_log_table_hint(table_id);
+  return NULL == log_table_hint ? NULL : log_table_hint->union_merge_hint_;
 }
 
 int ObLogPlanHint::check_use_column_store(uint64_t table_id, bool &force_column_store, bool &force_no_column_store) const
@@ -2387,6 +2418,7 @@ int LogTableHint::assign(const LogTableHint &other)
   parallel_hint_ = other.parallel_hint_;
   use_das_hint_ = other.use_das_hint_;
   use_column_store_hint_ = other.use_column_store_hint_;
+  union_merge_hint_ = other.union_merge_hint_;
   if (OB_FAIL(index_list_.assign(other.index_list_))) {
     LOG_WARN("failed to assign index list", K(ret));
   } else if (OB_FAIL(index_hints_.assign(other.index_hints_))) {
@@ -2407,7 +2439,7 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
   if (OB_ISNULL(table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected log index hint", K(ret), K(this));
-  } else if (index_hints_.empty()) {
+  } else if (index_hints_.empty() && union_merge_hint_ == nullptr) {
     /* do nothing */
   } else if (OB_FAIL(schema_guard.get_can_read_index_array(table_->ref_id_,
                                                            tids,
@@ -2420,6 +2452,9 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
   } else if (table_index_count > OB_MAX_INDEX_PER_TABLE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Table index count is bigger than OB_MAX_INDEX_PER_TABLE", K(ret), K(table_index_count));
+  } else if (union_merge_hint_ != nullptr &&
+    OB_FAIL(merge_index_list_.prepare_allocate(union_merge_hint_->get_index_name_list().count()))) {
+    LOG_WARN("failed to prepare allocate merge index list", KPC(union_merge_hint_), K(ret));
   } else {
     LOG_TRACE("get readable index", K(table_index_count));
     const share::schema::ObTableSchema *index_schema = NULL;
@@ -2486,6 +2521,19 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
             LOG_WARN("fail to push back", K(ret), K(index_id));
           } else if (OB_FAIL(index_hints.push_back(index_hints_.at(hint_pos)))) {
             LOG_WARN("fail to push back", K(ret), K(hint_pos));
+          }
+        }
+
+        if (OB_SUCC(ret) && union_merge_hint_ != nullptr) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < union_merge_hint_->get_index_name_list().count(); ++i) {
+            if (0 != union_merge_hint_->get_index_name_list().at(i).case_compare(index_name)) {
+              /* do nothing */
+            } else if (OB_UNLIKELY(i < 0 || i >= merge_index_list_.count())) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid argument", K(i), K(merge_index_list_.count()), K(ret));
+            } else {
+              merge_index_list_.at(i) = index_id;
+            }
           }
         }
       }

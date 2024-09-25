@@ -993,6 +993,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 <hint>INDEX { return INDEX_HINT; }
 <hint>NO_INDEX { return NO_INDEX_HINT; }
+<hint>UNION_MERGE { return UNION_MERGE_HINT; }
 <hint>USE_DAS { return USE_DAS_HINT; }
 <hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
 <hint>INDEX_SS { return INDEX_SS_HINT; }

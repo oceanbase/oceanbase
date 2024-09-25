@@ -269,7 +269,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
 #define COMPAT_VERSION_4_3_3      (oceanbase::common::cal_version(4, 3, 3, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_3
+#define COMPAT_VERSION_4_3_4      (oceanbase::common::cal_version(4, 3, 4, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_4
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
 
@@ -572,7 +573,8 @@ public:
       HINT_PQ_SET,
       HINT_JOIN_FILTER,
       HINT_TABLE_DYNAMIC_SAMPLING,
-      HINT_PQ
+      HINT_PQ,
+      HINT_UNION_MERGE
     };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
@@ -649,6 +651,7 @@ public:
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
   bool is_trans_added() const { return is_trans_added_; }
   bool set_trans_added(bool is_trans_added) { return is_trans_added_ = is_trans_added; }
+  bool is_union_merge_hint() const { return T_UNION_MERGE_HINT == hint_type_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
@@ -1029,6 +1032,28 @@ private:
   ObTableInHint table_;
   common::ObString index_name_;
   int64_t index_prefix_;
+};
+
+class ObUnionMergeHint : public ObOptHint
+{
+public:
+  ObUnionMergeHint(ObItemType hint_type = T_UNION_MERGE_HINT)
+    : ObOptHint(hint_type)
+  {
+    set_hint_class(HINT_UNION_MERGE);
+  }
+  int assign(const ObUnionMergeHint &other);
+  virtual ~ObUnionMergeHint() {}
+  virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  ObTableInHint &get_table() { return table_; }
+  const ObTableInHint &get_table() const { return table_; }
+  common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
+  const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list));
+private:
+  ObTableInHint table_;
+  common::ObSEArray<common::ObString, 2, common::ModulePageAllocator, true> index_name_list_;
 };
 
 class ObTableParallelHint : public ObOptHint

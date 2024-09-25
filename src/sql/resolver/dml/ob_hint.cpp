@@ -1261,6 +1261,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_FULL_HINT:           return "FULL";
     case T_NO_INDEX_HINT:       return "NO_INDEX";
     case T_USE_DAS_HINT:        return is_enable_hint ? "USE_DAS" : "NO_USE_DAS";
+    case T_UNION_MERGE_HINT:    return "UNION_MERGE";
     case T_USE_COLUMN_STORE_HINT: return is_enable_hint ? "USE_COLUMN_TABLE" : "NO_USE_COLUMN_TABLE";
     case T_INDEX_SS_HINT:       return "INDEX_SS";
     case T_INDEX_SS_ASC_HINT:   return "INDEX_SS_ASC";
@@ -1364,6 +1365,7 @@ int ObHint::deep_copy_hint_contain_table(ObIAllocator *allocator, ObHint *&hint)
     case HINT_JOIN_FILTER:  DEEP_COPY_NORMAL_HINT(ObJoinFilterHint); break;
     case HINT_WIN_MAGIC: DEEP_COPY_NORMAL_HINT(ObWinMagicHint); break;
     case HINT_COALESCE_AGGR: DEEP_COPY_NORMAL_HINT(ObCoalesceAggrHint); break;
+    case HINT_UNION_MERGE: DEEP_COPY_NORMAL_HINT(ObUnionMergeHint); break;
     default:  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type to deep copy", K(ret), K(hint_class_));
@@ -2272,6 +2274,37 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
     //do nothing
   } else if (OB_FAIL(BUF_PRINTF(" %ld", index_prefix_))) {
     LOG_WARN("fail to print index prefix", K(ret));
+  }
+  return ret;
+}
+
+int ObUnionMergeHint::assign(const ObUnionMergeHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_.assign(other.table_))) {
+    LOG_WARN("failed to assign table", K(ret));
+  } else if (OB_FAIL(index_name_list_.assign(other.index_name_list_))) {
+    LOG_WARN("failed to assign index name list", K(ret));
+  } else if  (OB_FAIL(ObOptHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  }
+  return ret;
+}
+
+int ObUnionMergeHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (OB_FAIL(table_.print_table_in_hint(plan_text))) {
+    LOG_WARN("fail to print table in hint", K(ret));
+  } else {
+    for (int64_t i = 0; i < index_name_list_.count(); i++) {
+      if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_list_.at(i).length(), index_name_list_.at(i).ptr()))) {
+        LOG_WARN("fail to print index name", K(ret));
+      }
+    }
   }
   return ret;
 }

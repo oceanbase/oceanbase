@@ -80,6 +80,7 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_text_retrieval_merge_iter.cpp
   das/iter/ob_das_iter_utils.cpp
   das/iter/ob_das_vid_merge_iter.cpp
+  das/iter/ob_das_index_merge_iter.cpp
 )
 
 ob_set_subtarget(ob_sql dtl

@@ -14621,6 +14621,12 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_UNION_MERGE_HINT: {
+      if (OB_FAIL(resolve_union_merge_hint(hint_node, opt_hint))) {
+        LOG_WARN("failed to resolve union merge hint", K(ret));
+      }
+      break;
+    }
     case T_ORDERED:
     case T_LEADING: {
       if (OB_FAIL(resolve_join_order_hint(hint_node, opt_hint))) {
@@ -14868,6 +14874,50 @@ int ObDMLResolver::resolve_index_hint(const TableItem &table, const ParseNode &i
       }
     }
   }
+  return ret;
+}
+
+int ObDMLResolver::resolve_union_merge_hint(const ParseNode &hint_node,
+                                            ObOptHint *&opt_hint)
+{
+  int ret = OB_SUCCESS;
+  opt_hint = NULL;
+  ObUnionMergeHint *union_merge_hint = NULL;
+  ParseNode *table_node = NULL;
+  ParseNode *index_list_node = NULL;
+  ObString qb_name;
+  if (OB_UNLIKELY(3 != hint_node.num_child_)
+      || OB_ISNULL(table_node = hint_node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index merge hint", K(ret), K(hint_node.type_), K(hint_node.num_child_),
+                                      K(table_node));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, union_merge_hint))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("Failed to resolve qb name node", K(ret));
+  } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, union_merge_hint->get_table()))) {
+    LOG_WARN("Resolve table relation fail", K(ret));
+  } else if (OB_ISNULL(index_list_node = hint_node.children_[2])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected union merge hint", K(ret));
+  } else {
+    const ParseNode *index_node = NULL;
+    ObString index_name;
+    for (int32_t i = 0; OB_SUCC(ret) && i < index_list_node->num_child_; i++) {
+      if (OB_ISNULL(index_node = index_list_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr index node", K(ret));
+      } else {
+        index_name.assign_ptr(index_node->str_value_, static_cast<int32_t>(index_node->str_len_));
+        if (OB_FAIL(union_merge_hint->get_index_name_list().push_back(index_name))) {
+          LOG_WARN("failed to push back index name", K(index_name), K(union_merge_hint->get_index_name_list()));
+        }
+      }
+    }
+    union_merge_hint->set_qb_name(qb_name);
+    opt_hint = union_merge_hint;
+  }
+  LOG_TRACE("resolve union merge hint finished", KPC(union_merge_hint));
   return ret;
 }
 

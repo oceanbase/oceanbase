@@ -127,18 +127,18 @@ void MergeStoreRows::reuse()
 
 void MergeStoreRows::reset()
 {
-  exprs_ = nullptr;
-  eval_ctx_ = nullptr;
-  group_id_idx_ = OB_INVALID_INDEX;
-  max_size_ = 1;
-  saved_size_ = 0;
-  cur_idx_ = OB_INVALID_INDEX;
   if (OB_NOT_NULL(store_rows_)) {
     for (int64_t i = 0; i < max_size_; i++) {
       store_rows_[i].~LastDASStoreRow();
     }
     store_rows_ = nullptr;
   }
+  exprs_ = nullptr;
+  eval_ctx_ = nullptr;
+  group_id_idx_ = OB_INVALID_INDEX;
+  max_size_ = 1;
+  saved_size_ = 0;
+  cur_idx_ = OB_INVALID_INDEX;
 }
 
 int ObDASMergeIter::set_merge_status(MergeType merge_type)
@@ -268,7 +268,7 @@ int ObDASMergeIter::do_table_scan()
         LOG_WARN("failed to push back das task ptr", K(ret));
       }
     } // for end
-    LOG_DEBUG("[DAS ITER] do table scan", K(ref_table_id_), K(das_tasks_arr_.count()));
+    LOG_DEBUG("[DAS ITER] merge iter do table scan", K(ref_table_id_), K(das_tasks_arr_.count()));
   }
   return ret;
 }
@@ -382,7 +382,7 @@ int ObDASMergeIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       LOG_WARN("das merge iter failed to get next rows", K(ret));
     }
   }
-  LOG_DEBUG("das merge iter get next rows end", K(count), K(merge_type_), K(merge_state_arr_), K(ret));
+  LOG_DEBUG("[DAS ITER] merge iter get next rows end", K(count), K(merge_type_), K(merge_state_arr_), K(ret));
   const ObBitVector *skip = nullptr;
   PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_, count, skip);
   return ret;
@@ -811,7 +811,7 @@ int ObDASMergeIter::compare(int64_t cur_idx, int64_t &output_idx)
       }
     }
   }
-  LOG_DEBUG("das merge iter compare finished", K(cur_idx), K(output_idx), K(used_for_keep_order_));
+  LOG_DEBUG("[DAS ITER] merge iter compare finished", K(cur_idx), K(output_idx), K(used_for_keep_order_));
   return ret;
 }
 

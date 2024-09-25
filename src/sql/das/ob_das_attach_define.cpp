@@ -71,6 +71,22 @@ OB_SERIALIZE_MEMBER((ObDASVIdMergeCtDef, ObDASAttachCtDef));
 
 OB_SERIALIZE_MEMBER((ObDASVIdMergeRtDef, ObDASAttachRtDef));
 
+const ObDASBaseCtDef *ObDASIndexMergeCtDef::get_left_ctdef() const
+{
+  OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
+  return children_[0];
+}
+
+const ObDASBaseCtDef *ObDASIndexMergeCtDef::get_right_ctdef() const
+{
+  OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
+  return children_[1];
+}
+
+OB_SERIALIZE_MEMBER((ObDASIndexMergeCtDef, ObDASAttachCtDef), merge_type_, is_left_child_leaf_node_, is_reverse_);
+
+OB_SERIALIZE_MEMBER((ObDASIndexMergeRtDef, ObDASAttachRtDef));
+
 OB_DEF_SERIALIZE(ObDASAttachSpec)
 {
   int ret = OB_SUCCESS;

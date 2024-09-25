@@ -136,6 +136,11 @@ private:
                               ObDASSortCtDef *&sort_ctdef);
   int mapping_oracle_real_agent_virtual_exprs(const ObLogTableScan &op,
                                               common::ObIArray<ObRawExpr*> &access_exprs);
+  int generate_index_merge_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
+  int generate_index_merge_node_ctdef(const ObLogTableScan &op,
+                                      ObIndexMergeNode *node,
+                                      common::ObIAllocator &alloc,
+                                      ObDASBaseCtDef *&node_ctdef);
 
 private:
   ObStaticEngineCG &cg_;

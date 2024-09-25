@@ -137,6 +137,7 @@ struct GroupRescanParamInfo
   common::ObObjParam cur_param_; //current param in param store, used to restore paramstore state after the completion of group rescan.
 };
 typedef common::ObFixedArray<GroupRescanParamInfo, common::ObIAllocator> GroupRescanParamArray;
+
 struct ObTableScanCtDef
 {
   OB_UNIS_VERSION(1);
@@ -158,7 +159,9 @@ public:
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
-    return lookup_ctdef_ != nullptr ? lookup_ctdef_->result_output_ : scan_ctdef_.result_output_;
+    return attach_spec_.attach_ctdef_ != nullptr ? attach_spec_.get_result_output()
+                                                 : lookup_ctdef_ != nullptr ? lookup_ctdef_->result_output_
+                                                 : scan_ctdef_.result_output_;
   }
   const UIntFixedArray &get_full_acccess_cids() const
   {
@@ -179,7 +182,9 @@ public:
                KPC_(das_dppr_tbl),
                KPC_(calc_part_id_expr),
                K_(global_index_rowkey_exprs),
-               K_(attach_spec));
+               K_(attach_spec),
+               K_(is_das_keep_order),
+               K_(use_index_merge));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -211,7 +216,8 @@ public:
     uint64_t flags_;
     struct {
       uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
-      uint64_t reserved_                     : 63;
+      uint64_t use_index_merge_              : 1; // whether use index merge
+      uint64_t reserved_                     : 62;
     };
   };
 };
@@ -485,7 +491,8 @@ protected:
   int single_equal_scan_check_type(const ParamStore &param_store, bool& is_same_type);
   bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.pre_query_range_.has_range(); }
   int prepare_single_scan_range(int64_t group_idx = 0);
-
+  int prepare_index_merge_scan_range(int64_t group_idx = 0);
+  int prepare_range_for_each_index(int64_t group_idx, ObIAllocator &allocator, ObDASBaseRtDef *rtdef);
   int reuse_table_rescan_allocator();
 
   int local_iter_rescan();

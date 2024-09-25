@@ -197,20 +197,38 @@ int ObDASSortIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   } else if (!sort_finished_ && OB_FAIL(do_sort(true))) {
     LOG_WARN("failed to do sort", K(ret));
   } else {
-    bool got_rows = false;
-    // TODO: @bingfan use vectorized interface instead.
-    while (OB_SUCC(ret) && !got_rows) {
-      if (OB_FAIL(sort_impl_.get_next_row(sort_row_))) {
+    if (input_row_cnt_ == 0 && limit_param_.limit_ > 0 && limit_param_.offset_ > 0)  {
+      int64_t need_offset_count = limit_param_.offset_;
+      while (OB_SUCC(ret) && need_offset_count > 0) {
+        int64_t got_count = 0;
+        if (OB_FAIL(sort_impl_.get_next_batch(sort_row_, need_offset_count, got_count))) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("failed to get next rows from child iter", K(ret));
+          }
+        }
+        input_row_cnt_ += got_count;
+        need_offset_count = need_offset_count - got_count;
+        got_count = 0;
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_LIKELY(need_offset_count == 0) && OB_LIKELY(input_row_cnt_ == limit_param_.offset_)) {
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected need offset count", K(ret), K(need_offset_count), K(input_row_cnt_), K(limit_param_.offset_));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int64_t min_capacity = limit_param_.limit_ > 0 ? OB_MIN(capacity, limit_param_.limit_ - output_row_cnt_) : capacity;
+      if (OB_FAIL(sort_impl_.get_next_batch(sort_row_, min_capacity, count))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("failed to get next row from sort impl", K(ret));
+          LOG_WARN("failed to get next rows from child iter", K(ret));
         }
-      } else {
-        ++input_row_cnt_;
-        if (input_row_cnt_ > limit_param_.offset_) {
-          got_rows = true;
-          count = 1;
-          ++output_row_cnt_;
-        }
+      }
+      output_row_cnt_ += count;
+      if (OB_FAIL(ret)) {
+      } else if (limit_param_.limit_ > 0 && (output_row_cnt_ >= limit_param_.limit_)) {
+        ret = OB_ITER_END;
       }
     }
   }

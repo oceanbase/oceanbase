@@ -69,6 +69,10 @@ enum ObDASIterTreeType : uint32_t
 struct ObDASRelatedTabletID
 {
 public:
+  ObDASRelatedTabletID(common::ObIAllocator &alloc)
+    : index_merge_tablet_ids_(alloc)
+  { reset(); }
+
   common::ObTabletID lookup_tablet_id_;
   common::ObTabletID aux_lookup_tablet_id_;
   common::ObTabletID rowkey_vid_tablet_id_;
@@ -78,6 +82,11 @@ public:
   common::ObTabletID fwd_idx_tablet_id_;
   common::ObTabletID doc_id_idx_tablet_id_;
   /* used by fulltext index */
+
+  /* used by index merge */
+  common::ObFixedArray<common::ObTabletID, ObIAllocator> index_merge_tablet_ids_;
+  /* used by index merge */
+
   void reset()
   {
     lookup_tablet_id_.reset();
@@ -86,6 +95,7 @@ public:
     inv_idx_tablet_id_.reset();
     fwd_idx_tablet_id_.reset();
     doc_id_idx_tablet_id_.reset();
+    index_merge_tablet_ids_.reset();
   }
 };
 

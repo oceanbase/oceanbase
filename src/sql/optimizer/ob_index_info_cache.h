@@ -223,12 +223,14 @@ public:
   int get_query_range(const uint64_t table_id,
                       const uint64_t index_id,
                       const QueryRangeInfo *&query_range_info) const;
+
   int get_access_path_ordering(const uint64_t table_id,
                                const uint64_t index_id,
                                const OrderingInfo *&ordering_info) const;
   int get_index_info_entry(const uint64_t table_id,
                            const uint64_t index_id,
-                           IndexInfoEntry *&entry) const;
+                           IndexInfoEntry *&entry,
+                           int64_t *idx = nullptr) const;
   void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   void set_base_table_id(const uint64_t base_table_id) { base_table_id_ = base_table_id; }
   uint64_t get_table_id() const { return table_id_; }

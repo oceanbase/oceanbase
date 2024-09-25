@@ -11,7 +11,7 @@
  */
 
 #ifndef OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H
-#define OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H 1
+#define OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "sql/optimizer/ob_join_order.h"
@@ -565,6 +565,9 @@ public:
 
   bool is_need_feedback() const;
   int set_table_scan_filters(const common::ObIArray<ObRawExpr *> &filters);
+  // for index merge, we need to set range conds and filters for each index scan
+  int set_index_merge_scan_filters(const AccessPath *path);
+  int set_index_table_scan_filters(ObIndexMergeNode *node);
   inline common::ObIArray<ObRawExpr*> &get_range_conditions() { return range_conds_; }
   const common::ObIArray<ObRawExpr*> &get_range_conditions() const { return range_conds_; }
   inline void set_diverse_path_count(int64_t count) { diverse_path_count_ = count; }
@@ -622,8 +625,12 @@ public:
                                ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                ObIArray<ObRawExpr*> &lookup_pushdown_filters,
                                bool ignore_pd_filter = false) const;
+  int extract_nonpushdown_filters(const ObIArray<ObRawExpr*> &filters,
+                                  ObIArray<ObRawExpr*> &nonpushdown_filters,
+                                  ObIArray<ObRawExpr*> &pushdown_filters) const;
   int has_nonpushdown_filter(bool &has_npd_filter);
   int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
+  int replace_index_merge_pushdown_filters(ObIndexMergeNode *node, ObRawExprReplacer &replacer);
   int extract_virtual_gen_access_exprs(ObIArray<ObRawExpr*> &access_exprs,
                                       uint64_t scan_table_id);
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
@@ -664,6 +671,17 @@ public:
                               const ObColumnRefRawExpr *col_expr,
                               PushdownFilterMonotonicity &mono,
                               ObIArray<ObRawExpr *> &assist_exprs) const;
+
+  bool use_index_merge() const;
+  const ObIArray<ObRawExpr*> &get_full_filters() const { return full_filters_; }
+  const ObIArray<ObRawExpr*> &get_index_range_conds(int64_t idx) const { return index_range_conds_.at(idx); }
+  const ObIArray<ObRawExpr*> &get_index_filters(int64_t idx) const { return index_filters_.at(idx); }
+  int get_index_range_conds(int64_t idx, ObIArray<ObRawExpr *> &index_range_conds) const;
+  int get_index_filters(int64_t idx, ObIArray<ObRawExpr *> &index_filters) const;
+  int get_index_tids(ObIArray<ObTableID> &index_tids) const;
+  int get_index_name_list(ObIArray<ObString> &index_name_list) const;
+  bool use_index_merge_by_hint() const;
+
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -716,6 +734,29 @@ protected: // memeber variables
   const ObQueryRange *pre_query_range_;
   const common::ObIArray<int64_t> *part_ids_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> range_conds_;
+
+  // for index merge, we need to prepare range conds and filters for each index scan, and we need
+  // to store full query filters for final check.
+  // for example, consider following query:
+  // create table t1(c1 int primary key, c2 int, c3 int, c4 int);
+  // create index c2 on t1(c2) local;
+  // create index c3 on t1(c3) local;
+  // create index c4 on t1(c4) local;
+  //     select /*+union_merge(t1 c2 c3 c4)*/ * from t1 where c1=1 or c2=1 or c4<1;
+  // when we choose index merge plan, range conds and filters need to be prepared, thus:
+  //  ---------------------------------------------------------
+  //  |  index table  |     range conds     |      filters    |
+  //  ---------------------------------------------------------
+  //  |      c2       |         NULL       |      c1 = 1      |
+  //  |      c3       |         NULL        |       NULL      |
+  //  |      c4       |        c4 < 1       |       NULL      |
+  //  ---------------------------------------------------------
+  // NOTE: only filters before index back can be pushed down to index scan.
+  // and full filters 'c1=1 or c2=1 or c4<1' will be used after lookup for final check.
+  typedef common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> ExprSEArray;
+  common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_range_conds_;
+  common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_filters_;
+  ExprSEArray full_filters_;
 
   // index primary key columns.
   // indicates use which columns to extract query range

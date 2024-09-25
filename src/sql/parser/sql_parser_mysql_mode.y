@@ -181,7 +181,7 @@ COALESCE_AGGR NO_COALESCE_AGGR WITH_PULLUP WO_PULLUP
 MV_REWRITE NO_MV_REWRITE
 DECORRELATE NO_DECORRELATE
 // optimize hint
-INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT
+INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT UNION_MERGE_HINT
 INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT
 USE_COLUMN_STORE_HINT NO_USE_COLUMN_STORE_HINT
 LEADING_HINT ORDERED
@@ -427,7 +427,7 @@ END_P SET_VAR DELIMITER
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
-%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix
+%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix union_merge_list
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
 %type <node> intnum_list
@@ -11506,6 +11506,18 @@ qb_name_list:
   }
   ;
 
+union_merge_list:
+NAME_OB
+{
+  $$ = $1;
+}
+| union_merge_list opt_comma NAME_OB
+{
+  (void) $2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
 optimize_hint:
 INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
 {
@@ -11514,6 +11526,12 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix '
 | NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_HINT, 3, $3, $4, $5);
+}
+| UNION_MERGE_HINT '(' qb_name_option relation_factor_in_hint union_merge_list ')'
+{
+  ParseNode *index_list = NULL;
+  merge_nodes(index_list, result, T_UNION_MERGE_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNION_MERGE_HINT, 3, $3, $4, index_list);
 }
 | FULL_HINT '(' qb_name_option relation_factor_in_hint ')'
 {

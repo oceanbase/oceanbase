@@ -2889,8 +2889,10 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
         } else {
           LOG_DEBUG("handle text ir expr in plan", K(ret), K(non_match_filters), K(match_filters));
         }
-      } else if (OB_FAIL(scan->set_table_scan_filters(ap->filter_))) {
-        LOG_WARN("failed to set filters", K(ret));
+      } else if (scan->use_index_merge() && OB_FAIL(scan->set_index_merge_scan_filters(ap))) {
+        LOG_WARN("failed to set index merge filters", K(ret));
+      } else if (!scan->use_index_merge() && OB_FAIL(scan->set_table_scan_filters(ap->filter_))) {
+        LOG_WARN("failed to set table scan filters", K(ret));
       } else if (OB_FAIL(append(scan->get_pushdown_filter_exprs(), ap->pushdown_filters_))) {
         LOG_WARN("failed to append pushdown filters", K(ret));
       } else if (ap->est_cost_info_.index_meta_info_.is_multivalue_index_ &&
@@ -11275,6 +11277,18 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
           LOG_WARN("fail to store rowkey doc table id", K(ret));
         }
       }
+
+      if (OB_SUCC(ret) && tsc_op.use_index_merge()) {
+        ObArray<ObTableID> index_tids;
+        if (OB_FAIL(tsc_op.get_index_tids(index_tids))) {
+          LOG_WARN("failed to get index tids", K(ret));
+        } else if (OB_FAIL(append_array_no_dup(rel_info.related_ids_, index_tids))) {
+          LOG_WARN("failed to append index merge table ids", K(index_tids), K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+          LOG_WARN("failed to append main table id", K(ret));
+        }
+      }
+      LOG_TRACE("collect location related info", K(rel_info));
 
       if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
         LOG_WARN("store location related info failed", K(ret));

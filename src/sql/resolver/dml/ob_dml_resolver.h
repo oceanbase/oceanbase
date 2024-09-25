@@ -942,6 +942,8 @@ private:
                          ObOptHint *&opt_hint);
   int resolve_index_hint(const TableItem &table, // resolved mysql mode index hint after table
                          const ParseNode &index_hint_node);
+  int resolve_union_merge_hint(const ParseNode &hint_node,
+                               ObOptHint *&opt_hint);
   int resolve_table_parallel_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_order_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_hint(const ParseNode &join_node, ObIArray<ObHint*> &join_hints);
