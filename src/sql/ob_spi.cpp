@@ -6067,7 +6067,13 @@ int ObSPIService::construct_exec_params(ObPLExecCtx *ctx,
         }
         OX (new_param.set_accuracy(result.get_accuracy()));
         OX (new_param.set_need_to_check_type(true));
-        OZ (exec_params.push_back(new_param));
+        if (OB_SUCC(ret)) {
+          OZ (exec_params.push_back(new_param));
+          if (OB_FAIL(ret) && !is_forall) {
+            int ret = OB_SUCCESS;
+            OZ (ObUserDefinedType::destruct_obj(new_param, ctx->exec_ctx_->get_my_session()));
+          }
+        }
       }
     }
   }
