@@ -196,6 +196,8 @@ int ObRawExprDeduceType::visit(ObColumnRefRawExpr &expr)
       ObSubSchemaValue meta_unused;
       if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, meta_unused))) {
         LOG_WARN("invalid subschema id", K(ret), K(subschema_id));
+      } else if (OB_FAIL(construct_collecton_attr_expr(expr))) {
+        LOG_WARN("failed to construct collection attr expr", K(ret));
       }
     }
   }
