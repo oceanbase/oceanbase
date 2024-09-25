@@ -325,7 +325,8 @@ public:
       const int64_t tenant_id,
       const int64_t parent_task_id,
       const ObTableSchema &index_schema,
-      const uint64_t target_id,
+      const uint64_t target_table_id,
+      const uint64_t target_task_id,
       ObDDLUpateParentTaskIDType update_type,
       ObIAllocator &allocator,
       common::ObISQLClient &proxy);

@@ -197,7 +197,7 @@ int ObIndexBuilder::drop_index_on_failed(const ObDropIndexArg &arg, obrpc::ObDro
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
-            arg.task_id_, new_index_schemas.at(0), res.task_id_,
+            arg.task_id_, new_index_schemas.at(0), res.task_id_, res.task_id_,
             ObDDLUpateParentTaskIDType::UPDATE_DROP_INDEX_TASK_ID, allocator, trans))) {
           LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(res.task_id_));
         }

@@ -82,6 +82,11 @@ public:
   void set_index_id_task_submitted(const bool status) { index_id_task_submitted_ = status; }
   void set_index_snapshot_data_task_submitted(const bool status) { index_snapshot_data_task_submitted_ = status; }
   void set_drop_index_task_submitted(const bool status) { drop_index_task_submitted_ = status; }
+  void set_rowkey_vid_task_id(const uint64_t id) { rowkey_vid_task_id_ = id; }
+  void set_vid_rowkey_task_id(const uint64_t id) { vid_rowkey_task_id_ = id; }
+  void set_delta_buffer_task_id(const uint64_t id) { delta_buffer_task_id_ = id; }
+  void set_index_id_task_id(const uint64_t id) { index_id_task_id_ = id; }
+  void set_index_snapshot_task_id(const uint64_t id) { index_snapshot_task_id_ = id; }
 
   int update_task_message(common::ObISQLClient &proxy);
 

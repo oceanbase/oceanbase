@@ -2993,16 +2993,17 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
     const int64_t tenant_id,
     const int64_t parent_task_id,
     const ObTableSchema &index_schema,
-    const uint64_t target_id,
+    const uint64_t target_table_id,
+    const uint64_t target_task_id,  // task id maybe is OB_INVALID_ID
     ObDDLUpateParentTaskIDType update_type,
     ObIAllocator &allocator,
     common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   ObDDLTaskRecord task_record;
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == parent_task_id || OB_INVALID_ID == target_id) {
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == parent_task_id ||  OB_INVALID_ID == target_table_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(parent_task_id), K(target_id));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(parent_task_id), K(target_table_id));
   } else if (OB_FAIL(get_ddl_task_record(tenant_id, parent_task_id, GCTX.root_service_->get_sql_proxy(), allocator, task_record))) {
     LOG_WARN("fail to get ddl task record", K(ret), K(parent_task_id));
   } else {
@@ -3012,23 +3013,28 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
           LOG_WARN("fail to init ObVecIndexBuildTask", K(ret), K(task_record));
         } else if (UPDATE_CREATE_INDEX_ID == update_type) {
           if (index_schema.is_vec_rowkey_vid_type()) {
-            task.set_rowkey_vid_aux_table_id(target_id);
+            task.set_rowkey_vid_aux_table_id(target_table_id);
+            task.set_rowkey_vid_task_id(target_task_id);
             task.set_rowkey_vid_task_submitted(true);
           } else if (index_schema.is_vec_vid_rowkey_type()) {
-            task.set_vid_rowkey_aux_table_id(target_id);
+            task.set_vid_rowkey_aux_table_id(target_table_id);
+            task.set_vid_rowkey_task_id(target_task_id);
             task.set_vid_rowkey_task_submitted(true);
           } else if (index_schema.is_vec_delta_buffer_type()) {
-            task.set_delta_buffer_table_id(target_id);
+            task.set_delta_buffer_table_id(target_table_id);
+            task.set_delta_buffer_task_id(target_task_id);
             task.set_delta_buffer_task_submitted(true);
           } else if (index_schema.is_vec_index_id_type()) {
-            task.set_index_id_table_id(target_id);
+            task.set_index_id_table_id(target_table_id);
+            task.set_index_id_task_id(target_task_id);
             task.set_index_id_task_submitted(true);
           } else if (index_schema.is_vec_index_snapshot_data_type()) {
-            task.set_index_snapshot_data_table_id(target_id);
+            task.set_index_snapshot_data_table_id(target_table_id);
+            task.set_index_snapshot_task_id(target_task_id);
             task.set_index_snapshot_data_task_submitted(true);
           }
         } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
-          task.set_drop_index_task_id(target_id);
+          task.set_drop_index_task_id(target_task_id);
           task.set_drop_index_task_submitted(true);
         }
       }
