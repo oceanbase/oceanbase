@@ -167,8 +167,11 @@ struct ObVectorParamData
 {
   int64_t dim_;
   int64_t count_;
-  ObObj *vectors_;
+  int64_t curr_idx_;
+  ObObj *vectors_; // need do init by yourself
   ObObj *vids_;
+  static const int64_t VI_PARAM_DATA_BATCH_SIZE = 1000;
+  TO_STRING_KV(K_(dim), K_(count), K_(curr_idx), KP_(vectors), KP_(vids));
 };
 
 class ObVectorQueryAdaptorResultContext {
@@ -187,15 +190,27 @@ public:
   int is_bitmaps_valid();
   ObObj *get_vids() { return vec_data_.vids_; }
   ObObj *get_vectors() { return vec_data_.vectors_; }
+  int64_t get_curr_idx() { return vec_data_.curr_idx_; }
+  int64_t get_vec_cnt() { return vec_data_.count_ - vec_data_.curr_idx_ > ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE ?
+                                ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE :
+                                vec_data_.count_ - vec_data_.curr_idx_; }
   int64_t get_dim() { return vec_data_.dim_; }
   int64_t get_count() { return vec_data_.count_; }
+  bool if_next_batch() { return vec_data_.count_ > vec_data_.curr_idx_; }
+  bool is_query_end() { return get_curr_idx() + get_vec_cnt() >= get_count();}
   PluginVectorQueryResStatus get_status() { return status_; }
   ObVectorQueryProcessFlag get_flag() { return flag_; }
   ObIAllocator *get_allocator() { return allocator_; }
   ObIAllocator *get_tmp_allocator() { return tmp_allocator_; }
   int set_vector(int64_t index, const char *ptr, common::ObString::obstr_size_t size);
+  int set_vector(int64_t index, ObObj &obj);
   void set_vectors(ObObj *vectors) { vec_data_.vectors_ = vectors; }
 
+  void do_next_batch()
+  {
+    int64_t curr_cnt = get_vec_cnt();
+    vec_data_.curr_idx_ += curr_cnt;
+  }
 private:
   PluginVectorQueryResStatus status_;
   ObVectorQueryProcessFlag flag_;
@@ -504,6 +519,8 @@ private:
 
   void output_bitmap(roaring::api::roaring64_bitmap_t *bitmap);
   int print_bitmap(roaring::api::roaring64_bitmap_t *bitmap);
+  void print_vids(uint64_t *vids, int64_t count);
+  void print_vectors(float *vecs, int64_t count, int64_t dim);
 
   int merge_mem_data_(ObVectorIndexRecordType type,
                       ObPluginVectorIndexAdaptor *partial_idx_adpt,
@@ -646,6 +663,11 @@ private:
   lib::MemoryContext mem_context_;
   constexpr static int64_t MEM_PTR_HEAD_SIZE = sizeof(int64_t);
 };
+
+void free_memdata_resource(ObVectorIndexRecordType type,
+                           ObVectorIndexMemData *&memdata,
+                           ObIAllocator *allocator,
+                           uint64_t tenant_id);
 
 };
 };

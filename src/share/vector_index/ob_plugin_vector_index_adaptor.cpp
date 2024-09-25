@@ -189,7 +189,7 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid index.", K(ret), K(index), K(get_count()));
   } else if (size == 0) {
-    // do nothing
+    vec_data_.vectors_[index].reset();
   } else if (size / sizeof(float) != get_dim()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector str.", K(ret), K(size), K(ptr), K(get_dim()));
@@ -205,10 +205,10 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
   return ret;
 }
 
-static void free_memdata_resource(ObVectorIndexRecordType type,
-                                  ObVectorIndexMemData *&memdata,
-                                  ObIAllocator *allocator,
-                                  uint64_t tenant_id)
+void free_memdata_resource(ObVectorIndexRecordType type,
+                           ObVectorIndexMemData *&memdata,
+                           ObIAllocator *allocator,
+                           uint64_t tenant_id)
 {
   LOG_INFO("free memdata", K(type), KP(memdata), K(allocator), K(lbt())); // remove later
   if (OB_NOT_NULL(memdata->bitmap_)) {
@@ -232,6 +232,7 @@ static void free_memdata_resource(ObVectorIndexRecordType type,
     LOG_INFO("delete vector index", K(type), KP(memdata->index_), K(lbt())); // remove later
     memdata->index_ = nullptr;
   }
+  memdata->is_init_ = false;
 }
 
 static int try_free_memdata_resource(ObVectorIndexRecordType type,
@@ -1044,19 +1045,20 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid ctx.", K(ret));
-  } else if (ctx->get_count() == 0) {
+  } else if (ctx->get_vec_cnt() == 0) {
     // do nothing
   } else if (OB_FAIL(try_init_mem_data(VIRT_INC))) {
     LOG_WARN("failed to init incr mem data.", K(ret));
-  } else if (OB_ISNULL(vectors = static_cast<float *>(tmp_allocator.alloc(sizeof(float) * ctx->get_dim() * ctx->get_count())))) {
+  } else if (OB_ISNULL(vectors = static_cast<float *>(tmp_allocator.alloc(sizeof(float) * ctx->get_dim() * ctx->get_vec_cnt())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc new mem.", K(ret));
-  } else if (OB_ISNULL(vids = static_cast<uint64_t *>(tmp_allocator.alloc(sizeof(uint64_t) * ctx->get_count())))) {
+  } else if (OB_ISNULL(vids = static_cast<uint64_t *>(tmp_allocator.alloc(sizeof(uint64_t) * ctx->get_vec_cnt())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc new mem.", K(ret));
   } else {
     int64_t dim = ctx->get_dim();
-    for (int i = 0; OB_SUCC(ret) && i < ctx->get_count(); i++) {
+    int64_t ctx_vec_cnt = ctx->get_vec_cnt();
+    for (int i = 0; OB_SUCC(ret) && i < ctx_vec_cnt; i++) {
       float *vector = nullptr;
       if (ctx->vec_data_.vectors_[i].is_null() || ctx->vec_data_.vectors_[i].get_string().empty()) {
         // do nothing
@@ -1067,20 +1069,30 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get float vector.", K(ret));
       } else {
-        vids[count] = ctx->get_vids()[i].get_int();
+        vids[count] = ctx->get_vids()[i + ctx->get_curr_idx()].get_int();
         for (int j = 0; OB_SUCC(ret) && j < dim; j++) {
           vectors[count * dim + j] = vector[j];
         }
         count++;
       }
     }
+    LOG_INFO("SYCN_DELTA_complete_data", K(ctx->vec_data_));
+    // print_vids(vids, ctx_vec_cnt);
+    // print_vectors(vectors, ctx_vec_cnt, dim);
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(write_into_delta_mem(ctx, count, vectors, vids))) {
     LOG_WARN("failed to write into delta mem.", K(ret), KP(ctx));
   } else {
-    ctx->status_ = PVQ_LACK_SCN;
+    ctx->do_next_batch();
+    if (ctx->if_next_batch()) {
+      ctx->status_ = PVQ_COM_DATA;
+      LOG_INFO("SYCN_DELTA_next_batch", K(ctx->vec_data_));
+    } else {
+      ctx->status_ = PVQ_LACK_SCN;
+      LOG_INFO("SYCN_DELTA_batch_end", K(ctx->vec_data_));
+    }
   }
 
   return ret;
@@ -1126,22 +1138,20 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
     } else if (OB_FAIL(read_scn.convert_for_gts(read_num))) {
       LOG_WARN("failed to convert from ts.", K(ret), K(read_num));
     }
+  }
 
-    if (OB_FAIL(ret)) {
-    } else if (check_if_complete_index(read_scn) &&
-                OB_FAIL(complete_index_mem_data(read_scn, row_iter, datum_row, i_vids))) {
-      LOG_WARN("failed to check comple index mem data.", K(ret), K(read_scn), K(vbitmap_data_->scn_));
-    } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get ctx bit map.", K(ret));
-    } else if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_)) {
-      if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_,
-                                         i_vids,
-                                         ctx))) {
-        LOG_WARN("failed to complete.", K(ret));
-      } else {
-        ctx->status_ = PVQ_COM_DATA;
-      }
+  if (OB_FAIL(ret)) {
+  } else if (check_if_complete_index(read_scn) &&
+             OB_FAIL(complete_index_mem_data(read_scn, row_iter, datum_row, i_vids))) {
+    LOG_WARN("failed to check comple index mem data.", K(ret), K(read_scn), K(vbitmap_data_->scn_));
+  } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ctx bit map.", K(ret));
+  } else if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_)) {
+    if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_, i_vids, ctx))) {
+      LOG_WARN("failed to complete.", K(ret));
+    } else {
+      ctx->status_ = PVQ_COM_DATA;
     }
   }
 
@@ -1342,6 +1352,8 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
       int index = 0;
       int64_t dim = 0;
       ObObj *vids = nullptr;
+      int64_t vector_cnt = bitmap_cnt > ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE ?
+                           ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE : bitmap_cnt;
       roaring::api::roaring64_iterator_t *bitmap_iter = nullptr;
       {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexBitmapADP"));
@@ -1356,7 +1368,8 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
       } else if (OB_ISNULL(vids = static_cast<ObObj *>(ctx->tmp_allocator_->alloc(sizeof(ObObj) * bitmap_cnt)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
-      } else if (OB_ISNULL(ctx->vec_data_.vectors_ = static_cast<ObObj *>(ctx->tmp_allocator_->alloc(sizeof(ObObj) * bitmap_cnt)))) {
+      } else if (OB_ISNULL(ctx->vec_data_.vectors_ = static_cast<ObObj *>(ctx->tmp_allocator_->
+                                                      alloc(sizeof(ObObj) * vector_cnt)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
       }
@@ -1380,10 +1393,8 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
         ctx->vec_data_.dim_ = dim;
         ctx->vec_data_.count_ = bitmap_cnt;
         ctx->vec_data_.vids_ = vids;
-
-        for (int64_t i = 0; OB_SUCC(ret) && i < bitmap_cnt; i++) {
-          ctx->vec_data_.vectors_[i].reset();
-        }
+        ctx->vec_data_.curr_idx_ = 0;
+        LOG_INFO("SYCN_DELTA_prepare_data", K(ctx->vec_data_));
       }
 
       if (OB_NOT_NULL(bitmap_iter)) {
@@ -1525,6 +1536,37 @@ int ObPluginVectorIndexAdaptor::print_bitmap(roaring::api::roaring64_bitmap_t *b
     }
   }
   return ret;
+}
+
+void ObPluginVectorIndexAdaptor::print_vids(uint64_t *vids, int64_t count)
+{
+  if (count != 0) {
+    ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+    ObStringBuffer buffer(&tmp_allocator);
+    for (int64_t i = 0; i < count; i++) {
+      char buf[10];
+      sprintf(buf, "%llu ", static_cast<unsigned long long>(vids[i]));
+      buffer.append(buf);
+    }
+    LOG_INFO("SYCN_DELTA_vids", K(buffer), KP(buffer.ptr()), K(buffer.string()));
+  }
+}
+
+void ObPluginVectorIndexAdaptor::print_vectors(float *vecs, int64_t count, int64_t dim)
+{
+  if (count != 0) {
+    ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+    //ObStringBuffer buffer(&tmp_allocator);
+    for (int i = 0; i < count; i++) {
+      ObStringBuffer buffer(&tmp_allocator);
+      for (int j = 0; j < dim; j++) {
+        char buf[10];
+        sprintf(buf, "%.1f ", (vecs[i * dim + j]));
+        buffer.append(buf);
+      }
+      LOG_INFO("SYCN_DELTA_vectors", K(buffer), KP(buffer.ptr()), K(buffer.string()));
+    }
+  }
 }
 
 int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContext *ctx,
@@ -1711,6 +1753,8 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       ObIStreamBuf::Callback cb = callback;
 
       ObVectorIndexSerializer index_seri(tmp_allocator);
+
+      TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
       if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb))) {
         LOG_WARN("serialize index failed.", K(ret));
       } else {
