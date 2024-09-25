@@ -195,6 +195,7 @@ public:
   virtual ~ObUpgradeForAllVersionProcessor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
   virtual int post_upgrade() override;
+  int flush_ncomp_dll_job();
 };
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 0, 0, 0)
@@ -288,6 +289,7 @@ public:
   virtual int post_upgrade() override;
 private:
   int add_spm_stats_scheduler_job();
+  int post_upgrade_for_persitent_routine();
 };
 
 /* =========== special upgrade processor end   ============= */

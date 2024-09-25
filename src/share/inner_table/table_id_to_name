@@ -348,6 +348,7 @@
 # 524: __all_pkg_coll_type
 # 525: __wr_sql_plan
 # 527: __all_kv_redis_table
+# 528: __all_ncomp_dll_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1106,6 +1107,8 @@
 # 12501: __wr_sql_plan  # BASE_TABLE_NAME
 # 12503: __all_virtual_kv_redis_table
 # 12503: __all_kv_redis_table  # BASE_TABLE_NAME
+# 12506: __all_virtual_ncomp_dll_v2
+# 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1734,6 +1737,8 @@
 # 15481: __all_virtual_wr_sql_plan  # BASE_TABLE_NAME1
 # 15482: ALL_VIRTUAL_RES_MGR_SYSSTAT
 # 15482: __all_virtual_res_mgr_sysstat  # BASE_TABLE_NAME
+# 15486: ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT
+# 15486: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

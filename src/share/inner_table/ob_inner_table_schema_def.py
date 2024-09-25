@@ -7267,8 +7267,29 @@ all_kv_redis_table_def = dict(
     ('table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'false'),
   ],
 )
-
 def_table_schema(**all_kv_redis_table_def)
+
+all_ncomp_dll_v2 = dict(
+  owner = 'hr351303',
+  table_name = '__all_ncomp_dll_v2',
+  table_id = '528',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('database_id', 'int', 'false'),
+    ('key_id', 'int'),
+    ('compile_db_id', 'int'),
+    ('arch_type', 'varchar:128'),
+    ('build_version', 'varchar:OB_SERVER_VERSION_LENGTH'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('merge_version', 'int'),
+    ('dll', 'longblob', 'false'),
+  ],
+)
+def_table_schema(**all_ncomp_dll_v2)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14654,6 +14675,11 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_kv_redis_table',
   keywords = all_def_keywords['__all_kv_redis_table']))
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12506',
+  table_name = '__all_virtual_ncomp_dll_v2',
+  keywords = all_def_keywords['__all_ncomp_dll_v2']))
+
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -15126,6 +15152,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15472', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15473', all_def_keywords['__all_pkg_coll_type']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15481', all_def_keywords['__all_virtual_wr_sql_plan'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15482', all_def_keywords['__all_virtual_res_mgr_sysstat'])))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_keywords['__all_ncomp_dll_v2']))
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
