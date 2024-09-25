@@ -660,6 +660,30 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
   return ret;
 }
 
+int ObStorageOssBase::check_endpoint_validaty() const
+{
+  int ret = OB_SUCCESS;
+  ObString host(oss_endpoint_);
+  int64_t proto_len = 0;
+  if (host.prefix_match(AOS_HTTP_PREFIX)) {
+    proto_len = strlen(AOS_HTTP_PREFIX);
+  } else if (host.prefix_match(AOS_HTTPS_PREFIX)) {
+    proto_len = strlen(AOS_HTTPS_PREFIX);
+  }
+
+  host += proto_len;
+  if (OB_UNLIKELY(host.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "endpoint is empty", K(ret), K(host), K(oss_endpoint_), K(proto_len));
+  } else if (OB_UNLIKELY(host[0] == '/' || host[0] == '?' || host[0] == '#')) {
+    // If the provided 'host' field, after removing the protocol prefix (http:// or https://),
+    // starts with any of the characters '/', '?', or '#', the OSS C SDK will result in a core dump.
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "endpoint is invalid", K(ret), K(host), K(oss_endpoint_), K(proto_len));
+  }
+  return ret;
+}
+
 int ObStorageOssBase::init_oss_endpoint()
 {
   int ret = OB_SUCCESS;
@@ -677,6 +701,9 @@ int ObStorageOssBase::init_oss_endpoint()
     }
   }
 
+  if (FAILEDx(check_endpoint_validaty())) {
+    OB_LOG(WARN, "endpoint is invalid", K(ret), K(oss_account_));
+  }
   return ret;
 }
 

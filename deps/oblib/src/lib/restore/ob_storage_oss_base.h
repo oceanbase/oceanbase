@@ -136,6 +136,8 @@ public:
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
   int init_oss_endpoint();
 
+  int check_endpoint_validaty() const;
+
   aos_pool_t *aos_pool_;
   oss_request_options_t *oss_option_;
   char oss_endpoint_[MAX_OSS_ENDPOINT_LENGTH];
