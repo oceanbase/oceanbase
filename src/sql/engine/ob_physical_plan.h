@@ -134,7 +134,7 @@ public:
   void reset_evolution_stat()
   {
     stat_.is_evolution_ = false;
-    stat_.evolution_stat_.reset();
+    // stat_.evolution_stat_.reset();
   }
   int64_t get_evo_perf() const;
   int64_t get_cpu_time() const { return stat_.evolution_stat_.cpu_time_; }
