@@ -3063,6 +3063,11 @@ int ObSchemaPrinter::print_materialized_view_definition(
                                                                   agent_mode,
                                                                   tz_info))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print partition options", KR(ret), K(*container_table_schema));
+      } else if (OB_FAIL(print_table_definition_column_group(*container_table_schema,
+                                                              buf,
+                                                              buf_len,
+                                                              pos))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print materialized view column group", KR(ret), K(*container_table_schema));
       } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id, table_id, mview_info))) {
         SHARE_SCHEMA_LOG(WARN, "fail to fecth materialized view info", KR(ret), K(table_id));
       } else if (!strict_compat_) {
@@ -3128,11 +3133,6 @@ int ObSchemaPrinter::print_materialized_view_definition(
                   && OB_FAIL(databuff_printf(buf, buf_len, pos,
                                             "ENABLE ON QUERY COMPUTATION "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print materialized view on query computation", KR(ret));
-        } else if (OB_FAIL(print_table_definition_column_group(*container_table_schema,
-                                                              buf,
-                                                              buf_len,
-                                                              pos))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print materialized view column group", KR(ret), K(*container_table_schema));
         }
       }
     }
